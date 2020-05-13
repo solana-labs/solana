@@ -76,6 +76,8 @@ pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
+pub type ShredMap = HashMap<(u64, u64), Shred>;
+
 // ledger window
 pub struct Blockstore {
     db: Arc<Database>,
@@ -553,12 +555,12 @@ impl Blockstore {
         slot: Slot,
         erasure_meta: &ErasureMeta,
         available_shreds: &mut Vec<Shred>,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &ShredMap,
         data_cf: &LedgerColumn<cf::ShredData>,
     ) {
         (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
             if index.data().is_present(i) {
-                if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
+                if let Some(shred) = prev_inserted_datas.get(&(slot, i)).cloned().or_else(|| {
                     let some_data = data_cf
                         .get_bytes((slot, i))
                         .expect("Database failure, could not fetch data shred");
@@ -580,7 +582,8 @@ impl Blockstore {
         slot: Slot,
         erasure_meta: &ErasureMeta,
         available_shreds: &mut Vec<Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        coding_shreds_to_retransmit: &mut Vec<Shred>,
+        prev_inserted_codes: &mut ShredMap,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
         (erasure_meta.first_coding_index
@@ -594,6 +597,7 @@ impl Blockstore {
                         // `prev_inserted_codes` does not yet exist in blockstore
                         // (guaranteed by `check_cache_coding_shred`)
                         index.coding_mut().set_present(i, false);
+                        coding_shreds_to_retransmit.push(s.clone());
                         s
                     })
                     .or_else(|| {
@@ -621,9 +625,10 @@ impl Blockstore {
         index: &mut Index,
         set_index: u64,
         erasure_meta: &ErasureMeta,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &ShredMap,
+        prev_inserted_codes: &mut ShredMap,
         recovered_data_shreds: &mut Vec<Shred>,
+        coding_shreds_to_retransmit: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
@@ -646,6 +651,7 @@ impl Blockstore {
             slot,
             erasure_meta,
             &mut available_shreds,
+            coding_shreds_to_retransmit,
             prev_inserted_codes,
             code_cf,
         );
@@ -699,8 +705,9 @@ impl Blockstore {
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &ShredMap,
+        prev_inserted_codes: &mut ShredMap,
+        coding_shreds_to_retransmit: &mut Vec<Shred>,
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
@@ -722,6 +729,7 @@ impl Blockstore {
                         prev_inserted_datas,
                         prev_inserted_codes,
                         &mut recovered_data_shreds,
+                        coding_shreds_to_retransmit,
                         &data_cf,
                         &code_cf,
                     );
@@ -729,13 +737,13 @@ impl Blockstore {
                 ErasureMetaStatus::DataFull => {
                     (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(
                         |i| {
-                            // Remove saved coding shreds. We don't need these for future recovery.
-                            if prev_inserted_codes.remove(&(slot, i)).is_some() {
+                            if let Some(shred) = prev_inserted_codes.remove(&(slot, i)) {
                                 // Remove from the index so it doesn't get committed. We know
                                 // this is safe to do because everything in
                                 // `prev_inserted_codes` does not yet exist in blockstore
                                 // (guaranteed by `check_cache_coding_shred`)
                                 index.coding_mut().set_present(i, false);
+                                coding_shreds_to_retransmit.push(shred);
                             }
                         },
                     );
@@ -770,7 +778,7 @@ impl Blockstore {
         is_trusted: bool,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> Result<()>
+    ) -> Result<(ShredMap, ShredMap, Vec<Shred>)>
     where
         F: Fn(Shred) -> (),
     {
@@ -788,6 +796,7 @@ impl Blockstore {
         let mut erasure_metas = HashMap::new();
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
+        let mut coding_shreds_to_retransmit = Vec::new();
 
         let num_shreds = shreds.len();
         let mut start = Measure::start("Shred insertion");
@@ -831,8 +840,9 @@ impl Blockstore {
                 &db,
                 &erasure_metas,
                 &mut index_working_set,
-                &mut just_inserted_data_shreds,
+                &just_inserted_data_shreds,
                 &mut just_inserted_coding_shreds,
+                &mut coding_shreds_to_retransmit,
             );
 
             num_recovered = recovered_data.len();
@@ -858,10 +868,10 @@ impl Blockstore {
         let shred_recovery_elapsed = start.as_us();
 
         just_inserted_coding_shreds
-            .into_iter()
+            .iter()
             .for_each(|((_, _), shred)| {
                 self.check_insert_coding_shred(
-                    shred,
+                    &shred,
                     &mut index_working_set,
                     &mut write_batch,
                     &mut index_meta_time,
@@ -921,7 +931,11 @@ impl Blockstore {
         metrics.num_recovered += num_recovered;
         metrics.index_meta_time += index_meta_time;
 
-        Ok(())
+        Ok((
+            just_inserted_data_shreds,
+            just_inserted_coding_shreds,
+            coding_shreds_to_retransmit,
+        ))
     }
 
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
@@ -953,7 +967,7 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
-    ) -> Result<()> {
+    ) -> Result<(ShredMap, ShredMap, Vec<Shred>)> {
         self.insert_shreds_handle_duplicate(
             shreds,
             leader_schedule,
@@ -965,7 +979,7 @@ impl Blockstore {
 
     fn check_insert_coding_shred(
         &self,
-        shred: Shred,
+        shred: &Shred,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         index_meta_time: &mut u64,
@@ -978,7 +992,7 @@ impl Blockstore {
         let index_meta = &mut index_meta_working_set_entry.index;
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
-        self.insert_coding_shred(index_meta, &shred, write_batch)
+        self.insert_coding_shred(index_meta, shred, write_batch)
             .map(|_| {
                 index_meta_working_set_entry.did_insert_occur = true;
             })
@@ -990,7 +1004,7 @@ impl Blockstore {
         shred: Shred,
         erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        just_received_coding_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_received_coding_shreds: &mut ShredMap,
         index_meta_time: &mut u64,
         is_trusted: bool,
     ) -> bool {

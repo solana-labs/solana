@@ -23,6 +23,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
+use solana_sdk::packet::Packet;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use solana_streamer::streamer::PacketSender;
@@ -108,11 +109,12 @@ fn run_check_duplicate(
 }
 
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<Vec<Shred>>,
+    shred_receiver: &ShredInsertReceiver,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
+    retransmit: &PacketSender,
 ) -> Result<()>
 where
     F: Fn(Shred) -> (),
@@ -121,25 +123,50 @@ where
     let mut shreds = shred_receiver.recv_timeout(timer)?;
 
     while let Ok(mut more_shreds) = shred_receiver.try_recv() {
-        shreds.append(&mut more_shreds)
+        shreds.append(&mut more_shreds);
     }
 
-    blockstore.insert_shreds_handle_duplicate(
-        shreds,
-        Some(leader_schedule_cache),
-        false,
-        &handle_duplicate,
-        metrics,
-    )?;
+    let (data_shreds, coding_shreds, more_coding_shreds) = blockstore
+        .insert_shreds_handle_duplicate(
+            shreds,
+            Some(leader_schedule_cache),
+            false,
+            &handle_duplicate,
+            metrics,
+        )?;
+
+    let mut packets = Packets::default();
+    packets.packets.resize(
+        data_shreds.len() + coding_shreds.len() + more_coding_shreds.len(),
+        Packet::default(),
+    );
+    let mut start = 0;
+    for (i, (_index, shred)) in data_shreds.into_iter().enumerate() {
+        shred.copy_to_packet(&mut packets.packets[i]);
+        start = i;
+    }
+    start += 1;
+    for (i, (_index, shred)) in coding_shreds.into_iter().enumerate() {
+        shred.copy_to_packet(&mut packets.packets[start + i]);
+        start = i;
+    }
+    start += 1;
+    for (i, shred) in more_coding_shreds.into_iter().enumerate() {
+        shred.copy_to_packet(&mut packets.packets[start + i]);
+    }
+    let _ = retransmit.send(packets);
+
     Ok(())
 }
 
+pub type ShredInsertSender = CrossbeamSender<Vec<Shred>>;
+pub type ShredInsertReceiver = CrossbeamReceiver<Vec<Shred>>;
+
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
-    insert_shred_sender: &CrossbeamSender<Vec<Shred>>,
+    insert_shred_sender: &ShredInsertSender,
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
-    retransmit: &PacketSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
 ) -> Result<()>
@@ -202,13 +229,6 @@ where
     trace!("{:?} shreds from packets", shreds.len());
 
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
-
-    for packets in packets.into_iter() {
-        if !packets.is_empty() {
-            // Ignore the send error, as the retransmit is optional (e.g. archivers don't retransmit)
-            let _ = retransmit.send(packets);
-        }
-    }
 
     insert_shred_sender.send(shreds)?;
 
@@ -291,6 +311,7 @@ impl WindowService {
             leader_schedule_cache,
             insert_receiver,
             duplicate_sender,
+            retransmit,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -301,7 +322,6 @@ impl WindowService {
             verified_receiver,
             shred_filter,
             bank_forks,
-            retransmit,
         );
 
         WindowService {
@@ -343,8 +363,9 @@ impl WindowService {
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        insert_receiver: CrossbeamReceiver<Vec<Shred>>,
+        insert_receiver: ShredInsertReceiver,
         duplicate_sender: CrossbeamSender<Shred>,
+        retransmit: PacketSender,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -373,6 +394,7 @@ impl WindowService {
                         &leader_schedule_cache,
                         &handle_duplicate,
                         &mut metrics,
+                        &retransmit,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
@@ -393,11 +415,10 @@ impl WindowService {
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        insert_sender: CrossbeamSender<Vec<Shred>>,
+        insert_sender: ShredInsertSender,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        retransmit: PacketSender,
     ) -> JoinHandle<()>
     where
         F: 'static
@@ -437,7 +458,6 @@ impl WindowService {
                         &insert_sender,
                         &id,
                         &verified_receiver,
-                        &retransmit,
                         |shred, last_root| {
                             shred_filter(
                                 &id,
