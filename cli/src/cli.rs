@@ -167,13 +167,19 @@ pub enum TransferAmount {
     Some(u64),
 }
 
-impl From<Option<u64>> for TransferAmount {
-    fn from(maybe_lamports: Option<u64>) -> Self {
-        if let Some(lamports) = maybe_lamports {
-            Self::Some(lamports)
-        } else {
-            Self::All
+impl TransferAmount {
+    pub fn new(amount: Option<u64>, sign_only: bool) -> Self {
+        match amount {
+            Some(lamports) => Self::Some(lamports),
+            None if !sign_only => Self::All,
+            _ => panic!("ALL amount not supported for sign-only operations"),
         }
+    }
+
+    pub fn new_from_matches(matches: &ArgMatches<'_>, name: &str) -> Self {
+        let amount = lamports_of_sol(matches, name);
+        let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+        TransferAmount::new(amount, sign_only)
     }
 }
 
@@ -978,7 +984,7 @@ pub fn parse_command(
             })
         }
         ("transfer", Some(matches)) => {
-            let amount = lamports_of_sol(matches, "amount").into();
+            let amount = TransferAmount::new_from_matches(matches, "amount");
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let no_wait = matches.is_present("no_wait");
