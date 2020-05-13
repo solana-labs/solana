@@ -374,18 +374,12 @@ pub struct Bank {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
-<<<<<<< HEAD
-=======
-
-    #[serde(skip)]
-    pub skip_drop: AtomicBool,
 
     #[serde(skip)]
     pub operating_mode: Option<OperatingMode>,
 
     #[serde(skip)]
     pub lazy_rent_collection: AtomicBool,
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
 }
 
 impl Default for BlockhashQueue {
@@ -498,14 +492,10 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
-<<<<<<< HEAD
-=======
-            skip_drop: AtomicBool::new(false),
             operating_mode: parent.operating_mode,
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
         };
 
         datapoint_info!(
