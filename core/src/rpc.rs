@@ -1843,8 +1843,8 @@ pub mod tests {
     fn test_get_supply() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSupply"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply"}"#;
+        let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
@@ -1907,19 +1907,15 @@ pub mod tests {
         }));
 
         // Test Circulating/NonCirculating Filter
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"circulating"}}]}}"#
-        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"circulating"}]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
         assert_eq!(largest_accounts.len(), 18);
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"nonCirculating"}}]}}"#
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"nonCirculating"}]}"#;
+        let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
