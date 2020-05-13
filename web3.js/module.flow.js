@@ -298,6 +298,9 @@ declare module '@solana/web3.js' {
     authorizedPubkey: PublicKey;
     nonce: Blockhash;
     feeCalculator: FeeCalculator;
+    static fromAccountData(
+      buffer: Buffer | Uint8Array | Array<number>,
+    ): NonceAccount;
   }
 
   declare export var NONCE_ACCOUNT_LENGTH: number;
