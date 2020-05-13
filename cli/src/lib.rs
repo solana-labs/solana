@@ -27,6 +27,7 @@ pub mod cluster_query;
 pub mod display;
 pub mod nonce;
 pub mod offline;
+pub mod spend_utils;
 pub mod stake;
 pub mod storage;
 pub mod test_utils;

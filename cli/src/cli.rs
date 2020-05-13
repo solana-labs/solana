@@ -4,6 +4,7 @@ use crate::{
     display::println_name_value,
     nonce::{self, *},
     offline::{blockhash_query::BlockhashQuery, *},
+    spend_utils::resolve_spend_tx_and_check_account_balances,
     stake::*,
     storage::*,
     validator_info::*,
@@ -1104,14 +1105,14 @@ pub fn check_accounts_for_spend_and_fee(
     Ok(())
 }
 
-fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
+pub fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
     messages
         .iter()
         .map(|message| fee_calculator.calculate_fee(message))
         .sum()
 }
 
-fn check_account_for_balance(
+pub fn check_account_for_balance(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
     balance: u64,
@@ -1688,35 +1689,30 @@ fn process_transfer(
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let lamports = match amount {
-        TransferAmount::All => {
-            let sigs = config.signers.len();
-            let fee = sigs as u64 * fee_calculator.lamports_per_signature;
-            let from_balance = rpc_client
-                .retry_get_balance(&from.pubkey(), 5)?
-                .unwrap_or_default();
-            if from.pubkey() == fee_payer.pubkey() {
-                from_balance.saturating_sub(fee)
-            } else {
-                from_balance
-            }
+    let build_message = |lamports| {
+        let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
+
+        if let Some(nonce_account) = &nonce_account {
+            Message::new_with_nonce(
+                ixs,
+                Some(&fee_payer.pubkey()),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        } else {
+            Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
         }
-        TransferAmount::Some(lamports) => lamports,
     };
 
-    let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
-
-    let message = if let Some(nonce_account) = &nonce_account {
-        Message::new_with_nonce(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            nonce_account,
-            &nonce_authority.pubkey(),
-        )
-    } else {
-        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
-    };
-    let mut tx = Transaction::new_unsigned(message);
+    let mut tx = resolve_spend_tx_and_check_account_balances(
+        rpc_client,
+        sign_only,
+        amount,
+        &fee_calculator,
+        &from.pubkey(),
+        &fee_payer.pubkey(),
+        build_message,
+    )?;
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
@@ -1727,14 +1723,6 @@ fn process_transfer(
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_accounts_for_spend_and_fee(
-            rpc_client,
-            &from.pubkey(),
-            &fee_payer.pubkey(),
-            &fee_calculator,
-            &tx.message,
-            lamports,
-        )?;
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
