@@ -1066,6 +1066,9 @@ impl RpcSol for RpcSolImpl {
                         gossip: Some(contact_info.gossip),
                         tpu: valid_address_or_none(&contact_info.tpu),
                         rpc: valid_address_or_none(&contact_info.rpc),
+                        version: cluster_info
+                            .get_node_version(&contact_info.id)
+                            .map(|v| v.to_string()),
                     })
                 } else {
                     None // Exclude spy nodes
@@ -1468,7 +1471,7 @@ impl RpcSol for RpcSolImpl {
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         Ok(RpcVersionInfo {
-            solana_core: solana_clap_utils::version!().to_string(),
+            solana_core: solana_version::Version::default().to_string(),
         })
     }
 
@@ -1835,7 +1838,7 @@ pub mod tests {
             .expect("actual response deserialization");
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}"}}],"id":1}}"#,
+            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}", "version": null}}],"id":1}}"#,
             leader_pubkey,
             rpc_port::DEFAULT_RPC_PORT
         );
@@ -2637,7 +2640,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "solana-core": solana_clap_utils::version!().to_string()
+                "solana-core": solana_version::version!().to_string()
             },
             "id": 1
         });
