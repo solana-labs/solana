@@ -8,7 +8,6 @@ TARGET=html/index.html
 TEST_STAMP=src/tests.ok
 
 all: $(TARGET)
-	./set-solana-release-tag.sh
 
 svg: $(SVG_IMGS)
 
@@ -16,6 +15,7 @@ test: $(TEST_STAMP)
 
 open: $(TEST_STAMP)
 	mdbook build --open
+	./set-solana-release-tag.sh
 
 watch: $(SVG_IMGS)
 	mdbook watch
@@ -44,6 +44,7 @@ $(TEST_STAMP): $(TARGET)
 
 $(TARGET): $(SVG_IMGS) $(MD_SRCS)
 	mdbook build
+	./set-solana-release-tag.sh
 
 clean:
 	rm -f $(SVG_IMGS) src/tests.ok

@@ -5,9 +5,10 @@ Install dependencies, build, and test the docs:
 
 ```bash
 $ brew install coreutils
-$ cargo install svgbob_cli
 $ brew install mscgen
-$ brew install mdbook
+$ cargo install svgbob_cli
+$ cargo install mdbook-linkcheck
+$ cargo install mdbook
 $ ./build.sh
 ```
 
