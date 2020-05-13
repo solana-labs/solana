@@ -85,6 +85,12 @@ pub type Segment = u64;
 ///  some number of Slots.
 pub type Epoch = u64;
 
+/// SlotIndex is an index to the slots of a epoch
+pub type SlotIndex = u64;
+
+/// SlotCount is the number of slots in a epoch
+pub type SlotCount = u64;
+
 /// UnixTimestamp is an approximate measure of real-world time,
 /// expressed as Unix time (ie. seconds since the Unix epoch)
 pub type UnixTimestamp = i64;

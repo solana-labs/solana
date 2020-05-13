@@ -1,6 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    ops::RangeBounds,
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -11,28 +12,66 @@ type AccountMapEntry<T> = (RefCount, SlotList<T>);
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
+<<<<<<< HEAD
     pub account_maps: HashMap<Pubkey, RwLock<AccountMapEntry<T>>>,
+=======
+    pub account_maps: BTreeMap<Pubkey, AccountMapEntry<T>>,
+>>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
 }
 
+<<<<<<< HEAD
 impl<T: Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors
     pub fn scan_accounts<F>(&self, ancestors: &HashMap<Slot, usize>, mut func: F)
+=======
+impl<'a, T: 'a + Clone> AccountsIndex<T> {
+    fn do_scan_accounts<F, I>(&self, ancestors: &Ancestors, mut func: F, iter: I)
+>>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
     where
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        I: Iterator<Item = (&'a Pubkey, &'a AccountMapEntry<T>)>,
     {
+<<<<<<< HEAD
         for (pubkey, list) in self.account_maps.iter() {
             let list_r = &list.read().unwrap().1;
+=======
+        for (pubkey, list) in iter {
+            let list_r = &list.1.read().unwrap();
+>>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
             if let Some(index) = self.latest_slot(ancestors, &list_r) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
         }
     }
 
+<<<<<<< HEAD
     fn get_rooted_entries(&self, list: &[(Slot, T)]) -> Vec<(Slot, T)> {
         list.iter()
+=======
+    /// call func with every pubkey and index visible from a given set of ancestors
+    pub fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+    {
+        self.do_scan_accounts(ancestors, func, self.account_maps.iter());
+    }
+
+    /// call func with every pubkey and index visible from a given set of ancestors with range
+    pub fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        R: RangeBounds<Pubkey>,
+    {
+        self.do_scan_accounts(ancestors, func, self.account_maps.range(range));
+    }
+
+    fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {
+        slice
+            .iter()
+>>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
             .filter(|(slot, _)| self.is_root(*slot))
             .cloned()
             .collect()
