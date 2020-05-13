@@ -69,6 +69,7 @@ pub fn load(
                     &process_options.frozen_accounts,
                     &snapshot_config.snapshot_path,
                     &archive_filename,
+                    genesis_config,
                 )
                 .expect("Load from snapshot failed");
 
