@@ -19,7 +19,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
         <td>Program</td>
         <td className="text-right">
           <Copyable bottom text={ix.programId.toBase58()}>
-            <code>{displayAddress(ix.programId)}</code>
+            <code>{displayAddress(ix.programId.toBase58())}</code>
           </Copyable>
         </td>
       </tr>

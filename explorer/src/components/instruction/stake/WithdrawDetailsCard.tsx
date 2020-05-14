@@ -41,7 +41,7 @@ export function WithdrawDetailsCard(props: {
         <td>Program</td>
         <td className="text-right">
           <Copyable bottom text={StakeProgram.programId.toBase58()}>
-            <code>{displayAddress(StakeProgram.programId)}</code>
+            <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
       </tr>

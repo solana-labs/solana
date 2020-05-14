@@ -38,7 +38,7 @@ export function AllocateDetailsCard(props: {
         <td>Program</td>
         <td className="text-right">
           <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
+            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
       </tr>

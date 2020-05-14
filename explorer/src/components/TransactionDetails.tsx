@@ -21,6 +21,9 @@ import { useHistory, useLocation } from "react-router-dom";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
+import ErrorCard from "./common/ErrorCard";
+import LoadingCard from "./common/LoadingCard";
+import TableCardBody from "./common/TableCardBody";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -100,9 +103,9 @@ function StatusCard({ signature }: Props) {
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (status?.fetchStatus === FetchStatus.FetchFailed) {
-    return <RetryCard retry={() => refresh(signature)} text="Fetch Failed" />;
+    return <ErrorCard retry={() => refresh(signature)} text="Fetch Failed" />;
   } else if (!status.info) {
-    return <RetryCard retry={() => refresh(signature)} text="Not Found" />;
+    return <ErrorCard retry={() => refresh(signature)} text="Not Found" />;
   }
 
   const { info } = status;
@@ -191,7 +194,7 @@ function AccountsCard({ signature }: Props) {
     return null;
   } else if (!details) {
     return (
-      <RetryCard
+      <ErrorCard
         retry={refreshStatus}
         text="Details are not available until the transaction reaches MAX confirmations"
       />
@@ -199,14 +202,14 @@ function AccountsCard({ signature }: Props) {
   } else if (details.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details?.fetchStatus === FetchStatus.FetchFailed) {
-    return <RetryCard retry={refreshDetails} text="Fetch Failed" />;
+    return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
   } else if (!details.transaction || !message) {
-    return <RetryCard retry={refreshDetails} text="Not Found" />;
+    return <ErrorCard retry={refreshDetails} text="Not Found" />;
   }
 
   const { meta } = details.transaction;
   if (!meta) {
-    return <RetryCard retry={refreshDetails} text="Metadata Missing" />;
+    return <ErrorCard retry={refreshDetails} text="Metadata Missing" />;
   }
 
   const accountRows = message.accountKeys.map((pubkey, index) => {
@@ -228,7 +231,7 @@ function AccountsCard({ signature }: Props) {
       <tr key={key}>
         <td>
           <Copyable text={key}>
-            <code>{displayAddress(pubkey)}</code>
+            <code>{displayAddress(pubkey.toBase58())}</code>
           </Copyable>
         </td>
         <td>{renderChange()}</td>
@@ -284,7 +287,7 @@ function InstructionsSection({ signature }: Props) {
 
   const { transaction } = details.transaction;
   if (transaction.instructions.length === 0) {
-    return <RetryCard retry={refreshDetails} text="No instructions found" />;
+    return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
   const result = status.info.result;
@@ -311,45 +314,5 @@ function InstructionsSection({ signature }: Props) {
       </div>
       {instructionDetails}
     </>
-  );
-}
-
-function LoadingCard() {
-  return (
-    <div className="card">
-      <div className="card-body text-center">
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
-      </div>
-    </div>
-  );
-}
-
-function RetryCard({ retry, text }: { retry: () => void; text: string }) {
-  return (
-    <div className="card">
-      <div className="card-body text-center">
-        {text}
-        <span className="btn btn-white ml-3 d-none d-md-inline" onClick={retry}>
-          Try Again
-        </span>
-        <div className="d-block d-md-none mt-4">
-          <hr></hr>
-          <span className="btn btn-white" onClick={retry}>
-            Try Again
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TableCardBody({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="table-responsive mb-0">
-      <table className="table table-sm table-nowrap card-table">
-        <tbody className="list">{children}</tbody>
-      </table>
-    </div>
   );
 }

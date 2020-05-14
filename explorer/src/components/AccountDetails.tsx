@@ -1,6 +1,7 @@
 import React from "react";
+import { StakeAccount } from "solana-sdk-wasm";
 import { useClusterModal } from "providers/cluster";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, StakeProgram } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { useHistory, useLocation } from "react-router-dom";
 import {
@@ -12,6 +13,10 @@ import {
 import { lamportsToSolString } from "utils";
 import Copyable from "./Copyable";
 import { displayAddress } from "utils/tx";
+import { StakeAccountDetailsCard } from "components/account/StakeAccountDetailsCard";
+import ErrorCard from "components/common/ErrorCard";
+import LoadingCard from "components/common/LoadingCard";
+import TableCardBody from "components/common/TableCardBody";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
@@ -84,9 +89,50 @@ export default function AccountDetails({ address }: Props) {
         </div>
       </div>
       {pubkey && <InfoCard pubkey={pubkey} />}
+      {pubkey && <DetailsCard pubkey={pubkey} />}
       {pubkey && <HistoryCard pubkey={pubkey} />}
     </div>
   );
+}
+
+type Wasm = {
+  StakeAccount: typeof StakeAccount;
+};
+
+function DetailsCard({ pubkey }: { pubkey: PublicKey }) {
+  const address = pubkey.toBase58();
+  const info = useAccountInfo(address);
+  const [Wasm, setWasm] = React.useState<Wasm | undefined>(undefined);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        setWasm(await import("solana-sdk-wasm"));
+      } catch (err) {
+        console.error("Unexpected error loading wasm", err);
+      }
+    })();
+  }, []);
+
+  if (!info || !info.details || !info.details.data) {
+    return null;
+  }
+
+  const { data, owner } = info.details;
+  try {
+    if (owner.equals(StakeProgram.programId)) {
+      if (Wasm === undefined) {
+        return <LoadingCard />;
+      } else {
+        const stakeAccount = Wasm.StakeAccount.fromAccountData(data);
+        return <StakeAccountDetailsCard account={stakeAccount} />;
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    return <ErrorCard text="Failed to decode account data" />;
+  }
+  return null;
 }
 
 function InfoCard({ pubkey }: { pubkey: PublicKey }) {
@@ -100,7 +146,7 @@ function InfoCard({ pubkey }: { pubkey: PublicKey }) {
     info.status === Status.CheckFailed ||
     info.lamports === undefined
   ) {
-    return <RetryCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
+    return <ErrorCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
   }
 
   const { details, lamports } = info;
@@ -138,7 +184,7 @@ function InfoCard({ pubkey }: { pubkey: PublicKey }) {
             <td>Owner</td>
             <td className="text-right">
               <Copyable text={details.owner.toBase58()}>
-                <code>{displayAddress(details.owner)}</code>
+                <code>{displayAddress(details.owner.toBase58())}</code>
               </Copyable>
             </td>
           </tr>
@@ -166,7 +212,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
     return <LoadingCard />;
   } else if (info.history === undefined) {
     return (
-      <RetryCard
+      <ErrorCard
         retry={() => refresh(pubkey)}
         text="Failed to fetch transaction history"
       />
@@ -175,9 +221,9 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
   if (info.history.size === 0) {
     return (
-      <RetryCard
+      <ErrorCard
         retry={() => refresh(pubkey)}
-        text="No transaction history found"
+        text="No recent transaction history found"
       />
     );
   }
@@ -216,46 +262,6 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
       </div>
 
       <TableCardBody>{detailsList}</TableCardBody>
-    </div>
-  );
-}
-
-function LoadingCard() {
-  return (
-    <div className="card">
-      <div className="card-body text-center">
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
-      </div>
-    </div>
-  );
-}
-
-function RetryCard({ retry, text }: { retry: () => void; text: string }) {
-  return (
-    <div className="card">
-      <div className="card-body text-center">
-        {text}
-        <span className="btn btn-white ml-3 d-none d-md-inline" onClick={retry}>
-          Try Again
-        </span>
-        <div className="d-block d-md-none mt-4">
-          <hr></hr>
-          <span className="btn btn-white" onClick={retry}>
-            Try Again
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TableCardBody({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="table-responsive mb-0">
-      <table className="table table-sm table-nowrap card-table">
-        <tbody className="list">{children}</tbody>
-      </table>
     </div>
   );
 }

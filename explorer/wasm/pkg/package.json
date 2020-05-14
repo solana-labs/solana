@@ -1,0 +1,22 @@
+{
+  "name": "solana-sdk-wasm",
+  "collaborators": [
+    "Solana Maintainers <maintainers@solana.com>"
+  ],
+  "description": "Solana SDK Wasm",
+  "version": "1.2.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solana-labs/solana"
+  },
+  "files": [
+    "solana_sdk_wasm_bg.wasm",
+    "solana_sdk_wasm.js",
+    "solana_sdk_wasm.d.ts"
+  ],
+  "module": "solana_sdk_wasm.js",
+  "homepage": "https://solana.com/",
+  "types": "solana_sdk_wasm.d.ts",
+  "sideEffects": false
+}
