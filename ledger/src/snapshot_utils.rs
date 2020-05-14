@@ -418,6 +418,7 @@ where
     Ok(ret)
 }
 
+#[allow(clippy::type_complexity)]
 fn create_versioned_bank_snapshot_serializer<'a>(
     snapshot_version: SnapshotVersion,
     bank: &'a Bank,
@@ -451,6 +452,7 @@ fn create_versioned_bank_snapshot_serializer<'a>(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn create_versioned_bank_snapshot_deserializer<'a, P: AsRef<Path>>(
     snapshot_version: &str,
     account_paths: &'a [PathBuf],
