@@ -1,28 +1,16 @@
 import React from "react";
-import {
-  PublicKey,
-  Connection,
-  TransactionSignature,
-  TransactionError,
-  SignatureStatus,
-  StakeProgram
-} from "@solana/web3.js";
-import { useQuery } from "../utils/url";
-import { useCluster, ClusterStatus } from "./cluster";
 import { StakeAccount } from "solana-sdk-wasm";
+import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
+import { useQuery } from "../../utils/url";
+import { useCluster, ClusterStatus } from "../cluster";
+import { HistoryProvider } from "./history";
+export { useAccountHistory } from "./history";
 
-export enum Status {
-  Checking,
-  CheckFailed,
-  FetchingHistory,
-  HistoryFailed,
-  Success
+export enum FetchStatus {
+  Fetching,
+  FetchFailed,
+  Fetched
 }
-
-export type History = Map<
-  number,
-  Map<TransactionSignature, TransactionError | null>
->;
 
 export interface Details {
   executable: boolean;
@@ -34,10 +22,9 @@ export interface Details {
 export interface Account {
   id: number;
   pubkey: PublicKey;
-  status: Status;
+  status: FetchStatus;
   lamports?: number;
   details?: Details;
-  history?: History;
 }
 
 type Accounts = { [address: string]: Account };
@@ -55,10 +42,9 @@ interface Update {
   type: ActionType.Update;
   pubkey: PublicKey;
   data: {
-    status: Status;
+    status: FetchStatus;
     lamports?: number;
     details?: Details;
-    history?: History;
   };
 }
 
@@ -68,7 +54,7 @@ interface Fetch {
 }
 
 type Action = Update | Fetch;
-export type Dispatch = (action: Action) => void;
+type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -81,7 +67,7 @@ function reducer(state: State, action: Action): State {
           [address]: {
             id: account.id,
             pubkey: account.pubkey,
-            status: Status.Checking
+            status: FetchStatus.Fetching
           }
         };
         return { ...state, accounts };
@@ -91,7 +77,7 @@ function reducer(state: State, action: Action): State {
           ...state.accounts,
           [address]: {
             id: idCounter,
-            status: Status.Checking,
+            status: FetchStatus.Fetching,
             pubkey: action.pubkey
           }
         };
@@ -164,7 +150,7 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        {children}
+        <HistoryProvider>{children}</HistoryProvider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
@@ -213,64 +199,12 @@ async function fetchAccountInfo(
         data
       };
     }
-    fetchStatus = Status.FetchingHistory;
-    fetchAccountHistory(dispatch, pubkey, url);
+    fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     console.error("Failed to fetch account info", error);
-    fetchStatus = Status.CheckFailed;
+    fetchStatus = FetchStatus.FetchFailed;
   }
   const data = { status: fetchStatus, lamports, details };
-  dispatch({ type: ActionType.Update, data, pubkey });
-}
-
-async function fetchAccountHistory(
-  dispatch: Dispatch,
-  pubkey: PublicKey,
-  url: string
-) {
-  dispatch({
-    type: ActionType.Update,
-    data: { status: Status.FetchingHistory },
-    pubkey
-  });
-
-  let history;
-  let status;
-  try {
-    const connection = new Connection(url);
-    const currentSlot = await connection.getSlot();
-    const signatures = await connection.getConfirmedSignaturesForAddress(
-      pubkey,
-      Math.max(0, currentSlot - 10000 + 1),
-      currentSlot
-    );
-
-    let statuses: (SignatureStatus | null)[] = [];
-    if (signatures.length > 0) {
-      statuses = (
-        await connection.getSignatureStatuses(signatures, {
-          searchTransactionHistory: true
-        })
-      ).value;
-    }
-
-    history = new Map();
-    for (let i = 0; i < statuses.length; i++) {
-      const status = statuses[i];
-      if (!status) continue;
-      let slotSignatures = history.get(status.slot);
-      if (!slotSignatures) {
-        slotSignatures = new Map();
-        history.set(status.slot, slotSignatures);
-      }
-      slotSignatures.set(signatures[i], status.err);
-    }
-    status = Status.Success;
-  } catch (error) {
-    console.error("Failed to fetch account history", error);
-    status = Status.HistoryFailed;
-  }
-  const data = { status, history };
   dispatch({ type: ActionType.Update, data, pubkey });
 }
 
@@ -297,16 +231,6 @@ export function useAccountInfo(address: string) {
   return context.accounts[address];
 }
 
-export function useAccountsDispatch() {
-  const context = React.useContext(DispatchContext);
-  if (!context) {
-    throw new Error(
-      `useAccountsDispatch must be used within a AccountsProvider`
-    );
-  }
-  return context;
-}
-
 export function useFetchAccountInfo() {
   const dispatch = React.useContext(DispatchContext);
   if (!dispatch) {
@@ -318,19 +242,5 @@ export function useFetchAccountInfo() {
   const { url, status } = useCluster();
   return (pubkey: PublicKey) => {
     fetchAccountInfo(dispatch, pubkey, url, status);
-  };
-}
-
-export function useFetchAccountHistory() {
-  const dispatch = React.useContext(DispatchContext);
-  if (!dispatch) {
-    throw new Error(
-      `useFetchAccountHistory must be used within a AccountsProvider`
-    );
-  }
-
-  const { url } = useCluster();
-  return (pubkey: PublicKey) => {
-    fetchAccountHistory(dispatch, pubkey, url);
   };
 }

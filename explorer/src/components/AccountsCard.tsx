@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   useAccounts,
   Account,
-  Status,
+  FetchStatus,
   useFetchAccountInfo
 } from "../providers/accounts";
 import { assertUnreachable } from "../utils";
@@ -109,17 +109,15 @@ const renderAccountRow = (account: Account) => {
   let statusText;
   let statusClass;
   switch (account.status) {
-    case Status.CheckFailed:
-    case Status.HistoryFailed:
+    case FetchStatus.FetchFailed:
       statusClass = "dark";
       statusText = "Cluster Error";
       break;
-    case Status.Checking:
-    case Status.FetchingHistory:
+    case FetchStatus.Fetching:
       statusClass = "info";
       statusText = "Fetching";
       break;
-    case Status.Success:
+    case FetchStatus.Fetched:
       if (account.details?.executable) {
         statusClass = "dark";
         statusText = "Executable";

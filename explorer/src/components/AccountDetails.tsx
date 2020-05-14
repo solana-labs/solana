@@ -4,10 +4,10 @@ import { PublicKey, StakeProgram } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { useHistory, useLocation } from "react-router-dom";
 import {
-  Status,
+  FetchStatus,
   useFetchAccountInfo,
-  useFetchAccountHistory,
   useAccountInfo,
+  useAccountHistory,
   Account
 } from "providers/accounts";
 import { lamportsToSolString } from "utils";
@@ -17,6 +17,7 @@ import { StakeAccountCards } from "components/account/StakeAccountCards";
 import ErrorCard from "components/common/ErrorCard";
 import LoadingCard from "components/common/LoadingCard";
 import TableCardBody from "components/common/TableCardBody";
+import { useFetchAccountHistory } from "providers/accounts/history";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
@@ -40,8 +41,9 @@ export default function AccountDetails({ address }: Props) {
 
   // Fetch account on load
   React.useEffect(() => {
+    setSearch(address);
     if (pubkey) fetchAccount(pubkey);
-  }, [pubkey?.toBase58()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchInput = (
     <input
@@ -99,10 +101,10 @@ function AccountCards({ pubkey }: { pubkey: PublicKey }) {
   const info = useAccountInfo(address);
   const refresh = useFetchAccountInfo();
 
-  if (!info || info.status === Status.Checking) {
+  if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (
-    info.status === Status.CheckFailed ||
+    info.status === FetchStatus.FetchFailed ||
     info.lamports === undefined
   ) {
     return <ErrorCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
@@ -118,22 +120,13 @@ function AccountCards({ pubkey }: { pubkey: PublicKey }) {
 }
 
 function UnknownAccountCard({ account }: { account: Account }) {
-  const refresh = useFetchAccountInfo();
-
-  const { details, lamports, pubkey } = account;
+  const { details, lamports } = account;
   if (lamports === undefined) return null;
 
   return (
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Account Overview</h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(pubkey)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
       </div>
 
       <TableCardBody>
@@ -176,40 +169,59 @@ function UnknownAccountCard({ account }: { account: Account }) {
 function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
-  const refresh = useFetchAccountHistory();
+  const history = useAccountHistory(address);
+  const fetchAccountHistory = useFetchAccountHistory();
+  const refresh = () => fetchAccountHistory(pubkey, true);
+  const loadMore = () => fetchAccountHistory(pubkey);
 
-  if (!info || info.lamports === undefined) {
+  if (!info || !history || info.lamports === undefined) {
     return null;
-  } else if (info.status === Status.FetchingHistory) {
-    return <LoadingCard />;
-  } else if (info.history === undefined) {
+  } else if (
+    history.fetched === undefined ||
+    history.fetchedRange === undefined
+  ) {
+    if (history.status === FetchStatus.Fetching) {
+      return <LoadingCard />;
+    }
+
     return (
-      <ErrorCard
-        retry={() => refresh(pubkey)}
-        text="Failed to fetch transaction history"
-      />
+      <ErrorCard retry={refresh} text="Failed to fetch transaction history" />
     );
   }
 
-  if (info.history.size === 0) {
+  if (history.fetched.length === 0) {
     return (
       <ErrorCard
-        retry={() => refresh(pubkey)}
-        text="No recent transaction history found"
+        retry={loadMore}
+        retryText="Look back further"
+        text={
+          "No transaction history found since slot " + history.fetchedRange.min
+        }
       />
     );
   }
 
   const detailsList: React.ReactNode[] = [];
-  info.history.forEach((slotTransactions, slot) => {
-    const signatures = Array.from(slotTransactions.entries()).map(
-      ([signature, err]) => {
-        return <code className="mb-2 mb-last-0">{signature}</code>;
-      }
-    );
+  const transactions = history.fetched;
+
+  for (var i = 0; i < transactions.length; i++) {
+    const slot = transactions[i].status.slot;
+    const slotTransactions = [transactions[i]];
+    while (i + 1 < transactions.length) {
+      const nextSlot = transactions[i + 1].status.slot;
+      if (nextSlot !== slot) break;
+      slotTransactions.push(transactions[++i]);
+    }
+    const signatures = slotTransactions.map(({ signature, status }) => {
+      return (
+        <code key={signature} className="mb-2 mb-last-0">
+          {signature}
+        </code>
+      );
+    });
 
     detailsList.push(
-      <tr>
+      <tr key={slot}>
         <td className="vertical-top">Slot {slot}</td>
         <td className="text-right">
           <div className="d-inline-flex flex-column align-items-end">
@@ -218,22 +230,49 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
         </td>
       </tr>
     );
-  });
+  }
 
+  const fetching = history.status === FetchStatus.Fetching;
   return (
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Transaction History</h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(pubkey)}
+          disabled={fetching}
+          onClick={refresh}
         >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
+          {fetching ? (
+            <>
+              <span className="spinner-grow spinner-grow-sm mr-2"></span>
+              Loading
+            </>
+          ) : (
+            <>
+              <span className="fe fe-refresh-cw mr-2"></span>
+              Refresh
+            </>
+          )}
         </button>
       </div>
 
       <TableCardBody>{detailsList}</TableCardBody>
+      <div className="card-footer">
+        <button
+          className="btn btn-primary w-100"
+          onClick={loadMore}
+          disabled={fetching}
+        >
+          {fetching ? (
+            <>
+              <span className="spinner-grow spinner-grow-sm mr-2"></span>
+              Loading
+            </>
+          ) : (
+            "Load More"
+          )}
+        </button>
+      </div>
     </div>
   );
 }
