@@ -93,6 +93,7 @@ mod tests {
         account_utils::State as AccountUtilsState,
         hash::Hash,
         instruction::InstructionError,
+        message::Message,
         nonce::{self, account::with_test_keyed_account, Account as NonceAccount, State},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -125,7 +126,8 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        let tx = Transaction::new_signed_instructions(&[&Keypair::new(); 0], &[], Hash::default());
+        let message = Message::new_with_payer(&[], None);
+        let tx = Transaction::new(&[&Keypair::new(); 0], message, Hash::default());
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 

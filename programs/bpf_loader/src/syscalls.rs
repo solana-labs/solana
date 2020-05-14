@@ -689,7 +689,7 @@ fn call<'a>(
     // Translate data passed from the VM
 
     let instruction = syscall.translate_instruction(instruction_addr, ro_regions)?;
-    let message = Message::new(&[instruction]);
+    let message = Message::new_with_payer(&[instruction], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
     let caller_program_id = invoke_context

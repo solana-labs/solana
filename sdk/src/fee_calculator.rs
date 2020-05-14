@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn test_fee_calculator_calculate_fee() {
         // Default: no fee.
-        let message = Message::new(&[]);
+        let message = Message::new_with_payer(&[], None);
         assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
 
         // No signature, no fee.
