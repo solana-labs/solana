@@ -75,6 +75,7 @@ pub fn discover_cluster(
         None,
         None,
         None,
+        0,
     )
     .map(|(_all_peers, validators, archivers)| (validators, archivers))
 }
@@ -86,9 +87,11 @@ pub fn discover(
     find_node_by_pubkey: Option<Pubkey>,
     find_node_by_gossip_addr: Option<&SocketAddr>,
     my_gossip_addr: Option<&SocketAddr>,
+    my_shred_version: u16,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>, Vec<ContactInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entrypoint, &exit, my_gossip_addr);
+    let (gossip_service, ip_echo, spy_ref) =
+        make_gossip_node(entrypoint, &exit, my_gossip_addr, my_shred_version);
 
     let id = spy_ref.id();
     info!("Entrypoint: {:?}", entrypoint);
@@ -260,12 +263,13 @@ fn make_gossip_node(
     entrypoint: Option<&SocketAddr>,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
+    shred_version: u16,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
-        ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr)
+        ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr, shred_version)
     } else {
-        ClusterInfo::spy_node(&keypair.pubkey())
+        ClusterInfo::spy_node(&keypair.pubkey(), shred_version)
     };
     let cluster_info = ClusterInfo::new(node, keypair);
     if let Some(entrypoint) = entrypoint {

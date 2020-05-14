@@ -155,6 +155,7 @@ fn main() {
         None,
         Some(&entrypoint_addr),
         None,
+        0,
     )
     .unwrap_or_else(|err| {
         eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
