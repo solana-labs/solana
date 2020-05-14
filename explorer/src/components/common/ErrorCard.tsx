@@ -2,11 +2,14 @@ import React from "react";
 
 export default function ErrorCard({
   retry,
+  retryText,
   text
 }: {
   retry?: () => void;
+  retryText?: string;
   text: string;
 }) {
+  const buttonText = retryText || "Try Again";
   return (
     <div className="card">
       <div className="card-body text-center">
@@ -17,12 +20,12 @@ export default function ErrorCard({
               className="btn btn-white ml-3 d-none d-md-inline"
               onClick={retry}
             >
-              Try Again
+              {buttonText}
             </span>
             <div className="d-block d-md-none mt-4">
               <hr></hr>
               <span className="btn btn-white" onClick={retry}>
-                Try Again
+                {buttonText}
               </span>
             </div>
           </>
