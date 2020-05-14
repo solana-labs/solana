@@ -55,7 +55,7 @@ export function NonceAuthorizeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Authorized Address</td>
+        <td>Old Authority Address</td>
         <td className="text-right">
           <Copyable text={authorizedKey}>
             <code>{authorizedKey}</code>
@@ -64,7 +64,7 @@ export function NonceAuthorizeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>New Authorized Address</td>
+        <td>New Authority Address</td>
         <td className="text-right">
           <Copyable text={newAuthorizedKey}>
             <code>{newAuthorizedKey}</code>

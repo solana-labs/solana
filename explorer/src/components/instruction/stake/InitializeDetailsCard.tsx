@@ -3,7 +3,8 @@ import {
   TransactionInstruction,
   SignatureResult,
   StakeInstruction,
-  StakeProgram
+  StakeProgram,
+  SystemProgram
 } from "@solana/web3.js";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
@@ -55,7 +56,7 @@ export function InitializeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Authorized Staker Address</td>
+        <td>Stake Authority Address</td>
         <td className="text-right">
           <Copyable text={stakerPubkey}>
             <code>{stakerPubkey}</code>
@@ -64,7 +65,7 @@ export function InitializeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Authorized Withdrawer Address</td>
+        <td>Withdraw Authority Address</td>
         <td className="text-right">
           <Copyable text={withdrawerPubkey}>
             <code>{withdrawerPubkey}</code>
@@ -72,26 +73,32 @@ export function InitializeDetailsCard(props: {
         </td>
       </tr>
 
-      <tr>
-        <td>Lockup Expiry Epoch</td>
-        <td className="text-right">{params.lockup.epoch}</td>
-      </tr>
+      {params.lockup.epoch > 0 && (
+        <tr>
+          <td>Lockup Expiry Epoch</td>
+          <td className="text-right">{params.lockup.epoch}</td>
+        </tr>
+      )}
 
-      <tr>
-        <td>Lockup Expiry Timestamp</td>
-        <td className="text-right">
-          {new Date(params.lockup.unixTimestamp * 1000).toUTCString()}
-        </td>
-      </tr>
+      {params.lockup.unixTimestamp > 0 && (
+        <tr>
+          <td>Lockup Expiry Timestamp</td>
+          <td className="text-right">
+            {new Date(params.lockup.unixTimestamp * 1000).toUTCString()}
+          </td>
+        </tr>
+      )}
 
-      <tr>
-        <td>Lockup Custodian Address</td>
-        <td className="text-right">
-          <Copyable text={params.lockup.custodian.toBase58()}>
-            <code>{displayAddress(params.lockup.custodian.toBase58())}</code>
-          </Copyable>
-        </td>
-      </tr>
+      {!params.lockup.custodian.equals(SystemProgram.programId) && (
+        <tr>
+          <td>Lockup Custodian Address</td>
+          <td className="text-right">
+            <Copyable text={params.lockup.custodian.toBase58()}>
+              <code>{displayAddress(params.lockup.custodian.toBase58())}</code>
+            </Copyable>
+          </td>
+        </tr>
+      )}
     </InstructionCard>
   );
 }
