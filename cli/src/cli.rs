@@ -846,7 +846,7 @@ pub fn parse_command(
         },
         ("decode-transaction", Some(matches)) => {
             let encoded_transaction = EncodedTransaction::Binary(
-                matches.value_of("base85_transaction").unwrap().to_string(),
+                matches.value_of("base58_transaction").unwrap().to_string(),
             );
             if let Some(transaction) = encoded_transaction.decode() {
                 Ok(CliCommandInfo {
@@ -2434,9 +2434,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("decode-transaction")
-                .about("Decode a base-85 binary transaction")
+                .about("Decode a base-58 binary transaction")
                 .arg(
-                    Arg::with_name("base85_transaction")
+                    Arg::with_name("base58_transaction")
                         .index(1)
                         .value_name("BASE58_TRANSACTION")
                         .takes_value(true)
