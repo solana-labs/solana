@@ -135,9 +135,14 @@ fn start_gossip_node(
     entrypoint_gossip: &SocketAddr,
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
+    expected_shred_version: Option<u16>,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let cluster_info = ClusterInfo::new(
-        ClusterInfo::gossip_contact_info(&identity_keypair.pubkey(), *gossip_addr),
+        ClusterInfo::gossip_contact_info(
+            &identity_keypair.pubkey(),
+            *gossip_addr,
+            expected_shred_version.unwrap_or(0),
+        ),
         identity_keypair.clone(),
     );
     cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
@@ -1061,6 +1066,7 @@ pub fn main() {
                 &cluster_entrypoint.gossip,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
+                validator_config.expected_shred_version,
             );
 
             let mut blacklisted_rpc_nodes = HashSet::new();
