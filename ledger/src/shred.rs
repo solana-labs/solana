@@ -9,7 +9,7 @@ use rayon::{
     slice::ParallelSlice,
     ThreadPool,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use solana_metrics::datapoint_debug;
 use solana_perf::packet::Packet;
 use solana_rayon_threadlimit::get_thread_count;
@@ -31,6 +31,7 @@ pub type Nonce = u32;
 /// Constants are used over lazy_static for performance reasons.
 pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
+pub const SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD: usize = 2;
 pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_SHRED_TYPE: usize = 1;
@@ -43,7 +44,8 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-pub const SIZE_OF_NONCE_DATA_SHRED_PAYLOAD: usize = SIZE_OF_DATA_SHRED_PAYLOAD - SIZE_OF_NONCE;
+pub const SIZE_OF_NONCE_DATA_SHRED_PAYLOAD: usize =
+    SIZE_OF_DATA_SHRED_PAYLOAD - SIZE_OF_NONCE - SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD;
 
 pub const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
@@ -114,6 +116,20 @@ pub struct ShredCommonHeader {
 pub struct DataShredHeader {
     pub parent_offset: u16,
     pub flags: u8,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "option_as_u16_serialize")]
+    pub size: Option<u16>,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn option_as_u16_serialize<S>(x: &Option<u16>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    assert!(x.is_some());
+    let num = x.unwrap();
+    s.serialize_u16(num)
 }
 
 /// The coding shred header has FEC information
@@ -185,9 +201,20 @@ impl Shred {
             ..ShredCommonHeader::default()
         };
 
+        let size = if Self::is_nonce_unlocked(slot) {
+            Some(
+                (data.map(|d| d.len()).unwrap_or(0)
+                    + SIZE_OF_DATA_SHRED_HEADER
+                    + SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD
+                    + SIZE_OF_COMMON_SHRED_HEADER) as u16,
+            )
+        } else {
+            None
+        };
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
+            size,
         };
 
         if is_last_data {
@@ -206,9 +233,10 @@ impl Shred {
             &common_header,
         )
         .expect("Failed to write header into shred buffer");
+        let size_of_data_shred_header = Shredder::get_expected_data_header_size_from_slot(slot);
         Self::serialize_obj_into(
             &mut start,
-            SIZE_OF_DATA_SHRED_HEADER,
+            size_of_data_shred_header,
             &mut payload,
             &data_header,
         )
@@ -251,8 +279,11 @@ impl Shred {
                 payload,
             }
         } else if common_header.shred_type == ShredType(DATA_SHRED) {
+            // This doesn't need to change since we skip deserialization of the
+            // "size" field in the header for now
+            let size_of_data_shred_header = SIZE_OF_DATA_SHRED_HEADER;
             let data_header: DataShredHeader =
-                Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
+                Self::deserialize_obj(&mut start, size_of_data_shred_header, &payload)?;
             if u64::from(data_header.parent_offset) > common_header.slot {
                 return Err(ShredError::InvalidParentOffset {
                     slot,
@@ -288,10 +319,15 @@ impl Shred {
             &common_header,
         )
         .expect("Failed to write header into shred buffer");
+        let expected_data_header_size = if payload_size == NONCE_SHRED_PAYLOAD_SIZE {
+            SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD
+        } else {
+            SIZE_OF_DATA_SHRED_HEADER
+        };
         if common_header.shred_type == ShredType(DATA_SHRED) {
             Self::serialize_obj_into(
                 &mut start,
-                SIZE_OF_DATA_SHRED_HEADER,
+                expected_data_header_size,
                 &mut payload,
                 &data_header,
             )
@@ -416,8 +452,9 @@ impl Shred {
         }
     }
 
-    pub fn reference_tick_from_data(data: &[u8]) -> u8 {
-        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER - size_of::<u8>()];
+    pub fn reference_tick_from_data(data: &[u8], slot: Slot) -> u8 {
+        let size_of_data_shred_header = Shredder::get_expected_data_header_size_from_slot(slot);
+        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + size_of_data_shred_header - size_of::<u8>()];
         flags & SHRED_TICK_REFERENCE_MASK
     }
 
@@ -742,8 +779,7 @@ impl Shredder {
         present: &mut [bool],
         payload_size: usize,
     ) -> Vec<Vec<u8>> {
-        // Safe to assert because window service should filter out any packets
-        // with unsupported payload sizes
+        // Safe to assert because `new_from_serialized_shred` guarantees the size
         assert!(payload_size == NONCE_SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         let end_index = index_found.saturating_sub(1);
         // The index of current shred must be within the range of shreds that are being
@@ -871,8 +907,9 @@ impl Shredder {
         let num_data = shreds.len();
         let expected_payload_size =
             Self::verify_consistent_shred_payload_sizes(&"deshred()", shreds)?;
-        let data_shred_bufs = {
+        let (data_shred_bufs, slot) = {
             let first_index = shreds.first().unwrap().index() as usize;
+            let slot = shreds.first().unwrap().slot();
             let last_shred = shreds.last().unwrap();
             let last_index = if last_shred.data_complete() || last_shred.last_in_slot() {
                 last_shred.index() as usize
@@ -884,13 +921,15 @@ impl Shredder {
                 return Err(reed_solomon_erasure::Error::TooFewDataShards);
             }
 
-            shreds.iter().map(|shred| &shred.payload).collect()
+            (shreds.iter().map(|shred| &shred.payload).collect(), slot)
         };
 
+        let expected_data_header_size = Self::get_expected_data_header_size_from_slot(slot);
         Ok(Self::reassemble_payload(
             num_data,
             data_shred_bufs,
             expected_payload_size,
+            expected_data_header_size,
         ))
     }
 
@@ -899,6 +938,14 @@ impl Shredder {
             SIZE_OF_NONCE_DATA_SHRED_PAYLOAD
         } else {
             SIZE_OF_DATA_SHRED_PAYLOAD
+        }
+    }
+
+    pub fn get_expected_data_header_size_from_slot(slot: Slot) -> usize {
+        if Shred::is_nonce_unlocked(slot) {
+            SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD
+        } else {
+            SIZE_OF_DATA_SHRED_HEADER
         }
     }
 
@@ -919,12 +966,13 @@ impl Shredder {
         num_data: usize,
         data_shred_bufs: Vec<&Vec<u8>>,
         expected_payload_size: usize,
+        expected_data_header_size: usize,
     ) -> Vec<u8> {
         let valid_data_len = expected_payload_size - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
-                let offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
+                let offset = SIZE_OF_COMMON_SHRED_HEADER + expected_data_header_size;
                 data[offset..valid_data_len].iter()
             })
             .cloned()
@@ -1026,6 +1074,14 @@ pub mod tests {
         assert_eq!(
             SIZE_OF_DATA_SHRED_HEADER,
             serialized_size(&DataShredHeader::default()).unwrap() as usize
+        );
+        let data_shred_header_with_size = DataShredHeader {
+            size: Some(1000),
+            ..DataShredHeader::default()
+        };
+        assert_eq!(
+            SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER_SIZE_FIELD,
+            serialized_size(&data_shred_header_with_size).unwrap() as usize
         );
         assert_eq!(
             SIZE_OF_SIGNATURE,
@@ -1198,7 +1254,7 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
-            assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
+            assert_eq!(Shred::reference_tick_from_data(&s.payload, slot), 5);
         });
 
         let deserialized_shred =
@@ -1229,7 +1285,7 @@ pub mod tests {
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
             assert_eq!(
-                Shred::reference_tick_from_data(&s.payload),
+                Shred::reference_tick_from_data(&s.payload, slot),
                 SHRED_TICK_REFERENCE_MASK
             );
         });

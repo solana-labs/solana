@@ -1471,6 +1471,7 @@ impl Blockstore {
             // the tick that will be used to figure out the timeout for this hole
             let reference_tick = u64::from(Shred::reference_tick_from_data(
                 &db_iterator.value().expect("couldn't read value"),
+                current_slot,
             ));
 
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
