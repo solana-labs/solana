@@ -913,16 +913,18 @@ mod tests {
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
         let invalid_owner = Account::new_data(1, &data, &Pubkey::new(&[1u8; 32]));
-        assert_eq!(
-            check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash),
-            Err(CliNonceError::InvalidAccountOwner.into()),
-        );
+        if let CliError::InvalidNonce(err) =
+            check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+        {
+            assert_eq!(err, CliNonceError::InvalidAccountOwner,);
+        }
 
         let invalid_data = Account::new_data(1, &"invalid", &system_program::ID);
-        assert_eq!(
-            check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash),
-            Err(CliNonceError::InvalidAccountData.into()),
-        );
+        if let CliError::InvalidNonce(err) =
+            check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+        {
+            assert_eq!(err, CliNonceError::InvalidAccountData,);
+        }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
@@ -930,10 +932,11 @@ mod tests {
             fee_calculator: FeeCalculator::default(),
         }));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID);
-        assert_eq!(
-            check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
-            Err(CliNonceError::InvalidHash.into()),
-        );
+        if let CliError::InvalidNonce(err) =
+            check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+        {
+            assert_eq!(err, CliNonceError::InvalidHash,);
+        }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: Pubkey::new_rand(),
@@ -941,17 +944,19 @@ mod tests {
             fee_calculator: FeeCalculator::default(),
         }));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
-        assert_eq!(
-            check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),
-            Err(CliNonceError::InvalidAuthority.into()),
-        );
+        if let CliError::InvalidNonce(err) =
+            check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+        {
+            assert_eq!(err, CliNonceError::InvalidAuthority,);
+        }
 
         let data = Versions::new_current(State::Uninitialized);
         let invalid_state = Account::new_data(1, &data, &system_program::ID);
-        assert_eq!(
-            check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
-            Err(CliNonceError::InvalidStateForOperation.into()),
-        );
+        if let CliError::InvalidNonce(err) =
+            check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+        {
+            assert_eq!(err, CliNonceError::InvalidStateForOperation,);
+        }
     }
 
     #[test]

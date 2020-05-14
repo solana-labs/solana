@@ -26,7 +26,7 @@ use solana_clap_utils::{
     ArgConstant,
 };
 use solana_client::{
-    client_error::{ClientErrorKind, Result as ClientResult},
+    client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::RpcLargestAccountsFilter,
     rpc_response::{RpcAccount, RpcKeyedAccount},
@@ -453,10 +453,12 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum CliError {
     #[error("bad parameter: {0}")]
     BadParameter(String),
+    #[error(transparent)]
+    ClientError(#[from] ClientError),
     #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
     #[error("insufficient funds for fee ({0} SOL)")]
@@ -1137,21 +1139,10 @@ fn process_airdrop(
         build_balance_message(lamports, false, true),
         faucet_addr
     );
-    let previous_balance = match rpc_client.retry_get_balance(&pubkey, 5)? {
-        Some(lamports) => lamports,
-        None => {
-            return Err(CliError::RpcRequestError(
-                "Received result of an unexpected type".to_string(),
-            )
-            .into())
-        }
-    };
 
     request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports, &config)?;
 
-    let current_balance = rpc_client
-        .retry_get_balance(&pubkey, 5)?
-        .unwrap_or(previous_balance);
+    let current_balance = rpc_client.get_balance(&pubkey)?;
 
     Ok(build_balance_message(current_balance, false, true))
 }

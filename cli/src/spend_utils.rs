@@ -94,9 +94,7 @@ where
         );
         message
     } else {
-        let from_balance = rpc_client
-            .retry_get_balance(&from_pubkey, 5)?
-            .unwrap_or_default();
+        let from_balance = rpc_client.get_balance(&from_pubkey)?;
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
             amount,
             fee_calculator,
