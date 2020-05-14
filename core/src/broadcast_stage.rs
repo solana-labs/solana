@@ -464,7 +464,7 @@ pub mod test {
         Vec<TransmitShreds>,
         Vec<TransmitShreds>,
     ) {
-        let num_entries = max_ticks_per_n_shreds(num);
+        let num_entries = max_ticks_per_n_shreds(num, None);
         let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
         let keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, 0, RECOMMENDED_FEC_RATE, keypair, 0, 0)
