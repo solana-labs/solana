@@ -118,14 +118,6 @@ static_assert(sizeof(uint64_t) == 8);
 #endif
 
 /**
- * Prefix for all BPF functions
- *
- * This prefix should be used for functions in order to facilitate
- * interoperability with BPF representation
- */
-#define SOL_FN_PREFIX __attribute__((always_inline)) static
-
-/**
  * Prints a string to stdout
  */
 void sol_log_(const char *, uint64_t);
@@ -157,7 +149,7 @@ typedef struct {
  * @param two Second public key
  * @return true if the same
  */
-SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
+static bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
   for (int i = 0; i < sizeof(*one); i++) {
     if (one->x[i] != two->x[i]) {
       return false;
@@ -184,7 +176,7 @@ typedef struct {
 /**
  * Copies memory
  */
-SOL_FN_PREFIX void sol_memcpy(void *dst, const void *src, int len) {
+static void sol_memcpy(void *dst, const void *src, int len) {
   for (int i = 0; i < len; i++) {
     *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
   }
@@ -193,7 +185,7 @@ SOL_FN_PREFIX void sol_memcpy(void *dst, const void *src, int len) {
 /**
  * Compares memory
  */
-SOL_FN_PREFIX int sol_memcmp(const void *s1, const void *s2, int n) {
+static int sol_memcmp(const void *s1, const void *s2, int n) {
   for (int i = 0; i < n; i++) {
     uint8_t diff = *((uint8_t *)s1 + i) - *((const uint8_t *)s2 + i);
     if (diff) {
@@ -206,7 +198,7 @@ SOL_FN_PREFIX int sol_memcmp(const void *s1, const void *s2, int n) {
 /**
  * Fill a byte string with a byte value
  */
-SOL_FN_PREFIX void *sol_memset(void *b, int c, size_t len) {
+static void *sol_memset(void *b, int c, size_t len) {
   uint8_t *a = (uint8_t *) b;
   while (len > 0) {
     *a = c;
@@ -218,7 +210,7 @@ SOL_FN_PREFIX void *sol_memset(void *b, int c, size_t len) {
 /**
  * Find length of string
  */
-SOL_FN_PREFIX size_t sol_strlen(const char *s) {
+static size_t sol_strlen(const char *s) {
   size_t len = 0;
   while (*s) {
     len++;
@@ -275,7 +267,7 @@ typedef struct {
  * @param params Pointer to a SolParameters structure
  * @return Boolean true if successful.
  */
-SOL_FN_PREFIX bool sol_deserialize(
+static bool sol_deserialize(
   const uint8_t *input,
   SolParameters *params,
   uint64_t ka_num
@@ -285,10 +277,6 @@ SOL_FN_PREFIX bool sol_deserialize(
   }
   params->ka_num = *(uint64_t *) input;
   input += sizeof(uint64_t);
-
-  if (ka_num > params->ka_num) {
-    return false;
-  }
 
   for (int i = 0; i < params->ka_num; i++) {
     uint8_t dup_info = input[0];
@@ -366,6 +354,102 @@ SOL_FN_PREFIX bool sol_deserialize(
 }
 
 /**
+<<<<<<< HEAD
+=======
+ * Account Meta
+ */
+typedef struct {
+  SolPubkey *pubkey; /** An account's public key */
+  bool is_writable; /** True if the `pubkey` can be loaded as a read-write account */
+  bool is_signer; /** True if an Instruction requires a Transaction signature matching `pubkey` */
+} SolAccountMeta;
+
+/**
+ * Instruction
+ */
+typedef struct {
+  SolPubkey *program_id; /** Pubkey of the instruction processor that executes this instruction */
+  SolAccountMeta *accounts; /** Metadata for what accounts should be passed to the instruction processor */
+  uint64_t account_len; /** Number of SolAccountMetas */
+  uint8_t *data; /** Opaque data passed to the instruction processor */
+  uint64_t data_len; /** Length of the data in bytes */
+} SolInstruction;
+
+/**
+ * Seed used to create a program address
+ */
+typedef struct {
+  const char *addr; /** Seed string */
+  uint64_t len; /** Length of the seed string */
+} SolSignerSeed;
+
+/**
+ * Seeds used by a signer to create a program address
+ */
+typedef struct {
+  const SolSignerSeed *addr; /** An arry of a signer's seeds */
+  uint64_t len; /** Number of seeds */
+} SolSignerSeeds;
+
+/**
+ * Cross-program invocation
+ *  * @{
+ */
+
+/*
+ * @param instruction Instruction to process
+ * @param account_infos Accounts used by instruction
+ * @param account_infos_len Length of account_infos array
+ * @param seeds Seed strings used to sign program accounts
+ * @param seeds_len Length of the seeds array
+ */
+static uint64_t sol_invoke_signed(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+) {
+  uint64_t sol_invoke_signed_c(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+  );
+
+  return sol_invoke_signed_c(
+    instruction,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    signers_seeds_len
+  );
+}
+/*
+* @param instruction Instruction to process
+* @param account_infos Accounts used by instruction
+* @param account_infos_len Length of account_infos array
+*/
+static uint64_t sol_invoke(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len
+) {
+  const SolSignerSeeds signers_seeds[] = {{}};
+  return sol_invoke_signed(
+    instruction,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    0
+  );
+}
+
+/**@}*/
+
+/**
+>>>>>>> c5460e7fe... Remove inline from all BPF C functions (#10038)
  * Debugging utilities
  * @{
  */
@@ -375,7 +459,7 @@ SOL_FN_PREFIX bool sol_deserialize(
  *
  * @param key The public key to print
  */
-SOL_FN_PREFIX void sol_log_key(const SolPubkey *key) {
+static void sol_log_key(const SolPubkey *key) {
   for (int j = 0; j < sizeof(*key); j++) {
     sol_log_64(0, 0, 0, j, key->x[j]);
   }
@@ -386,7 +470,7 @@ SOL_FN_PREFIX void sol_log_key(const SolPubkey *key) {
  *
  * @param array The array to print
  */
-SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
+static void sol_log_array(const uint8_t *array, int len) {
   for (int j = 0; j < len; j++) {
     sol_log_64(0, 0, 0, j, array[j]);
   }
@@ -397,7 +481,7 @@ SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
  *
  * @param params Pointer to a SolParameters structure
  */
-SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
+static void sol_log_params(const SolParameters *params) {
   sol_log("- Program identifier:");
   sol_log_key(params->program_id);
 
