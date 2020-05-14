@@ -1849,39 +1849,39 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    pub fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
+    pub fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr, shred_version: u16) -> ContactInfo {
         ContactInfo {
             id: *id,
             gossip,
             wallclock: timestamp(),
+            shred_version,
             ..ContactInfo::default()
         }
-    }
-
-    pub fn spy_contact_info(id: &Pubkey) -> ContactInfo {
-        let dummy_addr = socketaddr_any!();
-
-        Self::gossip_contact_info(id, dummy_addr)
     }
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(
         id: &Pubkey,
         gossip_addr: &SocketAddr,
+        shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
-        let contact_info = Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port));
+        let contact_info =
+            Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port), shred_version);
 
         (contact_info, gossip_socket, Some(ip_echo))
     }
 
     /// A Node with dummy ports to spy on gossip via pull requests
-    pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
+    pub fn spy_node(
+        id: &Pubkey,
+        shred_version: u16,
+    ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_, gossip_socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
-        let contact_info = Self::spy_contact_info(id);
+        let contact_info = Self::gossip_contact_info(id, socketaddr_any!(), shred_version);
 
         (contact_info, gossip_socket, None)
     }
@@ -2181,10 +2181,10 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-        let (node, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (node, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(&node));
         let (node, _, _) =
-            ClusterInfo::gossip_node(&Pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap());
+            ClusterInfo::gossip_node(&Pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap(), 0);
         assert!(ClusterInfo::is_spy_node(&node));
     }
 
@@ -2192,7 +2192,7 @@ mod tests {
     fn test_cluster_spy_gossip() {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand(), 0);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         cluster_info.insert_info(spy);
         cluster_info
