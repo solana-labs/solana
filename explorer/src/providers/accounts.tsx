@@ -9,6 +9,7 @@ import {
 } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useCluster, ClusterStatus } from "./cluster";
+import { StakeAccount } from "solana-sdk-wasm";
 
 export enum Status {
   Checking,
@@ -28,7 +29,7 @@ export interface Details {
   executable: boolean;
   owner: PublicKey;
   space: number;
-  data?: Buffer;
+  data?: StakeAccount;
 }
 
 export interface Account {
@@ -198,7 +199,13 @@ async function fetchAccountInfo(
 
       // Only save data in memory if we can decode it
       if (result.owner.equals(StakeProgram.programId)) {
-        data = result.data;
+        try {
+          const wasm = await import("solana-sdk-wasm");
+          data = wasm.StakeAccount.fromAccountData(result.data);
+        } catch (err) {
+          console.error("Unexpected error loading wasm", err);
+          // TODO store error state in Account info
+        }
       }
 
       details = {
