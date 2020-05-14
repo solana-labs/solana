@@ -1,0 +1,27 @@
+[package]
+name = "solana-sdk-wasm"
+version = "1.2.0"
+description = "Solana SDK Wasm"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2018"
+
+[lib]
+name = "solana_sdk_wasm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bincode = "1.2.1"
+bs58 = "0.3.1"
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

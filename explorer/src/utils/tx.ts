@@ -1,5 +1,4 @@
 import {
-  PublicKey,
   SystemProgram,
   StakeProgram,
   VOTE_PROGRAM_ID,
@@ -40,8 +39,7 @@ const SYSVAR_IDS = {
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "SYSVAR_STAKE_HISTORY"
 };
 
-export function displayAddress(pubkey: PublicKey): string {
-  const address = pubkey.toBase58();
+export function displayAddress(address: string): string {
   return (
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||

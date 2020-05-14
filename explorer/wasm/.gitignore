@@ -1,0 +1,16 @@
+/target/
+
+**/*.rs.bk
+.cargo
+
+/config/
+
+# log files
+*.log
+log-*.txt
+log-*/
+
+# intellij files
+/.idea/
+/solana.iml
+/.vscode/

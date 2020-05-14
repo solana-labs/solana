@@ -41,7 +41,7 @@ export function CreateWithSeedDetailsCard(props: {
         <td>Program</td>
         <td className="text-right">
           <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
+            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
       </tr>
@@ -105,7 +105,7 @@ export function CreateWithSeedDetailsCard(props: {
         <td>Assigned Owner</td>
         <td className="text-right">
           <Copyable text={params.programId.toBase58()}>
-            <code>{displayAddress(params.programId)}</code>
+            <code>{displayAddress(params.programId.toBase58())}</code>
           </Copyable>
         </td>
       </tr>

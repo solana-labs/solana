@@ -140,7 +140,7 @@ const renderAccountRow = (account: Account) => {
   let owner = "-";
   if (account.details) {
     data = `${account.details.space}`;
-    owner = displayAddress(account.details.owner);
+    owner = displayAddress(account.details.owner.toBase58());
   }
 
   let balance = "-";

@@ -4,7 +4,8 @@ import {
   Connection,
   TransactionSignature,
   TransactionError,
-  SignatureStatus
+  SignatureStatus,
+  StakeProgram
 } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useCluster, ClusterStatus } from "./cluster";
@@ -27,6 +28,7 @@ export interface Details {
   executable: boolean;
   owner: PublicKey;
   space: number;
+  data?: Buffer;
 }
 
 export interface Account {
@@ -192,10 +194,18 @@ async function fetchAccountInfo(
       fetchStatus = Status.NotFound;
     } else {
       lamports = result.lamports;
+      let data = undefined;
+
+      // Only save data in memory if we can decode it
+      if (result.owner.equals(StakeProgram.programId)) {
+        data = result.data;
+      }
+
       details = {
         space: result.data.length,
         executable: result.executable,
-        owner: result.owner
+        owner: result.owner,
+        data
       };
       fetchStatus = Status.FetchingHistory;
       fetchAccountHistory(dispatch, pubkey, url);
