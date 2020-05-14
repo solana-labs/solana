@@ -43,7 +43,7 @@ lazy_static! {
 ///   ...
 /// }
 /// Signature is the first thing in the packet, and slot is the first thing in the signed message.
-fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> Option<u8> {
+pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> Option<u8> {
     let sig_start = 0;
     let sig_end = size_of::<Signature>();
     let slot_start = sig_end + size_of::<ShredType>();
@@ -470,12 +470,8 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        repair_response,
-        shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD, UNLOCK_NONCE_SLOT},
-    };
+    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD, UNLOCK_NONCE_SLOT};
     use solana_sdk::signature::{Keypair, Signer};
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn run_test_sigverify_shred_cpu(slot: Slot) {
         solana_logger::setup();
@@ -522,62 +518,6 @@ pub mod tests {
     fn test_sigverify_shred_cpu() {
         run_test_sigverify_shred_cpu(UNLOCK_NONCE_SLOT);
         run_test_sigverify_shred_cpu(UNLOCK_NONCE_SLOT + 1);
-    }
-
-    fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
-        solana_logger::setup();
-        let mut shred = Shred::new_from_data(
-            slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
-        assert_eq!(shred.slot(), slot);
-        let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
-        trace!("signature {}", shred.common_header.signature);
-        let nonce = if Shred::is_nonce_unlocked(slot) {
-            Some(9)
-        } else {
-            None
-        };
-        let mut packet = repair_response::repair_response_packet_from_shred(
-            slot,
-            shred.payload,
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
-            nonce,
-        );
-        packet.meta.repair = true;
-
-        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
-            .iter()
-            .cloned()
-            .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(1));
-
-        let wrong_keypair = Keypair::new();
-        let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
-            .iter()
-            .cloned()
-            .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(0));
-
-        let leader_slots = HashMap::new();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, None);
-    }
-
-    #[test]
-    fn test_sigverify_shred_cpu_repair() {
-        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT);
-        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT + 1);
     }
 
     fn run_test_sigverify_shreds_cpu(slot: Slot) {

@@ -5,6 +5,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
     outstanding_requests::OutstandingRequests,
+    repair_response,
     repair_service::{RepairService, RepairStrategy},
     result::{Error, Result},
     serve_repair::RepairType,
@@ -19,7 +20,6 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
-    repair_response,
     shred::{Nonce, Shred, NONCE_SHRED_PAYLOAD_SIZE},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};

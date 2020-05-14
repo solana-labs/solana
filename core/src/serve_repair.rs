@@ -3,6 +3,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     outstanding_requests::OutstandingRequests,
+    repair_response,
     repair_service::RepairStats,
     request_response::RequestResponse,
     result::{Error, Result},
@@ -11,7 +12,6 @@ use crate::{
 use bincode::serialize;
 use solana_ledger::{
     blockstore::Blockstore,
-    repair_response,
     shred::{Nonce, Shred},
 };
 use solana_measure::measure::Measure;
@@ -646,12 +646,11 @@ impl ServeRepair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::result::Error;
+    use crate::{repair_response, result::Error};
     use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
-        repair_response,
         shred::{
             max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
             NONCE_SHRED_PAYLOAD_SIZE, UNLOCK_NONCE_SLOT,

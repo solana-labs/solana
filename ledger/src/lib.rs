@@ -15,7 +15,6 @@ pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
 pub mod next_slots_iterator;
 pub mod poh;
-pub mod repair_response;
 pub mod rooted_slot_iterator;
 pub mod shred;
 pub mod sigverify_shreds;
