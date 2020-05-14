@@ -68,7 +68,7 @@ export function AuthorizeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Old Authorized Address</td>
+        <td>Old Authority Address</td>
         <td className="text-right">
           <Copyable text={authorizedPubkey}>
             <code>{authorizedPubkey}</code>
@@ -77,7 +77,7 @@ export function AuthorizeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>New Authorized Address</td>
+        <td>New Authority Address</td>
         <td className="text-right">
           <Copyable text={newAuthorizedPubkey}>
             <code>{newAuthorizedPubkey}</code>
@@ -86,7 +86,7 @@ export function AuthorizeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Authorization Type</td>
+        <td>Authority Type</td>
         <td className="text-right">{authorizationType}</td>
       </tr>
     </InstructionCard>

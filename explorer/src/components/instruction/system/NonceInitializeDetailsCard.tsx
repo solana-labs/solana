@@ -54,7 +54,7 @@ export function NonceInitializeDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Authorized Address</td>
+        <td>Authority Address</td>
         <td className="text-right">
           <Copyable text={authorizedKey}>
             <code>{authorizedKey}</code>

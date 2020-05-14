@@ -11,6 +11,7 @@ export function StakeAccountDetailsCard({
   account: StakeAccount;
 }) {
   const { meta, stake } = account;
+  const hasLockup = meta && meta.lockup.unixTimestamp > 0;
   return (
     <div className="card">
       <div className="card-header">
@@ -34,7 +35,7 @@ export function StakeAccountDetailsCard({
             </tr>
 
             <tr>
-              <td>Authorized Staker Address</td>
+              <td>Stake Authority Address</td>
               <td className="text-right">
                 <Copyable text={meta.authorized.staker.toBase58()}>
                   <code>{meta.authorized.staker.toBase58()}</code>
@@ -43,7 +44,7 @@ export function StakeAccountDetailsCard({
             </tr>
 
             <tr>
-              <td>Authorized Withdrawer Address</td>
+              <td>Withdraw Authority Address</td>
               <td className="text-right">
                 <Copyable text={meta.authorized.withdrawer.toBase58()}>
                   <code>{meta.authorized.withdrawer.toBase58()}</code>
@@ -51,28 +52,27 @@ export function StakeAccountDetailsCard({
               </td>
             </tr>
 
-            <tr>
-              <td>Lockup Expiry Epoch</td>
-              <td className="text-right">{meta.lockup.epoch}</td>
-            </tr>
+            {hasLockup && (
+              <tr>
+                <td>Lockup Expiry Timestamp</td>
+                <td className="text-right">
+                  {new Date(meta.lockup.unixTimestamp).toUTCString()}
+                </td>
+              </tr>
+            )}
 
-            <tr>
-              <td>Lockup Expiry Timestamp</td>
-              <td className="text-right">
-                {new Date(meta.lockup.unixTimestamp).toUTCString()}
-              </td>
-            </tr>
-
-            <tr>
-              <td>Lockup Custodian Address</td>
-              <td className="text-right">
-                <Copyable text={meta.lockup.custodian.toBase58()}>
-                  <code>
-                    {displayAddress(meta.lockup.custodian.toBase58())}
-                  </code>
-                </Copyable>
-              </td>
-            </tr>
+            {hasLockup && (
+              <tr>
+                <td>Lockup Custodian Address</td>
+                <td className="text-right">
+                  <Copyable text={meta.lockup.custodian.toBase58()}>
+                    <code>
+                      {displayAddress(meta.lockup.custodian.toBase58())}
+                    </code>
+                  </Copyable>
+                </td>
+              </tr>
+            )}
           </>
         )}
 
