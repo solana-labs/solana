@@ -24,6 +24,7 @@ members = [
     "logger",
     "log-analyzer",
     "merkle-tree",
+    "stake-o-matic",
     "streamer",
     "measure",
     "metrics",

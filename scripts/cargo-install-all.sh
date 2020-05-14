@@ -100,6 +100,7 @@ else
     solana-net-shaper
     solana-stake-accounts
     solana-stake-monitor
+    solana-stake-o-matic
     solana-sys-tuner
     solana-tokens
     solana-validator

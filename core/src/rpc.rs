@@ -1338,7 +1338,6 @@ impl RpcSol for RpcSolImpl {
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
-        trace!("send_transaction: leader is {:?}", &tpu_addr);
         transactions_socket
             .send_to(&wire_transaction, tpu_addr)
             .map_err(|err| {
