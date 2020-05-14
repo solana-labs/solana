@@ -7,9 +7,7 @@ use solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     fee_calculator::FeeCalculator, message::Message, native_token::lamports_to_sol, pubkey::Pubkey,
-    transaction::Transaction,
 };
-use std::error;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SpendAmount {
@@ -44,18 +42,16 @@ struct SpendAndFee {
     fee: u64,
 }
 
-pub fn resolve_spend_tx_and_check_account_balance<F, G>(
+pub fn resolve_spend_tx_and_check_account_balance<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
     fee_calculator: &FeeCalculator,
     from_pubkey: &Pubkey,
     build_message: F,
-    additional_online_checks: G,
-) -> Result<Transaction, Box<dyn error::Error>>
+) -> Result<(Message, u64), CliError>
 where
     F: Fn(u64) -> Message,
-    G: Fn(u64) -> Result<(), Box<dyn error::Error>>,
 {
     resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -65,11 +61,10 @@ where
         from_pubkey,
         from_pubkey,
         build_message,
-        additional_online_checks,
     )
 }
 
-pub fn resolve_spend_tx_and_check_account_balances<F, G>(
+pub fn resolve_spend_tx_and_check_account_balances<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
@@ -77,14 +72,12 @@ pub fn resolve_spend_tx_and_check_account_balances<F, G>(
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
-    additional_online_checks: G,
-) -> Result<Transaction, Box<dyn error::Error>>
+) -> Result<(Message, u64), CliError>
 where
     F: Fn(u64) -> Message,
-    G: Fn(u64) -> Result<(), Box<dyn error::Error>>,
 {
-    let message = if sign_only {
-        let (message, _) = resolve_spend_message(
+    if sign_only {
+        let (message, SpendAndFee { spend, fee: _ }) = resolve_spend_message(
             amount,
             fee_calculator,
             0,
@@ -92,7 +85,7 @@ where
             fee_pubkey,
             build_message,
         );
-        message
+        Ok((message, spend))
     } else {
         let from_balance = rpc_client.get_balance(&from_pubkey)?;
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
@@ -108,21 +101,18 @@ where
                 return Err(CliError::InsufficientFundsForSpendAndFee(
                     lamports_to_sol(spend),
                     lamports_to_sol(fee),
-                )
-                .into());
+                ));
             }
         } else {
             if from_balance < spend {
-                return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(spend)).into());
+                return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(spend)));
             }
             if !check_account_for_balance(rpc_client, fee_pubkey, fee)? {
-                return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)).into());
+                return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
             }
         }
-        additional_online_checks(spend)?;
-        message
-    };
-    Ok(Transaction::new_unsigned(message))
+        Ok((message, spend))
+    }
 }
 
 fn resolve_spend_message<F>(

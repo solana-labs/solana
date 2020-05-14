@@ -471,30 +471,6 @@ pub fn process_create_nonce_account(
         (&nonce_account_address, "nonce_account".to_string()),
     )?;
 
-    let additional_online_checks = |lamports| {
-        if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
-            let err_msg = if state_from_account(&nonce_account).is_ok() {
-                format!("Nonce account {} already exists", nonce_account_address)
-            } else {
-                format!(
-                    "Account {} already exists and is not a nonce account",
-                    nonce_account_address
-                )
-            };
-            return Err(CliError::BadParameter(err_msg).into());
-        }
-
-        let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
-        if lamports < minimum_balance {
-            return Err(CliError::BadParameter(format!(
-                "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
-                minimum_balance, lamports
-            ))
-            .into());
-        }
-        Ok(())
-    };
-
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.signers[0].pubkey());
 
     let build_message = |lamports| {
@@ -520,17 +496,38 @@ pub fn process_create_nonce_account(
 
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let mut tx = resolve_spend_tx_and_check_account_balance(
+    let (message, lamports) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         amount,
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
-        additional_online_checks,
     )?;
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
+    if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
+        let err_msg = if state_from_account(&nonce_account).is_ok() {
+            format!("Nonce account {} already exists", nonce_account_address)
+        } else {
+            format!(
+                "Account {} already exists and is not a nonce account",
+                nonce_account_address
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
+    }
+
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
+    if lamports < minimum_balance {
+        return Err(CliError::BadParameter(format!(
+            "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
+            minimum_balance, lamports
+        ))
+        .into());
+    }
+
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&config.signers, recent_blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }

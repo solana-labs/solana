@@ -420,32 +420,29 @@ pub fn process_create_vote_account(
         Message::new(&ixs)
     };
 
-    let additional_online_checks = |_lamports| {
-        if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
-            let err_msg = if vote_account.owner == solana_vote_program::id() {
-                format!("Vote account {} already exists", vote_account_address)
-            } else {
-                format!(
-                    "Account {} already exists and is not a vote account",
-                    vote_account_address
-                )
-            };
-            return Err(CliError::BadParameter(err_msg).into());
-        }
-        Ok(())
-    };
+    if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
+        let err_msg = if vote_account.owner == solana_vote_program::id() {
+            format!("Vote account {} already exists", vote_account_address)
+        } else {
+            format!(
+                "Account {} already exists and is not a vote account",
+                vote_account_address
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
+    }
 
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let mut tx = resolve_spend_tx_and_check_account_balance(
+    let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         amount,
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
-        additional_online_checks,
     )?;
+    let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)

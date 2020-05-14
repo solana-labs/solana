@@ -32,6 +32,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_instruction,
     sysvar::{self, Sysvar},
+    transaction::Transaction,
 };
 use std::{
     collections::{HashMap, VecDeque},
@@ -930,18 +931,18 @@ pub fn process_ping(
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
             Message::new(&[ix])
         };
-        let mut transaction = resolve_spend_tx_and_check_account_balance(
+        let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
             false,
             SpendAmount::Some(lamports),
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
-            |_| Ok(()),
         )?;
-        transaction.try_sign(&config.signers, recent_blockhash)?;
+        let mut tx = Transaction::new_unsigned(message);
+        tx.try_sign(&config.signers, recent_blockhash)?;
 
-        match rpc_client.send_transaction(&transaction) {
+        match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {

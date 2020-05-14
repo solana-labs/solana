@@ -1379,27 +1379,26 @@ fn process_pay(
                 Message::new(&[ix])
             }
         };
-        let additional_online_checks = |_lamports| {
-            if let Some(nonce_account) = &nonce_account {
-                let nonce_account = rpc_client.get_account(nonce_account)?;
-                check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
-            }
-            Ok(())
-        };
-        let mut tx = resolve_spend_tx_and_check_account_balance(
+
+        let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
             sign_only,
             amount,
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
-            additional_online_checks,
         )?;
+        let mut tx = Transaction::new_unsigned(message);
 
         if sign_only {
             tx.try_partial_sign(&config.signers, blockhash)?;
             return_signers(&tx, &config)
         } else {
+            if let Some(nonce_account) = &nonce_account {
+                let nonce_account = rpc_client.get_account(nonce_account)?;
+                check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
+            }
+
             tx.try_sign(&config.signers, blockhash)?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
             log_instruction_custom_error::<SystemError>(result, &config)
@@ -1426,15 +1425,15 @@ fn process_pay(
             );
             Message::new(&ixs)
         };
-        let mut tx = resolve_spend_tx_and_check_account_balance(
+        let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
             sign_only,
             amount,
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
-            |_| Ok(()),
         )?;
+        let mut tx = Transaction::new_unsigned(message);
         if sign_only {
             tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
             return_signers(&tx, &config)
@@ -1472,15 +1471,15 @@ fn process_pay(
             );
             Message::new(&ixs)
         };
-        let mut tx = resolve_spend_tx_and_check_account_balance(
+        let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
             sign_only,
             amount,
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
-            |_| Ok(()),
         )?;
+        let mut tx = Transaction::new_unsigned(message);
         if sign_only {
             tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
             return_signers(&tx, &config)
@@ -1583,15 +1582,8 @@ fn process_transfer(
             Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
         }
     };
-    let additional_online_checks = |_lamports| {
-        if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
-        }
-        Ok(())
-    };
 
-    let mut tx = resolve_spend_tx_and_check_account_balances(
+    let (message, _) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
         sign_only,
         amount,
@@ -1599,13 +1591,18 @@ fn process_transfer(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
-        additional_online_checks,
     )?;
+    let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx, &config)
     } else {
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;

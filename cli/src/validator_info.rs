@@ -23,6 +23,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    transaction::Transaction,
 };
 use std::{error, sync::Arc};
 
@@ -364,15 +365,15 @@ pub fn process_set_validator_info(
 
     // Submit transaction
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = resolve_spend_tx_and_check_account_balance(
+    let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         SpendAmount::Some(lamports),
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
-        |_| Ok(()),
     )?;
+    let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&signers, recent_blockhash)?;
     let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&tx)?;
 

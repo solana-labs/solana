@@ -832,7 +832,17 @@ pub fn process_create_stake_account(
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
 
-    let additional_online_checks = |lamports| {
+    let (message, lamports) = resolve_spend_tx_and_check_account_balances(
+        rpc_client,
+        sign_only,
+        amount,
+        &fee_calculator,
+        &from.pubkey(),
+        &fee_payer.pubkey(),
+        build_message,
+    )?;
+
+    if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
             let err_msg = if stake_account.owner == solana_stake_program::id() {
                 format!("Stake account {} already exists", stake_account_address)
@@ -860,20 +870,9 @@ pub fn process_create_stake_account(
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        Ok(())
-    };
+    }
 
-    let mut tx = resolve_spend_tx_and_check_account_balances(
-        rpc_client,
-        sign_only,
-        amount,
-        &fee_calculator,
-        &from.pubkey(),
-        &fee_payer.pubkey(),
-        build_message,
-        additional_online_checks,
-    )?;
-
+    let mut tx = Transaction::new_unsigned(message);
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx, &config)
