@@ -18,7 +18,7 @@ hardware wallet.
 The Solana CLI supports the following hardware wallets:
  - [Ledger Nano S](ledger.md)
 
-## Specify a Hardware Wallet Key
+## Specify a Keypair URL
 
 Solana defines a keypair URL format to uniquely locate any Solana keypair on a
 hardware wallet connected to your computer.
@@ -36,19 +36,13 @@ usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
 are positive integers.
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501).  The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
-
 For example, a fully qualified URL for a Ledger device might be:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
+<<<<<<< HEAD:docs/src/remote-wallet/README.md
 ## Manage Multiple Hardware Wallets
 
 It is sometimes useful to sign a transaction with keys from multiple hardware
@@ -76,3 +70,11 @@ but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
 
 With your fully qualified URL, you can connect multiple hardware wallets to
 the same computer and uniquely identify a keypair from any of them.
+=======
+All derivation paths implicitly include the prefix `44'/501'`, which indicates
+the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+and that any derived keys are Solana keys (Coin type 501).  The single quote
+indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
+derivations are hardened and therefore adding the quote is optional and
+unnecessary.
+>>>>>>> d195dce5d... Clean up Ledger instructions (#10047):docs/src/hardware-wallets/README.md
