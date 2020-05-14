@@ -30,6 +30,8 @@
   * [Anatomy of a Transaction](transaction.md)
   * [JSON RPC API](apps/jsonrpc-api.md)
   * [JavaScript API](apps/javascript-api.md)
+* [Integration Guides](integrations/README.md)
+  * [Exchange](integrations/exchange.md)
 * [Run a Validator](running-validator/README.md)
   * [Validator Requirements](running-validator/validator-reqs.md)
   * [Start a Validator](running-validator/validator-start.md)
