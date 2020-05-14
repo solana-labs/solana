@@ -20,7 +20,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
-    shred::{Nonce, Shred, NONCE_SHRED_PAYLOAD_SIZE},
+    shred::{Nonce, Shred},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
@@ -207,12 +207,6 @@ where
                             );
                             None
                         } else {
-                            if packet.meta.size != PACKET_DATA_SIZE
-                                && packet.meta.size != NONCE_SHRED_PAYLOAD_SIZE
-                            {
-                                return None;
-                            }
-
                             // shred fetch stage should be sending packets
                             // with sufficiently large buffers. Needed to ensure
                             // call to `new_from_serialized_shred` is safe.
