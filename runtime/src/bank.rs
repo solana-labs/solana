@@ -3756,7 +3756,11 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 1));
         assert_eq!(bank.rent_collection_partitions(), vec![(224, 225, 432_000)]);
 
-        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 432_000 - 2));
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            432_000 - 2,
+        ));
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(
             bank.rent_collection_partitions(),
