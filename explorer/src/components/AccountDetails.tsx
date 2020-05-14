@@ -1,5 +1,4 @@
 import React from "react";
-import { StakeAccount } from "solana-sdk-wasm";
 import { useClusterModal } from "providers/cluster";
 import { PublicKey, StakeProgram } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
@@ -8,12 +7,13 @@ import {
   Status,
   useFetchAccountInfo,
   useFetchAccountHistory,
-  useAccountInfo
+  useAccountInfo,
+  Account
 } from "providers/accounts";
 import { lamportsToSolString } from "utils";
 import Copyable from "./Copyable";
 import { displayAddress } from "utils/tx";
-import { StakeAccountDetailsCard } from "components/account/StakeAccountDetailsCard";
+import { StakeAccountCards } from "components/account/StakeAccountCards";
 import ErrorCard from "components/common/ErrorCard";
 import LoadingCard from "components/common/LoadingCard";
 import TableCardBody from "components/common/TableCardBody";
@@ -88,54 +88,13 @@ export default function AccountDetails({ address }: Props) {
           </button>
         </div>
       </div>
-      {pubkey && <InfoCard pubkey={pubkey} />}
-      {pubkey && <DetailsCard pubkey={pubkey} />}
+      {pubkey && <AccountCards pubkey={pubkey} />}
       {pubkey && <HistoryCard pubkey={pubkey} />}
     </div>
   );
 }
 
-type Wasm = {
-  StakeAccount: typeof StakeAccount;
-};
-
-function DetailsCard({ pubkey }: { pubkey: PublicKey }) {
-  const address = pubkey.toBase58();
-  const info = useAccountInfo(address);
-  const [Wasm, setWasm] = React.useState<Wasm | undefined>(undefined);
-
-  React.useEffect(() => {
-    (async () => {
-      try {
-        setWasm(await import("solana-sdk-wasm"));
-      } catch (err) {
-        console.error("Unexpected error loading wasm", err);
-      }
-    })();
-  }, []);
-
-  if (!info || !info.details || !info.details.data) {
-    return null;
-  }
-
-  const { data, owner } = info.details;
-  try {
-    if (owner.equals(StakeProgram.programId)) {
-      if (Wasm === undefined) {
-        return <LoadingCard />;
-      } else {
-        const stakeAccount = Wasm.StakeAccount.fromAccountData(data);
-        return <StakeAccountDetailsCard account={stakeAccount} />;
-      }
-    }
-  } catch (err) {
-    console.error(err);
-    return <ErrorCard text="Failed to decode account data" />;
-  }
-  return null;
-}
-
-function InfoCard({ pubkey }: { pubkey: PublicKey }) {
+function AccountCards({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
   const refresh = useFetchAccountInfo();
@@ -149,12 +108,25 @@ function InfoCard({ pubkey }: { pubkey: PublicKey }) {
     return <ErrorCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
   }
 
-  const { details, lamports } = info;
+  const owner = info.details?.owner;
+  const data = info.details?.data;
+  if (data && owner && owner.equals(StakeProgram.programId)) {
+    return <StakeAccountCards account={info} stakeAccount={data} />;
+  } else {
+    return <UnknownAccountCard account={info} />;
+  }
+}
+
+function UnknownAccountCard({ account }: { account: Account }) {
+  const refresh = useFetchAccountInfo();
+
+  const { details, lamports, pubkey } = account;
+  if (lamports === undefined) return null;
 
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Overview</h3>
+        <h3 className="card-header-title">Account Overview</h3>
         <button
           className="btn btn-white btn-sm"
           onClick={() => refresh(pubkey)}
