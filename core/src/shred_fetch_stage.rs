@@ -4,7 +4,8 @@ use bv::BitVec;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
 use solana_ledger::shred::{
-    OFFSET_OF_SHRED_INDEX, OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_INDEX, SIZE_OF_SHRED_SLOT,
+    CODING_SHRED, DATA_SHRED, OFFSET_OF_SHRED_INDEX, OFFSET_OF_SHRED_SLOT, OFFSET_OF_SHRED_TYPE,
+    SIZE_OF_SHRED_INDEX, SIZE_OF_SHRED_SLOT,
 };
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::{limited_deserialize, Packet, PacketsRecycler};
@@ -20,7 +21,7 @@ use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-pub type ShredsReceived = HashMap<Slot, BitVec<u64>>;
+pub type ShredsReceived = HashMap<(Slot, u8), BitVec<u64>>;
 
 #[derive(Default)]
 struct ShredFetchStats {
@@ -78,17 +79,26 @@ impl ShredFetchStage {
         p.meta.discard = true;
         if let Some((slot, index)) = Self::get_slot_index(p, stats) {
             // Seems reasonable to limit shreds to 2 epochs away
-            if slot > last_root && slot < (last_slot + 2 * slots_per_epoch) {
-                // Shred filter
-                let slot_received = shreds_received
-                    .entry(slot)
-                    .or_insert_with(|| BitVec::new_fill(false, MAX_DATA_SHREDS_PER_SLOT as u64));
-                if !slot_received.get(index.into()) {
-                    p.meta.discard = false;
-                    modify(p);
-                    slot_received.set(index.into(), true);
-                } else {
-                    stats.duplicate_shred += 1;
+            if slot > last_root
+                && slot < (last_slot + 2 * slots_per_epoch)
+                && p.meta.size > OFFSET_OF_SHRED_TYPE
+            {
+                let shred_type = p.data[OFFSET_OF_SHRED_TYPE];
+                if shred_type == DATA_SHRED || shred_type == CODING_SHRED {
+                    // Shred filter
+                    let slot_received =
+                        shreds_received
+                            .entry((slot, shred_type))
+                            .or_insert_with(|| {
+                                BitVec::new_fill(false, MAX_DATA_SHREDS_PER_SLOT as u64)
+                            });
+                    if !slot_received.get(index.into()) {
+                        p.meta.discard = false;
+                        modify(p);
+                        slot_received.set(index.into(), true);
+                    } else {
+                        stats.duplicate_shred += 1;
+                    }
                 }
             } else {
                 stats.slot_out_of_range += 1;
