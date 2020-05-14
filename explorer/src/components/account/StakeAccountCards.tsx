@@ -97,6 +97,14 @@ function OverviewCard({
 
 function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   const { stake } = stakeAccount;
+  const displayStatus = () => {
+    let status = stakeAccount.displayState();
+    if (status !== "Delegated") {
+      status = "Not delegated";
+    }
+    return status;
+  };
+
   return (
     <div className="card">
       <div className="card-header">
@@ -107,7 +115,7 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
       <TableCardBody>
         <tr>
           <td>Status</td>
-          <td className="text-right">{stakeAccount.displayState()}</td>
+          <td className="text-right">{displayStatus()}</td>
         </tr>
 
         {stake && (
