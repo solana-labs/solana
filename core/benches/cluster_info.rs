@@ -6,7 +6,7 @@ use rand::{thread_rng, Rng};
 use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
-use solana_ledger::shred::Shred;
+use solana_ledger::shred::{Shred, NONCE_SHRED_PAYLOAD_SIZE};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::sync::RwLock;
@@ -26,7 +26,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     const NUM_SHREDS: usize = 32;
-    let shreds = vec![Shred::new_empty_data_shred(); NUM_SHREDS];
+    let shreds = vec![Shred::new_empty_data_shred(NONCE_SHRED_PAYLOAD_SIZE); NUM_SHREDS];
     let mut stakes = HashMap::new();
     const NUM_PEERS: usize = 200;
     for _ in 0..NUM_PEERS {

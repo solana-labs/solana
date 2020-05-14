@@ -14,7 +14,6 @@ use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::HashMap,
     iter::Iterator,
-    net::SocketAddr,
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -92,7 +91,7 @@ impl RepairService {
                     &blockstore,
                     &exit,
                     &repair_socket,
-                    &cluster_info,
+                    cluster_info,
                     repair_strategy,
                     &cluster_slots,
                 )
@@ -106,14 +105,14 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        cluster_info: &Arc<ClusterInfo>,
+        cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: &Arc<ClusterSlots>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
         if let RepairStrategy::RepairAll { .. } = repair_strategy {
-            Self::initialize_lowest_slot(id, blockstore, cluster_info);
+            Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         }
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();
@@ -122,7 +121,7 @@ impl RepairService {
             ..
         } = repair_strategy
         {
-            Self::initialize_epoch_slots(blockstore, cluster_info, completed_slots_receiver);
+            Self::initialize_epoch_slots(blockstore, &cluster_info, completed_slots_receiver);
         }
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -149,7 +148,7 @@ impl RepairService {
                         let lowest_slot = blockstore.lowest_slot();
                         Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                         Self::update_completed_slots(completed_slots_receiver, &cluster_info);
-                        cluster_slots.update(new_root, cluster_info, bank_forks);
+                        cluster_slots.update(new_root, &cluster_info, bank_forks);
                         Self::generate_repairs(blockstore, new_root, MAX_REPAIR_LENGTH)
                     }
                 }
@@ -157,27 +156,19 @@ impl RepairService {
 
             if let Ok(repairs) = repairs {
                 let mut cache = HashMap::new();
-                let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
-                    .into_iter()
-                    .filter_map(|repair_request| {
-                        serve_repair
-                            .repair_request(
-                                &cluster_slots,
-                                &repair_request,
-                                &mut cache,
-                                &mut repair_stats,
-                            )
-                            .map(|result| (result, repair_request))
-                            .ok()
-                    })
-                    .collect();
-
-                for ((to, req), _) in reqs {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
-                }
+                repairs.into_iter().for_each(|repair_request| {
+                    if let Ok((to, req)) = serve_repair.repair_request(
+                        &cluster_slots,
+                        repair_request,
+                        &mut cache,
+                        &mut repair_stats,
+                    ) {
+                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                            info!("{} repair req send_to({}) error {:?}", id, to, e);
+                            0
+                        });
+                    }
+                });
             }
             if last_stats.elapsed().as_secs() > 1 {
                 let repair_total = repair_stats.shred.count
@@ -504,7 +495,7 @@ mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {

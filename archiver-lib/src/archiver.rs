@@ -13,8 +13,7 @@ use solana_core::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    repair_service,
-    repair_service::{RepairService, RepairSlotRange, RepairStats, RepairStrategy},
+    repair_service::{self, RepairService, RepairSlotRange, RepairStats, RepairStrategy},
     serve_repair::ServeRepair,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
@@ -830,7 +829,7 @@ impl Archiver {
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .map_repair_request(&repair_request, &mut repair_stats)
+                            .map_repair_request(&repair_request, &mut repair_stats, Some(0))
                             .map(|result| ((archiver_info.gossip, result), repair_request))
                             .ok()
                     })
