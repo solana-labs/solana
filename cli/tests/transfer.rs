@@ -7,6 +7,7 @@ use solana_cli::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
@@ -55,7 +56,7 @@ fn test_transfer() {
 
     // Plain ole transfer
     config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -66,6 +67,22 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
+    check_balance(49_989, &rpc_client, &sender_pubkey);
+    check_balance(10, &rpc_client, &recipient_pubkey);
+
+    // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
+    config.command = CliCommand::Transfer {
+        amount: SpendAmount::Some(49_989),
+        to: recipient_pubkey,
+        from: 0,
+        sign_only: false,
+        no_wait: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    assert!(process_command(&config).is_err());
     check_balance(49_989, &rpc_client, &sender_pubkey);
     check_balance(10, &rpc_client, &recipient_pubkey);
 
@@ -83,7 +100,7 @@ fn test_transfer() {
     // Offline transfer
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     offline.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
@@ -100,7 +117,7 @@ fn test_transfer() {
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -124,7 +141,7 @@ fn test_transfer() {
         nonce_account: 1,
         seed: None,
         nonce_authority: None,
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
@@ -138,7 +155,7 @@ fn test_transfer() {
     // Nonced transfer
     config.signers = vec![&default_signer];
     config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -179,7 +196,7 @@ fn test_transfer() {
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];
     offline.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
@@ -195,7 +212,7 @@ fn test_transfer() {
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -272,7 +289,7 @@ fn test_transfer_multisession_signing() {
     fee_payer_config.command = CliCommand::ClusterVersion;
     process_command(&fee_payer_config).unwrap_err();
     fee_payer_config.command = CliCommand::Transfer {
-        lamports: 42,
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: true,
@@ -298,7 +315,7 @@ fn test_transfer_multisession_signing() {
     from_config.command = CliCommand::ClusterVersion;
     process_command(&from_config).unwrap_err();
     from_config.command = CliCommand::Transfer {
-        lamports: 42,
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: true,
@@ -321,7 +338,7 @@ fn test_transfer_multisession_signing() {
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&fee_payer_presigner, &from_presigner];
     config.command = CliCommand::Transfer {
-        lamports: 42,
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: false,
@@ -336,6 +353,60 @@ fn test_transfer_multisession_signing() {
     check_balance(1, &rpc_client, &offline_from_signer.pubkey());
     check_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
     check_balance(42, &rpc_client, &to_pubkey);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_transfer_all() {
+    let TestValidator {
+        server,
+        leader_data,
+        alice: mint_keypair,
+        ledger_path,
+        ..
+    } = TestValidator::run_with_options(TestValidatorOptions {
+        fees: 1,
+        bootstrap_validator_lamports: 42_000,
+        ..TestValidatorOptions::default()
+    });
+
+    let (sender, receiver) = channel();
+    run_local_faucet(mint_keypair, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let default_signer = Keypair::new();
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.signers = vec![&default_signer];
+
+    let sender_pubkey = config.signers[0].pubkey();
+    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config)
+        .unwrap();
+    check_balance(50_000, &rpc_client, &sender_pubkey);
+    check_balance(0, &rpc_client, &recipient_pubkey);
+
+    // Plain ole transfer
+    config.command = CliCommand::Transfer {
+        amount: SpendAmount::All,
+        to: recipient_pubkey,
+        from: 0,
+        sign_only: false,
+        no_wait: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+    check_balance(0, &rpc_client, &sender_pubkey);
+    check_balance(49_999, &rpc_client, &recipient_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

@@ -1,10 +1,11 @@
 use crate::{
+    checks::{check_account_for_fee, check_unique_pubkeys},
     cli::{
-        check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult, SignerIndex,
+        generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult, SignerIndex,
     },
     cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount},
+    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
@@ -386,6 +387,39 @@ pub fn process_create_vote_account(
         (&identity_pubkey, "identity_pubkey".to_string()),
     )?;
 
+    let required_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
+        .max(1);
+    let amount = SpendAmount::Some(required_balance);
+
+    let build_message = |lamports| {
+        let vote_init = VoteInit {
+            node_pubkey: identity_pubkey,
+            authorized_voter: authorized_voter.unwrap_or(identity_pubkey),
+            authorized_withdrawer: authorized_withdrawer.unwrap_or(identity_pubkey),
+            commission,
+        };
+
+        let ixs = if let Some(seed) = seed {
+            vote_instruction::create_account_with_seed(
+                &config.signers[0].pubkey(), // from
+                &vote_account_address,       // to
+                &vote_account_pubkey,        // base
+                seed,                        // seed
+                &vote_init,
+                lamports,
+            )
+        } else {
+            vote_instruction::create_account(
+                &config.signers[0].pubkey(),
+                &vote_account_pubkey,
+                &vote_init,
+                lamports,
+            )
+        };
+        Message::new(&ixs)
+    };
+
     if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
         let err_msg = if vote_account.owner == solana_vote_program::id() {
             format!("Vote account {} already exists", vote_account_address)
@@ -398,45 +432,18 @@ pub fn process_create_vote_account(
         return Err(CliError::BadParameter(err_msg).into());
     }
 
-    let required_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
-        .max(1);
-
-    let vote_init = VoteInit {
-        node_pubkey: identity_pubkey,
-        authorized_voter: authorized_voter.unwrap_or(identity_pubkey),
-        authorized_withdrawer: authorized_withdrawer.unwrap_or(identity_pubkey),
-        commission,
-    };
-
-    let ixs = if let Some(seed) = seed {
-        vote_instruction::create_account_with_seed(
-            &config.signers[0].pubkey(), // from
-            &vote_account_address,       // to
-            &vote_account_pubkey,        // base
-            seed,                        // seed
-            &vote_init,
-            required_balance,
-        )
-    } else {
-        vote_instruction::create_account(
-            &config.signers[0].pubkey(),
-            &vote_account_pubkey,
-            &vote_init,
-            required_balance,
-        )
-    };
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let message = Message::new(&ixs);
+    let (message, _) = resolve_spend_tx_and_check_account_balance(
+        rpc_client,
+        false,
+        amount,
+        &fee_calculator,
+        &config.signers[0].pubkey(),
+        build_message,
+    )?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
-        rpc_client,
-        &config.signers[0].pubkey(),
-        &fee_calculator,
-        &tx.message,
-    )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }

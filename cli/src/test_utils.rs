@@ -4,7 +4,7 @@ use std::{thread::sleep, time::Duration};
 
 pub fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
-        let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
+        let balance = client.get_balance(pubkey).unwrap();
         if balance == expected_balance {
             return;
         }

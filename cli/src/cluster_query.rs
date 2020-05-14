@@ -1,7 +1,8 @@
 use crate::{
-    cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
     display::println_name_value,
+    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -926,18 +927,22 @@ pub fn process_ping(
         let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
         last_blockhash = recent_blockhash;
 
-        let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
-        let message = Message::new(&[ix]);
-        let mut transaction = Transaction::new_unsigned(message);
-        transaction.try_sign(&config.signers, recent_blockhash)?;
-        check_account_for_fee(
+        let build_message = |lamports| {
+            let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
+            Message::new(&[ix])
+        };
+        let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
-            &config.signers[0].pubkey(),
+            false,
+            SpendAmount::Some(lamports),
             &fee_calculator,
-            &transaction.message,
+            &config.signers[0].pubkey(),
+            build_message,
         )?;
+        let mut tx = Transaction::new_unsigned(message);
+        tx.try_sign(&config.signers, recent_blockhash)?;
 
-        match rpc_client.send_transaction(&transaction) {
+        match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {

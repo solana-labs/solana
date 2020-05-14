@@ -7,6 +7,7 @@ use solana_cli::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::contact_info::ContactInfo;
@@ -126,7 +127,7 @@ fn full_battery_tests(
         nonce_account: 1,
         seed,
         nonce_authority: optional_authority,
-        lamports: 1000,
+        amount: SpendAmount::Some(1000),
     };
 
     process_command(&config_payer).unwrap();
@@ -289,7 +290,7 @@ fn test_create_account_with_seed() {
         nonce_account: 0,
         seed: Some(seed),
         nonce_authority: Some(authority_pubkey),
-        lamports: 241,
+        amount: SpendAmount::Some(241),
     };
     process_command(&creator_config).unwrap();
     check_balance(241, &rpc_client, &nonce_address);
@@ -311,7 +312,7 @@ fn test_create_account_with_seed() {
     authority_config.command = CliCommand::ClusterVersion;
     process_command(&authority_config).unwrap_err();
     authority_config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: to_address,
         from: 0,
         sign_only: true,
@@ -333,7 +334,7 @@ fn test_create_account_with_seed() {
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     submit_config.signers = vec![&authority_presigner];
     submit_config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: to_address,
         from: 0,
         sign_only: false,

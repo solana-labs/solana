@@ -7,6 +7,7 @@ use solana_cli::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
@@ -73,7 +74,7 @@ fn test_stake_delegation_force() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -165,7 +166,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -249,7 +250,7 @@ fn test_stake_delegation_and_deactivation() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -356,7 +357,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         staker: Some(config_offline.signers[0].pubkey().into()),
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -478,7 +479,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -495,7 +496,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(config.signers[0].pubkey()),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 
@@ -607,7 +608,7 @@ fn test_stake_authorize() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -735,7 +736,7 @@ fn test_stake_authorize() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_authority_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 
@@ -862,7 +863,7 @@ fn test_stake_authorize_with_fee_payer() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -991,7 +992,7 @@ fn test_stake_split() {
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
         lockup: Lockup::default(),
-        lamports: 10 * minimum_stake_balance,
+        amount: SpendAmount::Some(10 * minimum_stake_balance),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -1016,7 +1017,7 @@ fn test_stake_split() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
@@ -1147,7 +1148,7 @@ fn test_stake_set_lockup() {
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
         lockup,
-        lamports: 10 * minimum_stake_balance,
+        amount: SpendAmount::Some(10 * minimum_stake_balance),
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -1273,7 +1274,7 @@ fn test_stake_set_lockup() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
@@ -1393,7 +1394,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 
@@ -1413,7 +1414,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: true,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
@@ -1434,7 +1435,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         staker: Some(offline_pubkey),
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),
@@ -1507,7 +1508,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: true,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
@@ -1526,7 +1527,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         staker: Some(offline_pubkey.into()),
         withdrawer: Some(offline_pubkey.into()),
         lockup: Lockup::default(),
-        lamports: 50_000,
+        amount: SpendAmount::Some(50_000),
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),

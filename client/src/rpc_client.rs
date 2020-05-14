@@ -499,24 +499,6 @@ impl RpcClient {
         Ok(())
     }
 
-    pub fn retry_get_balance(
-        &self,
-        pubkey: &Pubkey,
-        retries: usize,
-    ) -> Result<Option<u64>, Box<dyn error::Error>> {
-        let request = RpcRequest::GetBalance;
-        let balance_json = self
-            .client
-            .send(request, json!([pubkey.to_string()]), retries)
-            .map_err(|err| err.into_with_request(request))?;
-
-        Ok(Some(
-            serde_json::from_value::<Response<u64>>(balance_json)
-                .map_err(|err| ClientError::new_with_request(err.into(), request))?
-                .value,
-        ))
-    }
-
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
         self.get_account_with_commitment(pubkey, CommitmentConfig::default())?
             .value

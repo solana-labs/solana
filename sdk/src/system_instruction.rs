@@ -13,7 +13,7 @@ use thiserror::Error;
 pub enum SystemError {
     #[error("an account with the same address already exists")]
     AccountAlreadyInUse,
-    #[error("account does not have enough lamports to perform the operation")]
+    #[error("account does not have enough SOL to perform the operation")]
     ResultWithNegativeLamports,
     #[error("cannot assign account to this program id")]
     InvalidProgramId,

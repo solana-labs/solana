@@ -664,7 +664,7 @@ pub fn deploy(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Checking cluster...", LOOKING_GLASS));
     let balance = rpc_client
-        .retry_get_balance(&from_keypair.pubkey(), 5)
+        .get_balance(&from_keypair.pubkey())
         .map_err(|err| {
             format!(
                 "Unable to get the account balance of {}: {}",
@@ -672,7 +672,7 @@ pub fn deploy(
             )
         })?;
     progress_bar.finish_and_clear();
-    if balance.unwrap_or(0) == 0 {
+    if balance == 0 {
         return Err(format!("{} account balance is empty", from_keypair_file));
     }
 
