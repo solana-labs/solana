@@ -1,8 +1,5 @@
 //! A command-line executable for monitoring the health of a cluster
 
-mod notifier;
-
-use crate::notifier::Notifier;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use solana_clap_utils::{
@@ -13,6 +10,7 @@ use solana_client::{
     client_error::Result as ClientResult, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus,
 };
 use solana_metrics::{datapoint_error, datapoint_info};
+use solana_notifier::Notifier;
 use solana_sdk::{
     clock::Slot, hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -232,7 +230,7 @@ fn load_blocks(
 }
 
 fn transaction_monitor(rpc_client: RpcClient) {
-    let notifier = Notifier::new_with_env_prefix("TRANSACTION_NOTIFIER_");
+    let notifier = Notifier::new("TRANSACTION_NOTIFIER_");
     let mut start_slot = loop {
         match rpc_client.get_slot() {
             Ok(slot) => break slot,
@@ -303,7 +301,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     let rpc_client = RpcClient::new(config.json_rpc_url.clone());
-    let notifier = Notifier::new();
+    let notifier = Notifier::default();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
     let mut last_notification_msg = "".into();

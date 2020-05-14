@@ -1,7 +1,7 @@
-use crate::notifier::Notifier;
 use crate::utils;
 use log::*;
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
+use solana_notifier::Notifier;
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::EpochSchedule,
@@ -183,7 +183,7 @@ pub fn announce_results(
 ) {
     let buffer_records = |keys: Vec<&Pubkey>, notifier: &mut Notifier| {
         if keys.is_empty() {
-            notifier.buffer("* None".to_string());
+            notifier.send("* None");
             return;
         }
 
@@ -199,7 +199,7 @@ pub fn announce_results(
             }
         }
         validators.sort();
-        notifier.buffer_vec(validators);
+        notifier.send(&validators.join("\n"));
     };
 
     let healthy: Vec<_> = remaining_validators
@@ -217,14 +217,12 @@ pub fn announce_results(
         .filter(|k| !remaining_validators.contains_key(k))
         .collect();
 
-    notifier.buffer("Healthy Validators:".to_string());
+    notifier.send("Healthy Validators:");
     buffer_records(healthy, notifier);
-    notifier.buffer("Unhealthy Validators:".to_string());
+    notifier.send("Unhealthy Validators:");
     buffer_records(unhealthy, notifier);
-    notifier.buffer("Inactive Validators:".to_string());
+    notifier.send("Inactive Validators:");
     buffer_records(inactive, notifier);
-
-    notifier.flush();
 }
 
 /// Award stake to the surviving validators by delegating stake to their vote account
@@ -235,10 +233,12 @@ pub fn award_stake(
     sol_gift: u64,
     notifier: &mut Notifier,
 ) {
+    let mut buffer = vec![];
+
     for (node_pubkey, vote_account_pubkey) in voters {
         info!("Delegate {} SOL to {}", sol_gift, node_pubkey);
         delegate_stake(rpc_client, faucet_keypair, vote_account_pubkey, sol_gift);
-        notifier.buffer(format!("Delegated {} SOL to {}", sol_gift, node_pubkey));
+        buffer.push(format!("Delegated {} SOL to {}", sol_gift, node_pubkey));
     }
-    notifier.flush();
+    notifier.send(&buffer.join("\n"));
 }

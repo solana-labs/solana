@@ -1,7 +1,26 @@
+/// To activate Slack, Discord and/or Telegram notifications, define these environment variables
+/// before using the `Notifier`
+/// ```bash
+/// export SLACK_WEBHOOK=...
+/// export DISCORD_WEBHOOK=...
+/// ```
+///
+/// Telegram requires the following two variables:
+/// ```bash
+/// export TELEGRAM_BOT_TOKEN=...
+/// export TELEGRAM_CHAT_ID=...
+/// ```
+///
+/// To receive a Twilio SMS notification on failure, having a Twilio account,
+/// and a sending number owned by that account,
+/// define environment variable before running `solana-watchtower`:
+/// ```bash
+/// export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
+/// ```
 use log::*;
-use reqwest::blocking::Client;
+use reqwest::{blocking::Client, StatusCode};
 use serde_json::json;
-use std::env;
+use std::{env, thread::sleep, time::Duration};
 
 struct TelegramWebHook {
     bot_token: String,
@@ -65,11 +84,11 @@ pub struct Notifier {
 }
 
 impl Notifier {
-    pub fn new() -> Self {
-        Self::new_with_env_prefix("")
+    pub fn default() -> Self {
+        Self::new("")
     }
 
-    pub fn new_with_env_prefix(env_prefix: &str) -> Self {
+    pub fn new(env_prefix: &str) -> Self {
         info!("Initializing {}Notifier", env_prefix);
 
         let discord_webhook = env::var(format!("{}DISCORD_WEBHOOK", env_prefix))
@@ -107,9 +126,30 @@ impl Notifier {
 
     pub fn send(&self, msg: &str) {
         if let Some(webhook) = &self.discord_webhook {
-            let data = json!({ "content": msg });
-            if let Err(err) = self.client.post(webhook).json(&data).send() {
-                warn!("Failed to send Discord message: {:?}", err);
+            for line in msg.split('\n') {
+                // Discord rate limiting is aggressive, limit to 1 message a second
+                sleep(Duration::from_millis(1000));
+
+                info!("Sending {}", line);
+                let data = json!({ "content": line });
+
+                loop {
+                    let response = self.client.post(webhook).json(&data).send();
+
+                    if let Err(err) = response {
+                        warn!("Failed to send Discord message: \"{}\": {:?}", line, err);
+                        break;
+                    } else if let Ok(response) = response {
+                        info!("response status: {}", response.status());
+                        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                            warn!("rate limited!...");
+                            warn!("response text: {:?}", response.text());
+                            sleep(Duration::from_secs(2));
+                        } else {
+                            break;
+                        }
+                    }
+                }
             }
         }
 

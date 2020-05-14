@@ -4570,6 +4570,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-notifier"
+version = "1.2.0"
+dependencies = [
+ "log 0.4.8",
+ "reqwest",
+ "serde_json",
+]
+
+[[package]]
 name = "solana-ownable"
 version = "1.2.0"
 dependencies = [
@@ -4618,6 +4627,7 @@ dependencies = [
  "solana-logger",
  "solana-metrics",
  "solana-net-utils",
+ "solana-notifier",
  "solana-sdk",
  "solana-stake-program",
  "tar",
@@ -4993,14 +5003,13 @@ dependencies = [
  "clap",
  "humantime 2.0.0",
  "log 0.4.8",
- "reqwest",
- "serde_json",
  "solana-clap-utils",
  "solana-cli",
  "solana-cli-config",
  "solana-client",
  "solana-logger",
  "solana-metrics",
+ "solana-notifier",
  "solana-sdk",
  "solana-transaction-status",
  "solana-version",

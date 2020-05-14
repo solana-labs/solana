@@ -1,7 +1,7 @@
-use crate::notifier::Notifier;
 use log::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_client::thin_client::ThinClient;
+use solana_notifier::Notifier;
 use solana_sdk::timing::duration_as_s;
 use std::{
     net::SocketAddr,
@@ -64,7 +64,7 @@ impl Sampler {
     pub fn report_results(&self, notifier: &Notifier) {
         let SampleStats { tps, elapsed, txs } = self.maxes.read().unwrap()[0].1;
         let avg_tps = txs as f32 / duration_as_s(&elapsed);
-        notifier.notify(&format!(
+        notifier.send(&format!(
             "Highest TPS: {:.0}, Average TPS: {:.0}",
             tps, avg_tps
         ));
