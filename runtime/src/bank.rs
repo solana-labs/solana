@@ -859,7 +859,7 @@ impl Bank {
 
             // DANGER: Remove this guard after tds has transitioned to the eager rent
             // collection and ABSOLUTELY before the mainnet-beta transitions to v1.1.
-            if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 45) {
+            if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 47) {
                 self.collect_rent_eagerly();
             }
             self.collect_fees();
