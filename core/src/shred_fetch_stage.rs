@@ -269,6 +269,51 @@ mod tests {
     use solana_ledger::shred::Shred;
 
     #[test]
+    fn test_data_code_same_index() {
+        solana_logger::setup();
+        let mut shreds_received = ShredsReceived::default();
+        let mut packet = Packet::default();
+        let mut stats = ShredFetchStats::default();
+
+        let slot = 1;
+        let shred = Shred::new_from_data(slot, 3, 0, None, true, true, 0, 0, 0);
+        shred.copy_to_packet(&mut packet);
+
+        let last_root = 0;
+        let last_slot = 100;
+        let slots_per_epoch = 10;
+        ShredFetchStage::process_packet(
+            &mut packet,
+            &mut shreds_received,
+            &mut stats,
+            last_root,
+            last_slot,
+            slots_per_epoch,
+            &|_p| {},
+        );
+        assert!(!packet.meta.discard);
+
+        let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
+            slot,
+            1.0f32,
+            &[shred],
+            10,
+            false,
+        );
+        coding[0].copy_to_packet(&mut packet);
+        ShredFetchStage::process_packet(
+            &mut packet,
+            &mut shreds_received,
+            &mut stats,
+            last_root,
+            last_slot,
+            slots_per_epoch,
+            &|_p| {},
+        );
+        assert!(!packet.meta.discard);
+    }
+
+    #[test]
     fn test_shred_filter() {
         solana_logger::setup();
         let mut shreds_received = ShredsReceived::default();
