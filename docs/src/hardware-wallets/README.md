@@ -18,7 +18,7 @@ hardware wallet.
 The Solana CLI supports the following hardware wallets:
  - [Ledger Nano S](ledger.md)
 
-## Specify a Hardware Wallet Key
+## Specify a Keypair URL
 
 Solana defines a keypair URL format to uniquely locate any Solana keypair on a
 hardware wallet connected to your computer.
@@ -36,89 +36,15 @@ usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
 are positive integers.
 
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any derived keys are Solana keys (Coin type 501).  The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
-
 For example, a fully qualified URL for a Ledger device might be:
 
 ```text
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-### Multiple Addresses on a Single Hardware Wallet
-You can derive as many wallet addresses as you like.  To view them, simply
-iterate the `ACCOUNT` and/or `CHANGE` number when specifying the URL path.
-Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposes.
-
-For example, a first address can be viewed with:
-```bash
-solana-keygen pubkey usb://ledger?key=0
-```
-A second address can be viewed with:
-```bash
-solana-keygen pubkey usb://ledger?key=1
-```
-A third address:
-```bash
-solana-keygen pubkey usb://ledger?key=2
-```
-...and so on.
-
-## Manage Multiple Hardware Wallets
-
-It is sometimes useful to sign a transaction with keys from multiple hardware
-wallets. Signing with multiple wallets requires *fully qualified keypair URLs*.
-When the URL is not fully qualified, the Solana CLI will prompt you with
-the fully qualified URLs of all connected hardware wallets, and ask you to
-choose which wallet to use for each signature.
-
-Instead of using the interactive prompts, you can generate fully qualified
-URLs using the Solana CLI `resolve-signer` command. For example, try
-connecting a Ledger Nano-S to USB, unlock it with your pin, and running the
-following command:
-
-```text
-solana resolve-signer usb://ledger?key=0/0
-```
-
-You will see output similar to:
-
-```text
-usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
-```
-
-but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
-
-With your fully qualified URL, you can connect multiple hardware wallets to
-the same computer and uniquely identify a keypair from any of them.
-
-## Troubleshooting
-
-### Keypair URL parameters are ignored in zsh
-
-The question mark character is a special character in zsh. If that's not a
-feature you use, add the following line to your `~/.zshrc` to treat it as a
-normal character:
-
-```bash
-unsetopt nomatch
-```
-
-Then either restart your shell window or run `~/.zshrc`:
-
-```bash
-source ~/.zshrc
-```
-
-If you would prefer not to disable zsh's special handling of the question mark
-character, you can disable it explictly with a backslash in your keypair URLs.
-For example:
-
-```bash
-solana-keygen pubkey usb://ledger\?key=0
-```
+All derivation paths implicitly include the prefix `44'/501'`, which indicates
+the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+and that any derived keys are Solana keys (Coin type 501).  The single quote
+indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
+derivations are hardened and therefore adding the quote is optional and
+unnecessary.
