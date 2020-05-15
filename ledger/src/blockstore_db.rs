@@ -55,6 +55,11 @@ pub enum BlockstoreError {
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
+<<<<<<< HEAD
+=======
+    UnpackError(#[from] UnpackError),
+    UnableToSetOpenFileDescriptorLimit,
+>>>>>>> 7080fb9b3... Abort if the open fd limit cannot be increased (#10064)
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
