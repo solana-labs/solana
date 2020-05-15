@@ -127,9 +127,13 @@ pub fn update_finalized_transaction(
 ) -> Result<Option<usize>, Error> {
     if opt_transaction_status.is_none() {
         if !recent_blockhashes.contains(blockhash) {
-            eprintln!("Signature not found {} and blockhash expired", signature);
-            eprintln!("Discarding transaction record");
-            db.rem(&signature.to_string())?;
+            eprintln!(
+                "Signature not found {} and blockhash not found, likely expired",
+                signature
+            );
+            // Don't discard the transaction, because we are not certain the
+            // blockhash is expired. Instead, return None to signal that
+            // we don't need to wait for confirmations.
             return Ok(None);
         }
 
@@ -245,8 +249,11 @@ mod tests {
             None
         );
 
-        // Ensure TransactionInfo has been purged.
-        assert_eq!(db.get::<TransactionInfo>(&signature.to_string()), None);
+        // Ensure TransactionInfo has not been purged.
+        assert_eq!(
+            db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
+            transaction_info
+        );
     }
 
     #[test]
