@@ -43,7 +43,7 @@ solana-transaction-status = { path = "../transaction-status", version = "1.2.0" 
 solana-version = { path = "../version", version = "1.2.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
-thiserror = "1.0.15"
+thiserror = "1.0.17"
 url = "2.1.1"
 
 [dev-dependencies]
