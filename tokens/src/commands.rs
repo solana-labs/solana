@@ -605,7 +605,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::{genesis_config::create_genesis_config, transaction::Transaction};
+    use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
     fn test_process_distribute_tokens() {
@@ -679,9 +679,7 @@ mod tests {
         let transaction_infos = vec![TransactionInfo {
             recipient: bob,
             amount: 1.0,
-            new_stake_account_address: None,
-            finalized_date: None,
-            transaction: Transaction::new_unsigned_instructions(&[]),
+            ..TransactionInfo::default()
         }];
         apply_previous_transactions(&mut allocations, &transaction_infos);
         assert_eq!(allocations.len(), 1);

@@ -479,7 +479,6 @@ mod tests {
     use solana_budget_program::budget_instruction;
     use solana_sdk::{
         hash::{hash, Hash},
-        message::Message,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
@@ -684,8 +683,7 @@ mod tests {
     #[test]
     fn test_verify_tick_hash_count() {
         let hashes_per_tick = 10;
-        let keypairs: Vec<&Keypair> = Vec::new();
-        let tx: Transaction = Transaction::new(&keypairs, Message::new(&[]), Hash::default());
+        let tx = Transaction::default();
         let tx_entry = Entry::new(&Hash::default(), 1, vec![tx]);
         let full_tick_entry = Entry::new_tick(hashes_per_tick, &Hash::default());
         let partial_tick_entry = Entry::new_tick(hashes_per_tick - 1, &Hash::default());

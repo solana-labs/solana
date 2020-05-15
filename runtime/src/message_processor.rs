@@ -611,8 +611,10 @@ mod tests {
                 AccountMeta::new(keys[not_owned_index], false),
                 AccountMeta::new(keys[owned_index], false),
             ];
-            let message =
-                Message::new(&[Instruction::new(program_ids[owned_index], &[0_u8], metas)]);
+            let message = Message::new_with_payer(
+                &[Instruction::new(program_ids[owned_index], &[0_u8], metas)],
+                None,
+            );
 
             // modify account owned by the program
             accounts[owned_index].borrow_mut().data[0] = (MAX_DEPTH + owned_index) as u8;
@@ -1437,11 +1439,12 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         accounts[0].borrow_mut().data[0] = 1;
-        let message = Message::new(&[Instruction::new(
+        let instruction = Instruction::new(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
-        )]);
+        );
+        let message = Message::new_with_payer(&[instruction], None);
         assert_eq!(
             MessageProcessor::process_cross_program_instruction(
                 &message,
@@ -1469,8 +1472,8 @@ mod tests {
         ];
 
         for case in cases {
-            let message =
-                Message::new(&[Instruction::new(callee_program_id, &case.0, metas.clone())]);
+            let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
+            let message = Message::new_with_payer(&[instruction], None);
             assert_eq!(
                 MessageProcessor::process_cross_program_instruction(
                     &message,

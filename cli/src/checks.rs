@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(calculate_fee(&fee_calculator, &[]), 0);
 
         // No signatures, no fee.
-        let message = Message::new(&[]);
+        let message = Message::default();
         assert_eq!(calculate_fee(&fee_calculator, &[&message, &message]), 0);
 
         // One message w/ one signature, a fee.

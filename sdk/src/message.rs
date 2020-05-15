@@ -57,6 +57,18 @@ impl InstructionKeys {
     }
 }
 
+/// Return the pubkey of the first writable signer in the given set of instructions.
+fn find_writable_signer(instructions: &[Instruction]) -> Option<&Pubkey> {
+    for instruction in instructions {
+        for account in &instruction.accounts {
+            if account.is_signer && account.is_writable {
+                return Some(&account.pubkey);
+            }
+        }
+    }
+    None
+}
+
 /// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
 /// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
 /// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
@@ -143,7 +155,7 @@ pub struct MessageHeader {
     pub num_readonly_unsigned_accounts: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`
@@ -221,7 +233,8 @@ impl Message {
     }
 
     pub fn new(instructions: &[Instruction]) -> Self {
-        Self::new_with_payer(instructions, None)
+        let payer = find_writable_signer(instructions).expect("no suitable key for fee-payer");
+        Self::new_with_payer(instructions, Some(payer))
     }
 
     pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
@@ -465,7 +478,7 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
-        let message = Message::new(&[ix]);
+        let message = Message::new_with_payer(&[ix], None);
         assert_eq!(message.header.num_required_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
