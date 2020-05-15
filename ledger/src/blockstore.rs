@@ -180,7 +180,7 @@ impl Blockstore {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
-        adjust_ulimit_nofile();
+        adjust_ulimit_nofile()?;
 
         // Open the database
         let mut measure = Measure::start("open");
@@ -2987,10 +2987,12 @@ pub fn make_chaining_slot_entries(
 }
 
 #[cfg(not(unix))]
-fn adjust_ulimit_nofile() {}
+fn adjust_ulimit_nofile() -> Result<()> {
+    Ok(())
+}
 
 #[cfg(unix)]
-fn adjust_ulimit_nofile() {
+fn adjust_ulimit_nofile() -> Result<()> {
     // Rocks DB likes to have many open files.  The default open file descriptor limit is
     // usually not enough
     let desired_nofile = 65000;
@@ -3018,11 +3020,13 @@ fn adjust_ulimit_nofile() {
             if cfg!(target_os = "macos") {
                 error!("On mac OS you may need to run |sudo launchctl limit maxfiles 65536 200000| first");
             }
+            return Err(BlockstoreError::UnableToSetOpenFileDescriptorLimit);
         }
 
         nofile = get_nofile();
     }
     info!("Maximum open file descriptors: {}", nofile.rlim_cur);
+    Ok(())
 }
 
 #[cfg(test)]

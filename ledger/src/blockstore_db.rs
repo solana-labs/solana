@@ -56,6 +56,7 @@ pub enum BlockstoreError {
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
     UnpackError(#[from] UnpackError),
+    UnableToSetOpenFileDescriptorLimit,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
