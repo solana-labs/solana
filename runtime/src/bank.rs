@@ -861,7 +861,8 @@ impl Bank {
             // collection and ABSOLUTELY after the mainnet-beta transitions to v1.1.
             if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 47
                 || self.operating_mode() == OperatingMode::Stable
-                    && self.epoch() < Epoch::max_value()) {
+                    && self.epoch() < Epoch::max_value())
+            {
                 self.collect_rent_eagerly();
             }
             self.collect_fees();
