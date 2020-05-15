@@ -220,7 +220,7 @@ pub enum SignerError {
     #[error("no device found")]
     NoDeviceFound,
 
-    #[error("device protocol error: {0}")]
+    #[error("{0}")]
     Protocol(String),
 
     #[error("{0}")]
