@@ -59,15 +59,15 @@ pub enum SystemInstruction {
     /// * Transaction::keys[1] - new account key
     /// * lamports - number of lamports to transfer to the new account
     /// * space - number of bytes of memory to allocate
-    /// * program_id - the program id of the new account
+    /// * owner - the program that will own the new account
     CreateAccount {
         lamports: u64,
         space: u64,
-        program_id: Pubkey,
+        owner: Pubkey,
     },
     /// Assign account to a program
     /// * Transaction::keys[0] - account to assign
-    Assign { program_id: Pubkey },
+    Assign { owner: Pubkey },
     /// Transfer lamports
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
@@ -79,13 +79,13 @@ pub enum SystemInstruction {
     /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
     /// * lamports - number of lamports to transfer to the new account
     /// * space - number of bytes of memory to allocate
-    /// * program_id - the program id of the new account
+    /// * owner - the program that will own the new account
     CreateAccountWithSeed {
         base: Pubkey,
         seed: String,
         lamports: u64,
         space: u64,
-        program_id: Pubkey,
+        owner: Pubkey,
     },
     /// `AdvanceNonceAccount` consumes a stored nonce, replacing it with a successor
     ///
@@ -141,21 +141,21 @@ pub enum SystemInstruction {
     /// * Transaction::keys[0] - new account key
     /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
     /// * space - number of bytes of memory to allocate
-    /// * program_id - the program id of the new account
+    /// * owner - the program that will own the new account
     AllocateWithSeed {
         base: Pubkey,
         seed: String,
         space: u64,
-        program_id: Pubkey,
+        owner: Pubkey,
     },
     /// Assign account to a program based on a seed
     /// * Transaction::keys[0] - account to assign
     /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
-    /// * program_id - the program id of the new account
+    /// * owner - the program that will own the new account
     AssignWithSeed {
         base: Pubkey,
         seed: String,
-        program_id: Pubkey,
+        owner: Pubkey,
     },
 }
 
@@ -164,7 +164,7 @@ pub fn create_account(
     to_pubkey: &Pubkey,
     lamports: u64,
     space: u64,
-    program_id: &Pubkey,
+    owner: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
@@ -175,7 +175,7 @@ pub fn create_account(
         &SystemInstruction::CreateAccount {
             lamports,
             space,
-            program_id: *program_id,
+            owner: *owner,
         },
         account_metas,
     )
@@ -185,12 +185,12 @@ pub fn create_account(
 //   calling create_address_with_seed()
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, program_id)
+    to_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
     lamports: u64,
     space: u64,
-    program_id: &Pubkey,
+    owner: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
@@ -205,28 +205,26 @@ pub fn create_account_with_seed(
             seed: seed.to_string(),
             lamports,
             space,
-            program_id: *program_id,
+            owner: *owner,
         },
         account_metas,
     )
 }
 
-pub fn assign(pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
+pub fn assign(pubkey: &Pubkey, owner: &Pubkey) -> Instruction {
     let account_metas = vec![AccountMeta::new(*pubkey, true)];
     Instruction::new(
         system_program::id(),
-        &SystemInstruction::Assign {
-            program_id: *program_id,
-        },
+        &SystemInstruction::Assign { owner: *owner },
         account_metas,
     )
 }
 
 pub fn assign_with_seed(
-    address: &Pubkey, // must match create_address_with_seed(base, seed, program_id)
+    address: &Pubkey, // must match create_address_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
-    program_id: &Pubkey,
+    owner: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(*address, false)].with_signer(base);
     Instruction::new(
@@ -234,7 +232,7 @@ pub fn assign_with_seed(
         &SystemInstruction::AssignWithSeed {
             base: *base,
             seed: seed.to_string(),
-            program_id: *program_id,
+            owner: *owner,
         },
         account_metas,
     )
@@ -262,11 +260,11 @@ pub fn allocate(pubkey: &Pubkey, space: u64) -> Instruction {
 }
 
 pub fn allocate_with_seed(
-    address: &Pubkey, // must match create_address_with_seed(base, seed, program_id)
+    address: &Pubkey, // must match create_address_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
     space: u64,
-    program_id: &Pubkey,
+    owner: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(*address, false)].with_signer(base);
     Instruction::new(
@@ -275,7 +273,7 @@ pub fn allocate_with_seed(
             base: *base,
             seed: seed.to_string(),
             space,
-            program_id: *program_id,
+            owner: *owner,
         },
         account_metas,
     )

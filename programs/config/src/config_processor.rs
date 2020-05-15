@@ -150,7 +150,7 @@ mod tests {
             SystemInstruction::CreateAccount {
                 lamports: _,
                 space,
-                program_id: _,
+                owner: _,
             } => space,
             _ => panic!("Not a CreateAccount system instruction"),
         };
