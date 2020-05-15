@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_parse_status() {
-        assert_eq!(LedgerWallet::parse_status(APDU_SUCCESS_CODE).unwrap(), ());
+        LedgerWallet::parse_status(APDU_SUCCESS_CODE).expect("unexpected result");
         if let RemoteWalletError::LedgerError(err) = LedgerWallet::parse_status(0x6985).unwrap_err()
         {
             assert_eq!(err, LedgerError::UserCancel);

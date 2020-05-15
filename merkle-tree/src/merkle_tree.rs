@@ -183,13 +183,12 @@ impl MerkleTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex;
 
-    const TEST: &'static [&'static [u8]] = &[
+    const TEST: &[&[u8]] = &[
         b"my", b"very", b"eager", b"mother", b"just", b"served", b"us", b"nine", b"pizzas",
         b"make", b"prime",
     ];
-    const BAD: &'static [&'static [u8]] = &[b"bad", b"missing", b"false"];
+    const BAD: &[&[u8]] = &[b"bad", b"missing", b"false"];
 
     #[test]
     fn test_tree_from_empty() {

@@ -246,7 +246,7 @@ mod test {
         let mut ci = ContactInfo::default();
         ci.wallclock += 1;
         let val3 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
-        assert_matches!(crds.insert(val3.clone(), 3), Ok(Some(_)));
+        assert_matches!(crds.insert(val3, 3), Ok(Some(_)));
         assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
         assert_eq!(crds.table[&val2.label()].insert_timestamp, 3);
     }
@@ -315,14 +315,18 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_equal() {
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         let v1 = VersionedCrdsValue::new(1, val.clone());
         let v2 = VersionedCrdsValue::new(1, val);
         assert_eq!(v1, v2);
         assert!(!(v1 != v2));
+        assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Equal));
+        assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Equal));
     }
     #[test]
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_hash_order() {
         let v1 = VersionedCrdsValue::new(
             1,
@@ -345,14 +349,19 @@ mod test {
         if v1 > v2 {
             assert!(v1 > v2);
             assert!(v2 < v1);
+            assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Greater));
+            assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Less));
         } else if v2 > v1 {
             assert!(v1 < v2);
             assert!(v2 > v1);
+            assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Less));
+            assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Greater));
         } else {
             panic!("bad PartialOrd implementation?");
         }
     }
     #[test]
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_wallclock_order() {
         let v1 = VersionedCrdsValue::new(
             1,
@@ -373,8 +382,11 @@ mod test {
         assert!(!(v1 < v2));
         assert!(v1 != v2);
         assert!(!(v1 == v2));
+        assert_eq!(v1.partial_cmp(&v2), Some(cmp::Ordering::Greater));
+        assert_eq!(v2.partial_cmp(&v1), Some(cmp::Ordering::Less));
     }
     #[test]
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
             1,
@@ -396,5 +408,7 @@ mod test {
         assert!(!(v1 > v2));
         assert!(!(v2 < v1));
         assert!(!(v2 > v1));
+        assert_eq!(v1.partial_cmp(&v2), None);
+        assert_eq!(v2.partial_cmp(&v1), None);
     }
 }

@@ -4085,6 +4085,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     pub fn test_forward_chaining_is_connected() {
         let blockstore_path = get_tmp_ledger_path!();
         {
@@ -4284,7 +4285,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Slot doesn't exist
-            assert!(blockstore.get_slots_since(&vec![0]).unwrap().is_empty());
+            assert!(blockstore.get_slots_since(&[0]).unwrap().is_empty());
 
             let mut meta0 = SlotMeta::new(0, 0);
             blockstore.meta_cf.put(0, &meta0).unwrap();
@@ -4292,25 +4293,22 @@ pub mod tests {
             // Slot exists, chains to nothing
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![])].into_iter());
-            assert_eq!(blockstore.get_slots_since(&vec![0]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
             meta0.next_slots = vec![1, 2];
             blockstore.meta_cf.put(0, &meta0).unwrap();
 
             // Slot exists, chains to some other slots
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![1, 2])].into_iter());
-            assert_eq!(blockstore.get_slots_since(&vec![0]).unwrap(), expected);
-            assert_eq!(blockstore.get_slots_since(&vec![0, 1]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&[0, 1]).unwrap(), expected);
 
             let mut meta3 = SlotMeta::new(3, 1);
             meta3.next_slots = vec![10, 5];
             blockstore.meta_cf.put(3, &meta3).unwrap();
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![1, 2]), (3, vec![10, 5])].into_iter());
-            assert_eq!(
-                blockstore.get_slots_since(&vec![0, 1, 3]).unwrap(),
-                expected
-            );
+            assert_eq!(blockstore.get_slots_since(&[0, 1, 3]).unwrap(), expected);
         }
 
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
@@ -4899,11 +4897,8 @@ pub mod tests {
 
             // Trying to insert value into slot <= than last root should fail
             {
-                let mut coding_shred = Shred::new_empty_from_header(
-                    shred.clone(),
-                    DataShredHeader::default(),
-                    coding.clone(),
-                );
+                let mut coding_shred =
+                    Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());
                 assert!(!Blockstore::should_insert_coding_shred(
@@ -5022,7 +5017,7 @@ pub mod tests {
             .unwrap();
         for ((slot, _), _) in data_iter {
             if slot > 5 {
-                assert!(false);
+                panic!();
             }
         }
 
@@ -5051,7 +5046,7 @@ pub mod tests {
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(_, _)| {
-                assert!(false);
+                panic!();
             });
 
         drop(blockstore);
@@ -5095,7 +5090,7 @@ pub mod tests {
         blockstore
             .slot_meta_iterator(5)
             .unwrap()
-            .for_each(|_| assert!(false));
+            .for_each(|_| panic!());
 
         drop(blockstore);
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
@@ -5479,7 +5474,7 @@ pub mod tests {
     #[test]
     fn test_get_block_timestamps() {
         let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
-        let base_timestamp = 1576183541;
+        let base_timestamp = 1_576_183_541;
         let mut expected_timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
 
         // Populate slot 1 with vote transactions, some of which have timestamps
@@ -5506,7 +5501,7 @@ pub mod tests {
             let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
             vote_entries.append(&mut tick);
         }
-        let shreds = entries_to_test_shreds(vote_entries.clone(), 1, 0, true, 0);
+        let shreds = entries_to_test_shreds(vote_entries, 1, 0, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -5553,7 +5548,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_stake_weighted_timestamp() {
-        let recent_timestamp: UnixTimestamp = 1578909061;
+        let recent_timestamp: UnixTimestamp = 1_578_909_061;
         let slot = 5;
         let slot_duration = Duration::from_millis(400);
         let expected_offset = (slot * slot_duration).as_secs();
@@ -5738,6 +5733,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_transaction_status_index() {
         let blockstore_path = get_tmp_ledger_path!();
         {
@@ -5942,6 +5938,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status() {
         let blockstore_path = get_tmp_ledger_path!();
         {
@@ -6116,8 +6113,8 @@ pub mod tests {
             let status = TransactionStatusMeta {
                 status: solana_sdk::transaction::Result::<()>::Ok(()),
                 fee: 42u64,
-                pre_balances: pre_balances_vec.clone(),
-                post_balances: post_balances_vec.clone(),
+                pre_balances: pre_balances_vec,
+                post_balances: post_balances_vec,
             };
 
             let signature1 = Signature::new(&[1u8; 64]);
@@ -6132,46 +6129,46 @@ pub mod tests {
             //   signature4 in 2 non-roots,
             //   extra entries
             transaction_status_cf
-                .put((0, signature2.clone(), 1), &status)
+                .put((0, signature2, 1), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((0, signature2.clone(), 2), &status)
+                .put((0, signature2, 2), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((0, signature4.clone(), 0), &status)
+                .put((0, signature4, 0), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((0, signature4.clone(), 1), &status)
+                .put((0, signature4, 1), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((0, signature5.clone(), 0), &status)
+                .put((0, signature5, 0), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((0, signature5.clone(), 1), &status)
+                .put((0, signature5, 1), &status)
                 .unwrap();
 
             // Initialize index 1, including:
             //   signature4 in non-root and root,
             //   extra entries
             transaction_status_cf
-                .put((1, signature4.clone(), 1), &status)
+                .put((1, signature4, 1), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((1, signature4.clone(), 2), &status)
+                .put((1, signature4, 2), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((1, signature5.clone(), 0), &status)
+                .put((1, signature5, 0), &status)
                 .unwrap();
 
             transaction_status_cf
-                .put((1, signature5.clone(), 1), &status)
+                .put((1, signature5, 1), &status)
                 .unwrap();
 
             blockstore.set_roots(&[2]).unwrap();
@@ -6508,8 +6505,8 @@ pub mod tests {
                 transactions.into_iter(),
             );
             assert_eq!(map.len(), 5);
-            for x in 0..4 {
-                assert_eq!(map[x].meta.as_ref().unwrap().fee, x as u64);
+            for (x, m) in map.iter().take(4).enumerate() {
+                assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);
             }
             assert_eq!(map[4].meta, None);
         }
@@ -6771,8 +6768,8 @@ pub mod tests {
         let entries1 = make_slot_entries_with_transactions(1);
         let entries2 = make_slot_entries_with_transactions(1);
         let leader_keypair = Arc::new(Keypair::new());
-        let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0)
-            .expect("Failed in creating shredder");
+        let shredder =
+            Shredder::new(slot, 0, 1.0, leader_keypair, 0, 0).expect("Failed in creating shredder");
         let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
         let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
         let shred = shreds[0].clone();

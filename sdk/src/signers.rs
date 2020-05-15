@@ -141,6 +141,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::blacklisted_name)]
     fn test_dyn_keypairs_by_ref_compile() {
         let foo = Foo {};
         let bar = Bar {};

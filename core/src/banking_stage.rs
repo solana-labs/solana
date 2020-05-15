@@ -1504,7 +1504,7 @@ mod tests {
         assert_eq!(
             BankingStage::filter_transaction_indexes(
                 transactions.clone(),
-                &vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
             ),
             (filtered_transactions.clone(), vec![1, 2, 3, 6, 8, 10])
         );
@@ -1512,7 +1512,7 @@ mod tests {
         assert_eq!(
             BankingStage::filter_transaction_indexes(
                 transactions,
-                &vec![1, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15],
+                &[1, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15],
             ),
             (filtered_transactions, vec![2, 4, 5, 9, 11, 13])
         );
@@ -1537,7 +1537,7 @@ mod tests {
         ];
 
         assert_eq!(
-            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![2, 4, 5],),
+            BankingStage::prepare_filter_for_pending_transactions(&transactions, &[2, 4, 5],),
             vec![
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
@@ -1549,7 +1549,7 @@ mod tests {
         );
 
         assert_eq!(
-            BankingStage::prepare_filter_for_pending_transactions(&transactions, &vec![0, 2, 3],),
+            BankingStage::prepare_filter_for_pending_transactions(&transactions, &[0, 2, 3],),
             vec![
                 Ok(()),
                 Err(TransactionError::BlockhashNotFound),
@@ -1565,7 +1565,7 @@ mod tests {
     fn test_bank_filter_valid_transaction_indexes() {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
-                &vec![
+                &[
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Ok(()), Some(HashAgeKind::Extant)),
@@ -1573,14 +1573,14 @@ mod tests {
                     (Ok(()), Some(HashAgeKind::Extant)),
                     (Ok(()), Some(HashAgeKind::Extant)),
                 ],
-                &vec![2, 4, 5, 9, 11, 13]
+                &[2, 4, 5, 9, 11, 13]
             ),
-            vec![5, 11, 13]
+            [5, 11, 13]
         );
 
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
-                &vec![
+                &[
                     (Ok(()), Some(HashAgeKind::Extant)),
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
@@ -1588,9 +1588,9 @@ mod tests {
                     (Ok(()), Some(HashAgeKind::Extant)),
                     (Ok(()), Some(HashAgeKind::Extant)),
                 ],
-                &vec![1, 6, 7, 9, 31, 43]
+                &[1, 6, 7, 9, 31, 43]
             ),
-            vec![1, 9, 31, 43]
+            [1, 9, 31, 43]
         );
     }
 
@@ -1613,48 +1613,23 @@ mod tests {
         );
 
         assert_eq!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1.clone()),
-                false,
-                false,
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey, Some(my_pubkey1), false, false,),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1.clone()),
-                false,
-                true,
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey, Some(my_pubkey1), false, true,),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1.clone()),
-                true,
-                false,
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey, Some(my_pubkey1), true, false,),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey1,
-                Some(my_pubkey1.clone()),
-                false,
-                false,
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey1, Some(my_pubkey1), false, false,),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey1,
-                Some(my_pubkey1.clone()),
-                true,
-                false,
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey1, Some(my_pubkey1), true, false,),
             BufferedPacketsDecision::Consume
         );
     }
@@ -1950,7 +1925,7 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-            let shreds = entries_to_test_shreds(entries.clone(), bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(&[bank.slot()]).unwrap();
 

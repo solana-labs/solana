@@ -225,8 +225,8 @@ mod tests {
                 }
             }
             exit.store(true, Ordering::Relaxed);
-            let _ = poh_service.join().unwrap();
-            let _ = entry_producer.join().unwrap();
+            poh_service.join().unwrap();
+            entry_producer.join().unwrap();
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

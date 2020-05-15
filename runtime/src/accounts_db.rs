@@ -2390,12 +2390,12 @@ pub mod tests {
         }
     }
 
-    fn update_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, slot: Slot, range: usize) {
+    fn update_accounts(accounts: &AccountsDB, pubkeys: &[Pubkey], slot: Slot, range: usize) {
         for _ in 1..1000 {
             let idx = thread_rng().gen_range(0, range);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             if let Some((mut account, _)) = accounts.load_slow(&ancestors, &pubkeys[idx]) {
-                account.lamports = account.lamports + 1;
+                account.lamports += 1;
                 accounts.store(slot, &[(&pubkeys[idx], &account)]);
                 if account.lamports == 0 {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
@@ -2441,9 +2441,10 @@ pub mod tests {
         }
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn modify_accounts(
         accounts: &AccountsDB,
-        pubkeys: &Vec<Pubkey>,
+        pubkeys: &[Pubkey],
         slot: Slot,
         num: usize,
         count: usize,
@@ -2979,7 +2980,7 @@ pub mod tests {
     fn assert_no_stores(accounts: &AccountsDB, slot: Slot) {
         let stores = accounts.storage.read().unwrap();
         info!("{:?}", stores.0.get(&slot));
-        assert!(stores.0.get(&slot).is_none() || stores.0.get(&slot).unwrap().len() == 0);
+        assert!(stores.0.get(&slot).is_none() || stores.0.get(&slot).unwrap().is_empty());
     }
 
     #[test]
@@ -3228,8 +3229,7 @@ pub mod tests {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             accounts.clean_accounts();
-            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-            accounts
+            reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
 
@@ -3240,8 +3240,7 @@ pub mod tests {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             print_accounts("after_reconstruct", &accounts);
             accounts.clean_accounts();
-            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-            accounts
+            reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
 
@@ -3258,7 +3257,6 @@ pub mod tests {
 
         db.add_root(slot);
         let thread_hdls: Vec<_> = (0..num_threads)
-            .into_iter()
             .map(|_| {
                 let db = db.clone();
                 std::thread::Builder::new()
@@ -3271,9 +3269,11 @@ pub mod tests {
                             let account_bal = thread_rng().gen_range(1, 99);
                             account.lamports = account_bal;
                             db.store(slot, &[(&pubkey, &account)]);
-                            let (account, slot) = db.load_slow(&HashMap::new(), &pubkey).expect(
-                                &format!("Could not fetch stored account {}, iter {}", pubkey, i),
-                            );
+
+                            let (account, slot) =
+                                db.load_slow(&HashMap::new(), &pubkey).unwrap_or_else(|| {
+                                    panic!("Could not fetch stored account {}, iter {}", pubkey, i)
+                                });
                             assert_eq!(slot, slot);
                             assert_eq!(account.lamports, account_bal);
                             i += 1;
@@ -3397,7 +3397,7 @@ pub mod tests {
         );
 
         // Executable may not be modified
-        let mut account_modified = account.clone();
+        let mut account_modified = account;
         account_modified.executable = true;
         assert_ne!(
             hash,
@@ -3641,7 +3641,7 @@ pub mod tests {
         db.hash_accounts(some_slot, accounts);
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_with_hashes(some_slot, accounts, &vec![some_hash]);
+        db.store_with_hashes(some_slot, accounts, &[some_hash]);
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash(some_slot, &ancestors),
@@ -3655,12 +3655,11 @@ pub mod tests {
         let db = AccountsDB::new(Vec::new());
 
         let some_slot: Slot = 0;
-        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+        let ancestors: Ancestors = [(some_slot, 0)].iter().copied().collect();
 
         for _ in 0..10_000 {
             let num_accounts = thread_rng().gen_range(0, 100);
             let accounts_keys: Vec<_> = (0..num_accounts)
-                .into_iter()
                 .map(|_| {
                     let key = Keypair::new().pubkey();
                     let lamports = thread_rng().gen_range(0, 100);
@@ -3790,7 +3789,7 @@ pub mod tests {
         let account = Account::new(old_lamport, no_data, &owner);
         let account2 = Account::new(old_lamport + 100_001, no_data, &owner);
         let account3 = Account::new(old_lamport + 100_002, no_data, &owner);
-        let dummy_account = Account::new(99999999, no_data, &owner);
+        let dummy_account = Account::new(99_999_999, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
         let pubkey = Pubkey::new_rand();
@@ -3846,7 +3845,7 @@ pub mod tests {
         let old_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
-        let dummy_lamport = 999999;
+        let dummy_lamport = 999_999;
         let owner = Account::default().owner;
 
         let account = Account::new(old_lamport, no_data, &owner);
@@ -4124,12 +4123,12 @@ pub mod tests {
             lamports: 0,
         };
         let mut reclaims = vec![];
-        accounts_index.insert(0, &key0, info0.clone(), &mut reclaims);
+        accounts_index.insert(0, &key0, info0, &mut reclaims);
         accounts_index.insert(1, &key0, info1.clone(), &mut reclaims);
-        accounts_index.insert(1, &key1, info1.clone(), &mut reclaims);
+        accounts_index.insert(1, &key1, info1, &mut reclaims);
         accounts_index.insert(2, &key1, info2.clone(), &mut reclaims);
-        accounts_index.insert(2, &key2, info2.clone(), &mut reclaims);
-        accounts_index.insert(3, &key2, info3.clone(), &mut reclaims);
+        accounts_index.insert(2, &key2, info2, &mut reclaims);
+        accounts_index.insert(3, &key2, info3, &mut reclaims);
         accounts_index.add_root(0);
         accounts_index.add_root(1);
         accounts_index.add_root(2);

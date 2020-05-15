@@ -403,7 +403,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
     let mut packet = Packet::default();
     packet.meta.size = tx_bytes.len();
     packet.data[..packet.meta.size].copy_from_slice(&tx_bytes);
-    return packet;
+    packet
 }
 
 #[cfg(test)]
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn test_small_packet() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = sigverify::make_packet_from_transaction(tx);
 
         packet.data[0] = 0xff;
         packet.data[1] = 0xff;
@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn test_large_sig_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = sigverify::make_packet_from_transaction(tx);
 
         // Make the signatures len huge
         packet.data[0] = 0x7f;
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn test_really_large_sig_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = sigverify::make_packet_from_transaction(tx);
 
         // Make the signatures len huge
         packet.data[0] = 0xff;
@@ -559,7 +559,7 @@ mod tests {
     #[test]
     fn test_invalid_pubkey_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = sigverify::make_packet_from_transaction(tx);
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
@@ -584,7 +584,7 @@ mod tests {
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.signatures = vec![Signature::default()];
-        let packet = sigverify::make_packet_from_transaction(tx.clone());
+        let packet = sigverify::make_packet_from_transaction(tx);
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(res, Err(PacketError::PayerNotWritable));
@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_verify_tampered_sig_len() {
-        let mut tx = test_tx().clone();
+        let mut tx = test_tx();
         // pretend malicious leader dropped a signature...
         tx.signatures.pop();
         let packet = sigverify::make_packet_from_transaction(tx);

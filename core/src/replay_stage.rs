@@ -1842,8 +1842,8 @@ pub(crate) mod tests {
 
     fn simulate_fork_selection(
         neutral_fork: &ForkInfo,
-        forks: &Vec<ForkInfo>,
-        validators: &Vec<ValidatorInfo>,
+        forks: &[ForkInfo],
+        validators: &[ValidatorInfo],
     ) -> Vec<Option<ForkSelectionResponse>> {
         fn vote(bank: &Arc<Bank>, pubkey: &Pubkey, slot: Slot) {
             let mut vote_account = bank.get_account(&pubkey).unwrap();
@@ -2031,19 +2031,18 @@ pub(crate) mod tests {
                 let (heaviest_bank, _) = ReplayStage::select_forks(
                     &frozen_banks,
                     &towers[i],
-                    &mut fork_progresses[i],
+                    &fork_progresses[i],
                     &bank_fork_ancestors,
                 );
 
-                if heaviest_bank.is_none() {
-                    None
-                } else {
-                    let bank = heaviest_bank.unwrap();
+                if let Some(bank) = heaviest_bank {
                     let stats = &fork_progresses[i].get_fork_stats(bank.slot()).unwrap();
                     Some(ForkSelectionResponse {
                         slot: bank.slot(),
                         is_locked_out: stats.is_locked_out,
                     })
+                } else {
+                    None
                 }
             })
             .collect()
@@ -2388,7 +2387,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidEntryHash);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -2413,7 +2412,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickHashCount);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -2436,7 +2435,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickCount);
         } else {
-            assert!(false);
+            panic!();
         }
 
         // Too few ticks per slot
@@ -2456,7 +2455,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickCount);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -2478,7 +2477,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidLastTick);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -2490,7 +2489,7 @@ pub(crate) mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             let mut entries =
-                entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash.clone());
+                entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash);
             let last_entry_hash = entries.last().unwrap().hash;
             let tx =
                 system_transaction::transfer(&genesis_keypair, &keypair.pubkey(), 2, blockhash);
@@ -2502,7 +2501,7 @@ pub(crate) mod tests {
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::TrailingEntry);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -2597,7 +2596,7 @@ pub(crate) mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+            BlockCommitmentCache::default_with_blockstore(blockstore),
         ));
         let (lockouts_sender, _) = AggregateCommitmentService::new(
             &Arc::new(AtomicBool::new(false)),
@@ -2659,12 +2658,7 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank2);
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(
-            arc_bank2.clone(),
-            0,
-            leader_lamports,
-            &lockouts_sender,
-        );
+        ReplayStage::update_commitment_cache(arc_bank2, 0, leader_lamports, &lockouts_sender);
         thread::sleep(Duration::from_millis(200));
 
         let mut expected0 = BlockCommitment::default();
@@ -2736,7 +2730,7 @@ pub(crate) mod tests {
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
-            blockstore.clone(),
+            blockstore,
             &Arc::new(AtomicBool::new(false)),
         );
 
@@ -3423,7 +3417,7 @@ pub(crate) mod tests {
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
-            vote_tracker.insert_vote(10, Arc::new(vote_pubkey.clone()));
+            vote_tracker.insert_vote(10, Arc::new(*vote_pubkey));
         }
 
         // The last bank should reach propagation threshold, and propagate it all
@@ -3514,7 +3508,7 @@ pub(crate) mod tests {
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         // Insert a new vote
-        vote_tracker.insert_vote(10, Arc::new(vote_pubkeys[2].clone()));
+        vote_tracker.insert_vote(10, Arc::new(vote_pubkeys[2]));
 
         // The last bank should reach propagation threshold, and propagate it all
         // the way back through earlier leader banks

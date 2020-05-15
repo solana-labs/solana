@@ -1482,6 +1482,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let default_keypair = Keypair::new();
@@ -2861,7 +2862,7 @@ mod tests {
                         blockhash_query::Source::NonceAccount(nonce_account),
                         nonce_hash
                     ),
-                    nonce_account: Some(nonce_account.into()),
+                    nonce_account: Some(nonce_account),
                     nonce_authority: 1,
                     split_stake_account: 2,
                     seed: None,

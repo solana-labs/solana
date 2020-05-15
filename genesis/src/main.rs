@@ -555,7 +555,6 @@ mod tests {
     use std::fs::remove_file;
     use std::io::Write;
     use std::path::Path;
-    use tempfile;
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {

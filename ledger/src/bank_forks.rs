@@ -402,7 +402,7 @@ mod tests {
         assert_eq!(bank_forks.root(), 0);
         assert_eq!(bank_forks.working_bank().slot(), 1);
 
-        let bank_forks = BankForks::new_from_banks(&[child_bank.clone(), bank.clone()], 0);
+        let bank_forks = BankForks::new_from_banks(&[child_bank, bank], 0);
         assert_eq!(bank_forks.root(), 0);
         assert_eq!(bank_forks.working_bank().slot(), 1);
     }

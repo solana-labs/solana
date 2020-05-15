@@ -303,19 +303,19 @@ mod tests {
         );
         mocks.insert(
             RpcRequest::GetFeeCalculatorForBlockhash,
-            get_fee_calculator_for_blockhash_response.clone(),
+            get_fee_calculator_for_blockhash_response,
         );
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::FeeCalculator(Source::Cluster, test_blockhash)
                 .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
-            (test_blockhash, rpc_fee_calc.clone()),
+            (test_blockhash, rpc_fee_calc),
         );
         let mut mocks = HashMap::new();
         mocks.insert(
             RpcRequest::GetRecentBlockhash,
-            get_recent_blockhash_response.clone(),
+            get_recent_blockhash_response,
         );
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
@@ -347,7 +347,7 @@ mod tests {
         let rpc_nonce_account = RpcAccount::encode(nonce_account);
         let get_account_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
-            value: json!(Some(rpc_nonce_account.clone())),
+            value: json!(Some(rpc_nonce_account)),
         });
 
         let mut mocks = HashMap::new();
@@ -366,7 +366,7 @@ mod tests {
             BlockhashQuery::FeeCalculator(Source::NonceAccount(nonce_pubkey), nonce_blockhash)
                 .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
-            (nonce_blockhash, nonce_fee_calc.clone()),
+            (nonce_blockhash, nonce_fee_calc),
         );
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
@@ -377,7 +377,7 @@ mod tests {
                 .is_err()
         );
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
+        mocks.insert(RpcRequest::GetAccountInfo, get_account_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::None(nonce_blockhash)

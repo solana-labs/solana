@@ -212,7 +212,7 @@ mod tests {
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authorized = nonce_account.unsigned_key().clone();
+            let authorized = nonce_account.unsigned_key();
             nonce_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
@@ -242,7 +242,7 @@ mod tests {
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authorized = nonce_account.unsigned_key().clone();
+            let authorized = nonce_account.unsigned_key();
             nonce_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
@@ -378,7 +378,7 @@ mod tests {
             &post_account_pubkey,
             &Err(transaction::TransactionError::InstructionError(
                 0,
-                InstructionError::InvalidArgument.into(),
+                InstructionError::InvalidArgument,
             )),
             Some((&pre_account_pubkey, &pre_account)),
             &last_blockhash,

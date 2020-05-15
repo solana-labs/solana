@@ -13,7 +13,7 @@ fn run_ledger_tool(args: &[&str]) -> Output {
 }
 
 fn count_newlines(chars: &[u8]) -> usize {
-    chars.iter().filter(|&c| *c == '\n' as u8).count()
+    bytecount::count(chars, b'\n')
 }
 
 #[test]

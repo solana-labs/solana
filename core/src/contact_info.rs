@@ -228,7 +228,6 @@ mod tests {
 
     #[test]
     fn test_is_valid_address() {
-        assert!(cfg!(test));
         let bad_address_port = socketaddr!("127.0.0.1:0");
         assert!(!ContactInfo::is_valid_address(&bad_address_port));
         let bad_address_unspecified = socketaddr!(0, 1234);

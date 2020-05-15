@@ -2703,6 +2703,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
@@ -2800,7 +2801,7 @@ mod tests {
         );
 
         // Test Confirm Subcommand
-        let signature = Signature::new(&vec![1; 64]);
+        let signature = Signature::new(&[1; 64]);
         let signature_string = format!("{:?}", signature);
         let test_confirm =
             test_commands
@@ -3235,6 +3236,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_cli_process_command() {
         // Success cases
         let mut config = CliConfig::default();
@@ -3774,7 +3776,7 @@ mod tests {
                         blockhash_query::Source::NonceAccount(nonce_address),
                         blockhash
                     ),
-                    nonce_account: Some(nonce_address.into()),
+                    nonce_account: Some(nonce_address),
                     nonce_authority: 1,
                     fee_payer: 0,
                 },

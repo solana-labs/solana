@@ -218,7 +218,7 @@ mod test {
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(95);
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = keyed_account.unsigned_key();
             keyed_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -228,7 +228,7 @@ mod test {
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
                 fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
-                ..data.clone()
+                ..data
             };
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, State::Initialized(data.clone()));
@@ -242,7 +242,7 @@ mod test {
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
                 fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
-                ..data.clone()
+                ..data
             };
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, State::Initialized(data.clone()));
@@ -256,10 +256,10 @@ mod test {
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
                 fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
-                ..data.clone()
+                ..data
             };
             // Third nonce instruction for fun and profit
-            assert_eq!(state, State::Initialized(data.clone()));
+            assert_eq!(state, State::Initialized(data));
             with_test_keyed_account(42, false, |to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(0);
                 let withdraw_lamports = keyed_account.account.borrow().lamports;
@@ -295,11 +295,11 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            let authority = nonce_account.unsigned_key().clone();
+            let authority = *nonce_account.unsigned_key();
             nonce_account
                 .initialize_nonce_account(&authority, &recent_blockhashes, &rent)
                 .unwrap();
-            let pubkey = nonce_account.account.borrow().owner.clone();
+            let pubkey = nonce_account.account.borrow().owner;
             let nonce_account = KeyedAccount::new(&pubkey, false, nonce_account.account);
             let state = AccountUtilsState::<Versions>::state(&nonce_account)
                 .unwrap()
@@ -328,7 +328,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = *keyed_account.unsigned_key();
             keyed_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -349,7 +349,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(63);
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = *keyed_account.unsigned_key();
             keyed_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -386,7 +386,7 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(nonce_account.signer_key().unwrap().clone());
                 let recent_blockhashes = create_test_recent_blockhashes(63);
-                let authorized = nonce_authority.unsigned_key().clone();
+                let authorized = *nonce_authority.unsigned_key();
                 nonce_account
                     .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                     .unwrap();
@@ -411,7 +411,7 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(nonce_account.signer_key().unwrap().clone());
                 let recent_blockhashes = create_test_recent_blockhashes(63);
-                let authorized = nonce_authority.unsigned_key().clone();
+                let authorized = *nonce_authority.unsigned_key();
                 nonce_account
                     .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                     .unwrap();
@@ -586,7 +586,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            let authority = nonce_keyed.unsigned_key().clone();
+            let authority = *nonce_keyed.unsigned_key();
             nonce_keyed
                 .initialize_nonce_account(&authority, &recent_blockhashes, &rent)
                 .unwrap();
@@ -653,7 +653,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authorized = nonce_keyed.unsigned_key().clone();
+            let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -682,7 +682,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(95);
-            let authorized = nonce_keyed.unsigned_key().clone();
+            let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -712,7 +712,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(95);
-            let authorized = nonce_keyed.unsigned_key().clone();
+            let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -748,7 +748,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authority = keyed_account.unsigned_key().clone();
+            let authority = *keyed_account.unsigned_key();
             let result =
                 keyed_account.initialize_nonce_account(&authority, &recent_blockhashes, &rent);
             let data = nonce::state::Data {
@@ -775,7 +775,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = RecentBlockhashes::from_iter(vec![].into_iter());
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = *keyed_account.unsigned_key();
             let result =
                 keyed_account.initialize_nonce_account(&authorized, &recent_blockhashes, &rent);
             assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
@@ -791,7 +791,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = *keyed_account.unsigned_key();
             keyed_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
@@ -811,7 +811,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports - 42, true, |keyed_account| {
             let recent_blockhashes = create_test_recent_blockhashes(63);
-            let authorized = keyed_account.unsigned_key().clone();
+            let authorized = *keyed_account.unsigned_key();
             let result =
                 keyed_account.initialize_nonce_account(&authorized, &recent_blockhashes, &rent);
             assert_eq!(result, Err(InstructionError::InsufficientFunds));
@@ -829,7 +829,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            let authorized = nonce_account.unsigned_key().clone();
+            let authorized = *nonce_account.unsigned_key();
             nonce_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();

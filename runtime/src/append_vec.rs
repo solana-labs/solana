@@ -545,12 +545,12 @@ pub mod tests {
     }
 
     impl<'a> StoredAccount<'a> {
+        #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
-            let data_len: &u64 = &self.meta.data_len;
-            #[allow(mutable_transmutes)]
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
-            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
-            *data_len = new_data_len;
+            unsafe {
+                *(&self.meta.data_len as *const u64 as *mut u64) = new_data_len;
+            }
         }
 
         fn get_executable_byte(&self) -> u8 {
@@ -560,13 +560,12 @@ pub mod tests {
             executable_byte
         }
 
+        #[allow(clippy::cast_ref_to_mut)]
         fn set_executable_as_byte(&self, new_executable_byte: u8) {
-            let executable_ref: &bool = &self.account_meta.executable;
-            #[allow(mutable_transmutes)]
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
-            let executable_byte: &mut u8 =
-                unsafe { &mut *(executable_ref as *const bool as *mut u8) };
-            *executable_byte = new_executable_byte;
+            unsafe {
+                *(&self.account_meta.executable as *const bool as *mut u8) = new_executable_byte;
+            }
         }
     }
 
@@ -597,31 +596,41 @@ pub mod tests {
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_too_small() {
-        let result = AppendVec::sanitize_len_and_size(0, 0);
+        const LEN: usize = 0;
+        const SIZE: usize = 0;
+        let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
         assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_maximum() {
-        let result = AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024);
+        const LEN: usize = 0;
+        const SIZE: usize = 16 * 1024 * 1024 * 1024;
+        let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
         assert_matches!(result, Ok(_));
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_too_large() {
-        let result = AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024 + 1);
+        const LEN: usize = 0;
+        const SIZE: usize = 16 * 1024 * 1024 * 1024 + 1;
+        let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
         assert_matches!(result, Err(ref message) if message.to_string() == *"too large file size 17179869185 for AppendVec");
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_full_and_same_as_current_len() {
-        let result = AppendVec::sanitize_len_and_size(1 * 1024 * 1024, 1 * 1024 * 1024);
+        const LEN: usize = 1024 * 1024;
+        const SIZE: usize = 1024 * 1024;
+        let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
         assert_matches!(result, Ok(_));
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_larger_current_len() {
-        let result = AppendVec::sanitize_len_and_size(1 * 1024 * 1024 + 1, 1 * 1024 * 1024);
+        const LEN: usize = 1024 * 1024 + 1;
+        const SIZE: usize = 1024 * 1024;
+        let result = AppendVec::sanitize_len_and_size(LEN, SIZE);
         assert_matches!(result, Err(ref message) if message.to_string() == *"current_len is larger than file size (1048576)");
     }
 
@@ -806,7 +815,8 @@ pub mod tests {
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *exeutable_bool is equal to false but the if condition thinks it's not, contradictly.
             assert_eq!(*executable_bool, false);
-            if *executable_bool == false {
+            const FALSE: bool = false; // keep clippy happy
+            if *executable_bool == FALSE {
                 panic!("This didn't occur if this test passed.");
             }
             assert_eq!(*account.ref_executable_byte(), crafted_executable);

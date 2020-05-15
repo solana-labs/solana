@@ -452,7 +452,7 @@ mod tests {
     fn test_health_check_with_no_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
+        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info, None);
         assert_eq!(rm.health_check(), "ok");
     }
 
@@ -483,7 +483,7 @@ mod tests {
             .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[0].clone(),
+                    trusted_validators[0],
                     vec![
                         (1, Hash::default()),
                         (1001, Hash::default()),
@@ -503,7 +503,7 @@ mod tests {
             .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[1].clone(),
+                    trusted_validators[1],
                     vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
                 ))),
                 1,
@@ -519,7 +519,7 @@ mod tests {
             .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[2].clone(),
+                    trusted_validators[2],
                     vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
                 ))),
                 1,

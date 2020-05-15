@@ -453,6 +453,7 @@ pub mod test {
         path::Path, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc, thread::sleep,
     };
 
+    #[allow(clippy::implicit_hasher)]
     pub fn make_transmit_shreds(
         slot: Slot,
         num: u64,
@@ -553,7 +554,7 @@ pub mod test {
             .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
             .unwrap();
         retransmit_slots_sender
-            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .send(vec![(updated_slot, bank0)].into_iter().collect())
             .unwrap();
         BroadcastStage::check_retransmit_signals(
             &blockstore,

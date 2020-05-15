@@ -210,10 +210,10 @@ mod tests {
                 );
                 let _pk: Pubkey = serde_json::from_value(succ.result).unwrap();
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -242,10 +242,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -273,10 +273,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -305,10 +305,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -330,7 +330,7 @@ mod tests {
         let res = io.handle_request_sync(&req.to_string(), meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let mut vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey;
         if let Response::Single(out) = result {
             if let Output::Success(succ) = out {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
@@ -341,10 +341,10 @@ mod tests {
                 );
                 vote_pubkey = serde_json::from_value(succ.result).unwrap();
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
 
         let req = json!({
@@ -369,10 +369,10 @@ mod tests {
                 let sig: Signature = serde_json::from_value(succ.result).unwrap();
                 assert_eq!(verify_signature(&sig, &vote_pubkey, msg.as_bytes()), Ok(()));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -400,10 +400,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -448,10 +448,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -489,10 +489,10 @@ mod tests {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 }

@@ -497,7 +497,7 @@ mod tests {
         let from_lamports = from_account.borrow().lamports;
         let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
-        let to_data = to_account.data.clone();
+        let to_data = to_account.data;
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
         assert_eq!(to_owner, new_program_owner);

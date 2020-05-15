@@ -542,7 +542,7 @@ mod tests {
         let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
 
         // Verify entry with 2 transctions
-        let mut e0 = vec![Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()])];
+        let mut e0 = vec![Entry::new(&zero, 0, vec![tx0, tx1])];
         assert!(e0.verify(&zero));
 
         // Clear signature of the first transaction, see that it does not verify
@@ -598,7 +598,7 @@ mod tests {
         let tx0 = create_sample_timestamp(&keypair, zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
-        assert_eq!(entry0.hash, next_hash(&zero, 1, &vec![tx0]));
+        assert_eq!(entry0.hash, next_hash(&zero, 1, &[tx0]));
     }
 
     #[test]
@@ -707,7 +707,7 @@ mod tests {
         assert!(tx_and_no_hash_tick.verify_tick_hash_count(&mut tick_hash_count, 0));
         assert_eq!(tick_hash_count, 0);
 
-        let single_tick = vec![full_tick_entry.clone()];
+        let single_tick = vec![full_tick_entry];
         assert!(single_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, 0);
         assert!(!single_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick - 1));
@@ -718,7 +718,7 @@ mod tests {
         assert!(ticks_and_txs.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, 0);
 
-        let partial_tick = vec![partial_tick_entry.clone()];
+        let partial_tick = vec![partial_tick_entry];
         assert!(!partial_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, hashes_per_tick - 1);
         tick_hash_count = 0;

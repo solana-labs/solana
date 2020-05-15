@@ -447,23 +447,19 @@ mod tests {
         );
         let _res = io.handle_request_sync(&req, session.clone());
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[0]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[0]}"#;
         let res = io.handle_request_sync(&req, session.clone());
 
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
+        let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}}"#);
-        let res = io.handle_request_sync(&req, session.clone());
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#
-        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}"#;
+        let res = io.handle_request_sync(&req, session);
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid Request: Subscription id does not exist"},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
@@ -604,8 +600,7 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_config))));
 
         let mut io = PubSubHandler::default();
-        let rpc =
-            RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks.clone());
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
 
         io.extend_with(rpc.to_delegate());
 
@@ -615,23 +610,19 @@ mod tests {
         );
         let _res = io.handle_request_sync(&req, session.clone());
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[0]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[0]}"#;
         let res = io.handle_request_sync(&req, session.clone());
 
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
+        let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}}"#);
-        let res = io.handle_request_sync(&req, session.clone());
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#
-        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}"#;
+        let res = io.handle_request_sync(&req, session);
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid Request: Subscription id does not exist"},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
@@ -746,7 +737,7 @@ mod tests {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
         let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 1, 10, bank2, blockstore.clone(), 1);
+            BlockCommitmentCache::new(block_commitment, 1, 10, bank2, blockstore, 1);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);

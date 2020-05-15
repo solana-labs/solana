@@ -961,7 +961,7 @@ pub mod tests {
     #[test]
     fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
-        let slot = 0x123456789abcdef0;
+        let slot = 0x1234_5678_9abc_def0;
 
         // Test that parent cannot be > current slot
         assert_matches!(
@@ -1057,7 +1057,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 0, 0)
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair, 0, 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -1083,7 +1083,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 5, 0)
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair, 5, 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -1113,7 +1113,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), u8::max_value(), 0)
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair, u8::max_value(), 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -1147,14 +1147,14 @@ pub mod tests {
     fn test_data_and_code_shredder() {
         let keypair = Arc::new(Keypair::new());
 
-        let slot = 0x123456789abcdef0;
+        let slot = 0x1234_5678_9abc_def0;
         // Test that FEC rate cannot be > 1.0
         assert_matches!(
             Shredder::new(slot, slot - 5, 1.001, keypair.clone(), 0, 0),
             Err(ShredError::InvalidFecRate(_))
         );
 
-        let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone(), 0, 0)
+        let shredder = Shredder::new(0x1234_5678_9abc_def0, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         // Create enough entries to make > 1 shred
@@ -1192,7 +1192,7 @@ pub mod tests {
     #[test]
     fn test_recovery_and_reassembly() {
         let keypair = Arc::new(Keypair::new());
-        let slot = 0x123456789abcdef0;
+        let slot = 0x1234_5678_9abc_def0;
         let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
@@ -1554,12 +1554,10 @@ pub mod tests {
 
         assert!(data_shreds.len() > MAX_DATA_SHREDS_PER_FEC_BLOCK as usize);
 
-        (1..=MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-            .into_iter()
-            .for_each(|count| {
-                let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[..count]);
-                assert_eq!(coding_shreds.len(), count);
-            });
+        (1..=MAX_DATA_SHREDS_PER_FEC_BLOCK as usize).for_each(|count| {
+            let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[..count]);
+            assert_eq!(coding_shreds.len(), count);
+        });
 
         let coding_shreds = shredder.data_shreds_to_coding_shreds(
             &data_shreds[..MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 1],

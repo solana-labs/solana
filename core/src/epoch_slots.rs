@@ -400,24 +400,24 @@ mod tests {
         o.first_slot = MAX_SLOT;
         assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
-        let mut o = compressed.clone();
+        let mut o = compressed;
         o.num = MAX_SLOTS_PER_ENTRY;
         assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut slots = EpochSlots::default();
-        let range: Vec<Slot> = (0..5000).into_iter().collect();
+        let range: Vec<Slot> = (0..5000).collect();
         assert_eq!(slots.fill(&range, 1), 5000);
         assert_eq!(slots.wallclock, 1);
         assert!(slots.sanitize().is_ok());
 
-        let mut o = slots.clone();
+        let mut o = slots;
         o.wallclock = MAX_WALLCLOCK;
         assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 
     #[test]
     fn test_epoch_slots_fill_range() {
-        let range: Vec<Slot> = (0..5000).into_iter().collect();
+        let range: Vec<Slot> = (0..5000).collect();
         let mut slots = EpochSlots::default();
         assert_eq!(slots.fill(&range, 1), 5000);
         assert_eq!(slots.wallclock, 1);
@@ -427,7 +427,7 @@ mod tests {
     }
     #[test]
     fn test_epoch_slots_fill_sparce_range() {
-        let range: Vec<Slot> = (0..5000).into_iter().map(|x| x * 3).collect();
+        let range: Vec<Slot> = (0..5000).map(|x| x * 3).collect();
         let mut slots = EpochSlots::default();
         assert_eq!(slots.fill(&range, 2), 5000);
         assert_eq!(slots.wallclock, 2);
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_epoch_slots_fill_large_sparce_range() {
-        let range: Vec<Slot> = (0..5000).into_iter().map(|x| x * 7).collect();
+        let range: Vec<Slot> = (0..5000).map(|x| x * 7).collect();
         let mut slots = EpochSlots::default();
         assert_eq!(slots.fill(&range, 2), 5000);
         assert_eq!(slots.to_slots(0), range);

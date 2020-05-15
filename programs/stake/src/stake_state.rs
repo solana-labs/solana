@@ -1044,7 +1044,6 @@ mod tests {
                     ..Delegation::default()
                 },
                 credits_observed: vote_state_credits,
-                ..Stake::default()
             }
         );
 
@@ -1092,7 +1091,6 @@ mod tests {
                     ..Delegation::default()
                 },
                 credits_observed: vote_state_credits,
-                ..Stake::default()
             }
         );
 
@@ -1150,7 +1148,7 @@ mod tests {
         };
 
         // save this off so stake.config.warmup_rate changes don't break this test
-        let increment = (1_000 as f64 * stake.warmup_cooldown_rate) as u64;
+        let increment = (1_000_f64 * stake.warmup_cooldown_rate) as u64;
 
         let mut stake_history = StakeHistory::default();
         // assert that this stake follows step function if there's no history
@@ -1707,7 +1705,7 @@ mod tests {
             assert_eq!(lockup.epoch, 1);
             assert_eq!(lockup.custodian, custodian);
         } else {
-            assert!(false);
+            panic!();
         }
 
         assert_eq!(
@@ -1729,7 +1727,7 @@ mod tests {
             assert_eq!(lockup.epoch, 3);
             assert_eq!(lockup.custodian, custodian);
         } else {
-            assert!(false);
+            panic!();
         }
 
         let new_custodian = Pubkey::new_rand();
@@ -1752,7 +1750,7 @@ mod tests {
             assert_eq!(lockup.epoch, 3);
             assert_eq!(lockup.custodian, new_custodian);
         } else {
-            assert!(false);
+            panic!();
         }
 
         assert_eq!(
@@ -2173,7 +2171,7 @@ mod tests {
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (already observed one)
         assert_eq!(
-            Some((0, stake.delegation.stake * 1, 2)),
+            Some((0, stake.delegation.stake, 2)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -2183,7 +2181,7 @@ mod tests {
         stake.credits_observed = 2;
         // this one should be able to collect the one just added
         assert_eq!(
-            Some((0, stake.delegation.stake * 1, 3)),
+            Some((0, stake.delegation.stake, 3)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -2202,8 +2200,8 @@ mod tests {
             Some((
                 0,
                 stake.delegation.stake * 2 // epoch 0
-                    + stake.delegation.stake * 1 // epoch 1
-                    + stake.delegation.stake * 1, // epoch 2
+                    + stake.delegation.stake // epoch 1
+                    + stake.delegation.stake, // epoch 2
                 4
             )),
             stake.calculate_rewards(1.0, &vote_state, None)
@@ -2278,7 +2276,7 @@ mod tests {
             assert_eq!(authorized.staker, stake_pubkey0);
             assert_eq!(authorized.withdrawer, stake_pubkey0);
         } else {
-            assert!(false);
+            panic!();
         }
 
         // A second authorization signed by the stake_keyed_account should fail

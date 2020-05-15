@@ -828,7 +828,7 @@ mod test {
     #[test]
     pub fn test_update_lowest_slot() {
         let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info);
         RepairService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
         let lowest = cluster_info
             .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| {
@@ -889,7 +889,7 @@ mod test {
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
             .unwrap();
 
-        duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status.clone());
+        duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status);
 
         // There is no repair_addr, so should not get filtered because the timeout
         // `std::u64::MAX` has not expired

@@ -424,7 +424,7 @@ mod test {
     fn test_add_node_pubkey_internal() {
         let num_vote_accounts = 10;
         let staked_vote_accounts = 5;
-        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(|| Pubkey::new_rand())
+        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
@@ -491,7 +491,7 @@ mod test {
         // Addding another pubkey with different vote accounts should succeed
         // and increase stake
         node_pubkey = Pubkey::new_rand();
-        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(|| Pubkey::new_rand())
+        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys

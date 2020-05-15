@@ -180,7 +180,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.epoch(), 1);
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(bank);
         assert_eq!(
             non_circulating_supply.lamports,
             num_non_circulating_accounts * new_balance

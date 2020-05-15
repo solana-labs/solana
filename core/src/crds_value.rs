@@ -487,21 +487,21 @@ mod test {
 
         let mut o = ls.clone();
         o.root = 1;
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
 
         let o = ls.clone();
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o.clone()));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o));
         assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut o = ls.clone();
         o.slots.insert(1);
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
 
-        let mut o = ls.clone();
+        let mut o = ls;
         o.stash.push(deprecated::EpochIncompleteSlots::default());
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o));
         assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
     }
 

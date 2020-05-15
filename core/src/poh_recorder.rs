@@ -759,9 +759,7 @@ mod tests {
             poh_recorder.tick();
             let tx = test_tx();
             let h1 = hash(b"hello world!");
-            assert!(poh_recorder
-                .record(bank.slot(), h1, vec![tx.clone()])
-                .is_err());
+            assert!(poh_recorder.record(bank.slot(), h1, vec![tx]).is_err());
             assert!(entry_receiver.try_recv().is_err());
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -800,7 +798,7 @@ mod tests {
             let tx = test_tx();
             let h1 = hash(b"hello world!");
             assert_matches!(
-                poh_recorder.record(bank.slot() + 1, h1, vec![tx.clone()]),
+                poh_recorder.record(bank.slot() + 1, h1, vec![tx]),
                 Err(PohRecorderError::MaxHeightReached)
             );
         }
@@ -839,9 +837,7 @@ mod tests {
             assert_eq!(poh_recorder.tick_height, 1);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
-            assert!(poh_recorder
-                .record(bank.slot(), h1, vec![tx.clone()])
-                .is_ok());
+            assert!(poh_recorder.record(bank.slot(), h1, vec![tx]).is_ok());
             assert_eq!(poh_recorder.tick_cache.len(), 0);
 
             //tick in the cache + entry
@@ -885,9 +881,7 @@ mod tests {
             assert_eq!(poh_recorder.tick_height, 2);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
-            assert!(poh_recorder
-                .record(bank.slot(), h1, vec![tx.clone()])
-                .is_err());
+            assert!(poh_recorder.record(bank.slot(), h1, vec![tx]).is_err());
 
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert!(entry.is_tick());
@@ -1122,9 +1116,7 @@ mod tests {
 
             let tx = test_tx();
             let h1 = hash(b"hello world!");
-            assert!(poh_recorder
-                .record(bank.slot(), h1, vec![tx.clone()])
-                .is_err());
+            assert!(poh_recorder.record(bank.slot(), h1, vec![tx]).is_err());
             assert!(poh_recorder.working_bank.is_none());
             // Make sure the starting slot is updated
             assert_eq!(poh_recorder.start_slot, end_slot);

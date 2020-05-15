@@ -294,7 +294,7 @@ mod tests {
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer0_info = ContactInfo::new_localhost(&peer0, 0);
         let peer1_info = ContactInfo::new_localhost(&peer1, 0);
-        let cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
+        let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
         cluster_info.insert_info(peer0_info.clone());
         cluster_info.insert_info(peer1_info);
 
@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(met_criteria, true);
 
         let (met_criteria, _, _, _) = spy(
-            spy_ref.clone(),
+            spy_ref,
             None,
             Some(0),
             None,

@@ -209,7 +209,7 @@ mod tests {
         trusted_validators.insert(validator1.pubkey());
         assert!(AccountsHashVerifier::should_halt(
             &cluster_info,
-            &Some(trusted_validators.clone()),
+            &Some(trusted_validators),
             &mut slot_to_hash,
         ));
     }

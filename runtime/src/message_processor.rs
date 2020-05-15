@@ -595,8 +595,8 @@ mod tests {
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
-        for i in 1..MAX_DEPTH {
-            if Err(InstructionError::CallDepth) == invoke_context.push(&program_ids[i]) {
+        for program_id in program_ids.iter().skip(1) {
+            if Err(InstructionError::CallDepth) == invoke_context.push(program_id) {
                 break;
             }
             depth_reached += 1;
@@ -721,7 +721,7 @@ mod tests {
         }
         pub fn new_cross_program(owner: &Pubkey, program_id: &Pubkey, key: &Pubkey) -> Self {
             let mut change = Change::new(owner, program_id);
-            change.pre.key = key.clone();
+            change.pre.key = *key;
             change
         }
         pub fn read_only(mut self) -> Self {
@@ -931,7 +931,7 @@ mod tests {
             Change::new(&owner, &owner)
                 .executable(false, true)
                 .lamports(0, min_lamports - 1)
-                .data(data.clone(), data.clone())
+                .data(data.clone(), data)
                 .verify(),
             Err(InstructionError::ExecutableAccountNotRentExempt),
             "owner should not be able to change an account's data once its marked executable"
@@ -968,7 +968,7 @@ mod tests {
 
         assert_eq!(
             Change::new_cross_program(&owner, &system_program_id, &key)
-                .signer(false, true, &[key.clone()])
+                .signer(false, true, &[key])
                 .verify_cross_program(),
             Ok(()),
             "account signed by a signer"
@@ -1314,7 +1314,7 @@ mod tests {
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
-        let dup_pubkey = from_pubkey.clone();
+        let dup_pubkey = from_pubkey;
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
             AccountMeta::new(to_pubkey, false),

@@ -415,9 +415,9 @@ mod tests {
         cache2.increase_confirmation_stake(2, 5);
 
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        block_commitment.entry(1).or_insert(cache1.clone());
-        block_commitment.entry(2).or_insert(cache2.clone());
+        block_commitment.entry(0).or_insert(cache0);
+        block_commitment.entry(1).or_insert(cache1);
+        block_commitment.entry(2).or_insert(cache2);
         let block_commitment_cache =
             BlockCommitmentCache::new(block_commitment, 0, 50, bank, blockstore, 0);
 
@@ -442,9 +442,9 @@ mod tests {
         cache2.increase_rooted_stake(20);
 
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache0.clone());
-        block_commitment.entry(2).or_insert(cache1.clone());
-        block_commitment.entry(3).or_insert(cache2.clone());
+        block_commitment.entry(1).or_insert(cache0);
+        block_commitment.entry(2).or_insert(cache1);
+        block_commitment.entry(3).or_insert(cache2);
         let largest_confirmed_root = 1;
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
@@ -484,7 +484,7 @@ mod tests {
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
-        let root = ancestors.last().unwrap().clone();
+        let root = *ancestors.last().unwrap();
         vote_state.root_slot = Some(root);
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,

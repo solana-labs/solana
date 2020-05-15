@@ -81,18 +81,15 @@ mod tests {
 
     impl CpuStats {
         fn update(&self) {
-            match self.sys.cpu_load_aggregate() {
-                Ok(cpu) => {
-                    std::thread::sleep(Duration::from_millis(400));
-                    let cpu_new = CpuStatsInner::from(cpu.done().unwrap());
-                    *self.stats.write().unwrap() = cpu_new;
-                }
-                _ => (),
+            if let Ok(cpu) = self.sys.cpu_load_aggregate() {
+                std::thread::sleep(Duration::from_millis(400));
+                let cpu_new = CpuStatsInner::from(cpu.done().unwrap());
+                *self.stats.write().unwrap() = cpu_new;
             }
         }
 
         fn get_stats(&self) -> CpuStatsInner {
-            self.stats.read().unwrap().clone()
+            *self.stats.read().unwrap()
         }
     }
 
@@ -118,7 +115,7 @@ mod tests {
                 .unwrap();
 
             Self {
-                cpu_stats: cpu_stats.clone(),
+                cpu_stats,
                 t_cleanup,
             }
         }

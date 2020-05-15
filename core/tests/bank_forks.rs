@@ -267,7 +267,7 @@ mod tests {
             };
 
             bank_forks
-                .generate_accounts_package(slot, &vec![], &package_sender)
+                .generate_accounts_package(slot, &[], &package_sender)
                 .unwrap();
 
             if slot == saved_slot as u64 {

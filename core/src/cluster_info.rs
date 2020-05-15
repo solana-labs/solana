@@ -2117,7 +2117,7 @@ mod tests {
     #[should_panic]
     fn test_update_contact_info() {
         let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(d);
         let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
         assert!(cluster_info
             .gossip
@@ -2153,7 +2153,7 @@ mod tests {
         assert!(x < range.1);
     }
 
-    fn check_sockets(sockets: &Vec<UdpSocket>, ip: IpAddr, range: (u16, u16)) {
+    fn check_sockets(sockets: &[UdpSocket], ip: IpAddr, range: (u16, u16)) {
         assert!(sockets.len() > 1);
         let port = sockets[0].local_addr().unwrap().port();
         for socket in sockets.iter() {
@@ -2214,8 +2214,8 @@ mod tests {
         let peer_keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
-        cluster_info.insert_info(peer.clone());
+        let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
+        cluster_info.insert_info(peer);
         cluster_info
             .gossip
             .write()
@@ -2228,7 +2228,7 @@ mod tests {
             .unwrap()
             .new_push_messages(timestamp());
         // there should be some pushes ready
-        assert_eq!(push_messages.len() > 0, true);
+        assert_eq!(push_messages.is_empty(), false);
         push_messages
             .values()
             .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
@@ -2525,7 +2525,7 @@ mod tests {
             });
             i += 1;
         }
-        let split = ClusterInfo::split_gossip_messages(vec![value.clone()]);
+        let split = ClusterInfo::split_gossip_messages(vec![value]);
         assert_eq!(split.len(), 0);
     }
 
@@ -2547,13 +2547,13 @@ mod tests {
         //sanity test to ensure filter size never exceeds MTU size
         check_pull_request_size(CrdsFilter::new_rand(1000, 10));
         check_pull_request_size(CrdsFilter::new_rand(1000, 1000));
-        check_pull_request_size(CrdsFilter::new_rand(100000, 1000));
-        check_pull_request_size(CrdsFilter::new_rand(100000, MAX_BLOOM_SIZE));
+        check_pull_request_size(CrdsFilter::new_rand(100_000, 1000));
+        check_pull_request_size(CrdsFilter::new_rand(100_000, MAX_BLOOM_SIZE));
     }
 
     fn check_pull_request_size(filter: CrdsFilter) {
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
-        let protocol = Protocol::PullRequest(filter, value.clone());
+        let protocol = Protocol::PullRequest(filter, value);
         assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
     }
 
@@ -2590,7 +2590,7 @@ mod tests {
         let mut contact_info = ContactInfo::new_localhost(&id4, timestamp());
         contact_info.shred_version = 1;
         assert_ne!(contact_info.shred_version, d.shred_version);
-        cluster_info.insert_info(contact_info.clone());
+        cluster_info.insert_info(contact_info);
         stakes.insert(id4, 10);
 
         let stakes = Arc::new(stakes);
@@ -2659,11 +2659,8 @@ mod tests {
             node_keypair,
         );
         for i in 0..10 {
-            let mut peer_lowest = 0;
-            if i >= 5 {
-                // make these invalid for the upcoming repair request
-                peer_lowest = 10;
-            }
+            // make these invalid for the upcoming repair request
+            let peer_lowest = if i >= 5 { 10 } else { 0 };
             let other_node_pubkey = Pubkey::new_rand();
             let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
             cluster_info.insert_info(other_node.clone());

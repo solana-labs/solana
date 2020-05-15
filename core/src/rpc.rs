@@ -1568,12 +1568,8 @@ pub mod tests {
         let mut commitment_slot1 = BlockCommitment::default();
         commitment_slot1.increase_confirmation_stake(1, 9);
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
-        block_commitment
-            .entry(0)
-            .or_insert(commitment_slot0.clone());
-        block_commitment
-            .entry(1)
-            .or_insert(commitment_slot1.clone());
+        block_commitment.entry(0).or_insert(commitment_slot0);
+        block_commitment.entry(1).or_insert(commitment_slot1);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -1609,7 +1605,7 @@ pub mod tests {
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(&[1]).unwrap();
 
-        let mut roots = blockstore_roots.clone();
+        let mut roots = blockstore_roots;
         if !roots.is_empty() {
             roots.retain(|&x| x > 0);
             let mut parent_bank = bank;
@@ -1751,7 +1747,8 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getClusterNodes"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getClusterNodes"}"#;
+
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -1777,7 +1774,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlotLeader"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, leader_pubkey);
         let expected: Response =
@@ -1792,9 +1789,9 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}"#;
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":4,"id":1}}"#);
+        let expected = r#"{"jsonrpc":"2.0","result":4,"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -1807,7 +1804,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"minimumLedgerSlot"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"minimumLedgerSlot"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = r#"{"jsonrpc":"2.0","result":0,"id":1}"#;
         let expected: Response =
@@ -1822,7 +1819,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}"#;
         let rep = io.handle_request_sync(&req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
@@ -1846,8 +1843,8 @@ pub mod tests {
     fn test_get_supply() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSupply"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply"}"#;
+        let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
@@ -1873,7 +1870,7 @@ pub mod tests {
         let RpcHandler {
             io, meta, alice, ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
@@ -1910,19 +1907,15 @@ pub mod tests {
         }));
 
         // Test Circulating/NonCirculating Filter
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"circulating"}}]}}"#
-        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"circulating"}]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
         assert_eq!(largest_accounts.len(), 18);
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"nonCirculating"}}]}}"#
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"nonCirculating"}]}"#;
+        let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
@@ -1967,7 +1960,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getInflation"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflation"}"#;
         let rep = io.handle_request_sync(&req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
@@ -1988,7 +1981,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getEpochSchedule"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getEpochSchedule"}"#;
         let rep = io.handle_request_sync(&req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
@@ -2284,7 +2277,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             confirmed_block_signatures[1]
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected_res: transaction::Result<()> = Err(TransactionError::InstructionError(
             0,
             InstructionError::Custom(1),
@@ -2306,7 +2299,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2359,7 +2352,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,
             Hash::default()
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -2380,7 +2373,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2453,7 +2446,7 @@ pub mod tests {
         };
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
-        let res = io.handle_request_sync(req, meta.clone());
+        let res = io.handle_request_sync(req, meta);
         let expected =
             r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
         let expected: Response =
@@ -2573,7 +2566,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getIdentity"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getIdentity"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2594,7 +2587,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVersion"}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getVersion"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2623,10 +2616,10 @@ pub mod tests {
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
         block_commitment
             .entry(0)
-            .or_insert(commitment_slot0.clone());
+            .or_insert_with(|| commitment_slot0.clone());
         block_commitment
             .entry(1)
-            .or_insert(commitment_slot1.clone());
+            .or_insert_with(|| commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -2678,8 +2671,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[0]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2705,8 +2697,7 @@ pub mod tests {
         );
         assert_eq!(total_stake, 10);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}"#;
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2735,8 +2726,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2776,9 +2766,7 @@ pub mod tests {
             }
         }
 
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0, "binary"]}}"#
-        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,"binary"]}"#;
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2836,40 +2824,35 @@ pub mod tests {
             .unwrap()
             .set_get_largest_confirmed_root(8);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, roots[1..].to_vec());
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[2]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[2]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 4]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,4]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 7]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,7]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
-        let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9,11]}"#;
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2880,7 +2863,7 @@ pub mod tests {
     #[test]
     fn test_get_block_time() {
         let bob_pubkey = Pubkey::new_rand();
-        let base_timestamp = 1576183541;
+        let base_timestamp = 1_576_183_541;
         let RpcHandler {
             io,
             meta,
@@ -2934,7 +2917,7 @@ pub mod tests {
             slot
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":null,"id":1}}"#);
+        let expected = r#"{"jsonrpc":"2.0","result":null,"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -2982,7 +2965,7 @@ pub mod tests {
         // Check getVoteAccounts: the bootstrap validator vote account will be delinquent as it has
         // stake but has never voted, and the vote account with no stake should not be present.
         {
-            let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}}"#);
+            let req = r#"{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}"#;
             let res = io.handle_request_sync(&req, meta.clone());
             let result: Value = serde_json::from_str(&res.expect("actual response"))
                 .expect("actual response deserialization");
@@ -3090,7 +3073,7 @@ pub mod tests {
                 json!([CommitmentConfig::recent()])
             );
 
-            let res = io.handle_request_sync(&req, meta.clone());
+            let res = io.handle_request_sync(&req, meta);
             let result: Value = serde_json::from_str(&res.expect("actual response"))
                 .expect("actual response deserialization");
 

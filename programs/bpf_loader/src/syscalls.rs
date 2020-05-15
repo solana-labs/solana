@@ -775,9 +775,10 @@ mod tests {
             (true, START + LENGTH / 2, LENGTH / 2, addr + LENGTH / 2),
         ];
         for (ok, start, length, value) in cases {
-            match ok {
-                true => assert_eq!(translate!(start, length, &regions).unwrap(), value),
-                false => assert!(translate!(start, length, &regions).is_err()),
+            if ok {
+                assert_eq!(translate!(start, length, &regions).unwrap(), value)
+            } else {
+                assert!(translate!(start, length, &regions).is_err())
             }
         }
     }

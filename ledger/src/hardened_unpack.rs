@@ -383,7 +383,7 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"invalid path found: \"foo/../../../dangerous\"");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "invalid path found: \"foo/../../../dangerous\"");
     }
 
     fn with_archive_unpack_snapshot_invalid_path(path: &str) -> Result<()> {
@@ -406,7 +406,7 @@ mod tests {
         archive.append(&header, data).unwrap();
         with_finalize_and_unpack(archive, |unpacking_archive, path| {
             for entry in unpacking_archive.entries()? {
-                if entry?.unpack_in(path)? == false {
+                if !entry?.unpack_in(path)? {
                     return Err(UnpackError::Archive("failed!".to_string()));
                 } else if !path.join(path).exists() {
                     return Err(UnpackError::Archive("not existing!".to_string()));
@@ -427,7 +427,7 @@ mod tests {
             with_archive_unpack_snapshot_invalid_path("/etc/passwd"),
             Ok(())
         );
-        assert_matches!(with_archive_unpack_snapshot_invalid_path("../../../dangerous"), Err(UnpackError::Archive(ref message)) if message.to_string() == "failed!");
+        assert_matches!(with_archive_unpack_snapshot_invalid_path("../../../dangerous"), Err(UnpackError::Archive(ref message)) if message == "failed!");
     }
 
     #[test]
@@ -442,14 +442,14 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"extra entry found: \"foo\"");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "extra entry found: \"foo\"");
     }
 
     #[test]
     fn test_archive_unpack_snapshot_too_large() {
         let mut header = Header::new_gnu();
         header.set_path("version").unwrap();
-        header.set_size(1 * 1024 * 1024 * 1024 * 1024 * 1024);
+        header.set_size(1024 * 1024 * 1024 * 1024 * 1024);
         header.set_cksum();
 
         let data: &[u8] = &[1, 2, 3, 4];
@@ -457,13 +457,13 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == format!("too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == &format!("too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
     }
 
     #[test]
     fn test_archive_unpack_snapshot_bad_unpack() {
         let result = check_unpack_result(false, "abc".to_string());
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"failed to unpack: \"abc\"");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "failed to unpack: \"abc\"");
     }
 
     #[test]
@@ -473,7 +473,7 @@ mod tests {
 
         let result =
             checked_total_size_sum(u64::max_value() - 2, 2, MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == format!("too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == &format!("too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
     }
 
     #[test]
@@ -483,6 +483,6 @@ mod tests {
 
         let result =
             checked_total_count_increment(999_999_999_999, MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"too many files in snapshot: 1000000000000");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "too many files in snapshot: 1000000000000");
     }
 }

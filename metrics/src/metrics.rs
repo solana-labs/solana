@@ -623,7 +623,7 @@ mod test {
     fn test_flush_before_drop() {
         let writer = Arc::new(MockMetricsWriter::new());
         {
-            let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(9999999), 1000);
+            let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(9_999_999), 1000);
             agent.submit(DataPoint::new("point 1"), Level::Info);
         }
 

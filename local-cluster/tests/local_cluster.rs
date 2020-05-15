@@ -52,7 +52,7 @@ fn test_ledger_cleanup_service() {
         cluster_lamports: 10_000,
         poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
         node_stakes: vec![100; num_nodes],
-        validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_configs: vec![validator_config; num_nodes],
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&config);
@@ -67,7 +67,7 @@ fn test_ledger_cleanup_service() {
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
-    for (_, info) in &cluster.validators {
+    for info in cluster.validators.values() {
         let mut slots = 0;
         let blockstore = Blockstore::open(&info.info.ledger_path).unwrap();
         blockstore
@@ -166,7 +166,7 @@ fn test_validator_exit_2() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; num_nodes],
-        validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_configs: vec![validator_config; num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -185,7 +185,7 @@ fn test_leader_failure_4() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
-        validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_configs: vec![validator_config; num_nodes],
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -206,6 +206,7 @@ fn test_leader_failure_4() {
 /// whether or not it should be killed during the partition
 /// * `leader_schedule` - An option that specifies whether the cluster should
 /// run with a fixed, predetermined leader schedule
+#[allow(clippy::cognitive_complexity)]
 fn run_cluster_partition(
     partitions: &[&[(usize, bool)]],
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
@@ -255,7 +256,7 @@ fn run_cluster_partition(
     let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
-        validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_configs: vec![validator_config; num_nodes],
         validator_keys: Some(validator_keys),
         ..ClusterConfig::default()
     };
@@ -336,7 +337,7 @@ fn run_cluster_partition(
         }
     }
 
-    assert!(alive_node_contact_infos.len() > 0);
+    assert_eq!(alive_node_contact_infos.is_empty(), false);
     info!("PARTITION_TEST discovering nodes");
     let cluster_nodes = discover_cluster(
         &alive_node_contact_infos[0].gossip,
@@ -428,7 +429,7 @@ fn test_two_unbalanced_stakes() {
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
-        validator_configs: vec![validator_config.clone(); 2],
+        validator_configs: vec![validator_config; 2],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
         stakers_slot_offset: num_slots_per_epoch,
@@ -706,7 +707,7 @@ fn test_consistency_halt() {
     let config = ClusterConfig {
         node_stakes: vec![validator_stake],
         cluster_lamports: 100_000,
-        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        validator_configs: vec![leader_snapshot_test_config.validator_config],
         ..ClusterConfig::default()
     };
 
@@ -848,7 +849,7 @@ fn test_snapshot_restart_tower() {
 
     let config = ClusterConfig {
         node_stakes: vec![10000, 10],
-        cluster_lamports: 100000,
+        cluster_lamports: 100_000,
         validator_configs: vec![
             leader_snapshot_test_config.validator_config.clone(),
             validator_snapshot_test_config.validator_config.clone(),
@@ -924,7 +925,7 @@ fn test_snapshots_blockstore_floor() {
 
     let config = ClusterConfig {
         node_stakes: vec![10000],
-        cluster_lamports: 100000,
+        cluster_lamports: 100_000,
         validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
         ..ClusterConfig::default()
     };
@@ -1023,7 +1024,7 @@ fn test_snapshots_restart_validity() {
 
     let config = ClusterConfig {
         node_stakes: vec![10000],
-        cluster_lamports: 100000,
+        cluster_lamports: 100_000,
         validator_configs: vec![snapshot_test_config.validator_config.clone()],
         ..ClusterConfig::default()
     };
@@ -1094,7 +1095,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let num_nodes = 2;
     let validator_config = ValidatorConfig::default();
     let mut error_validator_config = ValidatorConfig::default();
-    error_validator_config.broadcast_stage_type = faulty_node_type.clone();
+    error_validator_config.broadcast_stage_type = faulty_node_type;
     let mut validator_configs = vec![validator_config; num_nodes - 1];
     // Push a faulty_bootstrap = vec![error_validator_config];
     validator_configs.insert(0, error_validator_config);
@@ -1103,7 +1104,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes,
-        validator_configs: validator_configs,
+        validator_configs,
         slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
         stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
         ..ClusterConfig::default()
@@ -1131,7 +1132,7 @@ fn test_no_voting() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100],
-        validator_configs: vec![validator_config.clone()],
+        validator_configs: vec![validator_config],
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&config);

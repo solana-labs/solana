@@ -665,7 +665,6 @@ pub(crate) mod tests {
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
-    use solana_budget_program;
     use solana_ledger::{
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -924,8 +923,8 @@ pub(crate) mod tests {
         let cache1 = BlockCommitment::default();
 
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        block_commitment.entry(1).or_insert(cache1.clone());
+        block_commitment.entry(0).or_insert(cache0);
+        block_commitment.entry(1).or_insert(cache1);
         let block_commitment_cache =
             BlockCommitmentCache::new(block_commitment, 0, 10, bank1, blockstore, 0);
 

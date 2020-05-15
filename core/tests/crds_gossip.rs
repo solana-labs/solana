@@ -93,7 +93,7 @@ fn star_network_create(num: usize) -> Network {
         .collect();
     let mut node = CrdsGossip::default();
     let id = entry.label().pubkey();
-    node.crds.insert(entry.clone(), 0).unwrap();
+    node.crds.insert(entry, 0).unwrap();
     node.set_self(&id);
     network.insert(id, Node::new(Arc::new(Mutex::new(node))));
     Network::new(network)
@@ -106,7 +106,7 @@ fn rstar_network_create(num: usize) -> Network {
     )));
     let mut origin = CrdsGossip::default();
     let id = entry.label().pubkey();
-    origin.crds.insert(entry.clone(), 0).unwrap();
+    origin.crds.insert(entry, 0).unwrap();
     origin.set_self(&id);
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
@@ -144,7 +144,7 @@ fn ring_network_create(num: usize) -> Network {
     for k in 0..keys.len() {
         let start_info = {
             let start = &network[&keys[k]];
-            let start_id = start.lock().unwrap().id.clone();
+            let start_id = start.lock().unwrap().id;
             start
                 .lock()
                 .unwrap()
@@ -183,7 +183,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
         .iter()
         .map(|k| {
             let start = &network[k].lock().unwrap();
-            let start_id = start.id.clone();
+            let start_id = start.id;
             let start_label = CrdsValueLabel::ContactInfo(start_id);
             start.crds.lookup(&start_label).unwrap().clone()
         })
@@ -448,7 +448,7 @@ fn network_run_pull(
                     .unwrap();
                 bytes += serialized_size(&rsp).unwrap() as usize;
                 msgs += rsp.len();
-                network.get(&from).map(|node| {
+                if let Some(node) = network.get(&from) {
                     node.lock()
                         .unwrap()
                         .mark_pull_request_creation_time(&from, now);
@@ -456,7 +456,7 @@ fn network_run_pull(
                         .lock()
                         .unwrap()
                         .process_pull_response(&from, &timeouts, rsp, now);
-                });
+                }
                 (bytes, msgs, overhead)
             })
             .collect();

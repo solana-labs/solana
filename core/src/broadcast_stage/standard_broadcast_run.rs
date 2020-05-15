@@ -425,9 +425,7 @@ mod test {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
-            leader_info.info.clone(),
-        ));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(leader_info.info));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;
@@ -543,7 +541,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),
-            bank: bank2.clone(),
+            bank: bank2,
             last_tick_height: (ticks1.len() - 1) as u64,
         };
         standard_broadcast_run
@@ -597,7 +595,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
-            bank: bank0.clone(),
+            bank: bank0,
             last_tick_height: ticks.len() as u64,
         };
 

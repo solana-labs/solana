@@ -143,9 +143,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_make_lockups() {
         // this number just a random val
-        let total_lamports: u64 = 1725987234408923;
+        let total_lamports: u64 = 1_725_987_234_408_923;
 
         // expected config
         const EPOCHS_PER_MONTH: Epoch = 2;

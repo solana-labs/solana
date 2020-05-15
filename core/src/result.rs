@@ -136,7 +136,6 @@ impl std::convert::From<snapshot_utils::SnapshotError> for Error {
 mod tests {
     use crate::result::Error;
     use crate::result::Result;
-    use serde_json;
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
@@ -147,18 +146,15 @@ mod tests {
     use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {
-        let r = "12fdfasfsafsadfs".parse()?;
-        Ok(r)
+        Ok("12fdfasfsafsadfs".parse()?)
     }
 
     fn join_error() -> Result<()> {
         panic::set_hook(Box::new(|_info| {}));
-        let r = thread::spawn(|| panic!("hi")).join()?;
-        Ok(r)
+        Ok(thread::spawn(|| panic!("hi")).join()?)
     }
     fn json_error() -> Result<()> {
-        let r = serde_json::from_slice("=342{;;;;:}".as_bytes())?;
-        Ok(r)
+        Ok(serde_json::from_slice(b"=342{;;;;:}")?)
     }
     fn send_error() -> Result<()> {
         let (s, r) = channel();

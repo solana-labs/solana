@@ -76,7 +76,7 @@ mod tests {
         let packets = vec![Packet::default()];
         let mut msgs = Packets::new(packets);
         msgs.set_addr(&send_addr);
-        assert_eq!(SocketAddr::from(msgs.packets[0].meta.addr()), send_addr);
+        assert_eq!(msgs.packets[0].meta.addr(), send_addr);
     }
 
     #[test]

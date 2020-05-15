@@ -175,9 +175,9 @@ impl Tower {
             }
         }
         let trunk = self.votes.get(self.converge_depth).cloned();
-        trunk.map(|t| {
+        if let Some(t) = trunk {
             self.delayed_votes.retain(|v| v.fork.id > t.fork.id);
-        });
+        }
     }
     pub fn pop_best_votes(
         &mut self,
@@ -361,6 +361,7 @@ fn test_is_trunk_of_4() {
     assert!(!b2.is_trunk_of(&b1, &tree));
 }
 #[test]
+#[allow(clippy::cognitive_complexity)]
 fn test_push_vote() {
     let tree = HashMap::new();
     let bmap = HashMap::new();
@@ -396,7 +397,7 @@ fn test_push_vote() {
     assert_eq!(tower.votes[0].lockout, 2);
 
     let b1 = Fork { id: 1, base: 1 };
-    let vote = Vote::new(b1.clone(), 8);
+    let vote = Vote::new(b1, 8);
     assert!(!tower.push_vote(vote, &tree, &bmap));
 
     let vote = Vote::new(b0.clone(), 8);
@@ -408,7 +409,7 @@ fn test_push_vote() {
     assert_eq!(tower.votes[2].lockout, 8);
     assert_eq!(tower.votes[3].lockout, 16);
 
-    let vote = Vote::new(b0.clone(), 10);
+    let vote = Vote::new(b0, 10);
     assert!(tower.push_vote(vote, &tree, &bmap));
     assert_eq!(tower.votes.len(), 2);
     assert_eq!(tower.votes[0].lockout, 2);
@@ -417,7 +418,6 @@ fn test_push_vote() {
 
 fn create_towers(sz: usize, height: usize, delay_count: usize) -> Vec<Tower> {
     (0..sz)
-        .into_iter()
         .map(|_| Tower::new(32, height, delay_count))
         .collect()
 }
@@ -438,7 +438,7 @@ fn calc_fork_depth(fork_tree: &HashMap<usize, Fork>, id: usize) -> usize {
 /// map of `fork id` to `tower count`
 /// This map contains the number of nodes that have the fork as an ancestor.
 /// The fork with the highest count that is the newest is the cluster "trunk".
-fn calc_fork_map(towers: &Vec<Tower>, fork_tree: &HashMap<usize, Fork>) -> HashMap<usize, usize> {
+fn calc_fork_map(towers: &[Tower], fork_tree: &HashMap<usize, Fork>) -> HashMap<usize, usize> {
     let mut lca_map: HashMap<usize, usize> = HashMap::new();
     for tower in towers {
         let mut start = tower.last_fork();
@@ -460,7 +460,7 @@ fn calc_newest_trunk(bmap: &HashMap<usize, usize>) -> (usize, usize) {
     data.last().map(|v| (*v.0, *v.1)).unwrap()
 }
 /// how common is the latest fork of all the nodes
-fn calc_tip_converged(towers: &Vec<Tower>, bmap: &HashMap<usize, usize>) -> usize {
+fn calc_tip_converged(towers: &[Tower], bmap: &HashMap<usize, usize>) -> usize {
     let sum: usize = towers
         .iter()
         .map(|n| *bmap.get(&n.last_fork().id).unwrap_or(&0))

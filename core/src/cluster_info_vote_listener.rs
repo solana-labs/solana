@@ -534,7 +534,7 @@ mod tests {
         solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
-        let slots: Vec<_> = (0..31).into_iter().collect();
+        let slots: Vec<_> = (0..31).collect();
 
         let vote_tx = vote_transaction::new_vote_transaction(
             slots,
@@ -746,15 +746,14 @@ mod tests {
                 .map(|keypairs| {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
-                    let vote_tx = vote_transaction::new_vote_transaction(
+                    vote_transaction::new_vote_transaction(
                         vec![i as u64 + 1],
                         Hash::default(),
                         Hash::default(),
                         node_keypair,
                         vote_keypair,
                         vote_keypair,
-                    );
-                    vote_tx
+                    )
                 })
                 .collect();
             votes_sender.send(validator_votes).unwrap();
@@ -983,7 +982,7 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-    fn verify_packets_len(packets: &Vec<(CrdsValueLabel, Packets)>, ref_value: usize) {
+    fn verify_packets_len(packets: &[(CrdsValueLabel, Packets)], ref_value: usize) {
         let num_packets: usize = packets.iter().map(|p| p.1.packets.len()).sum();
         assert_eq!(num_packets, ref_value);
     }
@@ -992,22 +991,20 @@ mod tests {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let auth_voter_keypair = Keypair::new();
-        let vote_tx = vote_transaction::new_vote_transaction(
+        vote_transaction::new_vote_transaction(
             vec![0],
             Hash::default(),
             Hash::default(),
             &node_keypair,
             &vote_keypair,
             &auth_voter_keypair,
-        );
-
-        vote_tx
+        )
     }
 
     #[test]
     fn test_verify_votes_1_pass() {
         let vote_tx = test_vote_tx();
-        let votes = vec![vote_tx.clone()];
+        let votes = vec![vote_tx];
         let labels = vec![CrdsValueLabel::Vote(0, Pubkey::new_rand())];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 1);
@@ -1021,10 +1018,7 @@ mod tests {
         bad_vote.signatures[0] = Signature::default();
         let votes = vec![vote_tx.clone(), bad_vote, vote_tx];
         let label = CrdsValueLabel::Vote(0, Pubkey::new_rand());
-        let labels: Vec<_> = (0..votes.len())
-            .into_iter()
-            .map(|_| label.clone())
-            .collect();
+        let labels: Vec<_> = (0..votes.len()).map(|_| label.clone()).collect();
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);
         verify_packets_len(&packets, 2);

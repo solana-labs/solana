@@ -189,7 +189,7 @@ mod test {
             &Some(BroadcastShredBatchInfo {
                 slot: 0,
                 num_expected_batches: Some(2),
-                slot_start_ts: start.clone(),
+                slot_start_ts: start,
             }),
         );
 
@@ -233,7 +233,7 @@ mod test {
             &Some(BroadcastShredBatchInfo {
                 slot: 0,
                 num_expected_batches: None,
-                slot_start_ts: start.clone(),
+                slot_start_ts: start,
             }),
         );
 
@@ -249,7 +249,6 @@ mod test {
             let slot = 0;
             let (sender, receiver) = channel();
             let thread_handles: Vec<_> = (0..num_threads)
-                .into_iter()
                 .map(|i| {
                     let slot_broadcast_stats = slot_broadcast_stats.clone();
                     let sender = Some(sender.clone());
@@ -257,7 +256,7 @@ mod test {
                     let mut broadcast_batch_info = BroadcastShredBatchInfo {
                         slot,
                         num_expected_batches: None,
-                        slot_start_ts: start.clone(),
+                        slot_start_ts: start,
                     };
                     if i == round % num_threads {
                         broadcast_batch_info.num_expected_batches = Some(num_threads);

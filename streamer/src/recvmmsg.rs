@@ -107,9 +107,9 @@ mod tests {
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(sent, recv);
-        for i in 0..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr);
+        for packet in packets.iter().take(recv) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr);
         }
     }
 
@@ -128,16 +128,16 @@ mod tests {
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(TEST_NUM_MSGS, recv);
-        for i in 0..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr);
+        for packet in packets.iter().take(recv) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr);
         }
 
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(sent - TEST_NUM_MSGS, recv);
-        for i in 0..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr);
+        for packet in packets.iter().take(recv) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr);
         }
     }
 
@@ -159,9 +159,9 @@ mod tests {
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(TEST_NUM_MSGS, recv);
-        for i in 0..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr);
+        for packet in packets.iter().take(recv) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr);
         }
         reader.set_nonblocking(true).unwrap();
 
@@ -196,21 +196,20 @@ mod tests {
 
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(TEST_NUM_MSGS, recv);
-        for i in 0..sent1 {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr1);
+        for packet in packets.iter().take(sent1) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr1);
         }
-
-        for i in sent1..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr2);
+        for packet in packets.iter().skip(sent1).take(recv - sent1) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr2);
         }
 
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
-        for i in 0..recv {
-            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packets[i].meta.addr(), saddr2);
+        for packet in packets.iter().take(recv) {
+            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta.addr(), saddr2);
         }
     }
 }

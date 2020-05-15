@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(request["method"], "getRecentBlockhash");
 
         let test_request = RpcRequest::GetFeeCalculatorForBlockhash;
-        let request = test_request.build_request_json(1, json!([addr.clone()]));
+        let request = test_request.build_request_json(1, json!([addr]));
         assert_eq!(request["method"], "getFeeCalculatorForBlockhash");
 
         let test_request = RpcRequest::GetFeeRateGovernor;

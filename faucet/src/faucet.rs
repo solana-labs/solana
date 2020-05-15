@@ -323,7 +323,7 @@ mod tests {
     fn test_clear_request_count() {
         let keypair = Keypair::new();
         let mut faucet = Faucet::new(keypair, None, None);
-        faucet.request_current = faucet.request_current + 256;
+        faucet.request_current += 256;
         assert_eq!(faucet.request_current, 256);
         faucet.clear_request_count();
         assert_eq!(faucet.request_current, 0);
