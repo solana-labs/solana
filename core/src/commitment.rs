@@ -1,7 +1,7 @@
 use crate::consensus::VOTE_THRESHOLD_SIZE;
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
@@ -289,9 +289,13 @@ impl AggregateCommitmentService {
 
             std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
             aggregate_commitment_time.stop();
-            inc_new_counter_info!(
-                "aggregate-commitment-ms",
-                aggregate_commitment_time.as_ms() as usize
+            datapoint_info!(
+                "block-commitment-cache",
+                (
+                    "aggregate-commitment-ms",
+                    aggregate_commitment_time.as_ms() as i64,
+                    i64
+                )
             );
         }
     }
