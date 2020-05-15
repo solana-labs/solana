@@ -19,6 +19,7 @@ mod tests {
     };
     use solana_sdk::{
         clock::Slot,
+        genesis_config::GenesisConfig,
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -90,6 +91,7 @@ mod tests {
                 snapshot_package_output_path,
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
             ),
+            &GenesisConfig::default(),
         )
         .unwrap();
 
