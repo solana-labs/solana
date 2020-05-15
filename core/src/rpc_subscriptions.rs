@@ -158,6 +158,7 @@ where
     let current_slot = r_block_commitment_cache.slot();
     let node_root = r_block_commitment_cache.root();
     let largest_confirmed_root = r_block_commitment_cache.largest_confirmed_root();
+    let single_confirmation_slot = r_block_commitment_cache.highest_slot_with_single_confirmation();
     drop(r_block_commitment_cache);
 
     let mut notified_set: HashSet<SubscriptionId> = HashSet::new();
@@ -175,6 +176,7 @@ where
                 CommitmentLevel::Max => largest_confirmed_root,
                 CommitmentLevel::Recent => current_slot,
                 CommitmentLevel::Root => node_root,
+                CommitmentLevel::Single => single_confirmation_slot,
             };
             let results = {
                 let bank_forks = bank_forks.read().unwrap();
@@ -443,6 +445,11 @@ impl RpcSubscriptions {
                 .largest_confirmed_root(),
             CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
             CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
+            CommitmentLevel::Single => self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .highest_slot_with_single_confirmation(),
         };
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks

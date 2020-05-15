@@ -123,6 +123,22 @@ impl BlockCommitmentCache {
         self.root
     }
 
+    fn highest_slot_with_confirmation(&self, confirmation_count: usize) -> Slot {
+        assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
+        for slot in (self.root()..self.slot()).rev() {
+            if let Some(count) = self.get_confirmation_count(slot) {
+                if count >= confirmation_count {
+                    return slot;
+                }
+            }
+        }
+        self.root
+    }
+
+    pub fn highest_slot_with_single_confirmation(&self) -> Slot {
+        self.highest_slot_with_confirmation(1)
+    }
+
     pub fn get_confirmation_count(&self, slot: Slot) -> Option<usize> {
         self.get_lockout_count(slot, VOTE_THRESHOLD_SIZE)
     }
@@ -390,7 +406,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::{genesis_config::GenesisConfig, pubkey::Pubkey};
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteStateVersions};
 
@@ -482,6 +498,124 @@ mod tests {
         rooted_stake.push((2, 5));
         rooted_stake.push((1, 4));
         assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 1);
+    }
+
+    #[test]
+    fn test_highest_slot_with_single_confirmation() {
+        let bank = Arc::new(Bank::new(&GenesisConfig::default()));
+        let bank_slot_5 = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 5));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let total_stake = 50;
+
+        // Build cache with confirmation_count 2 given total_stake
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_confirmation_stake(1, 5);
+        cache0.increase_confirmation_stake(2, 40);
+
+        // Build cache with confirmation_count 1 given total_stake
+        let mut cache1 = BlockCommitment::default();
+        cache1.increase_confirmation_stake(1, 40);
+        cache1.increase_confirmation_stake(2, 5);
+
+        // Build cache with confirmation_count 0 given total_stake
+        let mut cache2 = BlockCommitment::default();
+        cache2.increase_confirmation_stake(1, 20);
+        cache2.increase_confirmation_stake(2, 5);
+
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache0.clone()); // Slot 1, conf 2
+        block_commitment.entry(2).or_insert(cache1.clone()); // Slot 2, conf 1
+        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            total_stake,
+            bank_slot_5.clone(),
+            blockstore.clone(),
+            0,
+        );
+
+        assert_eq!(
+            block_commitment_cache.highest_slot_with_single_confirmation(),
+            2
+        );
+
+        // Build map with multiple slots at conf 1
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache1.clone()); // Slot 1, conf 1
+        block_commitment.entry(2).or_insert(cache1.clone()); // Slot 2, conf 1
+        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            total_stake,
+            bank_slot_5.clone(),
+            blockstore.clone(),
+            0,
+        );
+
+        assert_eq!(
+            block_commitment_cache.highest_slot_with_single_confirmation(),
+            2
+        );
+
+        // Build map with slot gaps
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache1.clone()); // Slot 1, conf 1
+        block_commitment.entry(3).or_insert(cache1.clone()); // Slot 3, conf 1
+        block_commitment.entry(5).or_insert(cache2.clone()); // Slot 5, conf 0
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            total_stake,
+            bank_slot_5.clone(),
+            blockstore.clone(),
+            0,
+        );
+
+        assert_eq!(
+            block_commitment_cache.highest_slot_with_single_confirmation(),
+            3
+        );
+
+        // Build map with no conf 1 slots, but one higher
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache0.clone()); // Slot 1, conf 2
+        block_commitment.entry(2).or_insert(cache2.clone()); // Slot 2, conf 0
+        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            total_stake,
+            bank_slot_5.clone(),
+            blockstore.clone(),
+            0,
+        );
+
+        assert_eq!(
+            block_commitment_cache.highest_slot_with_single_confirmation(),
+            1
+        );
+
+        // Build map with no conf 1 or higher slots
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache2.clone()); // Slot 1, conf 0
+        block_commitment.entry(2).or_insert(cache2.clone()); // Slot 2, conf 0
+        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            total_stake,
+            bank_slot_5.clone(),
+            blockstore.clone(),
+            0,
+        );
+
+        assert_eq!(
+            block_commitment_cache.highest_slot_with_single_confirmation(),
+            0
+        );
     }
 
     #[test]
