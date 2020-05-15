@@ -55,6 +55,7 @@ pub enum BlockstoreError {
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
+    UnableToSetOpenFileDescriptorLimit,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
