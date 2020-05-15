@@ -605,7 +605,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::{genesis_config::create_genesis_config};
+    use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
     fn test_process_distribute_tokens() {
