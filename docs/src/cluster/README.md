@@ -4,17 +4,17 @@ A Solana cluster is a set of validators working together to serve client transac
 
 ## Creating a Cluster
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_ or _archiver_. Additional validators then register with any registered member of the cluster.
+Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_. Additional validators then register with any registered member of the cluster.
 
-A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries until archiver nodes submit proofs that they have stored copies of it. Once the validator observes a sufficient number of copies exist, it deletes its copy.
+A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries. Once the validator observes a sufficient number of copies exist, it deletes its copy.
 
 ## Joining a Cluster
 
-Validators and archivers enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
+Validators enter the cluster via registration messages sent to its _control plane_. The control plane is implemented using a _gossip_ protocol, meaning that a node may register with any existing node, and expect its registration to propagate to all nodes in the cluster. The time it takes for all nodes to synchronize is proportional to the square of the number of nodes participating in the cluster. Algorithmically, that's considered very slow, but in exchange for that time, a node is assured that it eventually has all the same information as every other node, and that that information cannot be censored by any one node.
 
 ## Sending Transactions to a Cluster
 
-Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes and replicated by archiver nodes, effectively appending them to the ledger.
+Clients send transactions to any validator's Transaction Processing Unit \(TPU\) port. If the node is in the validator role, it forwards the transaction to the designated leader. If in the leader role, the node bundles incoming transactions, timestamps them creating an _entry_, and pushes them onto the cluster's _data plane_. Once on the data plane, the transactions are validated by validator nodes, effectively appending them to the ledger.
 
 ## Confirming Transactions
 

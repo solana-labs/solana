@@ -1,8 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*,
-    storage_stage::StorageState, validator::ValidatorExit,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -252,7 +251,6 @@ impl JsonRpcService {
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
         ledger_path: &Path,
-        storage_state: StorageState,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
         trusted_validators: Option<HashSet<Pubkey>>,
     ) -> Self {
@@ -263,7 +261,6 @@ impl JsonRpcService {
             bank_forks,
             block_commitment_cache,
             blockstore,
-            storage_state,
             validator_exit.clone(),
         )));
 
@@ -394,7 +391,6 @@ mod tests {
             cluster_info,
             Hash::default(),
             &PathBuf::from("farf"),
-            StorageState::default(),
             validator_exit,
             None,
         );

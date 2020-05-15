@@ -364,7 +364,6 @@ impl ClusterInfo {
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
-        let mut archivers = 0;
         let mut different_shred_nodes = 0;
         let my_pubkey = self.id();
         let my_shred_version = self.my_shred_version();
@@ -374,8 +373,6 @@ impl ClusterInfo {
             .filter_map(|(node, last_updated)| {
                 if Self::is_spy_node(&node) {
                     spy_nodes += 1;
-                } else if Self::is_archiver(&node) {
-                    archivers += 1;
                 }
 
                 let node_version = self.get_node_version(&node.id);
@@ -431,14 +428,9 @@ impl ClusterInfo {
              ------------------+-------+----------------------------------------------+---------------+\
              ------+------+------+------+------+------+------+------+------+--------\n\
              {}\
-             Nodes: {}{}{}{}",
+             Nodes: {}{}{}",
             nodes.join(""),
-            nodes.len() - spy_nodes - archivers,
-            if archivers > 0 {
-                format!("\nArchivers: {}", archivers)
-            } else {
-                "".to_string()
-            },
+            nodes.len() - spy_nodes,
             if spy_nodes > 0 {
                 format!("\nSpies: {}", spy_nodes)
             } else {
@@ -773,11 +765,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| {
-                ContactInfo::is_valid_address(&x.tvu)
-                    && !ClusterInfo::is_archiver(x)
-                    && x.id != self.id()
-            })
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu) && x.id != self.id())
             .cloned()
             .collect()
     }
@@ -793,39 +781,6 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| {
                 ContactInfo::is_valid_address(&x.tvu)
-                    && !ClusterInfo::is_archiver(x)
-                    && x.id != self.id()
-                    && x.shred_version == self.my_shred_version()
-            })
-            .cloned()
-            .collect()
-    }
-
-    /// all peers that have a valid storage addr regardless of `shred_version`.
-    pub fn all_storage_peers(&self) -> Vec<ContactInfo> {
-        self.gossip
-            .read()
-            .unwrap()
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr) && x.id != self.id())
-            .cloned()
-            .collect()
-    }
-
-    /// all peers that have a valid storage addr and are on the same `shred_version`.
-    pub fn storage_peers(&self) -> Vec<ContactInfo> {
-        self.gossip
-            .read()
-            .unwrap()
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
-            .filter(|x| {
-                ContactInfo::is_valid_address(&x.storage_addr)
                     && x.id != self.id()
                     && x.shred_version == self.my_shred_version()
             })
@@ -871,15 +826,9 @@ impl ClusterInfo {
     }
 
     fn is_spy_node(contact_info: &ContactInfo) -> bool {
-        (!ContactInfo::is_valid_address(&contact_info.tpu)
+        !ContactInfo::is_valid_address(&contact_info.tpu)
             || !ContactInfo::is_valid_address(&contact_info.gossip)
-            || !ContactInfo::is_valid_address(&contact_info.tvu))
-            && !ContactInfo::is_valid_address(&contact_info.storage_addr)
-    }
-
-    pub fn is_archiver(contact_info: &ContactInfo) -> bool {
-        ContactInfo::is_valid_address(&contact_info.storage_addr)
-            && !ContactInfo::is_valid_address(&contact_info.tpu)
+            || !ContactInfo::is_valid_address(&contact_info.tvu)
     }
 
     fn sorted_stakes_with_index<S: std::hash::BuildHasher>(
@@ -1935,7 +1884,6 @@ pub struct Sockets {
     pub broadcast: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit_sockets: Vec<UdpSocket>,
-    pub storage: Option<UdpSocket>,
     pub serve_repair: UdpSocket,
 }
 
@@ -1949,50 +1897,6 @@ impl Node {
     pub fn new_localhost() -> Self {
         let pubkey = Pubkey::new_rand();
         Self::new_localhost_with_pubkey(&pubkey)
-    }
-    pub fn new_localhost_archiver(pubkey: &Pubkey) -> Self {
-        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let storage = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let empty = "0.0.0.0:0".parse().unwrap();
-        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
-        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-
-        let info = ContactInfo {
-            id: *pubkey,
-            gossip: gossip.local_addr().unwrap(),
-            tvu: tvu.local_addr().unwrap(),
-            tvu_forwards: tvu_forwards.local_addr().unwrap(),
-            repair: repair.local_addr().unwrap(),
-            tpu: empty,
-            tpu_forwards: empty,
-            storage_addr: storage.local_addr().unwrap(),
-            rpc: empty,
-            rpc_pubsub: empty,
-            serve_repair: serve_repair.local_addr().unwrap(),
-            wallclock: timestamp(),
-            shred_version: 0,
-        };
-
-        Node {
-            info,
-            sockets: Sockets {
-                gossip,
-                tvu: vec![tvu],
-                tvu_forwards: vec![],
-                tpu: vec![],
-                tpu_forwards: vec![],
-                broadcast,
-                repair,
-                retransmit_sockets: vec![retransmit],
-                serve_repair,
-                storage: Some(storage),
-                ip_echo: None,
-            },
-        }
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
@@ -2012,7 +1916,7 @@ impl Node {
 
         let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let unused = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let info = ContactInfo {
             id: *pubkey,
@@ -2022,7 +1926,7 @@ impl Node {
             repair: repair.local_addr().unwrap(),
             tpu: tpu.local_addr().unwrap(),
             tpu_forwards: tpu_forwards.local_addr().unwrap(),
-            storage_addr: storage.local_addr().unwrap(),
+            unused: unused.local_addr().unwrap(),
             rpc: rpc_addr,
             rpc_pubsub: rpc_pubsub_addr,
             serve_repair: serve_repair.local_addr().unwrap(),
@@ -2041,7 +1945,6 @@ impl Node {
                 broadcast,
                 repair,
                 retransmit_sockets: vec![retransmit_socket],
-                storage: None,
                 serve_repair,
             },
         }
@@ -2104,7 +2007,7 @@ impl Node {
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
             tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
-            storage_addr: socketaddr_any!(),
+            unused: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             serve_repair: SocketAddr::new(gossip_addr.ip(), serve_repair_port),
@@ -2124,31 +2027,10 @@ impl Node {
                 broadcast,
                 repair,
                 retransmit_sockets,
-                storage: None,
                 serve_repair,
                 ip_echo: Some(ip_echo),
             },
         }
-    }
-    pub fn new_archiver_with_external_ip(
-        pubkey: &Pubkey,
-        gossip_addr: &SocketAddr,
-        port_range: PortRange,
-        bind_ip_addr: IpAddr,
-    ) -> Node {
-        let mut new = Self::new_with_external_ip(pubkey, gossip_addr, port_range, bind_ip_addr);
-        let (storage_port, storage_socket) = Self::bind(bind_ip_addr, port_range);
-
-        new.info.storage_addr = SocketAddr::new(gossip_addr.ip(), storage_port);
-        new.sockets.storage = Some(storage_socket);
-
-        let empty = socketaddr_any!();
-        new.info.tpu = empty;
-        new.info.tpu_forwards = empty;
-        new.sockets.tpu = vec![];
-        new.sockets.tpu_forwards = vec![];
-
-        new
     }
 }
 
@@ -2321,27 +2203,6 @@ mod tests {
         check_node_sockets(&node, ip, port_range);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), port);
-    }
-
-    #[test]
-    fn new_archiver_external_ip_test() {
-        // Can't use VALIDATOR_PORT_RANGE because if this test runs in parallel with others, the
-        // port returned by `bind_in_range()` might be snatched up before `Node::new_with_external_ip()` runs
-        let port_range = (VALIDATOR_PORT_RANGE.1 + 20, VALIDATOR_PORT_RANGE.1 + 30);
-        let ip = Ipv4Addr::from(0);
-        let node = Node::new_archiver_with_external_ip(
-            &Pubkey::new_rand(),
-            &socketaddr!(ip, 0),
-            port_range,
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        );
-
-        let ip = IpAddr::V4(ip);
-        check_socket(&node.sockets.storage.unwrap(), ip, port_range);
-        check_socket(&node.sockets.gossip, ip, port_range);
-        check_socket(&node.sockets.repair, ip, port_range);
-
-        check_sockets(&node.sockets.tvu, ip, port_range);
     }
 
     //test that all cluster_info objects only generate signed messages

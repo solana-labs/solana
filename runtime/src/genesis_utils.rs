@@ -150,7 +150,6 @@ pub fn create_genesis_config_with_leader_ex(
     };
 
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
-    solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
     GenesisConfigInfo {
         genesis_config,

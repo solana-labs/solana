@@ -2,7 +2,7 @@
 
 use crate::{
     account::Account,
-    clock::{UnixTimestamp, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
     hash::{hash, Hash},
@@ -27,6 +27,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+// deprecated default that is no longer used
+pub const UNUSED_DEFAULT: u64 = 1024;
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum OperatingMode {
     Preview,     // Next set of cluster features to be promoted to Stable
@@ -45,7 +48,7 @@ pub struct GenesisConfig {
     /// accounts for network rewards, these do not count towards capitalization
     pub rewards_pools: BTreeMap<Pubkey, Account>,
     pub ticks_per_slot: u64,
-    pub slots_per_segment: u64,
+    pub unused: u64,
     /// network speed configuration
     pub poh_config: PohConfig,
     /// this field exists only to ensure that the binary layout of GenesisConfig remains compatible
@@ -89,7 +92,7 @@ impl Default for GenesisConfig {
             native_instruction_processors: Vec::default(),
             rewards_pools: BTreeMap::default(),
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
-            slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
+            unused: UNUSED_DEFAULT,
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             __backwards_compat_with_v0_23: 0,

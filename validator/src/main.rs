@@ -521,15 +521,6 @@ pub fn main() {
                        or with the --authorized-voter argument")
         )
         .arg(
-            Arg::with_name("storage_keypair")
-                .long("storage-keypair")
-                .value_name("PATH")
-                .hidden(true) // Don't document this argument to discourage its use
-                .takes_value(true)
-                .validator(is_keypair_or_ask_keyword)
-                .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
-        )
-        .arg(
             Arg::with_name("init_complete_file")
                 .long("init-complete-file")
                 .value_name("FILE")
@@ -832,8 +823,6 @@ pub fn main() {
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![identity_keypair.clone()]);
-
-    let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(Keypair::new);
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let init_complete_file = matches.value_of("init_complete_file");
@@ -1260,7 +1249,6 @@ pub fn main() {
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
-        &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,
         &validator_config,

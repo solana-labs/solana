@@ -16,7 +16,6 @@ gce)
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
-  archiverMachineType="--custom-cpu 4 --custom-memory 16GB"
   selfDestructHours=8
   ;;
 ec2)
@@ -31,7 +30,6 @@ ec2)
   gpuBootstrapLeaderMachineType=p2.xlarge
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=m5.4xlarge
-  archiverMachineType=c5.xlarge
   selfDestructHours=0
   ;;
 azure)
@@ -42,7 +40,6 @@ azure)
   gpuBootstrapLeaderMachineType=Standard_NC12
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
-  archiverMachineType=Standard_D4s_v3
   selfDestructHours=0
   ;;
 colo)
@@ -53,7 +50,6 @@ colo)
   gpuBootstrapLeaderMachineType=1
   clientMachineType=0
   blockstreamerMachineType=0
-  archiverMachineType=0
   selfDestructHours=0
   ;;
 *)
@@ -64,11 +60,9 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalValidatorCount=2
 clientNodeCount=0
-archiverNodeCount=0
 blockstreamer=false
 validatorBootDiskSizeInGb=500
 clientBootDiskSizeInGb=75
-archiverBootDiskSizeInGb=500
 validatorAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
@@ -123,7 +117,6 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional validators (default: $additionalValidatorCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
-   -r [number]      - Number of archiver nodes (default: $archiverNodeCount)
    -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU and automatically set validator machine types to $gpuBootstrapLeaderMachineType
@@ -151,7 +144,7 @@ Manage testnet instances
                       Only supported on GCE.
    --dedicated      - Use dedicated instances for additional validators
                       (by default preemptible instances are used to reduce
-                      cost).  Note that the bootstrap validator, archiver,
+                      cost).  Note that the bootstrap validator,
                       blockstreamer and client nodes are always dedicated.
                       Set this flag on colo to prevent your testnet from being pre-empted by nightly test automation.
    --self-destruct-hours [number]
@@ -251,9 +244,6 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   c)
     clientNodeCount=$OPTARG
-    ;;
-  r)
-    archiverNodeCount=$OPTARG
     ;;
   z)
     containsZone "$OPTARG" "${zones[@]}" || zones+=("$OPTARG")
@@ -607,16 +597,6 @@ EOF
     cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
   }
 
-  if ! $externalNodes; then
-    echo "archiverIpList=()" >> "$configFile"
-    echo "archiverIpListPrivate=()" >> "$configFile"
-  fi
-  echo "Looking for archiver instances..."
-  cloud_FindInstances "$prefix-archiver"
-  [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp true archiverIpList
-  }
-
   echo "Wrote $configFile"
   $metricsWriteDatapoint "testnet-deploy net-config-complete=1"
 }
@@ -696,7 +676,6 @@ create)
   Bootstrap validator = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional validators = $additionalValidatorCount x $validatorMachineType
   Client(s) = $clientNodeCount x $clientMachineType
-  Archivers(s) = $archiverNodeCount x $archiverMachineType
   Blockstreamer = $blockstreamer
 ========================================================================================
 
@@ -900,12 +879,6 @@ EOF
       "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
-  if [[ $archiverNodeCount -gt 0 ]]; then
-    cloud_CreateInstances "$prefix" "$prefix-archiver" "$archiverNodeCount" \
-      false "$archiverMachineType" "${zones[0]}" "$archiverBootDiskSizeInGb" \
-      "$startupScript" "" "" "" "$maybePreemptible" "$sshPrivateKey"
-  fi
-
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
 
   prepareInstancesAndWriteConfigFile
@@ -929,7 +902,6 @@ info)
     echo "NET_NUM_VALIDATORS=${#validatorIpList[@]}"
     echo "NET_NUM_CLIENTS=${#clientIpList[@]}"
     echo "NET_NUM_BLOCKSTREAMERS=${#blockstreamerIpList[@]}"
-    echo "NET_NUM_ARCHIVERS=${#archiverIpList[@]}"
   else
     printNode "Node Type" "Public IP" "Private IP" "Zone"
     echo "-------------------+-----------------+-----------------+--------------"
@@ -976,18 +948,6 @@ info)
     done
   fi
 
-  if [[ ${#archiverIpList[@]} -gt 0 ]]; then
-    for i in $(seq 0 $(( ${#archiverIpList[@]} - 1)) ); do
-      ipAddress=${archiverIpList[$i]}
-      ipAddressPrivate=${archiverIpListPrivate[$i]}
-      zone=${archiverIpListZone[$i]}
-      if $evalInfo; then
-        echo "NET_ARCHIVER${i}_IP=$ipAddress"
-      else
-        printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
-      fi
-    done
-  fi
   ;;
 status)
   cloud_StatusAll

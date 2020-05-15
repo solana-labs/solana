@@ -7,7 +7,6 @@ use crate::{
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::*,
     stake::*,
-    storage::*,
     validator_info::*,
     vote::*,
 };
@@ -57,7 +56,6 @@ use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize},
 };
-use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_transaction_status::{EncodedTransaction, TransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
@@ -363,17 +361,6 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
     },
-    // Storage Commands
-    CreateStorageAccount {
-        account_owner: Pubkey,
-        storage_account: SignerIndex,
-        account_type: StorageAccountType,
-    },
-    ClaimStorageReward {
-        node_account_pubkey: Pubkey,
-        storage_account_pubkey: Pubkey,
-    },
-    ShowStorageAccount(Pubkey),
     // Validator Info Commands
     GetValidatorInfo(Option<Pubkey>),
     SetValidatorInfo {
@@ -707,19 +694,6 @@ pub fn parse_command(
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
-        // Storage Commands
-        ("create-archiver-storage-account", Some(matches)) => {
-            parse_storage_create_archiver_account(matches, default_signer_path, wallet_manager)
-        }
-        ("create-validator-storage-account", Some(matches)) => {
-            parse_storage_create_validator_account(matches, default_signer_path, wallet_manager)
-        }
-        ("claim-storage-reward", Some(matches)) => {
-            parse_storage_claim_reward(matches, default_signer_path, wallet_manager)
-        }
-        ("storage-account", Some(matches)) => {
-            parse_storage_get_account_command(matches, wallet_manager)
-        }
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
@@ -1084,7 +1058,6 @@ pub fn parse_create_address_with_seed(
     let program_id = match matches.value_of("program_id").unwrap() {
         "NONCE" => system_program::id(),
         "STAKE" => solana_stake_program::id(),
-        "STORAGE" => solana_storage_program::id(),
         "VOTE" => solana_vote_program::id(),
         _ => pubkey_of(matches, "program_id").unwrap(),
     };
@@ -1994,33 +1967,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *fee_payer,
         ),
 
-        // Storage Commands
-
-        // Create storage account
-        CliCommand::CreateStorageAccount {
-            account_owner,
-            storage_account,
-            account_type,
-        } => process_create_storage_account(
-            &rpc_client,
-            config,
-            *storage_account,
-            &account_owner,
-            *account_type,
-        ),
-        CliCommand::ClaimStorageReward {
-            node_account_pubkey,
-            storage_account_pubkey,
-        } => process_claim_storage_reward(
-            &rpc_client,
-            config,
-            node_account_pubkey,
-            &storage_account_pubkey,
-        ),
-        CliCommand::ShowStorageAccount(storage_account_pubkey) => {
-            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
-        }
-
         // Validator Info Commands
 
         // Return all or single validator info
@@ -2355,7 +2301,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .cluster_query_subcommands()
         .nonce_subcommands()
         .stake_subcommands()
-        .storage_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
@@ -2463,7 +2408,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help(
                             "The program_id that the address will ultimately be used for, \n\
-                             or one of NONCE, STAKE, STORAGE, and VOTE keywords",
+                             or one of NONCE, STAKE, and VOTE keywords",
                         ),
                 )
                 .arg(
@@ -2879,7 +2824,6 @@ mod tests {
         for (name, program_id) in &[
             ("STAKE", solana_stake_program::id()),
             ("VOTE", solana_vote_program::id()),
-            ("STORAGE", solana_storage_program::id()),
             ("NONCE", system_program::id()),
         ] {
             let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![

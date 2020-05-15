@@ -57,14 +57,11 @@ pub const MAX_DUPLICATE_WAIT_MS: usize = 10_000;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_ORPHANS: usize = 5;
 
-pub enum RepairStrategy {
-    RepairRange(RepairSlotRange),
-    RepairAll {
-        bank_forks: Arc<RwLock<BankForks>>,
-        completed_slots_receiver: CompletedSlotsReceiver,
-        epoch_schedule: EpochSchedule,
-        duplicate_slots_reset_sender: DuplicateSlotsResetSender,
-    },
+pub struct RepairInfo {
+    pub bank_forks: Arc<RwLock<BankForks>>,
+    pub completed_slots_receiver: CompletedSlotsReceiver,
+    pub epoch_schedule: EpochSchedule,
+    pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
 }
 
 pub struct RepairSlotRange {
@@ -97,7 +94,7 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
-        repair_strategy: RepairStrategy,
+        repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
     ) -> Self {
         let t_repair = Builder::new()
@@ -108,7 +105,7 @@ impl RepairService {
                     &exit,
                     &repair_socket,
                     &cluster_info,
-                    repair_strategy,
+                    repair_info,
                     &cluster_slots,
                 )
             })
@@ -122,84 +119,61 @@ impl RepairService {
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
         cluster_info: &Arc<ClusterInfo>,
-        repair_strategy: RepairStrategy,
+        repair_info: RepairInfo,
         cluster_slots: &Arc<ClusterSlots>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
-        if let RepairStrategy::RepairAll { .. } = repair_strategy {
-            Self::initialize_lowest_slot(id, blockstore, cluster_info);
-        }
+        Self::initialize_lowest_slot(id, blockstore, cluster_info);
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();
         let mut duplicate_slot_repair_statuses = HashMap::new();
-
-        if let RepairStrategy::RepairAll {
-            ref completed_slots_receiver,
-            ..
-        } = repair_strategy
-        {
-            Self::initialize_epoch_slots(blockstore, cluster_info, completed_slots_receiver);
-        }
+        Self::initialize_epoch_slots(
+            blockstore,
+            cluster_info,
+            &repair_info.completed_slots_receiver,
+        );
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
             let repairs = {
-                match repair_strategy {
-                    RepairStrategy::RepairRange(ref repair_slot_range) => {
-                        // Strategy used by archivers
-                        Self::generate_repairs_in_range(
-                            blockstore,
-                            MAX_REPAIR_LENGTH,
-                            repair_slot_range,
-                        )
-                    }
-
-                    RepairStrategy::RepairAll {
-                        ref completed_slots_receiver,
-                        ref bank_forks,
-                        ref duplicate_slots_reset_sender,
-                        ..
-                    } => {
-                        let root_bank = bank_forks.read().unwrap().root_bank().clone();
-                        let new_root = root_bank.slot();
-                        let lowest_slot = blockstore.lowest_slot();
-                        Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
-                        Self::update_completed_slots(completed_slots_receiver, &cluster_info);
-                        cluster_slots.update(new_root, cluster_info, bank_forks);
-                        let new_duplicate_slots = Self::find_new_duplicate_slots(
-                            &duplicate_slot_repair_statuses,
-                            blockstore,
-                            cluster_slots,
-                            &root_bank,
-                        );
-                        Self::process_new_duplicate_slots(
-                            &new_duplicate_slots,
-                            &mut duplicate_slot_repair_statuses,
-                            cluster_slots,
-                            &root_bank,
-                            blockstore,
-                            &serve_repair,
-                            &duplicate_slots_reset_sender,
-                        );
-                        Self::generate_and_send_duplicate_repairs(
-                            &mut duplicate_slot_repair_statuses,
-                            cluster_slots,
-                            blockstore,
-                            &serve_repair,
-                            &mut repair_stats,
-                            &repair_socket,
-                        );
-                        Self::generate_repairs(
-                            blockstore,
-                            root_bank.slot(),
-                            MAX_REPAIR_LENGTH,
-                            &duplicate_slot_repair_statuses,
-                        )
-                    }
-                }
+                let root_bank = repair_info.bank_forks.read().unwrap().root_bank().clone();
+                let new_root = root_bank.slot();
+                let lowest_slot = blockstore.lowest_slot();
+                Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
+                Self::update_completed_slots(&repair_info.completed_slots_receiver, &cluster_info);
+                cluster_slots.update(new_root, cluster_info, &repair_info.bank_forks);
+                let new_duplicate_slots = Self::find_new_duplicate_slots(
+                    &duplicate_slot_repair_statuses,
+                    blockstore,
+                    cluster_slots,
+                    &root_bank,
+                );
+                Self::process_new_duplicate_slots(
+                    &new_duplicate_slots,
+                    &mut duplicate_slot_repair_statuses,
+                    cluster_slots,
+                    &root_bank,
+                    blockstore,
+                    &serve_repair,
+                    &repair_info.duplicate_slots_reset_sender,
+                );
+                Self::generate_and_send_duplicate_repairs(
+                    &mut duplicate_slot_repair_statuses,
+                    cluster_slots,
+                    blockstore,
+                    &serve_repair,
+                    &mut repair_stats,
+                    &repair_socket,
+                );
+                Self::generate_repairs(
+                    blockstore,
+                    root_bank.slot(),
+                    MAX_REPAIR_LENGTH,
+                    &duplicate_slot_repair_statuses,
+                )
             };
 
             if let Ok(repairs) = repairs {

@@ -17,7 +17,6 @@ usage: $0 [cluster_rpc_url]
    STAKE
    SYSTEM
    VOTE
-   STORAGE
    CONFIG
 
  Required arguments:
@@ -76,10 +75,6 @@ function get_program_account_balance_totals {
       voteAccountBalanceTotalSol=$totalAccountBalancesSol
       voteAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
-    STORAGE)
-      storageAccountBalanceTotalSol=$totalAccountBalancesSol
-      storageAccountBalanceTotalLamports=$totalAccountBalancesLamports
-      ;;
     CONFIG)
       configAccountBalanceTotalSol=$totalAccountBalancesSol
       configAccountBalanceTotalLamports=$totalAccountBalancesLamports
@@ -92,8 +87,8 @@ function get_program_account_balance_totals {
 }
 
 function sum_account_balances_totals {
-  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol + storageAccountBalanceTotalSol + configAccountBalanceTotalSol))
-  grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + storageAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
+  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol + configAccountBalanceTotalSol))
+  grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
 
   printf "\n--- Total Token Distribution in all Account Balances ---\n"
   printf "Total SOL in all Account Balances: %'d\n" "$grandTotalAccountBalancesSol"
@@ -109,13 +104,11 @@ LAMPORTS_PER_SOL=1000000000 # 1 billion
 stakeAccountBalanceTotalSol=
 systemAccountBalanceTotalSol=
 voteAccountBalanceTotalSol=
-storageAccountBalanceTotalSol=
 configAccountBalanceTotalSol=
 
 stakeAccountBalanceTotalLamports=
 systemAccountBalanceTotalLamports=
 voteAccountBalanceTotalLamports=
-storageAccountBalanceTotalLamports=
 configAccountBalanceTotalLamports=
 
 echo "--- Querying RPC URL: $url ---"
@@ -124,13 +117,11 @@ get_cluster_version
 get_program_accounts STAKE "$STAKE_PROGRAM_PUBKEY" "$url"
 get_program_accounts SYSTEM "$SYSTEM_PROGRAM_PUBKEY" "$url"
 get_program_accounts VOTE "$VOTE_PROGRAM_PUBKEY" "$url"
-get_program_accounts STORAGE "$STORAGE_PROGRAM_PUBKEY" "$url"
 get_program_accounts CONFIG "$CONFIG_PROGRAM_PUBKEY" "$url"
 
 write_program_account_data_csv STAKE
 write_program_account_data_csv SYSTEM
 write_program_account_data_csv VOTE
-write_program_account_data_csv STORAGE
 write_program_account_data_csv CONFIG
 
 get_token_capitalization
@@ -138,7 +129,6 @@ get_token_capitalization
 get_program_account_balance_totals STAKE
 get_program_account_balance_totals SYSTEM
 get_program_account_balance_totals VOTE
-get_program_account_balance_totals STORAGE
 get_program_account_balance_totals CONFIG
 
 sum_account_balances_totals

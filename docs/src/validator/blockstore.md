@@ -85,6 +85,3 @@ Replay stage uses Blockstore APIs to find the longest chain of entries it can ha
 ## Pruning Blockstore
 
 Once Blockstore entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart. Once a validator's votes have reached max lockout, however, any Blockstore contents that are not on the PoH chain for that vote for can be pruned, expunged.
-
-Archiver nodes will be responsible for storing really old ledger contents, and validators need only persist their bank periodically.
-

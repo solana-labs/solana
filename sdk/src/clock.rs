@@ -1,4 +1,4 @@
-//! Provides information about the network's clock which is made up of ticks, slots, segments, etc...
+//! Provides information about the network's clock which is made up of ticks, slots, etc...
 
 // The default tick rate that the cluster attempts to achieve.  Note that the actual tick
 // rate at any given time should be expected to drift
@@ -21,9 +21,6 @@ pub const TICKS_PER_DAY: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY;
 
 // 1 Epoch ~= 2 days
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 2 * TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
-
-// Storage segment configuration
-pub const DEFAULT_SLOTS_PER_SEGMENT: u64 = 1024;
 
 // 4 times longer than the max_lockout to allow enough time for PoRep (128 slots)
 pub const DEFAULT_SLOTS_PER_TURN: u64 = 32 * 4;
@@ -55,31 +52,9 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY_GPU: usize = 2;
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
 pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
-/// Converts a slot to a storage segment. Does not indicate that a segment is complete.
-pub fn get_segment_from_slot(rooted_slot: Slot, slots_per_segment: u64) -> Segment {
-    (rooted_slot + (slots_per_segment - 1)) / slots_per_segment
-}
-
-/// Given a slot returns the latest complete segment, if no segment could possibly be complete
-/// for a given slot it returns `None` (i.e if `slot < slots_per_segment`)
-pub fn get_complete_segment_from_slot(
-    rooted_slot: Slot,
-    slots_per_segment: u64,
-) -> Option<Segment> {
-    let completed_segment = rooted_slot / slots_per_segment;
-    if rooted_slot < slots_per_segment {
-        None
-    } else {
-        Some(completed_segment)
-    }
-}
-
 /// Slot is a unit of time given to a leader for encoding,
 ///  is some some number of Ticks long.
 pub type Slot = u64;
-
-/// A segment is some number of slots stored by archivers
-pub type Segment = u64;
 
 /// Epoch is a unit of time a given leader schedule is honored,
 ///  some number of Slots.
@@ -105,8 +80,8 @@ pub type UnixTimestamp = i64;
 pub struct Clock {
     /// the current network/bank Slot
     pub slot: Slot,
-    /// the current Segment, used for archiver rounds
-    pub segment: Segment,
+    /// unused
+    pub unused: u64,
     /// the bank Epoch
     pub epoch: Epoch,
     /// the future Epoch for which the leader schedule has
@@ -115,30 +90,4 @@ pub struct Clock {
     /// computed from genesis creation time and network time
     ///  in slots, drifts!
     pub unix_timestamp: UnixTimestamp,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn get_segments(slot: Slot, slots_per_segment: u64) -> (Segment, Segment) {
-        (
-            get_segment_from_slot(slot, slots_per_segment),
-            get_complete_segment_from_slot(slot, slots_per_segment).unwrap(),
-        )
-    }
-
-    #[test]
-    fn test_complete_segment_impossible() {
-        // slot < slots_per_segment so there can be no complete segments
-        assert_eq!(get_complete_segment_from_slot(5, 10), None);
-    }
-
-    #[test]
-    fn test_segment_conversion() {
-        let (current, complete) = get_segments(2048, 1024);
-        assert_eq!(current, complete);
-        let (current, complete) = get_segments(2049, 1024);
-        assert!(complete < current);
-    }
 }

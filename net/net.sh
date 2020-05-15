@@ -260,7 +260,7 @@ startBootstrapLeader() {
          $deployMethod \
          bootstrap-validator \
          $entrypointIp \
-         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -329,7 +329,7 @@ startNode() {
          $deployMethod \
          $nodeType \
          $entrypointIp \
-         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -461,12 +461,9 @@ getNodeType() {
   nodeIndex=0 # <-- global
   nodeType=validator # <-- global
 
-  for ipAddress in "${validatorIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
+  for ipAddress in "${validatorIpList[@]}" b "${blockstreamerIpList[@]}"; do
     if [[ $ipAddress = b ]]; then
       nodeType=blockstreamer
-      continue
-    elif [[ $ipAddress = r ]]; then
-      nodeType=archiver
       continue
     fi
 
@@ -543,7 +540,7 @@ deploy() {
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   declare bootstrapLeader=true
-  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
+  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
     nodeType=
     nodeIndex=
     getNodeType
@@ -623,7 +620,7 @@ deploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
+  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
 }
@@ -662,7 +659,7 @@ stop() {
 
   declare loopCount=0
   pids=()
-  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress" false
 
     # Stagger additional node stop time to avoid too many concurrent ssh
@@ -1016,9 +1013,6 @@ logs)
     fetchRemoteLog "$ipAddress" client
   done
   for ipAddress in "${blockstreamerIpList[@]}"; do
-    fetchRemoteLog "$ipAddress" validator
-  done
-  for ipAddress in "${archiverIpList[@]}"; do
     fetchRemoteLog "$ipAddress" validator
   done
   ;;

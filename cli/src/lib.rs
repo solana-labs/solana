@@ -30,7 +30,6 @@ pub mod nonce;
 pub mod offline;
 pub mod spend_utils;
 pub mod stake;
-pub mod storage;
 pub mod test_utils;
 pub mod validator_info;
 pub mod vote;

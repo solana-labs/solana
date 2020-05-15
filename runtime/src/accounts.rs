@@ -429,10 +429,7 @@ impl Accounts {
                             AccountAddressFilter::Exclude => !filter_by_address.contains(&pubkey),
                             AccountAddressFilter::Include => filter_by_address.contains(&pubkey),
                         };
-                        should_include_pubkey
-                            && account.lamports != 0
-                            && !(account.lamports == std::u64::MAX
-                                && account.owner == solana_storage_program::id())
+                        should_include_pubkey && account.lamports != 0
                     })
                     .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
                 {

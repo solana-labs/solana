@@ -148,7 +148,7 @@ fn main() {
     let data_type = value_t_or_exit!(matches, "data_type", String);
 
     info!("Finding cluster entry: {:?}", entrypoint_addr);
-    let (nodes, _validators, _archivers) = discover(
+    let (nodes, _validators) = discover(
         Some(&entrypoint_addr),
         None,
         Some(60),

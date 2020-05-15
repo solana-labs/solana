@@ -72,15 +72,6 @@ else
   done
 fi
 echo
-echo Archivers:
-if [[ ${#archiverIpList[@]} -eq 0 ]]; then
-  echo "  None"
-else
-  for ipAddress in "${archiverIpList[@]}"; do
-    printNode validator "$ipAddress"
-  done
-fi
-echo
 echo "Use |scp.sh| to transfer files to and from nodes"
 echo
 
