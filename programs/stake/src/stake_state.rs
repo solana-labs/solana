@@ -150,21 +150,6 @@ impl Meta {
         }
         Ok(())
     }
-
-    pub fn authorize_withdraw(
-        &mut self,
-        authority: &Pubkey,
-        signers: &HashSet<Pubkey>,
-        clock: &Clock,
-    ) -> Result<(), InstructionError> {
-        // verify that lockup has expired or that the authorization
-        //  is *also* signed by the custodian
-        if self.lockup.is_in_force(clock, signers) {
-            return Err(StakeError::LockupInForce.into());
-        }
-        self.authorized
-            .authorize(signers, authority, StakeAuthorize::Withdrawer)
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -944,39 +929,6 @@ mod tests {
             authorized.authorize(&signers, &staker, StakeAuthorize::Staker),
             Ok(())
         );
-    }
-
-    #[test]
-    fn test_meta_authorize_withdraw() {
-        let staker = Pubkey::new_rand();
-        let custodian = Pubkey::new_rand();
-        let mut meta = Meta {
-            authorized: Authorized::auto(&staker),
-            lockup: Lockup {
-                epoch: 0,
-                unix_timestamp: 0,
-                custodian,
-            },
-            ..Meta::default()
-        };
-        // verify sig check
-        let mut signers = HashSet::new();
-        signers.insert(staker);
-        let mut clock = Clock::default();
-
-        // verify lockup check
-        meta.lockup.epoch = 1;
-        assert_eq!(
-            meta.authorize_withdraw(&staker, &signers, &clock),
-            Err(StakeError::LockupInForce.into())
-        );
-        // verify lockup check defeated by custodian
-        signers.insert(custodian);
-        assert_eq!(meta.authorize_withdraw(&staker, &signers, &clock), Ok(()));
-        // verify lock expiry
-        signers.remove(&custodian);
-        clock.epoch = 1;
-        assert_eq!(meta.authorize_withdraw(&staker, &signers, &clock), Ok(()));
     }
 
     #[test]
