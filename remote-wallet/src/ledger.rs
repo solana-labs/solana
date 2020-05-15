@@ -1,9 +1,13 @@
-use crate::remote_wallet::{
-    DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+use crate::{
+    ledger_error::LedgerError,
+    remote_wallet::{
+        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+    },
 };
 use console::Emoji;
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
+use num_traits::FromPrimitive;
 use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{cmp::min, fmt, sync::Arc};
@@ -29,6 +33,8 @@ const P1_CONFIRM: u8 = 0x01;
 const P2_EXTEND: u8 = 0x01;
 const P2_MORE: u8 = 0x02;
 const MAX_CHUNK_SIZE: usize = 255;
+
+const APDU_SUCCESS_CODE: usize = 0x9000;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
@@ -231,33 +237,7 @@ impl LedgerWallet {
         let status =
             (message[message.len() - 2] as usize) << 8 | (message[message.len() - 1] as usize);
         trace!("Read status {:x}", status);
-        #[allow(clippy::match_overlapping_arm)]
-        match status {
-            // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
-            0x6700 => Err(RemoteWalletError::Protocol(
-                "Solana app not open on Ledger device",
-            )),
-            0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
-            0x6803 => Err(RemoteWalletError::Protocol(
-                "Overflow: message longer than MAX_MESSAGE_LENGTH",
-            )),
-            0x6982 => Err(RemoteWalletError::Protocol(
-                "Security status not satisfied (Canceled by user)",
-            )),
-            0x6985 => Err(RemoteWalletError::UserCancel),
-            0x6a80 => Err(RemoteWalletError::Protocol("Invalid data")),
-            0x6a82 => Err(RemoteWalletError::Protocol("File not found")),
-            0x6b00 => Err(RemoteWalletError::Protocol("Incorrect parameters")),
-            0x6d00 => Err(RemoteWalletError::Protocol(
-                "Not implemented. Make sure the Ledger Solana Wallet app is running.",
-            )),
-            0x6faa => Err(RemoteWalletError::Protocol(
-                "Your Ledger device needs to be unplugged",
-            )),
-            0x6f00..=0x6fff => Err(RemoteWalletError::Protocol("Internal error")),
-            0x9000 => Ok(()),
-            _ => Err(RemoteWalletError::Protocol("Unknown error")),
-        }?;
+        Self::parse_status(status)?;
         let new_len = message.len() - 2;
         message.truncate(new_len);
         Ok(message)
@@ -310,6 +290,16 @@ impl LedgerWallet {
 
     fn outdated_app(&self) -> bool {
         self.version < DEPRECATE_VERSION_BEFORE
+    }
+
+    fn parse_status(status: usize) -> Result<(), RemoteWalletError> {
+        if status == APDU_SUCCESS_CODE {
+            Ok(())
+        } else if let Some(err) = LedgerError::from_usize(status) {
+            Err(err.into())
+        } else {
+            Err(RemoteWalletError::Protocol("Unknown error"))
+        }
     }
 }
 
@@ -581,5 +571,17 @@ mod tests {
         let p2 = P2_EXTEND | P2_MORE;
         assert!(!is_last_part(p2));
         assert!(is_last_part(p2 & !P2_MORE));
+    }
+
+    #[test]
+    fn test_parse_status() {
+        assert_eq!(LedgerWallet::parse_status(APDU_SUCCESS_CODE).unwrap(), ());
+        if let RemoteWalletError::LedgerError(err) = LedgerWallet::parse_status(0x6985).unwrap_err()
+        {
+            assert_eq!(err, LedgerError::UserCancel);
+        }
+        if let RemoteWalletError::Protocol(err) = LedgerWallet::parse_status(0x6fff).unwrap_err() {
+            assert_eq!(err, "Unknown error");
+        }
     }
 }

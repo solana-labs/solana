@@ -1,4 +1,7 @@
-use crate::ledger::{is_valid_ledger, LedgerWallet};
+use crate::{
+    ledger::{is_valid_ledger, LedgerWallet},
+    ledger_error::LedgerError,
+};
 use log::*;
 use parking_lot::{Mutex, RwLock};
 use solana_sdk::{
@@ -38,6 +41,9 @@ pub enum RemoteWalletError {
     #[error("invalid path: {0}")]
     InvalidPath(String),
 
+    #[error(transparent)]
+    LedgerError(#[from] LedgerError),
+
     #[error("no device found")]
     NoDeviceFound,
 
@@ -64,6 +70,7 @@ impl From<RemoteWalletError> for SignerError {
             RemoteWalletError::DeviceTypeMismatch => SignerError::Connection(err.to_string()),
             RemoteWalletError::InvalidDevice => SignerError::Connection(err.to_string()),
             RemoteWalletError::InvalidInput(input) => SignerError::InvalidInput(input),
+            RemoteWalletError::LedgerError(e) => SignerError::Protocol(e.to_string()),
             RemoteWalletError::NoDeviceFound => SignerError::NoDeviceFound,
             RemoteWalletError::Protocol(e) => SignerError::Protocol(e.to_string()),
             RemoteWalletError::UserCancel => {
@@ -123,14 +130,14 @@ impl RemoteWalletManager {
                                     Err(err) => {
                                         error!(
                                             "Error connecting to ledger device to read info: {}",
-                                            e
+                                            err
                                         );
                                         errors.push(err)
                                     }
                                 }
                             }
-                            Err(e) => {
-                                error!("Error connecting to ledger device to read info: {}", e)
+                            Err(err) => {
+                                error!("Error connecting to ledger device to read info: {}", err)
                             }
                         }
                     }
