@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)
-                        .default_value("5")
+                        .default_value("15")
                         .help("Timeout in seconds"),
                 )
                 .arg(&shred_version_arg)
