@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(met_criteria, true);
 
         let (met_criteria, _, _, _) = spy(
-            spy_ref.clone(),
+            spy_ref,
             None,
             Some(0),
             None,

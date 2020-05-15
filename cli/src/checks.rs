@@ -97,10 +97,8 @@ mod tests {
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
-        assert_eq!(
-            check_account_for_fee(&rpc_client, &pubkey, &fee_calculator, &message0).unwrap(),
-            ()
-        );
+        check_account_for_fee(&rpc_client, &pubkey, &fee_calculator, &message0)
+            .expect("unexpected result");
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
@@ -128,16 +126,13 @@ mod tests {
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
-        assert_eq!(
-            check_account_for_multiple_fees(
-                &rpc_client,
-                &pubkey,
-                &fee_calculator,
-                &[&message0, &message0]
-            )
-            .unwrap(),
-            ()
-        );
+        check_account_for_multiple_fees(
+            &rpc_client,
+            &pubkey,
+            &fee_calculator,
+            &[&message0, &message0],
+        )
+        .expect("unexpected result");
     }
 
     #[test]
@@ -194,19 +189,14 @@ mod tests {
     #[test]
     fn test_check_unique_pubkeys() {
         let pubkey0 = Pubkey::new_rand();
-        let pubkey_clone = pubkey0.clone();
+        let pubkey_clone = pubkey0;
         let pubkey1 = Pubkey::new_rand();
 
-        assert_eq!(
-            check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "bar".to_string()))
-                .unwrap(),
-            ()
-        );
-        assert_eq!(
-            check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "foo".to_string()))
-                .unwrap(),
-            ()
-        );
+        check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "bar".to_string()))
+            .expect("unexpected result");
+        check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "foo".to_string()))
+            .expect("unexpected result");
+
         assert!(check_unique_pubkeys(
             (&pubkey0, "foo".to_string()),
             (&pubkey_clone, "bar".to_string())

@@ -5825,6 +5825,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_check_point_value() {
         let (genesis_config, _) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
