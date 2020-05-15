@@ -597,10 +597,15 @@ impl Bank {
         old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
     }
 
+    /// Unused conversion
+    pub fn get_unused_from_slot(rooted_slot: Slot, unused: u64) -> u64 {
+        (rooted_slot + (unused - 1)) / unused
+    }
+
     pub fn clock(&self) -> sysvar::clock::Clock {
         sysvar::clock::Clock {
             slot: self.slot,
-            unused: 0,
+            unused: Self::get_unused_from_slot(self.slot, self.unused),
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp: self.unix_timestamp(),
