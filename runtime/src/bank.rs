@@ -857,9 +857,10 @@ impl Bank {
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
 
-            // DANGER: Remove this guard after tds has transitioned to the eager rent
-            // collection and ABSOLUTELY before the mainnet-beta transitions to v1.1.
-            if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 47) {
+            // DANGER: Adjust this guard after tds has transitioned to the eager rent
+            // collection and ABSOLUTELY after the mainnet-beta transitions to v1.1.
+            if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 47 ||
+                 self.operating_mode() == OperatingMode::Stable && self.epoch() < Epoch::max_value()) {
                 self.collect_rent_eagerly();
             }
             self.collect_fees();
