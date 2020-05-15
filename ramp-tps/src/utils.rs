@@ -1,8 +1,8 @@
-use crate::notifier::Notifier;
 use bzip2::bufread::BzDecoder;
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_net_utils::parse_host;
+use solana_notifier::Notifier;
 use solana_sdk::{
     clock::{Epoch, Slot},
     genesis_config::GenesisConfig,
@@ -89,8 +89,8 @@ pub fn is_host(string: String) -> Result<(), String> {
     Ok(())
 }
 
-pub fn bail(notifier: &crate::notifier::Notifier, msg: &str) -> ! {
-    notifier.notify(msg);
+pub fn bail(notifier: &Notifier, msg: &str) -> ! {
+    notifier.send(msg);
     sleep(Duration::from_secs(30)); // Wait for notifications to send
     std::process::exit(1);
 }

@@ -23,25 +23,3 @@ On failure this data point contains details about the specific test that failed 
 the following fields:
 * `test`: name of the sanity test that failed
 * `err`: exact sanity failure message
-
-
-### Sanity failure push notification
-To receive a Slack, Discord and/or Telegram notification on sanity failure,
-define environment variables before running `solana-watchtower`:
-```
-export SLACK_WEBHOOK=...
-export DISCORD_WEBHOOK=...
-```
-
-Telegram requires the following two variables:
-```
-export TELEGRAM_BOT_TOKEN=...
-export TELEGRAM_CHAT_ID=...
-```
-
-To receive a Twilio SMS notification on failure, having a Twilio account,
-and a sending number owned by that account,
-define environment variable before running `solana-watchtower`:
-```
-export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
-```

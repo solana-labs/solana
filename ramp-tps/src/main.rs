@@ -1,6 +1,5 @@
 //! Ramp up TPS for Tour de SOL until all validators drop out
 
-mod notifier;
 mod results;
 mod stake;
 mod tps;
@@ -54,7 +53,7 @@ fn gift_for_round(tps_round: u32, initial_balance: u64) -> u64 {
 fn main() {
     solana_logger::setup_with_default("solana=debug");
     solana_metrics::set_panic_hook("ramp-tps");
-    let mut notifier = notifier::Notifier::new();
+    let mut notifier = solana_notifier::Notifier::default();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -199,7 +198,7 @@ fn main() {
     let _ = fs::remove_dir_all(&tmp_ledger_path);
     fs::create_dir_all(&tmp_ledger_path).expect("failed to create temp ledger path");
 
-    notifier.notify("Hi!");
+    notifier.send("Hi!");
     datapoint_info!("ramp-tps", ("event", "boot", String),);
 
     let entrypoint_str = matches.value_of("entrypoint").unwrap();
@@ -219,7 +218,7 @@ fn main() {
     debug!("First normal slot: {}", first_normal_slot);
     let sleep_slots = first_normal_slot.saturating_sub(current_slot);
     if sleep_slots > 0 {
-        notifier.notify(&format!(
+        notifier.send(&format!(
             "Waiting for warm-up epochs to complete (epoch {})",
             epoch_schedule.first_normal_epoch
         ));
@@ -291,7 +290,7 @@ fn main() {
     let mut tps_sampler = tps::Sampler::new(&entrypoint_addr);
 
     loop {
-        notifier.notify(&format!("Round {}!", tps_round));
+        notifier.send(&format!("Round {}!", tps_round));
         let tx_count = tx_count_for_round(tps_round, tx_count_baseline, tx_count_increment);
         datapoint_info!(
             "ramp-tps",
@@ -328,7 +327,7 @@ fn main() {
             ("validators", starting_validators.len(), i64)
         );
 
-        notifier.buffer(format!(
+        notifier.send(&format!(
             "There are {} validators present:",
             starting_validators.len()
         ));
@@ -338,11 +337,10 @@ fn main() {
             .map(|node_pubkey| format!("* {}", pubkey_to_keybase(&node_pubkey)))
             .collect();
         validators.sort();
-        notifier.buffer_vec(validators);
-        notifier.flush();
+        notifier.send(&validators.join("\n"));
 
         let client_tx_count = tx_count / NUM_BENCH_CLIENTS as u64;
-        notifier.notify(&format!(
+        notifier.send(&format!(
             "Starting transactions for {} minutes (batch size={})",
             round_minutes, tx_count,
         ));
@@ -393,7 +391,7 @@ fn main() {
             ("round", tps_round, i64),
         );
 
-        notifier.notify("Transactions stopped");
+        notifier.send("Transactions stopped");
         tps_sampler.report_results(&notifier);
 
         let remaining_validators = voters::fetch_active_validators(&rpc_client);
