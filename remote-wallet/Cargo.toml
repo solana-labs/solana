@@ -14,6 +14,8 @@ console = "0.10.1"
 dialoguer = "0.6.2"
 hidapi = { version = "1.2.1", default-features = false }
 log = "0.4.8"
+num-derive = { version = "0.3" }
+num-traits = { version = "0.2" }
 parking_lot = "0.10"
 semver = "0.9"
 solana-sdk = { path = "../sdk", version = "1.2.0" }

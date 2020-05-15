@@ -4525,6 +4525,8 @@ dependencies = [
  "dialoguer",
  "hidapi",
  "log 0.4.8",
+ "num-derive 0.3.0",
+ "num-traits",
  "parking_lot 0.10.2",
  "semver",
  "solana-sdk",
