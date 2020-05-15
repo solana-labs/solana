@@ -1,4 +1,5 @@
 use crate::{
+    clock::MAX_RECENT_BLOCKHASHES,
     declare_sysvar_id,
     fee_calculator::FeeCalculator,
     hash::{hash, Hash},
@@ -6,7 +7,7 @@ use crate::{
 };
 use std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
-pub const MAX_ENTRIES: usize = 150;
+pub const MAX_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
 
 declare_sysvar_id!(
     "SysvarRecentB1ockHashes11111111111111111111",
@@ -111,7 +112,7 @@ impl<T: Ord> Iterator for IntoIterSorted<T> {
 impl Sysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
-        6008 // golden, update if MAX_ENTRIES changes
+        12008 // golden, update if MAX_ENTRIES changes
     }
 }
 
@@ -146,9 +147,12 @@ mod tests {
 
     #[test]
     #[allow(clippy::assertions_on_constants)]
-    fn test_sysvar_can_hold_all_active_blockhashes() {
-        // Ensure we can still hold all of the active entries in `BlockhashQueue`
-        assert!(MAX_PROCESSING_AGE <= MAX_ENTRIES);
+    fn test_sysvar_size_matches_bank() {
+        const EXPECTED_MAX_ENTRIES: usize = 300; // Golden. Should match MAX_RECENT_BLOCKHASHES
+
+        // Changes to MAX_RECENT_BLOCKHASHES break ABI and may extend to any
+        // programs making reference to the RecentBlockhashes sysvar
+        assert!(EXPECTED_MAX_ENTRIES == MAX_ENTRIES);
     }
 
     #[test]
