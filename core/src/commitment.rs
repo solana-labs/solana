@@ -1,4 +1,4 @@
-use crate::consensus::VOTE_THRESHOLD_SIZE;
+use crate::{consensus::VOTE_THRESHOLD_SIZE, rpc_subscriptions::RpcSubscriptions};
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
@@ -221,6 +221,7 @@ impl AggregateCommitmentService {
     pub fn new(
         exit: &Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        subscriptions: Arc<RpcSubscriptions>,
     ) -> (Sender<CommitmentAggregationData>, Self) {
         let (sender, receiver): (
             Sender<CommitmentAggregationData>,
@@ -238,7 +239,7 @@ impl AggregateCommitmentService {
                         }
 
                         if let Err(RecvTimeoutError::Disconnected) =
-                            Self::run(&receiver, &block_commitment_cache, &exit_)
+                            Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit_)
                         {
                             break;
                         }
@@ -251,6 +252,7 @@ impl AggregateCommitmentService {
     fn run(
         receiver: &Receiver<CommitmentAggregationData>,
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
+        subscriptions: &Arc<RpcSubscriptions>,
         exit: &Arc<AtomicBool>,
     ) -> Result<(), RecvTimeoutError> {
         loop {
@@ -297,6 +299,8 @@ impl AggregateCommitmentService {
                     i64
                 )
             );
+
+            subscriptions.notify_subscribers(w_block_commitment_cache.slot());
         }
     }
 
