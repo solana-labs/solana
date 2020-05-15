@@ -38,7 +38,29 @@ line tools](../remote-wallet/ledger.md).
    - Make sure your device is plugged in via USB and is unlocked with its PIN
  - You may be prompted on the Nano S to confirm the install of Solana App
  - "Solana" should now show as "Installed" in the Ledger Live Manager
+<<<<<<< HEAD:docs/src/wallet/ledger-live.md
  ![Installed Solana App in Manager](../.gitbook/assets/ledger-live-install-solana-app.png)
+=======
+
+ ![Installed Solana App in Manager](../.gitbook/assets/ledger-live-latest-version-installed.png)
+
+## Upgrade to the latest version of the Solana App
+To make sure you have the latest functionality, if you are using an older version
+of the Solana App, please upgrade to version v0.2.2 by following these steps.
+
+ - Connect your Nano S to your computer an unlock it by entering your PIN on the
+ device
+ - Open Ledger Live and click on "Manager" in the left pane
+ - On your Nano S, click both buttons when prompted to "Allow Manager"
+ - Click the "Update All" button to update the Solana app to the latest version
+ (v.0.2.2)
+
+ ![Upgrade All button in Manager](../.gitbook/assets/ledger-live-update-available-v0.2.2.png)
+
+ - Once the upgrade is finished, confirm v0.2.2 is installed under "Apps Installed"
+
+ ![Upgrade complete](../.gitbook/assets/ledger-live-latest-version-installed.png)
+>>>>>>> a32f34f13... Add docs section to upgrade Solana App on Ledger Live (#10070):docs/src/wallet-guide/ledger-live.md
 
 ##Interact with Solana network
 - To interact with your Ledger wallet on our live network, please see our
