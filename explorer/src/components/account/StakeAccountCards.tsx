@@ -27,10 +27,22 @@ function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   const unixTimestamp = stakeAccount.meta?.lockup.unixTimestamp;
   if (unixTimestamp && unixTimestamp > 0) {
     const expireDate = new Date(unixTimestamp * 1000);
+    const dateString = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    }).format(expireDate);
+    const timeString = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: false,
+      timeZoneName: "long"
+    }).format(expireDate);
+    const expireString = `${dateString} at ${timeString}`;
     return (
       <div className="alert alert-warning text-center">
-        <strong>Account is locked!</strong> Lockup expires on{" "}
-        {expireDate.toLocaleDateString()} at {expireDate.toLocaleTimeString()}
+        <strong>Account is locked!</strong> Lockup expires on {expireString}
       </div>
     );
   } else {
