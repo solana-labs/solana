@@ -304,6 +304,13 @@ impl Validator {
         );
 
         if config.dev_halt_at_slot.is_some() {
+            // Simulate a confirmed root to avoid RPC errors with CommitmentmentConfig::max() and
+            // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
+            block_commitment_cache
+                .write()
+                .unwrap()
+                .set_get_largest_confirmed_root(bank_forks.read().unwrap().root());
+
             // Park with the RPC service running, ready for inspection!
             warn!("Validator halted");
             std::thread::park();
