@@ -267,7 +267,7 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
     TransactionLogArgs {
-        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
+        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
         output_path: value_t_or_exit!(matches, "output_path", String),
     }
 }

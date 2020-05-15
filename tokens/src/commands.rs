@@ -236,7 +236,7 @@ pub fn process_distribute_tokens<T: Client>(
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
     // Start by finalizing any transactions from the previous run.
-    let confirmations = finalize_transactions(client, &mut db)?;
+    let confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
 
     let transaction_infos = db::read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -292,14 +292,19 @@ pub fn process_distribute_tokens<T: Client>(
 
     distribute_tokens(client, &mut db, &allocations, args)?;
 
-    let opt_confirmations = finalize_transactions(client, &mut db)?;
+    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
     Ok(opt_confirmations)
 }
 
 fn finalize_transactions<T: Client>(
     client: &ThinClient<T>,
     db: &mut PickleDb,
+    dry_run: bool,
 ) -> Result<Option<usize>, Error> {
+    if dry_run {
+        return Ok(None);
+    }
+
     let mut opt_confirmations = update_finalized_transactions(client, db)?;
 
     let progress_bar = new_spinner_progress_bar();
