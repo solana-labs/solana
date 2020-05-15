@@ -180,7 +180,7 @@ impl BlockCommitmentCache {
         }
     }
 
-    pub(crate) fn set_get_largest_confirmed_root(&mut self, root: Slot) {
+    pub(crate) fn set_largest_confirmed_root(&mut self, root: Slot) {
         self.largest_confirmed_root = root;
     }
 }

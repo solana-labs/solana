@@ -2822,7 +2822,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_get_largest_confirmed_root(8);
+            .set_largest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
@@ -2878,7 +2878,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_get_largest_confirmed_root(7);
+            .set_largest_confirmed_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
