@@ -2461,7 +2461,7 @@ dependencies = [
  "solana_libra_vm_cache_map 0.0.1-sol5 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_vm_runtime 0.0.1-sol5 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_vm_runtime_types 0.0.1-sol5 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2501,10 +2501,9 @@ dependencies = [
  "solana-rayon-threadlimit 1.2.0",
  "solana-sdk 1.2.0",
  "solana-stake-program 1.2.0",
- "solana-storage-program 1.2.0",
  "solana-vote-program 1.2.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2537,7 +2536,7 @@ dependencies = [
  "solana-crate-features 1.2.0",
  "solana-logger 1.2.0",
  "solana-sdk-macro 1.2.0",
- "thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2564,22 +2563,7 @@ dependencies = [
  "solana-metrics 1.2.0",
  "solana-sdk 1.2.0",
  "solana-vote-program 1.2.0",
- "thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-storage-program"
-version = "1.2.0"
-dependencies = [
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.110 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.110 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.2.0",
- "solana-sdk 1.2.0",
+ "thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2594,7 +2578,7 @@ dependencies = [
  "serde_derive 1.0.110 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 1.2.0",
  "solana-sdk 1.2.0",
- "thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3099,15 +3083,15 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "thiserror-impl 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror-impl 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4061,8 +4045,8 @@ dependencies = [
 "checksum term 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c0863a3345e70f61d613eab32ee046ccd1bcc5f9105fe402c61fcd0c13eeb8b5"
 "checksum termcolor 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)" = "96d6098003bde162e4277c70665bd87c326f5a0c3f3fbfb285787fa482d54e6e"
 "checksum textwrap 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
-"checksum thiserror 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)" = "467e5ff447618a916519a4e0d62772ab14f434897f3d63f05d8700ef1e9b22c1"
-"checksum thiserror-impl 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)" = "e63c1091225b9834089b429bc4a2e01223470e3183e891582909e9d1c4cb55d9"
+"checksum thiserror 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)" = "5976891d6950b4f68477850b5b9e5aa64d955961466f9e174363f573e54e8ca7"
+"checksum thiserror-impl 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)" = "ab81dbd1cd69cd2ce22ecfbdd3bdb73334ba25350649408cc6c085f46d89573d"
 "checksum thread-id 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c7fbf4c9d56b320106cd64fd024dadfa0be7cb4706725fc44a7d7ce952d820c1"
 "checksum thread_local 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "c6b53e329000edc2b34dbe8545fd20e55a333362d0a321909685a19bd28c3f1b"
 "checksum threshold_crypto 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "95be1032c63011f20b01c5edb64930e2b51512782b43b458b1e3449613d70f87"
