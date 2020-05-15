@@ -163,6 +163,26 @@ impl BlockCommitmentCache {
     }
 
     #[cfg(test)]
+<<<<<<< HEAD
+=======
+    pub fn new_for_tests_with_blockstore_bank(
+        blockstore: Arc<Blockstore>,
+        bank: Arc<Bank>,
+        root: Slot,
+    ) -> Self {
+        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
+        block_commitment.insert(0, BlockCommitment::default());
+        Self {
+            block_commitment,
+            blockstore,
+            total_stake: 42,
+            largest_confirmed_root: root,
+            bank,
+            root,
+        }
+    }
+
+>>>>>>> 1da166792... Forge a confirmed root before halting for RPC inspection (#10061)
     pub(crate) fn set_get_largest_confirmed_root(&mut self, root: Slot) {
         self.largest_confirmed_root = root;
     }
