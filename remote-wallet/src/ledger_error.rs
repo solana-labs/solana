@@ -18,7 +18,7 @@ pub enum LedgerError {
     #[error("Ledger security exception")]
     SdkExceptionSecurity = 0x6804,
 
-    #[error("Ledger invalid crc")]
+    #[error("Ledger invalid CRC")]
     SdkInvalidCrc = 0x6805,
 
     #[error("Ledger invalid checksum")]
@@ -27,7 +27,7 @@ pub enum LedgerError {
     #[error("Ledger invalid counter")]
     SdkInvalidCounter = 0x6807,
 
-    #[error("Ledger blind signing of messages not supported")]
+    #[error("Ledger operation not supported")]
     SdkNotSupported = 0x6808,
 
     #[error("Ledger invalid state")]
