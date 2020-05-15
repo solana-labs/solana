@@ -1,7 +1,9 @@
 use chrono::prelude::*;
 use pickledb::{error::Error, PickleDb, PickleDbDumpPolicy};
 use serde::{Deserialize, Serialize};
-use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature, transaction::Transaction};
+use solana_sdk::{
+    hash::Hash, message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
+};
 use solana_transaction_status::TransactionStatus;
 use std::{cmp::Ordering, fs, io, path::Path};
 
@@ -25,7 +27,8 @@ struct SignedTransactionInfo {
 
 impl Default for TransactionInfo {
     fn default() -> Self {
-        let mut transaction = Transaction::new_unsigned_instructions(&[]);
+        let message = Message::new_with_payer(&[], None);
+        let mut transaction = Transaction::new_unsigned(message);
         transaction.signatures.push(Signature::default());
         Self {
             recipient: Pubkey::default(),
