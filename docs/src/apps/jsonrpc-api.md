@@ -1452,3 +1452,57 @@ Unsubscribe from root notifications
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
+
+### voteSubscribe
+
+Subscribe to receive notification anytime a new vote is observed in gossip.
+These votes are pre-consensus therefore there is no guarantee these votes will
+enter the ledger.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"voteSubscribe"}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
+
+```bash
+{"jsonrpc": "2.0","method": "voteNotification", "params": {"result": {"hash": [102,205,10,23,101,60,158,240,47,137,212,157,223,132,197,111,73,100,235,194,114,113,245,111,171,117,228,36,207,203,10,70], "slots": [93], "timestamp": null}, "subscription": 0}}
+```
+
+### voteUnsubscribe
+
+Unsubscribe from vote notifications
+
+#### Parameters:
+
+* `<integer>` - subscription id to cancel
+
+#### Results:
+
+* `<bool>` - unsubscribe success message
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"voteUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
