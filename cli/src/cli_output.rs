@@ -5,10 +5,11 @@ use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use solana_client::rpc_response::{
-    RpcAccountBalance, RpcEpochInfo, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
+    RpcAccountBalance, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
 };
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
+    epoch_info::EpochInfo,
     native_token::lamports_to_sol,
     stake_history::StakeHistoryEntry,
 };
@@ -186,11 +187,11 @@ pub struct CliSlotStatus {
 #[serde(rename_all = "camelCase")]
 pub struct CliEpochInfo {
     #[serde(flatten)]
-    pub epoch_info: RpcEpochInfo,
+    pub epoch_info: EpochInfo,
 }
 
-impl From<RpcEpochInfo> for CliEpochInfo {
-    fn from(epoch_info: RpcEpochInfo) -> Self {
+impl From<EpochInfo> for CliEpochInfo {
+    fn from(epoch_info: EpochInfo) -> Self {
         Self { epoch_info }
     }
 }
