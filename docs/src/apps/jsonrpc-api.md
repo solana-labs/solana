@@ -1482,7 +1482,7 @@ None
 The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
 
 ```bash
-{"jsonrpc": "2.0","method": "voteNotification", "params": {"result": {"hash": [102,205,10,23,101,60,158,240,47,137,212,157,223,132,197,111,73,100,235,194,114,113,245,111,171,117,228,36,207,203,10,70], "slots": [93], "timestamp": null}, "subscription": 0}}
+{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"hash":"8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM","slots":[1,2],"timestamp":null},"subscription":0}}
 ```
 
 ### voteUnsubscribe

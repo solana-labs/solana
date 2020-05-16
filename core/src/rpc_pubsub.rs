@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
@@ -12,7 +12,6 @@ use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_sdk::{
     clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
 };
-use solana_vote_program::vote_state::Vote;
 #[cfg(test)]
 use std::sync::RwLock;
 use std::{
@@ -117,7 +116,7 @@ pub trait RpcSolPubSub {
 
     // Get notification when vote is encountered
     #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
-    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<Vote>);
+    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<RpcVote>);
 
     // Unsubscribe from vote notification subscription.
     #[pubsub(
@@ -308,7 +307,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
     }
 
-    fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Vote>) {
+    fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<RpcVote>) {
         info!("vote_subscribe");
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
         let sub_id = SubscriptionId::Number(id as u64);
@@ -947,7 +946,7 @@ mod tests {
         let (response, _) = robust_poll_or_panic(receiver);
         assert_eq!(
             response,
-            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"hash":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"slots":[1,2],"timestamp":null},"subscription":0}}"#
+            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"hash":"11111111111111111111111111111111","slots":[1,2],"timestamp":null},"subscription":0}}"#
         );
     }
 

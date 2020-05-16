@@ -15,7 +15,7 @@ use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
-    clock::Slot,
+    clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     pubkey::Pubkey,
     signature::Signature,
@@ -42,6 +42,14 @@ pub struct SlotInfo {
     pub slot: Slot,
     pub parent: Slot,
     pub root: Slot,
+}
+
+// A more human-friendly version of Vote, with the bank state signature base58 encoded.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RpcVote {
+    pub slots: Vec<Slot>,
+    pub hash: String,
+    pub timestamp: Option<UnixTimestamp>,
 }
 
 enum NotificationEntry {
@@ -77,7 +85,7 @@ type RpcSignatureSubscriptions = RwLock<
     HashMap<Signature, HashMap<SubscriptionId, SubscriptionData<Response<RpcSignatureResult>>>>,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
-type RpcVoteSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Vote>>>;
+type RpcVoteSubscriptions = RwLock<HashMap<SubscriptionId, Sink<RpcVote>>>;
 type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
 fn add_subscription<K, S>(
@@ -529,7 +537,7 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Slot(SlotInfo { slot, parent, root }));
     }
 
-    pub fn add_vote_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<Vote>) {
+    pub fn add_vote_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<RpcVote>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
         subscriptions.insert(sub_id, sink);
@@ -602,7 +610,14 @@ impl RpcSubscriptions {
                     NotificationEntry::Vote(ref vote_info) => {
                         let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
-                            notifier.notify(vote_info.clone(), sink);
+                            notifier.notify(
+                                RpcVote {
+                                    slots: vote_info.slots.clone(),
+                                    hash: bs58::encode(vote_info.hash).into_string(),
+                                    timestamp: vote_info.timestamp,
+                                },
+                                sink,
+                            );
                         }
                     }
                     NotificationEntry::Root(root) => {
