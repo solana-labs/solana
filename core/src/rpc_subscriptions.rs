@@ -15,12 +15,13 @@ use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
-    clock::Slot,
+    clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     pubkey::Pubkey,
     signature::Signature,
     transaction,
 };
+use solana_vote_program::vote_state::Vote;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
@@ -43,8 +44,17 @@ pub struct SlotInfo {
     pub root: Slot,
 }
 
+// A more human-friendly version of Vote, with the bank state signature base58 encoded.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RpcVote {
+    pub slots: Vec<Slot>,
+    pub hash: String,
+    pub timestamp: Option<UnixTimestamp>,
+}
+
 enum NotificationEntry {
     Slot(SlotInfo),
+    Vote(Vote),
     Root(Slot),
     Bank(Slot),
 }
@@ -53,6 +63,7 @@ impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             NotificationEntry::Root(root) => write!(f, "Root({})", root),
+            NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
             NotificationEntry::Bank(current_slot) => {
                 write!(f, "Bank({{current_slot: {:?}}})", current_slot)
@@ -74,6 +85,7 @@ type RpcSignatureSubscriptions = RwLock<
     HashMap<Signature, HashMap<SubscriptionId, SubscriptionData<Response<RpcSignatureResult>>>>,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
+type RpcVoteSubscriptions = RwLock<HashMap<SubscriptionId, Sink<RpcVote>>>;
 type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
 fn add_subscription<K, S>(
@@ -250,6 +262,7 @@ struct Subscriptions {
     program_subscriptions: Arc<RpcProgramSubscriptions>,
     signature_subscriptions: Arc<RpcSignatureSubscriptions>,
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
+    vote_subscriptions: Arc<RpcVoteSubscriptions>,
     root_subscriptions: Arc<RpcRootSubscriptions>,
 }
 
@@ -286,6 +299,7 @@ impl RpcSubscriptions {
         let program_subscriptions = Arc::new(RpcProgramSubscriptions::default());
         let signature_subscriptions = Arc::new(RpcSignatureSubscriptions::default());
         let slot_subscriptions = Arc::new(RpcSlotSubscriptions::default());
+        let vote_subscriptions = Arc::new(RpcVoteSubscriptions::default());
         let root_subscriptions = Arc::new(RpcRootSubscriptions::default());
         let notification_sender = Arc::new(Mutex::new(notification_sender));
 
@@ -297,6 +311,7 @@ impl RpcSubscriptions {
             program_subscriptions,
             signature_subscriptions,
             slot_subscriptions,
+            vote_subscriptions,
             root_subscriptions,
         };
         let _subscriptions = subscriptions.clone();
@@ -522,6 +537,21 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Slot(SlotInfo { slot, parent, root }));
     }
 
+    pub fn add_vote_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<RpcVote>) {
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
+        subscriptions.insert(sub_id, sink);
+    }
+
+    pub fn remove_vote_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
+        subscriptions.remove(id).is_some()
+    }
+
+    pub fn notify_vote(&self, vote: &Vote) {
+        self.enqueue_notification(NotificationEntry::Vote(vote.clone()));
+    }
+
     pub fn add_root_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<Slot>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let mut subscriptions = self.subscriptions.root_subscriptions.write().unwrap();
@@ -575,6 +605,19 @@ impl RpcSubscriptions {
                         let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(slot_info, sink);
+                        }
+                    }
+                    NotificationEntry::Vote(ref vote_info) => {
+                        let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
+                        for (_, sink) in subscriptions.iter() {
+                            notifier.notify(
+                                RpcVote {
+                                    slots: vote_info.slots.clone(),
+                                    hash: bs58::encode(vote_info.hash).into_string(),
+                                    timestamp: vote_info.timestamp,
+                                },
+                                sink,
+                            );
                         }
                     }
                     NotificationEntry::Root(root) => {

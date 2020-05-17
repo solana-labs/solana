@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
@@ -113,6 +113,18 @@ pub trait RpcSolPubSub {
         name = "slotUnsubscribe"
     )]
     fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+    // Get notification when vote is encountered
+    #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
+    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<RpcVote>);
+
+    // Unsubscribe from vote notification subscription.
+    #[pubsub(
+        subscription = "voteNotification",
+        unsubscribe,
+        name = "voteUnsubscribe"
+    )]
+    fn vote_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when a new root is set
     #[pubsub(subscription = "rootNotification", subscribe, name = "rootSubscribe")]
@@ -295,6 +307,27 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
     }
 
+    fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<RpcVote>) {
+        info!("vote_subscribe");
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("vote_subscribe: id={:?}", sub_id);
+        self.subscriptions.add_vote_subscription(sub_id, subscriber);
+    }
+
+    fn vote_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
+        info!("vote_unsubscribe");
+        if self.subscriptions.remove_vote_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
     fn root_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Slot>) {
         info!("root_subscribe");
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
@@ -321,9 +354,11 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 mod tests {
     use super::*;
     use crate::{
+        cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
         commitment::{BlockCommitment, BlockCommitmentCache},
         rpc_subscriptions::tests::robust_poll_or_panic,
     };
+    use crossbeam_channel::unbounded;
     use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
@@ -333,13 +368,18 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_runtime::bank::Bank;
+    use solana_runtime::{
+        bank::Bank,
+        genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
+    };
     use solana_sdk::{
+        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_program, system_transaction,
         transaction::{self, Transaction},
     };
+    use solana_vote_program::vote_transaction;
     use std::{
         collections::HashMap,
         sync::{atomic::AtomicBool, RwLock},
@@ -829,6 +869,99 @@ mod tests {
         let session = create_session();
         assert!(rpc
             .slot_unsubscribe(Some(session), SubscriptionId::Number(0))
+            .is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_vote_subscribe() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
+        ));
+
+        let validator_voting_keypairs: Vec<_> = (0..10)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let GenesisConfigInfo { genesis_config, .. } =
+            create_genesis_config_with_vote_accounts(10_000, &validator_voting_keypairs, 100);
+        let exit = Arc::new(AtomicBool::new(false));
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = BankForks::new(0, bank);
+        let bank = bank_forks.get(0).unwrap().clone();
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        // Setup RPC
+        let mut rpc =
+            RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks.clone());
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("voteNotification");
+
+        // Setup Subscriptions
+        let subscriptions =
+            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache.clone());
+        rpc.subscriptions = Arc::new(subscriptions);
+        rpc.vote_subscribe(session, subscriber);
+
+        // Create some voters at genesis
+        let vote_tracker = VoteTracker::new(&bank);
+        let (votes_sender, votes_receiver) = unbounded();
+        let (vote_tracker, validator_voting_keypairs) =
+            (Arc::new(vote_tracker), validator_voting_keypairs);
+
+        let vote_slots = vec![1, 2];
+        validator_voting_keypairs.iter().for_each(|keypairs| {
+            let node_keypair = &keypairs.node_keypair;
+            let vote_keypair = &keypairs.vote_keypair;
+            let vote_tx = vote_transaction::new_vote_transaction(
+                vote_slots.clone(),
+                Hash::default(),
+                Hash::default(),
+                node_keypair,
+                vote_keypair,
+                vote_keypair,
+            );
+            votes_sender.send(vec![vote_tx]).unwrap();
+        });
+
+        // Process votes and check they were notified.
+        ClusterInfoVoteListener::get_and_process_votes_for_tests(
+            &votes_receiver,
+            &vote_tracker,
+            0,
+            rpc.subscriptions.clone(),
+        )
+        .unwrap();
+
+        let (response, _) = robust_poll_or_panic(receiver);
+        assert_eq!(
+            response,
+            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"hash":"11111111111111111111111111111111","slots":[1,2],"timestamp":null},"subscription":0}}"#
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_vote_unsubscribe() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
+        let session = create_session();
+        let (subscriber, _id_receiver, _) = Subscriber::new_test("voteNotification");
+        rpc.vote_subscribe(session, subscriber);
+
+        let session = create_session();
+        assert!(rpc
+            .vote_unsubscribe(Some(session), SubscriptionId::Number(42))
+            .is_err());
+
+        let session = create_session();
+        assert!(rpc
+            .vote_unsubscribe(Some(session), SubscriptionId::Number(0))
             .is_ok());
     }
 }
