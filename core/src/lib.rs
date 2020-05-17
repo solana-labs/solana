@@ -34,6 +34,7 @@ pub mod non_circulating_supply;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;
+pub mod repair_response;
 pub mod repair_service;
 pub mod replay_stage;
 mod result;
