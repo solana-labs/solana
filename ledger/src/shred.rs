@@ -20,8 +20,13 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use std::mem::size_of;
-use std::{sync::Arc, time::Instant};
+use std::{
+    collections::{BTreeMap, HashSet},
+    mem::size_of,
+    sync::Arc,
+    time::Instant,
+};
+
 use thiserror::Error;
 
 pub type Nonce = u32;
@@ -169,7 +174,7 @@ impl Shred {
         index: u32,
         parent_offset: u16,
         data: Option<&[u8]>,
-        is_last_data: bool,
+        is_last_in_fec_set: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
@@ -194,7 +199,7 @@ impl Shred {
             size,
         };
 
-        if is_last_data {
+        if is_last_in_fec_set {
             data_header.flags |= DATA_COMPLETE_SHRED
         }
 
@@ -496,7 +501,6 @@ impl Shredder {
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
-
         // 1) Generate data shreds
         let data_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
@@ -505,26 +509,22 @@ impl Shredder {
                     .enumerate()
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
+                        let is_last_in_fec_set = (i % (MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                            == MAX_DATA_SHREDS_PER_FEC_BLOCK as usize - 1)
+                            || shred_index == last_shred_index;
+                        let is_last_in_slot = shred_index == last_shred_index && is_last_in_slot;
 
                         // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds
                         // "FEC set index" is the index of first data shred in that FEC block
                         let fec_set_index =
                             shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
 
-                        let (is_last_data, is_last_in_slot) = {
-                            if shred_index == last_shred_index {
-                                (true, is_last_in_slot)
-                            } else {
-                                (false, false)
-                            }
-                        };
-
                         let mut shred = Shred::new_from_data(
                             self.slot,
                             shred_index,
                             (self.slot - self.parent_slot) as u16,
                             Some(shred_data),
-                            is_last_data,
+                            is_last_in_fec_set,
                             is_last_in_slot,
                             self.reference_tick,
                             self.version,
@@ -550,7 +550,6 @@ impl Shredder {
 
     pub fn data_shreds_to_coding_shreds(&self, data_shreds: &[Shred]) -> Vec<Shred> {
         let now = Instant::now();
-        let max_coding_shreds = data_shreds.len() > MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
         // 2) Generate coding shreds
         let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
@@ -562,7 +561,6 @@ impl Shredder {
                             self.fec_rate,
                             shred_data_batch,
                             self.version,
-                            max_coding_shreds,
                         )
                     })
                     .collect()
@@ -630,25 +628,12 @@ impl Shredder {
         fec_rate: f32,
         data_shred_batch: &[Shred],
         version: u16,
-        max_coding_shreds: bool,
     ) -> Vec<Shred> {
         assert!(!data_shred_batch.is_empty());
         if fec_rate != 0.0 {
             let num_data = data_shred_batch.len();
             // always generate at least 1 coding shred even if the fec_rate doesn't allow it
-            let shred_count = if max_coding_shreds {
-                MAX_DATA_SHREDS_PER_FEC_BLOCK as usize
-            } else {
-                num_data
-            };
-            let num_coding = Self::calculate_num_coding_shreds(shred_count as f32, fec_rate);
-            if num_coding > num_data {
-                trace!(
-                    "Generated more codes ({}) than data shreds ({})",
-                    num_coding,
-                    num_data
-                );
-            }
+            let num_coding = Self::calculate_num_coding_shreds(num_data, fec_rate);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
             let start_index = data_shred_batch[0].common_header.index;
@@ -716,8 +701,12 @@ impl Shredder {
         }
     }
 
-    fn calculate_num_coding_shreds(num_data_shreds: f32, fec_rate: f32) -> usize {
-        1.max((fec_rate * num_data_shreds) as usize)
+    fn calculate_num_coding_shreds(num_data_shreds: usize, fec_rate: f32) -> usize {
+        if num_data_shreds == 0 {
+            0
+        } else {
+            num_data_shreds.min(1.max((fec_rate * num_data_shreds as f32) as usize))
+        }
     }
 
     fn fill_in_missing_shreds(
@@ -965,13 +954,44 @@ pub fn verify_test_data_shred(
     }
 }
 
+pub fn sort_data_coding_into_fec_sets(
+    data_shreds: Vec<Shred>,
+    coding_shreds: Vec<Shred>,
+    fec_data: &mut BTreeMap<u32, Vec<Shred>>,
+    fec_coding: &mut BTreeMap<u32, Vec<Shred>>,
+) {
+    let mut data_slot_and_index = HashSet::new();
+    let mut coding_slot_and_index = HashSet::new();
+    for shred in data_shreds {
+        assert!(shred.is_data());
+        let key = (shred.slot(), shred.index());
+        // Make sure there are no duplicates for same key
+        assert!(!data_slot_and_index.contains(&key));
+        data_slot_and_index.insert(key);
+        let fec_entry = fec_data
+            .entry(shred.common_header.fec_set_index)
+            .or_insert(vec![]);
+        fec_entry.push(shred);
+    }
+    for shred in coding_shreds {
+        assert!(!shred.is_data());
+        let key = (shred.slot(), shred.index());
+        // Make sure there are no duplicates for same key
+        assert!(!coding_slot_and_index.contains(&key));
+        coding_slot_and_index.insert(key);
+        let fec_entry = fec_coding
+            .entry(shred.common_header.fec_set_index)
+            .or_insert(vec![]);
+        fec_entry.push(shred);
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use bincode::serialized_size;
     use matches::assert_matches;
     use solana_sdk::{hash::hash, shred_version, system_transaction};
-    use std::collections::HashSet;
     use std::convert::TryInto;
 
     #[test]
@@ -1061,7 +1081,7 @@ pub mod tests {
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
         let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
         let num_expected_coding_shreds =
-            Shredder::calculate_num_coding_shreds(num_expected_data_shreds as f32, fec_rate);
+            Shredder::calculate_num_coding_shreds(num_expected_data_shreds as usize, fec_rate);
 
         let start_index = 0;
         let (data_shreds, coding_shreds, next_index) =
@@ -1657,5 +1677,72 @@ pub mod tests {
                 parent_offset: 1000
             })
         );
+    }
+
+    #[test]
+    fn test_entries_to_data_shreds_different_size_coding() {
+        let keypair = Arc::new(Keypair::new());
+        let slot = 0x1234_5678_9abc_def0;
+        let parent_slot = slot - 5;
+        let shredder = Shredder::new(slot, parent_slot, 1.0, keypair.clone(), 0, 0)
+            .expect("Failed in creating shredder");
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+        let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
+
+        // Make enough entries for `MAX_DATA_SHREDS_PER_FEC_BLOCK + 2` shreds so one
+        // fec set will have `MAX_DATA_SHREDS_PER_FEC_BLOCK` shreds and the next
+        // will have 2 shreds.
+        assert!(MAX_DATA_SHREDS_PER_FEC_BLOCK > 2);
+        let num_entries = max_entries_per_n_shred(
+            &entry,
+            MAX_DATA_SHREDS_PER_FEC_BLOCK as u64 + 2,
+            Some(SIZE_OF_DATA_SHRED_PAYLOAD),
+        );
+        let entries: Vec<_> = (0..num_entries)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        // Run the shredder twice, generate data and coding shreds
+        let mut next_index = 0;
+        let mut fec_data = BTreeMap::new();
+        let mut fec_coding = BTreeMap::new();
+        for i in 0..2 {
+            let is_last = i == 1;
+            let (data_shreds, coding_shreds, new_next_index) =
+                shredder.entries_to_shreds(&entries, is_last, next_index);
+            assert_eq!(
+                data_shreds.len(),
+                MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2
+            );
+            next_index = new_next_index;
+            sort_data_coding_into_fec_sets(
+                data_shreds,
+                coding_shreds,
+                &mut fec_data,
+                &mut fec_coding,
+            );
+        }
+
+        for (fec_index, fec_set) in fec_data.values().enumerate() {
+            for (shred_index, shred) in fec_set.iter().enumerate() {
+                if fec_index == fec_set.len() - 1 && shred_index == fec_set.len() - 1 {
+                    assert!(shred.data_complete());
+                    assert!(shred.last_in_slot());
+                } else if shred_index == fec_set.len() - 1 {
+                    assert!(shred.data_complete());
+                } else {
+                    assert!(!shred.data_complete());
+                    assert!(!shred.last_in_slot());
+                }
+            }
+        }
     }
 }
