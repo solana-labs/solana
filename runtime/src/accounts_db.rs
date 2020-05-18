@@ -152,11 +152,10 @@ pub enum BankHashVerificationError {
 }
 
 /// Persistent storage structure holding the accounts
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct AccountStorageEntry {
     pub(crate) id: AppendVecId,
 
-    #[serde(skip)]
     pub(crate) slot: Slot,
 
     /// storage holding the accounts
