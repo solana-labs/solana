@@ -7010,4 +7010,46 @@ mod tests {
         }
         info!("results: {:?}", results);
     }
+
+    #[test]
+    fn test_bank_hash_consistency() {
+        let mut genesis_config = GenesisConfig::new(
+            &[(
+                Pubkey::new(&[42; 32]),
+                Account::new(1_000_000_000_000, 0, &system_program::id()),
+            )],
+            &[],
+        );
+        genesis_config.creation_time = 0;
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        loop {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            if bank.slot == 0 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "7MKHH6P7J5aQNN29Cr6aZQbEpQcXe8KTgchd4Suk9NCG"
+                );
+            }
+            if bank.slot == 1 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "CH6byTy6GEXyQk2EHpqfvw35Vi3ddxJA6QP6XMgtiqwe"
+                );
+            }
+            if bank.slot == 3 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "4kUw6sn94XLCjh5dBhtJec5W6qbzSuTHfzvXKbXtJtc7"
+                );
+            }
+            if bank.slot == 4 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "v6toDvZNfd2XWD3mNrZTBkyvji13PiBLeDDR5hfQLZ2"
+                );
+                break;
+            }
+            bank = Arc::new(new_from_parent(&bank));
+        }
+    }
 }
