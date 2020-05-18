@@ -139,8 +139,11 @@ impl ReplayStage {
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
 
         // Start the replay stage loop
-        let (lockouts_sender, commitment_service) =
-            AggregateCommitmentService::new(&exit, block_commitment_cache.clone());
+        let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
+            &exit,
+            block_commitment_cache.clone(),
+            subscriptions.clone(),
+        );
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
@@ -297,8 +300,6 @@ impl ReplayStage {
 
                     // Vote on a fork
                     if let Some(ref vote_bank) = vote_bank {
-                        subscriptions
-                            .notify_subscribers(block_commitment_cache.read().unwrap().slot());
                         if let Some(votable_leader) =
                             leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
                         {
@@ -2442,13 +2443,6 @@ pub(crate) mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
-        let (lockouts_sender, _) = AggregateCommitmentService::new(
-            &Arc::new(AtomicBool::new(false)),
-            block_commitment_cache.clone(),
-        );
 
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
@@ -2468,6 +2462,18 @@ pub(crate) mod tests {
             &[arc_bank0.clone()],
             vec![0],
         )));
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            block_commitment_cache.clone(),
+        ));
+        let (lockouts_sender, _) =
+            AggregateCommitmentService::new(&exit, block_commitment_cache.clone(), subscriptions);
 
         assert!(block_commitment_cache
             .read()
