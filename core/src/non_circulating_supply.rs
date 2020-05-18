@@ -15,6 +15,7 @@ pub fn calculate_non_circulating_supply(bank: Arc<Bank>) -> NonCirculatingSupply
     for key in non_circulating_accounts() {
         non_circulating_accounts_set.insert(key);
     }
+    let withdraw_authority_list = withdraw_authority();
 
     let clock = bank.clock();
     let stake_accounts = bank.get_program_accounts(Some(&solana_stake_program::id()));
@@ -23,14 +24,14 @@ pub fn calculate_non_circulating_supply(bank: Arc<Bank>) -> NonCirculatingSupply
         match stake_account {
             StakeState::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, &HashSet::default())
-                    || meta.authorized.withdrawer == withdraw_authority()
+                    || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
             StakeState::Stake(meta, _stake) => {
                 if meta.lockup.is_in_force(&clock, &HashSet::default())
-                    || meta.authorized.withdrawer == withdraw_authority()
+                    || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
@@ -60,11 +61,6 @@ solana_sdk::pubkeys!(
         "14FUT96s9swbmH7ZjpDvfEDywnAYy9zaNhv4xvezySGu",
         "HbZ5FfmKWNHC7uwk6TF1hVi6TCs7dtYfdjEcuPGgzFAg",
         "C7C8odR8oashR5Feyrq2tJKaXL18id1dSj2zbkDGL2C2",
-        "APnSR52EC1eH676m7qTBHUJ1nrGpHYpV7XKPxgRDD8gX",
-        "9ibqedFVnu5k4wo1mJRbH6KJ5HLBCyjpA9omPYkDeeT5",
-        "FopBKzQkG9pkyQqjdMFBLMQ995pSkjy83ziR4aism4c6",
-        "AiUHvJhTbMCcgFE2K26Ea9qCe74y3sFwqUt38iD5sfoR",
-        "3DndE3W53QdHSfBJiSJgzDKGvKJBoQLVmRHvy5LtqYfG",
         "Eyr9P5XsjK2NUKNCnfu39eqpGoiLFgVAv1LSQgMZCwiQ",
         "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ",
         "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S",
@@ -84,7 +80,10 @@ solana_sdk::pubkeys!(
 // Withdraw authority for autostaked accounts on mainnet-beta
 solana_sdk::pubkeys!(
     withdraw_authority,
-    "8CUUMKYNGxdgYio5CLHRHyzMEhhVRMcqefgE6dLqnVRK"
+    [
+        "8CUUMKYNGxdgYio5CLHRHyzMEhhVRMcqefgE6dLqnVRK",
+        "3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB",
+    ]
 );
 
 #[cfg(test)]
