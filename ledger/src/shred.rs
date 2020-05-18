@@ -504,15 +504,19 @@ impl Shredder {
                     .enumerate()
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
-                        let is_last_in_fec_set = (i % (MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-                            == MAX_DATA_SHREDS_PER_FEC_BLOCK as usize - 1)
-                            || shred_index == last_shred_index;
-                        let is_last_in_slot = shred_index == last_shred_index && is_last_in_slot;
 
                         // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds
                         // "FEC set index" is the index of first data shred in that FEC block
                         let fec_set_index =
                             shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
+
+                        let (is_last_in_fec_set, is_last_in_slot) = {
+                            if shred_index == last_shred_index {
+                                (true, is_last_in_slot)
+                            } else {
+                                (false, false)
+                            }
+                        };
 
                         let mut shred = Shred::new_from_data(
                             self.slot,
@@ -1618,14 +1622,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_entries_to_data_shreds_different_size_coding() {
-        let slot = 0x1234_5678_9abc_def0;
-        let parent_slot = slot - 5;
-        let keypair = Arc::new(Keypair::new());
-        setup_different_sized_fec_blocks(slot, parent_slot, keypair);
-    }
-
-    #[test]
     fn test_multi_fec_block_coding() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x1234_5678_9abc_def0;
@@ -1719,11 +1715,10 @@ pub mod tests {
         let slot = 0x1234_5678_9abc_def0;
         let parent_slot = slot - 5;
         let keypair = Arc::new(Keypair::new());
-        let (fec_data, fec_coding) =
+        let (fec_data, fec_coding, num_shreds_per_iter) =
             setup_different_sized_fec_blocks(slot, parent_slot, keypair.clone());
 
         let total_num_data_shreds: usize = fec_data.values().map(|x| x.len()).sum();
-
         // Test recovery
         for (fec_data_shreds, fec_coding_shreds) in fec_data.values().zip(fec_coding.values()) {
             let first_data_index = fec_data_shreds.first().unwrap().index() as usize;
@@ -1747,10 +1742,12 @@ pub mod tests {
             )
             .unwrap();
 
+            // Necessary in order to ensure the last shred in the slot
+            // is part of the recovered set, and that the below `index`
+            // cacluation in the loop  is correct
+            assert!(fec_data_shreds.len() % 2 == 0);
             for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
                 let index = first_data_index + (i * 2) + 1;
-                // position within fec set
-                let fec_set_index = index - first_data_index;
                 verify_test_data_shred(
                     &recovered_shred,
                     index.try_into().unwrap(),
@@ -1759,7 +1756,7 @@ pub mod tests {
                     &keypair.pubkey(),
                     true,
                     index == total_num_data_shreds - 1,
-                    fec_set_index == num_data - 1,
+                    index % num_shreds_per_iter == num_shreds_per_iter - 1,
                 );
             }
         }
@@ -1829,7 +1826,7 @@ pub mod tests {
         slot: Slot,
         parent_slot: Slot,
         keypair: Arc<Keypair>,
-    ) -> (BTreeMap<u32, Vec<Shred>>, BTreeMap<u32, Vec<Shred>>) {
+    ) -> (BTreeMap<u32, Vec<Shred>>, BTreeMap<u32, Vec<Shred>>, usize) {
         let shredder = Shredder::new(slot, parent_slot, 1.0, keypair, 0, 0)
             .expect("Failed in creating shredder");
         let keypair0 = Keypair::new();
@@ -1841,11 +1838,8 @@ pub mod tests {
         // fec set will have `MAX_DATA_SHREDS_PER_FEC_BLOCK` shreds and the next
         // will have 2 shreds.
         assert!(MAX_DATA_SHREDS_PER_FEC_BLOCK > 2);
-        let num_entries = max_entries_per_n_shred(
-            &entry,
-            MAX_DATA_SHREDS_PER_FEC_BLOCK as u64 + 2,
-            Some(SIZE_OF_DATA_SHRED_PAYLOAD),
-        );
+        let num_shreds_per_iter = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2;
+        let num_entries = max_entries_per_n_shred(&entry, num_shreds_per_iter as u64);
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();
@@ -1860,14 +1854,25 @@ pub mod tests {
         let mut next_index = 0;
         let mut fec_data = BTreeMap::new();
         let mut fec_coding = BTreeMap::new();
+
+        let total_num_data_shreds: usize = 2 * num_shreds_per_iter;
         for i in 0..2 {
             let is_last = i == 1;
             let (data_shreds, coding_shreds, new_next_index) =
                 shredder.entries_to_shreds(&entries, is_last, next_index);
-            assert_eq!(
-                data_shreds.len(),
-                MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2
-            );
+            for shred in &data_shreds {
+                if (shred.index() as usize) == total_num_data_shreds - 1 {
+                    assert!(shred.data_complete());
+                    assert!(shred.last_in_slot());
+                } else if (shred.index() as usize) % num_shreds_per_iter == num_shreds_per_iter - 1
+                {
+                    assert!(shred.data_complete());
+                } else {
+                    assert!(!shred.data_complete());
+                    assert!(!shred.last_in_slot());
+                }
+            }
+            assert_eq!(data_shreds.len(), num_shreds_per_iter as usize);
             next_index = new_next_index;
             sort_data_coding_into_fec_sets(
                 data_shreds,
@@ -1877,21 +1882,7 @@ pub mod tests {
             );
         }
 
-        for (fec_index, fec_set) in fec_data.values().enumerate() {
-            for (shred_index, shred) in fec_set.iter().enumerate() {
-                if fec_index == fec_set.len() - 1 && shred_index == fec_data.len() - 1 {
-                    assert!(shred.data_complete());
-                    assert!(shred.last_in_slot());
-                } else if shred_index == fec_set.len() - 1 {
-                    assert!(shred.data_complete());
-                } else {
-                    assert!(!shred.data_complete());
-                    assert!(!shred.last_in_slot());
-                }
-            }
-        }
-
         assert_eq!(fec_data.len(), fec_coding.len());
-        (fec_data, fec_coding)
+        (fec_data, fec_coding, num_shreds_per_iter)
     }
 }
