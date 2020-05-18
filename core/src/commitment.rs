@@ -123,7 +123,7 @@ impl BlockCommitmentCache {
         self.root
     }
 
-    fn highest_slot_with_confirmation(&self, confirmation_count: usize) -> Slot {
+    fn highest_slot_with_confirmation_count(&self, confirmation_count: usize) -> Slot {
         assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
         for slot in (self.root()..self.slot()).rev() {
             if let Some(count) = self.get_confirmation_count(slot) {
@@ -135,8 +135,8 @@ impl BlockCommitmentCache {
         self.root
     }
 
-    pub fn highest_slot_with_single_confirmation(&self) -> Slot {
-        self.highest_slot_with_confirmation(1)
+    pub fn highest_confirmed_slot(&self) -> Slot {
+        self.highest_slot_with_confirmation_count(1)
     }
 
     pub fn get_confirmation_count(&self, slot: Slot) -> Option<usize> {
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn test_highest_slot_with_single_confirmation() {
+    fn test_highest_confirmed_slot() {
         let bank = Arc::new(Bank::new(&GenesisConfig::default()));
         let bank_slot_5 = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 5));
         let ledger_path = get_tmp_ledger_path!();
@@ -536,10 +536,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(
-            block_commitment_cache.highest_slot_with_single_confirmation(),
-            2
-        );
+        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 2);
 
         // Build map with multiple slots at conf 1
         let mut block_commitment = HashMap::new();
@@ -555,10 +552,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(
-            block_commitment_cache.highest_slot_with_single_confirmation(),
-            2
-        );
+        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 2);
 
         // Build map with slot gaps
         let mut block_commitment = HashMap::new();
@@ -574,10 +568,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(
-            block_commitment_cache.highest_slot_with_single_confirmation(),
-            3
-        );
+        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 3);
 
         // Build map with no conf 1 slots, but one higher
         let mut block_commitment = HashMap::new();
@@ -593,10 +584,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(
-            block_commitment_cache.highest_slot_with_single_confirmation(),
-            1
-        );
+        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 1);
 
         // Build map with no conf 1 or higher slots
         let mut block_commitment = HashMap::new();
@@ -612,10 +600,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(
-            block_commitment_cache.highest_slot_with_single_confirmation(),
-            0
-        );
+        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 0);
     }
 
     #[test]

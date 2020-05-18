@@ -93,7 +93,7 @@ impl JsonRpcRequestProcessor {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_slot_with_single_confirmation();
+                .highest_confirmed_slot();
             debug!("RPC using confirmed slot: {:?}", slot);
             Ok(r_bank_forks.get(slot).cloned().unwrap())
         } else {
