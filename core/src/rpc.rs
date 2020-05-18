@@ -1586,6 +1586,7 @@ pub mod tests {
             bank.clone(),
             blockstore.clone(),
             0,
+            0,
         )));
 
         // Add timestamp vote to blockstore
@@ -2635,6 +2636,7 @@ pub mod tests {
             42,
             bank_forks.read().unwrap().working_bank(),
             blockstore.clone(),
+            0,
             0,
         )));
 

@@ -14,6 +14,14 @@ use std::{
     time::Duration,
 };
 
+#[derive(Default)]
+pub struct CacheSlotInfo {
+    pub current_slot: Slot,
+    pub node_root: Slot,
+    pub largest_confirmed_root: Slot,
+    pub highest_confirmed_slot: Slot,
+}
+
 pub type BlockCommitmentArray = [u64; MAX_LOCKOUT_HISTORY + 1];
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -53,6 +61,7 @@ pub struct BlockCommitmentCache {
     bank: Arc<Bank>,
     blockstore: Arc<Blockstore>,
     root: Slot,
+    highest_confirmed_slot: Slot,
 }
 
 impl std::fmt::Debug for BlockCommitmentCache {
@@ -77,6 +86,7 @@ impl BlockCommitmentCache {
         bank: Arc<Bank>,
         blockstore: Arc<Blockstore>,
         root: Slot,
+        highest_confirmed_slot: Slot,
     ) -> Self {
         Self {
             block_commitment,
@@ -85,6 +95,7 @@ impl BlockCommitmentCache {
             bank,
             blockstore,
             root,
+            highest_confirmed_slot,
         }
     }
 
@@ -96,6 +107,7 @@ impl BlockCommitmentCache {
             bank: Arc::new(Bank::default()),
             blockstore,
             root: Slot::default(),
+            highest_confirmed_slot: Slot::default(),
         }
     }
 
@@ -123,6 +135,10 @@ impl BlockCommitmentCache {
         self.root
     }
 
+    pub fn highest_confirmed_slot(&self) -> Slot {
+        self.highest_confirmed_slot
+    }
+
     fn highest_slot_with_confirmation_count(&self, confirmation_count: usize) -> Slot {
         assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
         for slot in (self.root()..self.slot()).rev() {
@@ -135,7 +151,7 @@ impl BlockCommitmentCache {
         self.root
     }
 
-    pub fn highest_confirmed_slot(&self) -> Slot {
+    fn calculate_highest_confirmed_slot(&self) -> Slot {
         self.highest_slot_with_confirmation_count(1)
     }
 
@@ -175,6 +191,7 @@ impl BlockCommitmentCache {
             largest_confirmed_root: Slot::default(),
             bank: Arc::new(Bank::default()),
             root: Slot::default(),
+            highest_confirmed_slot: Slot::default(),
         }
     }
 
@@ -193,6 +210,7 @@ impl BlockCommitmentCache {
             largest_confirmed_root: root,
             bank,
             root,
+            highest_confirmed_slot: root,
         }
     }
 
@@ -301,7 +319,10 @@ impl AggregateCommitmentService {
                 aggregation_data.bank,
                 block_commitment_cache.read().unwrap().blockstore.clone(),
                 aggregation_data.root,
+                aggregation_data.root,
             );
+            new_block_commitment.highest_confirmed_slot =
+                new_block_commitment.calculate_highest_confirmed_slot();
 
             let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
 
@@ -316,7 +337,12 @@ impl AggregateCommitmentService {
                 )
             );
 
-            subscriptions.notify_subscribers(w_block_commitment_cache.slot());
+            subscriptions.notify_subscribers(CacheSlotInfo {
+                current_slot: w_block_commitment_cache.slot(),
+                node_root: w_block_commitment_cache.root(),
+                largest_confirmed_root: w_block_commitment_cache.largest_confirmed_root(),
+                highest_confirmed_slot: w_block_commitment_cache.highest_confirmed_slot(),
+            });
         }
     }
 
@@ -443,7 +469,7 @@ mod tests {
         block_commitment.entry(1).or_insert(cache1);
         block_commitment.entry(2).or_insert(cache2);
         let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, 50, bank, blockstore, 0);
+            BlockCommitmentCache::new(block_commitment, 0, 50, bank, blockstore, 0, 0);
 
         assert_eq!(block_commitment_cache.get_confirmation_count(0), Some(2));
         assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
@@ -476,6 +502,7 @@ mod tests {
             50,
             bank,
             blockstore,
+            0,
             0,
         );
 
@@ -534,9 +561,10 @@ mod tests {
             bank_slot_5.clone(),
             blockstore.clone(),
             0,
+            0,
         );
 
-        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 2);
+        assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 2);
 
         // Build map with multiple slots at conf 1
         let mut block_commitment = HashMap::new();
@@ -550,9 +578,10 @@ mod tests {
             bank_slot_5.clone(),
             blockstore.clone(),
             0,
+            0,
         );
 
-        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 2);
+        assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 2);
 
         // Build map with slot gaps
         let mut block_commitment = HashMap::new();
@@ -566,9 +595,10 @@ mod tests {
             bank_slot_5.clone(),
             blockstore.clone(),
             0,
+            0,
         );
 
-        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 3);
+        assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 3);
 
         // Build map with no conf 1 slots, but one higher
         let mut block_commitment = HashMap::new();
@@ -582,9 +612,10 @@ mod tests {
             bank_slot_5.clone(),
             blockstore.clone(),
             0,
+            0,
         );
 
-        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 1);
+        assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 1);
 
         // Build map with no conf 1 or higher slots
         let mut block_commitment = HashMap::new();
@@ -598,9 +629,10 @@ mod tests {
             bank_slot_5.clone(),
             blockstore.clone(),
             0,
+            0,
         );
 
-        assert_eq!(block_commitment_cache.highest_confirmed_slot(), 0);
+        assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 0);
     }
 
     #[test]
