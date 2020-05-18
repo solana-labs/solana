@@ -19,6 +19,7 @@ pub struct AccountsIndex<T> {
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
+    pub previous_uncleaned_roots: HashSet<Slot>,
 }
 
 impl<'a, T: 'a + Clone> AccountsIndex<T> {
@@ -229,12 +230,22 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     pub fn add_root(&mut self, slot: Slot) {
         self.roots.insert(slot);
         self.uncleaned_roots.insert(slot);
+        self.previous_uncleaned_roots.insert(slot);
     }
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
     pub fn clean_dead_slot(&mut self, slot: Slot) {
         self.roots.remove(&slot);
         self.uncleaned_roots.remove(&slot);
+        self.previous_uncleaned_roots.remove(&slot);
+    }
+
+    pub fn reset_uncleaned_roots(&mut self) -> Vec<Slot> {
+        let empty = HashSet::new();
+        let new_previous = std::mem::replace(&mut self.uncleaned_roots, empty);
+        std::mem::replace(&mut self.previous_uncleaned_roots, new_previous)
+            .into_iter()
+            .collect()
     }
 }
 

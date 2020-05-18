@@ -537,9 +537,15 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
     }
 
-    fn clear_uncleaned_roots(&self) {
-        let mut accounts_index = self.accounts_index.write().unwrap();
-        accounts_index.uncleaned_roots.clear();
+    fn reset_uncleaned_roots(&self) {
+        let previous_roots = {
+            let mut accounts_index = self.accounts_index.write().unwrap();
+            accounts_index.reset_uncleaned_roots()
+        };
+        {
+            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+            candidates.extend(previous_roots);
+        }
     }
 
     fn inc_store_counts(
@@ -655,7 +661,7 @@ impl AccountsDB {
         if !purges_in_root.is_empty() {
             self.clean_old_rooted_accounts(purges_in_root);
         }
-        self.clear_uncleaned_roots();
+        self.reset_uncleaned_roots();
         clean_old_rooted.stop();
 
         let mut store_counts_time = Measure::start("store_counts");
@@ -878,18 +884,14 @@ impl AccountsDB {
 
     // Infinitely returns rooted roots in cyclic order
     fn next_shrink_slot(&self) -> Option<Slot> {
-        let next = {
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            candidates.pop()
-        };
+        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+        let next = candidates.pop();
 
         if next.is_some() {
             next
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
-
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
             *candidates = new_all_slots;
 
             next
