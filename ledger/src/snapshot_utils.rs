@@ -727,7 +727,6 @@ where
                 ),
             }?;
 
-            bankrc.accounts.accounts_db.generate_index();
             Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)
                 .unwrap()
                 .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);

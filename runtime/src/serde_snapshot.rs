@@ -365,6 +365,7 @@ where
     accounts_db
         .write_version
         .fetch_add(version, Ordering::Relaxed);
+    accounts_db.generate_index();
     Ok(accounts_db)
 }
 
