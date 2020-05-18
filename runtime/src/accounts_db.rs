@@ -1892,7 +1892,7 @@ pub mod tests {
     use crate::{
         accounts_index::RefCount,
         append_vec::AccountMeta,
-        serde_utils::{accountsdb_from_stream, accountsdb_to_stream},
+        serde_snapshot::{accountsdb_from_stream, accountsdb_to_stream},
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};

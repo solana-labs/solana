@@ -10,7 +10,7 @@ use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     bank::{Bank, BankSlotDelta},
-    serde_utils::{
+    serde_snapshot::{
         context_bankrc_from_stream, context_bankrc_to_stream, SerdeContextV1_1_0,
         SerdeContextV1_1_1, SnapshotStorage, SnapshotStorages,
     },

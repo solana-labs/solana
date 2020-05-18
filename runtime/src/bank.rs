@@ -5700,7 +5700,7 @@ mod tests {
         let mut buf = vec![];
         let mut writer = Cursor::new(&mut buf);
         serialize_into(&mut writer, &bank2).unwrap();
-        crate::serde_utils::bankrc_to_stream(
+        crate::serde_snapshot::bankrc_to_stream(
             &mut std::io::BufWriter::new(&mut writer),
             &bank2.rc,
             &snapshot_storages,
@@ -5719,7 +5719,7 @@ mod tests {
         let copied_accounts = TempDir::new().unwrap();
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
         dbank.set_bank_rc(
-            crate::serde_utils::bankrc_from_stream(
+            crate::serde_snapshot::bankrc_from_stream(
                 &dbank_paths,
                 dbank.slot(),
                 &mut reader,
