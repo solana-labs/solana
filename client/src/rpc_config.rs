@@ -8,6 +8,12 @@ pub struct RpcSignatureStatusConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionConfig {
+    pub sig_verify: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum RpcLargestAccountsFilter {
     Circulating,
     NonCirculating,

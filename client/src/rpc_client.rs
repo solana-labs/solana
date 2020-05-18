@@ -119,6 +119,19 @@ impl RpcClient {
         }
     }
 
+    pub fn simulate_transaction(
+        &self,
+        transaction: &Transaction,
+        sig_verify: bool,
+    ) -> RpcResult<TransactionStatus> {
+        let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
+        self.send(
+            RpcRequest::SimulateTransaction,
+            json!([serialized_encoded, { "sigVerify": sig_verify }]),
+            0,
+        )
+    }
+
     pub fn get_signature_status(
         &self,
         signature: &Signature,
