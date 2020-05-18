@@ -333,9 +333,9 @@ checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
 name = "byte-unit"
-version = "3.0.3"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6894a79550807490d9f19a138a6da0f8830e70c83e83402dd23f16fd6c479056"
+checksum = "48a353b2b73cff0adf26964f62a327d1320faa2a6ac5f84434759f69227ba67b"
 
 [[package]]
 name = "bytecount"
