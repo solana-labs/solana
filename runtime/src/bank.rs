@@ -14,9 +14,6 @@ use crate::{
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
     rent_collector::RentCollector,
-    serde_utils::{
-        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
-    },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
@@ -271,23 +268,15 @@ pub struct Bank {
     hard_forks: Arc<RwLock<HardForks>>,
 
     /// The number of transactions processed without error
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     transaction_count: AtomicU64,
 
     /// Bank tick height
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     tick_height: AtomicU64,
 
     /// The number of signatures from valid transactions in this slot
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     signature_count: AtomicU64,
 
     /// Total capitalization, used to calculate inflation
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     capitalization: AtomicU64,
 
     // Bank max_tick_height
@@ -324,8 +313,6 @@ pub struct Bank {
     collector_id: Pubkey,
 
     /// Fees that have been collected
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     collector_fees: AtomicU64,
 
     /// Latest transaction fees for transactions processed by this bank
@@ -335,8 +322,6 @@ pub struct Bank {
     fee_rate_governor: FeeRateGovernor,
 
     /// Rent that have been collected
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
     collected_rent: AtomicU64,
 
     /// latest rent collector, knows the epoch
@@ -360,8 +345,6 @@ pub struct Bank {
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
-    #[serde(serialize_with = "serialize_atomicbool")]
-    #[serde(deserialize_with = "deserialize_atomicbool")]
     is_delta: AtomicBool,
 
     /// The Message processor

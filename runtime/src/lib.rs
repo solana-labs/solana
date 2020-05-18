@@ -13,7 +13,6 @@ pub mod message_processor;
 mod native_loader;
 pub mod nonce_utils;
 pub mod rent_collector;
-mod serde_utils;
 pub mod stakes;
 pub mod status_cache;
 mod system_instruction_processor;
