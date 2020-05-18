@@ -98,7 +98,8 @@ Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 * `{"commitment":"max"}` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
 * `{"commitment":"root"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
-* `{"commitment":"recent"}` - the node will query its most recent bank state
+* `{"commitment":"single"}` - the node will query the most recent bank having reached 1 confirmation
+* `{"commitment":"recent"}` - the node will query its most recent bank
 
 The commitment parameter should be included as the last element in the `params` array:
 
