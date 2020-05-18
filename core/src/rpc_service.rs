@@ -43,6 +43,7 @@ struct RpcRequestMiddleware {
     snapshot_config: Option<SnapshotConfig>,
     cluster_info: Arc<ClusterInfo>,
     trusted_validators: Option<HashSet<Pubkey>>,
+    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl RpcRequestMiddleware {
@@ -51,6 +52,7 @@ impl RpcRequestMiddleware {
         snapshot_config: Option<SnapshotConfig>,
         cluster_info: Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         Self {
             ledger_path,
@@ -61,6 +63,7 @@ impl RpcRequestMiddleware {
             snapshot_config,
             cluster_info,
             trusted_validators,
+            bank_forks,
         }
     }
 
@@ -218,7 +221,18 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 };
             }
         }
-        if self.is_get_path(request.uri().path()) {
+
+        if let Some(result) = process_rest(&self.bank_forks, request.uri().path()) {
+            RequestMiddlewareAction::Respond {
+                should_validate_hosts: true,
+                response: Box::new(jsonrpc_core::futures::future::ok(
+                    hyper::Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .body(hyper::Body::from(result))
+                        .unwrap(),
+                )),
+            }
+        } else if self.is_get_path(request.uri().path()) {
             self.get(request.uri().path())
         } else if request.uri().path() == "/health" {
             RequestMiddlewareAction::Respond {
@@ -236,6 +250,27 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 request,
             }
         }
+    }
+}
+
+fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<String> {
+    match path {
+        "/v0/circulating-supply" => {
+            let r_bank_forks = bank_forks.read().unwrap();
+            let bank = r_bank_forks.root_bank();
+            let total_supply = bank.capitalization();
+            let non_circulating_supply =
+                crate::non_circulating_supply::calculate_non_circulating_supply(bank.clone())
+                    .lamports;
+            Some(format!("{}", total_supply - non_circulating_supply))
+        }
+        "/v0/total-supply" => {
+            let r_bank_forks = bank_forks.read().unwrap();
+            let bank = r_bank_forks.root_bank();
+            let total_supply = bank.capitalization();
+            Some(format!("{}", total_supply))
+        }
+        _ => None,
     }
 }
 
@@ -258,7 +293,7 @@ impl JsonRpcService {
         info!("rpc configuration: {:?}", config);
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             config,
-            bank_forks,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit.clone(),
@@ -282,6 +317,7 @@ impl JsonRpcService {
                     snapshot_config,
                     cluster_info.clone(),
                     trusted_validators,
+                    bank_forks.clone(),
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
@@ -411,11 +447,39 @@ mod tests {
         rpc_service.join().unwrap();
     }
 
+    fn create_bank_forks() -> Arc<RwLock<BankForks>> {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)))
+    }
+
+    #[test]
+    fn test_process_rest_api() {
+        let bank_forks = create_bank_forks();
+
+        assert_eq!(None, process_rest(&bank_forks, "not-a-supported-rest-api"));
+        assert_eq!(
+            Some("10127".to_string()),
+            process_rest(&bank_forks, "/v0/circulating-supply")
+        );
+        assert_eq!(
+            Some("10127".to_string()),
+            process_rest(&bank_forks, "/v0/total-supply")
+        );
+    }
+
     #[test]
     fn test_is_get_path() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
+        let bank_forks = create_bank_forks();
 
-        let rrm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
+        let rrm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
+            None,
+            cluster_info.clone(),
+            None,
+            bank_forks.clone(),
+        );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
@@ -426,6 +490,7 @@ mod tests {
             }),
             cluster_info,
             None,
+            bank_forks,
         );
 
         assert!(rrm.is_get_path("/genesis.tar.bz2"));
@@ -452,7 +517,13 @@ mod tests {
     fn test_health_check_with_no_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info, None);
+        let rm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
+            None,
+            cluster_info,
+            None,
+            create_bank_forks(),
+        );
         assert_eq!(rm.health_check(), "ok");
     }
 
@@ -466,6 +537,7 @@ mod tests {
             None,
             cluster_info.clone(),
             Some(trusted_validators.clone().into_iter().collect()),
+            create_bank_forks(),
         );
 
         // No account hashes for this node or any trusted validators == "behind"
