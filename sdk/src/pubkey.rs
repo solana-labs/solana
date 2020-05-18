@@ -73,21 +73,18 @@ impl Pubkey {
     pub fn create_with_seed(
         base: &Pubkey,
         seed: &str,
-        program_id: &Pubkey,
+        owner: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
         if seed.len() > MAX_SEED_LEN {
             return Err(PubkeyError::MaxSeedLengthExceeded);
         }
 
         Ok(Pubkey::new(
-            hashv(&[base.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
+            hashv(&[base.as_ref(), seed.as_ref(), owner.as_ref()]).as_ref(),
         ))
     }
 
-    pub fn create_program_address(
-        seeds: &[&str],
-        program_id: &Pubkey,
-    ) -> Result<Pubkey, PubkeyError> {
+    pub fn create_program_address(seeds: &[&str], owner: &Pubkey) -> Result<Pubkey, PubkeyError> {
         let mut hasher = Hasher::default();
         for seed in seeds.iter() {
             if seed.len() > MAX_SEED_LEN {
@@ -95,7 +92,7 @@ impl Pubkey {
             }
             hasher.hash(seed.as_ref());
         }
-        hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
+        hasher.hashv(&[owner.as_ref(), "ProgramDerivedAddress".as_ref()]);
 
         Ok(Pubkey::new(hashv(&[hasher.result().as_ref()]).as_ref()))
     }
