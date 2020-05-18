@@ -6,7 +6,6 @@ use crate::arg_parser::parse_args;
 use crate::args::{
     resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs, SetLockupArgs,
 };
-use itertools::Itertools;
 use solana_cli_config::Config;
 use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
@@ -14,7 +13,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::Pubkey,
-    signature::{Signature, Signer},
+    signature::{unique_signers, Signature, Signer},
     signers::Signers,
     transaction::Transaction,
 };
@@ -63,10 +62,6 @@ fn get_lockups(
         .into_iter()
         .map(|pubkey| get_lockup(client, &pubkey).map(|bal| (pubkey, bal)))
         .collect()
-}
-
-fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
-    signers.into_iter().unique_by(|s| s.pubkey()).collect_vec()
 }
 
 fn process_new_stake_account(
