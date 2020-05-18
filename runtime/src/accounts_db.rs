@@ -166,7 +166,7 @@ pub struct AccountStorageEntry {
     ///  any accounts in it
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
-    pub(crate) count_and_status: RwLock<(usize, AccountStorageStatus)>,
+    count_and_status: RwLock<(usize, AccountStorageStatus)>,
 }
 
 impl Default for AccountStorageEntry {
@@ -186,10 +186,19 @@ impl AccountStorageEntry {
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
-        AccountStorageEntry {
+        Self {
             id,
             slot,
             accounts,
+            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+        }
+    }
+
+    pub(crate) fn new_empty_map(id: AppendVecId, accounts_current_len: usize) -> Self {
+        Self {
+            id,
+            slot: 0,
+            accounts: AppendVec::new_empty_map(accounts_current_len),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
         }
     }
@@ -1800,7 +1809,7 @@ impl AccountsDB {
         }
     }
 
-    pub(crate) fn generate_index(&self) {
+    pub fn generate_index(&self) {
         let storage = self.storage.read().unwrap();
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();

@@ -5,7 +5,6 @@ use {
             AccountStorage, AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId,
             BankHashInfo, SlotStores,
         },
-        accounts_index::Ancestors,
         append_vec::AppendVec,
         bank::BankRc,
     },
@@ -17,7 +16,7 @@ use {
         de::{DeserializeOwned, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::clock::Slot,
     std::{
         cmp::min,
         collections::HashMap,
@@ -69,8 +68,6 @@ fn accountsdb_to_io_error<T: ToString>(error: T) -> IoError {
 pub fn bankrc_from_stream<R, P>(
     account_paths: &[PathBuf],
     slot: Slot,
-    ancestors: &Ancestors,
-    frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
 ) -> std::result::Result<BankRc, IoError>
@@ -81,8 +78,6 @@ where
     context_bankrc_from_stream::<DefaultSerdeContext, R, P>(
         account_paths,
         slot,
-        ancestors,
-        frozen_account_pubkeys,
         stream,
         stream_append_vecs_path,
     )
@@ -102,8 +97,6 @@ where
 #[cfg(test)]
 pub(crate) fn accounts_from_stream<R, P>(
     account_paths: &[PathBuf],
-    ancestors: &Ancestors,
-    frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
 ) -> std::result::Result<Accounts, IoError>
@@ -113,8 +106,6 @@ where
 {
     context_accounts_from_stream::<DefaultSerdeContext, R, P>(
         account_paths,
-        ancestors,
-        frozen_account_pubkeys,
         stream,
         stream_append_vecs_path,
     )
@@ -158,8 +149,6 @@ where
 pub fn context_bankrc_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
     slot: Slot,
-    ancestors: &Ancestors,
-    frozen_account_pubkeys: &[Pubkey],
     mut stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
 ) -> std::result::Result<BankRc, IoError>
@@ -172,13 +161,8 @@ where
     let _len: usize = deserialize_from(&mut stream).map_err(bankrc_to_io_error)?;
 
     // read and deserialise the accounts database directly from the stream
-    let accounts = context_accounts_from_stream::<C, R, P>(
-        account_paths,
-        ancestors,
-        frozen_account_pubkeys,
-        stream,
-        stream_append_vecs_path,
-    )?;
+    let accounts =
+        context_accounts_from_stream::<C, R, P>(account_paths, stream, stream_append_vecs_path)?;
 
     Ok(BankRc {
         accounts: Arc::new(accounts),
@@ -238,8 +222,6 @@ where
 
 pub(crate) fn context_accounts_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
-    ancestors: &Ancestors,
-    frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
 ) -> std::result::Result<Accounts, IoError>
@@ -248,10 +230,8 @@ where
     R: Read,
     P: AsRef<Path>,
 {
-    let mut accounts_db =
+    let accounts_db =
         context_accountsdb_from_stream::<C, R, P>(stream, account_paths, stream_append_vecs_path)?;
-
-    accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
 
     Ok(Accounts {
         accounts_db: Arc::new(accounts_db),
@@ -385,7 +365,6 @@ where
     accounts_db
         .write_version
         .fetch_add(version, Ordering::Relaxed);
-    accounts_db.generate_index();
     Ok(accounts_db)
 }
 
@@ -496,10 +475,7 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
 
 impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
     fn into(self) -> AccountStorageEntry {
-        let mut ase = AccountStorageEntry::default();
-        ase.id = self.id;
-        ase.accounts = self.accounts.into();
-        ase
+        AccountStorageEntry::new_empty_map(self.id, self.accounts.current_len)
     }
 }
 
@@ -590,11 +566,7 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_1 {
 
 impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_1_1 {
     fn into(self) -> AccountStorageEntry {
-        AccountStorageEntry {
-            id: self.id,
-            accounts: AppendVec::new_empty_map(self.accounts_current_len),
-            ..AccountStorageEntry::default()
-        }
+        AccountStorageEntry::new_empty_map(self.id, self.accounts_current_len)
     }
 }
 
@@ -608,10 +580,7 @@ mod tests {
         },
         rand::{thread_rng, Rng},
         solana_sdk::{account::Account, pubkey::Pubkey},
-        std::{
-            collections::HashMap,
-            io::{BufReader, Cursor},
-        },
+        std::io::{BufReader, Cursor},
         tempfile::TempDir,
     };
 
@@ -656,14 +625,8 @@ mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = accounts_from_stream(
-            &daccounts_paths,
-            &HashMap::default(),
-            &[],
-            &mut reader,
-            copied_accounts.path(),
-        )
-        .unwrap();
+        let daccounts =
+            accounts_from_stream(&daccounts_paths, &mut reader, copied_accounts.path()).unwrap();
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
     }

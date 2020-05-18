@@ -23,6 +23,7 @@ use std::{
     path::{Path, PathBuf},
     process::ExitStatus,
     str::FromStr,
+    sync::Arc,
 };
 use tar::Archive;
 use tempfile::TempDir;
@@ -37,6 +38,8 @@ const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_1_0: &str = "1.1.0";
 const VERSION_STRING_V1_1_1: &str = "1.1.1";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_1_1;
+
+type DefaultSerdeContextType = SerdeContextV1_1_1;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -418,93 +421,6 @@ where
     Ok(ret)
 }
 
-#[allow(clippy::type_complexity)]
-fn create_versioned_bank_snapshot_serializer<'a>(
-    snapshot_version: SnapshotVersion,
-    bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
-) -> Result<Box<dyn Fn(&mut BufWriter<File>) -> Result<()> + 'a>> {
-    match snapshot_version {
-        SnapshotVersion::V1_1_0 => Ok(Box::new(
-            move |stream: &mut BufWriter<File>| -> Result<()> {
-                serialize_into(stream.by_ref(), bank)?;
-                context_bankrc_to_stream::<SerdeContextV1_1_0, _>(
-                    stream.by_ref(),
-                    &bank.rc,
-                    snapshot_storages,
-                )?;
-                Ok(())
-            },
-        )),
-        SnapshotVersion::V1_1_1 => Ok(Box::new(
-            move |stream: &mut BufWriter<File>| -> Result<()> {
-                serialize_into(stream.by_ref(), bank)?;
-                context_bankrc_to_stream::<SerdeContextV1_1_1, _>(
-                    stream.by_ref(),
-                    &bank.rc,
-                    snapshot_storages,
-                )?;
-                Ok(())
-            },
-        )),
-        //If additional snapshot versions were defined but not implemented...
-        //_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version.to_string()))),
-    }
-}
-
-#[allow(clippy::type_complexity)]
-fn create_versioned_bank_snapshot_deserializer<'a, P: AsRef<Path>>(
-    snapshot_version: &str,
-    account_paths: &'a [PathBuf],
-    frozen_account_pubkeys: &'a [Pubkey],
-    append_vecs_path: &'a P,
-    genesis_config: &GenesisConfig,
-) -> Result<Box<dyn Fn(&mut BufReader<File>) -> Result<Bank> + 'a>> {
-    let operating_mode = genesis_config.operating_mode;
-    match SnapshotVersion::maybe_from_string(snapshot_version) {
-        Some(SnapshotVersion::V1_1_0) => Ok(Box::new(move |stream: &mut BufReader<File>| {
-            let mut bank: Bank = bincode::config()
-                .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-                .deserialize_from(stream.by_ref())?;
-            bank.operating_mode = Some(operating_mode);
-            info!("Rebuilding accounts...");
-            let rc = context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
-                account_paths,
-                bank.slot(),
-                &bank.ancestors,
-                frozen_account_pubkeys,
-                stream.by_ref(),
-                &append_vecs_path,
-            )?;
-            bank.rc = rc;
-            bank.finish_init();
-            Ok(bank)
-        })),
-        Some(SnapshotVersion::V1_1_1) => Ok(Box::new(move |stream: &mut BufReader<File>| {
-            let mut bank: Bank = bincode::config()
-                .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-                .deserialize_from(stream.by_ref())?;
-            bank.operating_mode = Some(operating_mode);
-            info!("Rebuilding accounts...");
-            let rc = context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
-                account_paths,
-                bank.slot(),
-                &bank.ancestors,
-                frozen_account_pubkeys,
-                stream.by_ref(),
-                &append_vecs_path,
-            )?;
-            bank.rc = rc;
-            bank.finish_init();
-            Ok(bank)
-        })),
-        _ => Err(get_io_error(&format!(
-            "unsupported snapshot version: {}",
-            snapshot_version
-        ))),
-    }
-}
-
 pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
@@ -523,11 +439,15 @@ pub fn add_snapshot<P: AsRef<Path>>(
     );
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
-    let bank_snapshot_serializer = create_versioned_bank_snapshot_serializer(
-        DEFAULT_SNAPSHOT_VERSION,
-        bank,
-        snapshot_storages,
-    )?;
+    let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
+        serialize_into(stream.by_ref(), bank)?;
+        context_bankrc_to_stream::<DefaultSerdeContextType, _>(
+            stream.by_ref(),
+            &bank.rc,
+            snapshot_storages,
+        )?;
+        Ok(())
+    };
     let consumed_size =
         serialize_snapshot_data_file(&snapshot_bank_file_path, bank_snapshot_serializer)?;
     bank_serialize.stop();
@@ -768,6 +688,13 @@ where
 {
     info!("snapshot version: {}", snapshot_version);
 
+    let snapshot_version_enum =
+        SnapshotVersion::maybe_from_string(snapshot_version).ok_or_else(|| {
+            get_io_error(&format!(
+                "unsupported snapshot version: {}",
+                snapshot_version
+            ))
+        })?;
     let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
     if snapshot_paths.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
@@ -777,15 +704,40 @@ where
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
-    let bank_snapshot_deserializer = create_versioned_bank_snapshot_deserializer(
-        snapshot_version,
-        account_paths,
-        frozen_account_pubkeys,
-        &append_vecs_path,
-        genesis_config,
-    )?;
-    let bank =
-        deserialize_snapshot_data_file(&root_paths.snapshot_file_path, bank_snapshot_deserializer)?;
+    let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
+        let mut bank: Bank = bincode::config()
+            .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .deserialize_from(&mut stream)?;
+
+        info!("Rebuilding accounts...");
+
+        {
+            let mut bankrc = match snapshot_version_enum {
+                SnapshotVersion::V1_1_0 => context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
+                    account_paths,
+                    bank.slot(),
+                    &mut stream,
+                    &append_vecs_path,
+                ),
+                SnapshotVersion::V1_1_1 => context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
+                    account_paths,
+                    bank.slot(),
+                    &mut stream,
+                    &append_vecs_path,
+                ),
+            }?;
+
+            bankrc.accounts.accounts_db.generate_index();
+            Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)
+                .unwrap()
+                .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
+            bank.rc = bankrc;
+        }
+
+        bank.operating_mode = Some(genesis_config.operating_mode);
+        bank.finish_init();
+        Ok(bank)
+    })?;
 
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
