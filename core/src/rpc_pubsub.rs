@@ -355,7 +355,7 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        commitment::{BlockCommitment, BlockCommitmentCache},
+        commitment::{BlockCommitmentCache, CacheSlotInfo},
         rpc_subscriptions::tests::robust_poll_or_panic,
     };
     use crossbeam_channel::unbounded;
@@ -381,7 +381,6 @@ mod tests {
     };
     use solana_vote_program::vote_transaction;
     use std::{
-        collections::HashMap,
         sync::{atomic::AtomicBool, RwLock},
         thread::sleep,
         time::Duration,
@@ -391,15 +390,17 @@ mod tests {
         bank_forks: &Arc<RwLock<BankForks>>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
-        slot: Slot,
+        current_slot: Slot,
     ) -> transaction::Result<()> {
         bank_forks
             .write()
             .unwrap()
-            .get(slot)
+            .get(current_slot)
             .unwrap()
             .process_transaction(tx)?;
-        subscriptions.notify_subscribers(slot);
+        let mut cache_slot_info = CacheSlotInfo::default();
+        cache_slot_info.current_slot = current_slot;
+        subscriptions.notify_subscribers(cache_slot_info);
         Ok(())
     }
 
@@ -714,7 +715,8 @@ mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        rpc.subscriptions.notify_subscribers(0);
+        rpc.subscriptions
+            .notify_subscribers(CacheSlotInfo::default());
         // allow 200ms for notification thread to wake
         std::thread::sleep(Duration::from_millis(200));
         let _panic = robust_poll_or_panic(receiver);
@@ -766,23 +768,17 @@ mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        rpc.subscriptions.notify_subscribers(1);
+        let mut cache_slot_info = CacheSlotInfo::default();
+        cache_slot_info.current_slot = 1;
+        rpc.subscriptions.notify_subscribers(cache_slot_info);
 
-        let bank1 = bank_forks.read().unwrap()[1].clone();
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
-        bank_forks.write().unwrap().insert(bank2);
-        bank_forks.write().unwrap().set_root(1, &None, None);
-        let bank2 = bank_forks.read().unwrap()[2].clone();
-
-        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
-        block_commitment.insert(0, BlockCommitment::default());
-        let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 1, 10, bank2, blockstore, 1);
-        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
-        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
-        drop(w_block_commitment_cache);
-
-        rpc.subscriptions.notify_subscribers(2);
+        let cache_slot_info = CacheSlotInfo {
+            current_slot: 2,
+            node_root: 1,
+            largest_confirmed_root: 1,
+            highest_confirmed_slot: 1,
+        };
+        rpc.subscriptions.notify_subscribers(cache_slot_info);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",

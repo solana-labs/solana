@@ -98,7 +98,8 @@ Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 * `{"commitment":"max"}` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
 * `{"commitment":"root"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
-* `{"commitment":"recent"}` - the node will query its most recent bank state
+* `{"commitment":"single"}` - the node will query the most recent bank having reached 1 confirmation
+* `{"commitment":"recent"}` - the node will query its most recent bank
 
 The commitment parameter should be included as the last element in the `params` array:
 
@@ -1163,25 +1164,11 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### Subscription Websocket
 
-After connect to the RPC PubSub websocket at `ws://<ADDRESS>/`:
+After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
 * Submit subscription requests to the websocket using the methods below
 * Multiple subscriptions may be active at once
-* All subscriptions take an optional `confirmations` parameter, which defines
-
-  how many confirmed blocks the node should wait before sending a notification.
-
-  The greater the number, the more likely the notification is to represent
-
-  consensus across the cluster, and the less likely it is to be affected by
-
-  forking or rollbacks. If unspecified, the default value is 0; the node will
-
-  send a notification as soon as it witnesses the event. The maximum
-
-  `confirmations` wait length is the cluster's `MAX_LOCKOUT_HISTORY`, which
-
-  represents the economic finality of the chain.
+* Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how . For subscriptions, if commitment is unspecified, the default value is `recent`.
 
 ### accountSubscribe
 
@@ -1190,7 +1177,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 #### Parameters:
 
 * `<string>` - account Pubkey, as base-58 encoded string
-* `<u64>` - optional, number of confirmed blocks to wait before notification.
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
@@ -1245,7 +1232,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 #### Parameters:
 
 * `<string>` - program\_id Pubkey, as base-58 encoded string
-* `<u64>` - optional, number of confirmed blocks to wait before notification.
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
@@ -1303,7 +1290,7 @@ Subscribe to a transaction signature to receive notification when the transactio
 #### Parameters:
 
 * `<string>` - Transaction Signature, as base-58 encoded string
-* `<integer>` - optional, number of confirmed blocks to wait before notification.
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 

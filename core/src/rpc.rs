@@ -79,28 +79,42 @@ impl JsonRpcRequestProcessor {
     fn bank(&self, commitment: Option<CommitmentConfig>) -> Result<Arc<Bank>> {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
-        if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Recent {
-            let bank = r_bank_forks.working_bank();
-            debug!("RPC using working_bank: {:?}", bank.slot());
-            Ok(bank)
-        } else if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Root {
-            let slot = r_bank_forks.root();
-            debug!("RPC using node root: {:?}", slot);
-            Ok(r_bank_forks.get(slot).cloned().unwrap())
-        } else {
-            let cluster_root = self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .largest_confirmed_root();
-            debug!("RPC using block: {:?}", cluster_root);
-            r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
-                RpcCustomError::NonexistentClusterRoot {
-                    cluster_root,
-                    node_root: r_bank_forks.root(),
-                }
-                .into()
-            })
+
+        match commitment {
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Recent => {
+                let bank = r_bank_forks.working_bank();
+                debug!("RPC using working_bank: {:?}", bank.slot());
+                Ok(bank)
+            }
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Root => {
+                let slot = r_bank_forks.root();
+                debug!("RPC using node root: {:?}", slot);
+                Ok(r_bank_forks.get(slot).cloned().unwrap())
+            }
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Single => {
+                let slot = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .highest_confirmed_slot();
+                debug!("RPC using confirmed slot: {:?}", slot);
+                Ok(r_bank_forks.get(slot).cloned().unwrap())
+            }
+            _ => {
+                let cluster_root = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root();
+                debug!("RPC using block: {:?}", cluster_root);
+                r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
+                    RpcCustomError::NonexistentClusterRoot {
+                        cluster_root,
+                        node_root: r_bank_forks.root(),
+                    }
+                    .into()
+                })
+            }
         }
     }
 
@@ -1577,6 +1591,7 @@ pub mod tests {
             bank.clone(),
             blockstore.clone(),
             0,
+            0,
         )));
 
         // Add timestamp vote to blockstore
@@ -2627,6 +2642,7 @@ pub mod tests {
             bank_forks.read().unwrap().working_bank(),
             blockstore.clone(),
             0,
+            0,
         )));
 
         let mut config = JsonRpcConfig::default();
@@ -2822,7 +2838,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_get_largest_confirmed_root(8);
+            .set_largest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
@@ -2878,7 +2894,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_get_largest_confirmed_root(7);
+            .set_largest_confirmed_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 

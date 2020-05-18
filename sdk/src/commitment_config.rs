@@ -31,6 +31,12 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn single() -> Self {
+        Self {
+            commitment: CommitmentLevel::Single,
+        }
+    }
+
     pub fn ok(self) -> Option<Self> {
         if self == Self::default() {
             None
@@ -46,4 +52,5 @@ pub enum CommitmentLevel {
     Max,
     Recent,
     Root,
+    Single,
 }
