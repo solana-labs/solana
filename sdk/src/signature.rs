@@ -157,7 +157,7 @@ impl std::fmt::Debug for dyn Signer {
 }
 
 /// Remove duplicates signers while preserving order. O(n²)
-pub fn unique_signers<'a>(signers: Vec<&'a dyn Signer>) -> Vec<&'a dyn Signer> {
+pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
     signers.into_iter().unique_by(|s| s.pubkey()).collect()
 }
 
