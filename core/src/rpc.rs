@@ -79,37 +79,42 @@ impl JsonRpcRequestProcessor {
     fn bank(&self, commitment: Option<CommitmentConfig>) -> Result<Arc<Bank>> {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
-        if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Recent {
-            let bank = r_bank_forks.working_bank();
-            debug!("RPC using working_bank: {:?}", bank.slot());
-            Ok(bank)
-        } else if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Root {
-            let slot = r_bank_forks.root();
-            debug!("RPC using node root: {:?}", slot);
-            Ok(r_bank_forks.get(slot).cloned().unwrap())
-        } else if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Single
-        {
-            let slot = self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_slot();
-            debug!("RPC using confirmed slot: {:?}", slot);
-            Ok(r_bank_forks.get(slot).cloned().unwrap())
-        } else {
-            let cluster_root = self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .largest_confirmed_root();
-            debug!("RPC using block: {:?}", cluster_root);
-            r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
-                RpcCustomError::NonexistentClusterRoot {
-                    cluster_root,
-                    node_root: r_bank_forks.root(),
-                }
-                .into()
-            })
+
+        match commitment {
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Recent => {
+                let bank = r_bank_forks.working_bank();
+                debug!("RPC using working_bank: {:?}", bank.slot());
+                Ok(bank)
+            }
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Root => {
+                let slot = r_bank_forks.root();
+                debug!("RPC using node root: {:?}", slot);
+                Ok(r_bank_forks.get(slot).cloned().unwrap())
+            }
+            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Single => {
+                let slot = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .highest_confirmed_slot();
+                debug!("RPC using confirmed slot: {:?}", slot);
+                Ok(r_bank_forks.get(slot).cloned().unwrap())
+            }
+            _ => {
+                let cluster_root = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root();
+                debug!("RPC using block: {:?}", cluster_root);
+                r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
+                    RpcCustomError::NonexistentClusterRoot {
+                        cluster_root,
+                        node_root: r_bank_forks.root(),
+                    }
+                    .into()
+                })
+            }
         }
     }
 
