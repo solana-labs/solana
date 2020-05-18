@@ -47,8 +47,6 @@ pub enum Error {
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
     TransportError(#[from] TransportError),
-    #[error("Signature not found")]
-    SignatureNotFound,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
