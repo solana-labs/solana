@@ -471,9 +471,9 @@ export class SystemInstruction {
    * @private
    */
   static checkKeyLength(keys: Array<any>, expectedLength: number) {
-    if (keys.length !== expectedLength) {
+    if (keys.length < expectedLength) {
       throw new Error(
-        `invalid instruction; key length mismatch ${keys.length} != ${expectedLength}`,
+        `invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`,
       );
     }
   }
