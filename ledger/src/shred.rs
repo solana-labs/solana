@@ -419,8 +419,9 @@ impl Shred {
     }
 
     pub fn reference_tick_from_data(data: &[u8]) -> u8 {
-        let size_of_data_shred_header = SIZE_OF_DATA_SHRED_HEADER;
-        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + size_of_data_shred_header - size_of::<u8>()];
+        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER
+            - size_of::<u8>()
+            - size_of::<u16>()];
         flags & SHRED_TICK_REFERENCE_MASK
     }
 
