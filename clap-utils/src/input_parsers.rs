@@ -183,6 +183,7 @@ pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentC
         "max" => CommitmentConfig::max(),
         "recent" => CommitmentConfig::recent(),
         "root" => CommitmentConfig::root(),
+        "single" => CommitmentConfig::single(),
         _ => CommitmentConfig::default(),
     })
 }
