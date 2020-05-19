@@ -45,7 +45,6 @@ members = [
     "ramp-tps",
     "runtime",
     "sdk",
-    "sdk-c",
     "scripts",
     "stake-accounts",
     "stake-monitor",

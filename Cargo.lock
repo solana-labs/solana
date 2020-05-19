@@ -408,24 +408,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cbindgen"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "104ca409bbff8293739438c71820a2606111b5f8f81835536dc673dfd807369e"
-dependencies = [
- "clap",
- "heck",
- "log 0.4.8",
- "proc-macro2 1.0.12",
- "quote 1.0.1",
- "serde",
- "serde_json",
- "syn 1.0.19",
- "tempfile",
- "toml",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4617,20 +4599,6 @@ dependencies = [
  "solana-sdk-macro",
  "thiserror",
  "tiny-bip39",
-]
-
-[[package]]
-name = "solana-sdk-c"
-version = "1.2.0"
-dependencies = [
- "bincode",
- "bs58 0.3.1",
- "cbindgen",
- "ed25519-dalek",
- "libc",
- "rand_chacha 0.2.2",
- "rand_core 0.5.1",
- "solana-sdk",
 ]
 
 [[package]]
