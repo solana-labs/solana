@@ -1335,28 +1335,12 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
-        let data = bs58::decode(data).into_vec().unwrap();
-        if data.len() >= PACKET_DATA_SIZE {
-            info!(
-                "send_transaction: transaction too large: {} bytes (max: {} bytes)",
-                data.len(),
-                PACKET_DATA_SIZE
-            );
-            return Err(Error::invalid_request());
-        }
-        let transaction: Transaction = bincode::config()
-            .limit(PACKET_DATA_SIZE as u64)
-            .deserialize(&data)
-            .map_err(|err| {
-                info!("send_transaction: deserialize error: {:?}", err);
-                Error::invalid_request()
-            })?;
-
+        let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         trace!("send_transaction: leader is {:?}", &tpu_addr);
         transactions_socket
-            .send_to(&data, tpu_addr)
+            .send_to(&wire_transaction, tpu_addr)
             .map_err(|err| {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
@@ -1364,7 +1348,7 @@ impl RpcSol for RpcSolImpl {
         let signature = transaction.signatures[0].to_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
-            data.len(),
+            wire_transaction.len(),
             signature
         );
         Ok(signature)
@@ -1376,24 +1360,8 @@ impl RpcSol for RpcSolImpl {
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
     ) -> RpcResponse<TransactionStatus> {
+        let (_, transaction) = deserialize_bs58_transaction(data)?;
         let config = config.unwrap_or(RpcSimulateTransactionConfig { sig_verify: false });
-
-        let data = bs58::decode(data).into_vec().unwrap();
-        if data.len() >= PACKET_DATA_SIZE {
-            info!(
-                "simulate_transaction: transaction too large: {} bytes (max: {} bytes)",
-                data.len(),
-                PACKET_DATA_SIZE
-            );
-            return Err(Error::invalid_request());
-        }
-        let transaction: Transaction = bincode::config()
-            .limit(PACKET_DATA_SIZE as u64)
-            .deserialize(&data)
-            .map_err(|err| {
-                info!("simulate_transaction: deserialize error: {:?}", err);
-                Error::invalid_request()
-            })?;
 
         let bank = &*meta.request_processor.read().unwrap().bank(None)?;
         assert!(bank.is_frozen());
@@ -1562,6 +1530,26 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_first_available_block()
     }
+}
+
+fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
+    let wire_transaction = bs58::decode(bs58_transaction).into_vec().unwrap();
+    if wire_transaction.len() >= PACKET_DATA_SIZE {
+        info!(
+            "transaction too large: {} bytes (max: {} bytes)",
+            wire_transaction.len(),
+            PACKET_DATA_SIZE
+        );
+        return Err(Error::invalid_request());
+    }
+    bincode::config()
+        .limit(PACKET_DATA_SIZE as u64)
+        .deserialize(&wire_transaction)
+        .map_err(|err| {
+            info!("transaction deserialize error: {:?}", err);
+            Error::invalid_request()
+        })
+        .map(|transaction| (wire_transaction, transaction))
 }
 
 #[cfg(test)]
