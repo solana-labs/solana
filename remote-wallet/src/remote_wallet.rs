@@ -104,46 +104,36 @@ impl RemoteWalletManager {
         let devices = usb.device_list();
         let num_prev_devices = self.devices.read().len();
 
-        let (detected_devices, errors) = devices
-            .filter(|&device_info| {
-                is_valid_hid_device(device_info.usage_page(), device_info.interface_number())
-            })
-            .fold(
-                (Vec::new(), Vec::new()),
-                |(mut devices, mut errors), device_info| {
-                    if is_valid_ledger(device_info.vendor_id(), device_info.product_id()) {
-                        match usb.open_path(&device_info.path()) {
-                            Ok(device) => {
-                                let mut ledger = LedgerWallet::new(device);
-                                let result = ledger.read_device(&device_info);
-                                match result {
-                                    Ok(info) => {
-                                        ledger.pretty_path = info.get_pretty_path();
-                                        let path = device_info.path().to_str().unwrap().to_string();
-                                        trace!("Found device: {:?}", info);
-                                        devices.push(Device {
-                                            path,
-                                            info,
-                                            wallet_type: RemoteWalletType::Ledger(Arc::new(ledger)),
-                                        })
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Error connecting to ledger device to read info: {}",
-                                            err
-                                        );
-                                        errors.push(err)
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                error!("Error connecting to ledger device to read info: {}", err)
-                            }
+        let mut detected_devices = vec![];
+        let mut errors = vec![];
+        for device_info in devices.filter(|&device_info| {
+            is_valid_hid_device(device_info.usage_page(), device_info.interface_number())
+                && is_valid_ledger(device_info.vendor_id(), device_info.product_id())
+        }) {
+            match usb.open_path(&device_info.path()) {
+                Ok(device) => {
+                    let mut ledger = LedgerWallet::new(device);
+                    let result = ledger.read_device(&device_info);
+                    match result {
+                        Ok(info) => {
+                            ledger.pretty_path = info.get_pretty_path();
+                            let path = device_info.path().to_str().unwrap().to_string();
+                            trace!("Found device: {:?}", info);
+                            detected_devices.push(Device {
+                                path,
+                                info,
+                                wallet_type: RemoteWalletType::Ledger(Arc::new(ledger)),
+                            })
+                        }
+                        Err(err) => {
+                            error!("Error connecting to ledger device to read info: {}", err);
+                            errors.push(err)
                         }
                     }
-                    (devices, errors)
-                },
-            );
+                }
+                Err(err) => error!("Error connecting to ledger device to read info: {}", err),
+            }
+        }
 
         let num_curr_devices = detected_devices.len();
         *self.devices.write() = detected_devices;

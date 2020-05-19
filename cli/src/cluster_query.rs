@@ -1227,12 +1227,14 @@ pub fn process_show_validators(
         .current
         .iter()
         .chain(vote_accounts.delinquent.iter())
-        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+        .map(|vote_account| vote_account.activated_stake)
+        .sum();
 
     let total_deliquent_stake = vote_accounts
         .delinquent
         .iter()
-        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+        .map(|vote_account| vote_account.activated_stake)
+        .sum();
     let total_current_stake = total_active_stake - total_deliquent_stake;
 
     let mut current = vote_accounts.current;

@@ -323,11 +323,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 let total_current_stake = vote_accounts
                     .current
                     .iter()
-                    .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+                    .map(|vote_account| vote_account.activated_stake)
+                    .sum();
                 let total_delinquent_stake = vote_accounts
                     .delinquent
                     .iter()
-                    .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+                    .map(|vote_account| vote_account.activated_stake)
+                    .sum();
 
                 let total_stake = total_current_stake + total_delinquent_stake;
                 let current_stake_percent = total_current_stake * 100 / total_stake;
