@@ -260,8 +260,7 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
             let non_circulating_supply =
-                crate::non_circulating_supply::calculate_non_circulating_supply(bank.clone())
-                    .lamports;
+                crate::non_circulating_supply::calculate_non_circulating_supply(&bank).lamports;
             Some(format!("{}", total_supply - non_circulating_supply))
         }
         "/v0/total-supply" => {
