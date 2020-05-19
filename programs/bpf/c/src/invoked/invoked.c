@@ -100,8 +100,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
-    const SolSignerSeed seeds1[] = {{"Lil'", 4}, {"Bits", 4}};
-    const SolSignerSeed seeds2[] = {{"Gar Ma Nar Nar", 14}};
+    char seed1[] = "Lil'";
+    char seed2[] = "Bits";
+    char seed3[] = "Gar Ma Nar Nar";
+    const SolSignerSeed seeds1[] = {{seed1, sol_strlen(seed1)},
+                                    {seed2, sol_strlen(seed2)}};
+    const SolSignerSeed seeds2[] = {{seed3, sol_strlen(seed3)}};
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
 

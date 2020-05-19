@@ -6,7 +6,7 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
-use solana_runtime::message_processor::MessageProcessor;
+use solana_runtime::{builtin_programs::get_builtin_programs, message_processor::MessageProcessor};
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
@@ -712,19 +712,20 @@ fn call<'a>(
     // Process instruction
 
     let program_account = (*accounts[callee_program_id_index]).clone();
-    if program_account.borrow().owner != bpf_loader::id() {
-        // Only BPF programs supported for now
-        return Err(SyscallError::ProgramNotSupported.into());
-    }
     let executable_accounts = vec![(callee_program_id, program_account)];
+    let mut message_processor = MessageProcessor::default();
+    let builtin_programs = get_builtin_programs();
+    for program in builtin_programs.iter() {
+        message_processor.add_program(program.id, program.process_instruction);
+    }
+    message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
 
     #[allow(clippy::deref_addrof)]
-    match MessageProcessor::process_cross_program_instruction(
+    match message_processor.process_cross_program_instruction(
         &message,
         &executable_accounts,
         &accounts,
         &signers,
-        crate::process_instruction,
         *(&mut *invoke_context),
     ) {
         Ok(()) => (),

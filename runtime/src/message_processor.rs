@@ -245,12 +245,15 @@ pub struct MessageProcessor {
     #[serde(skip)]
     programs: Vec<(Pubkey, ProcessInstruction)>,
     #[serde(skip)]
+    loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    #[serde(skip)]
     native_loader: NativeLoader,
 }
 impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
         MessageProcessor {
             programs: self.programs.clone(),
+            loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
         }
     }
@@ -261,6 +264,17 @@ impl MessageProcessor {
         match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
             Some((_, processor)) => *processor = process_instruction,
             None => self.programs.push((program_id, process_instruction)),
+        }
+    }
+
+    pub fn add_loader(
+        &mut self,
+        program_id: Pubkey,
+        process_instruction: ProcessInstructionWithContext,
+    ) {
+        match self.loaders.iter_mut().find(|(key, _)| program_id == *key) {
+            Some((_, processor)) => *processor = process_instruction,
+            None => self.loaders.push((program_id, process_instruction)),
         }
     }
 
@@ -296,46 +310,50 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint method
     fn process_instruction(
         &self,
-        message: &Message,
-        instruction: &CompiledInstruction,
+        keyed_accounts: &[KeyedAccount],
+        instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
-        executable_accounts: &[(Pubkey, RefCell<Account>)],
-        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
-        let keyed_accounts =
-            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
-
-        for (id, process_instruction) in &self.programs {
-            let root_program_id = keyed_accounts[0].unsigned_key();
-            if id == root_program_id {
-                return process_instruction(
-                    &root_program_id,
-                    &keyed_accounts[1..],
-                    &instruction.data,
-                );
+        if native_loader::check_id(&keyed_accounts[0].owner()?) {
+            let root_id = keyed_accounts[0].unsigned_key();
+            for (id, process_instruction) in &self.programs {
+                if id == root_id {
+                    // Call the builtin program
+                    return process_instruction(&root_id, &keyed_accounts[1..], instruction_data);
+                }
+            }
+            // Call the program via the native loader
+            return self.native_loader.process_instruction(
+                &native_loader::id(),
+                keyed_accounts,
+                instruction_data,
+                invoke_context,
+            );
+        } else {
+            let owner_id = keyed_accounts[0].owner()?;
+            for (id, process_instruction) in &self.loaders {
+                if *id == owner_id {
+                    // Call the program via a builtin loader
+                    return process_instruction(
+                        &owner_id,
+                        keyed_accounts,
+                        instruction_data,
+                        invoke_context,
+                    );
+                }
             }
         }
-
-        if native_loader::check_id(&keyed_accounts[0].owner()?) {
-            self.native_loader.process_instruction(
-                &native_loader::id(),
-                &keyed_accounts,
-                &instruction.data,
-                invoke_context,
-            )
-        } else {
-            Err(InstructionError::UnsupportedProgramId)
-        }
+        Err(InstructionError::UnsupportedProgramId)
     }
 
     /// Process a cross-program instruction
-    /// This method calls the instruction's program entrypoint method
+    /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
+        &self,
         message: &Message,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         signers: &[Pubkey],
-        process_instruction: ProcessInstructionWithContext,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let instruction = &message.instructions[0];
@@ -349,12 +367,8 @@ impl MessageProcessor {
 
         // Invoke callee
         invoke_context.push(instruction.program_id(&message.account_keys))?;
-        let mut result = process_instruction(
-            &keyed_accounts[0].owner()?,
-            &keyed_accounts,
-            &instruction.data,
-            invoke_context,
-        );
+        let mut result =
+            self.process_instruction(&keyed_accounts, &instruction.data, invoke_context);
         if result.is_ok() {
             // Verify the called program has not misbehaved
             result = invoke_context.verify_and_update(message, instruction, signers, accounts);
@@ -502,13 +516,9 @@ impl MessageProcessor {
             rent_collector.rent,
             pre_accounts,
         );
-        self.process_instruction(
-            message,
-            instruction,
-            &mut invoke_context,
-            executable_accounts,
-            accounts,
-        )?;
+        let keyed_accounts =
+            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
+        self.process_instruction(&keyed_accounts, &instruction.data, &mut invoke_context)?;
         Self::verify(
             message,
             instruction,
@@ -1368,15 +1378,10 @@ mod tests {
             program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
-            assert_eq!(
-                keyed_accounts[1].owner()?,
-                *keyed_accounts[0].unsigned_key()
-            );
             assert_ne!(
-                keyed_accounts[2].owner()?,
+                keyed_accounts[1].owner()?,
                 *keyed_accounts[0].unsigned_key()
             );
 
@@ -1385,10 +1390,10 @@ mod tests {
                     MockInstruction::NoopSuccess => (),
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => {
-                        keyed_accounts[1].try_account_ref_mut()?.data[0] = 1
+                        keyed_accounts[0].try_account_ref_mut()?.data[0] = 1
                     }
                     MockInstruction::ModifyNotOwned => {
-                        keyed_accounts[2].try_account_ref_mut()?.data[0] = 1
+                        keyed_accounts[1].try_account_ref_mut()?.data[0] = 1
                     }
                 }
             } else {
@@ -1399,7 +1404,10 @@ mod tests {
 
         let caller_program_id = Pubkey::new_rand();
         let callee_program_id = Pubkey::new_rand();
-        let mut program_account = Account::new(1, 0, &Pubkey::new_rand());
+        let mut message_processor = MessageProcessor::default();
+        message_processor.add_program(callee_program_id, mock_process_instruction);
+
+        let mut program_account = Account::new(1, 0, &native_loader::id());
         program_account.executable = true;
         let executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
 
@@ -1434,12 +1442,11 @@ mod tests {
         );
         let message = Message::new_with_payer(&[instruction], None);
         assert_eq!(
-            MessageProcessor::process_cross_program_instruction(
+            message_processor.process_cross_program_instruction(
                 &message,
                 &executable_accounts,
                 &accounts,
                 &[],
-                mock_process_instruction,
                 &mut invoke_context,
             ),
             Err(InstructionError::ExternalAccountDataModified)
@@ -1463,12 +1470,11 @@ mod tests {
             let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
             let message = Message::new_with_payer(&[instruction], None);
             assert_eq!(
-                MessageProcessor::process_cross_program_instruction(
+                message_processor.process_cross_program_instruction(
                     &message,
                     &executable_accounts,
                     &accounts,
                     &[],
-                    mock_process_instruction,
                     &mut invoke_context,
                 ),
                 case.1

@@ -336,13 +336,17 @@ mod bpf {
             let invoke_program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
             let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
 
-            let account = Account::new(42, 100, &invoke_program_id);
             let argument_keypair = Keypair::new();
+            let account = Account::new(41, 100, &invoke_program_id);
             bank.store_account(&argument_keypair.pubkey(), &account);
 
-            let account = Account::new(10, 10, &invoked_program_id);
             let invoked_argument_keypair = Keypair::new();
+            let account = Account::new(10, 10, &invoked_program_id);
             bank.store_account(&invoked_argument_keypair.pubkey(), &account);
+
+            let from_keypair = Keypair::new();
+            let account = Account::new(43, 0, &solana_sdk::system_program::id());
+            bank.store_account(&from_keypair.pubkey(), &account);
 
             let derived_key1 =
                 Pubkey::create_program_address(&["You pass butter"], &invoke_program_id).unwrap();
@@ -361,6 +365,8 @@ mod bpf {
                 AccountMeta::new(derived_key1, false),
                 AccountMeta::new(derived_key2, false),
                 AccountMeta::new_readonly(derived_key3, false),
+                AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+                AccountMeta::new(from_keypair.pubkey(), true),
             ];
 
             let instruction = Instruction::new(invoke_program_id, &1u8, account_metas);
@@ -368,7 +374,7 @@ mod bpf {
 
             assert!(bank_client
                 .send_message(
-                    &[&mint_keypair, &argument_keypair, &invoked_argument_keypair],
+                    &[&mint_keypair, &argument_keypair, &invoked_argument_keypair, &from_keypair],
                     message,
                 )
                 .is_ok());
