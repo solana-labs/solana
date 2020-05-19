@@ -168,22 +168,16 @@ impl RepairService {
             };
 
             if let Ok(repairs) = repairs {
-                let reqs: Vec<_> = repairs
-                    .into_iter()
-                    .filter_map(|repair_request| {
-                        serve_repair
-                            .repair_request(&repair_request, &mut repair_stats)
-                            .map(|result| (result, repair_request))
-                            .ok()
-                    })
-                    .collect();
-
-                for ((to, req), _) in reqs {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
-                }
+                repairs.into_iter().for_each(|repair_request| {
+                    if let Ok((to, req)) =
+                        serve_repair.repair_request(&repair_request, &mut repair_stats)
+                    {
+                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                            info!("{} repair req send_to({}) error {:?}", id, to, e);
+                            0
+                        });
+                    }
+                });
             }
             if last_stats.elapsed().as_secs() > 1 {
                 let repair_total = repair_stats.shred.count
@@ -607,7 +601,7 @@ mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {

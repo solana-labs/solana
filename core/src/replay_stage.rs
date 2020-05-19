@@ -1738,6 +1738,7 @@ pub(crate) mod tests {
                 ShredCommonHeader::default(),
                 data_header,
                 CodingShredHeader::default(),
+                PACKET_DATA_SIZE,
             );
             bincode::serialize_into(
                 &mut shred.payload[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER..],
