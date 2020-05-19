@@ -9,7 +9,7 @@ use rayon::{
     slice::ParallelSlice,
     ThreadPool,
 };
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_perf::packet::Packet;
 use solana_rayon_threadlimit::get_thread_count;
@@ -113,20 +113,7 @@ pub struct ShredCommonHeader {
 pub struct DataShredHeader {
     pub parent_offset: u16,
     pub flags: u8,
-    #[serde(skip_deserializing)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "option_as_u16_serialize")]
-    pub size: Option<u16>,
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn option_as_u16_serialize<S>(x: &Option<u16>, s: S) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    assert!(x.is_some());
-    let num = x.unwrap();
-    s.serialize_u16(num)
+    pub size: u16,
 }
 
 /// The coding shred header has FEC information
@@ -198,11 +185,9 @@ impl Shred {
             ..ShredCommonHeader::default()
         };
 
-        let size = Some(
-            (data.map(|d| d.len()).unwrap_or(0)
-                + SIZE_OF_DATA_SHRED_HEADER
-                + SIZE_OF_COMMON_SHRED_HEADER) as u16,
-        );
+        let size = (data.map(|d| d.len()).unwrap_or(0)
+            + SIZE_OF_DATA_SHRED_HEADER
+            + SIZE_OF_COMMON_SHRED_HEADER) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
@@ -271,8 +256,6 @@ impl Shred {
                 payload,
             }
         } else if common_header.shred_type == ShredType(DATA_SHRED) {
-            // This doesn't need to change since we skip deserialization of the
-            // "size" field in the header for now
             let size_of_data_shred_header = SIZE_OF_DATA_SHRED_HEADER;
             let data_header: DataShredHeader =
                 Self::deserialize_obj(&mut start, size_of_data_shred_header, &payload)?;
@@ -1005,7 +988,7 @@ pub mod tests {
             serialized_size(&DataShredHeader::default()).unwrap() as usize
         );
         let data_shred_header_with_size = DataShredHeader {
-            size: Some(1000),
+            size: 1000,
             ..DataShredHeader::default()
         };
         assert_eq!(
