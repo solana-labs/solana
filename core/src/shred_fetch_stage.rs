@@ -293,13 +293,8 @@ mod tests {
         );
         assert!(!packet.meta.discard);
 
-        let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
-            slot,
-            1.0f32,
-            &[shred],
-            10,
-            false,
-        );
+        let coding =
+            solana_ledger::shred::Shredder::generate_coding_shreds(slot, 1.0f32, &[shred], 10);
         coding[0].copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,

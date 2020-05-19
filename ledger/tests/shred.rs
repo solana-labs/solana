@@ -3,13 +3,22 @@ use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
     MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
 };
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::{clock::Slot, hash::Hash, system_transaction};
-use std::convert::TryInto;
-use std::sync::Arc;
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    signature::{Keypair, Signer},
+    system_transaction,
+};
+use std::{
+    collections::{BTreeMap, HashSet},
+    convert::TryInto,
+    sync::Arc,
+};
 
-fn run_test_multi_fec_block_coding(slot: Slot) {
+#[test]
+fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
+    let slot = 0x1234_5678_9abc_def0;
     let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
         .expect("Failed in creating shredder");
 
@@ -19,8 +28,11 @@ fn run_test_multi_fec_block_coding(slot: Slot) {
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
     let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
-    let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
-    let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(no_header_size));
+    let num_entries = max_entries_per_n_shred(
+        &entry,
+        num_data_shreds as u64,
+        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
+    );
 
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
@@ -96,6 +108,156 @@ fn run_test_multi_fec_block_coding(slot: Slot) {
 }
 
 #[test]
-fn test_multi_fec_block_coding() {
-    run_test_multi_fec_block_coding(0x1234_5678_9abc_def0);
+fn test_multi_fec_block_different_size_coding() {
+    let slot = 0x1234_5678_9abc_def0;
+    let parent_slot = slot - 5;
+    let keypair = Arc::new(Keypair::new());
+    let (fec_data, fec_coding, num_shreds_per_iter) =
+        setup_different_sized_fec_blocks(slot, parent_slot, keypair.clone());
+
+    let total_num_data_shreds: usize = fec_data.values().map(|x| x.len()).sum();
+    // Test recovery
+    for (fec_data_shreds, fec_coding_shreds) in fec_data.values().zip(fec_coding.values()) {
+        let first_data_index = fec_data_shreds.first().unwrap().index() as usize;
+        let first_code_index = fec_coding_shreds.first().unwrap().index() as usize;
+        let num_data = fec_data_shreds.len();
+        let num_coding = fec_coding_shreds.len();
+        let all_shreds: Vec<Shred> = fec_data_shreds
+            .into_iter()
+            .step_by(2)
+            .chain(fec_coding_shreds.into_iter().step_by(2))
+            .cloned()
+            .collect();
+
+        let recovered_data = Shredder::try_recovery(
+            all_shreds,
+            num_data,
+            num_coding,
+            first_data_index,
+            first_code_index,
+            slot,
+        )
+        .unwrap();
+
+        // Necessary in order to ensure the last shred in the slot
+        // is part of the recovered set, and that the below `index`
+        // cacluation in the loop  is correct
+        assert!(fec_data_shreds.len() % 2 == 0);
+        for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
+            let index = first_data_index + (i * 2) + 1;
+            verify_test_data_shred(
+                &recovered_shred,
+                index.try_into().unwrap(),
+                slot,
+                parent_slot,
+                &keypair.pubkey(),
+                true,
+                index == total_num_data_shreds - 1,
+                index % num_shreds_per_iter == num_shreds_per_iter - 1,
+            );
+        }
+    }
+}
+
+fn sort_data_coding_into_fec_sets(
+    data_shreds: Vec<Shred>,
+    coding_shreds: Vec<Shred>,
+    fec_data: &mut BTreeMap<u32, Vec<Shred>>,
+    fec_coding: &mut BTreeMap<u32, Vec<Shred>>,
+    data_slot_and_index: &mut HashSet<(Slot, u32)>,
+    coding_slot_and_index: &mut HashSet<(Slot, u32)>,
+) {
+    for shred in data_shreds {
+        assert!(shred.is_data());
+        let key = (shred.slot(), shred.index());
+        // Make sure there are no duplicates for same key
+        assert!(!data_slot_and_index.contains(&key));
+        data_slot_and_index.insert(key);
+        let fec_entry = fec_data
+            .entry(shred.common_header.fec_set_index)
+            .or_insert(vec![]);
+        fec_entry.push(shred);
+    }
+    for shred in coding_shreds {
+        assert!(!shred.is_data());
+        let key = (shred.slot(), shred.index());
+        // Make sure there are no duplicates for same key
+        assert!(!coding_slot_and_index.contains(&key));
+        coding_slot_and_index.insert(key);
+        let fec_entry = fec_coding
+            .entry(shred.common_header.fec_set_index)
+            .or_insert(vec![]);
+        fec_entry.push(shred);
+    }
+}
+
+fn setup_different_sized_fec_blocks(
+    slot: Slot,
+    parent_slot: Slot,
+    keypair: Arc<Keypair>,
+) -> (BTreeMap<u32, Vec<Shred>>, BTreeMap<u32, Vec<Shred>>, usize) {
+    let shredder =
+        Shredder::new(slot, parent_slot, 1.0, keypair, 0, 0).expect("Failed in creating shredder");
+    let keypair0 = Keypair::new();
+    let keypair1 = Keypair::new();
+    let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+    let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
+
+    // Make enough entries for `MAX_DATA_SHREDS_PER_FEC_BLOCK + 2` shreds so one
+    // fec set will have `MAX_DATA_SHREDS_PER_FEC_BLOCK` shreds and the next
+    // will have 2 shreds.
+    assert!(MAX_DATA_SHREDS_PER_FEC_BLOCK > 2);
+    let num_shreds_per_iter = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2;
+    let num_entries = max_entries_per_n_shred(
+        &entry,
+        num_shreds_per_iter as u64,
+        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
+    );
+    let entries: Vec<_> = (0..num_entries)
+        .map(|_| {
+            let keypair0 = Keypair::new();
+            let keypair1 = Keypair::new();
+            let tx0 =
+                system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+            Entry::new(&Hash::default(), 1, vec![tx0])
+        })
+        .collect();
+
+    // Run the shredder twice, generate data and coding shreds
+    let mut next_index = 0;
+    let mut fec_data = BTreeMap::new();
+    let mut fec_coding = BTreeMap::new();
+    let mut data_slot_and_index = HashSet::new();
+    let mut coding_slot_and_index = HashSet::new();
+
+    let total_num_data_shreds: usize = 2 * num_shreds_per_iter;
+    for i in 0..2 {
+        let is_last = i == 1;
+        let (data_shreds, coding_shreds, new_next_index) =
+            shredder.entries_to_shreds(&entries, is_last, next_index);
+        for shred in &data_shreds {
+            if (shred.index() as usize) == total_num_data_shreds - 1 {
+                assert!(shred.data_complete());
+                assert!(shred.last_in_slot());
+            } else if (shred.index() as usize) % num_shreds_per_iter == num_shreds_per_iter - 1 {
+                assert!(shred.data_complete());
+            } else {
+                assert!(!shred.data_complete());
+                assert!(!shred.last_in_slot());
+            }
+        }
+        assert_eq!(data_shreds.len(), num_shreds_per_iter as usize);
+        next_index = new_next_index;
+        sort_data_coding_into_fec_sets(
+            data_shreds,
+            coding_shreds,
+            &mut fec_data,
+            &mut fec_coding,
+            &mut data_slot_and_index,
+            &mut coding_slot_and_index,
+        );
+    }
+
+    assert_eq!(fec_data.len(), fec_coding.len());
+    (fec_data, fec_coding, num_shreds_per_iter)
 }
