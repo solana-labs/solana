@@ -711,28 +711,25 @@ where
 
         info!("Rebuilding accounts...");
 
-        {
-            let mut bankrc = match snapshot_version_enum {
-                SnapshotVersion::V1_1_0 => context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
-                    account_paths,
-                    bank.slot(),
-                    &mut stream,
-                    &append_vecs_path,
-                ),
-                SnapshotVersion::V1_2_0 => context_bankrc_from_stream::<SerdeContextV1_2_0, _, _>(
-                    account_paths,
-                    bank.slot(),
-                    &mut stream,
-                    &append_vecs_path,
-                ),
-            }?;
+        let mut bankrc = match snapshot_version_enum {
+            SnapshotVersion::V1_1_0 => context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
+                account_paths,
+                bank.slot(),
+                &mut stream,
+                &append_vecs_path,
+            ),
+            SnapshotVersion::V1_2_0 => context_bankrc_from_stream::<SerdeContextV1_2_0, _, _>(
+                account_paths,
+                bank.slot(),
+                &mut stream,
+                &append_vecs_path,
+            ),
+        }?;
+        Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)
+            .unwrap()
+            .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
 
-            Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)
-                .unwrap()
-                .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
-            bank.rc = bankrc;
-        }
-
+        bank.rc = bankrc;
         bank.operating_mode = Some(genesis_config.operating_mode);
         bank.finish_init();
         Ok(bank)

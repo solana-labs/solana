@@ -134,41 +134,6 @@ where
 }
 
 #[cfg(test)]
-pub(crate) fn accounts_from_stream<R, P>(
-    account_paths: &[PathBuf],
-    stream: &mut BufReader<R>,
-    stream_append_vecs_path: P,
-) -> std::result::Result<Accounts, IoError>
-where
-    R: Read,
-    P: AsRef<Path>,
-{
-    context_accounts_from_stream::<DefaultSerdeContext, R, P>(
-        account_paths,
-        stream,
-        stream_append_vecs_path,
-    )
-}
-
-#[cfg(test)]
-pub(crate) fn accountsdb_to_stream<W: Write>(
-    stream: &mut W,
-    accounts_db: &AccountsDB,
-    slot: Slot,
-    account_storage_entries: &[SnapshotStorage],
-) -> Result<(), IoError>
-where
-    W: Write,
-{
-    context_accountsdb_to_stream::<DefaultSerdeContext, W>(
-        stream,
-        accounts_db,
-        slot,
-        account_storage_entries,
-    )
-}
-
-#[cfg(test)]
 pub(crate) fn accountsdb_from_stream<R, P>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
@@ -183,6 +148,28 @@ where
         account_paths,
         stream_append_vecs_path,
     )
+}
+
+#[cfg(test)]
+pub(crate) fn accountsdb_to_stream<W: Write>(
+    stream: &mut W,
+    accounts_db: &AccountsDB,
+    slot: Slot,
+    account_storage_entries: &[SnapshotStorage],
+) -> Result<(), IoError>
+where
+    W: Write,
+{
+    serialize_into(
+        stream,
+        &SerializableAccountsDatabaseUnversioned::<DefaultSerdeContext> {
+            accounts_db,
+            slot,
+            account_storage_entries,
+            phantom: std::marker::PhantomData::default(),
+        },
+    )
+    .map_err(bankrc_to_io_error)
 }
 
 pub fn context_bankrc_from_stream<'a, C, R, P>(
@@ -201,8 +188,11 @@ where
         C::legacy_deserialize_byte_length(&mut stream).map_err(accountsdb_to_io_error)?;
 
     // read and deserialise the accounts database directly from the stream
-    let accounts =
-        context_accounts_from_stream::<C, R, P>(account_paths, stream, stream_append_vecs_path)?;
+    let accounts = Accounts::new_empty(context_accountsdb_from_stream::<C, R, P>(
+        stream,
+        account_paths,
+        stream_append_vecs_path,
+    )?);
 
     Ok(BankRc {
         accounts: Arc::new(accounts),
@@ -258,26 +248,7 @@ where
     .map_err(bankrc_to_io_error)
 }
 
-pub(crate) fn context_accounts_from_stream<'a, C, R, P>(
-    account_paths: &[PathBuf],
-    stream: &mut BufReader<R>,
-    stream_append_vecs_path: P,
-) -> std::result::Result<Accounts, IoError>
-where
-    C: SerdeContext<'a>,
-    R: Read,
-    P: AsRef<Path>,
-{
-    let accounts_db =
-        context_accountsdb_from_stream::<C, R, P>(stream, account_paths, stream_append_vecs_path)?;
-
-    Ok(Accounts {
-        accounts_db: Arc::new(accounts_db),
-        ..Accounts::new_empty()
-    })
-}
-
-pub(crate) fn context_accountsdb_from_stream<'a, C, R, P>(
+fn context_accountsdb_from_stream<'a, C, R, P>(
     mut stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
@@ -464,29 +435,6 @@ impl<'a, C: SerdeContext<'a>> Serialize for SerializableAccountsDatabaseUnversio
     }
 }
 
-#[cfg(test)]
-pub(crate) fn context_accountsdb_to_stream<'a, 'b, C, W>(
-    stream: &'b mut W,
-    accounts_db: &'a AccountsDB,
-    slot: Slot,
-    account_storage_entries: &'a [SnapshotStorage],
-) -> Result<(), IoError>
-where
-    C: SerdeContext<'a>,
-    W: Write,
-{
-    serialize_into(
-        stream,
-        &SerializableAccountsDatabaseUnversioned::<'a, C> {
-            accounts_db,
-            slot,
-            account_storage_entries,
-            phantom: std::marker::PhantomData::default(),
-        },
-    )
-    .map_err(bankrc_to_io_error)
-}
-
 // Serializable version of AccountStorageEntry for snapshot format V1_1_0
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SerializableAccountStorageEntryV1_1_0 {
@@ -657,8 +605,9 @@ mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts =
-            accounts_from_stream(&daccounts_paths, &mut reader, copied_accounts.path()).unwrap();
+        let daccounts = Accounts::new_empty(
+            accountsdb_from_stream(&mut reader, &daccounts_paths, copied_accounts.path()).unwrap(),
+        );
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
     }

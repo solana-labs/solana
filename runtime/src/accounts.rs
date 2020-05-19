@@ -65,8 +65,9 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub(crate) fn new_empty() -> Self {
+    pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
         Self {
+            accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
             ..Self::default()
