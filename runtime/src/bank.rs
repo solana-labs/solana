@@ -7022,6 +7022,8 @@ mod tests {
         );
         genesis_config.creation_time = 0;
         let mut bank = Arc::new(Bank::new(&genesis_config));
+        // Check a few slots, cross an epoch boundary
+        assert_eq!(bank.get_slots_in_epoch(0), 32);
         loop {
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             if bank.slot == 0 {
@@ -7030,22 +7032,22 @@ mod tests {
                     "7MKHH6P7J5aQNN29Cr6aZQbEpQcXe8KTgchd4Suk9NCG"
                 );
             }
-            if bank.slot == 1 {
+            if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "CH6byTy6GEXyQk2EHpqfvw35Vi3ddxJA6QP6XMgtiqwe"
+                    "3AxuV6GGcoqRi6pksN6btNEmeJCTesLbjgA88QZt9a8Q"
                 );
             }
-            if bank.slot == 3 {
+            if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4kUw6sn94XLCjh5dBhtJec5W6qbzSuTHfzvXKbXtJtc7"
+                    "B32ZLAzeCW5FueeauiGYnujh8Efmxvpeac74W9JU68oB"
                 );
             }
-            if bank.slot == 4 {
+            if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "v6toDvZNfd2XWD3mNrZTBkyvji13PiBLeDDR5hfQLZ2"
+                    "A2tCz2EqryRZ7tHpw9H2918RZLCbqnSGzRWUqbnnESGz"
                 );
                 break;
             }
