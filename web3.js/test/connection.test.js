@@ -1402,15 +1402,14 @@ test('transaction failure', async () => {
     return;
   }
 
-  const responseConfirmations = response.confirmations;
-  if (typeof responseConfirmations !== 'number') {
-    expect(typeof responseConfirmations).toEqual('number');
-    return;
-  }
-
   expect(response.err).toEqual(expectedErr);
   expect(response.slot).toBeGreaterThanOrEqual(0);
-  expect(responseConfirmations).toBeGreaterThan(0);
+  const responseConfirmations = response.confirmations;
+  if (typeof responseConfirmations === 'number') {
+    expect(responseConfirmations).toBeGreaterThan(0);
+  } else {
+    expect(responseConfirmations).toBeNull();
+  }
 });
 
 test('transaction', async () => {
@@ -1600,15 +1599,14 @@ test('transaction', async () => {
     return;
   }
 
-  const responseConfirmations = response.confirmations;
-  if (typeof responseConfirmations !== 'number') {
-    expect(typeof responseConfirmations).toEqual('number');
-    return;
-  }
-
   expect(response.err).toBeNull();
   expect(response.slot).toBeGreaterThanOrEqual(0);
-  expect(responseConfirmations).toBeGreaterThan(0);
+  const responseConfirmations = response.confirmations;
+  if (typeof responseConfirmations === 'number') {
+    expect(responseConfirmations).toBeGreaterThan(0);
+  } else {
+    expect(responseConfirmations).toBeNull();
+  }
 
   const unprocessedSignature =
     '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk';
@@ -1658,14 +1656,17 @@ test('transaction', async () => {
   expect(firstResponse.slot).toBeGreaterThanOrEqual(response.slot);
   expect(firstResponse.err).toEqual(response.err);
 
-  if (typeof firstResponse.confirmations !== 'number') {
-    expect(typeof firstResponse.confirmations).toEqual('number');
-    return;
+  const firstResponseConfirmations = firstResponse.confirmations;
+  if (
+    typeof responseConfirmations === 'number' &&
+    typeof firstResponseConfirmations === 'number'
+  ) {
+    expect(firstResponseConfirmations).toBeGreaterThanOrEqual(
+      responseConfirmations,
+    );
+  } else {
+    expect(firstResponseConfirmations).toBeNull();
   }
-
-  expect(firstResponse.confirmations).toBeGreaterThanOrEqual(
-    responseConfirmations,
-  );
 
   mockRpc.push([
     url,
