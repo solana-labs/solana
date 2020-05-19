@@ -580,10 +580,15 @@ impl Bank {
         old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
     }
 
+    /// Unused conversion
+    pub fn get_unused_from_slot(rooted_slot: Slot, unused: u64) -> u64 {
+        (rooted_slot + (unused - 1)) / unused
+    }
+
     pub fn clock(&self) -> sysvar::clock::Clock {
         sysvar::clock::Clock {
             slot: self.slot,
-            unused: 0,
+            unused: Self::get_unused_from_slot(self.slot, self.unused),
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp: self.unix_timestamp(),
@@ -6987,5 +6992,49 @@ mod tests {
             *results.entry(result_key).or_insert(0) += 1;
         }
         info!("results: {:?}", results);
+    }
+
+    #[test]
+    fn test_bank_hash_consistency() {
+        let mut genesis_config = GenesisConfig::new(
+            &[(
+                Pubkey::new(&[42; 32]),
+                Account::new(1_000_000_000_000, 0, &system_program::id()),
+            )],
+            &[],
+        );
+        genesis_config.creation_time = 0;
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        // Check a few slots, cross an epoch boundary
+        assert_eq!(bank.get_slots_in_epoch(0), 32);
+        loop {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            if bank.slot == 0 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "7MKHH6P7J5aQNN29Cr6aZQbEpQcXe8KTgchd4Suk9NCG"
+                );
+            }
+            if bank.slot == 32 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "3AxuV6GGcoqRi6pksN6btNEmeJCTesLbjgA88QZt9a8Q"
+                );
+            }
+            if bank.slot == 64 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "B32ZLAzeCW5FueeauiGYnujh8Efmxvpeac74W9JU68oB"
+                );
+            }
+            if bank.slot == 128 {
+                assert_eq!(
+                    bank.hash().to_string(),
+                    "A2tCz2EqryRZ7tHpw9H2918RZLCbqnSGzRWUqbnnESGz"
+                );
+                break;
+            }
+            bank = Arc::new(new_from_parent(&bank));
+        }
     }
 }
