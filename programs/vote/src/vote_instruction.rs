@@ -428,5 +428,5 @@ mod tests {
             "Custom(0): VoteError::VoteTooOld - vote already recorded or not in slot hashes history",
             pretty_err::<VoteError>(VoteError::VoteTooOld.into())
         )
-    }   
+    }
 }

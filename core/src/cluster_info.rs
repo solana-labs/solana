@@ -2052,10 +2052,11 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crds_value::CrdsValueLabel;
+    use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
+    use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Arc;
@@ -2762,5 +2763,32 @@ mod tests {
         let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
         assert_eq!(slots, range);
         assert!(since.is_some());
+    }
+
+    #[test]
+    fn test_vote_size() {
+        let slots = vec![1; 32];
+        let vote = Vote::new(slots, Hash::default());
+        let keypair = Arc::new(Keypair::new());
+
+        // Create the biggest possible vote transaction
+        let vote_ix = vote_instruction::vote_switch(
+            &keypair.pubkey(),
+            &keypair.pubkey(),
+            vote,
+            Hash::default(),
+        );
+        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&keypair.pubkey()));
+
+        vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());
+        vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());
+
+        let vote = CrdsVote {
+            from: keypair.pubkey(),
+            transaction: vote_tx,
+            wallclock: 0,
+        };
+        let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
+        assert!(bincode::serialized_size(&vote).unwrap() <= MAX_PROTOCOL_PAYLOAD_SIZE);
     }
 }
