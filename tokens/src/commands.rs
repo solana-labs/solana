@@ -5,13 +5,12 @@ use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
-use itertools::Itertools;
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
-    signature::{Signature, Signer},
+    signature::{unique_signers, Signature, Signer},
     system_instruction,
     transport::TransportError,
 };
@@ -48,12 +47,6 @@ pub enum Error {
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
     TransportError(#[from] TransportError),
-    #[error("Signature not found")]
-    SignatureNotFound,
-}
-
-fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
-    signers.into_iter().unique_by(|s| s.pubkey()).collect_vec()
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -343,11 +336,11 @@ fn update_finalized_transactions<T: Client>(
             }
         })
         .collect();
-    let unconfirmed_signatures = unconfirmed_transactions
+    let unconfirmed_signatures: Vec<_> = unconfirmed_transactions
         .iter()
         .map(|tx| tx.signatures[0])
         .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
-        .collect_vec();
+        .collect();
     let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
     let recent_blockhashes = client.get_recent_blockhashes()?;
 

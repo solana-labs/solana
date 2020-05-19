@@ -3,6 +3,7 @@
 use crate::{pubkey::Pubkey, transaction::TransactionError};
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
+use itertools::Itertools;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use std::{
     borrow::{Borrow, Cow},
@@ -153,6 +154,11 @@ impl std::fmt::Debug for dyn Signer {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(fmt, "Signer: {:?}", self.pubkey())
     }
+}
+
+/// Remove duplicates signers while preserving order. O(n²)
+pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
+    signers.into_iter().unique_by(|s| s.pubkey()).collect()
 }
 
 impl Signer for Keypair {
@@ -552,5 +558,19 @@ mod tests {
         assert_eq!(keypair, presigner);
         let presigner2 = Presigner::new(&pubkey, &sig);
         assert_eq!(presigner, presigner2);
+    }
+
+    fn pubkeys(signers: &[&dyn Signer]) -> Vec<Pubkey> {
+        signers.into_iter().map(|x| x.pubkey()).collect()
+    }
+
+    #[test]
+    fn test_unique_signers() {
+        let alice = Keypair::new();
+        let bob = Keypair::new();
+        assert_eq!(
+            pubkeys(&unique_signers(vec![&alice, &bob, &alice])),
+            pubkeys(&[&alice, &bob])
+        );
     }
 }
