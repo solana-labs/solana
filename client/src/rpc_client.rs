@@ -120,11 +120,13 @@ impl RpcClient {
         sig_verify: bool,
     ) -> RpcResult<TransactionStatus> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
-        self.send(
-            RpcRequest::SimulateTransaction,
+        let response = self.send(
+            &RpcRequest::SimulateTransaction,
             json!([serialized_encoded, { "sigVerify": sig_verify }]),
             0,
-        )
+        )?;
+        Ok(serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "SimulateTransaction"))?)
     }
 
     pub fn get_signature_status(

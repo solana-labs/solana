@@ -73,6 +73,12 @@ pub struct RpcSignatureStatusConfig {
     pub commitment: Option<CommitmentConfig>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionConfig {
+    pub sig_verify: bool,
+}
+
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
