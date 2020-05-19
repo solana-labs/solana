@@ -89,7 +89,7 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
-    fn is_get_path(&self, path: &str) -> bool {
+    fn is_file_get_path(&self, path: &str) -> bool {
         match path {
             "/genesis.tar.bz2" => true,
             _ => {
@@ -102,7 +102,7 @@ impl RpcRequestMiddleware {
         }
     }
 
-    fn get(&self, path: &str) -> RequestMiddlewareAction {
+    fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
@@ -232,8 +232,8 @@ impl RequestMiddleware for RpcRequestMiddleware {
                         .unwrap(),
                 )),
             }
-        } else if self.is_get_path(request.uri().path()) {
-            self.get(request.uri().path())
+        } else if self.is_file_get_path(request.uri().path()) {
+            self.process_file_get(request.uri().path())
         } else if request.uri().path() == "/health" {
             RequestMiddlewareAction::Respond {
                 should_validate_hosts: true,
@@ -468,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_get_path() {
+    fn test_is_file_get_path() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
         let bank_forks = create_bank_forks();
 
@@ -492,24 +492,25 @@ mod tests {
             bank_forks,
         );
 
-        assert!(rrm.is_get_path("/genesis.tar.bz2"));
-        assert!(!rrm.is_get_path("genesis.tar.bz2"));
+        assert!(rrm.is_file_get_path("/genesis.tar.bz2"));
+        assert!(!rrm.is_file_get_path("genesis.tar.bz2"));
 
-        assert!(!rrm.is_get_path("/snapshot.tar.bz2")); // This is a redirect
+        assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
 
-        assert!(
-            !rrm.is_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2")
-        );
-        assert!(rrm_with_snapshot_config
-            .is_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"));
+        assert!(!rrm.is_file_get_path(
+            "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
 
-        assert!(!rrm.is_get_path(
+        assert!(!rrm.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
 
-        assert!(!rrm.is_get_path("/"));
-        assert!(!rrm.is_get_path(".."));
-        assert!(!rrm.is_get_path("🎣"));
+        assert!(!rrm.is_file_get_path("/"));
+        assert!(!rrm.is_file_get_path(".."));
+        assert!(!rrm.is_file_get_path("🎣"));
     }
 
     #[test]
