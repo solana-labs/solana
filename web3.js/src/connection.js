@@ -357,6 +357,16 @@ const GetEpochScheduleRpcResult = struct({
 const GetBalanceAndContextRpcResult = jsonRpcResultAndContext('number?');
 
 /**
+ * Expected JSON RPC response for the "getBlockTime" message
+ */
+const GetBlockTimeRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: struct.union(['null', 'number']),
+});
+
+/**
  * Expected JSON RPC response for the "getVersion" message
  */
 const GetVersionRpcResult = struct({
@@ -940,6 +950,21 @@ export class Connection {
           'failed to get balance of account ' + publicKey.toBase58() + ': ' + e,
         );
       });
+  }
+
+  /**
+   * Fetch the estimated production time of a block
+   */
+  async getBlockTime(slot: number): Promise<number | null> {
+    const unsafeRes = await this._rpcRequest('getBlockTime', [slot]);
+    const res = GetBlockTimeRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get block time for slot ' + slot + ': ' + res.error.message,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
   }
 
   /**
