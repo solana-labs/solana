@@ -3,7 +3,7 @@ sudo: required
 language: node_js
 node_js:
   - "lts/*"
-  - "node"
+  # - "node" disabled due to flaky test failures
 
 services:
   - docker
