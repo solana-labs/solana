@@ -67,7 +67,7 @@ Operate a configured testnet
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
    --no-airdrop
-                                      - If set, disables airdrops.  Nodes must be funded in genesis config when airdrops are disabled.
+                                      - If set, disables the faucet keypair.  Nodes must be funded in genesis config
    --faucet-lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE

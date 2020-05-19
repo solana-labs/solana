@@ -265,7 +265,10 @@ setup_validator_accounts() {
   if ! wallet vote-account "$vote_account"; then
     if ((airdrops_enabled)); then
       echo "Adding $node_sol to validator identity account:"
-      wallet airdrop "$node_sol" || return $?
+      (
+        set -x
+        $solana_cli --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" transfer "$identity" "$node_sol"
+      ) || return $?
     fi
 
     echo "Creating validator vote account"
