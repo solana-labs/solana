@@ -8,7 +8,6 @@ use crate::{
     rpc_error::RpcCustomError,
     validator::ValidatorExit,
 };
-use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::{
@@ -19,7 +18,6 @@ use solana_client::{
     },
     rpc_response::*,
 };
-use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
 };
@@ -46,8 +44,6 @@ use std::{
     net::{SocketAddr, UdpSocket},
     str::FromStr,
     sync::{Arc, RwLock},
-    thread::sleep,
-    time::{Duration, Instant},
 };
 
 type RpcResponse<T> = Result<Response<T>>;
@@ -63,7 +59,6 @@ pub struct JsonRpcConfig {
     pub enable_set_log_filter: bool,
     pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
-    pub faucet_addr: Option<SocketAddr>,
 }
 
 #[derive(Clone)]
@@ -835,15 +830,6 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcSupply>;
 
-    #[rpc(meta, name = "requestAirdrop")]
-    fn request_airdrop(
-        &self,
-        meta: Self::Metadata,
-        pubkey_str: String,
-        lamports: u64,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<String>;
-
     #[rpc(meta, name = "sendTransaction")]
     fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String>;
 
@@ -1255,85 +1241,6 @@ impl RpcSol for RpcSolImpl {
             .get_supply(commitment)
     }
 
-    fn request_airdrop(
-        &self,
-        meta: Self::Metadata,
-        pubkey_str: String,
-        lamports: u64,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<String> {
-        trace!(
-            "request_airdrop id={} lamports={} commitment: {:?}",
-            pubkey_str,
-            lamports,
-            &commitment
-        );
-
-        let faucet_addr = meta
-            .request_processor
-            .read()
-            .unwrap()
-            .config
-            .faucet_addr
-            .ok_or_else(Error::invalid_request)?;
-        let pubkey = verify_pubkey(pubkey_str)?;
-
-        let blockhash = meta
-            .request_processor
-            .read()
-            .unwrap()
-            .bank(commitment.clone())?
-            .confirmed_last_blockhash()
-            .0;
-        let transaction = request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash)
-            .map_err(|err| {
-            info!("request_airdrop_transaction failed: {:?}", err);
-            Error::internal_error()
-        })?;
-
-        let data = serialize(&transaction).map_err(|err| {
-            info!("request_airdrop: serialize error: {:?}", err);
-            Error::internal_error()
-        })?;
-
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
-        transactions_socket
-            .send_to(&data, tpu_addr)
-            .map_err(|err| {
-                info!("request_airdrop: send_to error: {:?}", err);
-                Error::internal_error()
-            })?;
-
-        let signature = transaction.signatures[0];
-        let now = Instant::now();
-        let mut signature_status;
-        let signature_timeout = match &commitment {
-            Some(config) if config.commitment == CommitmentLevel::Recent => 5,
-            _ => 30,
-        };
-        loop {
-            signature_status = meta
-                .request_processor
-                .read()
-                .unwrap()
-                .get_signature_statuses(vec![signature], None)?
-                .value[0]
-                .clone()
-                .filter(|result| result.satisfies_commitment(commitment.unwrap_or_default()))
-                .map(|x| x.status);
-
-            if signature_status == Some(Ok(())) {
-                info!("airdrop signature ok");
-                return Ok(signature.to_string());
-            } else if now.elapsed().as_secs() > signature_timeout {
-                info!("airdrop signature timeout");
-                return Err(Error::internal_error());
-            }
-            sleep(Duration::from_millis(100));
-        }
-    }
-
     fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1560,7 +1467,7 @@ pub mod tests {
         non_circulating_supply::non_circulating_accounts,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
-    use bincode::deserialize;
+    use bincode::{deserialize, serialize};
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
@@ -2588,26 +2495,6 @@ pub mod tests {
         });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn test_rpc_fail_request_airdrop() {
-        let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
-
-        // Expect internal error because no faucet is available
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
-            bob_pubkey
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let expected =
-            r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
-        let expected: Response =
-            serde_json::from_str(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);

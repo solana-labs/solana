@@ -614,14 +614,6 @@ pub fn main() {
                 .help("Enable historical transaction info over JSON RPC, including the 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
         )
         .arg(
-            Arg::with_name("rpc_faucet_addr")
-                .long("rpc-faucet-address")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .validator(solana_net_utils::is_host_port)
-                .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
-        )
-        .arg(
             Arg::with_name("signer_addr")
                 .long("vote-signer-address")
                 .value_name("HOST:PORT")
@@ -871,9 +863,6 @@ pub fn main() {
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             identity_pubkey: identity_keypair.pubkey(),
-            faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
-                solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
-            }),
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()

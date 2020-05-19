@@ -38,7 +38,6 @@ pub enum RpcRequest {
     GetVersion,
     GetVoteAccounts,
     RegisterNode,
-    RequestAirdrop,
     SendTransaction,
     SimulateTransaction,
     SignVote,
@@ -83,7 +82,6 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetVersion => "getVersion",
             RpcRequest::GetVoteAccounts => "getVoteAccounts",
             RpcRequest::RegisterNode => "registerNode",
-            RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
@@ -167,10 +165,6 @@ mod tests {
         let test_request = RpcRequest::GetTransactionCount;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getTransactionCount");
-
-        let test_request = RpcRequest::RequestAirdrop;
-        let request = test_request.build_request_json(1, Value::Null);
-        assert_eq!(request["method"], "requestAirdrop");
 
         let test_request = RpcRequest::SendTransaction;
         let request = test_request.build_request_json(1, Value::Null);
