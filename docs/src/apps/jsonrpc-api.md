@@ -50,6 +50,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
 * [requestAirdrop](jsonrpc-api.md#requestairdrop)
 * [sendTransaction](jsonrpc-api.md#sendtransaction)
+* [simulateTransaction](jsonrpc-api.md#simulatetransaction)
 * [setLogFilter](jsonrpc-api.md#setlogfilter)
 * [validatorExit](jsonrpc-api.md#validatorexit)
 * [Subscription Websocket](jsonrpc-api.md#subscription-websocket)
@@ -1112,10 +1113,34 @@ Creates new transaction
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"sendTransaction", "params":["3gKEMTuxvm3DKEJc4UyiyoNz1sxwdVRW2pyDDXqaCvUjGApnsazGh2y4W92zuaSSdJhBbWLYAkZokBt4N5oW27R7zCVaLLpLxvATL2GgheEh9DmmDR1P9r1ZqirVXM2fF3z5cafmc4EtwWc1UErFdCWj1qYvy4bDGMLXRYLURxaKytEEqrxz6JXj8rUHhDpjTZeFxmC6iAW3hZr6cmaAzewQCQfiEv2HfydriwHDtN95u3Y1EF6SuXxcRqox2aTjGye2Ln9zFj4XbnAtjCmkZhR"]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"sendTransaction", "params":["4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":"2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b","id":1}
+{"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
+```
+
+### simulateTransaction
+
+Simulate sending a transaction
+
+#### Parameters:
+
+* `<string>` - Transaction, as base-58 encoded string.  The transaction must have a valid blockhash, but is not required to be signed.
+* `<object>` - (optional) Configuration object containing the following field:
+  * `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+
+#### Results:
+
+An RpcResponse containing a TransactionStatus object
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"simulateTransaction", "params":["4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":218},"value":{"confirmations":0,"err":null,"slot":218,"status":{"Ok":null}}},"id":1}
 ```
 
 ### setLogFilter

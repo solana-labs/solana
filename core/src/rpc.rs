@@ -847,6 +847,14 @@ pub trait RpcSol {
     #[rpc(meta, name = "sendTransaction")]
     fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String>;
 
+    #[rpc(meta, name = "simulateTransaction")]
+    fn simulate_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSimulateTransactionConfig>,
+    ) -> RpcResponse<TransactionStatus>;
+
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(
         &self,
@@ -1327,39 +1335,65 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
-        let data = bs58::decode(data).into_vec().unwrap();
-        if data.len() >= PACKET_DATA_SIZE {
-            info!(
-                "send_transaction: transaction too large: {} bytes (max: {} bytes)",
-                data.len(),
-                PACKET_DATA_SIZE
-            );
-            return Err(Error::invalid_request());
-        }
-        let tx: Transaction = bincode::config()
-            .limit(PACKET_DATA_SIZE as u64)
-            .deserialize(&data)
-            .map_err(|err| {
-                info!("send_transaction: deserialize error: {:?}", err);
-                Error::invalid_request()
-            })?;
-
+        let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         trace!("send_transaction: leader is {:?}", &tpu_addr);
         transactions_socket
-            .send_to(&data, tpu_addr)
+            .send_to(&wire_transaction, tpu_addr)
             .map_err(|err| {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let signature = tx.signatures[0].to_string();
+        let signature = transaction.signatures[0].to_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
-            data.len(),
+            wire_transaction.len(),
             signature
         );
         Ok(signature)
+    }
+
+    fn simulate_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSimulateTransactionConfig>,
+    ) -> RpcResponse<TransactionStatus> {
+        let (_, transaction) = deserialize_bs58_transaction(data)?;
+        let config = config.unwrap_or(RpcSimulateTransactionConfig { sig_verify: false });
+
+        let bank = &*meta.request_processor.read().unwrap().bank(None)?;
+        assert!(bank.is_frozen());
+
+        let mut result = if config.sig_verify {
+            transaction.verify()
+        } else {
+            Ok(())
+        };
+
+        if result.is_ok() {
+            let transactions = [transaction];
+            let batch = bank.prepare_batch(&transactions, None);
+            let (
+                _loaded_accounts,
+                executed,
+                _retryable_transactions,
+                _transaction_count,
+                _signature_count,
+            ) = bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
+            result = executed[0].0.clone();
+        }
+
+        new_response(
+            &bank,
+            TransactionStatus {
+                slot: bank.slot(),
+                confirmations: Some(0),
+                status: result.clone(),
+                err: result.err(),
+            },
+        )
     }
 
     fn get_slot_leader(
@@ -1496,6 +1530,26 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_first_available_block()
     }
+}
+
+fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
+    let wire_transaction = bs58::decode(bs58_transaction).into_vec().unwrap();
+    if wire_transaction.len() >= PACKET_DATA_SIZE {
+        info!(
+            "transaction too large: {} bytes (max: {} bytes)",
+            wire_transaction.len(),
+            PACKET_DATA_SIZE
+        );
+        return Err(Error::invalid_request());
+    }
+    bincode::config()
+        .limit(PACKET_DATA_SIZE as u64)
+        .deserialize(&wire_transaction)
+        .map_err(|err| {
+            info!("transaction deserialize error: {:?}", err);
+            Error::invalid_request()
+        })
+        .map(|transaction| (wire_transaction, transaction))
 }
 
 #[cfg(test)]
@@ -2144,6 +2198,133 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_simulate_transaction() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            alice,
+            bank,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let mut tx = system_transaction::transfer(&alice, &bob_pubkey, 1234, blockhash);
+        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        tx.signatures[0] = Signature::default();
+        let tx_badsig_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+
+        bank.freeze(); // Ensure the root bank is frozen, `start_rpc_handler_with_tx()` doesn't do this
+
+        // Good signature with sigVerify=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad signature with sigVerify=true
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
+            tx_badsig_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"confirmations":0,"slot":0,"status":{"Err":"SignatureFailure"},"err":"SignatureFailure"}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad signature with sigVerify=false
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": false}}]}}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Bad signature with default sigVerify setting (false)
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}"]}}"#,
+            tx_serialized_encoded,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_rpc_simulate_transaction_panic_on_unfrozen_bank() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            alice,
+            bank,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 1234, blockhash);
+        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+
+        assert!(!bank.is_frozen());
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}", {{"sigVerify": true}}]}}"#,
+            tx_serialized_encoded,
+        );
+
+        // should panic because `bank` is not frozen
+        let _ = io.handle_request_sync(&req, meta.clone());
     }
 
     #[test]
