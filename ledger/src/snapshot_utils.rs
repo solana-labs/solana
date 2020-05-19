@@ -12,7 +12,7 @@ use solana_runtime::{
     bank::{Bank, BankSlotDelta},
     serde_snapshot::{
         context_bankrc_from_stream, context_bankrc_to_stream, SerdeContextV1_1_0,
-        SerdeContextV1_1_1, SnapshotStorage, SnapshotStorages,
+        SerdeContextV1_2_0, SnapshotStorage, SnapshotStorages,
     },
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
@@ -36,15 +36,15 @@ pub const TAR_VERSION_FILE: &str = "version";
 
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_1_0: &str = "1.1.0";
-const VERSION_STRING_V1_1_1: &str = "1.1.1";
-const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_1_1;
+const VERSION_STRING_V1_2_0: &str = "1.2.0";
+const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 
-type DefaultSerdeContextType = SerdeContextV1_1_1;
+type DefaultSerdeContextType = SerdeContextV1_2_0;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
     V1_1_0,
-    V1_1_1,
+    V1_2_0,
 }
 
 impl Default for SnapshotVersion {
@@ -57,7 +57,7 @@ impl From<SnapshotVersion> for &'static str {
     fn from(snapshot_version: SnapshotVersion) -> &'static str {
         match snapshot_version {
             SnapshotVersion::V1_1_0 => VERSION_STRING_V1_1_0,
-            SnapshotVersion::V1_1_1 => VERSION_STRING_V1_1_1,
+            SnapshotVersion::V1_2_0 => VERSION_STRING_V1_2_0,
         }
     }
 }
@@ -68,7 +68,7 @@ impl FromStr for SnapshotVersion {
     fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
         match version_string {
             VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
-            VERSION_STRING_V1_1_1 => Ok(SnapshotVersion::V1_1_1),
+            VERSION_STRING_V1_2_0 => Ok(SnapshotVersion::V1_2_0),
             _ => Err("unsupported snapshot version"),
         }
     }
@@ -719,7 +719,7 @@ where
                     &mut stream,
                     &append_vecs_path,
                 ),
-                SnapshotVersion::V1_1_1 => context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
+                SnapshotVersion::V1_2_0 => context_bankrc_from_stream::<SerdeContextV1_2_0, _, _>(
                     account_paths,
                     bank.slot(),
                     &mut stream,
