@@ -1,6 +1,6 @@
 use solana_ledger::{
     blockstore::Blockstore,
-    shred::{Nonce, Shred, SIZE_OF_NONCE},
+    shred::{Nonce, SIZE_OF_NONCE},
 };
 use solana_perf::packet::limited_deserialize;
 use solana_sdk::{clock::Slot, packet::Packet};
@@ -11,43 +11,31 @@ pub fn repair_response_packet(
     slot: Slot,
     shred_index: u64,
     dest: &SocketAddr,
-    nonce: Option<Nonce>,
+    nonce: Nonce,
 ) -> Option<Packet> {
-    if Shred::is_nonce_unlocked(slot) && nonce.is_none()
-        || !Shred::is_nonce_unlocked(slot) && nonce.is_some()
-    {
-        return None;
-    }
     let shred = blockstore
         .get_data_shred(slot, shred_index)
         .expect("Blockstore could not get data shred");
-    shred.map(|shred| repair_response_packet_from_shred(slot, shred, dest, nonce))
+    shred
+        .map(|shred| repair_response_packet_from_shred(shred, dest, nonce))
+        .unwrap_or(None)
 }
 
 pub fn repair_response_packet_from_shred(
-    slot: Slot,
     shred: Vec<u8>,
     dest: &SocketAddr,
-    nonce: Option<Nonce>,
-) -> Packet {
-    let size_of_nonce = {
-        if Shred::is_nonce_unlocked(slot) {
-            assert!(nonce.is_some());
-            SIZE_OF_NONCE
-        } else {
-            assert!(nonce.is_none());
-            0
-        }
-    };
+    nonce: Nonce,
+) -> Option<Packet> {
     let mut packet = Packet::default();
-    packet.meta.size = shred.len() + size_of_nonce;
+    packet.meta.size = shred.len() + SIZE_OF_NONCE;
+    if packet.meta.size > packet.data.len() {
+        return None;
+    }
     packet.meta.set_addr(dest);
     packet.data[..shred.len()].copy_from_slice(&shred);
     let mut wr = io::Cursor::new(&mut packet.data[shred.len()..]);
-    if let Some(nonce) = nonce {
-        bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
-    }
-    packet
+    bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
+    Some(packet)
 }
 
 pub fn nonce(buf: &[u8]) -> Option<Nonce> {
@@ -62,7 +50,7 @@ pub fn nonce(buf: &[u8]) -> Option<Nonce> {
 mod test {
     use super::*;
     use solana_ledger::{
-        shred::{Shred, Shredder, UNLOCK_NONCE_SLOT},
+        shred::{Shred, Shredder},
         sigverify_shreds::verify_shred_cpu,
     };
     use solana_sdk::signature::{Keypair, Signer};
@@ -88,17 +76,13 @@ mod test {
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         trace!("signature {}", shred.common_header.signature);
-        let nonce = if Shred::is_nonce_unlocked(slot) {
-            Some(9)
-        } else {
-            None
-        };
+        let nonce = 9;
         let mut packet = repair_response_packet_from_shred(
-            slot,
             shred.payload,
             &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             nonce,
-        );
+        )
+        .unwrap();
         packet.meta.repair = true;
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
@@ -123,7 +107,6 @@ mod test {
 
     #[test]
     fn test_sigverify_shred_cpu_repair() {
-        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT);
-        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT + 1);
+        run_test_sigverify_shred_cpu_repair(0xdead_c0de);
     }
 }

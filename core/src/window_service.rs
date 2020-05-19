@@ -196,8 +196,7 @@ where
                             let serialized_shred = packet.data.to_vec();
                             if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
                                 let repair_info = {
-                                    if packet.meta.repair && Shred::is_nonce_unlocked(shred.slot())
-                                    {
+                                    if packet.meta.repair {
                                         if let Some(nonce) = repair_response::nonce(&packet.data) {
                                             let repair_info = RepairMeta {
                                                 _from_addr: packet.meta.addr(),
@@ -537,7 +536,7 @@ mod test {
         entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
-        shred::{DataShredHeader, Shredder, NONCE_SHRED_PAYLOAD_SIZE},
+        shred::{DataShredHeader, Shredder},
     };
     use solana_sdk::{
         clock::Slot,
@@ -601,12 +600,8 @@ mod test {
 
         // If it's a coding shred, test that slot >= root
         let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
-        let mut coding_shred = Shred::new_empty_from_header(
-            common,
-            DataShredHeader::default(),
-            coding,
-            NONCE_SHRED_PAYLOAD_SIZE,
-        );
+        let mut coding_shred =
+            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(
             should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0, 0),

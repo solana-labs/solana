@@ -4,7 +4,6 @@ use rand::{thread_rng, Rng};
 use solana_core::{
     contact_info::ContactInfo, gossip_service::discover, serve_repair::RepairProtocol,
 };
-use solana_ledger::shred::UNLOCK_NONCE_SLOT;
 use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
@@ -46,17 +45,17 @@ fn run_dos(
     contact.id = Pubkey::new_rand();
     match data_type.as_str() {
         "repair_highest" => {
-            let slot = UNLOCK_NONCE_SLOT + 1;
+            let slot = 100;
             let req = RepairProtocol::WindowIndexWithNonce(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_shred" => {
-            let slot = UNLOCK_NONCE_SLOT + 1;
+            let slot = 100;
             let req = RepairProtocol::HighestWindowIndexWithNonce(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_orphan" => {
-            let slot = UNLOCK_NONCE_SLOT + 1;
+            let slot = 100;
             let req = RepairProtocol::OrphanWithNonce(contact, slot, 0);
             data = bincode::serialize(&req).unwrap();
         }

@@ -11,7 +11,7 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-    shred::{Nonce, Shred},
+    shred::Nonce,
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
@@ -313,18 +313,13 @@ impl RepairService {
 
                 if let Some(repairs) = repairs {
                     for repair_type in repairs {
-                        let nonce = if Shred::is_nonce_unlocked(*slot) {
-                            Some(DEFAULT_NONCE)
-                        } else {
-                            None
-                        };
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
                             &repair_addr,
                             serve_repair,
                             repair_stats,
-                            nonce,
+                            DEFAULT_NONCE,
                         ) {
                             info!("repair req send_to({}) error {:?}", repair_addr, e);
                         }
@@ -345,7 +340,7 @@ impl RepairService {
         to: &SocketAddr,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
-        nonce: Option<Nonce>,
+        nonce: Nonce,
     ) -> Result<()> {
         let req = serve_repair.map_repair_request(&repair_type, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;

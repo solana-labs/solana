@@ -1,5 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::shred::{Shred, ShredType, SIZE_OF_NONCE};
+use crate::shred::{ShredType, SIZE_OF_NONCE};
 use rayon::{
     iter::{
         IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
@@ -57,7 +57,7 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
         return Some(0);
     }
     let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
-    let msg_end = if packet.meta.repair && Shred::is_nonce_unlocked(slot) {
+    let msg_end = if packet.meta.repair {
         packet.meta.size.saturating_sub(SIZE_OF_NONCE)
     } else {
         packet.meta.size
@@ -101,7 +101,7 @@ fn slot_key_data_for_gpu<
     batches: &[Packets],
     slot_keys: &HashMap<u64, T>,
     recycler_cache: &RecyclerCache,
-) -> (PinnedVec<u8>, TxOffset, usize, Vec<Vec<Slot>>) {
+) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
     let slots: Vec<Vec<Slot>> = SIGVERIFY_THREAD_POOL.install(|| {
@@ -164,7 +164,7 @@ fn slot_key_data_for_gpu<
     trace!("keyvec.len: {}", keyvec.len());
     trace!("keyvec: {:?}", keyvec);
     trace!("offsets: {:?}", offsets);
-    (keyvec, offsets, num_in_packets, slots)
+    (keyvec, offsets, num_in_packets)
 }
 
 fn vec_size_in_packets(keyvec: &PinnedVec<u8>) -> usize {
@@ -184,7 +184,6 @@ fn shred_gpu_offsets(
     mut pubkeys_end: usize,
     batches: &[Packets],
     recycler_cache: &RecyclerCache,
-    slots: Option<Vec<Vec<Slot>>>,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
     let mut signature_offsets = recycler_cache.offsets().allocate("shred_signatures");
     signature_offsets.set_pinnable();
@@ -193,26 +192,13 @@ fn shred_gpu_offsets(
     let mut msg_sizes = recycler_cache.offsets().allocate("shred_msg_sizes");
     msg_sizes.set_pinnable();
     let mut v_sig_lens = vec![];
-    let mut slots_iter;
-    let mut slots_iter_ref: &mut dyn Iterator<Item = Vec<Slot>> = &mut std::iter::repeat(vec![]);
-    if let Some(slots) = slots {
-        slots_iter = slots.into_iter();
-        slots_iter_ref = &mut slots_iter;
-    }
-    for (batch, slots) in batches.iter().zip(slots_iter_ref) {
+    for batch in batches.iter() {
         let mut sig_lens = Vec::new();
-        let mut inner_slot_iter;
-        let mut inner_slot_iter_ref: &mut dyn Iterator<Item = Slot> = &mut std::iter::repeat(0);
-        if !slots.is_empty() {
-            inner_slot_iter = slots.into_iter();
-            inner_slot_iter_ref = &mut inner_slot_iter;
-        };
-
-        for (packet, slot) in batch.packets.iter().zip(inner_slot_iter_ref) {
+        for packet in batch.packets.iter() {
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
-            let msg_end = if packet.meta.repair && Shred::is_nonce_unlocked(slot) {
+            let msg_end = if packet.meta.repair {
                 sig_start + packet.meta.size.saturating_sub(SIZE_OF_NONCE)
             } else {
                 sig_start + packet.meta.size
@@ -247,7 +233,7 @@ pub fn verify_shreds_gpu(
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
     let count = batch_size(batches);
-    let (pubkeys, pubkey_offsets, mut num_packets, slots) =
+    let (pubkeys, pubkey_offsets, mut num_packets) =
         slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
@@ -255,7 +241,7 @@ pub fn verify_shreds_gpu(
     trace!("num_packets: {}", num_packets);
     trace!("pubkeys_len: {}", pubkeys_len);
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
-        shred_gpu_offsets(pubkeys_len, batches, recycler_cache, Some(slots));
+        shred_gpu_offsets(pubkeys_len, batches, recycler_cache);
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     elems.push(
@@ -392,7 +378,7 @@ pub fn sign_shreds_gpu(
 
     trace!("offset: {}", offset);
     let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
-        shred_gpu_offsets(offset, batches, recycler_cache, None);
+        shred_gpu_offsets(offset, batches, recycler_cache);
     let total_sigs = signature_offsets.len();
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
@@ -470,7 +456,7 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD, UNLOCK_NONCE_SLOT};
+    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD};
     use solana_sdk::signature::{Keypair, Signer};
 
     fn run_test_sigverify_shred_cpu(slot: Slot) {
@@ -723,7 +709,6 @@ pub mod tests {
 
     #[test]
     fn test_sigverify_shreds_sign_cpu() {
-        run_test_sigverify_shreds_sign_cpu(UNLOCK_NONCE_SLOT);
-        run_test_sigverify_shreds_sign_cpu(UNLOCK_NONCE_SLOT + 1);
+        run_test_sigverify_shreds_sign_cpu(0xdead_c0de);
     }
 }
