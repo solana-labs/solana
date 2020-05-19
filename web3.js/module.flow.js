@@ -211,6 +211,7 @@ declare module '@solana/web3.js' {
       commitment: ?Commitment,
     ): Promise<RpcResponseAndContext<number>>;
     getBalance(publicKey: PublicKey, commitment: ?Commitment): Promise<number>;
+    getBlockTime(slot: number): Promise<number | null>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
     getConfirmedTransaction(

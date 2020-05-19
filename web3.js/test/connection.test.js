@@ -1039,6 +1039,29 @@ test('get recent blockhash', async () => {
   expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
 });
 
+test('get block time', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getBlockTime',
+      params: [1],
+    },
+    {
+      error: null,
+      result: 10000,
+    },
+  ]);
+
+  const blockTime = await connection.getBlockTime(1);
+  if (blockTime === null) {
+    expect(blockTime).not.toBeNull();
+  } else {
+    expect(blockTime).toBeGreaterThan(0);
+  }
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 
