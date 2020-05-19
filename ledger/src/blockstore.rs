@@ -2126,10 +2126,11 @@ impl Blockstore {
         let data_shreds = data_shreds?;
         assert!(data_shreds.last().unwrap().data_complete());
 
-        let deshred_payload = Shredder::deshred(&data_shreds).map_err(|_| {
-            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                "Could not reconstruct data block from constituent shreds".to_string(),
-            )))
+        let deshred_payload = Shredder::deshred(&data_shreds).map_err(|e| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "Could not reconstruct data block from constituent shreds, error: {:?}",
+                e
+            ))))
         })?;
 
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
@@ -3187,7 +3188,7 @@ pub mod tests {
     #[test]
     fn test_insert_get_bytes() {
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
 
         let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
@@ -3447,7 +3448,7 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_basic() {
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
 
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
@@ -3494,7 +3495,7 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_reverse() {
         let num_shreds = 10;
-        let num_entries = max_ticks_per_n_shreds(num_shreds);
+        let num_entries = max_ticks_per_n_shreds(num_shreds, None);
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
@@ -3671,7 +3672,7 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // Create enough entries to ensure there are at least two shreds created
-            let min_entries = max_ticks_per_n_shreds(1) + 1;
+            let min_entries = max_ticks_per_n_shreds(1, None) + 1;
             for i in 0..4 {
                 let slot = i;
                 let parent_slot = if i == 0 { 0 } else { i - 1 };
@@ -4096,7 +4097,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_slots = 15;
             // Create enough entries to ensure there are at least two shreds created
-            let entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
             assert!(entries_per_slot > 1);
 
             let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
@@ -4463,7 +4464,7 @@ pub mod tests {
         let gap: u64 = 10;
         assert!(gap > 3);
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
@@ -4902,7 +4903,7 @@ pub mod tests {
             // Trying to insert value into slot <= than last root should fail
             {
                 let mut coding_shred =
-                    Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
+                    Shred::new_empty_from_header(shred.clone(), DataShredHeader::default(), coding);
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());
                 assert!(!Blockstore::should_insert_coding_shred(

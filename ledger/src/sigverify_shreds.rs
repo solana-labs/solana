@@ -1,5 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::shred::ShredType;
+use crate::shred::{ShredType, SIZE_OF_NONCE};
 use rayon::{
     iter::{
         IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
@@ -16,9 +16,12 @@ use solana_perf::{
     sigverify::{self, batch_size, TxOffset},
 };
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::{
+    clock::Slot,
+    pubkey::Pubkey,
+    signature::Signature,
+    signature::{Keypair, Signer},
+};
 use std::sync::Arc;
 use std::{collections::HashMap, mem::size_of};
 
@@ -40,13 +43,12 @@ lazy_static! {
 ///   ...
 /// }
 /// Signature is the first thing in the packet, and slot is the first thing in the signed message.
-fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> Option<u8> {
+pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> Option<u8> {
     let sig_start = 0;
     let sig_end = size_of::<Signature>();
     let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
-    let msg_end = packet.meta.size;
     if packet.meta.discard {
         return Some(0);
     }
@@ -55,6 +57,11 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
         return Some(0);
     }
     let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
+    let msg_end = if packet.meta.repair {
+        packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+    } else {
+        packet.meta.size
+    };
     trace!("slot {}", slot);
     let pubkey = slot_leaders.get(&slot)?;
     if packet.meta.size < sig_end {
@@ -97,7 +104,7 @@ fn slot_key_data_for_gpu<
 ) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
-    let slots: Vec<Vec<u64>> = SIGVERIFY_THREAD_POOL.install(|| {
+    let slots: Vec<Vec<Slot>> = SIGVERIFY_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .map(|p| {
@@ -185,13 +192,17 @@ fn shred_gpu_offsets(
     let mut msg_sizes = recycler_cache.offsets().allocate("shred_msg_sizes");
     msg_sizes.set_pinnable();
     let mut v_sig_lens = vec![];
-    for batch in batches {
+    for batch in batches.iter() {
         let mut sig_lens = Vec::new();
-        for packet in &batch.packets {
+        for packet in batch.packets.iter() {
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
-            let msg_end = sig_start + packet.meta.size;
+            let msg_end = if packet.meta.repair {
+                sig_start + packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+            } else {
+                sig_start + packet.meta.size
+            };
             signature_offsets.push(sig_start as u32);
             msg_start_offsets.push(msg_start as u32);
             let msg_size = if msg_end < msg_start {
@@ -445,14 +456,12 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
-    use crate::shred::{Shred, Shredder};
+    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD};
     use solana_sdk::signature::{Keypair, Signer};
-    #[test]
-    fn test_sigverify_shred_cpu() {
+
+    fn run_test_sigverify_shred_cpu(slot: Slot) {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -492,10 +501,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_cpu() {
+    fn test_sigverify_shred_cpu() {
+        run_test_sigverify_shred_cpu(0xdead_c0de);
+    }
+
+    fn run_test_sigverify_shreds_cpu(slot: Slot) {
         solana_logger::setup();
         let mut batch = [Packets::default()];
-        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -542,12 +554,15 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_gpu() {
+    fn test_sigverify_shreds_cpu() {
+        run_test_sigverify_shreds_cpu(0xdead_c0de);
+    }
+
+    fn run_test_sigverify_shreds_gpu(slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -603,14 +618,17 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_sign_gpu() {
+    fn test_sigverify_shreds_gpu() {
+        run_test_sigverify_shreds_gpu(0xdead_c0de);
+    }
+
+    fn run_test_sigverify_shreds_sign_gpu(slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
         let mut packets = Packets::default();
         let num_packets = 32;
         let num_batches = 100;
-        let slot = 0xdead_c0de;
         packets.packets.resize(num_packets, Packet::default());
         for (i, p) in packets.packets.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
@@ -650,11 +668,14 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_sign_cpu() {
+    fn test_sigverify_shreds_sign_gpu() {
+        run_test_sigverify_shreds_sign_gpu(0xdead_c0de);
+    }
+
+    fn run_test_sigverify_shreds_sign_cpu(slot: Slot) {
         solana_logger::setup();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdead_c0de;
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
             slot,
@@ -684,5 +705,10 @@ pub mod tests {
         sign_shreds_cpu(&keypair, &mut batch);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
         assert_eq!(rv, vec![vec![1]]);
+    }
+
+    #[test]
+    fn test_sigverify_shreds_sign_cpu() {
+        run_test_sigverify_shreds_sign_cpu(0xdead_c0de);
     }
 }

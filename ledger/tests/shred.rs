@@ -1,16 +1,15 @@
 use solana_ledger::entry::Entry;
 use solana_ledger::shred::{
-    max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+    max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
+    MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
 };
 use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::{hash::Hash, system_transaction};
+use solana_sdk::{clock::Slot, hash::Hash, system_transaction};
 use std::convert::TryInto;
 use std::sync::Arc;
 
-#[test]
-fn test_multi_fec_block_coding() {
+fn run_test_multi_fec_block_coding(slot: Slot) {
     let keypair = Arc::new(Keypair::new());
-    let slot = 0x1234_5678_9abc_def0;
     let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
         .expect("Failed in creating shredder");
 
@@ -20,7 +19,8 @@ fn test_multi_fec_block_coding() {
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
     let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
-    let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64);
+    let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
+    let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(no_header_size));
 
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
@@ -93,4 +93,9 @@ fn test_multi_fec_block_coding() {
 
     let result = Shredder::deshred(&all_shreds[..]).unwrap();
     assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
+}
+
+#[test]
+fn test_multi_fec_block_coding() {
+    run_test_multi_fec_block_coding(0x1234_5678_9abc_def0);
 }

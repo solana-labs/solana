@@ -4029,6 +4029,7 @@ dependencies = [
  "rayon",
  "solana-clap-utils",
  "solana-core",
+ "solana-ledger",
  "solana-logger",
  "solana-net-utils",
  "solana-runtime",

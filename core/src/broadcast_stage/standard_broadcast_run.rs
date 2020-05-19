@@ -428,7 +428,7 @@ mod test {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(leader_info.info));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
-        genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;
+        genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;
         let bank0 = Arc::new(Bank::new(&genesis_config));
         (
             blockstore,
@@ -537,7 +537,11 @@ mod test {
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
         assert!(num_shreds < num_shreds_per_slot);
-        let ticks1 = create_ticks(max_ticks_per_n_shreds(num_shreds), 0, genesis_config.hash());
+        let ticks1 = create_ticks(
+            max_ticks_per_n_shreds(num_shreds, None),
+            0,
+            genesis_config.hash(),
+        );
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),

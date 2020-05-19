@@ -5,12 +5,13 @@ use crate::{
     cluster_slots::ClusterSlots,
     consensus::VOTE_THRESHOLD_SIZE,
     result::Result,
-    serve_repair::{RepairType, ServeRepair},
+    serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
+    shred::Nonce,
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
@@ -104,7 +105,7 @@ impl RepairService {
                     &blockstore,
                     &exit,
                     &repair_socket,
-                    &cluster_info,
+                    cluster_info,
                     repair_info,
                     &cluster_slots,
                 )
@@ -118,19 +119,19 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        cluster_info: &Arc<ClusterInfo>,
+        cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
-        cluster_slots: &Arc<ClusterSlots>,
+        cluster_slots: &ClusterSlots,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
-        Self::initialize_lowest_slot(id, blockstore, cluster_info);
+        Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();
         let mut duplicate_slot_repair_statuses = HashMap::new();
         Self::initialize_epoch_slots(
             blockstore,
-            cluster_info,
+            &cluster_info,
             &repair_info.completed_slots_receiver,
         );
         loop {
@@ -144,7 +145,7 @@ impl RepairService {
                 let lowest_slot = blockstore.lowest_slot();
                 Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                 Self::update_completed_slots(&repair_info.completed_slots_receiver, &cluster_info);
-                cluster_slots.update(new_root, cluster_info, &repair_info.bank_forks);
+                cluster_slots.update(new_root, &cluster_info, &repair_info.bank_forks);
                 let new_duplicate_slots = Self::find_new_duplicate_slots(
                     &duplicate_slot_repair_statuses,
                     blockstore,
@@ -178,27 +179,19 @@ impl RepairService {
 
             if let Ok(repairs) = repairs {
                 let mut cache = HashMap::new();
-                let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
-                    .into_iter()
-                    .filter_map(|repair_request| {
-                        serve_repair
-                            .repair_request(
-                                &cluster_slots,
-                                &repair_request,
-                                &mut cache,
-                                &mut repair_stats,
-                            )
-                            .map(|result| (result, repair_request))
-                            .ok()
-                    })
-                    .collect();
-
-                for ((to, req), _) in reqs {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
-                }
+                repairs.into_iter().for_each(|repair_request| {
+                    if let Ok((to, req)) = serve_repair.repair_request(
+                        &cluster_slots,
+                        repair_request,
+                        &mut cache,
+                        &mut repair_stats,
+                    ) {
+                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                            info!("{} repair req send_to({}) error {:?}", id, to, e);
+                            0
+                        });
+                    }
+                });
             }
 
             if last_stats.elapsed().as_secs() > 1 {
@@ -326,6 +319,7 @@ impl RepairService {
                             &repair_addr,
                             serve_repair,
                             repair_stats,
+                            DEFAULT_NONCE,
                         ) {
                             info!("repair req send_to({}) error {:?}", repair_addr, e);
                         }
@@ -346,8 +340,9 @@ impl RepairService {
         to: &SocketAddr,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
+        nonce: Nonce,
     ) -> Result<()> {
-        let req = serve_repair.map_repair_request(&repair_type, repair_stats)?;
+        let req = serve_repair.map_repair_request(&repair_type, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;
         Ok(())
     }
@@ -740,7 +735,7 @@ mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {
@@ -850,7 +845,7 @@ mod test {
         );
 
         // Insert some shreds to create a SlotMeta, should make repairs
-        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
@@ -883,7 +878,7 @@ mod test {
         };
 
         // Insert some shreds to create a SlotMeta,
-        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)

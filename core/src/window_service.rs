@@ -4,8 +4,10 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
+    repair_response,
     repair_service::{RepairInfo, RepairService},
     result::{Error, Result},
+    serve_repair::DEFAULT_NONCE,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
@@ -13,24 +15,25 @@ use crossbeam_channel::{
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blockstore::{
-    self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT,
+use solana_ledger::{
+    bank_forks::BankForks,
+    blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+    leader_schedule_cache::LeaderScheduleCache,
+    shred::{Nonce, Shred},
 };
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::{Duration, Instant};
+use std::{
+    net::{SocketAddr, UdpSocket},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -107,8 +110,15 @@ fn run_check_duplicate(
     Ok(())
 }
 
+fn verify_repair(_shred: &Shred, repair_info: &Option<RepairMeta>) -> bool {
+    repair_info
+        .as_ref()
+        .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
+        .unwrap_or(true)
+}
+
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<Vec<Shred>>,
+    shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
@@ -118,11 +128,15 @@ where
     F: Fn(Shred) -> (),
 {
     let timer = Duration::from_millis(200);
-    let mut shreds = shred_receiver.recv_timeout(timer)?;
-
-    while let Ok(mut more_shreds) = shred_receiver.try_recv() {
-        shreds.append(&mut more_shreds)
+    let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
+    while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
+        shreds.extend(more_shreds);
+        repair_infos.extend(more_repair_infos);
     }
+
+    assert_eq!(shreds.len(), repair_infos.len());
+    let mut i = 0;
+    shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
 
     blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -136,7 +150,7 @@ where
 
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
-    insert_shred_sender: &CrossbeamSender<Vec<Shred>>,
+    insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
     retransmit: &PacketSender,
@@ -160,7 +174,7 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blockstore.last_root();
-    let shreds: Vec<_> = thread_pool.install(|| {
+    let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter_mut()
             .flat_map(|packets| {
@@ -169,34 +183,58 @@ where
                     .iter_mut()
                     .filter_map(|packet| {
                         if packet.meta.discard {
-                            inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
+                            inc_new_counter_debug!(
+                                "streamer-recv_window-invalid_or_unnecessary_packet",
+                                1
+                            );
                             None
-                        } else if let Ok(shred) =
-                            Shred::new_from_serialized_shred(packet.data.to_vec())
-                        {
-                            if shred_filter(&shred, last_root) {
-                                // Mark slot as dead if the current shred is on the boundary
-                                // of max shreds per slot. However, let the current shred
-                                // get retransmitted. It'll allow peer nodes to see this shred
-                                // and trigger them to mark the slot as dead.
-                                if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
-                                    let _ = blockstore.set_dead_slot(shred.slot());
+                        } else {
+                            // shred fetch stage should be sending packets
+                            // with sufficiently large buffers. Needed to ensure
+                            // call to `new_from_serialized_shred` is safe.
+                            assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
+                            let serialized_shred = packet.data.to_vec();
+                            if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
+                                let repair_info = {
+                                    if packet.meta.repair {
+                                        if let Some(nonce) = repair_response::nonce(&packet.data) {
+                                            let repair_info = RepairMeta {
+                                                _from_addr: packet.meta.addr(),
+                                                nonce,
+                                            };
+                                            Some(repair_info)
+                                        } else {
+                                            // If can't parse the nonce, dump the packet
+                                            return None;
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                };
+                                if shred_filter(&shred, last_root) {
+                                    // Mark slot as dead if the current shred is on the boundary
+                                    // of max shreds per slot. However, let the current shred
+                                    // get retransmitted. It'll allow peer nodes to see this shred
+                                    // and trigger them to mark the slot as dead.
+                                    if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
+                                        let _ = blockstore.set_dead_slot(shred.slot());
+                                    }
+                                    packet.meta.slot = shred.slot();
+                                    packet.meta.seed = shred.seed();
+                                    Some((shred, repair_info))
+                                } else {
+                                    packet.meta.discard = true;
+                                    None
                                 }
-                                packet.meta.slot = shred.slot();
-                                packet.meta.seed = shred.seed();
-                                Some(shred)
                             } else {
                                 packet.meta.discard = true;
                                 None
                             }
-                        } else {
-                            packet.meta.discard = true;
-                            None
                         }
                     })
                     .collect::<Vec<_>>()
             })
-            .collect()
+            .unzip()
     });
 
     trace!("{:?} shreds from packets", shreds.len());
@@ -210,7 +248,7 @@ where
         }
     }
 
-    insert_shred_sender.send(shreds)?;
+    insert_shred_sender.send((shreds, repair_infos))?;
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -218,6 +256,11 @@ where
     );
 
     Ok(())
+}
+
+struct RepairMeta {
+    _from_addr: SocketAddr,
+    nonce: Nonce,
 }
 
 // Implement a destructor for the window_service thread to signal it exited
@@ -340,7 +383,7 @@ impl WindowService {
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        insert_receiver: CrossbeamReceiver<Vec<Shred>>,
+        insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         duplicate_sender: CrossbeamSender<Shred>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
@@ -390,7 +433,7 @@ impl WindowService {
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        insert_sender: CrossbeamSender<Vec<Shred>>,
+        insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
@@ -488,13 +531,12 @@ impl WindowService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
-        shred::Shredder,
+        shred::{DataShredHeader, Shredder},
     };
     use solana_sdk::{
         clock::Slot,
