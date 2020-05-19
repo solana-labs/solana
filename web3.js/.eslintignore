@@ -5,3 +5,4 @@
 /flow-typed
 /lib
 /module.flow.js
+/jest-environment.js
