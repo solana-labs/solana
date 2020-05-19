@@ -47,7 +47,6 @@ script:
   - examples/bpf-rust-noop/do.sh build
   - npm run localnet:update
   - npm run localnet:up
-  - npm run examples || true
   - npm run test:live
   - npm run localnet:down
 
