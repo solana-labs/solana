@@ -39,26 +39,26 @@ use std::{
 };
 
 pub struct RpcClient {
-    client: Box<dyn GenericRpcClientRequest + Send + Sync>,
+    client: Box<dyn GenericRpcClientRequest + Send + Sync + 'static>,
 }
 
 impl RpcClient {
-    pub fn new(url: String) -> Self {
+    pub fn new_sender<T: GenericRpcClientRequest + Send + Sync + 'static>(sender: T) -> Self {
         Self {
-            client: Box::new(RpcClientRequest::new(url)),
+            client: Box::new(sender),
         }
+    }
+
+    pub fn new(url: String) -> Self {
+        Self::new_sender(RpcClientRequest::new(url))
     }
 
     pub fn new_mock(url: String) -> Self {
-        Self {
-            client: Box::new(MockRpcClientRequest::new(url)),
-        }
+        Self::new_sender(MockRpcClientRequest::new(url))
     }
 
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
-        Self {
-            client: Box::new(MockRpcClientRequest::new_with_mocks(url, mocks)),
-        }
+        Self::new_sender(MockRpcClientRequest::new_with_mocks(url, mocks))
     }
 
     pub fn new_socket(addr: SocketAddr) -> Self {
