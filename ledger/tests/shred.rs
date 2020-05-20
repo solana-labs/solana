@@ -17,8 +17,18 @@ use std::{
 
 #[test]
 fn test_multi_fec_block_coding() {
+    run_test_multi_fec_block_coding(UNLOCK_NONCE_SLOT);
+    run_test_multi_fec_block_coding(UNLOCK_NONCE_SLOT + 1);
+}
+
+#[test]
+fn test_multi_fec_block_different_size_coding() {
+    run_test_multi_fec_block_different_size_coding(UNLOCK_NONCE_SLOT);
+    run_test_multi_fec_block_different_size_coding(UNLOCK_NONCE_SLOT + 1);
+}
+
+fn run_test_multi_fec_block_coding(slot: Slot) {
     let keypair = Arc::new(Keypair::new());
-    let slot = 0x1234_5678_9abc_def0;
     let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
         .expect("Failed in creating shredder");
 
@@ -28,16 +38,8 @@ fn test_multi_fec_block_coding() {
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
     let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
-<<<<<<< HEAD
     let no_header_size = Shredder::get_expected_data_shred_payload_size_from_slot(slot);
     let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(no_header_size));
-=======
-    let num_entries = max_entries_per_n_shred(
-        &entry,
-        num_data_shreds as u64,
-        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
-    );
->>>>>>> 439fd3084... Fix erasure (#10095)
 
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
@@ -112,14 +114,7 @@ fn test_multi_fec_block_coding() {
     assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
 }
 
-#[test]
-<<<<<<< HEAD
-fn test_multi_fec_block_coding() {
-    run_test_multi_fec_block_coding(UNLOCK_NONCE_SLOT);
-    run_test_multi_fec_block_coding(UNLOCK_NONCE_SLOT + 1);
-=======
-fn test_multi_fec_block_different_size_coding() {
-    let slot = 0x1234_5678_9abc_def0;
+fn run_test_multi_fec_block_different_size_coding(slot: Slot) {
     let parent_slot = slot - 5;
     let keypair = Arc::new(Keypair::new());
     let (fec_data, fec_coding, num_shreds_per_iter) =
@@ -218,11 +213,9 @@ fn setup_different_sized_fec_blocks(
     // will have 2 shreds.
     assert!(MAX_DATA_SHREDS_PER_FEC_BLOCK > 2);
     let num_shreds_per_iter = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2;
-    let num_entries = max_entries_per_n_shred(
-        &entry,
-        num_shreds_per_iter as u64,
-        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
-    );
+    let no_header_size = Shredder::get_expected_data_shred_payload_size_from_slot(slot);
+    let num_entries =
+        max_entries_per_n_shred(&entry, num_shreds_per_iter as u64, Some(no_header_size));
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
             let keypair0 = Keypair::new();
@@ -270,5 +263,4 @@ fn setup_different_sized_fec_blocks(
 
     assert_eq!(fec_data.len(), fec_coding.len());
     (fec_data, fec_coding, num_shreds_per_iter)
->>>>>>> 439fd3084... Fix erasure (#10095)
 }
