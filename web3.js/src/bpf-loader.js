@@ -39,7 +39,7 @@ export class BpfLoader {
     payer: Account,
     program: Account,
     elf: Buffer | Uint8Array | Array<number>,
-  ): Promise<PublicKey> {
+  ): Promise<void> {
     return Loader.load(connection, payer, program, BpfLoader.programId, elf);
   }
 }

@@ -39,10 +39,10 @@ test('load BPF C program', async () => {
   const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
   const program = new Account();
-  const programId = await BpfLoader.load(connection, from, program, data);
+  await BpfLoader.load(connection, from, program, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
-    programId,
+    programId: program.publicKey,
   });
   await sendAndConfirmTransaction(connection, transaction, from);
 });
@@ -68,10 +68,10 @@ test('load BPF Rust program', async () => {
   const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
   const program = new Account();
-  const programId = await BpfLoader.load(connection, from, program, data);
+  await BpfLoader.load(connection, from, program, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
-    programId,
+    programId: program.publicKey,
   });
   await sendAndConfirmTransaction(connection, transaction, from);
 });
