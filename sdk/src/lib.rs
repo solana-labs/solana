@@ -7,6 +7,7 @@ pub mod bpf_loader;
 pub mod clock;
 pub mod commitment_config;
 pub mod entrypoint_native;
+pub mod epoch_info;
 pub mod epoch_schedule;
 pub mod fee_calculator;
 pub mod hash;

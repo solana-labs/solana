@@ -18,6 +18,7 @@ use solana_sdk::{
         MAX_HASH_AGE_IN_SECONDS,
     },
     commitment_config::CommitmentConfig,
+    epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
@@ -309,14 +310,14 @@ impl RpcClient {
             .map_err(|err| err.into_with_request(request))?
     }
 
-    pub fn get_epoch_info(&self) -> ClientResult<RpcEpochInfo> {
+    pub fn get_epoch_info(&self) -> ClientResult<EpochInfo> {
         self.get_epoch_info_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_epoch_info_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> ClientResult<RpcEpochInfo> {
+    ) -> ClientResult<EpochInfo> {
         self.send(RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
     }
 

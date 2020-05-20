@@ -36,6 +36,7 @@ use solana_sdk::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
+    epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{GenesisConfig, OperatingMode},
@@ -2466,6 +2467,18 @@ impl Bank {
     ///
     pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, SlotIndex) {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
+    }
+
+    pub fn get_epoch_info(&self) -> EpochInfo {
+        let absolute_slot = self.slot();
+        let (epoch, slot_index) = self.get_epoch_and_slot_index(absolute_slot);
+        let slots_in_epoch = self.get_slots_in_epoch(epoch);
+        EpochInfo {
+            epoch,
+            slot_index,
+            slots_in_epoch,
+            absolute_slot,
+        }
     }
 
     pub fn is_empty(&self) -> bool {

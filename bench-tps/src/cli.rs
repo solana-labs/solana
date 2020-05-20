@@ -25,6 +25,7 @@ pub struct Config {
     pub multi_client: bool,
     pub use_move: bool,
     pub num_lamports_per_account: u64,
+    pub target_slots_per_epoch: u64,
 }
 
 impl Default for Config {
@@ -47,6 +48,7 @@ impl Default for Config {
             multi_client: true,
             use_move: false,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
+            target_slots_per_epoch: 0,
         }
     }
 }
@@ -172,6 +174,15 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                     "Number of lamports per account.",
                 ),
         )
+        .arg(
+            Arg::with_name("target_slots_per_epoch")
+                .long("target-slots-per-epoch")
+                .value_name("SLOTS")
+                .takes_value(true)
+                .help(
+                    "Wait until epochs are this many slots long.",
+                ),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -257,6 +268,13 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
         args.num_lamports_per_account = v.to_string().parse().expect("can't parse lamports");
+    }
+
+    if let Some(t) = matches.value_of("target_slots_per_epoch") {
+        args.target_slots_per_epoch = t
+            .to_string()
+            .parse()
+            .expect("can't parse target slots per epoch");
     }
 
     args

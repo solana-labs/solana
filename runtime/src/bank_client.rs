@@ -3,6 +3,7 @@ use solana_sdk::{
     account::Account,
     client::{AsyncClient, Client, SyncClient},
     commitment_config::CommitmentConfig,
+    epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
@@ -240,6 +241,10 @@ impl SyncClient for BankClient {
                 "Unable to get new blockhash",
             )))
         }
+    }
+
+    fn get_epoch_info(&self) -> Result<EpochInfo> {
+        Ok(self.bank.get_epoch_info())
     }
 }
 

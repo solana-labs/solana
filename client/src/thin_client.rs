@@ -11,6 +11,7 @@ use solana_sdk::{
     client::{AsyncClient, Client, SyncClient},
     clock::MAX_PROCESSING_AGE,
     commitment_config::CommitmentConfig,
+    epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
@@ -516,6 +517,10 @@ impl SyncClient for ThinClient {
                 )
             })?;
         Ok(slot)
+    }
+
+    fn get_epoch_info(&self) -> TransportResult<EpochInfo> {
+        self.rpc_client().get_epoch_info().map_err(|e| e.into())
     }
 
     fn get_transaction_count(&self) -> TransportResult<u64> {

@@ -11,6 +11,7 @@ use crate::{
     account::Account,
     clock::Slot,
     commitment_config::CommitmentConfig,
+    epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
@@ -105,6 +106,8 @@ pub trait SyncClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> Result<u64>;
+
+    fn get_epoch_info(&self) -> Result<EpochInfo>;
 
     /// Poll until the signature has been confirmed by at least `min_confirmed_blocks`
     fn poll_for_signature_confirmation(

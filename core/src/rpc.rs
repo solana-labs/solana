@@ -28,6 +28,7 @@ use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     hash::Hash,
     inflation::Inflation,
@@ -758,7 +759,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcEpochInfo>;
+    ) -> Result<EpochInfo>;
 
     #[rpc(meta, name = "getBlockCommitment")]
     fn get_block_commitment(
@@ -1057,18 +1058,9 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcEpochInfo> {
+    ) -> Result<EpochInfo> {
         let bank = meta.request_processor.read().unwrap().bank(commitment)?;
-        let epoch_schedule = bank.epoch_schedule();
-
-        let slot = bank.slot();
-        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(slot);
-        Ok(RpcEpochInfo {
-            epoch,
-            slot_index,
-            slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
-            absolute_slot: slot,
-        })
+        Ok(bank.get_epoch_info())
     }
 
     fn get_block_commitment(
