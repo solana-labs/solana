@@ -925,7 +925,7 @@ mod tests {
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
-            0,
+            &bank,
             &rpc.subscriptions,
         )
         .unwrap();

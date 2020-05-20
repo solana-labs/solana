@@ -406,7 +406,7 @@ impl ClusterInfoVoteListener {
             if let Err(e) = Self::get_and_process_votes(
                 &vote_txs_receiver,
                 &vote_tracker,
-                root_bank.slot(),
+                &root_bank,
                 &subscriptions,
             ) {
                 match e {
@@ -426,16 +426,16 @@ impl ClusterInfoVoteListener {
     pub fn get_and_process_votes_for_tests(
         vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &VoteTracker,
-        last_root: Slot,
+        root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
     ) -> Result<()> {
-        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, last_root, subscriptions)
+        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, root_bank, subscriptions)
     }
 
     fn get_and_process_votes(
         vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &VoteTracker,
-        last_root: Slot,
+        root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
@@ -443,14 +443,14 @@ impl ClusterInfoVoteListener {
         while let Ok(new_txs) = vote_txs_receiver.try_recv() {
             vote_txs.extend(new_txs);
         }
-        Self::process_votes(vote_tracker, vote_txs, last_root, subscriptions);
+        Self::process_votes(vote_tracker, vote_txs, root_bank, subscriptions);
         Ok(())
     }
 
     fn process_votes(
         vote_tracker: &VoteTracker,
         vote_txs: Vec<Transaction>,
-        root: Slot,
+        root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
@@ -505,10 +505,16 @@ impl ClusterInfoVoteListener {
                         continue;
                     }
 
+                    let root = root_bank.slot();
                     for slot in &vote.slots {
-                        if *slot <= root {
+                        // If slot is before the root, or so far ahead we don't have
+                        // stake information, then ignore it
+                        let epoch_vote_accounts = root_bank
+                            .epoch_vote_accounts(root_bank.epoch_schedule().get_epoch(*slot));
+                        if *slot <= root || epoch_vote_accounts.is_none() {
                             continue;
                         }
+                        let epoch_vote_accounts = epoch_vote_accounts.unwrap();
 
                         // Don't insert if we already have marked down this pubkey
                         // voting for this slot
@@ -520,8 +526,16 @@ impl ClusterInfoVoteListener {
                             }
                         }
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
-                        let should_update_switch = (slot == last_vote_slot) && !is_switch_vote;
-                        if should_update_switch
+                        let should_update_switch = if (slot == last_vote_slot) && !is_switch_vote {
+                            let stake = epoch_vote_accounts
+                                .get(vote_pubkey)
+                                .map(|(stake, _)| *stake)
+                                .unwrap_or(0);
+                            Some(stake)
+                        } else {
+                            None
+                        };
+                        if should_update_switch.is_some()
                             || diff
                                 .entry(*slot)
                                 .or_default()
@@ -547,7 +561,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         slot: Slot,
         pubkey: Arc<Pubkey>,
-        should_update_switch: bool,
+        should_update_switch: Option<u64>,
     ) {
         let mut slot_tracker = vote_tracker
             .slot_vote_trackers
@@ -579,10 +593,10 @@ impl ClusterInfoVoteListener {
             .as_mut()
             .unwrap()
             .push(pubkey.clone());
-        if should_update_switch {
+        if let Some(stake) = should_update_switch {
             w_slot_tracker
                 .voted_no_switching
-                .add_vote_pubkey(pubkey.clone(), 0);
+                .add_vote_pubkey(pubkey.clone(), stake);
         }
     }
 }
@@ -776,12 +790,76 @@ mod tests {
         );
     }
 
-    fn run_test_process_votes(hash: Option<Hash>) {
+    #[test]
+    fn test_votes_in_range() {
         // Create some voters at genesis
+        let stake_per_validator = 100;
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
 
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+                stake_per_validator,
+            );
+
+        let bank0 = Bank::new(&genesis_config);
+        // Votes for slots less than the provided root bank's slot should not be processed
+        let bank3 = Arc::new(Bank::new_from_parent(
+            &Arc::new(bank0),
+            &Pubkey::default(),
+            3,
+        ));
         let vote_slots = vec![1, 2];
+        send_vote_txs(
+            vote_slots.clone(),
+            &validator_voting_keypairs,
+            None,
+            &votes_sender,
+        );
+        ClusterInfoVoteListener::get_and_process_votes(
+            &votes_receiver,
+            &vote_tracker,
+            &bank3,
+            &subscriptions,
+        )
+        .unwrap();
+
+        // Vote slots for slots greater than root bank's set of currently calculated epochs
+        // are ignored
+        let max_epoch = bank3.get_leader_schedule_epoch(bank3.slot());
+        assert!(bank3.epoch_stakes(max_epoch).is_some());
+        let unknown_epoch = max_epoch + 1;
+        assert!(bank3.epoch_stakes(unknown_epoch).is_none());
+        let first_slot_in_unknown_epoch = bank3
+            .epoch_schedule()
+            .get_first_slot_in_epoch(unknown_epoch);
+        let vote_slots = vec![first_slot_in_unknown_epoch, first_slot_in_unknown_epoch + 1];
+        send_vote_txs(
+            vote_slots.clone(),
+            &validator_voting_keypairs,
+            None,
+            &votes_sender,
+        );
+        ClusterInfoVoteListener::get_and_process_votes(
+            &votes_receiver,
+            &vote_tracker,
+            &bank3,
+            &subscriptions,
+        )
+        .unwrap();
+
+        // Should be no updates since everything was ignored
+        assert!(vote_tracker.slot_vote_trackers.read().unwrap().is_empty());
+    }
+
+    fn send_vote_txs(
+        vote_slots: Vec<Slot>,
+        validator_voting_keypairs: &[ValidatorVoteKeypairs],
+        hash: Option<Hash>,
+        votes_sender: &VerifiedVoteTransactionsSender,
+    ) {
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
@@ -796,12 +874,35 @@ mod tests {
             );
             votes_sender.send(vec![vote_tx]).unwrap();
         });
+    }
+
+    fn run_test_process_votes(hash: Option<Hash>) {
+        // Create some voters at genesis
+        let stake_per_validator = 100;
+        let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
+        let (votes_sender, votes_receiver) = unbounded();
+
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+                stake_per_validator,
+            );
+        let bank0 = Bank::new(&genesis_config);
+
+        let vote_slots = vec![1, 2];
+        send_vote_txs(
+            vote_slots.clone(),
+            &validator_voting_keypairs,
+            hash,
+            &votes_sender,
+        );
 
         // Check that all the votes were registered for each validator correctly
         ClusterInfoVoteListener::get_and_process_votes(
             &votes_receiver,
             &vote_tracker,
-            0,
+            &bank0,
             &subscriptions,
         )
         .unwrap();
@@ -825,11 +926,16 @@ mod tests {
                         .voted_no_switching
                         .voted
                         .contains(&pubkey));
+                    assert_eq!(
+                        r_slot_vote_tracker.voted_no_switching.stake,
+                        stake_per_validator * validator_voting_keypairs.len() as u64
+                    );
                 } else {
                     assert!(!r_slot_vote_tracker
                         .voted_no_switching
                         .voted
                         .contains(&pubkey));
+                    assert_eq!(r_slot_vote_tracker.voted_no_switching.stake, 0);
                 }
             }
         }
@@ -845,10 +951,24 @@ mod tests {
     fn test_process_votes2() {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
+
+        // Create bank with the voters
+        let stake_per_validator = 100;
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+                stake_per_validator,
+            );
+        let bank0 = Bank::new(&genesis_config);
+
         // Send some votes to process
         let (votes_sender, votes_receiver) = unbounded();
-
-        for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
+        let num_voters_per_slot = 2;
+        for (i, keyset) in validator_voting_keypairs
+            .chunks(num_voters_per_slot)
+            .enumerate()
+        {
             let validator_votes: Vec<_> = keyset
                 .iter()
                 .map(|keypairs| {
@@ -872,7 +992,7 @@ mod tests {
         ClusterInfoVoteListener::get_and_process_votes(
             &votes_receiver,
             &vote_tracker,
-            0,
+            &bank0,
             &subscriptions,
         )
         .unwrap();
@@ -887,12 +1007,16 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
-                // All the votes were single votes, so theey should all count towards
+                // All the votes were single votes, so they should all count towards
                 // the non-switching vote set
                 assert!(r_slot_vote_tracker
                     .voted_no_switching
                     .voted
                     .contains(&pubkey));
+                assert_eq!(
+                    r_slot_vote_tracker.voted_no_switching.stake,
+                    num_voters_per_slot as u64 * stake_per_validator
+                );
             }
         }
     }
@@ -977,13 +1101,13 @@ mod tests {
         let vote_tracker = VoteTracker::new(&bank);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(bank_forks)),
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
                 blockstore,
             ))),
-        ));
+        );
 
         // Send a vote to process, should add a reference to the pubkey for that voter
         // in the tracker
@@ -999,7 +1123,7 @@ mod tests {
             None,
         )];
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0, &subscriptions);
+        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, &bank, &subscriptions);
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
@@ -1035,7 +1159,7 @@ mod tests {
 
         // Make 2 new votes in two different epochs, ref count should go up
         // by 2 * ref_count_per_vote
-        let vote_txs: Vec<_> = [bank.slot() + 2, first_slot_in_new_epoch]
+        let vote_txs: Vec<_> = [first_slot_in_new_epoch - 1, first_slot_in_new_epoch]
             .iter()
             .map(|slot| {
                 vote_transaction::new_vote_transaction(
@@ -1051,7 +1175,14 @@ mod tests {
             })
             .collect();
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_txs, 0, &subscriptions);
+        let new_root_bank =
+            Bank::new_from_parent(&bank, &Pubkey::default(), first_slot_in_new_epoch - 2);
+        ClusterInfoVoteListener::process_votes(
+            &vote_tracker,
+            vote_txs,
+            &new_root_bank,
+            &subscriptions,
+        );
 
         let ref_count = Arc::strong_count(
             &vote_tracker
