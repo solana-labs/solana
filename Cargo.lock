@@ -4652,6 +4652,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-stake-o-matic"
+version = "1.2.0"
+dependencies = [
+ "clap",
+ "log 0.4.8",
+ "serde_yaml",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-client",
+ "solana-logger",
+ "solana-metrics",
+ "solana-notifier",
+ "solana-sdk",
+ "solana-stake-program",
+ "solana-transaction-status",
+]
+
+[[package]]
 name = "solana-stake-program"
 version = "1.2.0"
 dependencies = [

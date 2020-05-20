@@ -15,7 +15,7 @@ pub struct RpcClientRequest {
 
 impl RpcClientRequest {
     pub fn new(url: String) -> Self {
-        Self::new_with_timeout(url, Duration::from_secs(20))
+        Self::new_with_timeout(url, Duration::from_secs(30))
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
