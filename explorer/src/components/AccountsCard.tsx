@@ -109,10 +109,6 @@ const renderAccountRow = (account: Account) => {
   let statusText;
   let statusClass;
   switch (account.status) {
-    case Status.NotFound:
-      statusClass = "danger";
-      statusText = "Not Found";
-      break;
     case Status.CheckFailed:
     case Status.HistoryFailed:
       statusClass = "dark";
@@ -127,9 +123,12 @@ const renderAccountRow = (account: Account) => {
       if (account.details?.executable) {
         statusClass = "dark";
         statusText = "Executable";
-      } else {
+      } else if (account.lamports) {
         statusClass = "success";
         statusText = "Found";
+      } else {
+        statusClass = "danger";
+        statusText = "Not Found";
       }
       break;
     default:
