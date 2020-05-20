@@ -1,6 +1,5 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    commitment::CacheSlotInfo,
     consensus::VOTE_THRESHOLD_SIZE,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
@@ -555,7 +554,6 @@ impl ClusterInfoVoteListener {
                     w_slot_tracker.total_stake,
                     &subscriptions,
                     epoch_stakes,
-                    root,
                     slot,
                 );
                 w_slot_tracker.total_stake += current_stake;
@@ -568,7 +566,7 @@ impl ClusterInfoVoteListener {
                         pubkey
                     })
                     .collect();
-                Self::notify_for_stake_change(total_stake, 0, &subscriptions, epoch_stakes, root, slot);
+                Self::notify_for_stake_change(total_stake, 0, &subscriptions, epoch_stakes, slot);
                 let new_slot_tracker = SlotVoteTracker {
                     voted: voted.clone(),
                     updates: Some(voted.into_iter().collect()),
@@ -588,7 +586,6 @@ impl ClusterInfoVoteListener {
         previous_stake: u64,
         subscriptions: &Arc<RpcSubscriptions>,
         epoch_stakes: Option<&EpochStakes>,
-        root: Slot,
         slot: Slot,
     ) {
         if let Some(stakes) = epoch_stakes {
@@ -596,12 +593,7 @@ impl ClusterInfoVoteListener {
             if previous_stake < supermajority_stake
                 && (previous_stake + current_stake) > supermajority_stake
             {
-                subscriptions.notify_subscribers(CacheSlotInfo {
-                    current_slot: slot,
-                    node_root: root,
-                    largest_confirmed_root: 0, // todo: ???
-                    highest_confirmed_slot: 0,
-                });
+                subscriptions.notify_gossip_subscribers(slot);
             }
         }
     }
