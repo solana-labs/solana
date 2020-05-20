@@ -37,6 +37,12 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn single_gossip() -> Self {
+        Self {
+            commitment: CommitmentLevel::SingleGossip,
+        }
+    }
+
     pub fn ok(self) -> Option<Self> {
         if self == Self::default() {
             None
@@ -53,4 +59,5 @@ pub enum CommitmentLevel {
     Recent,
     Root,
     Single,
+    SingleGossip,
 }
