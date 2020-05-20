@@ -25,7 +25,7 @@ const INVOKED_PROGRAM_DUP_INDEX: usize = 4;
 const DERIVED_KEY1_INDEX: usize = 6;
 const DERIVED_KEY2_INDEX: usize = 7;
 const DERIVED_KEY3_INDEX: usize = 8;
-const SYSTEM_PROGRAM_INDEX: usize = 9;
+// const SYSTEM_PROGRAM_INDEX: usize = 9;
 const FROM_INDEX: usize = 10;
 
 entrypoint!(process_instruction);
@@ -40,11 +40,8 @@ fn process_instruction(
     {
         assert_eq!(accounts[FROM_INDEX].lamports(), 43);
         assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 41);
-        let instruction = system_instruction::transfer(
-            accounts[FROM_INDEX].key,
-            accounts[ARGUMENT_INDEX].key,
-            1,
-        );
+        let instruction =
+            system_instruction::transfer(accounts[FROM_INDEX].key, accounts[ARGUMENT_INDEX].key, 1);
         invoke(&instruction, accounts)?;
         assert_eq!(accounts[FROM_INDEX].lamports(), 42);
         assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42);
