@@ -54,6 +54,14 @@ impl VoteStakeTracker {
             self.stake += stake;
         }
     }
+
+    pub fn voted(&self) -> &HashSet<Arc<Pubkey>> {
+        &self.voted
+    }
+
+    pub fn stake(&self) -> u64 {
+        self.stake
+    }
 }
 
 #[derive(Default)]
@@ -67,6 +75,10 @@ impl SlotVoteTracker {
     #[allow(dead_code)]
     pub fn get_updates(&mut self) -> Option<Vec<Arc<Pubkey>>> {
         self.updates.take()
+    }
+
+    pub fn voted_no_switching(&self) -> &VoteStakeTracker {
+        &self.voted_no_switching
     }
 }
 
@@ -459,7 +471,7 @@ impl ClusterInfoVoteListener {
                     })
                     .unwrap_or((None, None))
                 {
-                    let (vote, is_switch) = {
+                    let (vote, is_switch_vote) = {
                         match vote_instruction {
                             VoteInstruction::Vote(vote) => (vote, false),
                             VoteInstruction::VoteSwitch(vote, _) => (vote, true),
@@ -493,58 +505,84 @@ impl ClusterInfoVoteListener {
                         continue;
                     }
 
-                    for &slot in vote.slots.iter() {
-                        if slot <= root {
+                    for slot in &vote.slots {
+                        if *slot <= root {
                             continue;
                         }
 
                         // Don't insert if we already have marked down this pubkey
                         // voting for this slot
                         let maybe_slot_tracker =
-                            all_slot_trackers.read().unwrap().get(&slot).cloned();
+                            all_slot_trackers.read().unwrap().get(slot).cloned();
                         if let Some(slot_tracker) = maybe_slot_tracker {
                             if slot_tracker.read().unwrap().voted.contains(vote_pubkey) {
                                 continue;
                             }
                         }
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
-                        diff.entry(slot).or_default().insert(unduplicated_pubkey);
+                        let should_update_switch = (slot == last_vote_slot) && !is_switch_vote;
+                        if should_update_switch
+                            || !diff
+                                .entry(*slot)
+                                .or_default()
+                                .insert(unduplicated_pubkey.clone())
+                        {
+                            // If the value wasn't already inserted, insert it
+                            Self::add_vote(
+                                vote_tracker,
+                                *slot,
+                                unduplicated_pubkey,
+                                should_update_switch,
+                            );
+                        }
                     }
 
                     subscriptions.notify_vote(&vote);
                 }
             }
         }
+    }
 
-        for (slot, slot_diff) in diff {
-            let slot_tracker = vote_tracker
+    fn add_vote(
+        vote_tracker: &VoteTracker,
+        slot: Slot,
+        pubkey: Arc<Pubkey>,
+        should_update_switch: bool,
+    ) {
+        let mut slot_tracker = vote_tracker
+            .slot_vote_trackers
+            .read()
+            .unwrap()
+            .get(&slot)
+            .cloned();
+        if slot_tracker.is_none() {
+            let new_slot_tracker = Arc::new(RwLock::new(SlotVoteTracker {
+                voted: HashSet::new(),
+                voted_no_switching: VoteStakeTracker::default(),
+                updates: None,
+            }));
+            vote_tracker
                 .slot_vote_trackers
-                .read()
+                .write()
                 .unwrap()
-                .get(&slot)
-                .cloned();
-            if let Some(slot_tracker) = slot_tracker {
-                let mut w_slot_tracker = slot_tracker.write().unwrap();
-                if w_slot_tracker.updates.is_none() {
-                    w_slot_tracker.updates = Some(vec![]);
-                }
-                for pk in slot_diff {
-                    w_slot_tracker.voted.insert(pk.clone());
-                    w_slot_tracker.updates.as_mut().unwrap().push(pk);
-                }
-            } else {
-                let voted: HashSet<_> = slot_diff.into_iter().collect();
-                let new_slot_tracker = SlotVoteTracker {
-                    voted: voted.clone(),
-                    voted_no_switching: VoteStakeTracker::default(),
-                    updates: Some(voted.into_iter().collect()),
-                };
-                vote_tracker
-                    .slot_vote_trackers
-                    .write()
-                    .unwrap()
-                    .insert(slot, Arc::new(RwLock::new(new_slot_tracker)));
-            }
+                .insert(slot, new_slot_tracker.clone());
+            slot_tracker = Some(new_slot_tracker);
+        }
+        let slot_tracker = slot_tracker.unwrap();
+        let mut w_slot_tracker = slot_tracker.write().unwrap();
+        if w_slot_tracker.updates.is_none() {
+            w_slot_tracker.updates = Some(vec![]);
+        }
+        w_slot_tracker.voted.insert(pubkey.clone());
+        w_slot_tracker
+            .updates
+            .as_mut()
+            .unwrap()
+            .push(pubkey.clone());
+        if should_update_switch {
+            w_slot_tracker
+                .voted_no_switching
+                .add_vote_pubkey(pubkey.clone(), 0);
         }
     }
 }
