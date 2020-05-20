@@ -259,6 +259,7 @@ pub mod tests {
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
+    #[ignore]
     #[test]
     #[serial]
     fn test_tvu_exit() {
