@@ -453,8 +453,7 @@ pub fn parse_transaction_history(
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
     let end_slot = value_t!(matches, "end_slot", Slot).ok();
-    let slot_limit = value_t!(matches, "limit", u64)
-        .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE);
+    let slot_limit = value_t!(matches, "limit", u64).ok();
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
@@ -1265,7 +1264,7 @@ pub fn process_transaction_history(
     rpc_client: &RpcClient,
     address: &Pubkey,
     end_slot: Option<Slot>, // None == use latest slot
-    slot_limit: u64,
+    slot_limit: Option<u64>,
 ) -> ProcessResult {
     let end_slot = {
         if let Some(end_slot) = end_slot {
@@ -1274,18 +1273,30 @@ pub fn process_transaction_history(
             rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
         }
     };
-    let start_slot = end_slot.saturating_sub(slot_limit);
+    let mut start_slot = match slot_limit {
+        Some(slot_limit) => end_slot.saturating_sub(slot_limit),
+        None => rpc_client.minimum_ledger_slot()?,
+    };
 
     println!(
         "Transactions affecting {} within slots [{},{}]",
         address, start_slot, end_slot
     );
-    let signatures =
-        rpc_client.get_confirmed_signatures_for_address(address, start_slot, end_slot)?;
-    for signature in &signatures {
-        println!("{}", signature);
+
+    let mut transaction_count = 0;
+    while start_slot < end_slot {
+        let signatures = rpc_client.get_confirmed_signatures_for_address(
+            address,
+            start_slot,
+            (start_slot + MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE).min(end_slot),
+        )?;
+        for signature in &signatures {
+            println!("{}", signature);
+        }
+        transaction_count += signatures.len();
+        start_slot += MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE;
     }
-    Ok(format!("{} transactions found", signatures.len(),))
+    Ok(format!("{} transactions found", transaction_count))
 }
 
 #[cfg(test)]
