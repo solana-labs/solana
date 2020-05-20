@@ -1,11 +1,11 @@
 use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-    generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
     rpc_config::RpcLargestAccountsConfig,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::*,
+    rpc_sender::RpcSender,
 };
 use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -39,11 +39,11 @@ use std::{
 };
 
 pub struct RpcClient {
-    client: Box<dyn GenericRpcClientRequest + Send + Sync + 'static>,
+    client: Box<dyn RpcSender + Send + Sync + 'static>,
 }
 
 impl RpcClient {
-    pub fn new_sender<T: GenericRpcClientRequest + Send + Sync + 'static>(sender: T) -> Self {
+    pub fn new_sender<T: RpcSender + Send + Sync + 'static>(sender: T) -> Self {
         Self {
             client: Box::new(sender),
         }

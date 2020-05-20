@@ -1,8 +1,8 @@
 use crate::{
     client_error::Result,
-    generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
     rpc_response::{Response, RpcResponseContext},
+    rpc_sender::RpcSender,
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
@@ -37,7 +37,7 @@ impl MockRpcClientRequest {
     }
 }
 
-impl GenericRpcClientRequest for MockRpcClientRequest {
+impl RpcSender for MockRpcClientRequest {
     fn send(
         &self,
         request: RpcRequest,

@@ -1,7 +1,7 @@
 use crate::{
     client_error::Result,
-    generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
+    rpc_sender::RpcSender,
 };
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
@@ -28,7 +28,7 @@ impl RpcClientRequest {
     }
 }
 
-impl GenericRpcClientRequest for RpcClientRequest {
+impl RpcSender for RpcClientRequest {
     fn send(
         &self,
         request: RpcRequest,
