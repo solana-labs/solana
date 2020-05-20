@@ -46,7 +46,7 @@ declare module '@solana/web3.js' {
     value: T;
   };
 
-  export type Commitment = 'max' | 'recent';
+  export type Commitment = 'max' | 'recent' | 'root' | 'single';
 
   export type SignatureStatusConfig = {
     searchTransactionHistory: boolean;
