@@ -522,7 +522,7 @@ impl ClusterInfoVoteListener {
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
                         let should_update_switch = (slot == last_vote_slot) && !is_switch_vote;
                         if should_update_switch
-                            || !diff
+                            || diff
                                 .entry(*slot)
                                 .or_default()
                                 .insert(unduplicated_pubkey.clone())
@@ -616,6 +616,7 @@ mod tests {
             &node_keypair,
             &vote_keypair,
             &vote_keypair,
+            Some(Hash::default()),
         );
 
         use bincode::serialized_size;
@@ -626,8 +627,7 @@ mod tests {
         assert_eq!(msgs.len(), 1);
     }
 
-    #[test]
-    fn vote_contains_authorized_voter() {
+    fn run_vote_contains_authorized_voter(hash: Option<Hash>) {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let authorized_voter = Keypair::new();
@@ -639,6 +639,7 @@ mod tests {
             &node_keypair,
             &vote_keypair,
             &authorized_voter,
+            hash,
         );
 
         // Check that the two signing keys pass the check
@@ -666,6 +667,7 @@ mod tests {
             &node_keypair,
             &vote_keypair,
             &vote_keypair,
+            hash,
         );
 
         // Check that the node_keypair and vote keypair pass the authorized voter check
@@ -679,11 +681,17 @@ mod tests {
             &vote_keypair.pubkey()
         ));
 
-        // The other keypair should not pss the cchecck
+        // The other keypair should not pass the check
         assert!(!VoteTracker::vote_contains_authorized_voter(
             &vote_tx,
             &authorized_voter.pubkey()
         ));
+    }
+
+    #[test]
+    fn vote_contains_authorized_voter() {
+        run_vote_contains_authorized_voter(None);
+        run_vote_contains_authorized_voter(Some(Hash::default()));
     }
 
     #[test]
@@ -768,8 +776,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_process_votes() {
+    fn run_test_process_votes(hash: Option<Hash>) {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
@@ -785,6 +792,7 @@ mod tests {
                 node_keypair,
                 vote_keypair,
                 vote_keypair,
+                hash,
             );
             votes_sender.send(vec![vote_tx]).unwrap();
         });
@@ -808,8 +816,29 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
+                // 1) Only the last vote in the stack of votes should count toward
+                // the `no_switching` vote set
+                // 2) Should only count toward the `no_switching` vote set if the
+                // vote was a `no-switching` vote
+                if vote_slot == 2 && hash.is_none() {
+                    assert!(r_slot_vote_tracker
+                        .voted_no_switching
+                        .voted
+                        .contains(&pubkey));
+                } else {
+                    assert!(!r_slot_vote_tracker
+                        .voted_no_switching
+                        .voted
+                        .contains(&pubkey));
+                }
             }
         }
+    }
+
+    #[test]
+    fn test_process_votes() {
+        run_test_process_votes(None);
+        run_test_process_votes(Some(Hash::default()));
     }
 
     #[test]
@@ -832,6 +861,7 @@ mod tests {
                         node_keypair,
                         vote_keypair,
                         vote_keypair,
+                        None,
                     )
                 })
                 .collect();
@@ -857,6 +887,12 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
+                // All the votes were single votes, so theey should all count towards
+                // the non-switching vote set
+                assert!(r_slot_vote_tracker
+                    .voted_no_switching
+                    .voted
+                    .contains(&pubkey));
             }
         }
     }
@@ -920,8 +956,8 @@ mod tests {
     fn test_vote_tracker_references() {
         // The number of references that get stored for a pubkey every time
         // a vote is made. One stored in the SlotVoteTracker.voted, one in
-        // SlotVoteTracker.updates
-        let ref_count_per_vote = 2;
+        // SlotVoteTracker.updates, one in SlotVoteTracker.voted_no_switching
+        let ref_count_per_vote = 3;
 
         // Create some voters at genesis
         let validator_voting_keypairs: Vec<_> = (0..2)
@@ -960,6 +996,7 @@ mod tests {
             &validator0_keypairs.node_keypair,
             &validator0_keypairs.vote_keypair,
             &validator0_keypairs.vote_keypair,
+            None,
         )];
 
         ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0, subscriptions.clone());
@@ -1009,6 +1046,7 @@ mod tests {
                     &validator0_keypairs.node_keypair,
                     &validator0_keypairs.vote_keypair,
                     &validator0_keypairs.vote_keypair,
+                    None,
                 )
             })
             .collect();
@@ -1104,7 +1142,7 @@ mod tests {
         assert_eq!(num_packets, ref_value);
     }
 
-    fn test_vote_tx() -> Transaction {
+    fn test_vote_tx(hash: Option<Hash>) -> Transaction {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let auth_voter_keypair = Keypair::new();
@@ -1115,12 +1153,12 @@ mod tests {
             &node_keypair,
             &vote_keypair,
             &auth_voter_keypair,
+            hash,
         )
     }
 
-    #[test]
-    fn test_verify_votes_1_pass() {
-        let vote_tx = test_vote_tx();
+    fn run_test_verify_votes_1_pass(hash: Option<Hash>) {
+        let vote_tx = test_vote_tx(hash);
         let votes = vec![vote_tx];
         let labels = vec![CrdsValueLabel::Vote(0, Pubkey::new_rand())];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
@@ -1129,8 +1167,13 @@ mod tests {
     }
 
     #[test]
-    fn test_bad_vote() {
-        let vote_tx = test_vote_tx();
+    fn test_verify_votes_1_pass() {
+        run_test_verify_votes_1_pass(None);
+        run_test_verify_votes_1_pass(Some(Hash::default()));
+    }
+
+    fn run_test_bad_vote(hash: Option<Hash>) {
+        let vote_tx = test_vote_tx(hash);
         let mut bad_vote = vote_tx.clone();
         bad_vote.signatures[0] = Signature::default();
         let votes = vec![vote_tx.clone(), bad_vote, vote_tx];
@@ -1139,5 +1182,11 @@ mod tests {
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);
         verify_packets_len(&packets, 2);
+    }
+
+    #[test]
+    fn test_bad_vote() {
+        run_test_bad_vote(None);
+        run_test_bad_vote(Some(Hash::default()));
     }
 }

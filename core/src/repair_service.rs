@@ -1033,6 +1033,7 @@ mod test {
             &keypairs.node_keypair,
             &keypairs.vote_keypair,
             &keypairs.vote_keypair,
+            None,
         );
         bank9.process_transaction(&vote_tx).unwrap();
         assert!(bank9.get_signature_status(&vote_tx.signatures[0]).is_some());
