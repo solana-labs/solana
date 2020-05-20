@@ -17,6 +17,7 @@ use {
         ser::SerializeTuple,
         Deserialize, Deserializer, Serialize, Serializer,
     },
+    solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
         cmp::min,
@@ -91,6 +92,64 @@ impl<'a> SerdeContext<'a> for SerdeContextV1_2_0 {
 type DefaultSerdeContext = SerdeContextV1_2_0;
 
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
+
+// consumes an iterator and returns an object that will serialize as a serde seq
+fn serialize_iter_as_seq<I>(iter: I) -> impl Serialize
+where
+    I: IntoIterator,
+    <I as IntoIterator>::Item: Serialize,
+{
+    struct SerializableSequencedIterator<I> {
+        iter: std::cell::RefCell<Option<I>>,
+    }
+
+    impl<I> Serialize for SerializableSequencedIterator<I>
+    where
+        I: IntoIterator,
+        <I as IntoIterator>::Item: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.collect_seq(self.iter.borrow_mut().take().unwrap())
+        }
+    }
+
+    SerializableSequencedIterator {
+        iter: std::cell::RefCell::new(Some(iter)),
+    }
+}
+
+// consumes a 2-tuple iterator and returns an object that will serialize as a serde map
+fn serialize_iter_as_map<K, V, I>(iter: I) -> impl Serialize
+where
+    K: Serialize,
+    V: Serialize,
+    I: IntoIterator<Item = (K, V)>,
+{
+    struct SerializableMappedIterator<I> {
+        iter: std::cell::RefCell<Option<I>>,
+    }
+
+    impl<K, V, I> Serialize for SerializableMappedIterator<I>
+    where
+        K: Serialize,
+        V: Serialize,
+        I: IntoIterator<Item = (K, V)>,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.collect_map(self.iter.borrow_mut().take().unwrap())
+        }
+    }
+
+    SerializableMappedIterator {
+        iter: std::cell::RefCell::new(Some(iter)),
+    }
+}
 
 fn bankrc_to_io_error<T: ToString>(error: T) -> IoError {
     let msg = error.to_string();
@@ -400,20 +459,29 @@ impl<'a, C: SerdeContext<'a>> Serialize for SerializableAccountsDatabaseUnversio
         C::legacy_serialize_byte_length(&mut seq, MAX_ACCOUNTS_DB_STREAM_SIZE)?;
 
         // write the list of account storage entry lists out as a map
-        seq.serialize_element(
-            &(self
-                .account_storage_entries
-                .iter()
-                .map(|x| {
+        {
+            let mut serialize_account_storage_timer =
+                Measure::start("serialize_account_storage_ms");
+            let mut entry_count = 0;
+            seq.serialize_element(&serialize_iter_as_map(
+                self.account_storage_entries.iter().map(|x| {
+                    entry_count += x.len();
                     (
                         x.first().unwrap().slot,
-                        x.iter()
-                            .map(|x| C::SerializableAccountStorageEntry::from(x.as_ref()))
-                            .collect::<Vec<_>>(),
+                        serialize_iter_as_seq(
+                            x.iter()
+                                .map(|x| C::SerializableAccountStorageEntry::from(x.as_ref())),
+                        ),
                     )
-                })
-                .collect::<HashMap<Slot, _>>()),
-        )?;
+                }),
+            ))?;
+            serialize_account_storage_timer.stop();
+            datapoint_info!(
+                "serialize_account_storage_ms",
+                ("duration", serialize_account_storage_timer.as_ms(), i64),
+                ("num_entries", entry_count, i64),
+            );
+        }
 
         // write the current write version sampled before the account
         // storage entries were written out
