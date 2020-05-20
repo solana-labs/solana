@@ -6,6 +6,7 @@ pub mod bank;
 pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
+pub mod builtin_programs;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod loader_utils;

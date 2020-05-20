@@ -10,13 +10,14 @@ use crate::{
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
+    builtin_programs::get_builtin_programs,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
-    system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -2086,26 +2087,10 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        self.add_static_program(
-            "system_program",
-            solana_sdk::system_program::id(),
-            system_instruction_processor::process_instruction,
-        );
-        self.add_static_program(
-            "config_program",
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        );
-        self.add_static_program(
-            "stake_program",
-            solana_stake_program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        );
-        self.add_static_program(
-            "vote_program",
-            solana_vote_program::id(),
-            solana_vote_program::vote_instruction::process_instruction,
-        );
+        let builtin_programs = get_builtin_programs();
+        for program in builtin_programs.iter() {
+            self.add_builtin_program(&program.name, program.id, program.process_instruction);
+        }
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -2488,7 +2473,7 @@ impl Bank {
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_static_program(
+    pub fn add_builtin_program(
         &mut self,
         name: &str,
         program_id: Pubkey,
@@ -2509,7 +2494,7 @@ impl Bank {
             }
         }
         self.message_processor
-            .add_instruction_processor(program_id, process_instruction);
+            .add_program(program_id, process_instruction);
         debug!("Added static program {} under {:?}", name, program_id);
     }
 
@@ -3051,7 +3036,7 @@ mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
 
         bank
     }
@@ -5904,7 +5889,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_static_program() {
+    fn test_add_builtin_program() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
@@ -5923,7 +5908,7 @@ mod tests {
         }
 
         assert!(bank.get_account(&mock_vote_program_id()).is_none());
-        bank.add_static_program(
+        bank.add_builtin_program(
             "mock_vote_program",
             mock_vote_program_id(),
             mock_vote_processor,
@@ -5994,7 +5979,7 @@ mod tests {
         );
 
         let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-        bank.add_static_program(
+        bank.add_builtin_program(
             "solana_vote_program",
             solana_vote_program::id(),
             mock_vote_processor,
@@ -6026,7 +6011,7 @@ mod tests {
         }
 
         // Non-native loader accounts can not be used for instruction processing
-        bank.add_static_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
+        bank.add_builtin_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
     }
     #[test]
     fn test_recent_blockhashes_sysvar() {
@@ -6578,7 +6563,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
@@ -6621,7 +6606,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
@@ -6673,7 +6658,7 @@ mod tests {
 
         tx.message.account_keys.push(Pubkey::new_rand());
 
-        bank.add_static_program(
+        bank.add_builtin_program(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -6727,7 +6712,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_static_program(
+        bank.add_builtin_program(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -6760,7 +6745,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_static_program(
+        bank.add_builtin_program(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -6815,7 +6800,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_static_program(
+        bank.add_builtin_program(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -6851,7 +6836,7 @@ mod tests {
             .map(|i| {
                 let key = Pubkey::new_rand();
                 let name = format!("program{:?}", i);
-                bank.add_static_program(&name, key, mock_ok_vote_processor);
+                bank.add_builtin_program(&name, key, mock_ok_vote_processor);
                 (key, name.as_bytes().to_vec())
             })
             .collect();
