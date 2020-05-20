@@ -8,7 +8,7 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  sendAndConfirmRecentTransaction,
+  sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
 } from '../src';
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
@@ -293,11 +293,11 @@ test('live Nonce actions', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await sendAndConfirmRecentTransaction(
+  await sendAndConfirmTransaction(
     connection,
     createNonceAccount,
-    from,
-    nonceAccount,
+    [from, nonceAccount],
+    0,
   );
   const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
   expect(nonceBalance).toEqual(minimumAmount);
@@ -325,7 +325,7 @@ test('live Nonce actions', async () => {
       authorizedPubkey: from.publicKey,
     }),
   );
-  await sendAndConfirmRecentTransaction(connection, advanceNonce, from);
+  await sendAndConfirmTransaction(connection, advanceNonce, [from], 0);
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
   if (nonceQuery3 === null) {
     expect(nonceQuery3).not.toBeNull();
@@ -344,7 +344,7 @@ test('live Nonce actions', async () => {
       newAuthorizedPubkey: newAuthority.publicKey,
     }),
   );
-  await sendAndConfirmRecentTransaction(connection, authorizeNonce, from);
+  await sendAndConfirmTransaction(connection, authorizeNonce, [from], 0);
 
   let transfer = SystemProgram.transfer({
     fromPubkey: from.publicKey,
@@ -359,11 +359,11 @@ test('live Nonce actions', async () => {
     }),
   };
 
-  await sendAndConfirmRecentTransaction(
+  await sendAndConfirmTransaction(
     connection,
     transfer,
-    from,
-    newAuthority,
+    [from, newAuthority],
+    0,
   );
   const toBalance = await connection.getBalance(to.publicKey);
   expect(toBalance).toEqual(minimumAmount);
@@ -380,11 +380,7 @@ test('live Nonce actions', async () => {
       toPubkey: withdrawAccount.publicKey,
     }),
   );
-  await sendAndConfirmRecentTransaction(
-    connection,
-    withdrawNonce,
-    newAuthority,
-  );
+  await sendAndConfirmTransaction(connection, withdrawNonce, [newAuthority], 0);
   expect(await connection.getBalance(nonceAccount.publicKey)).toEqual(0);
   const withdrawBalance = await connection.getBalance(
     withdrawAccount.publicKey,

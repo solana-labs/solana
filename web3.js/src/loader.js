@@ -65,7 +65,12 @@ export class Loader {
         space: data.length,
         programId,
       });
-      await sendAndConfirmTransaction(connection, transaction, payer, program);
+      await sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [payer, program],
+        1,
+      );
     }
 
     const dataLayout = BufferLayout.struct([
@@ -102,7 +107,7 @@ export class Loader {
         data,
       });
       transactions.push(
-        sendAndConfirmTransaction(connection, transaction, payer, program),
+        sendAndConfirmTransaction(connection, transaction, [payer, program], 1),
       );
 
       // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
@@ -143,7 +148,12 @@ export class Loader {
         programId,
         data,
       });
-      await sendAndConfirmTransaction(connection, transaction, payer, program);
+      await sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [payer, program],
+        1,
+      );
     }
   }
 }

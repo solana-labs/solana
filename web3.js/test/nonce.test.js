@@ -103,7 +103,7 @@ test('create and query nonce account', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, from, nonceAccount);
+  await connection.sendTransaction(transaction, [from, nonceAccount]);
 
   mockRpc.push([
     url,
@@ -222,7 +222,7 @@ test('create and query nonce account with seed', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, from);
+  await connection.sendTransaction(transaction, [from]);
 
   mockRpc.push([
     url,

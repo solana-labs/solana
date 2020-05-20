@@ -14,6 +14,7 @@ import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {sleep} from '../src/util/sleep';
+import type {SignatureStatus, TransactionError} from '../src/connection';
 
 if (!mockRpcEnabled) {
   // Testing max commitment level takes around 20s to complete
@@ -26,6 +27,29 @@ const errorResponse = {
     message: errorMessage,
   },
   result: undefined,
+};
+
+const verifySignatureStatus = (
+  status: SignatureStatus | null,
+  err?: TransactionError,
+): SignatureStatus => {
+  if (status === null) {
+    expect(status).not.toBeNull();
+    throw new Error(); // unreachable
+  }
+
+  const expectedErr = err || null;
+  expect(status.err).toEqual(expectedErr);
+  expect(status.slot).toBeGreaterThanOrEqual(0);
+  if (expectedErr !== null) return status;
+
+  const confirmations = status.confirmations;
+  if (typeof confirmations === 'number') {
+    expect(confirmations).toBeGreaterThan(0);
+  } else {
+    expect(confirmations).toBeNull();
+  }
+  return status;
 };
 
 test('get account info - not found', async () => {
@@ -135,7 +159,7 @@ test('get program accounts', async () => {
     accountPubkey: account0.publicKey,
     programId: programId.publicKey,
   });
-  await sendAndConfirmTransaction(connection, transaction, account0);
+  await sendAndConfirmTransaction(connection, transaction, [account0], 1);
 
   mockRpc.push([
     url,
@@ -180,7 +204,7 @@ test('get program accounts', async () => {
     programId: programId.publicKey,
   });
 
-  await sendAndConfirmTransaction(connection, transaction, account1);
+  await sendAndConfirmTransaction(connection, transaction, [account1], 1);
 
   mockGetRecentBlockhash('recent');
   const {feeCalculator} = await connection.getRecentBlockhash();
@@ -493,8 +517,8 @@ test('confirm transaction - error', async () => {
   mockRpc.push([
     url,
     {
-      method: 'confirmTransaction',
-      params: [badTransactionSignature],
+      method: 'getSignatureStatuses',
+      params: [[badTransactionSignature]],
     },
     errorResponse,
   ]);
@@ -1367,15 +1391,17 @@ test('transaction failure', async () => {
     toPubkey: account.publicKey,
     lamports: 10,
   });
-  const signature = await connection.sendTransaction(transaction, account);
+  const signature = await connection.sendTransaction(transaction, [account]);
 
+  const expectedErr = {InstructionError: [0, 'AccountBorrowFailed']};
   mockRpc.push([
     url,
     {
-      method: 'confirmTransaction',
+      method: 'getSignatureStatuses',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        {commitment: 'recent'},
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
       ],
     },
     {
@@ -1384,16 +1410,23 @@ test('transaction failure', async () => {
         context: {
           slot: 11,
         },
-        value: false,
+        value: [
+          {
+            slot: 0,
+            confirmations: 1,
+            status: {Err: expectedErr},
+            err: expectedErr,
+          },
+        ],
       },
     },
   ]);
 
   // Wait for one confirmation
-  await sleep(1000);
-  expect(await connection.confirmTransaction(signature)).toEqual(false);
+  const confirmResult = (await connection.confirmTransaction(signature, 1))
+    .value;
+  verifySignatureStatus(confirmResult, expectedErr);
 
-  const expectedErr = {InstructionError: [0, 'AccountBorrowFailed']};
   mockRpc.push([
     url,
     {
@@ -1423,19 +1456,7 @@ test('transaction failure', async () => {
   ]);
 
   const response = (await connection.getSignatureStatus(signature)).value;
-  if (response === null) {
-    expect(response).not.toBeNull();
-    return;
-  }
-
-  expect(response.err).toEqual(expectedErr);
-  expect(response.slot).toBeGreaterThanOrEqual(0);
-  const responseConfirmations = response.confirmations;
-  if (typeof responseConfirmations === 'number') {
-    expect(responseConfirmations).toBeGreaterThan(0);
-  } else {
-    expect(responseConfirmations).toBeNull();
-  }
+  verifySignatureStatus(response, expectedErr);
 });
 
 test('transaction', async () => {
@@ -1555,15 +1576,18 @@ test('transaction', async () => {
     toPubkey: accountTo.publicKey,
     lamports: 10,
   });
-  const signature = await connection.sendTransaction(transaction, accountFrom);
+  const signature = await connection.sendTransaction(transaction, [
+    accountFrom,
+  ]);
 
   mockRpc.push([
     url,
     {
-      method: 'confirmTransaction',
+      method: 'getSignatureStatuses',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        {commitment: 'recent'},
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
       ],
     },
     {
@@ -1572,24 +1596,22 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: true,
+        value: [
+          {
+            slot: 0,
+            confirmations: 1,
+            status: {Ok: null},
+            err: null,
+          },
+        ],
       },
     },
   ]);
 
   // Wait for one confirmation
-  await sleep(1000);
-
-  let i = 0;
-  for (;;) {
-    if (await connection.confirmTransaction(signature)) {
-      break;
-    }
-    console.log('not confirmed', signature);
-    expect(mockRpcEnabled).toBe(false);
-    expect(++i).toBeLessThan(10);
-    await sleep(500);
-  }
+  const confirmResult = (await connection.confirmTransaction(signature, 1))
+    .value;
+  verifySignatureStatus(confirmResult);
 
   mockRpc.push([
     url,
@@ -1619,20 +1641,9 @@ test('transaction', async () => {
     },
   ]);
 
-  const response = (await connection.getSignatureStatus(signature)).value;
-  if (response === null) {
-    expect(response).not.toBeNull();
-    return;
-  }
-
-  expect(response.err).toBeNull();
-  expect(response.slot).toBeGreaterThanOrEqual(0);
-  const responseConfirmations = response.confirmations;
-  if (typeof responseConfirmations === 'number') {
-    expect(responseConfirmations).toBeGreaterThan(0);
-  } else {
-    expect(responseConfirmations).toBeNull();
-  }
+  const response = verifySignatureStatus(
+    (await connection.getSignatureStatus(signature)).value,
+  );
 
   const unprocessedSignature =
     '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk';
@@ -1670,28 +1681,22 @@ test('transaction', async () => {
     await connection.getSignatureStatuses([signature, unprocessedSignature])
   ).value;
   expect(responses.length).toEqual(2);
-
-  const firstResponse = responses[0];
   expect(responses[1]).toBeNull();
 
-  if (firstResponse === null) {
-    expect(firstResponse).not.toBeNull();
-    return;
-  }
-
+  const firstResponse = verifySignatureStatus(responses[0]);
   expect(firstResponse.slot).toBeGreaterThanOrEqual(response.slot);
   expect(firstResponse.err).toEqual(response.err);
 
-  const firstResponseConfirmations = firstResponse.confirmations;
+  const responseConfirmations = response.confirmations;
   if (
     typeof responseConfirmations === 'number' &&
-    typeof firstResponseConfirmations === 'number'
+    typeof firstResponse.confirmations === 'number'
   ) {
-    expect(firstResponseConfirmations).toBeGreaterThanOrEqual(
+    expect(firstResponse.confirmations).toBeGreaterThanOrEqual(
       responseConfirmations,
     );
   } else {
-    expect(firstResponseConfirmations).toBeNull();
+    expect(firstResponse.confirmations).toBeNull();
   }
 
   mockRpc.push([
@@ -1775,21 +1780,12 @@ test('multi-instruction transaction', async () => {
       lamports: 100,
     }),
   );
-  const signature = await connection.sendTransaction(
-    transaction,
+  const signature = await connection.sendTransaction(transaction, [
     accountFrom,
     accountTo,
-  );
-  let i = 0;
-  for (;;) {
-    if (await connection.confirmTransaction(signature)) {
-      break;
-    }
+  ]);
 
-    expect(mockRpcEnabled).toBe(false);
-    expect(++i).toBeLessThan(10);
-    await sleep(500);
-  }
+  await connection.confirmTransaction(signature, 1);
 
   const response = (await connection.getSignatureStatus(signature)).value;
   if (response !== null) {
@@ -1839,7 +1835,7 @@ test('account change notification', async () => {
       toPubkey: programAccount.publicKey,
       lamports: balanceNeeded,
     });
-    await sendAndConfirmTransaction(connection, transaction, owner);
+    await sendAndConfirmTransaction(connection, transaction, [owner], 1);
   } catch (err) {
     await connection.removeAccountChangeListener(subscriptionId);
     throw err;
@@ -1903,7 +1899,7 @@ test('program account change notification', async () => {
       toPubkey: programAccount.publicKey,
       lamports: balanceNeeded,
     });
-    await sendAndConfirmTransaction(connection, transaction, owner);
+    await sendAndConfirmTransaction(connection, transaction, [owner], 1);
   } catch (err) {
     await connection.removeProgramAccountChangeListener(subscriptionId);
     throw err;

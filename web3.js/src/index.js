@@ -30,10 +30,7 @@ export {
   SYSVAR_REWARDS_PUBKEY,
   SYSVAR_STAKE_HISTORY_PUBKEY,
 } from './sysvar';
-export {
-  sendAndConfirmTransaction,
-  sendAndConfirmRecentTransaction,
-} from './util/send-and-confirm-transaction';
+export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 export {sendAndConfirmRawTransaction} from './util/send-and-confirm-raw-transaction';
 export {clusterApiUrl} from './util/cluster';
 

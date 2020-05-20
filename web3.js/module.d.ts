@@ -210,14 +210,10 @@ declare module '@solana/web3.js' {
       endSlot: number,
     ): Promise<Array<TransactionSignature>>;
     getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus>;
-    confirmTransactionAndContext(
-      signature: TransactionSignature,
-      commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<boolean>>;
     confirmTransaction(
       signature: TransactionSignature,
-      commitment?: Commitment,
-    ): Promise<boolean>;
+      confirmations?: number,
+    ): Promise<RpcResponseAndContext<SignatureStatus | null>>;
     getSlot(commitment?: Commitment): Promise<number>;
     getSlotLeader(commitment?: Commitment): Promise<string>;
     getSignatureStatus(
@@ -247,7 +243,7 @@ declare module '@solana/web3.js' {
     ): Promise<TransactionSignature>;
     sendTransaction(
       transaction: Transaction,
-      ...signers: Array<Account>
+      signers: Array<Account>,
     ): Promise<TransactionSignature>;
     sendEncodedTransaction(
       encodedTransaction: string,
@@ -769,20 +765,15 @@ declare module '@solana/web3.js' {
   export function sendAndConfirmTransaction(
     connection: Connection,
     transaction: Transaction,
-    ...signers: Array<Account>
-  ): Promise<TransactionSignature>;
-
-  export function sendAndConfirmRecentTransaction(
-    connection: Connection,
-    transaction: Transaction,
-    ...signers: Array<Account>
+    signers: Array<Account>,
+    confirmations?: number,
   ): Promise<TransactionSignature>;
 
   // === src/util/send-and-confirm-raw-transaction.js ===
   export function sendAndConfirmRawTransaction(
     connection: Connection,
     wireTransaction: Buffer,
-    commitment?: Commitment,
+    confirmations?: number,
   ): Promise<TransactionSignature>;
 
   // === src/util/cluster.js ===
