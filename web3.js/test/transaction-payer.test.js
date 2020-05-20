@@ -3,7 +3,6 @@ import {Account, Connection, SystemProgram, LAMPORTS_PER_SOL} from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
-import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
@@ -106,19 +105,19 @@ test('transaction-payer', async () => {
     lamports: 10,
   });
 
-  const signature = await connection.sendTransaction(
-    transaction,
+  const signature = await connection.sendTransaction(transaction, [
     accountPayer,
     accountFrom,
-  );
+  ]);
 
   mockRpc.push([
     url,
     {
-      method: 'confirmTransaction',
+      method: 'getSignatureStatuses',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        {commitment: 'recent'},
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
       ],
     },
     {
@@ -127,21 +126,19 @@ test('transaction-payer', async () => {
         context: {
           slot: 11,
         },
-        value: true,
+        value: [
+          {
+            slot: 0,
+            confirmations: 1,
+            status: {Ok: null},
+            err: null,
+          },
+        ],
       },
     },
   ]);
 
-  let i = 0;
-  for (;;) {
-    if (await connection.confirmTransaction(signature)) {
-      break;
-    }
-
-    expect(mockRpcEnabled).toBe(false);
-    expect(++i).toBeLessThan(10);
-    await sleep(500);
-  }
+  await connection.confirmTransaction(signature, 1);
 
   mockRpc.push([
     url,

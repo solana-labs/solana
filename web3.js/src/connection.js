@@ -470,13 +470,6 @@ const GetProgramAccountsRpcResult = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "confirmTransaction" message
- */
-const ConfirmTransactionAndContextRpcResult = jsonRpcResultAndContext(
-  'boolean',
-);
-
-/**
  * Expected JSON RPC response for the "getSlot" message
  */
 const GetSlot = jsonRpcResult('number');
@@ -1064,34 +1057,43 @@ export class Connection {
   }
 
   /**
-   * Confirm the transaction identified by the specified signature, return with context
-   */
-  async confirmTransactionAndContext(
-    signature: TransactionSignature,
-    commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<boolean>> {
-    const args = this._argsWithCommitment([signature], commitment);
-    const unsafeRes = await this._rpcRequest('confirmTransaction', args);
-    const res = ConfirmTransactionAndContextRpcResult(unsafeRes);
-    if (res.error) {
-      throw new Error('failed to confirm transaction: ' + res.error.message);
-    }
-    assert(typeof res.result !== 'undefined');
-    return res.result;
-  }
-
-  /**
    * Confirm the transaction identified by the specified signature
    */
   async confirmTransaction(
     signature: TransactionSignature,
-    commitment: ?Commitment,
-  ): Promise<boolean> {
-    return await this.confirmTransactionAndContext(signature, commitment)
-      .then(x => x.value)
-      .catch(e => {
-        throw new Error('failed to confirm transaction: ' + e);
-      });
+    confirmations: ?number,
+  ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
+    const NUM_STATUS_RETRIES = 10;
+
+    const MS_PER_SECOND = 1000;
+    const MS_PER_SLOT =
+      (DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND) * MS_PER_SECOND;
+
+    let statusRetries = NUM_STATUS_RETRIES;
+    let statusResponse = await this.getSignatureStatus(signature);
+    for (;;) {
+      const status = statusResponse.value;
+      if (status) {
+        // Received a status, if not an error wait for confirmation
+        statusRetries = NUM_STATUS_RETRIES;
+        if (
+          status.err ||
+          status.confirmations === null ||
+          (typeof confirmations === 'number' &&
+            status.confirmations >= confirmations)
+        ) {
+          break;
+        }
+      } else if (--statusRetries <= 0) {
+        break;
+      }
+
+      // Sleep for approximately half a slot
+      await sleep(MS_PER_SLOT / 2);
+      statusResponse = await this.getSignatureStatus(signature);
+    }
+
+    return statusResponse;
   }
 
   /**
@@ -1474,7 +1476,7 @@ export class Connection {
    */
   async sendTransaction(
     transaction: Transaction,
-    ...signers: Array<Account>
+    signers: Array<Account>,
   ): Promise<TransactionSignature> {
     if (transaction.nonceInfo) {
       transaction.sign(...signers);
