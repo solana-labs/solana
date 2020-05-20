@@ -774,7 +774,7 @@ fn report_target_features() {
         // Validator binaries built on a machine with AVX support will generate invalid opcodes
         // when run on machines without AVX causing a non-obvious process abort.  Instead detect
         // the mismatch and error cleanly.
-        #[target_feature(enable = "avx")]
+        #[cfg(target_feature = "avx")]
         {
             if is_x86_feature_detected!("avx") {
                 info!("AVX detected");
@@ -783,7 +783,7 @@ fn report_target_features() {
                 process::exit(1);
             }
         }
-        #[target_feature(enable = "avx2")]
+        #[cfg(target_feature = "avx2")]
         {
             if is_x86_feature_detected!("avx2") {
                 info!("AVX2 detected");
