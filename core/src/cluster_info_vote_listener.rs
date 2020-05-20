@@ -42,8 +42,24 @@ pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 
 #[derive(Default)]
+pub struct VoteStakeTracker {
+    voted: HashSet<Arc<Pubkey>>,
+    stake: u64,
+}
+
+impl VoteStakeTracker {
+    pub fn add_vote_pubkey(&mut self, vote_pubkey: Arc<Pubkey>, stake: u64) {
+        if !self.voted.contains(&vote_pubkey) {
+            self.voted.insert(vote_pubkey);
+            self.stake += stake;
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
+    voted_no_switching: VoteStakeTracker,
     updates: Option<Vec<Arc<Pubkey>>>,
 }
 
@@ -443,9 +459,10 @@ impl ClusterInfoVoteListener {
                     })
                     .unwrap_or((None, None))
                 {
-                    let vote = {
+                    let (vote, is_switch) = {
                         match vote_instruction {
-                            VoteInstruction::Vote(vote) => vote,
+                            VoteInstruction::Vote(vote) => (vote, false),
+                            VoteInstruction::VoteSwitch(vote, _) => (vote, true),
                             _ => {
                                 continue;
                             }
@@ -519,6 +536,7 @@ impl ClusterInfoVoteListener {
                 let voted: HashSet<_> = slot_diff.into_iter().collect();
                 let new_slot_tracker = SlotVoteTracker {
                     voted: voted.clone(),
+                    voted_no_switching: VoteStakeTracker::default(),
                     updates: Some(voted.into_iter().collect()),
                 };
                 vote_tracker
