@@ -1,6 +1,6 @@
 use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
-    serve_repair::RepairType,
+    pubkey_references::LockedPubkeyReferences, serve_repair::RepairType,
 };
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::epoch_stakes::NodeIdToVoteAccounts;
@@ -16,7 +16,7 @@ pub type ClusterSlotsMap = RwLock<HashMap<Slot, Arc<RwLock<SlotPubkeys>>>>;
 #[derive(Default)]
 pub struct ClusterSlots {
     cluster_slots: ClusterSlotsMap,
-    keys: RwLock<HashSet<Arc<Pubkey>>>,
+    keys: LockedPubkeyReferences,
     since: RwLock<Option<u64>>,
     validator_stakes: RwLock<Arc<NodeIdToVoteAccounts>>,
     epoch: RwLock<Option<u64>>,
@@ -41,20 +41,12 @@ impl ClusterSlots {
                 if *slot <= root {
                     continue;
                 }
-                let pubkey = Arc::new(epoch_slots.from);
-                let exists = self.keys.read().unwrap().get(&pubkey).is_some();
-                if !exists {
-                    self.keys.write().unwrap().insert(pubkey.clone());
-                }
-                let from = self.keys.read().unwrap().get(&pubkey).unwrap().clone();
-                self.insert_node_id(*slot, from);
+                let unduplicated_pubkey = self.keys.get_or_insert(&epoch_slots.from);
+                self.insert_node_id(*slot, unduplicated_pubkey);
             }
         }
         self.cluster_slots.write().unwrap().retain(|x, _| *x > root);
-        self.keys
-            .write()
-            .unwrap()
-            .retain(|x| Arc::strong_count(x) > 1);
+        self.keys.purge();
         *self.since.write().unwrap() = since;
     }
 

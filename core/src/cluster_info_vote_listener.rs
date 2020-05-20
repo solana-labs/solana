@@ -3,6 +3,7 @@ use crate::{
     consensus::VOTE_THRESHOLD_SIZE,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
+    pubkey_references::LockedPubkeyReferences,
     result::{Error, Result},
     rpc_subscriptions::RpcSubscriptions,
     sigverify,
@@ -66,7 +67,7 @@ pub struct VoteTracker {
     epoch_authorized_voters: RwLock<HashMap<Epoch, Arc<EpochAuthorizedVoters>>>,
     leader_schedule_epoch: RwLock<Epoch>,
     current_epoch: RwLock<Epoch>,
-    keys: RwLock<HashSet<Arc<Pubkey>>>,
+    keys: LockedPubkeyReferences,
     epoch_schedule: EpochSchedule,
 }
 
@@ -132,7 +133,7 @@ impl VoteTracker {
             w_slot_vote_tracker.updates = Some(vec![pubkey.clone()]);
         }
 
-        self.keys.write().unwrap().insert(pubkey);
+        self.keys.get_or_insert(&pubkey);
     }
 
     fn update_leader_schedule_epoch(&self, root_bank: &Bank) {
@@ -182,10 +183,7 @@ impl VoteTracker {
                 .write()
                 .unwrap()
                 .retain(|epoch, _| epoch >= &root_epoch);
-            self.keys
-                .write()
-                .unwrap()
-                .retain(|pubkey| Arc::strong_count(pubkey) > 1);
+            self.keys.purge();
             *self.current_epoch.write().unwrap() = root_epoch;
         }
     }
@@ -513,16 +511,8 @@ impl ClusterInfoVoteListener {
                                 continue;
                             }
                         }
-                        let mut unduplicated_pubkey =
-                            vote_tracker.keys.read().unwrap().get(vote_pubkey).cloned();
-                        if unduplicated_pubkey.is_none() {
-                            let new_key = Arc::new(*vote_pubkey);
-                            vote_tracker.keys.write().unwrap().insert(new_key.clone());
-                            unduplicated_pubkey = Some(new_key);
-                        }
-                        diff.entry(slot)
-                            .or_default()
-                            .insert(unduplicated_pubkey.unwrap());
+                        let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
+                        diff.entry(slot).or_default().insert(unduplicated_pubkey);
                     }
 
                     subscriptions.notify_vote(&vote);
@@ -731,7 +721,7 @@ mod tests {
 
         // Check `keys` and `epoch_authorized_voters` are purged when new
         // root bank moves to the next epoch
-        assert!(vote_tracker.keys.read().unwrap().contains(&new_voter));
+        assert!(vote_tracker.keys.0.read().unwrap().contains(&new_voter));
         let current_epoch = bank.epoch();
         let new_epoch_bank = Bank::new_from_parent(
             &bank,
@@ -740,7 +730,7 @@ mod tests {
                 .get_first_slot_in_epoch(current_epoch + 1),
         );
         vote_tracker.process_new_root_bank(&new_epoch_bank);
-        assert!(!vote_tracker.keys.read().unwrap().contains(&new_voter));
+        assert!(!vote_tracker.keys.0.read().unwrap().contains(&new_voter));
         assert_eq!(
             *vote_tracker.current_epoch.read().unwrap(),
             current_epoch + 1
@@ -994,6 +984,7 @@ mod tests {
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
+                .0
                 .read()
                 .unwrap()
                 .get(&validator0_keypairs.vote_keypair.pubkey())
@@ -1045,6 +1036,7 @@ mod tests {
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
+                .0
                 .read()
                 .unwrap()
                 .get(&validator0_keypairs.vote_keypair.pubkey())
