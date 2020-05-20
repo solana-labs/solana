@@ -13,15 +13,33 @@ static const int ARGUMENT_DUP_INDEX = 5;
 static const int DERIVED_KEY1_INDEX = 6;
 static const int DERIVED_KEY2_INDEX = 7;
 static const int DERIVED_KEY3_INDEX = 8;
+static const int SYSTEM_PROGRAM_INDEX = 9;
+static const int FROM_INDEX = 10;
 
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("Invoke C program");
 
-  SolAccountInfo accounts[9];
+  SolAccountInfo accounts[11];
   SolParameters params = (SolParameters){.ka = accounts};
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(accounts))) {
     return ERROR_INVALID_ARGUMENT;
+  }
+
+  sol_log("Call system program");
+  {
+    sol_assert(*accounts[FROM_INDEX].lamports = 43);
+    sol_assert(*accounts[ARGUMENT_INDEX].lamports = 41);
+    SolAccountMeta arguments[] = {{accounts[FROM_INDEX].key, false, true},
+                                  {accounts[ARGUMENT_INDEX].key, false, false}};
+    uint8_t data[] = {2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
+    const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_assert(SUCCESS ==
+               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    sol_assert(*accounts[FROM_INDEX].lamports = 42);
+    sol_assert(*accounts[ARGUMENT_INDEX].lamports = 42);
   }
 
   sol_log("Test data translation");
@@ -37,7 +55,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
         {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
     uint8_t data[] = {TEST_VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, 4, data, 6};
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
 
     sol_assert(SUCCESS ==
                sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
@@ -70,8 +89,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
-    const SolSignerSeed seeds1[] = {{"You pass butter", 15}};
-    const SolSignerSeed seeds2[] = {{"Lil'", 4}, {"Bits", 4}};
+    char seed1[] = "You pass butter";
+    char seed2[] = "Lil'";
+    char seed3[] = "Bits";
+    const SolSignerSeed seeds1[] = {{seed1, sol_strlen(seed1)}};
+    const SolSignerSeed seeds2[] = {{seed2, sol_strlen(seed2)},
+                                    {seed3, sol_strlen(seed3)}};
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
     sol_assert(SUCCESS == sol_invoke_signed(
