@@ -24,6 +24,7 @@
   * [Command-line Reference](cli/usage.md)
 * [Solana Clusters](clusters.md)
 * [Develop Applications](apps/README.md)
+  * [Accounts and Rent](apps/rent.md)
   * [Example: Web Wallet](apps/webwallet.md)
   * [Example: Tic-Tac-Toe](apps/tictactoe.md)
   * [Drones](apps/drones.md)

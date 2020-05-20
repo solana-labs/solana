@@ -72,9 +72,10 @@ generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md
 
 We recommend using a unique deposit account for each of your users.
 
-Solana accounts are charged rent on creation and once per epoch, but they can be
-made rent-exempt if they contain 2-years worth of rent in SOL. In order to find
-the minimum rent-exempt balance for your deposit accounts, query the
+Solana accounts are charged [rent](../apps/rent.md) on creation and once per
+epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
+SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
+query the
 [`getMinimumBalanceForRentExemption` endpoint](../apps/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
