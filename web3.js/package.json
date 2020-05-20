@@ -37,10 +37,11 @@
     "/src"
   ],
   "scripts": {
-    "bpf-sdk:install": "bin/bpf-sdk-install.sh .",
+    "bpf-sdk:install": "npm run clean:fixtures; bin/bpf-sdk-install.sh .",
     "bpf-sdk:remove-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
     "build": "cross-env NODE_ENV=production rollup -c",
     "build:fixtures": "./test/fixtures/noop-c/build.sh; ./test/fixtures/noop-rust/build.sh",
+    "clean:fixtures": "examples/bpf-rust-noop/do.sh clean; make -C examples/bpf-c-noop clean ",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
