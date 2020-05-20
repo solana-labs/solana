@@ -2533,14 +2533,12 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 mod tests {
     use super::*;
     use crate::{
-        accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
         accounts_index::Ancestors,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use bincode::serialize_into;
     use solana_sdk::{
         account::KeyedAccount,
         account_utils::StateMut,
@@ -2566,8 +2564,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{io::Cursor, result, time::Duration};
-    use tempfile::TempDir;
+    use std::{result, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -5670,68 +5667,6 @@ mod tests {
         );
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_bank_serialize() {
-        solana_logger::setup();
-        let (genesis_config, _) = create_genesis_config(500);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank0.squash();
-
-        // Create an account on a non-root fork
-        let key1 = Keypair::new();
-        bank1.deposit(&key1.pubkey(), 5);
-
-        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
-
-        // Test new account
-        let key2 = Keypair::new();
-        bank2.deposit(&key2.pubkey(), 10);
-        assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
-
-        let key3 = Keypair::new();
-        bank2.deposit(&key3.pubkey(), 0);
-
-        bank2.squash();
-
-        let snapshot_storages = bank2.get_snapshot_storages();
-        let mut buf = vec![];
-        let mut writer = Cursor::new(&mut buf);
-        serialize_into(&mut writer, &bank2).unwrap();
-        crate::serde_snapshot::bankrc_to_stream(
-            &mut std::io::BufWriter::new(&mut writer),
-            &bank2.rc,
-            &snapshot_storages,
-        )
-        .unwrap();
-
-        let mut rdr = Cursor::new(&buf[..]);
-        let mut dbank: Bank = bincode::deserialize_from(&mut rdr).unwrap();
-        let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
-
-        // Create a new set of directories for this bank's accounts
-        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
-        let ref_sc = StatusCacheRc::default();
-        ref_sc.status_cache.write().unwrap().add_root(2);
-        // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
-        let copied_accounts = TempDir::new().unwrap();
-        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-        dbank.set_bank_rc(
-            crate::serde_snapshot::bankrc_from_stream(
-                &dbank_paths,
-                dbank.slot(),
-                &mut reader,
-                copied_accounts.path(),
-            )
-            .unwrap(),
-            ref_sc,
-        );
-        assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
-        assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
-        assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-        bank2.compare_bank(&dbank);
     }
 
     #[test]

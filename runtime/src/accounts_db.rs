@@ -1444,7 +1444,7 @@ impl AccountsDB {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         let keys: Vec<_> = accounts_index.account_maps.keys().collect();
-        let mismatch_found = AtomicBool::new(false);
+        let mismatch_found = AtomicU64::new(0);
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
@@ -1461,9 +1461,7 @@ impl AccountsDB {
                                 if check_hash {
                                     let hash = Self::hash_stored_account(*slot, &account);
                                     if hash != *account.hash {
-                                        mismatch_found.store(true, Ordering::Relaxed);
-                                    }
-                                    if mismatch_found.load(Ordering::Relaxed) {
+                                        mismatch_found.fetch_add(1, Ordering::Relaxed);
                                         return None;
                                     }
                                 }
@@ -1478,7 +1476,11 @@ impl AccountsDB {
                 }
             })
             .collect();
-        if mismatch_found.load(Ordering::Relaxed) {
+        if mismatch_found.load(Ordering::Relaxed) > 0 {
+            warn!(
+                "{} mismatched account hash(es) found",
+                mismatch_found.load(Ordering::Relaxed)
+            );
             return Err(MismatchedAccountHash);
         }
 
@@ -1889,20 +1891,11 @@ impl AccountsDB {
 pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
-    use crate::{
-        accounts_index::RefCount,
-        append_vec::AccountMeta,
-        serde_snapshot::{accountsdb_from_stream, accountsdb_to_stream},
-    };
+    use crate::{accounts_index::RefCount, append_vec::AccountMeta};
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{account::Account, hash::HASH_BYTES};
-    use std::{
-        fs,
-        io::{BufReader, Cursor},
-        str::FromStr,
-    };
-    use tempfile::TempDir;
+    use std::{fs, str::FromStr};
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
         let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
@@ -2764,19 +2757,9 @@ pub mod tests {
     }
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
-        let mut writer = Cursor::new(vec![]);
-        let snapshot_storages = accounts.get_snapshot_storages(slot);
-        accountsdb_to_stream(&mut writer, &accounts, slot, &snapshot_storages).unwrap();
-
-        let buf = writer.into_inner();
-        let mut reader = BufReader::new(&buf[..]);
-        let copied_accounts = TempDir::new().unwrap();
-        // Simulate obtaining a copy of the AppendVecs from a tarball
-        copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
-        let daccounts = accountsdb_from_stream(&mut reader, &[], copied_accounts.path()).unwrap();
-
+        let daccounts =
+            crate::serde_snapshot::reconstruct_accounts_db_via_serialization(accounts, slot);
         print_count_and_status("daccounts", &daccounts);
-
         daccounts
     }
 

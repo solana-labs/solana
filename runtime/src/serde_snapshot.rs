@@ -34,7 +34,13 @@ use {
 
 pub use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
-pub trait SerdeContext<'a> {
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum SerdeStyle {
+    NEWER,
+    OLDER,
+}
+
+trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
@@ -49,9 +55,9 @@ pub trait SerdeContext<'a> {
     fn legacy_deserialize_byte_length<R: Read>(stream: &mut R) -> Result<u64, bincode::Error>;
 }
 
-pub struct SerdeContextV1_1_0 {}
-impl<'a> SerdeContext<'a> for SerdeContextV1_1_0 {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntryV1_1_0;
+struct TypeContextLegacy {}
+impl<'a> TypeContext<'a> for TypeContextLegacy {
+    type SerializableAccountStorageEntry = SerializableAccountStorageEntryLegacy;
 
     fn legacy_or_zero<T: Default>(x: T) -> T {
         x
@@ -69,9 +75,9 @@ impl<'a> SerdeContext<'a> for SerdeContextV1_1_0 {
     }
 }
 
-pub struct SerdeContextV1_2_0 {}
-impl<'a> SerdeContext<'a> for SerdeContextV1_2_0 {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntryV1_2_0;
+struct TypeContextFuture {}
+impl<'a> TypeContext<'a> for TypeContextFuture {
+    type SerializableAccountStorageEntry = SerializableAccountStorageEntryFuture;
 
     fn legacy_or_zero<T: Default>(_x: T) -> T {
         T::default()
@@ -88,8 +94,6 @@ impl<'a> SerdeContext<'a> for SerdeContextV1_2_0 {
         Ok(MAX_ACCOUNTS_DB_STREAM_SIZE)
     }
 }
-
-type DefaultSerdeContext = SerdeContextV1_2_0;
 
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
@@ -164,6 +168,7 @@ fn accountsdb_to_io_error<T: ToString>(error: T) -> IoError {
 }
 
 pub fn bankrc_from_stream<R, P>(
+    serde_style: SerdeStyle,
     account_paths: &[PathBuf],
     slot: Slot,
     stream: &mut BufReader<R>,
@@ -173,15 +178,24 @@ where
     R: Read,
     P: AsRef<Path>,
 {
-    context_bankrc_from_stream::<DefaultSerdeContext, R, P>(
-        account_paths,
-        slot,
-        stream,
-        stream_append_vecs_path,
-    )
+    match serde_style {
+        SerdeStyle::NEWER => context_bankrc_from_stream::<TypeContextFuture, R, P>(
+            account_paths,
+            slot,
+            stream,
+            stream_append_vecs_path,
+        ),
+        SerdeStyle::OLDER => context_bankrc_from_stream::<TypeContextLegacy, R, P>(
+            account_paths,
+            slot,
+            stream,
+            stream_append_vecs_path,
+        ),
+    }
 }
 
 pub fn bankrc_to_stream<W>(
+    serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank_rc: &BankRc,
     snapshot_storages: &[SnapshotStorage],
@@ -189,56 +203,24 @@ pub fn bankrc_to_stream<W>(
 where
     W: Write,
 {
-    context_bankrc_to_stream::<DefaultSerdeContext, W>(stream, bank_rc, snapshot_storages)
+    match serde_style {
+        SerdeStyle::NEWER => {
+            context_bankrc_to_stream::<TypeContextFuture, W>(stream, bank_rc, snapshot_storages)
+        }
+        SerdeStyle::OLDER => {
+            context_bankrc_to_stream::<TypeContextLegacy, W>(stream, bank_rc, snapshot_storages)
+        }
+    }
 }
 
-#[cfg(test)]
-pub(crate) fn accountsdb_from_stream<R, P>(
-    stream: &mut BufReader<R>,
-    account_paths: &[PathBuf],
-    stream_append_vecs_path: P,
-) -> Result<AccountsDB, IoError>
-where
-    R: Read,
-    P: AsRef<Path>,
-{
-    context_accountsdb_from_stream::<DefaultSerdeContext, R, P>(
-        stream,
-        account_paths,
-        stream_append_vecs_path,
-    )
-}
-
-#[cfg(test)]
-pub(crate) fn accountsdb_to_stream<W: Write>(
-    stream: &mut W,
-    accounts_db: &AccountsDB,
-    slot: Slot,
-    account_storage_entries: &[SnapshotStorage],
-) -> Result<(), IoError>
-where
-    W: Write,
-{
-    serialize_into(
-        stream,
-        &SerializableAccountsDatabaseUnversioned::<DefaultSerdeContext> {
-            accounts_db,
-            slot,
-            account_storage_entries,
-            phantom: std::marker::PhantomData::default(),
-        },
-    )
-    .map_err(bankrc_to_io_error)
-}
-
-pub fn context_bankrc_from_stream<'a, C, R, P>(
+fn context_bankrc_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
     slot: Slot,
     mut stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
 ) -> std::result::Result<BankRc, IoError>
 where
-    C: SerdeContext<'a>,
+    C: TypeContext<'a>,
     R: Read,
     P: AsRef<Path>,
 {
@@ -260,13 +242,13 @@ where
     })
 }
 
-pub fn context_bankrc_to_stream<'a, 'b, C, W>(
+fn context_bankrc_to_stream<'a, 'b, C, W>(
     stream: &'b mut BufWriter<W>,
     bank_rc: &'a BankRc,
     snapshot_storages: &'a [SnapshotStorage],
 ) -> Result<(), IoError>
 where
-    C: SerdeContext<'a>,
+    C: TypeContext<'a>,
     W: Write,
 {
     struct BankRcSerialize<'a, C> {
@@ -275,7 +257,7 @@ where
         phantom: std::marker::PhantomData<C>,
     }
 
-    impl<'a, C: SerdeContext<'a>> Serialize for BankRcSerialize<'a, C> {
+    impl<'a, C: TypeContext<'a>> Serialize for BankRcSerialize<'a, C> {
         fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
         where
             S: serde::ser::Serializer,
@@ -285,7 +267,7 @@ where
             // Possibly write out a dummy vector length for backward compatibility
             C::legacy_serialize_byte_length(&mut seq, MAX_ACCOUNTS_DB_STREAM_SIZE)?;
 
-            seq.serialize_element(&SerializableAccountsDatabaseUnversioned::<'a, C> {
+            seq.serialize_element(&SerializableAccountsDatabaseUnversioned::<'a, 'a, C> {
                 accounts_db: &*self.bank_rc.accounts.accounts_db,
                 slot: self.bank_rc.slot,
                 account_storage_entries: self.snapshot_storages,
@@ -313,7 +295,7 @@ fn context_accountsdb_from_stream<'a, C, R, P>(
     stream_append_vecs_path: P,
 ) -> Result<AccountsDB, IoError>
 where
-    C: SerdeContext<'a>,
+    C: TypeContext<'a>,
     R: Read,
     P: AsRef<Path>,
 {
@@ -438,14 +420,14 @@ where
     Ok(accounts_db)
 }
 
-struct SerializableAccountsDatabaseUnversioned<'a, C> {
+struct SerializableAccountsDatabaseUnversioned<'a, 'b, C> {
     accounts_db: &'a AccountsDB,
     slot: Slot,
-    account_storage_entries: &'a [SnapshotStorage],
+    account_storage_entries: &'b [SnapshotStorage],
     phantom: std::marker::PhantomData<C>,
 }
 
-impl<'a, C: SerdeContext<'a>> Serialize for SerializableAccountsDatabaseUnversioned<'a, C> {
+impl<'a, 'b, C: TypeContext<'b>> Serialize for SerializableAccountsDatabaseUnversioned<'a, 'b, C> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -503,53 +485,53 @@ impl<'a, C: SerdeContext<'a>> Serialize for SerializableAccountsDatabaseUnversio
     }
 }
 
-// Serializable version of AccountStorageEntry for snapshot format V1_1_0
+// Serializable version of AccountStorageEntry for snapshot format Legacy
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SerializableAccountStorageEntryV1_1_0 {
+pub struct SerializableAccountStorageEntryLegacy {
     id: AppendVecId,
-    accounts: SerializableAppendVecV1_1_0,
+    accounts: SerializableAppendVecLegacy,
     count_and_status: (usize, AccountStorageStatus),
 }
 
-impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
+impl From<&AccountStorageEntry> for SerializableAccountStorageEntryLegacy {
     fn from(rhs: &AccountStorageEntry) -> Self {
         Self {
             id: rhs.id,
-            accounts: SerializableAppendVecV1_1_0::from(&rhs.accounts),
+            accounts: SerializableAppendVecLegacy::from(&rhs.accounts),
             ..Self::default()
         }
     }
 }
 
-impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
+impl Into<AccountStorageEntry> for SerializableAccountStorageEntryLegacy {
     fn into(self) -> AccountStorageEntry {
         AccountStorageEntry::new_empty_map(self.id, self.accounts.current_len)
     }
 }
 
-// Serializable version of AppendVec for snapshot format V1_1_0
+// Serializable version of AppendVec for snapshot format Legacy
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct SerializableAppendVecV1_1_0 {
+struct SerializableAppendVecLegacy {
     current_len: usize,
 }
 
-impl From<&AppendVec> for SerializableAppendVecV1_1_0 {
-    fn from(rhs: &AppendVec) -> SerializableAppendVecV1_1_0 {
-        SerializableAppendVecV1_1_0 {
+impl From<&AppendVec> for SerializableAppendVecLegacy {
+    fn from(rhs: &AppendVec) -> SerializableAppendVecLegacy {
+        SerializableAppendVecLegacy {
             current_len: rhs.len(),
         }
     }
 }
 
-impl Into<AppendVec> for SerializableAppendVecV1_1_0 {
+impl Into<AppendVec> for SerializableAppendVecLegacy {
     fn into(self) -> AppendVec {
         AppendVec::new_empty_map(self.current_len)
     }
 }
 
-// Serialization of AppendVec V1_1_0 requires serialization of u64 to
+// Serialization of AppendVec Legacy requires serialization of u64 to
 // eight byte vector which is then itself serialized to the stream
-impl Serialize for SerializableAppendVecV1_1_0 {
+impl Serialize for SerializableAppendVecLegacy {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -562,19 +544,19 @@ impl Serialize for SerializableAppendVecV1_1_0 {
     }
 }
 
-// Deserialization of AppendVec V1_1_0 requires deserialization
+// Deserialization of AppendVec Legacy requires deserialization
 // of eight byte vector from which u64 is then deserialized
-impl<'de> Deserialize<'de> for SerializableAppendVecV1_1_0 {
+impl<'de> Deserialize<'de> for SerializableAppendVecLegacy {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         use serde::de::Error;
-        struct SerializableAppendVecV1_1_0Visitor;
-        impl<'a> Visitor<'a> for SerializableAppendVecV1_1_0Visitor {
-            type Value = SerializableAppendVecV1_1_0;
+        struct SerializableAppendVecLegacyVisitor;
+        impl<'a> Visitor<'a> for SerializableAppendVecLegacyVisitor {
+            type Value = SerializableAppendVecLegacy;
             fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
-                formatter.write_str("Expecting SerializableAppendVecV1_1_0")
+                formatter.write_str("Expecting SerializableAppendVecLegacy")
             }
             fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
             where
@@ -585,25 +567,25 @@ impl<'de> Deserialize<'de> for SerializableAppendVecV1_1_0 {
                 let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
                 if rd.position() != LEN {
                     Err(Error::custom(
-                        "SerializableAppendVecV1_1_0: unexpected length",
+                        "SerializableAppendVecLegacy: unexpected length",
                     ))
                 } else {
-                    Ok(SerializableAppendVecV1_1_0 { current_len })
+                    Ok(SerializableAppendVecLegacy { current_len })
                 }
             }
         }
-        deserializer.deserialize_bytes(SerializableAppendVecV1_1_0Visitor)
+        deserializer.deserialize_bytes(SerializableAppendVecLegacyVisitor)
     }
 }
 
-// Serializable version of AccountStorageEntry for snapshot format V1_2_0
+// Serializable version of AccountStorageEntry for snapshot format Future
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SerializableAccountStorageEntryV1_2_0 {
+pub struct SerializableAccountStorageEntryFuture {
     id: AppendVecId,
     accounts_current_len: usize,
 }
 
-impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_2_0 {
+impl From<&AccountStorageEntry> for SerializableAccountStorageEntryFuture {
     fn from(rhs: &AccountStorageEntry) -> Self {
         Self {
             id: rhs.id,
@@ -612,11 +594,15 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_2_0 {
     }
 }
 
-impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_2_0 {
+impl Into<AccountStorageEntry> for SerializableAccountStorageEntryFuture {
     fn into(self) -> AccountStorageEntry {
         AccountStorageEntry::new_empty_map(self.id, self.accounts_current_len)
     }
 }
+
+// a number of test cases in accounts_db use this
+#[cfg(test)]
+pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
 
 #[cfg(test)]
 mod tests {
@@ -624,13 +610,38 @@ mod tests {
         super::*,
         crate::{
             accounts::{create_test_accounts, Accounts},
-            accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
+            accounts_db::get_temp_accounts_paths,
+            bank::{Bank, StatusCacheRc},
         },
         rand::{thread_rng, Rng},
-        solana_sdk::{account::Account, pubkey::Pubkey},
+        solana_sdk::{
+            account::Account,
+            genesis_config::create_genesis_config,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+        },
         std::io::{BufReader, Cursor},
         tempfile::TempDir,
     };
+
+    fn copy_append_vecs<P: AsRef<Path>>(
+        accounts_db: &AccountsDB,
+        output_dir: P,
+    ) -> std::io::Result<()> {
+        let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
+        for storage in storage_entries.iter().flatten() {
+            let storage_path = storage.get_path();
+            let output_path = output_dir.as_ref().join(
+                storage_path
+                    .file_name()
+                    .expect("Invalid AppendVec file path"),
+            );
+
+            std::fs::copy(storage_path, output_path)?;
+        }
+
+        Ok(())
+    }
 
     fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
         for _ in 1..num {
@@ -645,8 +656,65 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_accounts_serialize() {
+    fn accountsdb_from_stream<R, P>(
+        serde_style: SerdeStyle,
+        stream: &mut BufReader<R>,
+        account_paths: &[PathBuf],
+        stream_append_vecs_path: P,
+    ) -> Result<AccountsDB, IoError>
+    where
+        R: Read,
+        P: AsRef<Path>,
+    {
+        match serde_style {
+            SerdeStyle::NEWER => context_accountsdb_from_stream::<TypeContextFuture, R, P>(
+                stream,
+                account_paths,
+                stream_append_vecs_path,
+            ),
+            SerdeStyle::OLDER => context_accountsdb_from_stream::<TypeContextLegacy, R, P>(
+                stream,
+                account_paths,
+                stream_append_vecs_path,
+            ),
+        }
+    }
+
+    fn accountsdb_to_stream<W>(
+        serde_style: SerdeStyle,
+        stream: &mut W,
+        accounts_db: &AccountsDB,
+        slot: Slot,
+        account_storage_entries: &[SnapshotStorage],
+    ) -> Result<(), IoError>
+    where
+        W: Write,
+    {
+        match serde_style {
+            SerdeStyle::NEWER => serialize_into(
+                stream,
+                &SerializableAccountsDatabaseUnversioned::<TypeContextFuture> {
+                    accounts_db,
+                    slot,
+                    account_storage_entries,
+                    phantom: std::marker::PhantomData::default(),
+                },
+            )
+            .map_err(bankrc_to_io_error),
+            SerdeStyle::OLDER => serialize_into(
+                stream,
+                &SerializableAccountsDatabaseUnversioned::<TypeContextLegacy> {
+                    accounts_db,
+                    slot,
+                    account_storage_entries,
+                    phantom: std::marker::PhantomData::default(),
+                },
+            )
+            .map_err(bankrc_to_io_error),
+        }
+    }
+
+    fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         solana_logger::setup();
         let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
         let accounts = Accounts::new(paths);
@@ -658,6 +726,7 @@ mod tests {
 
         let mut writer = Cursor::new(vec![]);
         accountsdb_to_stream(
+            serde_style,
             &mut writer,
             &*accounts.accounts_db,
             0,
@@ -674,9 +743,121 @@ mod tests {
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
         let daccounts = Accounts::new_empty(
-            accountsdb_from_stream(&mut reader, &daccounts_paths, copied_accounts.path()).unwrap(),
+            accountsdb_from_stream(
+                serde_style,
+                &mut reader,
+                &daccounts_paths,
+                copied_accounts.path(),
+            )
+            .unwrap(),
         );
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
+    }
+
+    fn test_bank_serialize_style(serde_style: SerdeStyle) {
+        solana_logger::setup();
+        let (genesis_config, _) = create_genesis_config(500);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank0.squash();
+
+        // Create an account on a non-root fork
+        let key1 = Keypair::new();
+        bank1.deposit(&key1.pubkey(), 5);
+
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+
+        // Test new account
+        let key2 = Keypair::new();
+        bank2.deposit(&key2.pubkey(), 10);
+        assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
+
+        let key3 = Keypair::new();
+        bank2.deposit(&key3.pubkey(), 0);
+
+        bank2.squash();
+
+        let snapshot_storages = bank2.get_snapshot_storages();
+        let mut buf = vec![];
+        let mut writer = Cursor::new(&mut buf);
+        serialize_into(&mut writer, &bank2).unwrap();
+        crate::serde_snapshot::bankrc_to_stream(
+            serde_style,
+            &mut std::io::BufWriter::new(&mut writer),
+            &bank2.rc,
+            &snapshot_storages,
+        )
+        .unwrap();
+
+        let mut rdr = Cursor::new(&buf[..]);
+        let mut dbank: Bank = bincode::deserialize_from(&mut rdr).unwrap();
+        let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+
+        // Create a new set of directories for this bank's accounts
+        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+        let ref_sc = StatusCacheRc::default();
+        ref_sc.status_cache.write().unwrap().add_root(2);
+        // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
+        let copied_accounts = TempDir::new().unwrap();
+        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+        dbank.set_bank_rc(
+            crate::serde_snapshot::bankrc_from_stream(
+                serde_style,
+                &dbank_paths,
+                dbank.slot(),
+                &mut reader,
+                copied_accounts.path(),
+            )
+            .unwrap(),
+            ref_sc,
+        );
+        assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
+        assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
+        assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
+        bank2.compare_bank(&dbank);
+    }
+
+    pub(crate) fn reconstruct_accounts_db_via_serialization(
+        accounts: &AccountsDB,
+        slot: Slot,
+    ) -> AccountsDB {
+        let mut writer = Cursor::new(vec![]);
+        let snapshot_storages = accounts.get_snapshot_storages(slot);
+        accountsdb_to_stream(
+            SerdeStyle::NEWER,
+            &mut writer,
+            &accounts,
+            slot,
+            &snapshot_storages,
+        )
+        .unwrap();
+
+        let buf = writer.into_inner();
+        let mut reader = BufReader::new(&buf[..]);
+        let copied_accounts = TempDir::new().unwrap();
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
+        accountsdb_from_stream(SerdeStyle::NEWER, &mut reader, &[], copied_accounts.path()).unwrap()
+    }
+
+    #[test]
+    fn test_accounts_serialize_newer() {
+        test_accounts_serialize_style(SerdeStyle::NEWER)
+    }
+
+    #[test]
+    fn test_accounts_serialize_older() {
+        test_accounts_serialize_style(SerdeStyle::OLDER)
+    }
+
+    #[test]
+    fn test_bank_serialize_newer() {
+        test_bank_serialize_style(SerdeStyle::NEWER)
+    }
+
+    #[test]
+    fn test_bank_serialize_older() {
+        test_bank_serialize_style(SerdeStyle::OLDER)
     }
 }

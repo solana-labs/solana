@@ -11,8 +11,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     bank::{Bank, BankSlotDelta},
     serde_snapshot::{
-        context_bankrc_from_stream, context_bankrc_to_stream, SerdeContextV1_1_0,
-        SerdeContextV1_2_0, SnapshotStorage, SnapshotStorages,
+        bankrc_from_stream, bankrc_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
@@ -37,20 +36,12 @@ pub const TAR_VERSION_FILE: &str = "version";
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_1_0: &str = "1.1.0";
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
-const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
-
-type DefaultSerdeContextType = SerdeContextV1_2_0;
+const OUTPUT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
     V1_1_0,
     V1_2_0,
-}
-
-impl Default for SnapshotVersion {
-    fn default() -> Self {
-        DEFAULT_SNAPSHOT_VERSION
-    }
 }
 
 impl From<SnapshotVersion> for &'static str {
@@ -242,7 +233,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(DEFAULT_SNAPSHOT_VERSION.as_str().as_bytes())?;
+        f.write_all(OUTPUT_SNAPSHOT_VERSION.as_str().as_bytes())?;
     }
 
     let (compression_option, file_ext) = get_compression_ext(&snapshot_package.compression);
@@ -441,7 +432,8 @@ pub fn add_snapshot<P: AsRef<Path>>(
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         serialize_into(stream.by_ref(), bank)?;
-        context_bankrc_to_stream::<DefaultSerdeContextType, _>(
+        bankrc_to_stream(
+            SerdeStyle::NEWER,
             stream.by_ref(),
             &bank.rc,
             snapshot_storages,
@@ -712,13 +704,15 @@ where
         info!("Rebuilding accounts...");
 
         let mut bankrc = match snapshot_version_enum {
-            SnapshotVersion::V1_1_0 => context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
+            SnapshotVersion::V1_1_0 => bankrc_from_stream(
+                SerdeStyle::OLDER,
                 account_paths,
                 bank.slot(),
                 &mut stream,
                 &append_vecs_path,
             ),
-            SnapshotVersion::V1_2_0 => context_bankrc_from_stream::<SerdeContextV1_2_0, _, _>(
+            SnapshotVersion::V1_2_0 => bankrc_from_stream(
+                SerdeStyle::NEWER,
                 account_paths,
                 bank.slot(),
                 &mut stream,
