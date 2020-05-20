@@ -168,6 +168,9 @@ pub struct AccountStorageEntry {
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
     count_and_status: RwLock<(usize, AccountStorageStatus)>,
+
+    #[serde(skip)]
+    store_count: AtomicUsize,
 }
 
 impl Default for AccountStorageEntry {
@@ -192,6 +195,7 @@ impl AccountStorageEntry {
             slot,
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            store_count: AtomicUsize::new(0),
         }
     }
 
@@ -233,6 +237,10 @@ impl AccountStorageEntry {
         self.count_and_status.read().unwrap().0
     }
 
+    pub fn stored_count(&self) -> usize {
+        self.store_count.load(Ordering::Relaxed)
+    }
+
     pub fn has_accounts(&self) -> bool {
         self.count() > 0
     }
@@ -252,6 +260,7 @@ impl AccountStorageEntry {
     fn add_account(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
+        self.store_count.fetch_add(1, Ordering::Relaxed);
     }
 
     fn try_available(&self) -> bool {
@@ -769,9 +778,17 @@ impl AccountsDB {
         );
     }
 
+    fn shrink_stale_slot(&self, slot: Slot) -> usize {
+        self.do_shrink_slot(slot, false)
+    }
+
+    fn shrink_slot_forced(&self, slot: Slot) {
+        self.do_shrink_slot(slot, true);
+    }
+
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
-    // then create a minimum AppendVed filled with the alive.
-    fn shrink_stale_slot(&self, slot: Slot) {
+    // then create a minimum AppendVec filled with the alive.
+    fn do_shrink_slot(&self, slot: Slot, forced: bool) -> usize {
         trace!("shrink_stale_slot: slot: {}", slot);
 
         let mut stored_accounts = vec![];
@@ -779,8 +796,20 @@ impl AccountsDB {
             let storage = self.storage.read().unwrap();
             if let Some(stores) = storage.0.get(&slot) {
                 let mut alive_count = 0;
+                let mut stored_count = 0;
                 for store in stores.values() {
                     alive_count += store.count();
+                    stored_count += store.stored_count();
+                }
+                if (alive_count as f32 / stored_count as f32) >= 0.80 && !forced {
+                    trace!(
+                        "shrink_stale_slot: not enough space to shrink: {} / {}",
+                        alive_count,
+                        stored_count,
+                    );
+                    return 0;
+                }
+                for store in stores.values() {
                     let mut start = 0;
                     while let Some((account, next)) = store.accounts.get_account(start) {
                         stored_accounts.push((
@@ -793,14 +822,6 @@ impl AccountsDB {
                         ));
                         start = next;
                     }
-                }
-                if (alive_count as f32 / stored_accounts.len() as f32) >= 0.80 {
-                    trace!(
-                        "shrink_stale_slot: not enough space to shrink: {} / {}",
-                        alive_count,
-                        stored_accounts.len()
-                    );
-                    return;
                 }
             }
         }
@@ -853,7 +874,8 @@ impl AccountsDB {
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, account, account_hash, _size, _location, write_version) in alive_accounts {
+            for (pubkey, account, account_hash, _size, _location, write_version) in &alive_accounts
+            {
                 accounts.push((pubkey, account));
                 hashes.push(*account_hash);
                 write_versions.push(*write_version);
@@ -880,6 +902,8 @@ impl AccountsDB {
                 slot_storage.retain(|_key, store| store.count() > 0);
             }
         }
+
+        alive_accounts.len()
     }
 
     // Infinitely returns rooted roots in cyclic order
@@ -908,18 +932,21 @@ impl AccountsDB {
         storage.0.keys().cloned().collect()
     }
 
-    pub fn process_stale_slot(&self) {
+    pub fn process_stale_slot(&self) -> usize {
         let mut measure = Measure::start("stale_slot_shrink-ms");
+        let mut count = 0;
         if let Some(slot) = self.next_shrink_slot() {
-            //self.shrink_stale_slot(slot);
+            count = self.shrink_stale_slot(slot);
         }
         measure.stop();
         inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);
+
+        count
     }
 
-    pub fn shrink_all_stale_slots(&self) {
+    pub fn shrink_all_slots(&self) {
         for slot in self.all_slots_in_storage() {
-            self.shrink_stale_slot(slot);
+            self.shrink_slot_forced(slot);
         }
     }
 
@@ -1885,9 +1912,11 @@ impl AccountsDB {
                         store.count_and_status.read().unwrap().0
                     );
                     store.count_and_status.write().unwrap().0 = *count;
+                    store.store_count.store(*count, Ordering::Relaxed);
                 } else {
                     trace!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
+                    store.store_count.store(0, Ordering::Relaxed);
                 }
             }
         }
@@ -3732,14 +3761,14 @@ pub mod tests {
     }
 
     #[test]
-    fn test_shrink_stale_slots_none() {
+    fn test_shrink_slots_none() {
         let accounts = AccountsDB::new_single();
 
         for _ in 0..10 {
             accounts.process_stale_slot();
         }
 
-        accounts.shrink_all_stale_slots();
+        accounts.shrink_all_slots();
     }
 
     #[test]
@@ -3817,7 +3846,7 @@ pub mod tests {
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
-        accounts.shrink_all_stale_slots();
+        accounts.shrink_all_slots();
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -3835,7 +3864,7 @@ pub mod tests {
             .unwrap();
 
         // repeating should be no-op
-        accounts.shrink_all_stale_slots();
+        accounts.shrink_all_slots();
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -3881,7 +3910,7 @@ pub mod tests {
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
-        accounts.shrink_all_stale_slots();
+        accounts.shrink_all_slots();
         assert_eq!(
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
