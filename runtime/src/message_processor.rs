@@ -243,34 +243,24 @@ pub type ProcessInstructionWithContext =
 #[derive(Default, Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
-    instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
+    programs: Vec<(Pubkey, ProcessInstruction)>,
     #[serde(skip)]
     native_loader: NativeLoader,
 }
 impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
         MessageProcessor {
-            instruction_processors: self.instruction_processors.clone(),
+            programs: self.programs.clone(),
             native_loader: NativeLoader::default(),
         }
     }
 }
 impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
-    pub fn add_instruction_processor(
-        &mut self,
-        program_id: Pubkey,
-        process_instruction: ProcessInstruction,
-    ) {
-        match self
-            .instruction_processors
-            .iter_mut()
-            .find(|(key, _)| program_id == *key)
-        {
+    pub fn add_program(&mut self, program_id: Pubkey, process_instruction: ProcessInstruction) {
+        match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
             Some((_, processor)) => *processor = process_instruction,
-            None => self
-                .instruction_processors
-                .push((program_id, process_instruction)),
+            None => self.programs.push((program_id, process_instruction)),
         }
     }
 
@@ -315,7 +305,7 @@ impl MessageProcessor {
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
 
-        for (id, process_instruction) in &self.instruction_processors {
+        for (id, process_instruction) in &self.programs {
             let root_program_id = keyed_accounts[0].unsigned_key();
             if id == root_program_id {
                 return process_instruction(
@@ -1178,8 +1168,7 @@ mod tests {
         let mock_system_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
-        message_processor
-            .add_instruction_processor(mock_system_program_id, mock_system_process_instruction);
+        message_processor.add_program(mock_system_program_id, mock_system_process_instruction);
 
         let mut accounts: Vec<Rc<RefCell<Account>>> = Vec::new();
         let account = Account::new_ref(100, 1, &mock_system_program_id);
@@ -1301,8 +1290,7 @@ mod tests {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
-        message_processor
-            .add_instruction_processor(mock_program_id, mock_system_process_instruction);
+        message_processor.add_program(mock_program_id, mock_system_process_instruction);
 
         let mut accounts: Vec<Rc<RefCell<Account>>> = Vec::new();
         let account = Account::new_ref(100, 1, &mock_program_id);
