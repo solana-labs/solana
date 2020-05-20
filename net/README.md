@@ -74,27 +74,6 @@ $ ./ec2.sh create -g ...
 If deploying a tarball-based network nothing further is required, as GPU presence
 is detected at runtime and the CUDA build is auto selected.
 
-### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
-
-**AWS-Specific Extra Setup**: Follow the steps in
-`scripts/solana-user-authorized_keys.sh`, then redeploy the testnet
-before continuing in this section.
-
-Taking **master-testnet-solana-com** as an example, configure your workspace for
-the testnet using:
-```bash
-$ ./gce.sh config -p master-testnet-solana-com
-```
-or
-```bash
-$ ./ec2.sh config -p master-testnet-solana-com
-```
-
-Then run the following for details on how to ssh into any testnet node to access logs or otherwise inspect the node
-```bash
-$ ./ssh.sh
-```
-
 ### Partition testing
 
 To induce the partition `net.sh netem --config-file <config file path>`
