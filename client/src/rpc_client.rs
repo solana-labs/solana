@@ -39,13 +39,13 @@ use std::{
 };
 
 pub struct RpcClient {
-    client: Box<dyn RpcSender + Send + Sync + 'static>,
+    sender: Box<dyn RpcSender + Send + Sync + 'static>,
 }
 
 impl RpcClient {
     pub fn new_sender<T: RpcSender + Send + Sync + 'static>(sender: T) -> Self {
         Self {
-            client: Box::new(sender),
+            sender: Box::new(sender),
         }
     }
 
@@ -292,7 +292,7 @@ impl RpcClient {
 
     pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
         let request = RpcRequest::GetBlockTime;
-        let response = self.client.send(request, json!([slot]), 0);
+        let response = self.sender.send(request, json!([slot]), 0);
 
         response
             .map(|result_json| {
@@ -521,7 +521,7 @@ impl RpcClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
-        let response = self.client.send(
+        let response = self.sender.send(
             RpcRequest::GetAccountInfo,
             json!([pubkey.to_string(), commitment_config]),
             0,
@@ -560,7 +560,7 @@ impl RpcClient {
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64> {
         let request = RpcRequest::GetMinimumBalanceForRentExemption;
         let minimum_balance_json = self
-            .client
+            .sender
             .send(request, json!([data_len]), 0)
             .map_err(|err| err.into_with_request(request))?;
 
@@ -1036,7 +1036,7 @@ impl RpcClient {
     {
         assert!(params.is_array() || params.is_null());
         let response = self
-            .client
+            .sender
             .send(request, params, retries)
             .map_err(|err| err.into_with_request(request))?;
         serde_json::from_value(response)
@@ -1135,8 +1135,8 @@ mod tests {
         let (sender, receiver) = channel();
         thread::spawn(move || {
             // 1. Pick a random port
-            // 2. Tell the client to start using it
-            // 3. Delay for 1.5 seconds before starting the server to ensure the client will fail
+            // 2. Tell the sender to start using it
+            // 3. Delay for 1.5 seconds before starting the server to ensure the sender will fail
             //    and need to retry
             let rpc_addr: SocketAddr = "0.0.0.0:4242".parse().unwrap();
             sender.send(rpc_addr.clone()).unwrap();
