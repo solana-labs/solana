@@ -2,8 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{
-            AccountStorage, AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId,
-            BankHashInfo, SlotStores,
+            AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId, BankHashInfo,
         },
         append_vec::AppendVec,
         bank::BankRc,
@@ -32,67 +31,15 @@ use {
     },
 };
 
+mod legacy;
+use legacy::*;
+
 pub use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum SerdeStyle {
     NEWER,
     OLDER,
-}
-
-trait TypeContext<'a> {
-    type SerializableAccountStorageEntry: Serialize
-        + DeserializeOwned
-        + From<&'a AccountStorageEntry>
-        + Into<AccountStorageEntry>;
-
-    fn legacy_or_zero<T: Default>(x: T) -> T;
-
-    fn legacy_serialize_byte_length<S>(serializer: &mut S, x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple;
-
-    fn legacy_deserialize_byte_length<R: Read>(stream: &mut R) -> Result<u64, bincode::Error>;
-}
-
-struct TypeContextLegacy {}
-impl<'a> TypeContext<'a> for TypeContextLegacy {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntryLegacy;
-
-    fn legacy_or_zero<T: Default>(x: T) -> T {
-        x
-    }
-
-    fn legacy_serialize_byte_length<S>(serializer: &mut S, x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        serializer.serialize_element(&x)
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(stream: &mut R) -> Result<u64, bincode::Error> {
-        deserialize_from(stream)
-    }
-}
-
-struct TypeContextFuture {}
-impl<'a> TypeContext<'a> for TypeContextFuture {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntryFuture;
-
-    fn legacy_or_zero<T: Default>(_x: T) -> T {
-        T::default()
-    }
-
-    fn legacy_serialize_byte_length<S>(_serializer: &mut S, _x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        Ok(())
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(_stream: &mut R) -> Result<u64, bincode::Error> {
-        Ok(MAX_ACCOUNTS_DB_STREAM_SIZE)
-    }
 }
 
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
@@ -264,7 +211,7 @@ where
         {
             let mut seq = serializer.serialize_tuple(C::legacy_or_zero(1) + 1)?;
 
-            // Possibly write out a dummy vector length for backward compatibility
+            // possibly write out a dummy vector length for backward compatibility
             C::legacy_serialize_byte_length(&mut seq, MAX_ACCOUNTS_DB_STREAM_SIZE)?;
 
             seq.serialize_element(&SerializableAccountsDatabaseUnversioned::<'a, 'a, C> {
@@ -307,7 +254,7 @@ where
     let serialized_len: u64 =
         C::legacy_deserialize_byte_length(&mut stream).map_err(accountsdb_to_io_error)?;
 
-    // read map of slots to account storage entries
+    // (1st of 3 elements) read in map of slots to account storage entries
     let storage: HashMap<Slot, Vec<C::SerializableAccountStorageEntry>> = bincode::config()
         .limit(min(serialized_len, MAX_ACCOUNTS_DB_STREAM_SIZE))
         .deserialize_from(&mut stream)
@@ -327,8 +274,9 @@ where
         map
     };
 
-    // Remap the deserialized AppendVec paths to point to correct local paths
-    let new_storage_map: Result<HashMap<Slot, SlotStores>, IoError> = storage
+    // construct a new HashMap<Slot, SlotStores> and remap the deserialized
+    // AppendVec paths to point to correct local paths
+    let mut storage = storage
         .into_iter()
         .map(|(slot, mut slot_storage)| {
             let mut new_slot_storage = HashMap::new();
@@ -338,7 +286,7 @@ where
 
                 std::fs::create_dir_all(local_dir).expect("Create directory failed");
 
-                // Move the corresponding AppendVec from the snapshot into the directory pointed
+                // move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
                 let append_vec_relative_path = AppendVec::new_relative_path(slot, storage_entry.id);
                 let append_vec_abs_path = stream_append_vecs_path
@@ -366,7 +314,7 @@ where
                     }
                 };
 
-                // Notify the AppendVec of the new file location
+                // notify the AppendVec of the new file location
                 let local_path = local_dir.join(append_vec_relative_path);
                 let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
                 u_storage_entry
@@ -376,20 +324,35 @@ where
             }
             Ok((slot, new_slot_storage))
         })
-        .collect();
-
-    let new_storage_map = new_storage_map?;
-    let mut storage = AccountStorage(new_storage_map);
+        .collect::<Result<HashMap<_, _>, IoError>>()?;
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
     // but non-root stores should not be included in the snapshot
-    storage.0.retain(|_slot, stores| !stores.is_empty());
+    storage.retain(|_slot, stores| !stores.is_empty());
 
+    // set next entry id to 1 + maximum of all remaining storage entry ids
+    accounts_db.next_id.store(
+        1 + *storage
+            .values()
+            .flat_map(HashMap::keys)
+            .max()
+            .expect("At least one storage entry must exist from deserializing stream"),
+        Ordering::Relaxed,
+    );
+
+    // move storage entries into accounts database
+    accounts_db.storage.write().unwrap().0.extend(storage);
+
+    // (2nd of 3 elements) read in write version
     let version: u64 = deserialize_from(&mut stream)
         .map_err(|e| format!("write version deserialize error: {}", e.to_string()))
         .map_err(accountsdb_to_io_error)?;
+    accounts_db
+        .write_version
+        .fetch_add(version, Ordering::Relaxed);
 
+    // (3rd of 3 elements) read in (slot, bank hashes) pair
     let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
         .map_err(|e| format!("bank hashes deserialize error: {}", e.to_string()))
         .map_err(accountsdb_to_io_error)?;
@@ -399,24 +362,9 @@ where
         .unwrap()
         .insert(slot, bank_hash);
 
-    // Process deserialized data, set necessary fields in self
-    let max_id: usize = *storage
-        .0
-        .values()
-        .flat_map(HashMap::keys)
-        .max()
-        .expect("At least one storage entry must exist from deserializing stream");
-
-    {
-        let mut stores = accounts_db.storage.write().unwrap();
-        stores.0.extend(storage.0);
-    }
-
-    accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
-    accounts_db
-        .write_version
-        .fetch_add(version, Ordering::Relaxed);
+    // lastly generate accounts database index
     accounts_db.generate_index();
+
     Ok(accounts_db)
 }
 
@@ -435,12 +383,13 @@ impl<'a, 'b, C: TypeContext<'b>> Serialize for SerializableAccountsDatabaseUnver
         // sample write version before serializing storage entries
         let version = self.accounts_db.write_version.load(Ordering::Relaxed);
 
+        // accounts database serializes as a 3-tuple
         let mut seq = serializer.serialize_tuple(C::legacy_or_zero(1) + 3)?;
 
-        // Possibly write out a dummy vector length for backward compatibility
+        // possibly write out a dummy vector length for backward compatibility
         C::legacy_serialize_byte_length(&mut seq, MAX_ACCOUNTS_DB_STREAM_SIZE)?;
 
-        // write the list of account storage entry lists out as a map
+        // (1st of 3 elements) write the list of account storage entry lists out as a map
         {
             let mut serialize_account_storage_timer =
                 Measure::start("serialize_account_storage_ms");
@@ -465,11 +414,11 @@ impl<'a, 'b, C: TypeContext<'b>> Serialize for SerializableAccountsDatabaseUnver
             );
         }
 
-        // write the current write version sampled before the account
-        // storage entries were written out
+        // (2nd of 3 elements) write the current write version sampled before
+        // the account storage entries were written out
         seq.serialize_element(&version)?;
 
-        // write out bank hashes
+        // (3rd of 3 elements) write out (slot, bank hashes) pair
         seq.serialize_element(&(
             self.slot,
             &*self
@@ -482,99 +431,6 @@ impl<'a, 'b, C: TypeContext<'b>> Serialize for SerializableAccountsDatabaseUnver
         ))?;
 
         seq.end()
-    }
-}
-
-// Serializable version of AccountStorageEntry for snapshot format Legacy
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SerializableAccountStorageEntryLegacy {
-    id: AppendVecId,
-    accounts: SerializableAppendVecLegacy,
-    count_and_status: (usize, AccountStorageStatus),
-}
-
-impl From<&AccountStorageEntry> for SerializableAccountStorageEntryLegacy {
-    fn from(rhs: &AccountStorageEntry) -> Self {
-        Self {
-            id: rhs.id,
-            accounts: SerializableAppendVecLegacy::from(&rhs.accounts),
-            ..Self::default()
-        }
-    }
-}
-
-impl Into<AccountStorageEntry> for SerializableAccountStorageEntryLegacy {
-    fn into(self) -> AccountStorageEntry {
-        AccountStorageEntry::new_empty_map(self.id, self.accounts.current_len)
-    }
-}
-
-// Serializable version of AppendVec for snapshot format Legacy
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct SerializableAppendVecLegacy {
-    current_len: usize,
-}
-
-impl From<&AppendVec> for SerializableAppendVecLegacy {
-    fn from(rhs: &AppendVec) -> SerializableAppendVecLegacy {
-        SerializableAppendVecLegacy {
-            current_len: rhs.len(),
-        }
-    }
-}
-
-impl Into<AppendVec> for SerializableAppendVecLegacy {
-    fn into(self) -> AppendVec {
-        AppendVec::new_empty_map(self.current_len)
-    }
-}
-
-// Serialization of AppendVec Legacy requires serialization of u64 to
-// eight byte vector which is then itself serialized to the stream
-impl Serialize for SerializableAppendVecLegacy {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        const LEN: usize = std::mem::size_of::<usize>();
-        let mut buf = [0u8; LEN];
-        serialize_into(Cursor::new(&mut buf[..]), &(self.current_len as u64))
-            .map_err(serde::ser::Error::custom)?;
-        serializer.serialize_bytes(&buf)
-    }
-}
-
-// Deserialization of AppendVec Legacy requires deserialization
-// of eight byte vector from which u64 is then deserialized
-impl<'de> Deserialize<'de> for SerializableAppendVecLegacy {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde::de::Error;
-        struct SerializableAppendVecLegacyVisitor;
-        impl<'a> Visitor<'a> for SerializableAppendVecLegacyVisitor {
-            type Value = SerializableAppendVecLegacy;
-            fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
-                formatter.write_str("Expecting SerializableAppendVecLegacy")
-            }
-            fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                const LEN: u64 = std::mem::size_of::<usize>() as u64;
-                let mut rd = Cursor::new(&data[..]);
-                let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-                if rd.position() != LEN {
-                    Err(Error::custom(
-                        "SerializableAppendVecLegacy: unexpected length",
-                    ))
-                } else {
-                    Ok(SerializableAppendVecLegacy { current_len })
-                }
-            }
-        }
-        deserializer.deserialize_bytes(SerializableAppendVecLegacyVisitor)
     }
 }
 
