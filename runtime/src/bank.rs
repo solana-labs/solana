@@ -5814,6 +5814,7 @@ mod tests {
     fn test_bank_get_program_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let parent = Arc::new(Bank::new(&genesis_config));
+        parent.lazy_rent_collection.store(true, Ordering::Relaxed);
 
         let genesis_accounts: Vec<_> = parent.get_program_accounts(None);
         assert!(
