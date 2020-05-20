@@ -19,12 +19,12 @@ pub const SIGNATURE: &str =
     "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
 pub type Mocks = HashMap<RpcRequest, Value>;
-pub struct MockRpcClientRequest {
+pub struct MockSender {
     mocks: RwLock<Mocks>,
     url: String,
 }
 
-impl MockRpcClientRequest {
+impl MockSender {
     pub fn new(url: String) -> Self {
         Self::new_with_mocks(url, Mocks::default())
     }
@@ -37,7 +37,7 @@ impl MockRpcClientRequest {
     }
 }
 
-impl RpcSender for MockRpcClientRequest {
+impl RpcSender for MockSender {
     fn send(
         &self,
         request: RpcRequest,

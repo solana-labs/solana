@@ -1,7 +1,7 @@
 use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-    mock_rpc_client_request::{MockRpcClientRequest, Mocks},
-    rpc_client_request::RpcClientRequest,
+    http_sender::HttpSender,
+    mock_sender::{MockSender, Mocks},
     rpc_config::RpcLargestAccountsConfig,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::*,
@@ -50,15 +50,15 @@ impl RpcClient {
     }
 
     pub fn new(url: String) -> Self {
-        Self::new_sender(RpcClientRequest::new(url))
+        Self::new_sender(HttpSender::new(url))
     }
 
     pub fn new_mock(url: String) -> Self {
-        Self::new_sender(MockRpcClientRequest::new(url))
+        Self::new_sender(MockSender::new(url))
     }
 
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
-        Self::new_sender(MockRpcClientRequest::new_with_mocks(url, mocks))
+        Self::new_sender(MockSender::new_with_mocks(url, mocks))
     }
 
     pub fn new_socket(addr: SocketAddr) -> Self {
@@ -67,9 +67,7 @@ impl RpcClient {
 
     pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
         let url = get_rpc_request_str(addr, false);
-        Self {
-            client: Box::new(RpcClientRequest::new_with_timeout(url, timeout)),
-        }
+        Self::new_sender(HttpSender::new_with_timeout(url, timeout))
     }
 
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
@@ -1065,7 +1063,7 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{client_error::ClientErrorKind, mock_rpc_client_request::PUBKEY};
+    use crate::{client_error::ClientErrorKind, mock_sender::PUBKEY};
     use assert_matches::assert_matches;
     use jsonrpc_core::{Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
