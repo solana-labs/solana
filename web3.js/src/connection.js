@@ -89,12 +89,16 @@ function notificationResultAndContext(resultDescription: any) {
 
 /**
  * The level of commitment desired when querying state
- *   'max':    Query the most recent block which has reached max voter lockout
- *   'recent': Query the most recent block
+ * <pre>
+ *   'max':    Query the most recent block which has been finalized by the cluster
+ *   'recent': Query the most recent block which has reached 1 confirmation by the connected node
+ *   'root':   Query the most recent block which has been rooted by the connected node
+ *   'single': Query the most recent block which has reached 1 confirmation by the cluster
+ * </pre>
  *
- * @typedef {'max' | 'recent'} Commitment
+ * @typedef {'max' | 'recent' | 'root' | 'single'} Commitment
  */
-export type Commitment = 'max' | 'recent';
+export type Commitment = 'max' | 'recent' | 'root' | 'single';
 
 /**
  * Configuration object for changing query behavior

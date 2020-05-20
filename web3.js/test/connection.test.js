@@ -1031,12 +1031,15 @@ test('get confirmed block', async () => {
 
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
+  for (const commitment of ['max', 'recent', 'root', 'single']) {
+    mockGetRecentBlockhash(commitment);
 
-  mockGetRecentBlockhash();
-
-  const {blockhash, feeCalculator} = await connection.getRecentBlockhash();
-  expect(blockhash.length).toBeGreaterThanOrEqual(43);
-  expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
+    const {blockhash, feeCalculator} = await connection.getRecentBlockhash(
+      commitment,
+    );
+    expect(blockhash.length).toBeGreaterThanOrEqual(43);
+    expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
+  }
 });
 
 test('get block time', async () => {
