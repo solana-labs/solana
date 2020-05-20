@@ -15,11 +15,15 @@ pub struct AccountsBackgroundService {
 }
 
 const INTERVAL_MS: u64 = 100;
+const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
+const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
+    SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 
 impl AccountsBackgroundService {
     pub fn new(bank_forks: Arc<RwLock<BankForks>>, exit: &Arc<AtomicBool>) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
+        let mut shrinking_budget = 0;
         let t_background = Builder::new()
             .name("solana-accounts-background".to_string())
             .spawn(move || loop {
@@ -30,8 +34,17 @@ impl AccountsBackgroundService {
 
                 bank.process_dead_slots();
 
-                // Currently, given INTERVAL_MS, we process 1 slot/100 ms
-                bank.process_stale_slot();
+                if shrinking_budget == 0 {
+                    let shrunken_account_count = bank.process_stale_slot();
+                    if shrunken_account_count > 0 {
+                        datapoint_info!(
+                            "stale_slot_shrink",
+                            ("accounts", shrunken_account_count, i64)
+                        );
+                        shrinking_budget += shrunken_account_count;
+                    }
+                }
+                shrinking_budget = shrinking_budget.saturating_sub(SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
                 sleep(Duration::from_millis(INTERVAL_MS));
             })
