@@ -178,7 +178,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const info = useAccountInfo(address);
   const refresh = useFetchAccountHistory();
 
-  if (!info || !info.details) {
+  if (!info || info.lamports === undefined) {
     return null;
   } else if (info.status === Status.FetchingHistory) {
     return <LoadingCard />;

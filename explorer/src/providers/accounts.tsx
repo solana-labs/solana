@@ -16,7 +16,6 @@ export enum Status {
   CheckFailed,
   FetchingHistory,
   HistoryFailed,
-  NotFound,
   Success
 }
 
@@ -192,7 +191,6 @@ async function fetchAccountInfo(
     const result = await new Connection(url, "recent").getAccountInfo(pubkey);
     if (result === null) {
       lamports = 0;
-      fetchStatus = Status.NotFound;
     } else {
       lamports = result.lamports;
       let data = undefined;
@@ -214,9 +212,9 @@ async function fetchAccountInfo(
         owner: result.owner,
         data
       };
-      fetchStatus = Status.FetchingHistory;
-      fetchAccountHistory(dispatch, pubkey, url);
     }
+    fetchStatus = Status.FetchingHistory;
+    fetchAccountHistory(dispatch, pubkey, url);
   } catch (error) {
     console.error("Failed to fetch account info", error);
     fetchStatus = Status.CheckFailed;
