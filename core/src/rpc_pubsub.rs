@@ -916,6 +916,7 @@ mod tests {
                 node_keypair,
                 vote_keypair,
                 vote_keypair,
+                None,
             );
             votes_sender.send(vec![vote_tx]).unwrap();
         });
