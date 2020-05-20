@@ -38,6 +38,7 @@ common_args=()
 label=
 airdrops_enabled=1
 maybe_force=
+keypair=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -46,7 +47,7 @@ while [[ -n $1 ]]; do
       label="-$2"
       shift 2
     elif [[ $1 = --keypair || $1 = -k ]]; then
-      common_args+=("$1" "$2")
+      keypair="$2"
       shift 2
     elif [[ $1 = --force ]]; then
       maybe_force=--force
@@ -94,7 +95,15 @@ if [[ -f $stake_account ]]; then
 fi
 
 if ((airdrops_enabled)); then
-  $solana_cli "${common_args[@]}" airdrop "$stake_sol"
+  if [[ -z $keypair ]]; then
+    echo "--keypair argument must be provided"
+    exit 1
+  fi
+  $solana_cli "${common_args[@]}" --keypair "$SOLANA_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_sol"
+fi
+
+if [[ -n $keypair ]]; then
+  common_args+=(--keypair "$keypair")
 fi
 
 $solana_keygen new --no-passphrase -so "$stake_account"

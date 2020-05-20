@@ -73,16 +73,15 @@ source scripts/configure-metrics.sh
 source multinode-demo/common.sh
 
 nodes=(
-  "multinode-demo/faucet.sh"
   "multinode-demo/bootstrap-validator.sh \
     --no-restart \
-    --init-complete-file init-complete-node1.log \
+    --init-complete-file init-complete-node0.log \
     --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \
     --enable-rpc-exit \
     --no-restart \
     --dynamic-port-range 8050-8100
-    --init-complete-file init-complete-node2.log \
+    --init-complete-file init-complete-node1.log \
     --rpc-port 18899"
 )
 
@@ -95,7 +94,7 @@ if [[ extraNodes -gt 0 ]]; then
         --no-restart \
         --dynamic-port-range $portStart-$portEnd
         --label dyn$i \
-        --init-complete-file init-complete-node$((2 + i)).log"
+        --init-complete-file init-complete-node$((1 + i)).log"
     )
   done
 fi
@@ -160,11 +159,10 @@ startNodes() {
   for i in $(seq 0 $((${#nodes[@]} - 1))); do
     declare cmd=${nodes[$i]}
 
-    if [[ "$i" -ne 0 ]]; then # 0 == faucet, skip it
-      declare initCompleteFile="init-complete-node$i.log"
-      rm -f "$initCompleteFile"
-      initCompleteFiles+=("$initCompleteFile")
-    fi
+    declare initCompleteFile="init-complete-node$i.log"
+    rm -f "$initCompleteFile"
+    initCompleteFiles+=("$initCompleteFile")
+
     startNode "$i" "$cmd $maybeExpectedGenesisHash"
     if $addLogs; then
       logs+=("$(getNodeLogFile "$i" "$cmd")")

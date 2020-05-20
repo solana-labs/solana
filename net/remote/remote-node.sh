@@ -271,6 +271,9 @@ EOF
       fi
       net/scripts/rsync-retry.sh -vPrc \
         "$entrypointIp":~/solana/config/shred-version config/shred-version
+
+      net/scripts/rsync-retry.sh -vPrc \
+        "$entrypointIp":~/solana/config/faucet.json config/faucet.json
     fi
 
     args=(
@@ -310,7 +313,6 @@ EOF
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
-      scp "$entrypointIp":~/solana/config/faucet.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
         multinode-demo/faucet.sh > faucet.log 2>&1 &
