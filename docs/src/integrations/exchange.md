@@ -5,9 +5,9 @@ exchange.
 
 ## Node Setup
 
-We highly recommend setting up at least one of your own Solana api nodes to
-give you a trusted entrypoint to the network and allow you full control over how
-much data is retained.
+We highly recommend setting up at least two of your own Solana api nodes to
+give you a trusted entrypoint to the network, allow you full control over how
+much data is retained, and ensure you do not miss any data if one node fails.
 
 To run an api node:
 1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
@@ -20,17 +20,49 @@ solana-validator \
   --expected-shred-version <EXPECTED_SHRED_VERSION> \
   --rpc-port 8899 \
   --no-voting \
-  --enable-rpc-transaction-history
+  --enable-rpc-transaction-history \
+  --limit-ledger-size <SHRED_COUNT> \
+  --trusted-validator <VALIDATOR_ADDRESS> \
+  --no-untrusted-rpc
 ```
 
   Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
 
-  The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining.
+  The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining. The shred version will change on any hard forks in the cluster, so including `--expected-shred-version` ensures you are receiving current data from the cluster you expect.
   [Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
+  The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the ledger will keep the entire ledger until it runs out of disk space. A larger value like `--limit-ledger-size 250000000000` is good for a couple days
+
+  Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+
   Optional parameters to consider:
-  - `--limit-ledger-size` specifies how many ledger shreds to retain on disk. If you do not include this parameter, the ledger will keep the entire ledger until it runs out of disk space. A larger value like `--limit-ledger-size 250000000000` is good for a couple days
-  - `--trusted-validator` can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+  - `--private-rpc` prevents your RPC port from being published for use by other nodes
+  - `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
+
+### Automatic Restarts
+
+We recommend configuring each of your nodes to restart automatically on exit, to
+ensure you miss as little data as possible. Running the solana software as a
+systemd service is one great option.
+
+### Ledger Continuity
+
+By default, each of your nodes will boot from a snapshot provided by one of your
+trusted validators. This snapshot reflects the current state of the chain, but
+does not contain the complete historical ledger. If one of your node exits and
+boots from a new snapshot, there may be a gap in the ledger on that node. In
+order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
+`solana-validator` command to receive historical ledger data instead of a
+snapshot.
+
+If you pass the `--no-snapshot-fetch` parameter on your initial boot, it will
+take your node a very long time to catch up. We recommend booting from a
+snapshot first, and then using the `--no-snapshot-fetch` parameter for reboots.
+
+It is important to note that the amount of historical ledger available to your
+nodes is limited to what your trusted validators retain. You will need to ensure
+your nodes do not experience downtimes longer than this span, if ledger
+continuity is crucial for you.
 
 ## Setting up Deposit Accounts
 
@@ -39,6 +71,17 @@ some SOL, they exist. To set up a deposit account for your exchange, simply
 generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md).
 
 We recommend using a unique deposit account for each of your users.
+
+Solana accounts are charged rent on creation and once per epoch, but they can be
+made rent-exempt if they contain 2-years worth of rent in SOL. In order to find
+the minimum rent-exempt balance for your deposit accounts, query the
+[`getMinimumBalanceForRentExemption` endpoint](../apps/jsonrpc-api.md#getminimumbalanceforrentexemption):
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+
+{"jsonrpc":"2.0","result":890880,"id":1}
+```
 
 ## Listening for Deposits
 
@@ -49,7 +92,7 @@ transfer to the appropriate deposit address.
 
 The easiest way to track all the deposit accounts for your exchange is to poll
 for each confirmed block and inspect for addresses of interest, using the
-JSON-RPC service of the Solana api node.
+JSON-RPC service of your Solana api node.
 
 1. To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
 passing the last block you have already processed as the start-slot parameter:
@@ -66,7 +109,65 @@ Not every slot produces a block, so there may be gaps in the sequence of integer
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
 
-{"jsonrpc":"2.0","result":{"blockhash":"2WcrsKSVANoe6xQHKtCcqNdUpCQPQ3vb6QTgi1dcE2oL","parentSlot":4,"previousBlockhash":"7ZDoGW83nXgP14vnn9XhGSaGjbuLdLWkQAoUQ7pg6qDZ","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"postBalances":[2033973061360,218099990000,42000000003],"preBalances":[2044973066360,207099990000,42000000003],"status":{"Ok":null}},"transaction":{"message":{"accountKeys":["Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX","47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi","11111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":1,"numRequiredSignatures":1},"instructions":[{"accounts":[0,1],"data":"3Bxs3zyH82bhpB8j","programIdIndex":2}],"recentBlockhash":"7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"},"signatures":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"]}}]},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockhash": "2WcrsKSVANoe6xQHKtCcqNdUpCQPQ3vb6QTgi1dcE2oL",
+    "parentSlot": 4,
+    "previousBlockhash": "7ZDoGW83nXgP14vnn9XhGSaGjbuLdLWkQAoUQ7pg6qDZ",
+    "rewards": [],
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "postBalances": [
+            2033973061360,
+            218099990000,
+            42000000003
+          ],
+          "preBalances": [
+            2044973066360,
+            207099990000,
+            42000000003
+          ],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": {
+          "message": {
+            "accountKeys": [
+              "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+              "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
+              "11111111111111111111111111111111"
+            ],
+            "header": {
+              "numReadonlySignedAccounts": 0,
+              "numReadonlyUnsignedAccounts": 1,
+              "numRequiredSignatures": 1
+            },
+            "instructions": [
+              {
+                "accounts": [
+                  0,
+                  1
+                ],
+                "data": "3Bxs3zyH82bhpB8j",
+                "programIdIndex": 2
+              }
+            ],
+            "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
+          },
+          "signatures": [
+            "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+          ]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 The `preBalances` and `postBalances` fields allow you to track the balance
@@ -78,8 +179,8 @@ example, if the deposit address if interest is
 transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
 
 If you need more information about the transaction type or other specifics, you
-can request the block in binary format, and parse it using either our
-[Rust SDK](https://github.com/solana-labs/solana/tree/master/sdk) or
+can request the block from RPC in binary format, and parse it using either our
+[Rust SDK](https://github.com/solana-labs/solana) or
 [Javascript SDK](https://github.com/solana-labs/solana-web3.js).
 
 ### Address History
@@ -108,7 +209,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ## Sending Withdrawals
 
 To accommodate a user's request to withdraw SOL, you must generate a Solana
-transfer transaction, and send it to the api node to be forwarded to the
+transfer transaction, and send it to the api node to be forwarded to your
 cluster.
 
 ### Synchronous
@@ -122,7 +223,7 @@ will wait and track progress on stderr until the transaction has been finalized
 by the cluster. If the transaction fails, it will report any transaction errors.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://api.mainnet-beta.solana.com
+solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 The [Solana Javascript SDK](https://github.com/solana-labs/solana-web3.js)
@@ -146,10 +247,10 @@ In the command-line tool, pass the `--no-wait` argument to send a transfer
 asynchronously:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --keypair <KEYPAIR> --url http://api.mainnet-beta.solana.com
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
-You can also build and serialize the transaction manually, and fire it off to
+You can also build, sign, and serialize the transaction manually, and fire it off to
 the cluster using the JSON-RPC [`sendTransaction` endpoint](../apps/jsonrpc-api.md#sendtransaction).
 
 #### Transaction Confirmations & Finality
