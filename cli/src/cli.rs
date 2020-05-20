@@ -244,8 +244,8 @@ pub enum CliCommand {
     },
     TransactionHistory {
         address: Pubkey,
-        end_slot: Option<Slot>, // None == latest slot
-        slot_limit: u64,
+        end_slot: Option<Slot>,  // None == latest slot
+        slot_limit: Option<u64>, // None == search full history
     },
     // Nonce commands
     AuthorizeNonceAccount {
