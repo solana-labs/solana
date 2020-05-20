@@ -282,7 +282,7 @@ setup_validator_accounts() {
   return 0
 }
 
-rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint" --any)
+rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint")
 
 [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
 [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
