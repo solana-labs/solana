@@ -760,9 +760,10 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
             let mut retries = 0;
             let amount = chunk[0].1[0].1;
             while !to_fund_txs.is_empty() {
-                let receivers = to_fund_txs
+                let receivers: usize = to_fund_txs
                     .iter()
-                    .fold(0, |len, (_, tx)| len + tx.message().instructions.len());
+                    .map(|(_, tx)| tx.message().instructions.len())
+                    .sum();
 
                 debug!(
                     "  {} to {} in {} txs",
@@ -854,9 +855,10 @@ pub fn create_token_accounts<T: Client>(
                 })
                 .collect();
 
-            let accounts = to_create_txs
+            let accounts: usize = to_create_txs
                 .iter()
-                .fold(0, |len, (_, tx)| len + tx.message().instructions.len() / 2);
+                .map(|(_, tx)| tx.message().instructions.len() / 2)
+                .sum();
 
             debug!(
                 "  Creating {} accounts in {} txs",

@@ -209,7 +209,8 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
         let total_stake = bank
             .vote_accounts()
             .iter()
-            .fold(0, |acc, (_, (stake, _))| acc + stake);
+            .map(|(_, (stake, _))| stake)
+            .sum();
         for (_, (stake, vote_account)) in bank.vote_accounts() {
             let vote_state = VoteState::from(&vote_account).unwrap_or_default();
             if let Some(last_vote) = vote_state.votes.iter().last() {

@@ -3,7 +3,6 @@
 
 use byteorder::{ByteOrder, LittleEndian};
 use solana_sdk::clock::Slot;
-use std::ops::Add;
 
 #[derive(Default, Clone, Deserialize, Serialize)]
 pub struct HardForks {
@@ -34,16 +33,17 @@ impl HardForks {
         // The expected number of hard forks in a cluster is small.
         // If this turns out to be false then a more efficient data
         // structure may be needed here to avoid this linear search
-        let fork_count = self
+        let fork_count: usize = self
             .hard_forks
             .iter()
-            .fold(0, |acc, (fork_slot, fork_count)| {
-                acc.add(if parent_slot < *fork_slot && slot >= *fork_slot {
+            .map(|(fork_slot, fork_count)| {
+                if parent_slot < *fork_slot && slot >= *fork_slot {
                     *fork_count
                 } else {
                     0
-                })
-            });
+                }
+            })
+            .sum();
 
         if fork_count > 0 {
             let mut buf = [0u8; 8];
