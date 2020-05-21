@@ -35,9 +35,8 @@ stall and will resume finalizing blocks after the network recovers.
 So far, we haven’t observed a large unavailability hit on our
 mainnet, cosmos, or tezos. For our network, which is primarily
 composed of high availability systems, this seems unlikely. Currently,
-we have set the threshold percentage to 4.66%, which means that
-23.68% of the nodes have to be available for the network to continue
-finalizing blocks.  For our network, which is primarily composed
+we have set the threshold percentage to 4.66%, which means that if
+23.68% have failed the network may stop finalizing blocks.  For our network, which is primarily composed
 of high availability systems a 23.68 drop in availabilty seems
 ulinkely.  1:10^12 odds assuming five 4.7% staked nodes with 0.995
 of uptime.
