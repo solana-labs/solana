@@ -194,7 +194,15 @@ request to the api node, specifying a range of recent slots:
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 10]}' localhost:8899
 
-{"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"]},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": [
+    "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
+    "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
+    "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+  ],
+  "id": 1
+}
 ```
 
 2. For each signature returned, get the transaction details by sending a
@@ -204,7 +212,58 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"slot":5,"transaction":{"message":{"accountKeys":["Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX","47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi","11111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":1,"numRequiredSignatures":1},"instructions":[{"accounts":[0,1],"data":"3Bxs3zyH82bhpB8j","programIdIndex":2}],"recentBlockhash":"7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"},"signatures":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"]},"meta":{"err":null,"fee":5000,"postBalances":[2033973061360,218099990000,42000000003],"preBalances":[2044973066360,207099990000,42000000003],"status":{"Ok":null}}},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "slot": 5,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+          "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
+          "11111111111111111111111111111111"
+        ],
+        "header": {
+          "numReadonlySignedAccounts": 0,
+          "numReadonlyUnsignedAccounts": 1,
+          "numRequiredSignatures": 1
+        },
+        "instructions": [
+          {
+            "accounts": [
+              0,
+              1
+            ],
+            "data": "3Bxs3zyH82bhpB8j",
+            "programIdIndex": 2
+          }
+        ],
+        "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
+      },
+      "signatures": [
+        "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+      ]
+    },
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "postBalances": [
+        2033973061360,
+        218099990000,
+        42000000003
+      ],
+      "preBalances": [
+        2044973066360,
+        207099990000,
+        42000000003
+      ],
+      "status": {
+        "Ok": null
+      }
+    }
+  },
+  "id": 1
+}
 ```
 
 ## Sending Withdrawals
@@ -265,7 +324,33 @@ transaction was processed. If `confirmations: null`, it is [finalized](../termin
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
 
-{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "err": null, "status": {"Ok": null}}, {"slot": 48, "confirmations": null, "err": null, "status": {"Ok": null}}]},"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 82
+    },
+    "value": [
+      {
+        "slot": 72,
+        "confirmations": 10,
+        "err": null,
+        "status": {
+          "Ok": null
+        }
+      },
+      {
+        "slot": 48,
+        "confirmations": null,
+        "err": null,
+        "status": {
+          "Ok": null
+        }
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 #### Blockhash Expiration
