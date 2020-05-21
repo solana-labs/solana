@@ -351,8 +351,9 @@ fn simulate_transactions(
         let sim_result = rpc_client.simulate_transaction(&transaction, false)?;
         if sim_result.value.err.is_some() {
             trace!(
-                "filtering out transaction due to simulation failure: {:?}",
-                sim_result
+                "filtering out transaction due to simulation failure: {:?}: {}",
+                sim_result,
+                memo
             );
         } else {
             simulated_transactions.push((transaction, memo))
