@@ -1330,10 +1330,8 @@ impl AccountsDB {
         hasher.result()
     }
 
-    pub fn include_owner_in_hash(slot: Slot) -> bool {
-        // Account hashing updated to include owner activates at this slot on the testnet
-        // DANGER: Remove this guard ABSOLUTELY before the mainnet-beta transitions to v1.1.
-        slot >= 14_000_000
+    pub fn include_owner_in_hash(_slot: Slot) -> bool {
+        true
     }
 
     pub fn hash_account_data(
@@ -3532,7 +3530,7 @@ pub mod tests {
                 let loaded_account = db.load_slow(&ancestors, key).unwrap().0;
                 assert_eq!(
                     loaded_account.hash,
-                    AccountsDB::hash_account(some_slot, &account, &key, false)
+                    AccountsDB::hash_account(some_slot, &account, &key, true)
                 );
             }
         }
