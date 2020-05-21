@@ -7,7 +7,7 @@ https://github.com/solana-labs/solana/projects/52
 At the end of May, the mainnet is moving to 1.1, and TdS is moving
 to 1.2. With 1.2, TdS will behave as if we have 1-block conf as
 long as no more than 4% of the validators are acting maliciously.
-Applications can assume that ⅔+ votes observed in gossip confirm a
+Applications can assume that 2/3+ votes observed in gossip confirm a
 block or that at least 4.66% of the network is violating the protocol.
 
 ## How does it work?
@@ -16,8 +16,8 @@ The general idea is that validators have to continue voting, following
 their last fork, unless they can construct a proof that their fork
 cannot reach finality. The way validators construct this proof is by
 collecting votes for all the other forks, excluding their own. If
-the set of valid votes represents over ⅓+X of the epoch stake weight,
-there is no way for the validators current fork to reach ⅔+ finality.
+the set of valid votes represents over 1/3+X of the epoch stake weight,
+there is no way for the validators current fork to reach 2/3+ finality.
 The validator hashes the proof (creates a witness) and submits it
 with their vote for the alternative fork.  If 2/3+ votes for the
 same block, it is impossible for any of the nodes to construct this
@@ -30,7 +30,7 @@ will be eventually finalized.
 The safety margin is 1/3+X, where X represents the minimum amount
 of stake that will be slashed in case the protocol is violated. The
 tradeoff is that liveness is now reduced by 2X in the worst case.
-If more than ⅓ - 2X of the network is unavailable, the network may
+If more than 1/3 - 2X of the network is unavailable, the network may
 stall and will resume finalizing blocks after the network recovers.
 So far, we haven’t observed a large unavailability hit on our
 mainnet, cosmos, or tezos. For our network, which is primarily
@@ -87,4 +87,3 @@ In the long term, transactions should be able to recover a portion
 of the slashing collateral if the one-block safety violation is
 proven. In that scenario, each block is effectively insured by the
 network.
-
