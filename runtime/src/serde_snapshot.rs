@@ -13,7 +13,7 @@ use {
     rand::{thread_rng, Rng},
     serde::{
         de::{DeserializeOwned, Visitor},
-        ser::SerializeTuple,
+        ser::{SerializeSeq, SerializeTuple},
         Deserialize, Deserializer, Serialize, Serializer,
     },
     solana_measure::measure::Measure,
@@ -45,10 +45,11 @@ pub enum SerdeStyle {
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
 // consumes an iterator and returns an object that will serialize as a serde seq
-fn serialize_iter_as_seq<I>(iter: I) -> impl Serialize
+pub fn serialize_iter_as_seq<I>(iter: I) -> impl Serialize
 where
     I: IntoIterator,
     <I as IntoIterator>::Item: Serialize,
+    <I as IntoIterator>::IntoIter: ExactSizeIterator,
 {
     struct SerializableSequencedIterator<I> {
         iter: std::cell::RefCell<Option<I>>,
@@ -58,12 +59,53 @@ where
     where
         I: IntoIterator,
         <I as IntoIterator>::Item: Serialize,
+        <I as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            serializer.collect_seq(self.iter.borrow_mut().take().unwrap())
+	    let iter = self.iter.borrow_mut().take().unwrap().into_iter();
+	    let mut seq = serializer.serialize_seq(Some(iter.len()))?;
+	    for item in iter {
+		seq.serialize_element(&item)?;
+	    }
+	    seq.end()
+        }
+    }
+
+    SerializableSequencedIterator {
+        iter: std::cell::RefCell::new(Some(iter)),
+    }
+}
+
+// consumes an iterator and returns an object that will serialize as a serde tuple
+pub fn serialize_iter_as_tuple<I>(iter: I) -> impl Serialize
+where
+    I: IntoIterator,
+    <I as IntoIterator>::Item: Serialize,
+    <I as IntoIterator>::IntoIter: ExactSizeIterator,
+{
+    struct SerializableSequencedIterator<I> {
+        iter: std::cell::RefCell<Option<I>>,
+    }
+
+    impl<I> Serialize for SerializableSequencedIterator<I>
+    where
+        I: IntoIterator,
+        <I as IntoIterator>::Item: Serialize,
+        <I as IntoIterator>::IntoIter: ExactSizeIterator,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+	    let iter = self.iter.borrow_mut().take().unwrap().into_iter();
+	    let mut tup = serializer.serialize_tuple(iter.len())?;
+	    for item in iter {
+		tup.serialize_element(&item)?;
+	    }
+	    tup.end()
         }
     }
 
@@ -73,7 +115,7 @@ where
 }
 
 // consumes a 2-tuple iterator and returns an object that will serialize as a serde map
-fn serialize_iter_as_map<K, V, I>(iter: I) -> impl Serialize
+pub fn serialize_iter_as_map<K, V, I>(iter: I) -> impl Serialize
 where
     K: Serialize,
     V: Serialize,
