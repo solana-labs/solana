@@ -84,6 +84,12 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
+### Offline Accounts
+
+You may wish to keep the keys for one or more collection accounts offline for
+greater security. If so, you will need to move SOL to hot accounts using our
+[offline methods](../offline-signing/README.md).
+
 ## Listening for Deposits
 
 When a user wants to deposit SOL into your exchange, instruct them to send a
@@ -297,11 +303,12 @@ For greater flexibility, you can submit withdrawal transfers asynchronously. In
 these cases, it is your responsibility to verify that the transaction succeeded
 and was finalized by the cluster.
 
-Note: Each transaction contains a [recent blockhash](../transaction.md#blockhash-format)
-to indicate its liveness. It is **critical** to wait until this blockhash
-expires before retrying a withdrawal transfer that does not appear to have been
-confirmed or finalized by the cluster. Otherwise, you risk a double spend. We
-recommend waiting 500 slots between retries.
+**Note:** Each transaction contains a [recent
+blockhash](../transaction.md#blockhash-format) to indicate its liveness. It is
+**critical** to wait until this blockhash expires before retrying a withdrawal
+transfer that does not appear to have been confirmed or finalized by the
+cluster. Otherwise, you risk a double spend. See [blockhash expiration](#blockhash-expiration)
+below.
 
 In the command-line tool, pass the `--no-wait` argument to send a transfer
 asynchronously:
@@ -358,13 +365,15 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 To check whether a recent blockhash is still valid, send a
 [`getFeeCalculatorForBlockhash`](../apps/jsonrpc-api.md#getfeecalculatorforblockhash)
 request with the blockhash as a parameter. If the response value is null, the
-blockhash is expired, and the withdrawal transaction is safe to retry.
+blockhash is expired, and the withdrawal transaction should never succeed.
+
+You can also use the
+[`getBlockhashLifespan` endpoint](../apps/jsonrpc-api.md#getblockhashlifespan)
+to determine how many slots a blockhash is valid for in the current epoch. When
+you request a [recent blockhash](../apps/jsonrpc-api.md#getrecentblockhash), the
+response includes the slot context. The blockhash is valid until `blockhashSlot +
+blockhashQueueLength`. Note that blockhash lifespan may change on epoch
+boundaries; check the [`getEpochInfo` endpoint](../apps/jsonrpc-api.md#getepochinfo)
+to see when the current epoch will end.
 
 ## Testing the Integration
-
-
-
-## Going Further
-
-- **Offline accounts:** you may wish to keep the keys for one or more collection accounts offline for greater security. If so, you will need to move SOL to hot accounts using our [offline methods](../offline-signing/README.md).
--
