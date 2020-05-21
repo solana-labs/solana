@@ -17,9 +17,9 @@ their last fork, unless they can construct a proof that their fork
 may not reach finality. The way validators construct this proof is by
 collecting votes for all the other forks, excluding their own. If
 the set of valid votes represents over 1/3+X of the epoch stake weight,
-there is no way for the validators current fork to reach 2/3+ finality.
+there is may not be a way for the validators current fork to reach 2/3+ finality.
 The validator hashes the proof (creates a witness) and submits it
-with their vote for the alternative fork.  If 2/3+ votes for the
+with their vote for the alternative fork.  But if 2/3+ votes for the
 same block, it is impossible for any of the nodes to construct this
 proof, and therefore no node is able to switch forks and this block
 will be eventually finalized.
