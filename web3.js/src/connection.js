@@ -163,7 +163,7 @@ type VoteAccountStatus = {
 };
 
 /**
- * Network Inflation parameters
+ * Network Inflation
  * (see https://docs.solana.com/implemented-proposals/ed_overview)
  *
  * @typedef {Object} Inflation
@@ -174,6 +174,15 @@ type VoteAccountStatus = {
  * @property {number} taper
  * @property {number} terminal
  */
+type Inflation = {
+  foundation: number,
+  foundationTerm: number,
+  initial: number,
+  storage: number,
+  taper: number,
+  terminal: number,
+};
+
 const GetInflationResult = struct({
   foundation: 'number',
   foundationTerm: 'number',
@@ -184,8 +193,7 @@ const GetInflationResult = struct({
 });
 
 /**
- * EpochInfo parameters
- * (see https://docs.solana.com/terminology#epoch)
+ * Information about the current epoch
  *
  * @typedef {Object} EpochInfo
  * @property {number} epoch
@@ -193,6 +201,13 @@ const GetInflationResult = struct({
  * @property {number} slotsInEpoch
  * @property {number} absoluteSlot
  */
+type EpochInfo = {
+  epoch: number,
+  slotIndex: number,
+  slotsInEpoch: number,
+  absoluteSlot: number,
+};
+
 const GetEpochInfoResult = struct({
   epoch: 'number',
   slotIndex: 'number',
@@ -201,7 +216,7 @@ const GetEpochInfoResult = struct({
 });
 
 /**
- * EpochSchedule parameters
+ * Epoch schedule
  * (see https://docs.solana.com/terminology#epoch)
  *
  * @typedef {Object} EpochSchedule
@@ -211,6 +226,14 @@ const GetEpochInfoResult = struct({
  * @property {number} firstNormalEpoch The first epoch with `slotsPerEpoch` slots
  * @property {number} firstNormalSlot The first slot of `firstNormalEpoch`
  */
+type EpochSchedule = {
+  slotsPerEpoch: number,
+  leaderScheduleSlotOffset: number,
+  warmup: boolean,
+  firstNormalEpoch: number,
+  firstNormalSlot: number,
+};
+
 const GetEpochScheduleResult = struct({
   slotsPerEpoch: 'number',
   leaderScheduleSlotOffset: 'number',
@@ -1245,7 +1268,7 @@ export class Connection {
   /**
    * Fetch the cluster Inflation parameters
    */
-  async getInflation(commitment: ?Commitment): Promise<GetInflationRpcResult> {
+  async getInflation(commitment: ?Commitment): Promise<Inflation> {
     const args = this._argsWithCommitment([], commitment);
     const unsafeRes = await this._rpcRequest('getInflation', args);
     const res = GetInflationRpcResult(unsafeRes);
@@ -1259,7 +1282,7 @@ export class Connection {
   /**
    * Fetch the Epoch Info parameters
    */
-  async getEpochInfo(commitment: ?Commitment): Promise<GetEpochInfoRpcResult> {
+  async getEpochInfo(commitment: ?Commitment): Promise<EpochInfo> {
     const args = this._argsWithCommitment([], commitment);
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = GetEpochInfoRpcResult(unsafeRes);
@@ -1273,7 +1296,7 @@ export class Connection {
   /**
    * Fetch the Epoch Schedule parameters
    */
-  async getEpochSchedule(): Promise<GetEpochScheduleRpcResult> {
+  async getEpochSchedule(): Promise<EpochSchedule> {
     const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
     const res = GetEpochScheduleRpcResult(unsafeRes);
     if (res.error) {

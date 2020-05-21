@@ -243,7 +243,7 @@ declare module '@solana/web3.js' {
     getVersion(): Promise<Version>;
     getInflation(commitment: ?Commitment): Promise<Inflation>;
     getEpochSchedule(): Promise<EpochSchedule>;
-    getEpochInfo(): Promise<EpochInfo>;
+    getEpochInfo(commitment: ?Commitment): Promise<EpochInfo>;
     getRecentBlockhashAndContext(
       commitment: ?Commitment,
     ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>>;
