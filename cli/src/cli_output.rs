@@ -981,3 +981,25 @@ impl fmt::Display for CliSupply {
         Ok(())
     }
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFees {
+    pub slot: Slot,
+    pub blockhash: String,
+    pub lamports_per_signature: u64,
+    pub last_valid_slot: Slot,
+}
+
+impl fmt::Display for CliFees {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Blockhash:", &self.blockhash)?;
+        writeln_name_value(
+            f,
+            "Lamports per signature:",
+            &self.lamports_per_signature.to_string(),
+        )?;
+        writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
+        Ok(())
+    }
+}
