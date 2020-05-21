@@ -24,4 +24,4 @@ solana-net-utils = { path = "../net-utils", version = "1.2.0" }
 solana-notifier = { path = "../notifier", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
-tar = "0.4.26"
+tar = "0.4.27"
