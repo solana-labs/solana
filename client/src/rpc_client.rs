@@ -693,6 +693,14 @@ impl RpcClient {
         })
     }
 
+    pub fn get_blockhash_queue_length(&self) -> RpcResult<RpcBlockhashQueueLength> {
+        self.send::<Response<RpcBlockhashQueueLength>>(
+            RpcRequest::GetBlockhashQueueLength,
+            Value::Null,
+            0,
+        )
+    }
+
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> ClientResult<(Hash, FeeCalculator)> {
         let mut num_retries = 0;
         let start = Instant::now();
