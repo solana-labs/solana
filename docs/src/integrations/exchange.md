@@ -377,3 +377,9 @@ boundaries; check the [`getEpochInfo` endpoint](../apps/jsonrpc-api.md#getepochi
 to see when the current epoch will end.
 
 ## Testing the Integration
+
+Be sure to test your complete workflow on Solana devnet and testnet
+[clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
+is the most open and flexible, and ideal for initial development, while testnet
+offers more realistic cluster configuration. Devnet features a token faucet, but
+you will need to request some testnet SOL to get going on testnet.
