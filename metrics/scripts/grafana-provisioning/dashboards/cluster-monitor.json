@@ -1548,6 +1548,117 @@
       }
     },
     {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "$datasource",
+      "format": "ms",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 0,
+        "y": 6
+      },
+      "id": 65,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"average_elapsed_ms\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_elapsed\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": "",
+      "title": "Average Optimistic Confirmation Elapsed",
+      "type": "singlestat",
+      "valueFontSize": "70%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
       "aliasColors": {},
       "bars": true,
       "dashLength": 10,
@@ -1558,7 +1669,7 @@
         "h": 9,
         "w": 14,
         "x": 0,
-        "y": 6
+        "y": 8
       },
       "id": 14,
       "legend": {
@@ -1936,7 +2047,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 17
       },
       "id": 16,
       "panels": [],
@@ -1954,7 +2065,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 16
+        "y": 18
       },
       "id": 17,
       "legend": {
@@ -2110,7 +2221,7 @@
         "h": 6,
         "w": 7,
         "x": 8,
-        "y": 16
+        "y": 18
       },
       "id": 18,
       "legend": {
@@ -2346,7 +2457,7 @@
         "h": 2,
         "w": 4,
         "x": 15,
-        "y": 16
+        "y": 18
       },
       "id": 19,
       "interval": null,
@@ -2457,7 +2568,7 @@
         "h": 2,
         "w": 3,
         "x": 19,
-        "y": 16
+        "y": 18
       },
       "id": 20,
       "interval": null,
@@ -2568,7 +2679,7 @@
         "h": 2,
         "w": 2,
         "x": 22,
-        "y": 16
+        "y": 18
       },
       "id": 21,
       "interval": null,
@@ -2668,7 +2779,7 @@
         "h": 4,
         "w": 5,
         "x": 15,
-        "y": 18
+        "y": 20
       },
       "id": 22,
       "legend": {
@@ -2786,7 +2897,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 18
+        "y": 20
       },
       "id": 23,
       "legend": {
@@ -2904,7 +3015,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 19
+        "y": 21
       },
       "id": 24,
       "legend": {
@@ -3057,7 +3168,7 @@
         "h": 6,
         "w": 15,
         "x": 0,
-        "y": 22
+        "y": 24
       },
       "id": 25,
       "links": [],
@@ -3145,7 +3256,7 @@
         "h": 6,
         "w": 9,
         "x": 15,
-        "y": 22
+        "y": 24
       },
       "id": 26,
       "legend": {
@@ -3626,7 +3737,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 28
+        "y": 30
       },
       "id": 27,
       "links": [],
@@ -3711,7 +3822,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 28
+        "y": 30
       },
       "id": 28,
       "links": [],
@@ -3796,7 +3907,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 28
+        "y": 30
       },
       "id": 29,
       "links": [],
@@ -3879,7 +3990,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 36
       },
       "id": 30,
       "panels": [],
@@ -3897,7 +4008,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 35
+        "y": 37
       },
       "id": 31,
       "legend": {
@@ -4136,7 +4247,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 35
+        "y": 37
       },
       "id": 32,
       "legend": {
@@ -4418,7 +4529,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 35
+        "y": 37
       },
       "id": 33,
       "legend": {
@@ -4629,7 +4740,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 41
+        "y": 43
       },
       "id": 34,
       "legend": {
@@ -4996,7 +5107,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 41
+        "y": 43
       },
       "id": 35,
       "legend": {
@@ -5168,7 +5279,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 41
+        "y": 43
       },
       "id": 36,
       "legend": {
@@ -5489,7 +5600,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 47
+        "y": 49
       },
       "id": 37,
       "legend": {
@@ -5919,7 +6030,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 47
+        "y": 49
       },
       "id": 38,
       "legend": {
@@ -6152,7 +6263,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 47
+        "y": 49
       },
       "id": 39,
       "legend": {
@@ -6478,7 +6589,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 53
+        "y": 55
       },
       "id": 40,
       "legend": {
@@ -6780,7 +6891,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 53
+        "y": 55
       },
       "id": 41,
       "legend": {
@@ -6933,7 +7044,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 53
+        "y": 55
       },
       "id": 42,
       "legend": {
@@ -7050,7 +7161,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 58
+        "y": 60
       },
       "id": 43,
       "legend": {
@@ -7209,7 +7320,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 58
+        "y": 60
       },
       "id": 44,
       "legend": {
@@ -7325,7 +7436,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 58
+        "y": 60
       },
       "id": 45,
       "legend": {
@@ -7436,7 +7547,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 64
+        "y": 66
       },
       "id": 46,
       "panels": [],
@@ -7459,7 +7570,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 65
+        "y": 67
       },
       "id": 47,
       "legend": {
@@ -7619,7 +7730,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 65
+        "y": 67
       },
       "id": 48,
       "legend": {
@@ -7779,7 +7890,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 65
+        "y": 67
       },
       "id": 49,
       "legend": {
@@ -7959,12 +8070,258 @@
       }
     },
     {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 72
+      },
+      "id": 68,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Optimistic Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 72
+      },
+      "id": 69,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_not_rooted\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Unrooted Optimistic Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 77
       },
       "id": 50,
       "panels": [],
@@ -7983,7 +8340,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 78
       },
       "id": 51,
       "legend": {
@@ -8216,7 +8573,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 71
+        "y": 78
       },
       "id": 52,
       "legend": {
@@ -8369,7 +8726,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 83
       },
       "id": 53,
       "panels": [],
@@ -8387,7 +8744,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 77
+        "y": 84
       },
       "id": 54,
       "legend": {
@@ -8589,7 +8946,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 77
+        "y": 84
       },
       "id": 55,
       "legend": {
@@ -8738,7 +9095,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 89
       },
       "id": 56,
       "panels": [],
@@ -8756,7 +9113,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 83
+        "y": 90
       },
       "id": 57,
       "legend": {
@@ -8948,7 +9305,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 83
+        "y": 90
       },
       "id": 58,
       "legend": {
@@ -9216,7 +9573,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 83
+        "y": 90
       },
       "id": 59,
       "legend": {

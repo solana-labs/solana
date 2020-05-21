@@ -1,6 +1,7 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
     crds_value::CrdsValueLabel,
+    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
     result::{Error, Result},
@@ -248,9 +249,9 @@ impl ClusterInfoVoteListener {
                     exit_,
                     verified_vote_transactions_receiver,
                     vote_tracker,
-                    &bank_forks,
+                    bank_forks,
                     subscriptions,
-                    &blockstore,
+                    blockstore,
                 );
             })
             .unwrap();
@@ -372,17 +373,33 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         vote_txs_receiver: VerifiedVoteTransactionsReceiver,
         vote_tracker: Arc<VoteTracker>,
-        bank_forks: &RwLock<BankForks>,
+        bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
-        blockstore: &Blockstore,
+        blockstore: Arc<Blockstore>,
     ) -> Result<()> {
+        let mut optimistic_confirmation_verifier =
+            OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
+        let mut last_process_root = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
 
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
-            vote_tracker.process_new_root_bank(&root_bank);
+            if last_process_root.elapsed().as_millis() > 400 {
+                let unrooted_optimistic_slots = optimistic_confirmation_verifier
+                    .check_optimistic_slots_rooted(&root_bank, &blockstore);
+                // SlotVoteTracker's for all `slots` in `unrooted_optimistic_slots`
+                // should still be available because we haven't purged in
+                // `process_new_root_bank()` yet, which is called below
+                OptimisticConfirmationVerifier::log_unrooted_optimistic_slots(
+                    &root_bank,
+                    &vote_tracker,
+                    &unrooted_optimistic_slots,
+                );
+                vote_tracker.process_new_root_bank(&root_bank);
+                last_process_root = Instant::now();
+            }
             let optimistic_confirmed_slots = Self::get_and_process_votes(
                 &vote_txs_receiver,
                 &vote_tracker,
@@ -400,6 +417,10 @@ impl ClusterInfoVoteListener {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
                 }
+            } else {
+                let optimistic_confirmed_slots = optimistic_confirmed_slots.unwrap();
+                optimistic_confirmation_verifier
+                    .add_new_optimistic_confirmed_slots(&optimistic_confirmed_slots);
             }
         }
     }
@@ -531,21 +552,20 @@ impl ClusterInfoVoteListener {
                         // 1) If this vote for this slot qualifies for optimistic confirmation or
                         // 2) the (slot, unduplicated_pubkey) combination wasn't already inserted
                         // then process that the `unduplicated_pubkey` voted for the slot.
-                        if should_update_switch.is_some()
+                        if (should_update_switch.is_some()
                             || diff
                                 .entry(*slot)
                                 .or_default()
-                                .insert(unduplicated_pubkey.clone())
-                        {
-                            if Self::add_vote(
+                                .insert(unduplicated_pubkey.clone()))
+                            && Self::add_vote(
                                 vote_tracker,
                                 *slot,
                                 unduplicated_pubkey,
                                 should_update_switch,
                                 total_epoch_stake,
-                            ) {
-                                new_optimistic_confirmed_slots.push(*slot);
-                            }
+                            )
+                        {
+                            new_optimistic_confirmed_slots.push(*slot);
                         }
                     }
 
