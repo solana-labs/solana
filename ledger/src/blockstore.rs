@@ -4922,7 +4922,7 @@ pub mod tests {
             // Trying to insert value into slot <= than last root should fail
             {
                 let mut coding_shred =
-                    Shred::new_empty_from_header(shred.clone(), DataShredHeader::default(), coding);
+                    Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());
                 assert!(!Blockstore::should_insert_coding_shred(

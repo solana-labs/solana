@@ -551,9 +551,9 @@ mod tests {
         cache2.increase_confirmation_stake(2, 5);
 
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache0.clone()); // Slot 1, conf 2
-        block_commitment.entry(2).or_insert(cache1.clone()); // Slot 2, conf 1
-        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        block_commitment.entry(1).or_insert_with(|| cache0.clone()); // Slot 1, conf 2
+        block_commitment.entry(2).or_insert_with(|| cache1.clone()); // Slot 2, conf 1
+        block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -568,9 +568,9 @@ mod tests {
 
         // Build map with multiple slots at conf 1
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache1.clone()); // Slot 1, conf 1
-        block_commitment.entry(2).or_insert(cache1.clone()); // Slot 2, conf 1
-        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        block_commitment.entry(1).or_insert_with(|| cache1.clone()); // Slot 1, conf 1
+        block_commitment.entry(2).or_insert_with(|| cache1.clone()); // Slot 2, conf 1
+        block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -585,9 +585,9 @@ mod tests {
 
         // Build map with slot gaps
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache1.clone()); // Slot 1, conf 1
-        block_commitment.entry(3).or_insert(cache1.clone()); // Slot 3, conf 1
-        block_commitment.entry(5).or_insert(cache2.clone()); // Slot 5, conf 0
+        block_commitment.entry(1).or_insert_with(|| cache1.clone()); // Slot 1, conf 1
+        block_commitment.entry(3).or_insert(cache1); // Slot 3, conf 1
+        block_commitment.entry(5).or_insert_with(|| cache2.clone()); // Slot 5, conf 0
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -602,9 +602,9 @@ mod tests {
 
         // Build map with no conf 1 slots, but one higher
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache0.clone()); // Slot 1, conf 2
-        block_commitment.entry(2).or_insert(cache2.clone()); // Slot 2, conf 0
-        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        block_commitment.entry(1).or_insert(cache0); // Slot 1, conf 2
+        block_commitment.entry(2).or_insert_with(|| cache2.clone()); // Slot 2, conf 0
+        block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             0,
@@ -619,15 +619,15 @@ mod tests {
 
         // Build map with no conf 1 or higher slots
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache2.clone()); // Slot 1, conf 0
-        block_commitment.entry(2).or_insert(cache2.clone()); // Slot 2, conf 0
-        block_commitment.entry(3).or_insert(cache2.clone()); // Slot 3, conf 0
+        block_commitment.entry(1).or_insert_with(|| cache2.clone()); // Slot 1, conf 0
+        block_commitment.entry(2).or_insert_with(|| cache2.clone()); // Slot 2, conf 0
+        block_commitment.entry(3).or_insert(cache2); // Slot 3, conf 0
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             0,
             total_stake,
-            bank_slot_5.clone(),
-            blockstore.clone(),
+            bank_slot_5,
+            blockstore,
             0,
             0,
         );
