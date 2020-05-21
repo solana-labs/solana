@@ -102,7 +102,7 @@ fn add_subscription<K, S>(
     S: Clone,
 {
     let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-    let commitment = commitment.unwrap_or_else(CommitmentConfig::recent);
+    let commitment = commitment.unwrap_or_else(CommitmentConfig::single);
     let subscription_data = SubscriptionData {
         sink,
         commitment,
@@ -429,7 +429,7 @@ impl RpcSubscriptions {
     ) {
         let mut subscriptions = self.subscriptions.account_subscriptions.write().unwrap();
         let slot = match commitment
-            .unwrap_or_else(CommitmentConfig::recent)
+            .unwrap_or_else(CommitmentConfig::single)
             .commitment
         {
             CommitmentLevel::Max => self
@@ -778,7 +778,12 @@ pub(crate) mod tests {
                 ),
             )),
         );
-        subscriptions.add_account_subscription(alice.pubkey(), None, sub_id.clone(), subscriber);
+        subscriptions.add_account_subscription(
+            alice.pubkey(),
+            Some(CommitmentConfig::recent()),
+            sub_id.clone(),
+            subscriber,
+        );
 
         assert!(subscriptions
             .subscriptions
