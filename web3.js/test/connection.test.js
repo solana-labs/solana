@@ -1089,6 +1089,25 @@ test('get block time', async () => {
   }
 });
 
+test('get minimum ledger slot', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'minimumLedgerSlot',
+      params: [],
+    },
+    {
+      error: null,
+      result: 0,
+    },
+  ]);
+
+  const minimumLedgerSlot = await connection.getMinimumLedgerSlot();
+  expect(minimumLedgerSlot).toBeGreaterThanOrEqual(0);
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 
