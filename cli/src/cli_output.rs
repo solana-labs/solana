@@ -5,7 +5,7 @@ use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use solana_client::rpc_response::{
-    RpcAccountBalance, RpcBlockhashQueueLength, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
+    RpcAccountBalance, RpcBlockhashLifespan, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
 };
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
@@ -991,7 +991,7 @@ pub struct CliFees {
     pub slot: Slot,
     pub blockhash: String,
     pub lamports_per_signature: u64,
-    pub blockhash_queue_length: RpcBlockhashQueueLength,
+    pub blockhash_lifespan: RpcBlockhashLifespan,
 }
 
 impl fmt::Display for CliFees {
@@ -1005,11 +1005,10 @@ impl fmt::Display for CliFees {
         writeln_name_value(f, "Slot:", &self.slot.to_string())?;
         writeln_name_value(
             f,
-            "Blockhash queue length:",
+            "Blockhash lifespan:",
             &format!(
-                "{} (epoch {})",
-                &self.blockhash_queue_length.blockhash_queue_length,
-                &self.blockhash_queue_length.epoch
+                "{} slots (epoch {})",
+                &self.blockhash_lifespan.blockhash_lifespan, &self.blockhash_lifespan.epoch
             ),
         )?;
         Ok(())

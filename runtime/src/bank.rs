@@ -985,7 +985,7 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_blockhash_queue_length(&self) -> usize {
+    pub fn get_blockhash_lifespan(&self) -> usize {
         self.blockhash_queue.read().unwrap().len()
     }
 

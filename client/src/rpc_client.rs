@@ -693,9 +693,9 @@ impl RpcClient {
         })
     }
 
-    pub fn get_blockhash_queue_length(&self) -> RpcResult<RpcBlockhashQueueLength> {
-        self.send::<Response<RpcBlockhashQueueLength>>(
-            RpcRequest::GetBlockhashQueueLength,
+    pub fn get_blockhash_lifespan(&self) -> RpcResult<RpcBlockhashLifespan> {
+        self.send::<Response<RpcBlockhashLifespan>>(
+            RpcRequest::GetBlockhashLifespan,
             Value::Null,
             0,
         )

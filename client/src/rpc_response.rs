@@ -49,9 +49,9 @@ pub struct RpcFeeRateGovernor {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcBlockhashQueueLength {
+pub struct RpcBlockhashLifespan {
     pub epoch: Epoch,
-    pub blockhash_queue_length: usize,
+    pub blockhash_lifespan: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

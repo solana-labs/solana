@@ -602,12 +602,12 @@ pub fn process_cluster_version(rpc_client: &RpcClient) -> ProcessResult {
 pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let result = rpc_client.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
     let (recent_blockhash, fee_calculator) = result.value;
-    let blockhash_queue_length = rpc_client.get_blockhash_queue_length()?;
+    let blockhash_lifespan = rpc_client.get_blockhash_lifespan()?;
     let fees = CliFees {
         slot: result.context.slot,
         blockhash: recent_blockhash.to_string(),
         lamports_per_signature: fee_calculator.lamports_per_signature,
-        blockhash_queue_length: blockhash_queue_length.value,
+        blockhash_lifespan: blockhash_lifespan.value,
     };
     Ok(config.output_format.formatted_string(&fees))
 }

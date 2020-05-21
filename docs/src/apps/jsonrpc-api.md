@@ -17,7 +17,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
-* [getBlockhashQueueLength](jsonrpc-api.md#getblockhashqueuelength)
+* [getBlockhashLifespan](jsonrpc-api.md#getblockhashlifespan)
 * [getBlockTime](jsonrpc-api.md#getblocktime)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
@@ -214,9 +214,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
 ```
 
-### getBlockhashQueueLength
+### getBlockhashLifespan
 
-Returns the blockhash queue length for the current epoch.
+Returns the blockhash lifespan for the current epoch. A particular blockhash
+from slot M is valid until slot N, where N = `M + blockhashLifespan`.
 
 #### Parameters:
 
@@ -228,16 +229,16 @@ The result will be an RpcResponse JSON object with `value` equal to and object
 with the following fields:
 
 * `epoch: <u64>` - epoch
-* `blockhashQueueLength: <usize>` - length of the blockhash queue
+* `blockhashLifespan: <usize>` - blockhash lifespan, in slots
 
 #### Example:
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockhashQueueLength"}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockhashLifespan"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":221},"value":{"epoch":0,"blockhashQueueLength":300}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":221},"value":{"epoch":0,"blockhashLifespan":300}},"id":1}
 ```
 
 ### getBlockTime

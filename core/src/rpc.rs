@@ -227,15 +227,15 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_blockhash_queue_length(&self) -> RpcResponse<RpcBlockhashQueueLength> {
+    fn get_blockhash_lifespan(&self) -> RpcResponse<RpcBlockhashLifespan> {
         let bank = &*self.bank(None)?;
         let epoch = bank.epoch();
-        let blockhash_queue_length = bank.get_blockhash_queue_length();
+        let blockhash_lifespan = bank.get_blockhash_lifespan();
         new_response(
             bank,
-            RpcBlockhashQueueLength {
+            RpcBlockhashLifespan {
                 epoch,
-                blockhash_queue_length,
+                blockhash_lifespan,
             },
         )
     }
@@ -809,11 +809,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
-    #[rpc(meta, name = "getBlockhashQueueLength")]
-    fn get_blockhash_queue_length(
-        &self,
-        meta: Self::Metadata,
-    ) -> RpcResponse<RpcBlockhashQueueLength>;
+    #[rpc(meta, name = "getBlockhashLifespan")]
+    fn get_blockhash_lifespan(&self, meta: Self::Metadata) -> RpcResponse<RpcBlockhashLifespan>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
@@ -1160,15 +1157,12 @@ impl RpcSol for RpcSolImpl {
             .get_fee_rate_governor()
     }
 
-    fn get_blockhash_queue_length(
-        &self,
-        meta: Self::Metadata,
-    ) -> RpcResponse<RpcBlockhashQueueLength> {
+    fn get_blockhash_lifespan(&self, meta: Self::Metadata) -> RpcResponse<RpcBlockhashLifespan> {
         debug!("get_blockhash_length rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_blockhash_queue_length()
+            .get_blockhash_lifespan()
     }
 
     fn get_signature_confirmation(
@@ -2616,11 +2610,11 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_get_blockhash_queue_length() {
+    fn test_rpc_get_blockhash_lifespan() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockhashQueueLength"}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockhashLifespan"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2628,7 +2622,7 @@ pub mod tests {
             "context":{"slot":0},
             "value":{
                 "epoch": 0,
-                "blockhashQueueLength": MAX_RECENT_BLOCKHASHES,
+                "blockhashLifespan": MAX_RECENT_BLOCKHASHES,
             }},
             "id": 1
         });
