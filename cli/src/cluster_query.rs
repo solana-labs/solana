@@ -25,12 +25,10 @@ use solana_sdk::{
     clock::{self, Clock, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
-    hash::Hash,
     message::Message,
     native_token::lamports_to_sol,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_instruction,
+    pubkey::{self, Pubkey},
+    system_instruction, system_program,
     sysvar::{self, Sysvar},
     transaction::Transaction,
 };
@@ -905,10 +903,7 @@ pub fn process_ping(
     timeout: &Duration,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let to = Keypair::new().pubkey();
-
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
-    println_name_value("Destination Account:", &to.to_string());
     println!();
 
     let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
@@ -917,14 +912,29 @@ pub fn process_ping(
     })
     .expect("Error setting Ctrl-C handler");
 
-    let mut last_blockhash = Hash::default();
     let mut submit_count = 0;
     let mut confirmed_count = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
+    let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let mut blockhash_transaction_count = 0;
+    let mut blockhash_acquired = Instant::now();
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
-        let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
-        last_blockhash = recent_blockhash;
+        let now = Instant::now();
+        if now.duration_since(blockhash_acquired).as_secs() > 60 {
+            // Fetch a new blockhash every minute
+            let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
+            blockhash = new_blockhash;
+            fee_calculator = new_fee_calculator;
+            blockhash_transaction_count = 0;
+            blockhash_acquired = Instant::now();
+        }
+
+        let seed =
+            &format!("{}{}", blockhash_transaction_count, blockhash)[0..pubkey::MAX_SEED_LEN];
+        let to = Pubkey::create_with_seed(&config.signers[0].pubkey(), seed, &system_program::id())
+            .unwrap();
+        blockhash_transaction_count += 1;
 
         let build_message = |lamports| {
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
@@ -939,7 +949,7 @@ pub fn process_ping(
             build_message,
         )?;
         let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&config.signers, recent_blockhash)?;
+        tx.try_sign(&config.signers, blockhash)?;
 
         match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
