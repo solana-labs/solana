@@ -1193,7 +1193,7 @@ After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
 * Submit subscription requests to the websocket using the methods below
 * Multiple subscriptions may be active at once
-* Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `recent`.
+* Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"single"`.
 
 ### accountSubscribe
 
@@ -1203,8 +1203,6 @@ Subscribe to an account to receive notifications when the lamports or data for a
 
 * `<string>` - account Pubkey, as base-58 encoded string
 * `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-  Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
 #### Results:
 
@@ -1216,7 +1214,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12"]}
 
-{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", 15]}
+{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"commitment": "single"}]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -1225,7 +1223,25 @@ Subscribe to an account to receive notifications when the lamports or data for a
 #### Notification Format:
 
 ```bash
-{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF","rentEpoch":28},"subscription":0}}
+{
+  "jsonrpc": "2.0",
+  "method": "accountNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5199307
+      },
+      "value": {
+        "data": "9qRxMDwy1ntDhBBoiy4Na9uDLbRTSzUS989mpwz",
+        "executable": false,
+        "lamports": 33594,
+        "owner": "H9oaJujXETwkmjyweuqKPFtk2no4SumoU9A3hi3dC8U6",
+        "rentEpoch": 635
+      }
+    },
+    "subscription": 23784
+  }
+}
 ```
 
 ### accountUnsubscribe
@@ -1259,8 +1275,6 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 * `<string>` - program\_id Pubkey, as base-58 encoded string
 * `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-  Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
-
 #### Results:
 
 * `<integer>` - Subscription id \(needed to unsubscribe\)
@@ -1269,9 +1283,9 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 ```bash
 // Request
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV"]}
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq"]}
 
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV", 15]}
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq", {"commitment": "single"}]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -1279,12 +1293,30 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 #### Notification Format:
 
-* `<string>` - account Pubkey, as base-58 encoded string
-* `<object>` - account info JSON object \(see [getAccountInfo](jsonrpc-api.md#getaccountinfo) for field details\)
-
-  ```bash
-  {"jsonrpc":"2.0","method":"programNotification","params":{{"result":["8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM",{"executable":false,"lamports":1,"owner":"9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV","data":"4SZWhnbSt3njU4QHVgPrWeekz1BudU4ttmdr9ezmrL4X6XeLeL83xVAo6ZdxwU3oXgHNeF2q6tWZbnVnBXmvNyeLVEGt8ZQ4ZmgjHfVNCEwBtzh2aDrHgQSjBFLYAdmM3uwBhcm1EyHJLeUiFqpsoAUhn6Vphwrpf44dWRAGsAJZbzvVrUW9bfucpR7xudHHg2MxQ2CdqsfS3TfWUJY3vaf2A4AUNzfAmNPHBGi99nU2hYubGSVSPcpVPpdRWQkydgqasBmTosd","rentEpoch":28}],"subscription":0}}
-  ```
+```bash
+{
+  "jsonrpc": "2.0",
+  "method": "programNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5208469
+      },
+      "value": {
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq"
+        "account": {
+          "data": "9qRxMDwy1ntDhBBoiy4Na9uDLbRTSzUS989m",
+          "executable": false,
+          "lamports": 33594,
+          "owner": "7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq",
+          "rentEpoch": 636
+        },
+      }
+    },
+    "subscription": 24040
+  }
+}
+```
 
 ### programUnsubscribe
 
@@ -1329,7 +1361,7 @@ Subscribe to a transaction signature to receive notification when the transactio
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b"]}
 
-{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b", 15]}
+{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b", {"commitment": "max"}]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -1338,7 +1370,21 @@ Subscribe to a transaction signature to receive notification when the transactio
 #### Notification Format:
 
 ```bash
-{"jsonrpc": "2.0","method": "signatureNotification", "params": {"result": {"err": null}, "subscription":0}}
+{
+  "jsonrpc": "2.0",
+  "method": "signatureNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5207624
+      },
+      "value": {
+        "err": null
+      }
+    },
+    "subscription": 24006
+  }
+}
 ```
 
 ### signatureUnsubscribe
@@ -1388,7 +1434,18 @@ None
 #### Notification Format:
 
 ```bash
-{"jsonrpc": "2.0","method": "slotNotification", "params": {"result":{"parent":75,"root":44,"slot":76},"subscription":0}}
+{
+  "jsonrpc": "2.0",
+  "method": "slotNotification",
+  "params": {
+    "result": {
+      "parent": 75,
+      "root": 44,
+      "slot": 76
+    },
+    "subscription": 0
+  }
+}
 ```
 
 ### slotUnsubscribe
@@ -1440,7 +1497,14 @@ None
 The result is the latest root slot number.
 
 ```bash
-{"jsonrpc": "2.0","method": "rootNotification", "params": {"result":42,"subscription":0}}
+{
+  "jsonrpc": "2.0",
+  "method": "rootNotification",
+  "params": {
+    "result": 42,
+    "subscription": 0
+  }
+}
 ```
 
 ### rootUnsubscribe
@@ -1494,7 +1558,18 @@ None
 The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
 
 ```bash
-{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"hash":"8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM","slots":[1,2],"timestamp":null},"subscription":0}}
+{
+  "jsonrpc": "2.0",
+  "method": "voteNotification",
+  "params": {
+    "result": {
+      "hash": "8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM",
+      "slots": [1, 2],
+      "timestamp": null
+    },
+    "subscription": 0
+  }
+}
 ```
 
 ### voteUnsubscribe
