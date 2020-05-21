@@ -222,6 +222,10 @@ impl BankForks {
         self.root
     }
 
+    pub fn root_bank(&self) -> &Arc<Bank> {
+        self.banks.get(&self.root()).expect("Root bank must exist")
+    }
+
     pub fn purge_old_snapshots(&self) {
         // Remove outdated snapshots
         let config = self.snapshot_config.as_ref().unwrap();
