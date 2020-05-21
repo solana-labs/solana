@@ -4,8 +4,8 @@ Progress on optimistic confirmation can be tracked here
 
 https://github.com/solana-labs/solana/projects/52
 
-At the end of May, the mainnet is moving to 1.1, and TdS is moving
-to 1.2. With 1.2, TdS will behave as if we have 1-block conf as
+At the end of May, the mainnet-beta is moving to 1.1, and testnet is moving
+to 1.2. With 1.2, testnet will behave as if we have 1-block conf as
 long as no more than 4% of the validators are acting maliciously.
 Applications can assume that 2/3+ votes observed in gossip confirm a
 block or that at least 4.66% of the network is violating the protocol.
