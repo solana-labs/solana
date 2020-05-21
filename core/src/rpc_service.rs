@@ -14,7 +14,7 @@ use solana_ledger::{
     blockstore::Blockstore,
     snapshot_utils,
 };
-use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
 use std::{
     collections::HashSet,
     net::SocketAddr,
@@ -261,13 +261,16 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             let total_supply = bank.capitalization();
             let non_circulating_supply =
                 crate::non_circulating_supply::calculate_non_circulating_supply(&bank).lamports;
-            Some(format!("{}", total_supply - non_circulating_supply))
+            Some(format!(
+                "{}",
+                lamports_to_sol(total_supply - non_circulating_supply)
+            ))
         }
         "/v0/total-supply" => {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
-            Some(format!("{}", total_supply))
+            Some(format!("{}", lamports_to_sol(total_supply)))
         }
         _ => None,
     }
@@ -458,11 +461,11 @@ mod tests {
 
         assert_eq!(None, process_rest(&bank_forks, "not-a-supported-rest-api"));
         assert_eq!(
-            Some("10127".to_string()),
+            Some("0.000010127".to_string()),
             process_rest(&bank_forks, "/v0/circulating-supply")
         );
         assert_eq!(
-            Some("10127".to_string()),
+            Some("0.000010127".to_string()),
             process_rest(&bank_forks, "/v0/total-supply")
         );
     }
