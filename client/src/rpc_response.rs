@@ -49,6 +49,13 @@ pub struct RpcFeeRateGovernor {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcBlockhashQueueLength {
+    pub epoch: Epoch,
+    pub blockhash_queue_length: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
     pub account: RpcAccount,

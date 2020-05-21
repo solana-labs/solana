@@ -985,6 +985,10 @@ impl Bank {
         &self.fee_rate_governor
     }
 
+    pub fn get_blockhash_queue_length(&self) -> usize {
+        self.blockhash_queue.read().unwrap().len()
+    }
+
     pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 

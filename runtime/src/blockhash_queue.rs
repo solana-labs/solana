@@ -119,6 +119,10 @@ impl BlockhashQueue {
             .iter()
             .map(|(k, v)| recent_blockhashes::IterItem(v.hash_height, k, &v.fee_calculator))
     }
+
+    pub fn len(&self) -> usize {
+        self.max_age
+    }
 }
 #[cfg(test)]
 mod tests {

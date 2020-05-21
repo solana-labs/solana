@@ -227,6 +227,19 @@ impl JsonRpcRequestProcessor {
         )
     }
 
+    fn get_blockhash_queue_length(&self) -> RpcResponse<RpcBlockhashQueueLength> {
+        let bank = &*self.bank(None)?;
+        let epoch = bank.epoch();
+        let blockhash_queue_length = bank.get_blockhash_queue_length();
+        new_response(
+            bank,
+            RpcBlockhashQueueLength {
+                epoch,
+                blockhash_queue_length,
+            },
+        )
+    }
+
     pub fn confirm_transaction(
         &self,
         signature: Result<Signature>,
@@ -796,6 +809,12 @@ pub trait RpcSol {
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
+    #[rpc(meta, name = "getBlockhashQueueLength")]
+    fn get_blockhash_queue_length(
+        &self,
+        meta: Self::Metadata,
+    ) -> RpcResponse<RpcBlockhashQueueLength>;
+
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
         &self,
@@ -1139,6 +1158,17 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_fee_rate_governor()
+    }
+
+    fn get_blockhash_queue_length(
+        &self,
+        meta: Self::Metadata,
+    ) -> RpcResponse<RpcBlockhashQueueLength> {
+        debug!("get_blockhash_length rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_blockhash_queue_length()
     }
 
     fn get_signature_confirmation(
@@ -1561,6 +1591,7 @@ pub mod tests {
         get_tmp_ledger_path,
     };
     use solana_sdk::{
+        clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -2574,6 +2605,30 @@ pub mod tests {
                     "targetLamportsPerSignature": 0,
                     "targetSignaturesPerSlot": 0
                 }
+            }},
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_blockhash_queue_length() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlockhashQueueLength"}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+            "context":{"slot":0},
+            "value":{
+                "epoch": 0,
+                "blockhashQueueLength": MAX_RECENT_BLOCKHASHES,
             }},
             "id": 1
         });
