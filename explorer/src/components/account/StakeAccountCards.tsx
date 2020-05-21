@@ -4,6 +4,7 @@ import TableCardBody from "components/common/TableCardBody";
 import { lamportsToSolString } from "utils";
 import Copyable from "components/Copyable";
 import { displayAddress } from "utils/tx";
+import { displayTimestamp } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 
 export function StakeAccountCards({
@@ -26,23 +27,10 @@ export function StakeAccountCards({
 function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   const unixTimestamp = stakeAccount.meta?.lockup.unixTimestamp;
   if (unixTimestamp && unixTimestamp > 0) {
-    const expireDate = new Date(unixTimestamp * 1000);
-    const dateString = new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    }).format(expireDate);
-    const timeString = new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      minute: "numeric",
-      second: "numeric",
-      hour12: false,
-      timeZoneName: "long"
-    }).format(expireDate);
-    const expireString = `${dateString} at ${timeString}`;
+    const prettyTimestamp = displayTimestamp(unixTimestamp);
     return (
       <div className="alert alert-warning text-center">
-        <strong>Account is locked!</strong> Lockup expires on {expireString}
+        <strong>Account is locked!</strong> Lockup expires on {prettyTimestamp}
       </div>
     );
   } else {

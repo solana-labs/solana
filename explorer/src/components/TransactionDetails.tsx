@@ -24,6 +24,7 @@ import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
 import ErrorCard from "./common/ErrorCard";
 import LoadingCard from "./common/LoadingCard";
 import TableCardBody from "./common/TableCardBody";
+import { displayTimestamp } from "utils/date";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -144,6 +145,13 @@ function StatusCard({ signature }: Props) {
           <td>Result</td>
           <td className="text-right">{renderResult()}</td>
         </tr>
+
+        {info.timestamp && (
+          <tr>
+            <td>Timestamp</td>
+            <td className="text-right">{displayTimestamp(info.timestamp)}</td>
+          </tr>
+        )}
 
         <tr>
           <td>Confirmations</td>
