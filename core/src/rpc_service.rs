@@ -517,17 +517,13 @@ mod tests {
     fn test_health_check_with_no_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
-<<<<<<< HEAD
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
-=======
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             None,
-            cluster_info,
+            cluster_info.clone(),
             None,
             create_bank_forks(),
         );
->>>>>>> 324cfd40f... Add v0 REST APIs for circulating and total supply (#10102)
         assert_eq!(rm.health_check(), "ok");
     }
 

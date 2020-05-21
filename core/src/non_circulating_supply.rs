@@ -179,11 +179,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.epoch(), 1);
-<<<<<<< HEAD
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
-=======
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
->>>>>>> 324cfd40f... Add v0 REST APIs for circulating and total supply (#10102)
         assert_eq!(
             non_circulating_supply.lamports,
             num_non_circulating_accounts * new_balance
