@@ -308,7 +308,7 @@ impl JsonRpcRequestProcessor {
 
     fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
         let bank = self.bank(commitment)?;
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(&bank);
         let total_supply = bank.capitalization();
         new_response(
             &bank,
