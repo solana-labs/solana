@@ -77,6 +77,7 @@ impl Tpu {
             vote_tracker,
             bank_forks,
             subscriptions.clone(),
+            blockstore.clone(),
         );
 
         let banking_stage = BankingStage::new(

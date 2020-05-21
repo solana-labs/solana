@@ -7,16 +7,17 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     sigverify,
     verified_vote_packets::VerifiedVotePackets,
+    vote_stake_tracker::VoteStakeTracker,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
 use itertools::izip;
 use log::*;
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
-use solana_runtime::{bank::Bank, epoch_stakes::EpochAuthorizedVoters};
+use solana_runtime::{bank::Bank, epoch_stakes::EpochAuthorizedVoters, stakes::Stakes};
 use solana_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
@@ -40,29 +41,6 @@ pub type VerifiedVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packet
 pub type VerifiedVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
-
-#[derive(Default)]
-pub struct VoteStakeTracker {
-    voted: HashSet<Arc<Pubkey>>,
-    stake: u64,
-}
-
-impl VoteStakeTracker {
-    pub fn add_vote_pubkey(&mut self, vote_pubkey: Arc<Pubkey>, stake: u64) {
-        if !self.voted.contains(&vote_pubkey) {
-            self.voted.insert(vote_pubkey);
-            self.stake += stake;
-        }
-    }
-
-    pub fn voted(&self) -> &HashSet<Arc<Pubkey>> {
-        &self.voted
-    }
-
-    pub fn stake(&self) -> u64 {
-        self.stake
-    }
-}
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -230,6 +208,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
+        blockstore: Arc<Blockstore>,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -271,6 +250,7 @@ impl ClusterInfoVoteListener {
                     vote_tracker,
                     &bank_forks,
                     subscriptions,
+                    &blockstore,
                 );
             })
             .unwrap();
@@ -394,6 +374,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
         subscriptions: Arc<RpcSubscriptions>,
+        blockstore: &Blockstore,
     ) -> Result<()> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -402,13 +383,14 @@ impl ClusterInfoVoteListener {
 
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
             vote_tracker.process_new_root_bank(&root_bank);
-
-            if let Err(e) = Self::get_and_process_votes(
+            let optimistic_confirmed_slots = Self::get_and_process_votes(
                 &vote_txs_receiver,
                 &vote_tracker,
                 &root_bank,
                 &subscriptions,
-            ) {
+            );
+
+            if let Err(e) = optimistic_confirmed_slots {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return Ok(());
@@ -428,8 +410,8 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) -> Result<()> {
-        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, root_bank, subscriptions)
+    ) -> Result<Vec<Slot>> {
+        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, last_root, subscriptions)
     }
 
     fn get_and_process_votes(
@@ -437,14 +419,18 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) -> Result<()> {
+    ) -> Result<Vec<Slot>> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
+
+        // Should not early return from this point onwards until `process_votes()`
+        // returns below to avoid missing any potential `optimistic_confirmed_slots`
         while let Ok(new_txs) = vote_txs_receiver.try_recv() {
             vote_txs.extend(new_txs);
         }
-        Self::process_votes(vote_tracker, vote_txs, root_bank, subscriptions);
-        Ok(())
+        let optimistic_confirmed_slots =
+            Self::process_votes(vote_tracker, vote_txs, root_bank, subscriptions);
+        Ok(optimistic_confirmed_slots)
     }
 
     fn process_votes(
@@ -452,8 +438,9 @@ impl ClusterInfoVoteListener {
         vote_txs: Vec<Transaction>,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) {
+    ) -> Vec<Slot> {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
+        let mut new_optimistic_confirmed_slots = vec![];
         {
             let all_slot_trackers = &vote_tracker.slot_vote_trackers;
             for tx in vote_txs {
@@ -509,12 +496,14 @@ impl ClusterInfoVoteListener {
                     for slot in &vote.slots {
                         // If slot is before the root, or so far ahead we don't have
                         // stake information, then ignore it
-                        let epoch_vote_accounts = root_bank
-                            .epoch_vote_accounts(root_bank.epoch_schedule().get_epoch(*slot));
-                        if *slot <= root || epoch_vote_accounts.is_none() {
+                        let epoch = root_bank.epoch_schedule().get_epoch(*slot);
+                        let epoch_stakes = root_bank.epoch_stakes(epoch);
+                        if *slot <= root || epoch_stakes.is_none() {
                             continue;
                         }
-                        let epoch_vote_accounts = epoch_vote_accounts.unwrap();
+                        let epoch_stakes = epoch_stakes.unwrap();
+                        let epoch_vote_accounts = Stakes::vote_accounts(epoch_stakes.stakes());
+                        let total_epoch_stake = epoch_stakes.total_stake();
 
                         // Don't insert if we already have marked down this pubkey
                         // voting for this slot
@@ -526,6 +515,9 @@ impl ClusterInfoVoteListener {
                             }
                         }
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
+
+                        // The vote for the greatest slot in the stack of votes in a non-switching vote
+                        // qualifies for optimistic confirmation.
                         let should_update_switch = if (slot == last_vote_slot) && !is_switch_vote {
                             let stake = epoch_vote_accounts
                                 .get(vote_pubkey)
@@ -535,19 +527,25 @@ impl ClusterInfoVoteListener {
                         } else {
                             None
                         };
+
+                        // 1) If this vote for this slot qualifies for optimistic confirmation or
+                        // 2) the (slot, unduplicated_pubkey) combination wasn't already inserted
+                        // then process that the `unduplicated_pubkey` voted for the slot.
                         if should_update_switch.is_some()
                             || diff
                                 .entry(*slot)
                                 .or_default()
                                 .insert(unduplicated_pubkey.clone())
                         {
-                            // If the value wasn't already inserted, insert it
-                            Self::add_vote(
+                            if Self::add_vote(
                                 vote_tracker,
                                 *slot,
                                 unduplicated_pubkey,
                                 should_update_switch,
-                            );
+                                total_epoch_stake,
+                            ) {
+                                new_optimistic_confirmed_slots.push(*slot);
+                            }
                         }
                     }
 
@@ -555,14 +553,17 @@ impl ClusterInfoVoteListener {
                 }
             }
         }
+        new_optimistic_confirmed_slots
     }
 
+    // Returns if the slot was optimistically confirmed
     fn add_vote(
         vote_tracker: &VoteTracker,
         slot: Slot,
         pubkey: Arc<Pubkey>,
         should_update_switch: Option<u64>,
-    ) {
+        total_epoch_stake: u64,
+    ) -> bool {
         let mut slot_tracker = vote_tracker
             .slot_vote_trackers
             .read()
@@ -583,6 +584,9 @@ impl ClusterInfoVoteListener {
             slot_tracker = Some(new_slot_tracker);
         }
         let slot_tracker = slot_tracker.unwrap();
+
+        // Update that the given pubkey voted for the
+        // given slot
         let mut w_slot_tracker = slot_tracker.write().unwrap();
         if w_slot_tracker.updates.is_none() {
             w_slot_tracker.updates = Some(vec![]);
@@ -593,11 +597,18 @@ impl ClusterInfoVoteListener {
             .as_mut()
             .unwrap()
             .push(pubkey.clone());
-        if let Some(stake) = should_update_switch {
-            w_slot_tracker
-                .voted_no_switching
-                .add_vote_pubkey(pubkey.clone(), stake);
-        }
+
+        // If this was a no-switching vote, check for optimistic
+        // confirmation
+        should_update_switch
+            .map(|stake| {
+                w_slot_tracker.voted_no_switching.add_vote_pubkey(
+                    pubkey.clone(),
+                    stake,
+                    total_epoch_stake,
+                )
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -924,18 +935,18 @@ mod tests {
                 if vote_slot == 2 && hash.is_none() {
                     assert!(r_slot_vote_tracker
                         .voted_no_switching
-                        .voted
+                        .voted()
                         .contains(&pubkey));
                     assert_eq!(
-                        r_slot_vote_tracker.voted_no_switching.stake,
+                        r_slot_vote_tracker.voted_no_switching.stake(),
                         stake_per_validator * validator_voting_keypairs.len() as u64
                     );
                 } else {
                     assert!(!r_slot_vote_tracker
                         .voted_no_switching
-                        .voted
+                        .voted()
                         .contains(&pubkey));
-                    assert_eq!(r_slot_vote_tracker.voted_no_switching.stake, 0);
+                    assert_eq!(r_slot_vote_tracker.voted_no_switching.stake(), 0);
                 }
             }
         }
@@ -1011,10 +1022,10 @@ mod tests {
                 // the non-switching vote set
                 assert!(r_slot_vote_tracker
                     .voted_no_switching
-                    .voted
+                    .voted()
                     .contains(&pubkey));
                 assert_eq!(
-                    r_slot_vote_tracker.voted_no_switching.stake,
+                    r_slot_vote_tracker.voted_no_switching.stake(),
                     num_voters_per_slot as u64 * stake_per_validator
                 );
             }
