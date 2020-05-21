@@ -542,6 +542,7 @@ fn process_confirmations(
     ok
 }
 
+#[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
     let config = get_config();
@@ -578,6 +579,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut source_stake_lamports_required = 0;
     let mut create_stake_transactions = vec![];
     let mut delegate_stake_transactions = vec![];
+    let mut stake_activated_in_current_epoch: HashSet<Pubkey> = HashSet::new();
 
     for RpcVoteAccountInfo {
         vote_pubkey,
@@ -605,13 +607,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
         // Transactions to create the baseline and bonus stake accounts
-        if let Ok((balance, _)) = get_stake_account(&rpc_client, &baseline_stake_address) {
+        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
+        {
             if balance != config.baseline_stake_amount {
                 error!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     baseline_stake_address, balance, config.baseline_stake_amount
                 );
                 process::exit(1);
+            }
+            if let Some(delegation) = stake_state.delegation() {
+                if epoch_info.epoch == delegation.activation_epoch {
+                    stake_activated_in_current_epoch.insert(baseline_stake_address);
+                }
             }
         } else {
             info!(
@@ -638,13 +646,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ));
         }
 
-        if let Ok((balance, _)) = get_stake_account(&rpc_client, &bonus_stake_address) {
+        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &bonus_stake_address) {
             if balance != config.bonus_stake_amount {
                 error!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     bonus_stake_address, balance, config.bonus_stake_amount
                 );
                 process::exit(1);
+            }
+            if let Some(delegation) = stake_state.delegation() {
+                if epoch_info.epoch == delegation.activation_epoch {
+                    stake_activated_in_current_epoch.insert(bonus_stake_address);
+                }
             }
         } else {
             info!(
@@ -683,41 +696,45 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             );
 
             // Delegate baseline stake
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new_with_payer(
-                    &[stake_instruction::delegate_stake(
-                        &baseline_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        &vote_pubkey,
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🥩 `{}` is current. Added ◎{} baseline stake",
-                    node_pubkey,
-                    lamports_to_sol(config.baseline_stake_amount),
-                ),
-            ));
-
-            if quality_block_producers.contains(&node_pubkey) {
-                // Delegate bonus stake
+            if !stake_activated_in_current_epoch.contains(&baseline_stake_address) {
                 delegate_stake_transactions.push((
-                    Transaction::new_unsigned(
-                    Message::new_with_payer(
+                    Transaction::new_unsigned(Message::new_with_payer(
                         &[stake_instruction::delegate_stake(
-                            &bonus_stake_address,
+                            &baseline_stake_address,
                             &config.authorized_staker.pubkey(),
                             &vote_pubkey,
                         )],
                         Some(&config.authorized_staker.pubkey()),
                     )),
                     format!(
-                        "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                        "🥩 `{}` is current. Added ◎{} baseline stake",
                         node_pubkey,
-                        last_epoch,
-                        lamports_to_sol(config.bonus_stake_amount),
+                        lamports_to_sol(config.baseline_stake_amount),
                     ),
                 ));
+            }
+
+            if quality_block_producers.contains(&node_pubkey) {
+                // Delegate bonus stake
+                if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
+                    delegate_stake_transactions.push((
+                        Transaction::new_unsigned(
+                        Message::new_with_payer(
+                            &[stake_instruction::delegate_stake(
+                                &bonus_stake_address,
+                                &config.authorized_staker.pubkey(),
+                                &vote_pubkey,
+                            )],
+                            Some(&config.authorized_staker.pubkey()),
+                        )),
+                        format!(
+                            "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                            node_pubkey,
+                            last_epoch,
+                            lamports_to_sol(config.bonus_stake_amount),
+                        ),
+                    ));
+                }
             } else {
                 // Deactivate bonus stake
                 delegate_stake_transactions.push((
@@ -837,7 +854,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &config.authorized_staker,
     )?;
 
-    if !process_confirmations(confirmations, Some(&notifier)) {
+    if !process_confirmations(
+        confirmations,
+        if config.dry_run {
+            None
+        } else {
+            Some(&notifier)
+        },
+    ) {
         process::exit(1);
     }
 
