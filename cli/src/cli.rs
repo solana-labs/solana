@@ -2613,7 +2613,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 mod tests {
     use super::*;
     use serde_json::Value;
-    use solana_client::mock_rpc_client_request::SIGNATURE;
+    use solana_client::mock_sender::SIGNATURE;
     use solana_sdk::{
         pubkey::Pubkey,
         signature::{

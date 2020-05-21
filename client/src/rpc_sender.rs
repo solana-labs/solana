@@ -1,6 +1,6 @@
 use crate::{client_error::Result, rpc_request::RpcRequest};
 
-pub(crate) trait GenericRpcClientRequest {
+pub trait RpcSender {
     fn send(
         &self,
         request: RpcRequest,

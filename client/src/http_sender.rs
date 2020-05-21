@@ -1,19 +1,19 @@
 use crate::{
     client_error::Result,
-    generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
+    rpc_sender::RpcSender,
 };
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use std::{thread::sleep, time::Duration};
 
-pub struct RpcClientRequest {
+pub struct HttpSender {
     client: reqwest::blocking::Client,
     url: String,
 }
 
-impl RpcClientRequest {
+impl HttpSender {
     pub fn new(url: String) -> Self {
         Self::new_with_timeout(url, Duration::from_secs(30))
     }
@@ -28,7 +28,7 @@ impl RpcClientRequest {
     }
 }
 
-impl GenericRpcClientRequest for RpcClientRequest {
+impl RpcSender for HttpSender {
     fn send(
         &self,
         request: RpcRequest,
