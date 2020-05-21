@@ -55,6 +55,7 @@ use std::{
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
+pub const UNLOCK_SWITCH_VOTE_SLOT: Slot = 17_000_000;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -137,6 +138,12 @@ impl ReplayTiming {
             self.select_vote_and_reset_forks_elapsed = 0;
         }
     }
+}
+
+pub(crate) struct SelectVoteAndResetForkResult {
+    pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
+    pub reset_bank: Option<Arc<Bank>>,
+    pub heaviest_fork_failures: Vec<HeaviestForkFailures>,
 }
 
 pub struct ReplayStage {
@@ -316,15 +323,18 @@ impl ReplayStage {
                     Self::report_memory(&allocated, "select_fork", start);
 
                     let now = Instant::now();
-                    let (vote_bank, reset_bank, failure_reasons) =
-                        Self::select_vote_and_reset_forks(
-                            &heaviest_bank,
-                            &heaviest_bank_on_same_fork,
-                            &ancestors,
-                            &descendants,
-                            &progress,
-                            &tower,
-                        );
+                    let SelectVoteAndResetForkResult {
+                        vote_bank,
+                        reset_bank,
+                        heaviest_fork_failures,
+                    } = Self::select_vote_and_reset_forks(
+                        &heaviest_bank,
+                        &heaviest_bank_on_same_fork,
+                        &ancestors,
+                        &descendants,
+                        &progress,
+                        &tower,
+                    );
                     let select_vote_and_reset_forks_elapsed = now.elapsed().as_micros();
                     replay_timing.update(
                         compute_bank_stats_elapsed as u64,
@@ -333,15 +343,15 @@ impl ReplayStage {
 
                     if heaviest_bank.is_some()
                         && tower.is_recent(heaviest_bank.as_ref().unwrap().slot())
-                        && !failure_reasons.is_empty()
+                        && !heaviest_fork_failures.is_empty()
                     {
                         info!(
-                            "Couldn't vote on heaviest fork: {:?}, failure_reasons: {:?}",
+                            "Couldn't vote on heaviest fork: {:?}, heaviest_fork_failures: {:?}",
                             heaviest_bank.as_ref().map(|b| b.slot()),
-                            failure_reasons
+                            heaviest_fork_failures
                         );
 
-                        for r in failure_reasons {
+                        for r in heaviest_fork_failures {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
                                 if let Some(latest_leader_slot) =
                                     progress.get_latest_leader_slot(slot)
@@ -987,21 +997,31 @@ impl ReplayStage {
         let node_keypair = cluster_info.keypair.clone();
 
         // Send our last few votes along with the new one
-        let vote_ix = match switch_fork_decision {
-            SwitchForkDecision::FailedSwitchThreshold => {
-                panic!("Switch threshold failure should not lead to voting")
+        let vote_ix = if bank.slot() > UNLOCK_SWITCH_VOTE_SLOT {
+            match switch_fork_decision {
+                SwitchForkDecision::FailedSwitchThreshold => {
+                    panic!("Switch threshold failure should not lead to voting")
+                }
+                SwitchForkDecision::NoSwitch => vote_instruction::vote(
+                    &vote_account_pubkey,
+                    &authorized_voter_keypair.pubkey(),
+                    vote,
+                ),
+                SwitchForkDecision::SwitchProof(switch_proof_hash) => {
+                    vote_instruction::vote_switch(
+                        &vote_account_pubkey,
+                        &authorized_voter_keypair.pubkey(),
+                        vote,
+                        *switch_proof_hash,
+                    )
+                }
             }
-            SwitchForkDecision::NoSwitch => vote_instruction::vote(
+        } else {
+            vote_instruction::vote(
                 &vote_account_pubkey,
                 &authorized_voter_keypair.pubkey(),
                 vote,
-            ),
-            SwitchForkDecision::SwitchProof(switch_proof_hash) => vote_instruction::vote_switch(
-                &vote_account_pubkey,
-                &authorized_voter_keypair.pubkey(),
-                vote,
-                *switch_proof_hash,
-            ),
+            )
         };
 
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
@@ -1409,11 +1429,7 @@ impl ReplayStage {
         descendants: &HashMap<u64, HashSet<u64>>,
         progress: &ProgressMap,
         tower: &Tower,
-    ) -> (
-        Option<(Arc<Bank>, SwitchForkDecision)>,
-        Option<Arc<Bank>>,
-        Vec<HeaviestForkFailures>,
-    ) {
+    ) -> SelectVoteAndResetForkResult {
         // Try to vote on the actual heaviest fork. If the heaviest bank is
         // locked out or fails the threshold check, the validator will:
         // 1) Not continue to vote on current fork, waiting for lockouts to expire/
@@ -1493,16 +1509,24 @@ impl ReplayStage {
                 && switch_fork_decision != SwitchForkDecision::FailedSwitchThreshold
             {
                 info!("voting: {} {}", bank.slot(), fork_weight);
-                (
-                    Some((bank.clone(), switch_fork_decision)),
-                    Some(bank.clone()),
-                    failure_reasons,
-                )
+                SelectVoteAndResetForkResult {
+                    vote_bank: Some((bank.clone(), switch_fork_decision)),
+                    reset_bank: Some(bank.clone()),
+                    heaviest_fork_failures: failure_reasons,
+                }
             } else {
-                (None, Some(bank.clone()), failure_reasons)
+                SelectVoteAndResetForkResult {
+                    vote_bank: None,
+                    reset_bank: Some(bank.clone()),
+                    heaviest_fork_failures: failure_reasons,
+                }
             }
         } else {
-            (None, None, failure_reasons)
+            SelectVoteAndResetForkResult {
+                vote_bank: None,
+                reset_bank: None,
+                heaviest_fork_failures: failure_reasons,
+            }
         }
     }
 
