@@ -6,7 +6,7 @@ https://github.com/solana-labs/solana/projects/52
 
 At the end of May, the mainnet-beta is moving to 1.1, and testnet is moving
 to 1.2. With 1.2, testnet will behave as if we have 1-block conf as
-long as no more than 4% of the validators are acting maliciously.
+long as no more than 4.66% of the validators are acting maliciously.
 Applications can assume that 2/3+ votes observed in gossip confirm a
 block or that at least 4.66% of the network is violating the protocol.
 
@@ -14,7 +14,7 @@ block or that at least 4.66% of the network is violating the protocol.
 
 The general idea is that validators have to continue voting, following
 their last fork, unless they can construct a proof that their fork
-cannot reach finality. The way validators construct this proof is by
+may not reach finality. The way validators construct this proof is by
 collecting votes for all the other forks, excluding their own. If
 the set of valid votes represents over 1/3+X of the epoch stake weight,
 there is no way for the validators current fork to reach 2/3+ finality.
