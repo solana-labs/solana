@@ -37,8 +37,8 @@ mainnet, cosmos, or tezos. For our network, which is primarily
 composed of high availability systems, this seems unlikely. Currently,
 we have set the threshold percentage to 4.66%, which means that if
 23.68% have failed the network may stop finalizing blocks.  For our network, which is primarily composed
-of high availability systems a 23.68 drop in availabilty seems
-ulinkely.  1:10^12 odds assuming five 4.7% staked nodes with 0.995
+of high availability systems a 23.68% drop in availabilty seems
+unlinkely.  1:10^12 odds assuming five 4.7% staked nodes with 0.995
 of uptime.
 
 ## Security
@@ -77,7 +77,7 @@ network will halt. We can analyze the data and figure out who was
 responsible and propose that the stake should be slashed after
 restart. A similar approach will be used with a one-block conf. A
 one-block conf safety violation is easily observable, but under
-normal circumstances, a one-block conf safety violation may not
+normal circumstances, an optimistic confirmation safety violation may not
 halt the network. Once the violation has been observed, the validators
 will freeze the affected stake in the next epoch and will decide
 on the next upgrade if the violation requires slashing.
