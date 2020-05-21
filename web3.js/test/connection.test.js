@@ -1840,6 +1840,7 @@ test('account change notification', async () => {
   const subscriptionId = connection.onAccountChange(
     programAccount.publicKey,
     mockCallback,
+    'recent',
   );
 
   const balanceNeeded = Math.max(

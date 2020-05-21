@@ -759,6 +759,7 @@ type SubscriptionId = 'subscribing' | number;
 type AccountSubscriptionInfo = {
   publicKey: string, // PublicKey of the account as a base 58 string
   callback: AccountChangeCallback,
+  commitment: ?Commitment,
   subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
 };
 
@@ -776,6 +777,7 @@ export type ProgramAccountChangeCallback = (
 type ProgramAccountSubscriptionInfo = {
   programId: string, // PublicKey of the program as a base 58 string
   callback: ProgramAccountChangeCallback,
+  commitment: ?Commitment,
   subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
 };
 
@@ -806,6 +808,7 @@ export type SignatureResultCallback = (
 type SignatureSubscriptionInfo = {
   signature: TransactionSignature, // TransactionSignature as a base 58 string
   callback: SignatureResultCallback,
+  commitment: ?Commitment,
   subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
 };
 
@@ -1753,12 +1756,20 @@ export class Connection {
 
     for (let id of accountKeys) {
       const sub = this._accountChangeSubscriptions[id];
-      this._subscribe(sub, 'accountSubscribe', [sub.publicKey]);
+      this._subscribe(
+        sub,
+        'accountSubscribe',
+        this._argsWithCommitment([sub.publicKey], sub.commitment),
+      );
     }
 
     for (let id of programKeys) {
       const sub = this._programAccountChangeSubscriptions[id];
-      this._subscribe(sub, 'programSubscribe', [sub.programId]);
+      this._subscribe(
+        sub,
+        'programSubscribe',
+        this._argsWithCommitment([sub.programId], sub.commitment),
+      );
     }
 
     for (let id of slotKeys) {
@@ -1768,7 +1779,11 @@ export class Connection {
 
     for (let id of signatureKeys) {
       const sub = this._signatureSubscriptions[id];
-      this._subscribe(sub, 'signatureSubscribe', [sub.signature]);
+      this._subscribe(
+        sub,
+        'signatureSubscribe',
+        this._argsWithCommitment([sub.signature], sub.commitment),
+      );
     }
 
     for (let id of rootKeys) {
@@ -1810,18 +1825,21 @@ export class Connection {
   /**
    * Register a callback to be invoked whenever the specified account changes
    *
-   * @param publickey Public key of the account to monitor
+   * @param publicKey Public key of the account to monitor
    * @param callback Function to invoke whenever the account is changed
+   * @param commitment Specify the commitment level account changes must reach before notification
    * @return subscription id
    */
   onAccountChange(
     publicKey: PublicKey,
     callback: AccountChangeCallback,
+    commitment: ?Commitment,
   ): number {
     const id = ++this._accountChangeSubscriptionCounter;
     this._accountChangeSubscriptions[id] = {
       publicKey: publicKey.toBase58(),
       callback,
+      commitment,
       subscriptionId: null,
     };
     this._updateSubscriptions();
@@ -1887,16 +1905,19 @@ export class Connection {
    *
    * @param programId Public key of the program to monitor
    * @param callback Function to invoke whenever the account is changed
+   * @param commitment Specify the commitment level account changes must reach before notification
    * @return subscription id
    */
   onProgramAccountChange(
     programId: PublicKey,
     callback: ProgramAccountChangeCallback,
+    commitment: ?Commitment,
   ): number {
     const id = ++this._programAccountChangeSubscriptionCounter;
     this._programAccountChangeSubscriptions[id] = {
       programId: programId.toBase58(),
       callback,
+      commitment,
       subscriptionId: null,
     };
     this._updateSubscriptions();
@@ -2011,16 +2032,19 @@ export class Connection {
    *
    * @param signature Transaction signature string in base 58
    * @param callback Function to invoke on signature notifications
+   * @param commitment Specify the commitment level signature must reach before notification
    * @return subscription id
    */
   onSignature(
     signature: TransactionSignature,
     callback: SignatureResultCallback,
+    commitment: ?Commitment,
   ): number {
     const id = ++this._signatureSubscriptionCounter;
     this._signatureSubscriptions[id] = {
       signature,
       callback,
+      commitment,
       subscriptionId: null,
     };
     this._updateSubscriptions();
