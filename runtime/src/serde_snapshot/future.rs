@@ -69,21 +69,18 @@ impl<'a> TypeContext<'a> for Context {
                     ),
                 )
             }));
-
-        let slot_hash = (
-            serializable_db.slot,
-            serializable_db
-                .accounts_db
-                .bank_hashes
-                .read()
-                .unwrap()
-                .get(&serializable_db.slot)
-                .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
-                .clone(),
-        );
+        let slot = serializable_db.slot;
+        let hash = serializable_db
+            .accounts_db
+            .bank_hashes
+            .read()
+            .unwrap()
+            .get(&serializable_db.slot)
+            .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
+            .clone();
 
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        let result = (entries, version, slot_hash).serialize(serializer);
+        let result = (entries, version, slot, hash).serialize(serializer);
         serialize_account_storage_timer.stop();
         datapoint_info!(
             "serialize_account_storage_ms",
@@ -95,15 +92,7 @@ impl<'a> TypeContext<'a> for Context {
 
     fn deserialize_accounts_db_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<
-        (
-            HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>>,
-            u64,
-            Slot,
-            BankHashInfo,
-        ),
-        IoError,
-    >
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
     where
         R: Read,
     {

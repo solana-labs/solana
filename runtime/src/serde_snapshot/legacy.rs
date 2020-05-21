@@ -173,15 +173,7 @@ impl<'a> TypeContext<'a> for Context {
 
     fn deserialize_accounts_db_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<
-        (
-            HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>>,
-            u64,
-            Slot,
-            BankHashInfo,
-        ),
-        IoError,
-    >
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
     where
         R: Read,
     {
@@ -212,6 +204,6 @@ impl<'a> TypeContext<'a> for Context {
             .map_err(|e| format!("bank hashes deserialize error: {}", e.to_string()))
             .map_err(accountsdb_to_io_error)?;
 
-        Ok((storage, version, slot, bank_hash_info))
+        Ok(AccountDBFields(storage, version, slot, bank_hash_info))
     }
 }

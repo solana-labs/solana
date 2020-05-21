@@ -53,6 +53,9 @@ pub enum SerdeStyle {
 
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct AccountDBFields<T>(HashMap<Slot, Vec<T>>, u64, Slot, BankHashInfo);
+
 pub trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
@@ -75,15 +78,7 @@ pub trait TypeContext<'a> {
 
     fn deserialize_accounts_db_fields<R>(
         stream: &mut BufReader<R>,
-    ) -> Result<
-        (
-            HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>>,
-            u64,
-            Slot,
-            BankHashInfo,
-        ),
-        IoError,
-    >
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
     where
         R: Read;
 
@@ -191,12 +186,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
 }
 
 fn context_accountsdb_from_fields<'a, C, P>(
-    (storage, version, slot, bank_hash_info): (
-        HashMap<Slot, Vec<C::SerializableAccountStorageEntry>>,
-        u64,
-        Slot,
-        BankHashInfo,
-    ),
+    account_db_fields: AccountDBFields<C::SerializableAccountStorageEntry>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
 ) -> Result<AccountsDB, IoError>
@@ -205,6 +195,8 @@ where
     P: AsRef<Path>,
 {
     let accounts_db = AccountsDB::new(account_paths.to_vec());
+
+    let AccountDBFields(storage, version, slot, bank_hash_info) = account_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry
     let storage = {
