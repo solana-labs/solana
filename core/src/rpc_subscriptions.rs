@@ -778,7 +778,12 @@ pub(crate) mod tests {
                 ),
             )),
         );
-        subscriptions.add_account_subscription(alice.pubkey(), None, sub_id.clone(), subscriber);
+        subscriptions.add_account_subscription(
+            alice.pubkey(),
+            Some(CommitmentConfig::recent()),
+            sub_id.clone(),
+            subscriber,
+        );
 
         assert!(subscriptions
             .subscriptions
