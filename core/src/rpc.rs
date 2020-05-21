@@ -291,7 +291,7 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let (addresses, address_filter) = if let Some(filter) = config.filter {
-            let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+            let non_circulating_supply = calculate_non_circulating_supply(&bank);
             let addresses = non_circulating_supply.accounts.into_iter().collect();
             let address_filter = match filter {
                 RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
@@ -315,7 +315,7 @@ impl JsonRpcRequestProcessor {
 
     fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
         let bank = self.bank(commitment)?;
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(&bank);
         let total_supply = bank.capitalization();
         new_response(
             &bank,
