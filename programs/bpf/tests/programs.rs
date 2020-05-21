@@ -374,7 +374,12 @@ mod bpf {
 
             assert!(bank_client
                 .send_message(
-                    &[&mint_keypair, &argument_keypair, &invoked_argument_keypair, &from_keypair],
+                    &[
+                        &mint_keypair,
+                        &argument_keypair,
+                        &invoked_argument_keypair,
+                        &from_keypair
+                    ],
                     message,
                 )
                 .is_ok());

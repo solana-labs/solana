@@ -1,24 +1,4 @@
-use super::*;
-
-pub(super) struct Context {}
-impl<'a> TypeContext<'a> for Context {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
-
-    fn legacy_or_zero<T: Default>(_x: T) -> T {
-        T::default()
-    }
-
-    fn legacy_serialize_byte_length<S>(_serializer: &mut S, _x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        Ok(())
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(_stream: &mut R) -> Result<u64, bincode::Error> {
-        Ok(MAX_ACCOUNTS_DB_STREAM_SIZE)
-    }
-}
+use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -42,8 +22,8 @@ impl Into<AccountStorageEntry> for SerializableAccountStorageEntry {
     }
 }
 
-pub(super) struct Context2 {}
-impl<'a> SerdeContext<'a> for Context2 {
+pub(super) struct Context {}
+impl<'a> TypeContext<'a> for Context {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
 
     fn serialize_bank_rc_fields<S: serde::ser::Serializer>(
@@ -76,30 +56,41 @@ impl<'a> SerdeContext<'a> for Context2 {
             .write_version
             .load(Ordering::Relaxed);
 
-        let entries = serializable_db
-            .account_storage_entries
-            .iter()
-            .map(|x| {
+        // (1st of 3 elements) write the list of account storage entry lists out as a map
+        let entry_count = RefCell::<usize>::new(0);
+        let entries =
+            serialize_iter_as_map(serializable_db.account_storage_entries.iter().map(|x| {
+                *entry_count.borrow_mut() += x.len();
                 (
                     x.first().unwrap().slot,
-                    x.iter()
-                        .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref()))
-                        .collect::<Vec<_>>(),
+                    serialize_iter_as_seq(
+                        x.iter()
+                            .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref())),
+                    ),
                 )
-            })
-            .collect::<HashMap<Slot, _>>();
+            }));
 
-        let bank_hashes = serializable_db.accounts_db.bank_hashes.read().unwrap();
-
-        (
-            entries,
-            version,
+        let slot_hash = (
             serializable_db.slot,
-            &*bank_hashes.get(&serializable_db.slot).unwrap_or_else(|| {
-                panic!("No bank_hashes entry for slot {}", serializable_db.slot)
-            }),
-        )
-            .serialize(serializer)
+            serializable_db
+                .accounts_db
+                .bank_hashes
+                .read()
+                .unwrap()
+                .get(&serializable_db.slot)
+                .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
+                .clone(),
+        );
+
+        let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
+        let result = (entries, version, slot_hash).serialize(serializer);
+        serialize_account_storage_timer.stop();
+        datapoint_info!(
+            "serialize_account_storage_ms",
+            ("duration", serialize_account_storage_timer.as_ms(), i64),
+            ("num_entries", *entry_count.borrow(), i64),
+        );
+        result
     }
 
     fn deserialize_accounts_db_fields<R>(
@@ -117,20 +108,5 @@ impl<'a> SerdeContext<'a> for Context2 {
         R: Read,
     {
         deserialize_from(&mut stream).map_err(accountsdb_to_io_error)
-    }
-
-    fn legacy_or_zero<T: Default>(_x: T) -> T {
-        T::default()
-    }
-
-    fn legacy_serialize_byte_length<S>(_serializer: &mut S, _x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        Ok(())
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(_stream: &mut R) -> Result<u64, bincode::Error> {
-        Ok(MAX_ACCOUNTS_DB_STREAM_SIZE)
     }
 }

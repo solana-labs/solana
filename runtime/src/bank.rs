@@ -105,6 +105,14 @@ pub struct BankRc {
 }
 
 impl BankRc {
+    pub(crate) fn new(accounts: Accounts, slot: Slot) -> Self {
+        Self {
+            accounts: Arc::new(accounts),
+            parent: RwLock::new(None),
+            slot,
+        }
+    }
+
     pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
         self.accounts.accounts_db.get_snapshot_storages(slot)
     }

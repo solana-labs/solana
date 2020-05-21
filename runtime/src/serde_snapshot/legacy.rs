@@ -1,24 +1,4 @@
-use super::*;
-
-pub(super) struct Context {}
-impl<'a> TypeContext<'a> for Context {
-    type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
-
-    fn legacy_or_zero<T: Default>(x: T) -> T {
-        x
-    }
-
-    fn legacy_serialize_byte_length<S>(serializer: &mut S, x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        serializer.serialize_element(&x)
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(stream: &mut R) -> Result<u64, bincode::Error> {
-        deserialize_from(stream)
-    }
-}
+use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -101,9 +81,7 @@ impl<'de> Deserialize<'de> for SerializableAppendVec {
                 let mut rd = Cursor::new(&data[..]);
                 let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
                 if rd.position() != LEN {
-                    Err(Error::custom(
-                        "SerializableAppendVec: unexpected length",
-                    ))
+                    Err(Error::custom("SerializableAppendVec: unexpected length"))
                 } else {
                     Ok(SerializableAppendVec { current_len })
                 }
@@ -113,8 +91,8 @@ impl<'de> Deserialize<'de> for SerializableAppendVec {
     }
 }
 
-pub(super) struct Context2 {}
-impl<'a> SerdeContext<'a> for Context2 {
+pub(super) struct Context {}
+impl<'a> TypeContext<'a> for Context {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
 
     fn serialize_bank_rc_fields<S: serde::ser::Serializer>(
@@ -124,20 +102,16 @@ impl<'a> SerdeContext<'a> for Context2 {
     where
         Self: std::marker::Sized,
     {
-        // let's preserve the exact behavior for maximum compatibility
-        // there is no gurantee how bincode encode things by using serde constructs (like
-        // serialize_tuple())
-        use serde::ser::Error;
-        let mut wr = Cursor::new(Vec::new());
-        let accounts_db_serialize = SerializableAccountsDB::<'a, Self> {
+        // as there is no deserialize_bank_rc_fields(), do not emit the u64
+        // size field here and have serialize_accounts_db_fields() emit two
+        // u64 size fields instead
+        SerializableAccountsDB::<'a, Self> {
             accounts_db: &*serializable_bank.bank_rc.accounts.accounts_db,
             slot: serializable_bank.bank_rc.slot,
             account_storage_entries: serializable_bank.snapshot_storages,
             phantom: std::marker::PhantomData::default(),
-        };
-        serialize_into(&mut wr, &accounts_db_serialize).map_err(Error::custom)?;
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
+        }
+        .serialize(serializer)
     }
 
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
@@ -147,51 +121,54 @@ impl<'a> SerdeContext<'a> for Context2 {
     where
         Self: std::marker::Sized,
     {
-        // let's preserve the exact behavior for maximum compatibility
-        // there is no gurantee how bincode encode things by using serde constructs (like
-        // serialize_tuple())
-        use serde::ser::Error;
-        let mut wr = Cursor::new(vec![]);
-
         // sample write version before serializing storage entries
         let version = serializable_db
             .accounts_db
             .write_version
             .load(Ordering::Relaxed);
 
-        let entries = serializable_db
-            .account_storage_entries
-            .iter()
-            .map(|x| {
+        // (1st of 3 elements) write the list of account storage entry lists out as a map
+        let entry_count = RefCell::<usize>::new(0);
+        let entries =
+            serialize_iter_as_map(serializable_db.account_storage_entries.iter().map(|x| {
+                *entry_count.borrow_mut() += x.len();
                 (
                     x.first().unwrap().slot,
-                    x.iter()
-                        .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref()))
-                        .collect::<Vec<_>>(),
+                    serialize_iter_as_seq(
+                        x.iter()
+                            .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref())),
+                    ),
                 )
-            })
-            .collect::<HashMap<Slot, _>>();
+            }));
 
-        let bank_hashes = serializable_db.accounts_db.bank_hashes.read().unwrap();
+        let slot_hash = (
+            serializable_db.slot,
+            serializable_db
+                .accounts_db
+                .bank_hashes
+                .read()
+                .unwrap()
+                .get(&serializable_db.slot)
+                .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
+                .clone(),
+        );
 
-        // write the list of account storage entry lists out as a map
-        serialize_into(&mut wr, &entries).map_err(Error::custom)?;
-        // write the current write version sampled before the account
-        // storage entries were written out
-        serialize_into(&mut wr, &version).map_err(Error::custom)?;
-
-        serialize_into(
-            &mut wr,
-            &(
-                serializable_db.slot,
-                &*bank_hashes.get(&serializable_db.slot).unwrap_or_else(|| {
-                    panic!("No bank_hashes entry for slot {}", serializable_db.slot)
-                }),
-            ),
+        let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
+        let result = (
+            &MAX_ACCOUNTS_DB_STREAM_SIZE,
+            &MAX_ACCOUNTS_DB_STREAM_SIZE,
+            &entries,
+            &version,
+            &slot_hash,
         )
-        .map_err(Error::custom)?;
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
+            .serialize(serializer);
+        serialize_account_storage_timer.stop();
+        datapoint_info!(
+            "serialize_account_storage_ms",
+            ("duration", serialize_account_storage_timer.as_ms(), i64),
+            ("num_entries", *entry_count.borrow(), i64),
+        );
+        result
     }
 
     fn deserialize_accounts_db_fields<R>(
@@ -208,42 +185,33 @@ impl<'a> SerdeContext<'a> for Context2 {
     where
         R: Read,
     {
-        // Read and discard the prepended serialized byte vector length
-        let _serialized_len: u64 = deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?;
+        // read and discard two u64 byte vector lengths
+        let serialized_len = MAX_ACCOUNTS_DB_STREAM_SIZE;
+        let serialized_len = min(
+            serialized_len,
+            deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?,
+        );
+        let serialized_len = min(
+            serialized_len,
+            deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?,
+        );
 
-        // read and discard u64 byte vector length
-        // (artifact from accountsdb_to_stream serializing first
-        // into byte vector and then into stream)
-        let serialized_len: u64 = deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?;
-
-        // read map of slots to account storage entries
+        // (1st of 3 elements) read in map of slots to account storage entries
         let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::config()
-            .limit(min(serialized_len, MAX_ACCOUNTS_DB_STREAM_SIZE))
+            .limit(serialized_len)
             .deserialize_from(&mut stream)
             .map_err(accountsdb_to_io_error)?;
+
+        // (2nd of 3 elements) read in write version
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|e| format!("write version deserialize error: {}", e.to_string()))
             .map_err(accountsdb_to_io_error)?;
 
+        // (3rd of 3 elements) read in (slot, bank hashes) pair
         let (slot, bank_hash_info): (Slot, BankHashInfo) = deserialize_from(&mut stream)
             .map_err(|e| format!("bank hashes deserialize error: {}", e.to_string()))
             .map_err(accountsdb_to_io_error)?;
 
         Ok((storage, version, slot, bank_hash_info))
-    }
-
-    fn legacy_or_zero<T: Default>(x: T) -> T {
-        x
-    }
-
-    fn legacy_serialize_byte_length<S>(serializer: &mut S, x: u64) -> Result<(), S::Error>
-    where
-        S: SerializeTuple,
-    {
-        serializer.serialize_element(&x)
-    }
-
-    fn legacy_deserialize_byte_length<R: Read>(stream: &mut R) -> Result<u64, bincode::Error> {
-        deserialize_from(stream)
     }
 }
