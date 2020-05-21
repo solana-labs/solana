@@ -5,7 +5,8 @@ import {
   SystemProgram,
   Account,
   SignatureResult,
-  PublicKey
+  PublicKey,
+  sendAndConfirmTransaction
 } from "@solana/web3.js";
 import { useQuery } from "../../utils/url";
 import { useCluster, Cluster, ClusterStatus } from "../cluster";
@@ -28,6 +29,7 @@ export type Confirmations = number | "max";
 export interface TransactionStatusInfo {
   slot: number;
   result: SignatureResult;
+  timestamp: number | null;
   confirmations: Confirmations;
 }
 
@@ -199,7 +201,12 @@ async function createTestTransaction(
       toPubkey: testAccount.publicKey,
       lamports: 1
     });
-    const signature = await connection.sendTransaction(tx, testAccount);
+    const signature = await sendAndConfirmTransaction(
+      connection,
+      tx,
+      [testAccount],
+      1
+    );
     fetchTransactionStatus(dispatch, signature, url, clusterStatus);
   } catch (error) {
     console.error("Failed to create test failure transaction", error);
@@ -223,11 +230,13 @@ export async function fetchTransactionStatus(
   let fetchStatus;
   let info: TransactionStatusInfo | undefined;
   try {
-    const { value } = await new Connection(url).getSignatureStatus(signature, {
+    const connection = new Connection(url);
+    const { value } = await connection.getSignatureStatus(signature, {
       searchTransactionHistory: true
     });
 
     if (value !== null) {
+      let timestamp = await connection.getBlockTime(value.slot);
       let confirmations: Confirmations;
       if (typeof value.confirmations === "number") {
         confirmations = value.confirmations;
@@ -237,6 +246,7 @@ export async function fetchTransactionStatus(
 
       info = {
         slot: value.slot,
+        timestamp,
         confirmations,
         result: { err: value.err }
       };
