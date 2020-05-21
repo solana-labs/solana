@@ -5,7 +5,7 @@ use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use solana_client::rpc_response::{
-    RpcAccountBalance, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
+    RpcAccountBalance, RpcBlockhashQueueLength, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
 };
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
@@ -978,6 +978,37 @@ impl fmt::Display for CliSupply {
                 writeln!(f, "  {}", account)?;
             }
         }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFees {
+    pub slot: Slot,
+    pub blockhash: String,
+    pub lamports_per_signature: u64,
+    pub blockhash_queue_length: RpcBlockhashQueueLength,
+}
+
+impl fmt::Display for CliFees {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Blockhash:", &self.blockhash)?;
+        writeln_name_value(
+            f,
+            "Lamports per signature:",
+            &self.lamports_per_signature.to_string(),
+        )?;
+        writeln_name_value(f, "Slot:", &self.slot.to_string())?;
+        writeln_name_value(
+            f,
+            "Blockhash queue length:",
+            &format!(
+                "{} (epoch {})",
+                &self.blockhash_queue_length.blockhash_queue_length,
+                &self.blockhash_queue_length.epoch
+            ),
+        )?;
         Ok(())
     }
 }
