@@ -599,7 +599,7 @@ pub mod test {
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         progress_map::ForkProgress,
-        replay_stage::{HeaviestForkFailures, ReplayStage},
+        replay_stage::{HeaviestForkFailures, ReplayStage, SelectVoteAndResetForkResult},
     };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
@@ -732,7 +732,10 @@ pub mod test {
 
             // Try to vote on the given slot
             let descendants = self.bank_forks.read().unwrap().descendants();
-            let (_, _, failure_reasons) = ReplayStage::select_vote_and_reset_forks(
+            let SelectVoteAndResetForkResult {
+                heaviest_fork_failures,
+                ..
+            } = ReplayStage::select_vote_and_reset_forks(
                 &Some(vote_bank.clone()),
                 &None,
                 &ancestors,
@@ -743,8 +746,8 @@ pub mod test {
 
             // Make sure this slot isn't locked out or failing threshold
             info!("Checking vote: {}", vote_bank.slot());
-            if !failure_reasons.is_empty() {
-                return failure_reasons;
+            if !heaviest_fork_failures.is_empty() {
+                return heaviest_fork_failures;
             }
             let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
