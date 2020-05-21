@@ -900,6 +900,7 @@ impl fmt::Display for CliSignOnlyData {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSignature {
     pub signature: String,
 }
@@ -913,6 +914,7 @@ impl fmt::Display for CliSignature {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliAccountBalances {
     pub accounts: Vec<RpcAccountBalance>,
 }
@@ -937,6 +939,7 @@ impl fmt::Display for CliAccountBalances {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSupply {
     pub total: u64,
     pub circulating: u64,
