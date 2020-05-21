@@ -519,7 +519,7 @@ mod tests {
             session,
             subscriber,
             contract_state.pubkey().to_string(),
-            None,
+            Some(CommitmentConfig::recent()),
         );
 
         let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
