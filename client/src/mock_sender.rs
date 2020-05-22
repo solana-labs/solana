@@ -38,12 +38,7 @@ impl MockSender {
 }
 
 impl RpcSender for MockSender {
-    fn send(
-        &self,
-        request: RpcRequest,
-        params: serde_json::Value,
-        _retries: usize,
-    ) -> Result<serde_json::Value> {
+    fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
         }
