@@ -684,11 +684,15 @@ fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
-    input.parse().map_err(|_e| Error::invalid_request())
+    input
+        .parse()
+        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
 }
 
 fn verify_signature(input: &str) -> Result<Signature> {
-    input.parse().map_err(|_e| Error::invalid_request())
+    input
+        .parse()
+        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
 }
 
 #[derive(Clone)]
@@ -1604,21 +1608,24 @@ impl RpcSol for RpcSolImpl {
 }
 
 fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
-    let wire_transaction = bs58::decode(bs58_transaction).into_vec().unwrap();
+    let wire_transaction = bs58::decode(bs58_transaction)
+        .into_vec()
+        .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
     if wire_transaction.len() >= PACKET_DATA_SIZE {
-        info!(
+        let err = format!(
             "transaction too large: {} bytes (max: {} bytes)",
             wire_transaction.len(),
             PACKET_DATA_SIZE
         );
-        return Err(Error::invalid_request());
+        info!("{}", err);
+        return Err(Error::invalid_params(&err));
     }
     bincode::config()
         .limit(PACKET_DATA_SIZE as u64)
         .deserialize(&wire_transaction)
         .map_err(|err| {
             info!("transaction deserialize error: {:?}", err);
-            Error::invalid_request()
+            Error::invalid_params(&err.to_string())
         })
         .map(|transaction| (wire_transaction, transaction))
 }
@@ -1633,7 +1640,7 @@ pub mod tests {
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
-    use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use jsonrpc_core::{ErrorCode, MetaIoHandler, Output, Response, Value};
     use solana_ledger::{
         blockstore::entries_to_test_shreds, blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,
@@ -2679,14 +2686,10 @@ pub mod tests {
         };
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
-        let res = io.handle_request_sync(req, meta.clone());
-        let expected =
-            r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
-        let expected: Response =
-            serde_json::from_str(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        let res = io.handle_request_sync(req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let error = &json["error"];
+        assert_eq!(error["code"], ErrorCode::InvalidParams.code());
     }
 
     #[test]
@@ -2707,7 +2710,7 @@ pub mod tests {
         let bad_pubkey = "a1b2c3d4";
         assert_eq!(
             verify_pubkey(bad_pubkey.to_string()),
-            Err(Error::invalid_request())
+            Err(Error::invalid_params("WrongSize"))
         );
     }
 
@@ -2721,7 +2724,7 @@ pub mod tests {
         let bad_signature = "a1b2c3d4";
         assert_eq!(
             verify_signature(&bad_signature.to_string()),
-            Err(Error::invalid_request())
+            Err(Error::invalid_params("WrongSize"))
         );
     }
 
