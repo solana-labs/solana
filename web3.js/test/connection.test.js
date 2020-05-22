@@ -1141,6 +1141,33 @@ test('get supply', async () => {
   expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
 });
 
+test('get largest accounts', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getLargestAccounts',
+      params: [],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 1,
+        },
+        value: new Array(20).fill(0).map(() => ({
+          address: new Account().publicKey.toBase58(),
+          lamports: 1000,
+        })),
+      },
+    },
+  ]);
+
+  const largestAccounts = (await connection.getLargestAccounts()).value;
+  expect(largestAccounts.length).toEqual(20);
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 

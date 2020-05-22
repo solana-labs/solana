@@ -61,6 +61,13 @@ declare module '@solana/web3.js' {
 
   declare export type Commitment = 'max' | 'recent' | 'root' | 'single';
 
+  declare export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
+
+  declare export type GetLargestAccountsConfig = {
+    commitment: ?Commitment,
+    filter: ?LargestAccountsFilter,
+  };
+
   declare export type SignatureStatusConfig = {
     searchTransactionHistory: boolean,
   };
@@ -193,6 +200,11 @@ declare module '@solana/web3.js' {
     nonCirculatingAccounts: Array<PublicKey>,
   };
 
+  declare export type AccountBalancePair = {
+    address: PublicKey,
+    lamports: number,
+  };
+
   declare export type VoteAccountStatus = {
     current: Array<VoteAccountInfo>,
     delinquent: Array<VoteAccountInfo>,
@@ -221,6 +233,9 @@ declare module '@solana/web3.js' {
     getBlockTime(slot: number): Promise<number | null>;
     getMinimumLedgerSlot(): Promise<number>;
     getSupply(commitment: ?Commitment): Promise<RpcResponseAndContext<Supply>>;
+    getLargestAccounts(
+      config: ?GetLargestAccountsConfig,
+    ): Promise<RpcResponseAndContext<Array<AccountBalancePair>>>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
     getConfirmedTransaction(
