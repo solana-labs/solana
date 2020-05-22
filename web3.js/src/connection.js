@@ -101,6 +101,29 @@ function notificationResultAndContext(resultDescription: any) {
 export type Commitment = 'max' | 'recent' | 'root' | 'single';
 
 /**
+ * Filter for largest accounts query
+ * <pre>
+ *   'circulating':    Return the largest accounts that are part of the circulating supply
+ *   'nonCirculating': Return the largest accounts that are not part of the circulating supply
+ * </pre>
+ *
+ * @typedef {'circulating' | 'nonCirculating'} LargestAccountsFilter
+ */
+export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
+
+/**
+ * Configuration object for changing `getLargestAccounts` query behavior
+ *
+ * @typedef {Object} GetLargestAccountsConfig
+ * @property {Commitment|undefined} commitment The level of commitment desired
+ * @property {LargestAccountsFilter|undefined} filter Filter largest accounts by whether they are part of the circulating supply
+ */
+type GetLargestAccountsConfig = {
+  commitment: ?Commitment,
+  filter: ?LargestAccountsFilter,
+};
+
+/**
  * Configuration object for changing query behavior
  *
  * @typedef {Object} SignatureStatusConfig
@@ -429,6 +452,30 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
     nonCirculating: 'number',
     nonCirculatingAccounts: struct.array(['string']),
   }),
+);
+
+/**
+ * Pair of an account address and its balance
+ *
+ * @typedef {Object} AccountBalancePair
+ * @property {PublicKey} address
+ * @property {number} lamports
+ */
+type AccountBalancePair = {
+  address: PublicKey,
+  lamports: number,
+};
+
+/**
+ * Expected JSON RPC response for the "getLargestAccounts" message
+ */
+const GetLargestAccountsRpcResult = jsonRpcResultAndContext(
+  struct.array([
+    struct({
+      lamports: 'number',
+      address: 'string',
+    }),
+  ]),
 );
 
 /**
@@ -1060,6 +1107,30 @@ export class Connection {
     res.result.value.nonCirculatingAccounts = res.result.value.nonCirculatingAccounts.map(
       account => new PublicKey(account),
     );
+    return res.result;
+  }
+
+  /**
+   * Fetch the 20 largest accounts with their current balances
+   */
+  async getLargestAccounts(
+    config: ?GetLargestAccountsConfig,
+  ): Promise<RpcResponseAndContext<Array<AccountBalancePair>>> {
+    const arg = {
+      ...config,
+      commitment: (config && config.commitment) || this.commitment,
+    };
+    const args = arg.filter || arg.commitment ? [arg] : [];
+    const unsafeRes = await this._rpcRequest('getLargestAccounts', args);
+    const res = GetLargestAccountsRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get largest accounts: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    res.result.value = res.result.value.map(({address, lamports}) => ({
+      address: new PublicKey(address),
+      lamports,
+    }));
     return res.result;
   }
 
