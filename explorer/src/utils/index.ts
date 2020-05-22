@@ -4,6 +4,12 @@ export function assertUnreachable(x: never): never {
   throw new Error("Unreachable!");
 }
 
-export function lamportsToSolString(lamports: number): string {
-  return `◎${(1.0 * Math.abs(lamports)) / LAMPORTS_PER_SOL}`;
+export function lamportsToSolString(
+  lamports: number,
+  maximumFractionDigits: number = 9
+): string {
+  const sol = Math.abs(lamports) / LAMPORTS_PER_SOL;
+  return (
+    "◎" + new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol)
+  );
 }
