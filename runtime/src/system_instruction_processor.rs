@@ -129,6 +129,15 @@ fn create_account(
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
+    // if it looks like the `to` account is already in use, bail
+    if to.lamports > 0 {
+        debug!(
+            "Create Account: invalid argument; account {:?} already in use",
+            to_address
+        );
+        return Err(SystemError::AccountAlreadyInUse.into());
+    }
+
     allocate_and_assign(to, to_address, space, owner, signers)?;
     transfer(from, to, lamports)
 }
@@ -605,8 +614,9 @@ mod tests {
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
 
-        // Verify that create_account works even if `to` has a non-zero balance
+        // Attempt to create an account that already has lamports
         let mut owned_account = Account::new(1, 0, &Pubkey::default());
+        let unchanged_account = owned_account.clone();
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
@@ -616,9 +626,9 @@ mod tests {
             &new_owner,
             &signers,
         );
-        assert_eq!(result, Ok(()));
-        assert_eq!(from_account.borrow().lamports, from_lamports - 50);
-        assert_eq!(owned_account.lamports, 1 + 50);
+        assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
+        assert_eq!(from_lamports, 100);
+        assert_eq!(owned_account, unchanged_account);
     }
 
     #[test]
