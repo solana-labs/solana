@@ -9,7 +9,9 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    system_instruction::SystemError,
     sysvar::{self, stake_history::StakeHistory, Sysvar},
+    transaction::TransactionError,
 };
 use solana_stake_program::{
     stake_instruction::{self},
@@ -154,6 +156,84 @@ fn test_stake_create_and_split_single_signature() {
         .is_ok());
 
     // w00t!
+}
+
+#[test]
+fn test_stake_create_and_split_to_existing_system_account() {
+    // Ensure stake-split does not allow the user to promote an existing system account into
+    // a stake account.
+
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair: staker_keypair,
+        ..
+    } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
+
+    let staker_pubkey = staker_keypair.pubkey();
+
+    let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
+
+    let stake_address =
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
+
+    let authorized = stake_state::Authorized::auto(&staker_pubkey);
+
+    let lamports = 1_000_000;
+
+    // Create stake account with seed
+    let message = Message::new(&stake_instruction::create_account_with_seed(
+        &staker_pubkey, // from
+        &stake_address, // to
+        &staker_pubkey, // base
+        "stake",        // seed
+        &authorized,
+        &stake_state::Lockup::default(),
+        lamports,
+    ));
+
+    bank_client
+        .send_message(&[&staker_keypair], message)
+        .expect("failed to create and delegate stake account");
+
+    let split_stake_address =
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
+            .unwrap();
+
+    // First, put a system account where we want the new stake account
+    let existing_lamports = 42;
+    bank_client
+        .transfer(existing_lamports, &staker_keypair, &split_stake_address)
+        .unwrap();
+    assert_eq!(
+        bank_client.get_balance(&split_stake_address).unwrap(),
+        existing_lamports
+    );
+
+    // Verify the split fails because the account is already in use
+    let message = Message::new_with_payer(
+        &stake_instruction::split_with_seed(
+            &stake_address, // original
+            &staker_pubkey, // authorized
+            lamports / 2,
+            &split_stake_address, // new address
+            &staker_pubkey,       // base
+            "split_stake",        // seed
+        ),
+        Some(&staker_keypair.pubkey()),
+    );
+    assert_eq!(
+        bank_client
+            .send_message(&[&staker_keypair], message)
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(0, SystemError::AccountAlreadyInUse.into())
+    );
+    assert_eq!(
+        bank_client.get_balance(&split_stake_address).unwrap(),
+        existing_lamports
+    );
 }
 
 #[test]
