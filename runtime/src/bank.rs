@@ -7,7 +7,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
         TransactionLoaders,
     },
-    accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
+    accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
     builtin_programs::get_builtin_programs,
@@ -21,7 +21,6 @@ use crate::{
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
-use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
@@ -59,17 +58,15 @@ use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    io::{BufReader, Cursor, Error as IOError, Read},
     mem,
     ops::RangeInclusive,
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
-pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
@@ -98,72 +95,26 @@ type EpochCount = u64;
 #[derive(Default)]
 pub struct BankRc {
     /// where all the Accounts are stored
-    accounts: Arc<Accounts>,
+    pub accounts: Arc<Accounts>,
 
     /// Previous checkpoint of this bank
-    parent: RwLock<Option<Arc<Bank>>>,
+    pub(crate) parent: RwLock<Option<Arc<Bank>>>,
 
     /// Current slot
-    slot: Slot,
+    pub(crate) slot: Slot,
 }
 
 impl BankRc {
-    pub fn from_stream<R: Read, P: AsRef<Path>>(
-        account_paths: &[PathBuf],
-        slot: Slot,
-        ancestors: &Ancestors,
-        frozen_account_pubkeys: &[Pubkey],
-        mut stream: &mut BufReader<R>,
-        stream_append_vecs_path: P,
-    ) -> std::result::Result<Self, IOError> {
-        let _len: usize =
-            deserialize_from(&mut stream).map_err(|e| BankRc::get_io_error(&e.to_string()))?;
-
-        let accounts = Accounts::from_stream(
-            account_paths,
-            ancestors,
-            frozen_account_pubkeys,
-            stream,
-            stream_append_vecs_path,
-        )?;
-
-        Ok(BankRc {
+    pub(crate) fn new(accounts: Accounts, slot: Slot) -> Self {
+        Self {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
             slot,
-        })
+        }
     }
 
     pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
         self.accounts.accounts_db.get_snapshot_storages(slot)
-    }
-
-    fn get_io_error(error: &str) -> IOError {
-        warn!("BankRc error: {:?}", error);
-        std::io::Error::new(std::io::ErrorKind::Other, error)
-    }
-}
-
-pub struct BankRcSerialize<'a, 'b> {
-    pub bank_rc: &'a BankRc,
-    pub snapshot_storages: &'b [SnapshotStorage],
-}
-
-impl<'a, 'b> Serialize for BankRcSerialize<'a, 'b> {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        use serde::ser::Error;
-        let mut wr = Cursor::new(Vec::new());
-        let accounts_db_serialize = AccountsDBSerialize::new(
-            &*self.bank_rc.accounts.accounts_db,
-            self.bank_rc.slot,
-            self.snapshot_storages,
-        );
-        serialize_into(&mut wr, &accounts_db_serialize).map_err(Error::custom)?;
-        let len = wr.position() as usize;
-        serializer.serialize_bytes(&wr.into_inner()[..len])
     }
 }
 
@@ -2586,31 +2537,16 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-// This guards against possible memory exhaustions in bincode when restoring
-// the full state from snapshot data files by imposing a fixed hard limit with
-// ample of headrooms for such a usecase.
-pub fn deserialize_from_snapshot<R, T>(reader: R) -> bincode::Result<T>
-where
-    R: Read,
-    T: serde::de::DeserializeOwned,
-{
-    bincode::config()
-        .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-        .deserialize_from(reader)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
         accounts_index::Ancestors,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use bincode::{serialize_into, serialized_size};
     use solana_sdk::{
         account::KeyedAccount,
         account_utils::StateMut,
@@ -2636,8 +2572,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{io::Cursor, result, time::Duration};
-    use tempfile::TempDir;
+    use std::{result, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -5740,70 +5675,6 @@ mod tests {
         );
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_bank_serialize() {
-        solana_logger::setup();
-        let (genesis_config, _) = create_genesis_config(500);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank0.squash();
-
-        // Create an account on a non-root fork
-        let key1 = Keypair::new();
-        bank1.deposit(&key1.pubkey(), 5);
-
-        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
-
-        // Test new account
-        let key2 = Keypair::new();
-        bank2.deposit(&key2.pubkey(), 10);
-        assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
-
-        let key3 = Keypair::new();
-        bank2.deposit(&key3.pubkey(), 0);
-
-        bank2.squash();
-
-        let snapshot_storages = bank2.get_snapshot_storages();
-        let rc_serialize = BankRcSerialize {
-            bank_rc: &bank2.rc,
-            snapshot_storages: &snapshot_storages,
-        };
-        let len = serialized_size(&bank2).unwrap() + serialized_size(&rc_serialize).unwrap();
-        let mut buf = vec![0u8; len as usize];
-        let mut writer = Cursor::new(&mut buf[..]);
-        serialize_into(&mut writer, &bank2).unwrap();
-        serialize_into(&mut writer, &rc_serialize).unwrap();
-
-        let mut rdr = Cursor::new(&buf[..]);
-        let mut dbank: Bank = deserialize_from_snapshot(&mut rdr).unwrap();
-        let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
-
-        // Create a new set of directories for this bank's accounts
-        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
-        let ref_sc = StatusCacheRc::default();
-        ref_sc.status_cache.write().unwrap().add_root(2);
-        // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
-        let copied_accounts = TempDir::new().unwrap();
-        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-        dbank.set_bank_rc(
-            BankRc::from_stream(
-                &dbank_paths,
-                dbank.slot(),
-                &dbank.ancestors,
-                &[],
-                &mut reader,
-                copied_accounts.path(),
-            )
-            .unwrap(),
-            ref_sc,
-        );
-        assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
-        assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
-        assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-        bank2.compare_bank(&dbank);
     }
 
     #[test]

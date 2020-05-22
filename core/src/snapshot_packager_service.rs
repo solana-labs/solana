@@ -83,9 +83,7 @@ mod tests {
         snapshot_package::AccountsPackage,
         snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
-    use solana_runtime::{
-        accounts_db::AccountStorageEntry, bank::BankSlotDelta, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
-    };
+    use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
     use solana_sdk::hash::Hash;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
@@ -186,7 +184,6 @@ mod tests {
         let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
             &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
-            MAX_SNAPSHOT_DATA_FILE_SIZE,
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())

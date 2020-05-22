@@ -344,7 +344,6 @@ mod tests {
             &saved_snapshots_dir
                 .path()
                 .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME),
-            solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())

@@ -26,14 +26,13 @@ use solana_sdk::{
 };
 use std::{
     collections::{HashMap, HashSet},
-    io::{BufReader, Error as IOError, Read},
     ops::RangeBounds,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
 
 #[derive(Default, Debug)]
-struct ReadonlyLock {
+pub(crate) struct ReadonlyLock {
     lock_count: Mutex<u64>,
 }
 
@@ -47,10 +46,10 @@ pub struct Accounts {
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of writable accounts which are currently in the pipeline
-    account_locks: Mutex<HashSet<Pubkey>>,
+    pub(crate) account_locks: Mutex<HashSet<Pubkey>>,
 
     /// Set of read-only accounts which are currently in the pipeline, caching number of locks.
-    readonly_locks: Arc<RwLock<Option<HashMap<Pubkey, ReadonlyLock>>>>,
+    pub(crate) readonly_locks: Arc<RwLock<Option<HashMap<Pubkey, ReadonlyLock>>>>,
 }
 
 // for the load instructions
@@ -66,6 +65,15 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
+    pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
+        Self {
+            accounts_db: Arc::new(accounts_db),
+            account_locks: Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            ..Self::default()
+        }
+    }
+
     pub fn new(paths: Vec<PathBuf>) -> Self {
         Self::new_with_frozen_accounts(paths, &HashMap::default(), &[])
     }
@@ -100,25 +108,6 @@ impl Accounts {
         Arc::get_mut(&mut self.accounts_db)
             .unwrap()
             .freeze_accounts(ancestors, frozen_account_pubkeys);
-    }
-
-    pub fn from_stream<R: Read, P: AsRef<Path>>(
-        account_paths: &[PathBuf],
-        ancestors: &Ancestors,
-        frozen_account_pubkeys: &[Pubkey],
-        stream: &mut BufReader<R>,
-        stream_append_vecs_path: P,
-    ) -> std::result::Result<Self, IOError> {
-        let mut accounts_db = AccountsDB::new(account_paths.to_vec());
-        accounts_db.accounts_from_stream(stream, stream_append_vecs_path)?;
-        accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
-
-        Ok(Accounts {
-            slot: 0,
-            accounts_db: Arc::new(accounts_db),
-            account_locks: Mutex::new(HashSet::new()),
-            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-        })
     }
 
     /// Return true if the slice has any duplicate elements
@@ -787,16 +776,7 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use crate::{
-        accounts_db::{
-            tests::copy_append_vecs,
-            {get_temp_accounts_paths, AccountsDBSerialize},
-        },
-        bank::HashAgeKind,
-        rent_collector::RentCollector,
-    };
-    use bincode::serialize_into;
-    use rand::{thread_rng, Rng};
+    use crate::{bank::HashAgeKind, rent_collector::RentCollector};
     use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
@@ -811,11 +791,9 @@ mod tests {
         transaction::Transaction,
     };
     use std::{
-        io::Cursor,
         sync::atomic::{AtomicBool, AtomicU64, Ordering},
         {thread, time},
     };
-    use tempfile::TempDir;
 
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
@@ -1470,61 +1448,6 @@ mod tests {
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new(Vec::new());
         accounts.bank_hash_at(1);
-    }
-
-    fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
-        for _ in 1..num {
-            let idx = thread_rng().gen_range(0, num - 1);
-            let ancestors = vec![(0, 0)].into_iter().collect();
-            let account = accounts.load_slow(&ancestors, &pubkeys[idx]);
-            let account1 = Some((
-                Account::new((idx + 1) as u64, 0, &Account::default().owner),
-                0,
-            ));
-            assert_eq!(account, account1);
-        }
-    }
-
-    #[test]
-    fn test_accounts_serialize() {
-        solana_logger::setup();
-        let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-        let accounts = Accounts::new(paths);
-
-        let mut pubkeys: Vec<Pubkey> = vec![];
-        create_test_accounts(&accounts, &mut pubkeys, 100, 0);
-        check_accounts(&accounts, &pubkeys, 100);
-        accounts.add_root(0);
-
-        let mut writer = Cursor::new(vec![]);
-        serialize_into(
-            &mut writer,
-            &AccountsDBSerialize::new(
-                &*accounts.accounts_db,
-                0,
-                &accounts.accounts_db.get_snapshot_storages(0),
-            ),
-        )
-        .unwrap();
-
-        let copied_accounts = TempDir::new().unwrap();
-
-        // Simulate obtaining a copy of the AppendVecs from a tarball
-        copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
-
-        let buf = writer.into_inner();
-        let mut reader = BufReader::new(&buf[..]);
-        let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = Accounts::from_stream(
-            &daccounts_paths,
-            &HashMap::default(),
-            &[],
-            &mut reader,
-            copied_accounts.path(),
-        )
-        .unwrap();
-        check_accounts(&daccounts, &pubkeys, 100);
-        assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
     }
 
     #[test]
