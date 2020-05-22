@@ -3,7 +3,10 @@ use solana_sdk::commitment_config::CommitmentConfig;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignatureStatusConfig {
-    pub search_transaction_history: bool,
+    pub search_transaction_history: Option<bool>,
+    // DEPRECATED
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
