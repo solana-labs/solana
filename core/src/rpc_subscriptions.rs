@@ -277,6 +277,7 @@ pub struct RpcSubscriptions {
     notifier_runtime: Option<Runtime>,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    last_checked_slots: Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
     exit: Arc<AtomicBool>,
 }
 
@@ -326,6 +327,9 @@ impl RpcSubscriptions {
         };
         let _subscriptions = subscriptions.clone();
 
+        let last_checked_slots = Arc::new(RwLock::new(HashMap::new()));
+        let _last_checked_slots = last_checked_slots.clone();
+
         let notifier_runtime = RuntimeBuilder::new()
             .core_threads(1)
             .name_prefix("solana-rpc-notifier-")
@@ -342,6 +346,7 @@ impl RpcSubscriptions {
                     notification_receiver,
                     _subscriptions,
                     _bank_forks,
+                    _last_checked_slots,
                 );
             })
             .unwrap();
@@ -353,6 +358,7 @@ impl RpcSubscriptions {
             t_cleanup: Some(t_cleanup),
             bank_forks,
             block_commitment_cache,
+            last_checked_slots,
             exit: exit.clone(),
         }
     }
@@ -449,15 +455,19 @@ impl RpcSubscriptions {
                 .read()
                 .unwrap()
                 .largest_confirmed_root(),
-            CommitmentLevel::Recent | CommitmentLevel::SingleGossip => {
-                self.block_commitment_cache.read().unwrap().slot()
-            }
+            CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
             CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
             CommitmentLevel::Single => self
                 .block_commitment_cache
                 .read()
                 .unwrap()
                 .highest_confirmed_slot(),
+            CommitmentLevel::SingleGossip => *self
+                .last_checked_slots
+                .read()
+                .unwrap()
+                .get(&CommitmentLevel::SingleGossip)
+                .unwrap_or(&0),
         };
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
@@ -670,6 +680,7 @@ impl RpcSubscriptions {
         notification_receiver: Receiver<NotificationEntry>,
         subscriptions: Subscriptions,
         bank_forks: Arc<RwLock<BankForks>>,
+        last_checked_slots: Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
     ) {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -713,6 +724,10 @@ impl RpcSubscriptions {
                         )
                     }
                     NotificationEntry::Gossip(slot) => {
+                        let _ = last_checked_slots
+                            .write()
+                            .unwrap()
+                            .insert(CommitmentLevel::SingleGossip, slot);
                         let cache_slot_info = CacheSlotInfo {
                             highest_confirmed_slot: slot,
                             ..CacheSlotInfo::default()
