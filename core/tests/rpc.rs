@@ -147,7 +147,7 @@ fn test_rpc_invalid_requests() {
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
     let the_error = json["error"]["message"].as_str().unwrap();
-    assert_eq!(the_error, "Invalid request");
+    assert_eq!(the_error, "Invalid");
 
     // test invalid get_account_info request
     let client = reqwest::blocking::Client::new();
@@ -167,7 +167,7 @@ fn test_rpc_invalid_requests() {
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
     let the_error = json["error"]["message"].as_str().unwrap();
-    assert_eq!(the_error, "Invalid request");
+    assert_eq!(the_error, "Invalid");
 
     // test invalid get_account_info request
     let client = reqwest::blocking::Client::new();
