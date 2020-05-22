@@ -3687,10 +3687,12 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.2.0"
 dependencies = [
+ "clap",
  "crossbeam-channel",
  "log 0.4.8",
  "rand 0.7.3",
  "rayon",
+ "solana-clap-utils",
  "solana-core",
  "solana-ledger",
  "solana-logger",
@@ -3699,6 +3701,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-version",
 ]
 
 [[package]]
