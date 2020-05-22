@@ -1043,7 +1043,7 @@ pub fn main() {
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
                             .unwrap_or_else(|err| {
                                 error!("Unable to bind to tcp/{} for {}: {}", port, purpose, err);
-                                std::process::exit(1);
+                                exit(1);
                             }),
                     ));
                 }
@@ -1055,11 +1055,13 @@ pub fn main() {
             tcp_listeners.push((node.info.gossip.port(), ip_echo));
         }
 
-        solana_net_utils::verify_reachable_ports(
+        if !solana_net_utils::verify_reachable_ports(
             &cluster_entrypoint.gossip,
             tcp_listeners,
             &udp_sockets,
-        );
+        ) {
+            exit(1);
+        }
         if !no_genesis_fetch {
             let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
                 &identity_keypair,
