@@ -186,6 +186,13 @@ declare module '@solana/web3.js' {
     absoluteSlot: number,
   };
 
+  declare export type Supply = {
+    total: number,
+    circulating: number,
+    nonCirculating: number,
+    nonCirculatingAccounts: Array<PublicKey>,
+  };
+
   declare export type VoteAccountStatus = {
     current: Array<VoteAccountInfo>,
     delinquent: Array<VoteAccountInfo>,
@@ -213,6 +220,7 @@ declare module '@solana/web3.js' {
     getBalance(publicKey: PublicKey, commitment: ?Commitment): Promise<number>;
     getBlockTime(slot: number): Promise<number | null>;
     getMinimumLedgerSlot(): Promise<number>;
+    getSupply(commitment: ?Commitment): Promise<RpcResponseAndContext<Supply>>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
     getConfirmedTransaction(

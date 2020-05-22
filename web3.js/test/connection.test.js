@@ -1109,6 +1109,38 @@ test('get minimum ledger slot', async () => {
   expect(minimumLedgerSlot).toBeGreaterThanOrEqual(0);
 });
 
+test('get supply', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSupply',
+      params: [],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 1,
+        },
+        value: {
+          total: 1000,
+          circulating: 100,
+          nonCirculating: 900,
+          nonCirculatingAccounts: [new Account().publicKey.toBase58()],
+        },
+      },
+    },
+  ]);
+
+  const supply = (await connection.getSupply()).value;
+  expect(supply.total).toBeGreaterThan(0);
+  expect(supply.circulating).toBeGreaterThan(0);
+  expect(supply.nonCirculating).toBeGreaterThan(0);
+  expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 

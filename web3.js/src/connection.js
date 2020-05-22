@@ -404,6 +404,34 @@ const MinimumLedgerSlotRpcResult = struct({
 });
 
 /**
+ * Supply
+ *
+ * @typedef {Object} Supply
+ * @property {number} total Total supply in lamports
+ * @property {number} circulating Circulating supply in lamports
+ * @property {number} nonCirculating Non-circulating supply in lamports
+ * @property {Array<PublicKey>} nonCirculatingAccounts List of non-circulating account addresses
+ */
+type Supply = {
+  total: number,
+  circulating: number,
+  nonCirculating: number,
+  nonCirculatingAccounts: Array<PublicKey>,
+};
+
+/**
+ * Expected JSON RPC response for the "getSupply" message
+ */
+const GetSupplyRpcResult = jsonRpcResultAndContext(
+  struct({
+    total: 'number',
+    circulating: 'number',
+    nonCirculating: 'number',
+    nonCirculatingAccounts: struct.array(['string']),
+  }),
+);
+
+/**
  * Expected JSON RPC response for the "getVersion" message
  */
 const GetVersionRpcResult = struct({
@@ -1013,6 +1041,25 @@ export class Connection {
       );
     }
     assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch information about the current supply
+   */
+  async getSupply(
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<Supply>> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getSupply', args);
+    const res = GetSupplyRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get supply: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    res.result.value.nonCirculatingAccounts = res.result.value.nonCirculatingAccounts.map(
+      account => new PublicKey(account),
+    );
     return res.result;
   }
 
