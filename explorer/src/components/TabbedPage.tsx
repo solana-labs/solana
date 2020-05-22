@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useClusterModal } from "providers/cluster";
 import ClusterStatusButton from "components/ClusterStatusButton";
 
-export type Tab = "Transactions" | "Accounts";
+export type Tab = "Transactions" | "Accounts" | "Supply";
 
 type Props = { children: React.ReactNode; tab: Tab };
 export default function TabbedPage({ children, tab }: Props) {
@@ -30,6 +30,9 @@ export default function TabbedPage({ children, tab }: Props) {
                 </li>
                 <li className="nav-item">
                   <NavLink href="/accounts" tab="Accounts" current={tab} />
+                </li>
+                <li className="nav-item">
+                  <NavLink href="/supply" tab="Supply" current={tab} />
                 </li>
               </ul>
             </div>
