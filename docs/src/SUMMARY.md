@@ -96,6 +96,7 @@
   * [Commitment](implemented-proposals/commitment.md)
   * [Snapshot Verification](implemented-proposals/snapshot-verification.md)
 * [Accepted Design Proposals](proposals/README.md)
+  * [Optimistic Confirmation and Slashing](proposals/optimistic-confirmation-and-slashing.md)
   * [Secure Vote Signing](proposals/vote-signing-to-implement.md)
   * [Cluster Test Framework](proposals/cluster-test-framework.md)
   * [Validator](proposals/validator-proposal.md)
