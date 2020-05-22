@@ -21,9 +21,10 @@ if (!mockRpcEnabled) {
   jest.setTimeout(30000);
 }
 
-const errorMessage = 'Invalid request';
+const errorMessage = 'Invalid';
 const errorResponse = {
   error: {
+    code: -32602,
     message: errorMessage,
   },
   result: undefined,
