@@ -292,7 +292,7 @@ impl BankingStage {
         enable_forwarding: bool,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) {
+    ) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
             (
@@ -349,6 +349,7 @@ impl BankingStage {
             }
             _ => (),
         }
+        decision
     }
 
     pub fn process_loop(
@@ -365,8 +366,8 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
         loop {
-            if !buffered_packets.is_empty() {
-                Self::process_buffered_packets(
+            while !buffered_packets.is_empty() {
+                let decision = Self::process_buffered_packets(
                     &my_pubkey,
                     &socket,
                     poh_recorder,
@@ -376,6 +377,11 @@ impl BankingStage {
                     batch_limit,
                     transaction_status_sender.clone(),
                 );
+                if decision == BufferedPacketsDecision::Hold {
+                    // If we are waiting on a new bank,
+                    // check the receiver for more transactions/for exiting
+                    break;
+                }
             }
 
             let recv_timeout = if !buffered_packets.is_empty() {
