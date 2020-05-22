@@ -22,6 +22,7 @@ use solana_runtime::{bank::Bank, epoch_stakes::EpochAuthorizedVoters, stakes::St
 use solana_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
+    hash::Hash,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     transaction::Transaction,
@@ -46,7 +47,7 @@ pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 #[derive(Default)]
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
-    voted_no_switching: VoteStakeTracker,
+    optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
     updates: Option<Vec<Arc<Pubkey>>>,
 }
 
@@ -56,8 +57,11 @@ impl SlotVoteTracker {
         self.updates.take()
     }
 
-    pub fn voted_no_switching(&self) -> &VoteStakeTracker {
-        &self.voted_no_switching
+    pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
+        self.optimistic_votes_tracker.entry(hash).or_default()
+    }
+    pub fn optimistic_votes_tracker(&self, hash: &Hash) -> Option<&VoteStakeTracker> {
+        self.optimistic_votes_tracker.get(hash)
     }
 }
 
@@ -419,8 +423,11 @@ impl ClusterInfoVoteListener {
                 }
             } else {
                 let optimistic_confirmed_slots = optimistic_confirmed_slots.unwrap();
+                for (slot, _) in optimistic_confirmed_slots.iter() {
+                    subscriptions.notify_gossip_subscribers(*slot);
+                }
                 optimistic_confirmation_verifier
-                    .add_new_optimistic_confirmed_slots(&optimistic_confirmed_slots);
+                    .add_new_optimistic_confirmed_slots(optimistic_confirmed_slots);
             }
         }
     }
@@ -431,7 +438,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) -> Result<Vec<Slot>> {
+    ) -> Result<Vec<(Slot, Hash)>> {
         Self::get_and_process_votes(vote_txs_receiver, vote_tracker, last_root, subscriptions)
     }
 
@@ -440,7 +447,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) -> Result<Vec<Slot>> {
+    ) -> Result<Vec<(Slot, Hash)>> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
 
@@ -459,7 +466,7 @@ impl ClusterInfoVoteListener {
         vote_txs: Vec<Transaction>,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
-    ) -> Vec<Slot> {
+    ) -> Vec<(Slot, Hash)> {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
         {
@@ -514,6 +521,7 @@ impl ClusterInfoVoteListener {
                     }
 
                     let root = root_bank.slot();
+                    let last_vote_hash = vote.hash;
                     for slot in &vote.slots {
                         // If slot is before the root, or so far ahead we don't have
                         // stake information, then ignore it
@@ -526,8 +534,6 @@ impl ClusterInfoVoteListener {
                         let epoch_vote_accounts = Stakes::vote_accounts(epoch_stakes.stakes());
                         let total_epoch_stake = epoch_stakes.total_stake();
 
-                        // Don't insert if we already have marked down this pubkey
-                        // voting for this slot
                         let maybe_slot_tracker =
                             all_slot_trackers.read().unwrap().get(slot).cloned();
                         if let Some(slot_tracker) = maybe_slot_tracker {
@@ -544,7 +550,7 @@ impl ClusterInfoVoteListener {
                                 .get(vote_pubkey)
                                 .map(|(stake, _)| *stake)
                                 .unwrap_or(0);
-                            Some(stake)
+                            Some((stake, last_vote_hash))
                         } else {
                             None
                         };
@@ -565,7 +571,7 @@ impl ClusterInfoVoteListener {
                                 total_epoch_stake,
                             )
                         {
-                            new_optimistic_confirmed_slots.push(*slot);
+                            new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
                         }
                     }
 
@@ -581,7 +587,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         slot: Slot,
         pubkey: Arc<Pubkey>,
-        should_update_switch: Option<u64>,
+        should_update_switch: Option<(u64, Hash)>,
         total_epoch_stake: u64,
     ) -> bool {
         let mut slot_tracker = vote_tracker
@@ -593,7 +599,7 @@ impl ClusterInfoVoteListener {
         if slot_tracker.is_none() {
             let new_slot_tracker = Arc::new(RwLock::new(SlotVoteTracker {
                 voted: HashSet::new(),
-                voted_no_switching: VoteStakeTracker::default(),
+                optimistic_votes_tracker: HashMap::default(),
                 updates: None,
             }));
             vote_tracker
@@ -621,12 +627,10 @@ impl ClusterInfoVoteListener {
         // If this was a no-switching vote, check for optimistic
         // confirmation
         should_update_switch
-            .map(|stake| {
-                w_slot_tracker.voted_no_switching.add_vote_pubkey(
-                    pubkey.clone(),
-                    stake,
-                    total_epoch_stake,
-                )
+            .map(|(stake, hash)| {
+                w_slot_tracker
+                    .get_or_insert_optimistic_votes_tracker(hash)
+                    .add_vote_pubkey(pubkey.clone(), stake, total_epoch_stake)
             })
             .unwrap_or(false)
     }
@@ -843,11 +847,13 @@ mod tests {
             3,
         ));
         let vote_slots = vec![1, 2];
+        let bank_hash = Hash::default();
         send_vote_txs(
             vote_slots.clone(),
             &validator_voting_keypairs,
             None,
             &votes_sender,
+            bank_hash,
         );
         ClusterInfoVoteListener::get_and_process_votes(
             &votes_receiver,
@@ -872,6 +878,7 @@ mod tests {
             &validator_voting_keypairs,
             None,
             &votes_sender,
+            bank_hash,
         );
         ClusterInfoVoteListener::get_and_process_votes(
             &votes_receiver,
@@ -890,13 +897,14 @@ mod tests {
         validator_voting_keypairs: &[ValidatorVoteKeypairs],
         hash: Option<Hash>,
         votes_sender: &VerifiedVoteTransactionsSender,
+        bank_hash: Hash,
     ) {
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
             let vote_tx = vote_transaction::new_vote_transaction(
                 vote_slots.clone(),
-                Hash::default(),
+                bank_hash,
                 Hash::default(),
                 node_keypair,
                 vote_keypair,
@@ -921,12 +929,14 @@ mod tests {
             );
         let bank0 = Bank::new(&genesis_config);
 
+        let bank_hash = Hash::default();
         let vote_slots = vec![1, 2];
         send_vote_txs(
             vote_slots.clone(),
             &validator_voting_keypairs,
             hash,
             &votes_sender,
+            bank_hash,
         );
 
         // Check that all the votes were registered for each validator correctly
@@ -952,21 +962,17 @@ mod tests {
                 // the `no_switching` vote set
                 // 2) Should only count toward the `no_switching` vote set if the
                 // vote was a `no-switching` vote
+                let optimistic_votes_tracker =
+                    r_slot_vote_tracker.optimistic_votes_tracker(&bank_hash);
                 if vote_slot == 2 && hash.is_none() {
-                    assert!(r_slot_vote_tracker
-                        .voted_no_switching
-                        .voted()
-                        .contains(&pubkey));
+                    let optimistic_votes_tracker = optimistic_votes_tracker.unwrap();
+                    assert!(optimistic_votes_tracker.voted().contains(&pubkey));
                     assert_eq!(
-                        r_slot_vote_tracker.voted_no_switching.stake(),
+                        optimistic_votes_tracker.stake(),
                         stake_per_validator * validator_voting_keypairs.len() as u64
                     );
                 } else {
-                    assert!(!r_slot_vote_tracker
-                        .voted_no_switching
-                        .voted()
-                        .contains(&pubkey));
-                    assert_eq!(r_slot_vote_tracker.voted_no_switching.stake(), 0);
+                    assert!(optimistic_votes_tracker.is_none())
                 }
             }
         }
@@ -996,6 +1002,7 @@ mod tests {
         // Send some votes to process
         let (votes_sender, votes_receiver) = unbounded();
         let num_voters_per_slot = 2;
+        let bank_hash = Hash::default();
         for (i, keyset) in validator_voting_keypairs
             .chunks(num_voters_per_slot)
             .enumerate()
@@ -1007,7 +1014,7 @@ mod tests {
                     let vote_keypair = &keypairs.vote_keypair;
                     vote_transaction::new_vote_transaction(
                         vec![i as u64 + 1],
-                        Hash::default(),
+                        bank_hash,
                         Hash::default(),
                         node_keypair,
                         vote_keypair,
@@ -1040,12 +1047,12 @@ mod tests {
                     .contains(&Arc::new(pubkey)));
                 // All the votes were single votes, so they should all count towards
                 // the non-switching vote set
-                assert!(r_slot_vote_tracker
-                    .voted_no_switching
-                    .voted()
-                    .contains(&pubkey));
+                let optimistic_votes_tracker = r_slot_vote_tracker
+                    .optimistic_votes_tracker(&bank_hash)
+                    .unwrap();
+                assert!(optimistic_votes_tracker.voted().contains(&pubkey));
                 assert_eq!(
-                    r_slot_vote_tracker.voted_no_switching.stake(),
+                    optimistic_votes_tracker.stake(),
                     num_voters_per_slot as u64 * stake_per_validator
                 );
             }
@@ -1111,7 +1118,7 @@ mod tests {
     fn test_vote_tracker_references() {
         // The number of references that get stored for a pubkey every time
         // a vote is made. One stored in the SlotVoteTracker.voted, one in
-        // SlotVoteTracker.updates, one in SlotVoteTracker.voted_no_switching
+        // SlotVoteTracker.updates, one in SlotVoteTracker.optimistic_votes_tracker
         let ref_count_per_vote = 3;
 
         // Create some voters at genesis
