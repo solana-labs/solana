@@ -37,6 +37,12 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn single_gossip() -> Self {
+        Self {
+            commitment: CommitmentLevel::SingleGossip,
+        }
+    }
+
     pub fn ok(self) -> Option<Self> {
         if self == Self::default() {
             None
@@ -46,11 +52,12 @@ impl CommitmentConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum CommitmentLevel {
     Max,
     Recent,
     Root,
     Single,
+    SingleGossip,
 }
