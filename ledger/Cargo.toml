@@ -44,7 +44,7 @@ solana-sdk = { path = "../sdk", version = "1.2.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 symlink = "0.1.0"
-tar = "0.4.27"
+tar = "0.4.28"
 thiserror = "1.0"
 tempfile = "3.1.0"
 lazy_static = "1.4.0"
