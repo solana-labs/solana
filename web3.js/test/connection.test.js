@@ -1109,6 +1109,25 @@ test('get minimum ledger slot', async () => {
   expect(minimumLedgerSlot).toBeGreaterThanOrEqual(0);
 });
 
+test('get first available block', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getFirstAvailableBlock',
+      params: [],
+    },
+    {
+      error: null,
+      result: 0,
+    },
+  ]);
+
+  const firstAvailableBlock = await connection.getFirstAvailableBlock();
+  expect(firstAvailableBlock).toBeGreaterThanOrEqual(0);
+});
+
 test('get supply', async () => {
   const connection = new Connection(url);
 
