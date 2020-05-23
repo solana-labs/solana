@@ -101,12 +101,22 @@ function StatusCard({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const refresh = useFetchTransactionStatus();
   const details = useTransactionDetails(signature);
+  const { firstAvailableBlock } = useCluster();
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (status?.fetchStatus === FetchStatus.FetchFailed) {
     return <ErrorCard retry={() => refresh(signature)} text="Fetch Failed" />;
   } else if (!status.info) {
+    if (firstAvailableBlock !== undefined) {
+      return (
+        <ErrorCard
+          retry={() => refresh(signature)}
+          text="Not Found"
+          subtext={`Note: Transactions processed before block ${firstAvailableBlock} are not available at this time`}
+        />
+      );
+    }
     return <ErrorCard retry={() => refresh(signature)} text="Not Found" />;
   }
 
