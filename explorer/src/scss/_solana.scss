@@ -10,15 +10,19 @@ code {
   color: $black;
 }
 
-.copyable {
+.popover-container {
   position: relative;
-  display: inline;
-  cursor: pointer;
 
   .popover {
     &.bs-popover-top {
       background-color: $dark;
-      top: -4rem;
+      top: auto;
+      bottom: 1.5rem;
+    }
+
+    &.right {
+      left: auto;
+      right: 0;
     }
 
     &.bs-popover-bottom {
@@ -28,6 +32,10 @@ code {
 
     .popover-body {
       color: white;
+    }
+
+    .arrow.right {
+      right: 1rem;
     }
 
     .arrow::after {
@@ -45,7 +53,7 @@ code {
   display: block;
 }
 
-.modal .close {
+.c-pointer {
   cursor: pointer;
 }
 

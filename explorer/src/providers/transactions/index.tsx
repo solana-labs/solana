@@ -26,10 +26,12 @@ export enum FetchStatus {
 
 export type Confirmations = number | "max";
 
+export type Timestamp = number | "unavailable";
+
 export interface TransactionStatusInfo {
   slot: number;
   result: SignatureResult;
-  timestamp: number | null;
+  timestamp: Timestamp;
   confirmations: Confirmations;
 }
 
@@ -236,7 +238,20 @@ export async function fetchTransactionStatus(
     });
 
     if (value !== null) {
-      let timestamp = await connection.getBlockTime(value.slot);
+      let blockTime = await connection.getBlockTime(value.slot);
+
+      let timestamp: Timestamp;
+      if (blockTime !== null) {
+        timestamp = blockTime;
+      } else {
+        const epochInfo = await connection.getEpochInfo();
+        if (value.slot < epochInfo.absoluteSlot - epochInfo.slotsInEpoch) {
+          timestamp = "unavailable";
+        } else {
+          throw new Error("Unable to fetch timestamp");
+        }
+      }
+
       let confirmations: Confirmations;
       if (typeof value.confirmations === "number") {
         confirmations = value.confirmations;

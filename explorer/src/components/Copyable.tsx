@@ -31,7 +31,7 @@ function Copyable({ bottom, text, children }: CopyableProps) {
 
   return (
     <div
-      className="copyable"
+      className="popoover-container"
       onClick={handleClick}
       onMouseOver={() => setState("copy")}
       onMouseOut={() => state === "copy" && setState("hide")}
