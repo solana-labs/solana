@@ -29,6 +29,7 @@ pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 // and starve other blockstore users.
 pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
 
+// Delay between purges to cooperate with other blockstore users
 pub const DEFAULT_DELAY_BETWEEN_PURGES: Duration = Duration::from_millis(500);
 
 pub struct LedgerCleanupService {
@@ -76,7 +77,7 @@ impl LedgerCleanupService {
         blockstore: &Arc<Blockstore>,
         root: Slot,
         max_ledger_shreds: u64,
-    ) -> (u64, Slot, Slot, u64) {
+    ) -> (bool, Slot, Slot, u64) {
         let mut total_slots = Vec::new();
         let mut iterate_time = Measure::start("iterate_time");
         let mut total_shreds = 0;
@@ -103,7 +104,7 @@ impl LedgerCleanupService {
             iterate_time
         );
         if (total_shreds as u64) < max_ledger_shreds {
-            return (0, 0, 0, total_shreds);
+            return (false, 0, 0, total_shreds);
         }
         let mut num_shreds_to_clean = 0;
         let mut lowest_cleanup_slot = total_slots[0].0;
@@ -115,12 +116,7 @@ impl LedgerCleanupService {
             }
         }
 
-        (
-            num_shreds_to_clean,
-            lowest_cleanup_slot,
-            first_slot,
-            total_shreds,
-        )
+        (true, lowest_cleanup_slot, first_slot, total_shreds)
     }
 
     fn receive_new_roots(new_root_receiver: &Receiver<Slot>) -> Result<Slot, RecvTimeoutError> {
@@ -152,13 +148,13 @@ impl LedgerCleanupService {
         );
         *last_purge_slot = root;
 
-        let (num_shreds_to_clean, lowest_cleanup_slot, first_slot, total_shreds) =
+        let (slots_to_clean, lowest_cleanup_slot, first_slot, total_shreds) =
             Self::find_slots_to_clean(&blockstore, root, max_ledger_shreds);
 
-        if num_shreds_to_clean > 0 {
+        if slots_to_clean {
             info!(
-                "purging data for {} shreds from slots {} to {}",
-                num_shreds_to_clean, first_slot, lowest_cleanup_slot
+                "purging data from slots {} to {}",
+                first_slot, lowest_cleanup_slot
             );
 
             let purge_complete = Arc::new(AtomicBool::new(false));
@@ -174,7 +170,7 @@ impl LedgerCleanupService {
                     let mut purge_time = Measure::start("purge_slots_with_delay");
                     blockstore.purge_slots_with_delay(
                         first_slot,
-                        Some(lowest_cleanup_slot),
+                        lowest_cleanup_slot,
                         delay_between_purges,
                     );
                     purge_time.stop();

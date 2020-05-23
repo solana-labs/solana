@@ -381,6 +381,7 @@ mod tests {
             max_ledger_shreds,
             &mut next_purge_batch,
             10,
+            None,
         )
         .unwrap();
 
