@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { AccountBalancePair } from "@solana/web3.js";
 import Copyable from "./Copyable";
-import { useRichList, useFetchRichList } from "providers/richList";
+import { useRichList, useFetchRichList, Status } from "providers/richList";
 import LoadingCard from "./common/LoadingCard";
 import ErrorCard from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
@@ -11,10 +11,17 @@ export default function TopAccountsCard() {
   const richList = useRichList();
   const fetchRichList = useFetchRichList();
 
-  if (typeof richList === "boolean") {
-    if (richList) return <LoadingCard />;
+  // Fetch on load
+  React.useEffect(() => {
+    fetchRichList();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (richList === Status.Disconnected) {
     return <ErrorCard text="Not connected to the cluster" />;
   }
+
+  if (richList === Status.Idle || richList === Status.Connecting)
+    return <LoadingCard />;
 
   if (typeof richList === "string") {
     return <ErrorCard text={richList} retry={fetchRichList} />;

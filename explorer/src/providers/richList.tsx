@@ -3,13 +3,19 @@ import React from "react";
 import { AccountBalancePair, Connection } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "./cluster";
 
+export enum Status {
+  Idle,
+  Disconnected,
+  Connecting
+}
+
 type RichList = {
   accounts: AccountBalancePair[];
   totalSupply: number;
   circulatingSupply: number;
 };
 
-type State = RichList | boolean | string;
+type State = RichList | Status | string;
 
 type Dispatch = React.Dispatch<React.SetStateAction<State>>;
 const StateContext = React.createContext<State | undefined>(undefined);
@@ -17,13 +23,16 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type Props = { children: React.ReactNode };
 export function RichListProvider({ children }: Props) {
-  const [state, setState] = React.useState<State>(false);
-  const { status, url } = useCluster();
+  const [state, setState] = React.useState<State>(Status.Idle);
+  const { status: clusterStatus, url } = useCluster();
 
   React.useEffect(() => {
-    if (status === ClusterStatus.Connecting) setState(false);
-    if (status === ClusterStatus.Connected) fetch(setState, url);
-  }, [status, url]);
+    if (state !== Status.Idle) {
+      if (clusterStatus === ClusterStatus.Connecting)
+        setState(Status.Disconnected);
+      if (clusterStatus === ClusterStatus.Connected) fetch(setState, url);
+    }
+  }, [clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -35,7 +44,8 @@ export function RichListProvider({ children }: Props) {
 }
 
 async function fetch(dispatch: Dispatch, url: string) {
-  dispatch(true);
+  dispatch(Status.Connecting);
+
   try {
     const connection = new Connection(url, "max");
     const supply = (await connection.getSupply()).value;
@@ -43,9 +53,9 @@ async function fetch(dispatch: Dispatch, url: string) {
       await connection.getLargestAccounts({ filter: "circulating" })
     ).value;
 
-    // Update state if selected cluster hasn't changed
+    // Update state if still connecting
     dispatch(state => {
-      if (!state) return state;
+      if (state !== Status.Connecting) return state;
       return {
         accounts,
         totalSupply: supply.total,
