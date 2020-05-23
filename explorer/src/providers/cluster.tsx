@@ -58,6 +58,7 @@ export const DEFAULT_CUSTOM_URL = "http://localhost:8899";
 interface State {
   cluster: Cluster;
   customUrl: string;
+  firstAvailableBlock?: number;
   status: ClusterStatus;
 }
 
@@ -65,6 +66,7 @@ interface Action {
   status: ClusterStatus;
   cluster: Cluster;
   customUrl: string;
+  firstAvailableBlock?: number;
 }
 
 type Dispatch = (action: Action) => void;
@@ -192,8 +194,13 @@ async function updateCluster(
 
   try {
     const connection = new Connection(clusterUrl(cluster, customUrl));
-    await connection.getRecentBlockhash();
-    dispatch({ status: ClusterStatus.Connected, cluster, customUrl });
+    const firstAvailableBlock = await connection.getFirstAvailableBlock();
+    dispatch({
+      status: ClusterStatus.Connected,
+      cluster,
+      customUrl,
+      firstAvailableBlock
+    });
   } catch (error) {
     console.error("Failed to update cluster", error);
     dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
