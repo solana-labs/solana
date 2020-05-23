@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { useClusterModal } from "providers/cluster";
 import { PublicKey, StakeProgram } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
@@ -190,6 +191,9 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   }
 
   if (history.fetched.length === 0) {
+    if (history.status === FetchStatus.Fetching) {
+      return <LoadingCard />;
+    }
     return (
       <ErrorCard
         retry={loadMore}
@@ -212,24 +216,54 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
       if (nextSlot !== slot) break;
       slotTransactions.push(transactions[++i]);
     }
-    const signatures = slotTransactions.map(({ signature, status }) => {
-      return (
-        <code key={signature} className="mb-2 mb-last-0">
-          {signature}
-        </code>
+
+    slotTransactions.forEach(({ signature, status }, index) => {
+      let statusText;
+      let statusClass;
+      if (status.err) {
+        statusClass = "warning";
+        statusText = "Failed";
+      } else {
+        statusClass = "success";
+        statusText = "Success";
+      }
+
+      detailsList.push(
+        <tr key={signature}>
+          {index === 0 ? (
+            <td className="w-1">{slot}</td>
+          ) : (
+            <td className="text-muted text-center w-1">
+              <span className="fe fe-more-horizontal" />
+            </td>
+          )}
+
+          <td>
+            <span className={`badge badge-soft-${statusClass}`}>
+              {statusText}
+            </span>
+          </td>
+
+          <td>
+            <Copyable text={signature}>
+              <code>{signature}</code>
+            </Copyable>
+          </td>
+
+          <td>
+            <Link
+              to={location => ({
+                ...location,
+                pathname: "/tx/" + signature
+              })}
+              className="btn btn-rounded-circle btn-white btn-sm"
+            >
+              <span className="fe fe-arrow-right"></span>
+            </Link>
+          </td>
+        </tr>
       );
     });
-
-    detailsList.push(
-      <tr key={slot}>
-        <td className="vertical-top">Slot {slot}</td>
-        <td className="text-right">
-          <div className="d-inline-flex flex-column align-items-end">
-            {signatures}
-          </div>
-        </td>
-      </tr>
-    );
   }
 
   const fetching = history.status === FetchStatus.Fetching;
@@ -256,7 +290,20 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
         </button>
       </div>
 
-      <TableCardBody>{detailsList}</TableCardBody>
+      <div className="table-responsive mb-0">
+        <table className="table table-sm table-nowrap card-table">
+          <thead>
+            <tr>
+              <th className="text-muted w-1">Slot</th>
+              <th className="text-muted">Result</th>
+              <th className="text-muted">Transaction Signature</th>
+              <th className="text-muted">Details</th>
+            </tr>
+          </thead>
+          <tbody className="list">{detailsList}</tbody>
+        </table>
+      </div>
+
       <div className="card-footer">
         <button
           className="btn btn-primary w-100"
