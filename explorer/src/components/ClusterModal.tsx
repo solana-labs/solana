@@ -26,7 +26,7 @@ function ClusterModal() {
         <div className="modal-dialog modal-dialog-vertical">
           <div className="modal-content">
             <div className="modal-body" onClick={e => e.stopPropagation()}>
-              <span className="close" onClick={onClose}>
+              <span className="c-pointer" onClick={onClose}>
                 &times;
               </span>
 

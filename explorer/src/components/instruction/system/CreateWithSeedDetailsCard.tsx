@@ -40,7 +40,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -49,7 +49,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>From Address</td>
         <td className="text-right">
-          <Copyable text={from}>
+          <Copyable right text={from}>
             <code>{from}</code>
           </Copyable>
         </td>
@@ -58,7 +58,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>New Address</td>
         <td className="text-right">
-          <Copyable text={newKey}>
+          <Copyable right text={newKey}>
             <code>{newKey}</code>
           </Copyable>
         </td>
@@ -67,7 +67,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>New Address</td>
         <td className="text-right">
-          <Copyable text={newKey}>
+          <Copyable right text={newKey}>
             <code>{newKey}</code>
           </Copyable>
         </td>
@@ -76,7 +76,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>Base Address</td>
         <td className="text-right">
-          <Copyable text={baseKey}>
+          <Copyable right text={baseKey}>
             <code>{baseKey}</code>
           </Copyable>
         </td>
@@ -85,7 +85,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>Seed</td>
         <td className="text-right">
-          <Copyable text={params.seed}>
+          <Copyable right text={params.seed}>
             <code>{params.seed}</code>
           </Copyable>
         </td>
@@ -104,7 +104,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
+          <Copyable right text={params.programId.toBase58()}>
             <code>{displayAddress(params.programId.toBase58())}</code>
           </Copyable>
         </td>

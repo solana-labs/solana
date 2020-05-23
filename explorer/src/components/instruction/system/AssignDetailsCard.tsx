@@ -37,7 +37,7 @@ export function AssignDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -46,7 +46,7 @@ export function AssignDetailsCard(props: {
       <tr>
         <td>Account Address</td>
         <td className="text-right">
-          <Copyable text={accountKey}>
+          <Copyable right text={accountKey}>
             <code>{accountKey}</code>
           </Copyable>
         </td>
@@ -55,7 +55,7 @@ export function AssignDetailsCard(props: {
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
+          <Copyable right text={params.programId.toBase58()}>
             <code>{displayAddress(params.programId.toBase58())}</code>
           </Copyable>
         </td>

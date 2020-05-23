@@ -52,7 +52,7 @@ export function AuthorizeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={StakeProgram.programId.toBase58()}>
+          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
             <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -61,7 +61,7 @@ export function AuthorizeDetailsCard(props: {
       <tr>
         <td>Stake Address</td>
         <td className="text-right">
-          <Copyable text={stakePubkey}>
+          <Copyable right text={stakePubkey}>
             <code>{stakePubkey}</code>
           </Copyable>
         </td>
@@ -70,7 +70,7 @@ export function AuthorizeDetailsCard(props: {
       <tr>
         <td>Old Authority Address</td>
         <td className="text-right">
-          <Copyable text={authorizedPubkey}>
+          <Copyable right text={authorizedPubkey}>
             <code>{authorizedPubkey}</code>
           </Copyable>
         </td>
@@ -79,7 +79,7 @@ export function AuthorizeDetailsCard(props: {
       <tr>
         <td>New Authority Address</td>
         <td className="text-right">
-          <Copyable text={newAuthorizedPubkey}>
+          <Copyable right text={newAuthorizedPubkey}>
             <code>{newAuthorizedPubkey}</code>
           </Copyable>
         </td>

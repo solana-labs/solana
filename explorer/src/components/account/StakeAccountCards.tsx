@@ -65,7 +65,7 @@ function OverviewCard({
         <tr>
           <td>Address</td>
           <td className="text-right">
-            <Copyable text={account.pubkey.toBase58()}>
+            <Copyable text={account.pubkey.toBase58()} bottom right>
               <code>{account.pubkey.toBase58()}</code>
             </Copyable>
           </td>
@@ -130,7 +130,7 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
             <tr>
               <td>Delegated Vote Address</td>
               <td className="text-right">
-                <Copyable text={stake.delegation.voterPubkey.toBase58()}>
+                <Copyable text={stake.delegation.voterPubkey.toBase58()} right>
                   <code>
                     {displayAddress(stake.delegation.voterPubkey.toBase58())}
                   </code>
@@ -175,7 +175,7 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
         <tr>
           <td>Stake Authority Address</td>
           <td className="text-right">
-            <Copyable text={meta.authorized.staker.toBase58()}>
+            <Copyable text={meta.authorized.staker.toBase58()} bottom right>
               <code>{meta.authorized.staker.toBase58()}</code>
             </Copyable>
           </td>
@@ -184,7 +184,7 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
         <tr>
           <td>Withdraw Authority Address</td>
           <td className="text-right">
-            <Copyable text={meta.authorized.withdrawer.toBase58()}>
+            <Copyable text={meta.authorized.withdrawer.toBase58()} right>
               <code>{meta.authorized.withdrawer.toBase58()}</code>
             </Copyable>
           </td>
@@ -194,7 +194,7 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
           <tr>
             <td>Lockup Authority Address</td>
             <td className="text-right">
-              <Copyable text={meta.lockup.custodian.toBase58()}>
+              <Copyable text={meta.lockup.custodian.toBase58()} right>
                 <code>{displayAddress(meta.lockup.custodian.toBase58())}</code>
               </Copyable>
             </td>

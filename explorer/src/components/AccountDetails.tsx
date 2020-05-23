@@ -148,7 +148,7 @@ function UnknownAccountCard({ account }: { account: Account }) {
           <tr>
             <td>Owner</td>
             <td className="text-right">
-              <Copyable text={details.owner.toBase58()}>
+              <Copyable text={details.owner.toBase58()} right>
                 <code>{displayAddress(details.owner.toBase58())}</code>
               </Copyable>
             </td>
