@@ -305,43 +305,54 @@ impl Blockstore {
     /// Dangerous; Use with care:
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
-    pub fn purge_slots(&self, mut from_slot: Slot, to_slot: Option<Slot>) {
+    pub fn purge_slots_with_delay(
+        &self,
+        from_slot: Slot,
+        to_slot: Option<Slot>,
+        delay_between_purges: Option<Duration>,
+    ) {
         // if there's no upper bound, split the purge request into batches of 1000 slots
         const PURGE_BATCH_SIZE: u64 = 1000;
+        let mut batch_start = from_slot;
         let mut batch_end = to_slot.unwrap_or(from_slot + PURGE_BATCH_SIZE);
-        while from_slot < batch_end {
-            match self.run_purge(from_slot, batch_end) {
-                Ok(end) => {
-                    if !self.no_compaction {
-                        if let Err(e) = self.compact_storage(from_slot, batch_end) {
-                            // This error is not fatal and indicates an internal error
-                            error!(
-                                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                                e, from_slot, batch_end
-                            );
-                        }
-                    }
+        while batch_start < batch_end {
+            match self.run_purge(batch_start, batch_end) {
+                Ok(_all_columns_purged) => {
+                    // update the next batch bounds
+                    batch_start = batch_end;
+                    batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
 
-                    if end {
-                        break;
-                    } else {
-                        // update the next batch bounds
-                        from_slot = batch_end;
-                        batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
+                    if let Some(ref duration) = delay_between_purges {
+                        // Cooperate with other blockstore users
+                        std::thread::sleep(*duration);
                     }
                 }
                 Err(e) => {
                     error!(
                         "Error: {:?}; Purge failed in range {:?} to {:?}",
-                        e, from_slot, batch_end
+                        e, batch_start, batch_end
                     );
                     break;
                 }
             }
         }
+
+        if !self.no_compaction {
+            if let Err(e) = self.compact_storage(from_slot, batch_end) {
+                // This error is not fatal and indicates an internal error
+                error!(
+                    "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                    e, from_slot, batch_end
+                );
+            }
+        }
     }
 
-    // Returns whether or not all columns have been purged until their end
+    pub fn purge_slots(&self, from_slot: Slot, to_slot: Option<Slot>) {
+        self.purge_slots_with_delay(from_slot, to_slot, None)
+    }
+
+    // Returns whether or not all columns successfully purged the slot range
     fn run_purge(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
         let mut write_batch = self
             .db
@@ -349,6 +360,8 @@ impl Blockstore {
             .expect("Database Error: Failed to get write batch");
         // delete range cf is not inclusive
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
+
+        let mut delete_range_timer = Measure::start("delete_range");
         let mut columns_empty = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
@@ -405,6 +418,7 @@ impl Blockstore {
                     .delete_range_cf::<cf::AddressSignatures>(&mut write_batch, index, index + 1)
                     .unwrap_or(false);
         }
+        delete_range_timer.stop();
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
             error!(
@@ -416,12 +430,16 @@ impl Blockstore {
         write_timer.stop();
         datapoint_info!(
             "blockstore-purge",
+            ("from_slot", from_slot as i64, i64),
+            ("to_slot", to_slot as i64, i64),
+            ("delete_range_us", delete_range_timer.as_us() as i64, i64),
             ("write_batch_us", write_timer.as_us() as i64, i64)
         );
         Ok(columns_empty)
     }
 
     pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
+        let mut compact_timer = Measure::start("compact_range");
         let result = self
             .meta_cf
             .compact_range(from_slot, to_slot)
@@ -475,6 +493,11 @@ impl Blockstore {
                 .rewards_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
+        compact_timer.stop();
+        datapoint_info!(
+            "blockstore-compact",
+            ("compact_range_us", compact_timer.as_us() as i64, i64),
+        );
         Ok(result)
     }
 
