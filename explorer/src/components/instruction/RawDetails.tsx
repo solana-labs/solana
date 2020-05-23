@@ -44,7 +44,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       ))}
 
       <tr>
-        <td>Raw Data (Base58)</td>
+        <td>Instruction Data (Base58)</td>
         <td className="text-right">
           <Copyable text={data}>
             <code>{displayData(data)}</code>
