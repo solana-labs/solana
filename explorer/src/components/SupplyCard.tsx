@@ -1,5 +1,5 @@
 import React from "react";
-import { useSupply, useFetchSupply } from "providers/supply";
+import { useSupply, useFetchSupply, Status } from "providers/supply";
 import LoadingCard from "./common/LoadingCard";
 import ErrorCard from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
@@ -9,10 +9,17 @@ export default function SupplyCard() {
   const supply = useSupply();
   const fetchSupply = useFetchSupply();
 
-  if (typeof supply === "boolean") {
-    if (supply) return <LoadingCard />;
+  // Fetch supply on load
+  React.useEffect(() => {
+    fetchSupply();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (supply === Status.Disconnected) {
     return <ErrorCard text="Not connected to the cluster" />;
   }
+
+  if (supply === Status.Idle || supply === Status.Connecting)
+    return <LoadingCard />;
 
   if (typeof supply === "string") {
     return <ErrorCard text={supply} retry={fetchSupply} />;
