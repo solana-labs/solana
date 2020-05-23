@@ -5,6 +5,7 @@ import "./scss/theme.scss";
 import App from "./App";
 import * as serviceWorker from "./serviceWorker";
 import { ClusterProvider } from "./providers/cluster";
+import { RichListProvider } from "./providers/richList";
 import { SupplyProvider } from "./providers/supply";
 import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
@@ -13,11 +14,13 @@ ReactDOM.render(
   <Router>
     <ClusterProvider>
       <SupplyProvider>
-        <AccountsProvider>
-          <TransactionsProvider>
-            <App />
-          </TransactionsProvider>
-        </AccountsProvider>
+        <RichListProvider>
+          <AccountsProvider>
+            <TransactionsProvider>
+              <App />
+            </TransactionsProvider>
+          </AccountsProvider>
+        </RichListProvider>
       </SupplyProvider>
     </ClusterProvider>
   </Router>,
