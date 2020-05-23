@@ -265,7 +265,7 @@ function AccountsCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Accounts</h3>
+        <h3 className="card-header-title">Account Inputs</h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
