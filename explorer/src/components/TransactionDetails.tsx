@@ -151,7 +151,7 @@ function StatusCard({ signature }: Props) {
           <td>Timestamp</td>
           <td className="text-right">
             {info.timestamp !== "unavailable" ? displayTimestamp(info.timestamp) : (
-              <InfoTooltip text="Timestamps older than 5 epochs are not available at this time">
+              <InfoTooltip bottom right text="Timestamps older than 5 epochs are not available at this time">
                 Unavailable
               </InfoTooltip>
             )}

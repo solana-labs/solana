@@ -33,7 +33,7 @@ export function TransferDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -42,7 +42,7 @@ export function TransferDetailsCard(props: {
       <tr>
         <td>From Address</td>
         <td className="text-right">
-          <Copyable text={from}>
+          <Copyable right text={from}>
             <code>{from}</code>
           </Copyable>
         </td>
@@ -51,7 +51,7 @@ export function TransferDetailsCard(props: {
       <tr>
         <td>To Address</td>
         <td className="text-right">
-          <Copyable text={to}>
+          <Copyable right text={to}>
             <code>{to}</code>
           </Copyable>
         </td>

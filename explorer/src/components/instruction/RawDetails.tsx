@@ -18,7 +18,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={ix.programId.toBase58()}>
+          <Copyable text={ix.programId.toBase58()} bottom right>
             <code>{displayAddress(ix.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -36,7 +36,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
             )}
           </td>
           <td className="text-right">
-            <Copyable text={pubkey.toBase58()}>
+            <Copyable text={pubkey.toBase58()} right>
               <code>{pubkey.toBase58()}</code>
             </Copyable>
           </td>
@@ -46,7 +46,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       <tr>
         <td>Instruction Data (Base58)</td>
         <td className="text-right">
-          <Copyable text={data}>
+          <Copyable text={data} right>
             <code>{displayData(data)}</code>
           </Copyable>
         </td>

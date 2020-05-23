@@ -40,7 +40,7 @@ export function InitializeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={StakeProgram.programId.toBase58()}>
+          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
             <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -49,7 +49,7 @@ export function InitializeDetailsCard(props: {
       <tr>
         <td>Stake Address</td>
         <td className="text-right">
-          <Copyable text={stakePubkey}>
+          <Copyable right text={stakePubkey}>
             <code>{stakePubkey}</code>
           </Copyable>
         </td>
@@ -58,7 +58,7 @@ export function InitializeDetailsCard(props: {
       <tr>
         <td>Stake Authority Address</td>
         <td className="text-right">
-          <Copyable text={stakerPubkey}>
+          <Copyable right text={stakerPubkey}>
             <code>{stakerPubkey}</code>
           </Copyable>
         </td>
@@ -67,7 +67,7 @@ export function InitializeDetailsCard(props: {
       <tr>
         <td>Withdraw Authority Address</td>
         <td className="text-right">
-          <Copyable text={withdrawerPubkey}>
+          <Copyable right text={withdrawerPubkey}>
             <code>{withdrawerPubkey}</code>
           </Copyable>
         </td>
@@ -93,7 +93,7 @@ export function InitializeDetailsCard(props: {
         <tr>
           <td>Lockup Custodian Address</td>
           <td className="text-right">
-            <Copyable text={params.lockup.custodian.toBase58()}>
+            <Copyable right text={params.lockup.custodian.toBase58()}>
               <code>{displayAddress(params.lockup.custodian.toBase58())}</code>
             </Copyable>
           </td>

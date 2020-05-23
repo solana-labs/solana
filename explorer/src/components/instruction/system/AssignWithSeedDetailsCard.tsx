@@ -38,7 +38,7 @@ export function AssignWithSeedDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -47,7 +47,7 @@ export function AssignWithSeedDetailsCard(props: {
       <tr>
         <td>Account Address</td>
         <td className="text-right">
-          <Copyable text={accountKey}>
+          <Copyable right text={accountKey}>
             <code>{accountKey}</code>
           </Copyable>
         </td>
@@ -56,7 +56,7 @@ export function AssignWithSeedDetailsCard(props: {
       <tr>
         <td>Base Address</td>
         <td className="text-right">
-          <Copyable text={baseKey}>
+          <Copyable right text={baseKey}>
             <code>{baseKey}</code>
           </Copyable>
         </td>
@@ -65,7 +65,7 @@ export function AssignWithSeedDetailsCard(props: {
       <tr>
         <td>Seed</td>
         <td className="text-right">
-          <Copyable text={params.seed}>
+          <Copyable right text={params.seed}>
             <code>{params.seed}</code>
           </Copyable>
         </td>
@@ -74,7 +74,7 @@ export function AssignWithSeedDetailsCard(props: {
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
+          <Copyable right text={params.programId.toBase58()}>
             <code>{displayAddress(params.programId.toBase58())}</code>
           </Copyable>
         </td>

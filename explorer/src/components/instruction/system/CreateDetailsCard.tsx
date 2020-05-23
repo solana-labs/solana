@@ -39,7 +39,7 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -48,7 +48,7 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>From Address</td>
         <td className="text-right">
-          <Copyable text={from}>
+          <Copyable right text={from}>
             <code>{from}</code>
           </Copyable>
         </td>
@@ -57,7 +57,7 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>New Address</td>
         <td className="text-right">
-          <Copyable text={newKey}>
+          <Copyable right text={newKey}>
             <code>{newKey}</code>
           </Copyable>
         </td>
@@ -76,7 +76,7 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
+          <Copyable right text={params.programId.toBase58()}>
             <code>{displayAddress(params.programId.toBase58())}</code>
           </Copyable>
         </td>

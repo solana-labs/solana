@@ -39,7 +39,7 @@ export function DelegateDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={StakeProgram.programId.toBase58()}>
+          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
             <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -48,7 +48,7 @@ export function DelegateDetailsCard(props: {
       <tr>
         <td>Stake Address</td>
         <td className="text-right">
-          <Copyable text={stakePubkey}>
+          <Copyable right text={stakePubkey}>
             <code>{stakePubkey}</code>
           </Copyable>
         </td>
@@ -57,7 +57,7 @@ export function DelegateDetailsCard(props: {
       <tr>
         <td>Delegated Vote Address</td>
         <td className="text-right">
-          <Copyable text={votePubkey}>
+          <Copyable right text={votePubkey}>
             <code>{votePubkey}</code>
           </Copyable>
         </td>
@@ -66,7 +66,7 @@ export function DelegateDetailsCard(props: {
       <tr>
         <td>Authority Address</td>
         <td className="text-right">
-          <Copyable text={authorizedPubkey}>
+          <Copyable right text={authorizedPubkey}>
             <code>{authorizedPubkey}</code>
           </Copyable>
         </td>

@@ -39,7 +39,7 @@ export function NonceAuthorizeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
+          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
           </Copyable>
         </td>
@@ -48,7 +48,7 @@ export function NonceAuthorizeDetailsCard(props: {
       <tr>
         <td>Nonce Address</td>
         <td className="text-right">
-          <Copyable text={nonceKey}>
+          <Copyable right text={nonceKey}>
             <code>{nonceKey}</code>
           </Copyable>
         </td>
@@ -57,7 +57,7 @@ export function NonceAuthorizeDetailsCard(props: {
       <tr>
         <td>Old Authority Address</td>
         <td className="text-right">
-          <Copyable text={authorizedKey}>
+          <Copyable right text={authorizedKey}>
             <code>{authorizedKey}</code>
           </Copyable>
         </td>
@@ -66,7 +66,7 @@ export function NonceAuthorizeDetailsCard(props: {
       <tr>
         <td>New Authority Address</td>
         <td className="text-right">
-          <Copyable text={newAuthorizedKey}>
+          <Copyable right text={newAuthorizedKey}>
             <code>{newAuthorizedKey}</code>
           </Copyable>
         </td>
