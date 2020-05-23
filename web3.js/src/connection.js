@@ -417,9 +417,9 @@ const GetBlockTimeRpcResult = struct({
 });
 
 /**
- * Expected JSON RPC response for the "minimumLedgerSlot" message
+ * Expected JSON RPC response for the "minimumLedgerSlot" and "getFirstAvailableBlock" messages
  */
-const MinimumLedgerSlotRpcResult = struct({
+const SlotRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
@@ -1081,10 +1081,25 @@ export class Connection {
    */
   async getMinimumLedgerSlot(): Promise<number> {
     const unsafeRes = await this._rpcRequest('minimumLedgerSlot', []);
-    const res = MinimumLedgerSlotRpcResult(unsafeRes);
+    const res = SlotRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get minimum ledger slot: ' + res.error.message,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the slot of the lowest confirmed block that has not been purged from the ledger
+   */
+  async getFirstAvailableBlock(): Promise<number> {
+    const unsafeRes = await this._rpcRequest('getFirstAvailableBlock', []);
+    const res = SlotRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get first available block: ' + res.error.message,
       );
     }
     assert(typeof res.result !== 'undefined');

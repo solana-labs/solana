@@ -219,6 +219,7 @@ declare module '@solana/web3.js' {
     getBalance(publicKey: PublicKey, commitment?: Commitment): Promise<number>;
     getBlockTime(slot: number): Promise<number | null>;
     getMinimumLedgerSlot(): Promise<number>;
+    getFirstAvailableBlock(): Promise<number>;
     getSupply(commitment?: Commitment): Promise<RpcResponseAndContext<Supply>>;
     getLargestAccounts(
       config?: GetLargestAccountsConfig,
