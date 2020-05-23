@@ -9,10 +9,24 @@ type Props = {
 
 type State = "hide" | "show";
 
-function Popover({ state, bottom, right, text }: { state: State; bottom?: boolean, right?: boolean, text: string }) {
+function Popover({
+  state,
+  bottom,
+  right,
+  text
+}: {
+  state: State;
+  bottom?: boolean;
+  right?: boolean;
+  text: string;
+}) {
   if (state === "hide") return null;
   return (
-    <div className={`popover bs-popover-${bottom ? "bottom" : "top"}${right ? " right" : ""} show`}>
+    <div
+      className={`popover bs-popover-${bottom ? "bottom" : "top"}${
+        right ? " right" : ""
+      } show`}
+    >
       <div className={`arrow${right ? " right" : ""}`} />
       <div className="popover-body">{text}</div>
     </div>
@@ -24,7 +38,7 @@ function InfoTooltip({ bottom, right, text, children }: Props) {
 
   return (
     <div
-    className="popover-container w-100"
+      className="popover-container w-100"
       onMouseOver={() => setState("show")}
       onMouseOut={() => setState("hide")}
     >

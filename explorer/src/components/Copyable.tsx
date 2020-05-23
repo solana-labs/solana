@@ -9,11 +9,23 @@ type CopyableProps = {
 
 type State = "hide" | "copy" | "copied";
 
-function Popover({ state, bottom, right }: { state: State; bottom?: boolean, right?: boolean }) {
+function Popover({
+  state,
+  bottom,
+  right
+}: {
+  state: State;
+  bottom?: boolean;
+  right?: boolean;
+}) {
   if (state === "hide") return null;
   const text = state === "copy" ? "Copy" : "Copied!";
   return (
-    <div className={`popover bs-popover-${bottom ? "bottom" : "top"}${right ? " right" : ""} show`}>
+    <div
+      className={`popover bs-popover-${bottom ? "bottom" : "top"}${
+        right ? " right" : ""
+      } show`}
+    >
       <div className={`arrow${right ? " right" : ""}`} />
       <div className="popover-body">{text}</div>
     </div>
