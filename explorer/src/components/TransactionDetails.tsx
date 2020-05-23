@@ -25,6 +25,7 @@ import ErrorCard from "./common/ErrorCard";
 import LoadingCard from "./common/LoadingCard";
 import TableCardBody from "./common/TableCardBody";
 import { displayTimestamp } from "utils/date";
+import InfoTooltip from "components/InfoTooltip";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -146,12 +147,16 @@ function StatusCard({ signature }: Props) {
           <td className="text-right">{renderResult()}</td>
         </tr>
 
-        {info.timestamp && (
-          <tr>
-            <td>Timestamp</td>
-            <td className="text-right">{displayTimestamp(info.timestamp)}</td>
-          </tr>
-        )}
+        <tr>
+          <td>Timestamp</td>
+          <td className="text-right">
+            {info.timestamp !== "unavailable" ? displayTimestamp(info.timestamp) : (
+              <InfoTooltip text="Timestamps older than 5 epochs are not available at this time">
+                Unavailable
+              </InfoTooltip>
+            )}
+          </td>
+        </tr>
 
         <tr>
           <td>Confirmations</td>
