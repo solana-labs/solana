@@ -13,7 +13,7 @@ export default function TopAccountsCard() {
 
   // Fetch on load
   React.useEffect(() => {
-    fetchRichList();
+    if (richList === Status.Idle) fetchRichList();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (richList === Status.Disconnected) {

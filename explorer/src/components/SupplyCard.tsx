@@ -11,7 +11,7 @@ export default function SupplyCard() {
 
   // Fetch supply on load
   React.useEffect(() => {
-    fetchSupply();
+    if (supply === Status.Idle) fetchSupply();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (supply === Status.Disconnected) {
