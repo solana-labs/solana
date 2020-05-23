@@ -10,6 +10,7 @@ import Logo from "./img/logos-solana/light-explorer-logo.svg";
 import { TX_ALIASES } from "./providers/transactions";
 import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
 import TabbedPage from "components/TabbedPage";
+import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
 
 function App() {
@@ -33,6 +34,11 @@ function App() {
           <Route exact path="/supply">
             <TabbedPage tab="Supply">
               <SupplyCard />
+            </TabbedPage>
+          </Route>
+          <Route exact path="/accounts/top">
+            <TabbedPage tab="Accounts">
+              <TopAccountsCard />
             </TabbedPage>
           </Route>
           <Route
