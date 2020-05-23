@@ -1724,9 +1724,16 @@ impl Bank {
         datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
 
+    // Mostly, the pair (start_index & end_index) is equivalent to this range:
+    // start_index..=end_index. But it has some exceptional cases, including
+    // this important and valid one:
+    //   0..=0 can be given across epochs without a gap
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
+        assert!(start_index < partition_count);
+        assert!(end_index < partition_count);
+
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
 
@@ -1741,17 +1748,29 @@ impl Bank {
 
         // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
         let partition_width = (Prefix::max_value() - partition_count + 1) / partition_count + 1;
-        let start_key_prefix = if start_index == 0 && end_index == 0 {
+        let mut start_key_prefix = if start_index == 0 && end_index == 0 {
             0
         } else {
             (start_index + 1) * partition_width
         };
 
-        let end_key_prefix = if end_index + 1 == partition_count {
+        let mut end_key_prefix = if end_index + 1 == partition_count {
             Prefix::max_value()
         } else {
             (end_index + 1) * partition_width - 1
         };
+
+        if start_index != 0 && start_index == end_index {
+            // n..=n (n != 0) is can be given as noop partition across epochs without
+            // a gap under multi_epoch_cycle, just nullify it.
+            if end_key_prefix == Prefix::max_value() {
+                start_key_prefix = end_key_prefix;
+                start_pubkey = end_pubkey;
+            } else {
+                end_key_prefix = start_key_prefix;
+                end_pubkey = start_pubkey;
+            }
+        }
 
         start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
@@ -1779,12 +1798,18 @@ impl Bank {
         let mut partitions = vec![];
         if parent_cycle < current_cycle {
             if current_cycle_index > 0 {
+                // generate and push gapped partitions because some slots are skipped
                 let parent_last_cycle_index = slot_count_in_two_day - 1;
+
+                // ... for parent cycle
                 partitions.push((
                     parent_cycle_index,
                     parent_last_cycle_index,
                     slot_count_in_two_day,
                 ));
+
+                // ... for current cycle
+                partitions.push((0, 0, slot_count_in_two_day));
             }
             parent_cycle_index = 0;
         }
@@ -1806,12 +1831,19 @@ impl Bank {
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
+                // generate and push gapped partitions because some slots are skipped
                 let parent_last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
+
+                // ... for parent epoch
                 partitions.push(self.partition_from_slot_indexes(
                     parent_slot_index,
                     parent_last_slot_index,
                     parent_epoch,
+                    true,
                 ));
+
+                // ... for current epoch
+                partitions.push(self.partition_from_slot_indexes(0, 0, current_epoch, true));
             }
             parent_slot_index = 0;
         }
@@ -1820,6 +1852,7 @@ impl Bank {
             parent_slot_index,
             current_slot_index,
             current_epoch,
+            false,
         ));
 
         partitions
@@ -1830,6 +1863,7 @@ impl Bank {
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         epoch: Epoch,
+        auto_generated: bool,
     ) -> Partition {
         let cycle_params = self.determine_collection_cycle_params(epoch);
         let (_, _, is_in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
@@ -1839,7 +1873,7 @@ impl Bank {
         // likely case.
         let mut start_partition_index =
             Self::partition_index_from_slot_index(start_slot_index, cycle_params);
-        let end_partition_index =
+        let mut end_partition_index =
             Self::partition_index_from_slot_index(end_slot_index, cycle_params);
 
         let is_across_epoch_boundary =
@@ -1854,17 +1888,22 @@ impl Bank {
             // ------------------+------------+-------------------+-----------------------
             // 3       20..30    | [7..8]     |    7.. 8          |    7.. 8
             //                   | [8..9]     |    8.. 9          |    8.. 9
-            // 4       30..40    | [0..0]     | <10>..10          |  <9>..10 <= not gapped
+            // 4       30..40    | [0..0]     | <10>..10          |  <9>..10 <-- not gapped
             //                   | [0..1]     |   10..11          |   10..11
             //                   | [1..2]     |   11..12          |   11..12
-            //                   | [2..9      |   12..19          |   12..19
-            // 5       40..50    |  0..4]     | <20>..24          | <19>..24 <= gapped
+            //                   | [2..9      |   12..19          |   12..19   <-+
+            // 5       40..50    |  0..0 gen=1| <20>..<20>  (noop)| <19>..<19> <-+- gapped
+            //                   |  0..4]     | <20>..24          | <19>..24   <-+
             //                   | [4..5]     |   24..25          |   24..25
             //                   | [5..6]     |   25..26          |   25..26
             // *: The range of parent_bank.slot() and current_bank.slot() is firstly
             //    split by the epoch boundaries and then the split ones are given to us.
             //    The oritinal ranges are denoted as [...]
             start_partition_index -= 1;
+            if auto_generated {
+                assert_eq!(start_slot_index, end_slot_index);
+                end_partition_index -= 1;
+            }
         }
 
         (start_partition_index, end_partition_index, partition_count)
@@ -2572,7 +2611,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 mod tests {
     use super::*;
     use crate::{
-        accounts_index::Ancestors,
+        accounts_index::{AccountMap, Ancestors},
         builtin_programs::new_system_program_activation_epoch,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
@@ -3489,7 +3528,7 @@ mod tests {
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 49));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(14, 31, 32), (0, 17, 64)]
+            vec![(14, 31, 32), (0, 0, 64), (0, 17, 64)]
         );
     }
 
@@ -3600,7 +3639,7 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1, 12));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(18, 31, 432_000), (31, 44, 432_000)]
+            vec![(18, 31, 432_000), (31, 31, 432_000), (31, 44, 432_000)]
         );
 
         bank = Arc::new(new_from_parent(&bank));
@@ -3614,7 +3653,7 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13500, 11));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(431_993, 431_999, 432_000), (0, 11, 432_000)]
+            vec![(431_993, 431_999, 432_000), (0, 0, 432000), (0, 11, 432_000)]
         );
     }
 
@@ -3736,7 +3775,7 @@ mod tests {
         ));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(431_980, 431_999, 432_000), (0, 39, 432_000)]
+            vec![(431_980, 431_999, 432_000), (0, 0, 432000), (0, 39, 432_000)]
         );
     }
 
@@ -3749,42 +3788,34 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_rent_eager_pubkey_range_dividable() {
-        let range = Bank::pubkey_range_from_partition((0, 0, 2));
-        assert_eq!(
-            range,
-            Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ])
-                ..=Pubkey::new_from_array([
-                    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                ])
-        );
+    fn map_to_test_bad_range() -> AccountMap<Pubkey, i8> {
+        let mut map: AccountMap<Pubkey, i8> = AccountMap::new();
+        // when empty, AccountMap (= std::collections::BTreeMap) doesn't sanitize given range...
+        map.insert(Pubkey::new_rand(), 1);
+        map
+    }
 
-        let range = Bank::pubkey_range_from_partition((0, 1, 2));
-        assert_eq!(
-            range,
+    #[test]
+    #[should_panic(expected = "range start is greater than range end in BTreeMap")]
+    fn test_rent_eager_bad_range() {
+        let test_map = map_to_test_bad_range();
+        test_map.range(
             Pubkey::new_from_array([
-                0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
+                0x00, 0x00, 0x00, 0x01,
             ])
                 ..=Pubkey::new_from_array([
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                ])
+                    0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                ]),
         );
     }
 
     #[test]
-    fn test_rent_eager_pubkey_range_not_dividable() {
-        solana_logger::setup();
+    fn test_rent_eager_pubkey_range_noop_range() {
+        let test_map = map_to_test_bad_range();
 
         let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
@@ -3800,6 +3831,98 @@ mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
+        test_map.range(range);
+
+        let range = Bank::pubkey_range_from_partition((1, 1, 3));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                ])
+        );
+        test_map.range(range);
+
+        let range = Bank::pubkey_range_from_partition((2, 2, 3));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        test_map.range(range);
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_dividable() {
+        let test_map = map_to_test_bad_range();
+        let range = Bank::pubkey_range_from_partition((0, 0, 2));
+
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        test_map.range(range);
+
+        let range = Bank::pubkey_range_from_partition((0, 1, 2));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        test_map.range(range);
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_not_dividable() {
+        solana_logger::setup();
+
+        let test_map = map_to_test_bad_range();
+        let range = Bank::pubkey_range_from_partition((0, 0, 3));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((0, 1, 3));
         assert_eq!(
@@ -3815,6 +3938,7 @@ mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
+        test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((1, 2, 3));
         assert_eq!(
@@ -3830,11 +3954,14 @@ mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
+        test_map.range(range);
     }
 
     #[test]
     fn test_rent_eager_pubkey_range_gap() {
         solana_logger::setup();
+
+        let test_map = map_to_test_bad_range();
         let range = Bank::pubkey_range_from_partition((120, 1023, 12345));
         assert_eq!(
             range,
@@ -3849,6 +3976,7 @@ mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
+        test_map.range(range);
     }
 
     impl Bank {
