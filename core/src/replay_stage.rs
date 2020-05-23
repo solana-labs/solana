@@ -2706,6 +2706,7 @@ pub(crate) mod tests {
             &my_keypairs.node_keypair,
             &my_keypairs.vote_keypair,
             &my_keypairs.vote_keypair,
+            None,
         );
 
         let bank_forks = RwLock::new(bank_forks);
