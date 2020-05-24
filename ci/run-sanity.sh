@@ -25,5 +25,5 @@ wait $pid
 
 $solana_ledger_tool create-snapshot --ledger config/ledger 1 config/snapshot-ledger
 cp config/ledger/genesis.tar.bz2 config/snapshot-ledger
-tar -C config/snapshot-ledger -xvf genesis.tar.bz2
+tar -C config/snapshot-ledger -xvf config/snapshot-ledger/genesis.tar.bz2
 $solana_ledger_tool verify --ledger config/snapshot-ledger
