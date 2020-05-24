@@ -1764,8 +1764,8 @@ impl Bank {
         };
 
         if start_index != 0 && start_index == end_index {
-            // n..=n (n != 0) is can be given as noop partition across epochs without
-            // a gap under multi_epoch_cycle, just nullify it.
+            // n..=n (n != 0): a noop partition across epochs without a gap under
+            // multi_epoch_cycle, just nullify it.
             if end_key_prefix == PREFIX_MAX {
                 start_key_prefix = end_key_prefix;
                 start_pubkey = end_pubkey;
