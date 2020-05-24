@@ -1032,6 +1032,8 @@ fn main() {
 
                     println!("Creating a snapshot of slot {}", bank.slot());
                     bank.squash();
+                    bank.clean_accounts();
+                    bank.update_accounts_hash();
 
                     let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
                         eprintln!("Unable to create temporary directory: {}", err);
