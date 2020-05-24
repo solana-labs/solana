@@ -6437,18 +6437,18 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.5.1+zstd.1.4.4"
+version = "0.5.2+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c5d978b793ae64375b80baf652919b148f6a496ac8802922d9999f5a553194f"
+checksum = "644352b10ce7f333d6e0af85bd4f5322dc449416dc1211c6308e95bca8923db4"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "2.0.3+zstd.1.4.4"
+version = "2.0.4+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bee25eac9753cfedd48133fa1736cbd23b774e253d89badbeac7d12b23848d3f"
+checksum = "7113c0c9aed2c55181f2d9f5b0a36e7d2c0183b11c058ab40b35987479efe4d7"
 dependencies = [
  "libc",
  "zstd-sys",
@@ -6456,11 +6456,12 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.4.15+zstd.1.4.4"
+version = "1.4.16+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89719b034dc22d240d5b407fb0a3fe6d29952c181cff9a9f95c0bd40b4f8f7d8"
+checksum = "c442965efc45353be5a9b9969c9b0872fff6828c7e06d118dda2cb2d0bb11d5a"
 dependencies = [
  "cc",
  "glob",
+ "itertools 0.9.0",
  "libc",
 ]
