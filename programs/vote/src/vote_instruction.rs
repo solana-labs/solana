@@ -11,6 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
+    hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
@@ -95,6 +96,15 @@ pub enum VoteInstruction {
     ///    1 - New validator identity (node_pubkey)
     ///
     UpdateValidatorIdentity,
+
+    /// A Vote instruction with recent votes
+    ///    requires authorized voter signature
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - Vote account to vote with
+    ///    1 - Slot hashes sysvar
+    ///    2 - Clock sysvar
+    VoteSwitch(Vote, Hash),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -195,6 +205,26 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
     Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
+pub fn vote_switch(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote: Vote,
+    proof_hash: Hash,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+    ]
+    .with_signer(authorized_voter_pubkey);
+
+    Instruction::new(
+        id(),
+        &VoteInstruction::VoteSwitch(vote, proof_hash),
+        account_metas,
+    )
+}
+
 pub fn withdraw(
     vote_pubkey: &Pubkey,
     authorized_withdrawer_pubkey: &Pubkey,
@@ -245,7 +275,7 @@ pub fn process_instruction(
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
         ),
-        VoteInstruction::Vote(vote) => {
+        VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,
@@ -325,6 +355,15 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
                 Vote::default(),
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&vote_switch(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                Vote::default(),
+                Hash::default(),
             )),
             Err(InstructionError::InvalidAccountData),
         );
