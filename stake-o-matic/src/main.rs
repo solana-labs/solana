@@ -520,10 +520,12 @@ fn transact(
 }
 
 fn process_confirmations(
-    confirmations: Vec<ConfirmedTransaction>,
+    mut confirmations: Vec<ConfirmedTransaction>,
     notifier: Option<&Notifier>,
 ) -> bool {
     let mut ok = true;
+
+    confirmations.sort_by(|a, b| a.memo.cmp(&b.memo));
     for ConfirmedTransaction {
         success,
         signature,
