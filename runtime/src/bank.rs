@@ -1727,7 +1727,7 @@ impl Bank {
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
     // start_index..=end_index. But it has some exceptional cases, including
     // this important and valid one:
-    //   0..=0 can be given across epochs
+    //   0..=0: the first partition in the new epoch when crossing epochs
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
@@ -1891,7 +1891,7 @@ impl Bank {
             // 4       30..40    | [0..0]     | <10>..10          |  <9>..10 <-- not gapped
             //                   | [0..1]     |   10..11          |   10..11
             //                   | [1..2]     |   11..12          |   11..12
-            //                   | [2..9      |   12..19          |   12..19   <-+
+            //                   | [2..9 gen=1|   12..19          |   12..19   <-+
             // 5       40..50    |  0..0 gen=1| <20>..<20>  (noop)| <19>..<19> <-+- gapped
             //                   |  0..4]     | <20>..24          | <19>..24   <-+
             //                   | [4..5]     |   24..25          |   24..25
