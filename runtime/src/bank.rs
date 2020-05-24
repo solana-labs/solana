@@ -1731,14 +1731,14 @@ impl Bank {
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
-        type Prefix = u64;
-        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
-        const PREFIX_MAX: Prefix = Prefix::max_value();
-
         assert!(start_index <= end_index);
         assert!(start_index < partition_count);
         assert!(end_index < partition_count);
-        assert!(0 < partition_count && partition_count < PREFIX_MAX);
+        assert!(0 < partition_count);
+
+        type Prefix = u64;
+        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
+        const PREFIX_MAX: Prefix = Prefix::max_value();
 
         let mut start_pubkey = [0x00u8; 32];
         let mut end_pubkey = [0xffu8; 32];
@@ -1766,7 +1766,7 @@ impl Bank {
         if start_index != 0 && start_index == end_index {
             // n..=n (n != 0) is can be given as noop partition across epochs without
             // a gap under multi_epoch_cycle, just nullify it.
-            if end_key_prefix == Prefix::max_value() {
+            if end_key_prefix == PREFIX_MAX {
                 start_key_prefix = end_key_prefix;
                 start_pubkey = end_pubkey;
             } else {
@@ -1778,13 +1778,13 @@ impl Bank {
         start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
         trace!(
-            "pubkey_range_from_partition: ({}-{})/{} [{}]: {:02x?}-{:02x?}",
+            "pubkey_range_from_partition: ({}-{})/{} [{}]: {}-{}",
             start_index,
             end_index,
             partition_count,
             (end_key_prefix - start_key_prefix),
-            start_pubkey,
-            end_pubkey
+            start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
+            end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
         );
         // should be an inclusive range (a closed interval) like this:
         // [0xgg00-0xhhff], [0xii00-0xjjff], ... (where 0xii00 == 0xhhff + 1)
@@ -3796,6 +3796,64 @@ mod tests {
         assert_eq!(
             range,
             Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
+        );
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_maximum() {
+        let max = !0;
+
+        let range = Bank::pubkey_range_from_partition((0, 0, max));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([0x00; 32])
+                ..=Pubkey::new_from_array([
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        let range = Bank::pubkey_range_from_partition((0, 1, max));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ])
+                ..=Pubkey::new_from_array([
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+        let range = Bank::pubkey_range_from_partition((max - 2, max - 1, max));
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
         );
     }
 
