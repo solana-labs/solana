@@ -52,7 +52,6 @@ function generateConfig(configType) {
           terser({
             mangle: false,
             compress: false,
-            sourcemap: true,
           }),
         );
       }
