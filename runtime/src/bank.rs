@@ -1731,11 +1731,14 @@ impl Bank {
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
-        assert!(start_index < partition_count);
-        assert!(end_index < partition_count);
-
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
+        const PREFIX_MAX: Prefix = Prefix::max_value();
+
+        assert!(start_index <= end_index);
+        assert!(start_index < partition_count);
+        assert!(end_index < partition_count);
+        assert!(0 < partition_count && partition_count < PREFIX_MAX);
 
         let mut start_pubkey = [0x00u8; 32];
         let mut end_pubkey = [0xffu8; 32];
@@ -1747,7 +1750,7 @@ impl Bank {
         }
 
         // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
-        let partition_width = (Prefix::max_value() - partition_count + 1) / partition_count + 1;
+        let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
         let mut start_key_prefix = if start_index == 0 && end_index == 0 {
             0
         } else {
