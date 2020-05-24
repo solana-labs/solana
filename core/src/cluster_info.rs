@@ -2096,6 +2096,7 @@ impl ClusterInfo {
                     i64
                 ),
             );
+
             datapoint_info!(
                 "cluster_info_stats2",
                 ("retransmit_peers", self.stats.retransmit_peers.clear(), i64),
@@ -2225,6 +2226,15 @@ impl ClusterInfo {
                     self.stats.new_pull_requests_count.clear(),
                     i64
                 ),
+            );
+
+            datapoint_info!(
+                "cluster_info_stats4",
+                ("epoch_slots_lookup", self.stats.epoch_slots_lookup.clear(), i64),
+                ("epoch_slots_push", self.stats.epoch_slots_push.clear(), i64),
+                ("push_message", self.stats.push_message.clear(), i64),
+                ("new_pull_requests", self.stats.new_pull_requests.clear(), i64),
+                ("mark_pull_request", self.stats.mark_pull_request.clear(), i64),
             );
 
             *last_print = Instant::now();
