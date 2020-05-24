@@ -1727,7 +1727,7 @@ impl Bank {
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
     // start_index..=end_index. But it has some exceptional cases, including
     // this important and valid one:
-    //   0..=0 can be given across epochs without a gap
+    //   0..=0 can be given across epochs
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
@@ -3653,7 +3653,11 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13500, 11));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(431_993, 431_999, 432_000), (0, 0, 432000), (0, 11, 432_000)]
+            vec![
+                (431_993, 431_999, 432_000),
+                (0, 0, 432000),
+                (0, 11, 432_000)
+            ]
         );
     }
 
@@ -3775,7 +3779,11 @@ mod tests {
         ));
         assert_eq!(
             bank.rent_collection_partitions(),
-            vec![(431_980, 431_999, 432_000), (0, 0, 432000), (0, 39, 432_000)]
+            vec![
+                (431_980, 431_999, 432_000),
+                (0, 0, 432000),
+                (0, 39, 432_000)
+            ]
         );
     }
 
