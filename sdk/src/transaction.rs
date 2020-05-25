@@ -46,7 +46,7 @@ pub enum TransactionError {
     /// The bank has seen this `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `recent_blockhash`, or as a double-spend attack.
-    #[error("The bank has seen this `Signature` beforee")]
+    #[error("The bank has seen this signature before")]
     DuplicateSignature,
 
     /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
