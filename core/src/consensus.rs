@@ -22,6 +22,7 @@ use std::{
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
 
 #[derive(Default, Debug, Clone)]

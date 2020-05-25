@@ -25,6 +25,7 @@ pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
+pub const MAX_COMPLETED_EPOCH_SLOTS: EpochSlotsIndex = 128;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -366,9 +367,9 @@ impl CrdsValue {
         }
     }
 
-    pub fn epoch_slots(&self) -> Option<&EpochSlots> {
+    pub fn epoch_slots(&self) -> Option<(EpochSlotsIndex, &EpochSlots)> {
         match &self.data {
-            CrdsData::EpochSlots(_, slots) => Some(slots),
+            CrdsData::EpochSlots(i, slots) => Some((*i, slots)),
             _ => None,
         }
     }

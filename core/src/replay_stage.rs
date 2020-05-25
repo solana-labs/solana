@@ -6,7 +6,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
-    consensus::{StakeLockout, Tower},
+    consensus::{StakeLockout, Tower, SUPERMINORITY_THRESHOLD},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
     pubkey_references::PubkeyReferences,
@@ -53,7 +53,6 @@ use std::{
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
-pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 
 #[derive(PartialEq, Debug)]
@@ -1250,7 +1249,7 @@ impl ReplayStage {
             .clone();
 
         if cluster_slot_pubkeys.is_none() {
-            cluster_slot_pubkeys = cluster_slots.lookup(slot);
+            cluster_slot_pubkeys = cluster_slots.lookup_completed(slot);
             progress
                 .get_propagated_stats_mut(slot)
                 .expect("All frozen banks must exist in the Progress map")

@@ -482,7 +482,7 @@ impl ClusterInfo {
             .crds
             .lookup(&entry)
             .and_then(CrdsValue::epoch_slots)
-            .cloned()
+            .map(|(_, e)| e.clone())
             .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
     }
 
@@ -595,9 +595,14 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_epoch_slots(&self, update: &[Slot]) {
+    // [start_index, start_index + num_epoch_slots) is the range of EpochSlots indexes
+    // that can be modified
+    pub fn push_epoch_slots(&self, update: &[Slot], start_index: u8, num_epoch_slots: u8) {
+        assert!(
+            start_index as u16 + num_epoch_slots as u16 - 1 <= crds_value::MAX_EPOCH_SLOTS as u16
+        );
         let mut num = 0;
-        let mut current_slots: Vec<_> = (0..crds_value::MAX_EPOCH_SLOTS)
+        let mut current_slots: Vec<_> = (start_index..start_index + num_epoch_slots)
             .filter_map(|ix| {
                 Some((
                     self.time_gossip_read_lock(
@@ -607,7 +612,7 @@ impl ClusterInfo {
                     .crds
                     .lookup(&CrdsValueLabel::EpochSlots(ix, self.id()))
                     .and_then(CrdsValue::epoch_slots)
-                    .and_then(|x| Some((x.wallclock, x.first_slot()?)))?,
+                    .and_then(|(_, x)| Some((x.wallclock, x.first_slot()?)))?,
                     ix,
                 ))
             })
@@ -620,10 +625,10 @@ impl ClusterInfo {
             .unwrap_or(0);
         let max_slot: Slot = update.iter().max().cloned().unwrap_or(0);
         let total_slots = max_slot as isize - min_slot as isize;
+        let ratio = num_epoch_slots as f32 / crds_value::MAX_EPOCH_SLOTS as f32;
+        let num_expected_slots = (ratio * DEFAULT_SLOTS_PER_EPOCH as f32) as isize;
         // WARN if CRDS is not storing at least a full epoch worth of slots
-        if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
-            && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
-        {
+        if num_expected_slots > total_slots && num_epoch_slots as usize <= current_slots.len() {
             inc_new_counter_warn!("cluster_info-epoch_slots-filled", 1);
             warn!(
                 "EPOCH_SLOTS are filling up FAST {}/{}",
@@ -632,9 +637,12 @@ impl ClusterInfo {
             );
         }
         let mut reset = false;
-        let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
+        let mut epoch_slot_index = current_slots
+            .last()
+            .map(|(_, x)| *x - start_index)
+            .unwrap_or(0);
         while num < update.len() {
-            let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
+            let ix = (epoch_slot_index % num_epoch_slots) as u8 + start_index;
             let now = timestamp();
             let mut slots = if !reset {
                 self.lookup_epoch_slots(ix)
@@ -810,7 +818,10 @@ impl ClusterInfo {
             .map(|x| map(x.value.lowest_slot().unwrap(), x.insert_timestamp))
     }
 
-    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, Option<u64>) {
+    pub fn get_epoch_slots_since(
+        &self,
+        since: Option<u64>,
+    ) -> (Vec<(EpochSlotsIndex, EpochSlots)>, Option<u64>) {
         let vals: Vec<_> = self
             .gossip
             .read()
@@ -823,7 +834,12 @@ impl ClusterInfo {
                     .map(|since| x.insert_timestamp > since)
                     .unwrap_or(true)
             })
-            .filter_map(|x| Some((x.value.epoch_slots()?.clone(), x.insert_timestamp)))
+            .filter_map(|x| {
+                Some((
+                    x.value.epoch_slots().map(|(i, e)| (i, e.clone()))?,
+                    x.insert_timestamp,
+                ))
+            })
             .collect();
         let max = vals.iter().map(|x| x.1).max().or(since);
         let vec = vals.into_iter().map(|x| x.0).collect();
@@ -2650,7 +2666,7 @@ mod tests {
         let (slots, since) = cluster_info.get_epoch_slots_since(None);
         assert!(slots.is_empty());
         assert!(since.is_none());
-        cluster_info.push_epoch_slots(&[0]);
+        cluster_info.push_epoch_slots(&[0], 0, crds_value::MAX_COMPLETED_EPOCH_SLOTS);
 
         let (slots, since) = cluster_info.get_epoch_slots_since(Some(std::u64::MAX));
         assert!(slots.is_empty());
@@ -2975,10 +2991,10 @@ mod tests {
             let last = *range.last().unwrap_or(&0);
             range.push(last + rand::thread_rng().gen_range(1, 32));
         }
-        cluster_info.push_epoch_slots(&range[..16000]);
-        cluster_info.push_epoch_slots(&range[16000..]);
+        cluster_info.push_epoch_slots(&range[..16000], 0, crds_value::MAX_COMPLETED_EPOCH_SLOTS);
+        cluster_info.push_epoch_slots(&range[16000..], 0, crds_value::MAX_COMPLETED_EPOCH_SLOTS);
         let (slots, since) = cluster_info.get_epoch_slots_since(None);
-        let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
+        let slots: Vec<_> = slots.iter().flat_map(|(_, x)| x.to_slots(0)).collect();
         assert_eq!(slots, range);
         assert!(since.is_some());
     }

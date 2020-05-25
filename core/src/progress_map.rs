@@ -1,7 +1,8 @@
 use crate::{
-    cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
-    consensus::StakeLockout, pubkey_references::PubkeyReferences,
-    replay_stage::SUPERMINORITY_THRESHOLD,
+    cluster_info_vote_listener::SlotVoteTracker,
+    cluster_slots::SlotPubkeys,
+    consensus::{StakeLockout, SUPERMINORITY_THRESHOLD},
+    pubkey_references::PubkeyReferences,
 };
 use solana_ledger::{
     bank_forks::BankForks,

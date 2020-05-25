@@ -3,7 +3,8 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
-    consensus::VOTE_THRESHOLD_SIZE,
+    consensus::SUPERMINORITY_THRESHOLD,
+    crds_value::{MAX_COMPLETED_EPOCH_SLOTS, MAX_EPOCH_SLOTS},
     result::Result,
     serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
 };
@@ -428,7 +429,7 @@ impl RepairService {
                     );
                 }
                 cluster_slots
-                    .lookup(dead_slot)
+                    .lookup_confirmed(dead_slot)
                     .and_then(|completed_dead_slot_pubkeys| {
                         let epoch = root_bank.get_epoch_and_slot_index(dead_slot).0;
                         if let Some(epoch_stakes) = root_bank.epoch_stakes(epoch) {
@@ -446,7 +447,7 @@ impl RepairService {
                                 })
                                 .sum();
                             if total_completed_slot_stake as f64 / total_stake as f64
-                                > VOTE_THRESHOLD_SIZE
+                                > SUPERMINORITY_THRESHOLD
                             {
                                 Some(dead_slot)
                             } else {
@@ -535,6 +536,24 @@ impl RepairService {
         cluster_info.push_lowest_slot(id, blockstore.lowest_slot());
     }
 
+    fn update_confirmed_slots(
+        confirmed_slots_receiver: &CompletedSlotsReceiver,
+        cluster_info: &ClusterInfo,
+    ) {
+        let mut slots: Vec<Slot> = vec![];
+        while let Ok(mut more) = confirmed_slots_receiver.try_recv() {
+            slots.append(&mut more);
+        }
+        slots.sort();
+        if !slots.is_empty() {
+            cluster_info.push_epoch_slots(
+                &slots,
+                MAX_COMPLETED_EPOCH_SLOTS,
+                MAX_EPOCH_SLOTS - MAX_COMPLETED_EPOCH_SLOTS + 1,
+            );
+        }
+    }
+
     fn update_completed_slots(
         completed_slots_receiver: &CompletedSlotsReceiver,
         cluster_info: &ClusterInfo,
@@ -545,7 +564,7 @@ impl RepairService {
         }
         slots.sort();
         if !slots.is_empty() {
-            cluster_info.push_epoch_slots(&slots);
+            cluster_info.push_epoch_slots(&slots, 0, MAX_COMPLETED_EPOCH_SLOTS);
         }
     }
 
@@ -576,7 +595,7 @@ impl RepairService {
         slots.sort();
         slots.dedup();
         if !slots.is_empty() {
-            cluster_info.push_epoch_slots(&slots);
+            cluster_info.push_epoch_slots(&slots, 0, MAX_COMPLETED_EPOCH_SLOTS);
         }
     }
 
@@ -950,7 +969,11 @@ mod test {
         // a valid target for repair
         let dead_slot = 9;
         let cluster_slots = ClusterSlots::default();
-        cluster_slots.insert_node_id(dead_slot, Arc::new(valid_repair_peer.id));
+        cluster_slots.insert_node_id(
+            dead_slot,
+            Arc::new(valid_repair_peer.id),
+            MAX_COMPLETED_EPOCH_SLOTS,
+        );
         cluster_info.insert_info(valid_repair_peer);
 
         // Not enough time has passed, should not update the
@@ -1105,9 +1128,9 @@ mod test {
         )
         .is_empty());
 
-        // If supermajority confirms the slot, then dead slot should be
+        // If superminoorty reports slot was confirmed, then dead slot should be
         // marked as a duplicate that needs to be repaired
-        cluster_slots.insert_node_id(dead_slot, only_node_id);
+        cluster_slots.insert_node_id(dead_slot, only_node_id, MAX_COMPLETED_EPOCH_SLOTS);
         assert_eq!(
             RepairService::find_new_duplicate_slots(
                 &duplicate_slot_repair_statuses,
