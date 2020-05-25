@@ -414,9 +414,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.0"
+version = "2.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5067f5bb2d80ef5d68b4c87db81601f0b75bca627bc2ef76b141d7b846a3c6d9"
+checksum = "bdfa80d47f954d53a35a64987ca1422f495b8d6483c0fe9f7117b36c2a792129"
 dependencies = [
  "ansi_term",
  "atty",
@@ -2963,6 +2963,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.1.14"
 dependencies = [
+ "clap",
  "crossbeam-channel",
  "log 0.4.8",
  "rand 0.7.3",
@@ -2975,6 +2976,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-version",
 ]
 
 [[package]]

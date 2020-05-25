@@ -90,24 +90,17 @@ pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, St
     ip_echo_server_request(ip_echo_server_addr, IpEchoServerMessage::default())
 }
 
-// Aborts the process if any of the provided TCP/UDP ports are not reachable by the machine at
+// Checks if any of the provided TCP/UDP ports are not reachable by the machine at
 // `ip_echo_server_addr`
 pub fn verify_reachable_ports(
     ip_echo_server_addr: &SocketAddr,
     tcp_listeners: Vec<(u16, TcpListener)>,
     udp_sockets: &[&UdpSocket],
-) {
-    let udp: Vec<(_, _)> = udp_sockets
+) -> bool {
+    let udp_ports: Vec<_> = udp_sockets
         .iter()
-        .map(|udp_socket| {
-            (
-                udp_socket.local_addr().unwrap().port(),
-                udp_socket.try_clone().expect("Unable to clone udp socket"),
-            )
-        })
+        .map(|udp_socket| udp_socket.local_addr().unwrap().port())
         .collect();
-
-    let udp_ports: Vec<_> = udp.iter().map(|x| x.0).collect();
 
     info!(
         "Checking that tcp ports {:?} and udp ports {:?} are reachable from {:?}",
@@ -121,6 +114,8 @@ pub fn verify_reachable_ports(
     )
     .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
+    let mut ok = true;
+
     // Wait for a connection to open on each TCP port
     for (port, tcp_listener) in tcp_listeners {
         let (sender, receiver) = channel();
@@ -129,38 +124,64 @@ pub fn verify_reachable_ports(
             let _ = tcp_listener.incoming().next().expect("tcp incoming failed");
             sender.send(()).expect("send failure");
         });
-        receiver
-            .recv_timeout(Duration::from_secs(5))
-            .unwrap_or_else(|err| {
+        match receiver.recv_timeout(Duration::from_secs(5)) {
+            Ok(_) => {
+                info!("tcp/{} is reachable", port);
+            }
+            Err(err) => {
                 error!(
                     "Received no response at tcp/{}, check your port configuration: {}",
                     port, err
                 );
-                std::process::exit(1);
-            });
-        info!("tcp/{} is reachable", port);
+                ok = false;
+            }
+        }
     }
 
-    // Wait for a datagram to arrive at each UDP port
-    for (port, udp_socket) in udp {
-        let (sender, receiver) = channel();
-        std::thread::spawn(move || {
-            let mut buf = [0; 1];
-            debug!("Waiting for incoming datagram on udp/{}", port);
-            let _ = udp_socket.recv(&mut buf).expect("udp recv failure");
-            sender.send(()).expect("send failure");
-        });
-        receiver
-            .recv_timeout(Duration::from_secs(5))
-            .unwrap_or_else(|err| {
-                error!(
-                    "Received no response at udp/{}, check your port configuration: {}",
-                    port, err
-                );
-                std::process::exit(1);
-            });
-        info!("udp/{} is reachable", port);
+    if !ok {
+        // No retries for TCP, abort on the first failure
+        return ok;
     }
+
+    for _udp_retries in 0..5 {
+        // Wait for a datagram to arrive at each UDP port
+        for udp_socket in udp_sockets {
+            let port = udp_socket.local_addr().unwrap().port();
+            let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
+            let (sender, receiver) = channel();
+            std::thread::spawn(move || {
+                let mut buf = [0; 1];
+                debug!("Waiting for incoming datagram on udp/{}", port);
+                let _ = udp_socket.recv(&mut buf).expect("udp recv failure");
+                sender.send(()).expect("send failure");
+            });
+            match receiver.recv_timeout(Duration::from_secs(5)) {
+                Ok(_) => {
+                    info!("udp/{} is reachable", port);
+                }
+                Err(err) => {
+                    error!(
+                        "Received no response at udp/{}, check your port configuration: {}",
+                        port, err
+                    );
+                    ok = false;
+                }
+            }
+        }
+        if ok {
+            break;
+        }
+        ok = true;
+
+        // Might have lost a UDP packet, retry a couple times
+        let _ = ip_echo_server_request(
+            ip_echo_server_addr,
+            IpEchoServerMessage::new(&[], &udp_ports),
+        )
+        .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+    }
+
+    ok
 }
 
 pub fn parse_port_or_addr(optstr: Option<&str>, default_addr: SocketAddr) -> SocketAddr {
@@ -499,10 +520,10 @@ mod tests {
             parse_host("127.0.0.1"),
         );
 
-        verify_reachable_ports(
+        assert!(verify_reachable_ports(
             &ip_echo_server_addr,
             vec![(client_port, client_tcp_listener)],
             &[&client_udp_socket],
-        );
+        ));
     }
 }

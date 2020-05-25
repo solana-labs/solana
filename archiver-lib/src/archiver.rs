@@ -699,7 +699,6 @@ impl Archiver {
                 .send::<u64>(
                     RpcRequest::GetSlotsPerSegment,
                     serde_json::json!([client_commitment]),
-                    0,
                 )
                 .unwrap())
         } else {
@@ -746,11 +745,7 @@ impl Archiver {
                 let RpcStorageTurn {
                     blockhash: storage_blockhash,
                     slot: turn_slot,
-                } = rpc_client.send(
-                    RpcRequest::GetStorageTurn,
-                    serde_json::value::Value::Null,
-                    0,
-                )?;
+                } = rpc_client.send(RpcRequest::GetStorageTurn, serde_json::value::Value::Null)?;
                 let turn_blockhash = storage_blockhash.parse().map_err(|err| {
                     io::Error::new(
                         io::ErrorKind::Other,

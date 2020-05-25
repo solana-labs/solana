@@ -8,7 +8,7 @@ pub struct NonCirculatingSupply {
     pub accounts: Vec<Pubkey>,
 }
 
-pub fn calculate_non_circulating_supply(bank: Arc<Bank>) -> NonCirculatingSupply {
+pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSupply {
     debug!("Updating Bank supply, epoch: {}", bank.epoch());
     let mut non_circulating_accounts_set: HashSet<Pubkey> = HashSet::new();
 
@@ -74,6 +74,7 @@ solana_sdk::pubkeys!(
         "CHmdL15akDcJgBkY6BP3hzs98Dqr6wbdDC5p8odvtSbq",
         "FR84wZQy3Y3j2gWz6pgETUiUoJtreMEuWfbg6573UCj9",
         "5q54XjQ7vDx4y6KphPeE97LUNiYGtP55spjvXAWPGBuf",
+        "3o6xgkJ9sTmDeQWyfj3sxwon18fXJB9PV5LDc8sfgR4a",
     ]
 );
 
@@ -149,7 +150,7 @@ mod tests {
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
         );
 
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(
             non_circulating_supply.lamports,
             (num_non_circulating_accounts + num_stake_accounts) * balance
@@ -164,7 +165,7 @@ mod tests {
         for key in non_circulating_accounts {
             bank.store_account(&key, &Account::new(new_balance, 0, &Pubkey::default()));
         }
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(
             non_circulating_supply.lamports,
             (num_non_circulating_accounts * new_balance) + (num_stake_accounts * balance)
@@ -179,7 +180,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.epoch(), 1);
-        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(
             non_circulating_supply.lamports,
             num_non_circulating_accounts * new_balance
