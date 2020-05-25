@@ -568,14 +568,15 @@ fn load_bank_forks(
     let blockstore = open_blockstore(&ledger_path, access_type);
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
         account_paths.split(',').map(PathBuf::from).collect()
+    } else if blockstore.is_primary_access() {
+        vec![ledger_path.join("accounts")]
     } else {
-        if blockstore.is_primary_access() {
-            vec![ledger_path.join("accounts")]
-        } else {
-            let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
-            eprintln!("Default accounts path is switched aligning with Blockstore's non-primary access: {:?}", non_primary_accounts_path);
-            vec![non_primary_accounts_path]
-        }
+        let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
+        eprintln!(
+            "Default accounts path is switched aligning with Blockstore's non-primary access: {:?}",
+            non_primary_accounts_path
+        );
+        vec![non_primary_accounts_path]
     };
 
     bank_forks_utils::load(
