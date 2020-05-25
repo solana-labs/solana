@@ -1758,13 +1758,13 @@ impl Bank {
         };
 
         let mut end_key_prefix = if end_index + 1 == partition_count {
-            Prefix::max_value()
+            PREFIX_MAX
         } else {
             (end_index + 1) * partition_width - 1
         };
 
         if start_index != 0 && start_index == end_index {
-            // n..=n (n != 0): a noop partition across epochs without a gap under
+            // n..=n (n != 0): a noop pair across epochs without a gap under
             // multi_epoch_cycle, just nullify it.
             if end_key_prefix == PREFIX_MAX {
                 start_key_prefix = end_key_prefix;
