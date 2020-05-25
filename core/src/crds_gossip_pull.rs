@@ -9,6 +9,7 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
+use solana_measure::measure::Measure;
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
@@ -156,17 +157,25 @@ impl CrdsGossipPull {
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+        let mut options_time = Measure::start("options");
         let options = self.pull_options(crds, &self_id, self_shred_version, now, stakes);
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
+        options_time.stop();
+        let mut filters_time = Measure::start("filters");
         let filters = self.build_crds_filters(crds, bloom_size);
         let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         let random = index.sample(&mut rand::thread_rng());
+        filters_time.stop();
+        let mut my_time = Measure::start("my");
         let self_info = crds
             .lookup(&CrdsValueLabel::ContactInfo(*self_id))
             .unwrap_or_else(|| panic!("self_id invalid {}", self_id));
-        Ok((options[random].1.id, filters, self_info.clone()))
+        let ret = self_info.clone();
+        my_time.stop();
+        info!("{} {} {}", options_time, filters_time, my_time);
+        Ok((options[random].1.id, filters, ret))
     }
 
     fn pull_options<'a>(
@@ -336,19 +345,27 @@ impl CrdsGossipPull {
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
     pub fn build_crds_filters(&self, crds: &Crds, bloom_size: usize) -> Vec<CrdsFilter> {
+        let mut new_set = Measure::start("new_set");
         let num = cmp::max(
             CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
             crds.table.values().count() + self.purged_values.len(),
         );
         let mut filters = CrdsFilter::new_complete_set(num, bloom_size);
+        new_set.stop();
+        let mut add_time = Measure::start("filters_add");
         for v in crds.table.values() {
             filters
                 .iter_mut()
                 .for_each(|filter| filter.add(&v.value_hash));
         }
+        add_time.stop();
+        let mut purge_time = Measure::start("filters_purge");
         for (value_hash, _insert_timestamp) in &self.purged_values {
             filters.iter_mut().for_each(|filter| filter.add(value_hash));
         }
+        purge_time.stop();
+        info!("{} {} {} crds.table.len: {} purged: {}",
+            new_set, add_time, purge_time, crds.table.len(), self.purged_values.len());
         filters
     }
     /// filter values that fail the bloom filter up to max_bytes

@@ -233,6 +233,8 @@ struct GossipStats {
     push_message: Counter,
     new_pull_requests: Counter,
     new_pull_requests_count: Counter,
+    new_pull_requests2: Counter,
+    new_pull_requests_num: Counter,
     mark_pull_request: Counter,
     skip_pull_response_shred_version: Counter,
     skip_pull_shred_version: Counter,
@@ -1389,11 +1391,16 @@ impl ClusterInfo {
         let mut pulls: Vec<_> = {
             let r_gossip =
                 self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
-            r_gossip
+            let reqs = r_gossip
                 .new_pull_request(now, stakes, MAX_BLOOM_SIZE)
-                .ok()
+                .ok();
+
+            let r_gossip =
+                self.time_gossip_read_lock("new_pull_reqs2", &self.stats.new_pull_requests2);
+            reqs
                 .into_iter()
                 .filter_map(|(peer, filters, me)| {
+                    //let foo:() = peer;
                     let peer_label = CrdsValueLabel::ContactInfo(peer);
                     r_gossip
                         .crds
@@ -1408,6 +1415,8 @@ impl ClusterInfo {
                 .flatten()
                 .collect()
         };
+        self.stats.new_pull_requests_count.add_relaxed(1);
+        self.stats.new_pull_requests_num.add_relaxed(pulls.len() as u64);
         self.append_entrypoint_to_pulls(&mut pulls);
         self.stats
             .new_pull_requests_count
@@ -2233,8 +2242,10 @@ impl ClusterInfo {
                 ("epoch_slots_lookup", self.stats.epoch_slots_lookup.clear(), i64),
                 ("epoch_slots_push", self.stats.epoch_slots_push.clear(), i64),
                 ("push_message", self.stats.push_message.clear(), i64),
-                ("new_pull_requests", self.stats.new_pull_requests.clear(), i64),
                 ("mark_pull_request", self.stats.mark_pull_request.clear(), i64),
+                ("new_pull_requests_count", self.stats.new_pull_requests_count.clear(), i64),
+                ("new_pull_requests_num", self.stats.new_pull_requests_num.clear(), i64),
+                ("new_pull_requests2", self.stats.new_pull_requests2.clear(), i64),
             );
 
             *last_print = Instant::now();
