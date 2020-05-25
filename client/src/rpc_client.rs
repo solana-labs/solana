@@ -614,15 +614,16 @@ impl RpcClient {
     }
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
-        Ok(self
+        let (blockhash, fee_calculator, _blockhash_last_valid_slot) = self
             .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
-            .value)
+            .value;
+        Ok((blockhash, fee_calculator))
     }
 
     pub fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<(Hash, FeeCalculator)> {
+    ) -> RpcResult<(Hash, FeeCalculator, Slot)> {
         let Response {
             context,
             value:
@@ -635,6 +636,26 @@ impl RpcClient {
             json!([commitment_config]),
         )?;
 
+        let Response {
+            context: _context,
+            value: blockhash_last_valid_slot,
+        } = self
+            .send::<Response<Option<Slot>>>(
+                RpcRequest::GetBlockhashLastValidSlot,
+                json!([commitment_config]),
+            )
+            .unwrap_or(Some(0)); // Provides backward compatibility for old nodes that do not support the getBlockhashLastValidSlot endpoint
+
+        if blockhash_last_valid_slot.is_none() {
+            return Err(ClientError::new_with_request(
+                RpcError::RpcRequestError(format!(
+                    "Recent blockhash no longer present in blockhash queue"
+                ))
+                .into(),
+                RpcRequest::GetBlockhashLastValidSlot,
+            ));
+        }
+
         let blockhash = blockhash.parse().map_err(|_| {
             ClientError::new_with_request(
                 RpcError::ParseError("Hash".to_string()).into(),
@@ -643,7 +664,11 @@ impl RpcClient {
         })?;
         Ok(Response {
             context,
-            value: (blockhash, fee_calculator),
+            value: (
+                blockhash,
+                fee_calculator,
+                blockhash_last_valid_slot.unwrap(),
+            ),
         })
     }
 

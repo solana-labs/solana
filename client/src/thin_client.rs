@@ -441,7 +441,7 @@ impl SyncClient for ThinClient {
         match recent_blockhash {
             Ok(Response { value, .. }) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
-                Ok(value)
+                Ok((value.0, value.1))
             }
             Err(e) => {
                 self.optimizer.report(index, std::u64::MAX);
