@@ -230,6 +230,15 @@ impl JsonRpcRequestProcessor {
         )
     }
 
+    fn get_blockhash_last_valid_slot(
+        &self,
+        blockhash: &Hash,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Option<Slot>> {
+        let bank = &*self.bank(commitment)?;
+        new_response(bank, bank.get_blockhash_last_valid_slot(blockhash))
+    }
+
     pub fn confirm_transaction(
         &self,
         signature: Result<Signature>,
@@ -677,6 +686,10 @@ fn verify_signature(input: &str) -> Result<Signature> {
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))
 }
 
+fn verify_hash(input: &str) -> Result<Hash> {
+    Hash::from_str(input).map_err(|e| Error::invalid_params(format!("{:?}", e)))
+}
+
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
@@ -802,6 +815,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
+
+    #[rpc(meta, name = "getBlockhashLastValidSlot")]
+    fn get_blockhash_last_valid_slot(
+        &self,
+        meta: Self::Metadata,
+        blockhash: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Option<Slot>>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
@@ -1132,8 +1153,7 @@ impl RpcSol for RpcSolImpl {
         blockhash: String,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
         debug!("get_fee_calculator_for_blockhash rpc request received");
-        let blockhash =
-            Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+        let blockhash = verify_hash(&blockhash)?;
         meta.request_processor
             .read()
             .unwrap()
@@ -1146,6 +1166,20 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_fee_rate_governor()
+    }
+
+    fn get_blockhash_last_valid_slot(
+        &self,
+        meta: Self::Metadata,
+        blockhash: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Option<Slot>> {
+        debug!("get_blockhash_last_valid_slot rpc request received");
+        let blockhash = verify_hash(&blockhash)?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_blockhash_last_valid_slot(&blockhash, commitment)
     }
 
     fn get_signature_confirmation(
@@ -2585,6 +2619,54 @@ pub mod tests {
                     "targetSignaturesPerSlot": 0
                 }
             }},
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_blockhash_last_valid_slot() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let (blockhash, _fee_calculator) = bank.last_blockhash_with_fee_calculator();
+        let valid_last_slot = bank.get_blockhash_last_valid_slot(&blockhash);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockhashLastValidSlot","params":["{:?}"]}}"#,
+            blockhash
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":valid_last_slot,
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Expired (non-existent) blockhash
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockhashLastValidSlot","params":["{:?}"]}}"#,
+            Hash::default()
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":Value::Null,
+            },
             "id": 1
         });
         let expected: Response =
