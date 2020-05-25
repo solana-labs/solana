@@ -1331,9 +1331,8 @@ impl AccountsDB {
     }
 
     pub fn include_owner_in_hash(slot: Slot) -> bool {
-        // Account hashing updated to include owner activates at this slot on the testnet
-        // DANGER: Remove this guard ABSOLUTELY before the mainnet-beta transitions to v1.1.
-        slot >= 14_000_000
+        // Account hashing updated to include owner activates at this slot on the testnet/mainnet-beta
+        slot >= 11_000_000
     }
 
     pub fn hash_account_data(
