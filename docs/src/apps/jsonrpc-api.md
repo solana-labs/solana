@@ -17,6 +17,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
+* [getBlockhashLastValidSlot](jsonrpc-api.md#getblockhashlastvalidslot)
 * [getBlockTime](jsonrpc-api.md#getblocktime)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
@@ -211,6 +212,32 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
+```
+
+### getBlockhashLastValidSlot
+
+Returns the last slot in which a blockhash will be valid
+
+#### Parameters:
+
+* `blockhash: <string>`, query blockhash as a Base58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to either:
+
+* `<null>` - blockhash is not present in blockhash queue, because it has expired or is not valid on this fork
+* `<u64>` - last slot in which a blockhash will be valid
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlockhashLastValidSlot","params":["GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"]}' 127.0.0.1:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":221},"value":400},"id":1}
 ```
 
 ### getBlockTime
