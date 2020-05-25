@@ -19,65 +19,74 @@ use thiserror::Error;
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
     /// that does not support parallelism
+    #[error("Account in use")]
     AccountInUse,
 
     /// A `Pubkey` appears twice in the transaction's `account_keys`.  Instructions can reference
     /// `Pubkey`s more than once but the message must contain a list with no duplicate keys
+    #[error("Account loaded twice")]
     AccountLoadedTwice,
 
     /// Attempt to debit an account but found no record of a prior credit.
+    #[error("Attempt to debit an account but found no record of a prior credit.")]
     AccountNotFound,
 
     /// Attempt to load a program that does not exist
+    #[error("Attempt to load a program that does not exist")]
     ProgramAccountNotFound,
 
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
+    #[error("Insufficient funds for fee")]
     InsufficientFundsForFee,
 
     /// This account may not be used to pay transaction fees
+    #[error("This account may not be used to pay transaction fees")]
     InvalidAccountForFee,
 
     /// The bank has seen this `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `recent_blockhash`, or as a double-spend attack.
+    #[error("The bank has seen this signature before")]
     DuplicateSignature,
 
     /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
     /// the `recent_blockhash` has been discarded.
+    #[error("Blockhash not found")]
     BlockhashNotFound,
 
     /// An error occurred while processing an instruction. The first element of the tuple
     /// indicates the instruction index in which the error occurred.
+    #[error("Error processing Instruction {0}: {1}")]
     InstructionError(u8, InstructionError),
 
     /// Loader call chain is too deep
+    #[error("Loader call chain is too deep")]
     CallChainTooDeep,
 
     /// Transaction requires a fee but has no signature present
+    #[error("Transaction requires a fee but has no signature present")]
     MissingSignatureForFee,
 
     /// Transaction contains an invalid account reference
+    #[error("Transaction contains an invalid account reference")]
     InvalidAccountIndex,
 
     /// Transaction did not pass signature verification
+    #[error("Transaction did not pass signature verification")]
     SignatureFailure,
 
     /// This program may not be used for executing instructions
+    #[error("This program may not be used for executing instructions")]
     InvalidProgramForExecution,
 
     /// Transaction failed to sanitize accounts offsets correctly
     /// implies that account locks are not taken for this TX, and should
     /// not be unlocked.
+    #[error("Transaction failed to sanitize accounts offsets correctly")]
     SanitizeFailure,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
-
-impl std::fmt::Display for TransactionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TransactionError::{:?}", self)
-    }
-}
 
 /// An atomic transaction
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
