@@ -51,6 +51,8 @@ fi
 installDir="$(mkdir -p "$installDir"; cd "$installDir"; pwd)"
 mkdir -p "$installDir/bin/deps"
 cargo=cargo
+# Trigger the selection of the correct set of processor features such as AVX2.
+RUSTFLAGS="$RUSTFLAGS -C target-cpu=native"
 
 echo "Install location: $installDir ($buildVariant)"
 
