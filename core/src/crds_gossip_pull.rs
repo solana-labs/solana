@@ -231,8 +231,9 @@ impl CrdsGossipPull {
         timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
-    ) -> usize {
+    ) -> (usize, usize) {
         let mut failed = 0;
+        let mut timeout_count = 0;
         for r in response {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
@@ -252,10 +253,7 @@ impl CrdsGossipPull {
                         if now > r.wallclock().checked_add(timeout).unwrap_or_else(|| 0)
                             || now + timeout < r.wallclock()
                         {
-                            inc_new_counter_warn!(
-                                "cluster_info-gossip_pull_response_value_timeout",
-                                1
-                            );
+                            timeout_count += 1;
                             failed += 1;
                             continue;
                         }
@@ -264,10 +262,7 @@ impl CrdsGossipPull {
                         // Before discarding this value, check if a ContactInfo for the owner
                         // exists in the table. If it doesn't, that implies that this value can be discarded
                         if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
-                            inc_new_counter_warn!(
-                                "cluster_info-gossip_pull_response_value_timeout",
-                                1
-                            );
+                            timeout_count += 1;
                             failed += 1;
                             continue;
                         } else {
@@ -289,7 +284,7 @@ impl CrdsGossipPull {
             });
         }
         crds.update_record_timestamp(from, now);
-        failed
+        (failed, timeout_count)
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
@@ -660,13 +655,15 @@ mod test {
                 continue;
             }
             assert_eq!(rsp.len(), 1);
-            let failed = node.process_pull_response(
-                &mut node_crds,
-                &node_pubkey,
-                &node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1),
-                rsp.pop().unwrap(),
-                1,
-            );
+            let failed = node
+                .process_pull_response(
+                    &mut node_crds,
+                    &node_pubkey,
+                    &node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1),
+                    rsp.pop().unwrap(),
+                    1,
+                )
+                .0;
             assert_eq!(failed, 0);
             assert_eq!(
                 node_crds
@@ -827,7 +824,8 @@ mod test {
                 &timeouts,
                 vec![peer_entry.clone()],
                 1,
-            ),
+            )
+            .0,
             0
         );
 
@@ -843,7 +841,8 @@ mod test {
                 &timeouts,
                 vec![peer_entry.clone(), unstaked_peer_entry],
                 node.msg_timeout + 100,
-            ),
+            )
+            .0,
             2
         );
 
@@ -856,7 +855,8 @@ mod test {
                 &timeouts,
                 vec![peer_entry],
                 node.msg_timeout + 1,
-            ),
+            )
+            .0,
             0
         );
 
@@ -872,7 +872,8 @@ mod test {
                 &timeouts,
                 vec![peer_vote.clone()],
                 node.msg_timeout + 1,
-            ),
+            )
+            .0,
             0
         );
 
@@ -885,7 +886,8 @@ mod test {
                 &timeouts,
                 vec![peer_vote],
                 node.msg_timeout + 1,
-            ),
+            )
+            .0,
             1
         );
     }
