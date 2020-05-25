@@ -65,7 +65,7 @@ mod acme {
     }
 ```
 
-`invoke()` is built into Solana's runtime and is responsible for routing the given instruction to the `token` program via the instruction's `program_id` field. 
+`invoke()` is built into Solana's runtime and is responsible for routing the given instruction to the `token` program via the instruction's `program_id` field.
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any accounts owned by `token`.  It does this by applying the runtime's policy to the current state of the accounts at the time `acme` calls `invoke` vs. the initial state of the accounts at the beginning of the `acme`'s instruction.  After `pay()` completes, the runtime must again ensure that `token` didn't modify any accounts owned by `acme` by again applying the runtime's policy, but this time with the `token` program ID.  Lastly, after `pay_and_launch_missiles()` completes, the runtime must apply the runtime policy one more time, where it normally would, but using all updated `pre_*` variables. If executing `pay_and_launch_missiles()` up to `pay()` made no invalid account changes, `pay()` made no invalid changes, and executing from `pay()` until `pay_and_launch_missiles()` returns made no invalid changes, then the runtime can transitively assume `pay_and_launch_missiles()` as whole made no invalid account changes, and therefore commit all these account modifications.
 
