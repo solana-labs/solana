@@ -4998,7 +4998,7 @@
         "x": 8,
         "y": 41
       },
-      "id": 64,
+      "id": 35,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5921,7 +5921,7 @@
         "x": 8,
         "y": 47
       },
-      "id": 35,
+      "id": 38,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6480,7 +6480,7 @@
         "x": 0,
         "y": 53
       },
-      "id": 41,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6782,7 +6782,7 @@
         "x": 8,
         "y": 53
       },
-      "id": 38,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7211,7 +7211,7 @@
         "x": 8,
         "y": 58
       },
-      "id": 40,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7327,7 +7327,7 @@
         "x": 16,
         "y": 58
       },
-      "id": 44,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7438,7 +7438,7 @@
         "x": 0,
         "y": 64
       },
-      "id": 45,
+      "id": 46,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7461,7 +7461,7 @@
         "x": 0,
         "y": 65
       },
-      "id": 46,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7621,7 +7621,7 @@
         "x": 8,
         "y": 65
       },
-      "id": 47,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7781,7 +7781,7 @@
         "x": 16,
         "y": 65
       },
-      "id": 48,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7966,7 +7966,7 @@
         "x": 0,
         "y": 70
       },
-      "id": 49,
+      "id": 50,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7985,7 +7985,7 @@
         "x": 0,
         "y": 71
       },
-      "id": 50,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8218,7 +8218,7 @@
         "x": 12,
         "y": 71
       },
-      "id": 51,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8371,7 +8371,7 @@
         "x": 0,
         "y": 76
       },
-      "id": 52,
+      "id": 53,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8389,7 +8389,7 @@
         "x": 0,
         "y": 77
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "avg": false,
         "current": false,
@@ -8591,7 +8591,7 @@
         "x": 12,
         "y": 77
       },
-      "id": 54,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8740,7 +8740,7 @@
         "x": 0,
         "y": 82
       },
-      "id": 55,
+      "id": 56,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8758,7 +8758,7 @@
         "x": 0,
         "y": 83
       },
-      "id": 56,
+      "id": 57,
       "legend": {
         "avg": false,
         "current": false,
@@ -8950,7 +8950,7 @@
         "x": 8,
         "y": 83
       },
-      "id": 57,
+      "id": 58,
       "legend": {
         "avg": false,
         "current": false,
@@ -9218,7 +9218,7 @@
         "x": 16,
         "y": 83
       },
-      "id": 58,
+      "id": 59,
       "legend": {
         "avg": false,
         "current": false,
@@ -9400,14 +9400,210 @@
       }
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 89
+      },
+      "id": 65,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "hideEmpty": true,
+        "hideZero": true,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null as zero",
+      "percentage": false,
+      "pointradius": 1,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {}
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"compact_range_us\") as \"max compact range\" FROM \"$testnet\".\"autogen\".\"blockstore-compact\" WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"delete_range_us\") as \"max delete range\" FROM \"$testnet\".\"autogen\".\"blockstore-purge\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT max(\"write_batch_us\") as \"max write batch\" FROM \"$testnet\".\"autogen\".\"blockstore-purge\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Ledger Pruning ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "µs",
+          "label": "",
+          "logBase": 10,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 95
       },
-      "id": 59,
+      "id": 60,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -9423,9 +9619,9 @@
         "h": 5,
         "w": 7,
         "x": 0,
-        "y": 90
+        "y": 96
       },
-      "id": 60,
+      "id": 61,
       "legend": {
         "avg": false,
         "current": false,
@@ -9538,9 +9734,9 @@
         "h": 5,
         "w": 7,
         "x": 7,
-        "y": 90
+        "y": 96
       },
-      "id": 61,
+      "id": 62,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9763,9 +9959,9 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 90
+        "y": 96
       },
-      "id": 62,
+      "id": 63,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -9851,9 +10047,9 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 95
+        "y": 101
       },
-      "id": 63,
+      "id": 64,
       "legend": {
         "avg": false,
         "current": false,
@@ -10002,7 +10198,7 @@
             "selected": false,
             "text": "Testnet",
             "value": "tds"
-          }
+         }
         ],
         "query": "devnet,mainnet-beta,tds",
         "type": "custom"

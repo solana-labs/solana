@@ -788,17 +788,6 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
-            SubCommand::with_name("prune")
-            .about("Prune the ledger from a yaml file containing a list of slots to prune.")
-            .arg(
-                Arg::with_name("slot_list")
-                    .long("slot-list")
-                    .value_name("FILENAME")
-                    .takes_value(true)
-                    .required(true)
-                    .help("The location of the YAML file with a list of rollback slot heights and hashes"),
-            )
-        ).subcommand(
             SubCommand::with_name("purge")
             .about("Delete a range of slots from the ledger.")
             .arg(
@@ -807,14 +796,14 @@ fn main() {
                     .value_name("SLOT")
                     .takes_value(true)
                     .required(true)
-                    .help("Start slot to purge from."),
+                    .help("Start slot to purge from (inclusive)"),
             )
             .arg(
                 Arg::with_name("end_slot")
                     .index(2)
                     .value_name("SLOT")
-                    .takes_value(true)
-                    .help("Optional ending slot to stop purging."),
+                    .required(true)
+                    .help("Ending slot to stop purging (inclusive)"),
             )
         )
         .subcommand(
@@ -1195,47 +1184,9 @@ fn main() {
         }
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
-            let end_slot = value_t!(arg_matches, "end_slot", Slot);
-            let end_slot = end_slot.map_or(None, Some);
+            let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
             let blockstore = open_blockstore(&ledger_path);
             blockstore.purge_slots(start_slot, end_slot);
-        }
-        ("prune", Some(arg_matches)) => {
-            if let Some(prune_file_path) = arg_matches.value_of("slot_list") {
-                let blockstore = open_blockstore(&ledger_path);
-                let prune_file = File::open(prune_file_path.to_string()).unwrap();
-                let slot_hashes: BTreeMap<u64, String> =
-                    serde_yaml::from_reader(prune_file).unwrap();
-
-                let iter =
-                    RootedSlotIterator::new(0, &blockstore).expect("Failed to get rooted slot");
-
-                let potential_hashes: Vec<_> = iter
-                    .filter_map(|(slot, _meta)| {
-                        let blockhash = blockstore
-                            .get_slot_entries(slot, 0)
-                            .unwrap()
-                            .last()
-                            .unwrap()
-                            .hash
-                            .to_string();
-
-                        slot_hashes.get(&slot).and_then(|hash| {
-                            if *hash == blockhash {
-                                Some((slot, blockhash))
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect();
-
-                let (target_slot, target_hash) = potential_hashes
-                    .last()
-                    .expect("Failed to find a valid slot");
-                println!("Prune at slot {:?} hash {:?}", target_slot, target_hash);
-                blockstore.prune(*target_slot);
-            }
         }
         ("list-roots", Some(arg_matches)) => {
             let blockstore = open_blockstore(&ledger_path);
