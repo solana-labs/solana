@@ -57,6 +57,7 @@ impl UserDefinedError for BPFError {}
 
 pub fn create_vm<'a>(
     prog: &'a [u8],
+    parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
     let mut vm = EbpfVm::new(None)?;
@@ -64,7 +65,7 @@ pub fn create_vm<'a>(
     vm.set_max_instruction_count(100_000)?;
     vm.set_elf(&prog)?;
 
-    let heap_region = syscalls::register_syscalls(&mut vm, invoke_context)?;
+    let heap_region = syscalls::register_syscalls(&mut vm, parameter_accounts, invoke_context)?;
 
     Ok((vm, heap_region))
 }
@@ -182,13 +183,14 @@ pub fn process_instruction(
         )?;
         {
             let program_account = program.try_account_ref_mut()?;
-            let (mut vm, heap_region) = match create_vm(&program_account.data, invoke_context) {
-                Ok(info) => info,
-                Err(e) => {
-                    warn!("Failed to create BPF VM: {}", e);
-                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
-                }
-            };
+            let (mut vm, heap_region) =
+                match create_vm(&program_account.data, &parameter_accounts, invoke_context) {
+                    Ok(info) => info,
+                    Err(e) => {
+                        warn!("Failed to create BPF VM: {}", e);
+                        return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                    }
+                };
 
             info!("Call BPF program {}", program.unsigned_key());
             match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
@@ -274,7 +276,6 @@ mod tests {
             &mut self,
             _message: &Message,
             _instruction: &CompiledInstruction,
-            _signers: &[Pubkey],
             _accounts: &[Rc<RefCell<Account>>],
         ) -> Result<(), InstructionError> {
             Ok(())

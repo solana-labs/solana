@@ -136,6 +136,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(accounts[ARGUMENT_INDEX].is_writable);
     break;
   }
+  case TEST_VERIFY_PRIVILEGE_ESCALATION: {
+    sol_log("Success");
+  }
   case TEST_NESTED_INVOKE: {
     sol_log("invoke");
 
