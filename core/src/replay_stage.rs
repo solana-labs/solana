@@ -998,24 +998,13 @@ impl ReplayStage {
 
         // Send our last few votes along with the new one
         let vote_ix = if bank.slot() > UNLOCK_SWITCH_VOTE_SLOT {
-            match switch_fork_decision {
-                SwitchForkDecision::FailedSwitchThreshold => {
-                    panic!("Switch threshold failure should not lead to voting")
-                }
-                SwitchForkDecision::NoSwitch => vote_instruction::vote(
+            switch_fork_decision
+                .to_vote_instruction(
+                    vote,
                     &vote_account_pubkey,
                     &authorized_voter_keypair.pubkey(),
-                    vote,
-                ),
-                SwitchForkDecision::SwitchProof(switch_proof_hash) => {
-                    vote_instruction::vote_switch(
-                        &vote_account_pubkey,
-                        &authorized_voter_keypair.pubkey(),
-                        vote,
-                        *switch_proof_hash,
-                    )
-                }
-            }
+                )
+                .expect("Switch threshold failure should not lead to voting")
         } else {
             vote_instruction::vote(
                 &vote_account_pubkey,
