@@ -15,7 +15,7 @@ fn test_multiple_threads_insert_shred() {
     for _ in 0..100 {
         let num_threads = 10;
 
-        // Create `num_threads` different ticks in slots 1..num_therads + 1, all
+        // Create `num_threads` different ticks in slots 1..num_threads + 1, all
         // with parent = slot 0
         let threads: Vec<_> = (0..num_threads)
             .map(|i| {
@@ -42,7 +42,7 @@ fn test_multiple_threads_insert_shred() {
         assert_eq!(meta0.next_slots, expected_next_slots);
 
         // Delete slots for next iteration
-        blockstore.purge_slots(0, None);
+        blockstore.purge_slots(0, num_threads + 1);
     }
 
     // Cleanup
