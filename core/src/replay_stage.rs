@@ -2161,7 +2161,7 @@ pub(crate) mod tests {
         {
             // Setup
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open_as_primary(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
             let validator_authorized_voter_keypairs: Vec<_> = (0..20)
@@ -2590,7 +2590,7 @@ pub(crate) mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open_as_primary(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
             let GenesisConfigInfo {
@@ -2641,7 +2641,7 @@ pub(crate) mod tests {
         }
 
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
 
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
@@ -2809,7 +2809,7 @@ pub(crate) mod tests {
         } = create_genesis_config(1000);
         let (ledger_path, _) = create_new_tmp_ledger!(&genesis_config);
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to successfully open database ledger");
             let blockstore = Arc::new(blockstore);
 

@@ -952,7 +952,7 @@ mod tests {
         let bank = bank_forks.get(0).unwrap().clone();
         let vote_tracker = VoteTracker::new(&bank);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(bank_forks)),
@@ -1067,7 +1067,7 @@ mod tests {
         let bank_forks = BankForks::new(0, bank);
         let bank = bank_forks.get(0).unwrap().clone();
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(bank_forks)),

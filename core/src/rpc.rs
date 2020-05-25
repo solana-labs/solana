@@ -1693,7 +1693,7 @@ pub mod tests {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
 
         let keypair1 = Keypair::new();
@@ -1835,7 +1835,7 @@ pub mod tests {
         let (bank_forks, alice, _) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -2773,7 +2773,7 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -2871,7 +2871,7 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -2891,7 +2891,7 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -2956,7 +2956,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let bank_forks = new_bank_forks().0;
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
 
         let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY + 1]);
         let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY + 1]);

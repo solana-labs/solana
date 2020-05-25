@@ -603,7 +603,7 @@ mod test {
     pub fn test_repair_orphan() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             // Create some orphan slots
             let (mut shreds, _) = make_slot_entries(1, 0, 1);
@@ -623,7 +623,7 @@ mod test {
     pub fn test_repair_empty_slot() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             let (shreds, _) = make_slot_entries(2, 0, 1);
 
@@ -644,7 +644,7 @@ mod test {
     pub fn test_generate_repairs() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             let nth = 3;
             let num_slots = 2;
@@ -702,7 +702,7 @@ mod test {
     pub fn test_generate_highest_repair() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             let num_entries_per_slot = 100;
 
@@ -732,7 +732,7 @@ mod test {
     pub fn test_repair_range() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
             let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
@@ -781,7 +781,7 @@ mod test {
     pub fn test_repair_range_highest() {
         let blockstore_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
 
             let num_entries_per_slot = 10;
 
@@ -836,7 +836,7 @@ mod test {
     #[test]
     pub fn test_generate_duplicate_repairs_for_slot() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
         let dead_slot = 9;
 
         // SlotMeta doesn't exist, should make no repairs
@@ -866,7 +866,7 @@ mod test {
     #[test]
     pub fn test_generate_and_send_duplicate_repairs() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
         let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
         let mut duplicate_slot_repair_statuses = HashMap::new();
@@ -997,7 +997,7 @@ mod test {
     #[test]
     pub fn test_process_new_duplicate_slots() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
         let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
         let mut duplicate_slot_repair_statuses = HashMap::new();
@@ -1071,7 +1071,7 @@ mod test {
     #[test]
     pub fn test_find_new_duplicate_slots() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
         let duplicate_slot_repair_statuses = HashMap::new();
         let keypairs = ValidatorVoteKeypairs::new_rand();

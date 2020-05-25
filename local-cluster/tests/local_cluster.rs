@@ -69,7 +69,7 @@ fn test_ledger_cleanup_service() {
     //check everyone's ledgers and make sure only ~100 slots are stored
     for info in cluster.validators.values() {
         let mut slots = 0;
-        let blockstore = Blockstore::open(&info.info.ledger_path).unwrap();
+        let blockstore = Blockstore::open_as_primary(&info.info.ledger_path).unwrap();
         blockstore
             .slot_meta_iterator(0)
             .unwrap()
@@ -991,7 +991,7 @@ fn test_snapshots_blockstore_floor() {
     // Check the validator ledger doesn't contain any slots < slot_floor
     cluster.close_preserve_ledgers();
     let validator_ledger_path = &cluster.validators[&validator_id];
-    let blockstore = Blockstore::open(&validator_ledger_path.info.ledger_path).unwrap();
+    let blockstore = Blockstore::open_as_primary(&validator_ledger_path.info.ledger_path).unwrap();
 
     // Skip the zeroth slot in blockstore that the ledger is initialized with
     let (first_slot, _) = blockstore.slot_meta_iterator(1).unwrap().next().unwrap();
@@ -1152,7 +1152,7 @@ fn test_no_voting() {
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
     let ledger_path = cluster.validators[&leader_pubkey].info.ledger_path.clone();
-    let ledger = Blockstore::open(&ledger_path).unwrap();
+    let ledger = Blockstore::open_as_primary(&ledger_path).unwrap();
     for i in 0..2 * VOTE_THRESHOLD_DEPTH {
         let meta = ledger.meta(i as u64).unwrap().unwrap();
         let parent = meta.parent_slot;

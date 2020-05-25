@@ -524,7 +524,7 @@ mod tests {
         let prev_hash = Hash::default();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
 
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
@@ -551,7 +551,7 @@ mod tests {
         let prev_hash = Hash::default();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
 
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
@@ -578,7 +578,7 @@ mod tests {
     fn test_poh_recorder_reset_clears_cache() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
                 0,
@@ -603,7 +603,7 @@ mod tests {
     fn test_poh_recorder_clear() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -637,7 +637,7 @@ mod tests {
     fn test_poh_recorder_tick_sent_after_min() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -686,7 +686,7 @@ mod tests {
     fn test_poh_recorder_tick_sent_upto_and_including_max() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -733,7 +733,7 @@ mod tests {
     fn test_poh_recorder_record_to_early() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -769,7 +769,7 @@ mod tests {
     fn test_poh_recorder_record_bad_slot() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -809,7 +809,7 @@ mod tests {
     fn test_poh_recorder_record_at_min_passes() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -853,7 +853,7 @@ mod tests {
     fn test_poh_recorder_record_at_max_fails() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -895,7 +895,7 @@ mod tests {
     fn test_poh_cache_on_disconnect() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -933,7 +933,7 @@ mod tests {
     fn test_reset_current() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
                 0,
@@ -960,7 +960,7 @@ mod tests {
     fn test_reset_with_cached() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
                 0,
@@ -988,7 +988,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
                 0,
@@ -1019,7 +1019,7 @@ mod tests {
     fn test_reset_clear_bank() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -1050,7 +1050,7 @@ mod tests {
     pub fn test_clear_signal() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -1079,7 +1079,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let ticks_per_slot = 5;
             let GenesisConfigInfo {
@@ -1130,7 +1130,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -1192,7 +1192,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -1319,7 +1319,7 @@ mod tests {
     fn test_would_be_leader_soon() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
@@ -1386,7 +1386,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             // test that virtual ticks are flushed into a newly set bank asap
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));

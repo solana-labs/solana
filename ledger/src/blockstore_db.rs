@@ -207,7 +207,7 @@ impl Rocks {
                     Ok(db) => Rocks(db, ActualAccessType::Primary),
                     Err(err) => {
                         warn!("Error when opening as primary: {}", err);
-                        warn!("Trying as secondary at : {:?}", secondary_path);
+                        warn!("Trying to open as secondary with: {:?}", secondary_path);
                         warn!("This active secondary db use may temporarily cause the performance of another db use (like by validator) to degrade");
                         Rocks(
                             DB::open_cf_as_secondary(&db_options, path, &secondary_path, names)?,

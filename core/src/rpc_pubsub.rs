@@ -422,7 +422,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
@@ -473,7 +473,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
 
         let session = create_session();
 
@@ -533,7 +533,7 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
 
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
@@ -636,7 +636,7 @@ mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let session = create_session();
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_config))));
 
@@ -682,7 +682,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(1, bank)));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let bob = Keypair::new();
 
         let mut rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(
@@ -736,7 +736,7 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let bob = Keypair::new();
 
         let mut rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(
@@ -804,7 +804,7 @@ mod tests {
     #[serial]
     fn test_slot_subscribe() {
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -834,7 +834,7 @@ mod tests {
     #[serial]
     fn test_slot_unsubscribe() {
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -872,7 +872,7 @@ mod tests {
     #[serial]
     fn test_vote_subscribe() {
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
         ));
@@ -942,7 +942,7 @@ mod tests {
     #[serial]
     fn test_vote_unsubscribe() {
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

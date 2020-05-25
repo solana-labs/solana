@@ -574,7 +574,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
             let rv = ServeRepair::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
@@ -642,7 +642,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
             let me = ContactInfo {
                 id: Pubkey::new_rand(),
                 gossip: socketaddr!("127.0.0.1:1234"),
@@ -802,7 +802,7 @@ mod tests {
         let recycler = PacketsRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
             let rv = ServeRepair::run_orphan(
                 &recycler,
                 &socketaddr_any!(),

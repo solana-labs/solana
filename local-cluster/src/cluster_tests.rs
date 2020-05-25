@@ -140,7 +140,7 @@ pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
 }
 
 pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
-    let ledger = Blockstore::open(ledger_path).unwrap();
+    let ledger = Blockstore::open_as_primary(ledger_path).unwrap();
     let zeroth_slot = ledger.get_slot_entries(0, 0).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();

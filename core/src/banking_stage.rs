@@ -1046,7 +1046,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open_as_primary(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
@@ -1084,7 +1084,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open_as_primary(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
@@ -1146,7 +1146,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
+                Blockstore::open_as_primary(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
@@ -1286,7 +1286,7 @@ mod tests {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new(&genesis_config));
                 let blockstore = Arc::new(
-                    Blockstore::open(&ledger_path)
+                    Blockstore::open_as_primary(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
                 );
                 let mut poh_config = PohConfig::default();
@@ -1354,7 +1354,7 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -1665,7 +1665,7 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -1758,7 +1758,7 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -1846,7 +1846,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
@@ -1913,7 +1913,7 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore = Blockstore::open(&ledger_path)
+            let blockstore = Blockstore::open_as_primary(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let blockstore = Arc::new(blockstore);
             let (poh_recorder, _entry_receiver) = PohRecorder::new(

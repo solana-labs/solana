@@ -93,7 +93,7 @@ fn test_slot_subscription() {
     );
     let exit = Arc::new(AtomicBool::new(false));
     let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+    let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
