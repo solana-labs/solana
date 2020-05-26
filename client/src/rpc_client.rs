@@ -614,26 +614,46 @@ impl RpcClient {
     }
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
-        Ok(self
+        let (blockhash, fee_calculator, _last_valid_slot) = self
             .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
-            .value)
+            .value;
+        Ok((blockhash, fee_calculator))
     }
 
     pub fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<(Hash, FeeCalculator)> {
-        let Response {
+    ) -> RpcResult<(Hash, FeeCalculator, Slot)> {
+        let (context, blockhash, fee_calculator, last_valid_slot) = if let Ok(Response {
+            context,
+            value:
+                RpcFees {
+                    blockhash,
+                    fee_calculator,
+                    last_valid_slot,
+                },
+        }) =
+            self.send::<Response<RpcFees>>(RpcRequest::GetFees, json!([commitment_config]))
+        {
+            (context, blockhash, fee_calculator, last_valid_slot)
+        } else if let Ok(Response {
             context,
             value:
                 RpcBlockhashFeeCalculator {
                     blockhash,
                     fee_calculator,
                 },
-        } = self.send::<Response<RpcBlockhashFeeCalculator>>(
+        }) = self.send::<Response<RpcBlockhashFeeCalculator>>(
             RpcRequest::GetRecentBlockhash,
             json!([commitment_config]),
-        )?;
+        ) {
+            (context, blockhash, fee_calculator, 0)
+        } else {
+            return Err(ClientError::new_with_request(
+                RpcError::ParseError("RpcBlockhashFeeCalculator or RpcFees".to_string()).into(),
+                RpcRequest::GetRecentBlockhash,
+            ));
+        };
 
         let blockhash = blockhash.parse().map_err(|_| {
             ClientError::new_with_request(
@@ -643,7 +663,7 @@ impl RpcClient {
         })?;
         Ok(Response {
             context,
-            value: (blockhash, fee_calculator),
+            value: (blockhash, fee_calculator, last_valid_slot),
         })
     }
 
