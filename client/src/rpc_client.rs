@@ -671,12 +671,28 @@ impl RpcClient {
         &self,
         blockhash: &Hash,
     ) -> ClientResult<Option<FeeCalculator>> {
-        let Response { value, .. } = self.send::<Response<Option<RpcFeeCalculator>>>(
+        Ok(self
+            .get_fee_calculator_for_blockhash_with_commitment(
+                blockhash,
+                CommitmentConfig::default(),
+            )?
+            .value)
+    }
+
+    pub fn get_fee_calculator_for_blockhash_with_commitment(
+        &self,
+        blockhash: &Hash,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Option<FeeCalculator>> {
+        let Response { context, value } = self.send::<Response<Option<RpcFeeCalculator>>>(
             RpcRequest::GetFeeCalculatorForBlockhash,
-            json!([blockhash.to_string()]),
+            json!([blockhash.to_string(), commitment_config]),
         )?;
 
-        Ok(value.map(|rf| rf.fee_calculator))
+        Ok(Response {
+            context,
+            value: value.map(|rf| rf.fee_calculator),
+        })
     }
 
     pub fn get_fee_rate_governor(&self) -> RpcResult<FeeRateGovernor> {
