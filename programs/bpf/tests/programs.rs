@@ -309,6 +309,10 @@ mod bpf {
     fn test_program_bpf_invoke() {
         solana_logger::setup();
 
+        const TEST_SUCCESS: u8 = 1;
+        const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
+        const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
+
         let mut programs = Vec::new();
         #[cfg(feature = "bpf_c")]
         {
@@ -369,9 +373,11 @@ mod bpf {
                 AccountMeta::new(from_keypair.pubkey(), true),
             ];
 
-            let instruction = Instruction::new(invoke_program_id, &1u8, account_metas);
-            let message = Message::new(&[instruction]);
+            // success cases
 
+            let instruction =
+                Instruction::new(invoke_program_id, &TEST_SUCCESS, account_metas.clone());
+            let message = Message::new(&[instruction]);
             assert!(bank_client
                 .send_message(
                     &[
@@ -383,6 +389,52 @@ mod bpf {
                     message,
                 )
                 .is_ok());
+
+            // failure cases
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &TEST_PRIVILEGE_ESCALATION_SIGNER,
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction]);
+            assert_eq!(
+                bank_client
+                    .send_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            );
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &TEST_PRIVILEGE_ESCALATION_WRITABLE,
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction]);
+            assert_eq!(
+                bank_client
+                    .send_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            );
         }
     }
 }
