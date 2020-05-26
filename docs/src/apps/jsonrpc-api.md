@@ -491,7 +491,8 @@ Returns the fee calculator associated with the query blockhash, or `null` if the
 
 #### Parameters:
 
-* `blockhash: <string>`, query blockhash as a Base58 encoded string
+* `<string>` - query blockhash as a Base58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
