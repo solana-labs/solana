@@ -151,6 +151,9 @@ fn process_instruction(
 
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
+        TEST_VERIFY_PRIVILEGE_ESCALATION => {
+            info!("Success");
+        }
         TEST_NESTED_INVOKE => {
             info!("nested invoke");
 

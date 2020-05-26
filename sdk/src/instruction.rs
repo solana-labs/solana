@@ -140,14 +140,6 @@ pub enum InstructionError {
     #[error("Unsupported program id")]
     UnsupportedProgramId,
 
-    /// Writable bit on account info changed, but shouldn't have
-    #[error("Writable bit on account info changed, but shouldn't have")]
-    WritableModified,
-
-    /// Signer bit on account info changed, but shouldn't have
-    #[error("Signer bit on account info changed, but shouldn't have")]
-    SignerModified,
-
     /// Cross-program invocation call depth too deep
     #[error("Cross-program invocation call depth too deep")]
     CallDepth,

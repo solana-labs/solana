@@ -80,7 +80,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf().unwrap();
-    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf, &mut invoke_context).unwrap();
+    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf, &[], &mut invoke_context).unwrap();
 
     println!("Interpreted:");
     assert_eq!(
@@ -145,7 +145,6 @@ impl InvokeContext for MockInvokeContext {
         &mut self,
         _message: &Message,
         _instruction: &CompiledInstruction,
-        _signers: &[Pubkey],
         _accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         Ok(())

@@ -10,7 +10,8 @@ pub const TEST_RETURN_ERROR: u8 = 1;
 pub const TEST_DERIVED_SIGNERS: u8 = 2;
 pub const TEST_VERIFY_NESTED_SIGNERS: u8 = 3;
 pub const TEST_VERIFY_WRITER: u8 = 4;
-pub const TEST_NESTED_INVOKE: u8 = 5;
+pub const TEST_VERIFY_PRIVILEGE_ESCALATION: u8 = 5;
+pub const TEST_NESTED_INVOKE: u8 = 6;
 
 pub fn create_instruction(
     program_id: Pubkey,
