@@ -936,6 +936,15 @@ impl Bank {
         &self.fee_rate_governor
     }
 
+    pub fn get_blockhash_last_valid_slot(&self, blockhash: &Hash) -> Option<Slot> {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        // This calculation will need to be updated to consider epoch boundaries if BlockhashQueue
+        // length is made variable by epoch
+        blockhash_queue
+            .get_hash_age(blockhash)
+            .map(|age| self.slot + blockhash_queue.len() as u64 - age)
+    }
+
     pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 
