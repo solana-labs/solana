@@ -1209,8 +1209,10 @@ impl AccountsDB {
     }
 
     pub fn include_owner_in_hash(slot: Slot) -> bool {
-        // Account hashing updated to include owner activates at this slot on the testnet
-        slot >= 14_000_000
+        // Account hashing will be updated to include owner at this slot on the devnet.
+        // For testnet, it fully transitioned already thanks to eager rent collection,
+        // so, this check is irrelevant, strictly speaking.
+        slot >= 6_500_000
     }
 
     pub fn hash_account_data(
