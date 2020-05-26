@@ -597,13 +597,16 @@ pub fn process_cluster_version(rpc_client: &RpcClient) -> ProcessResult {
     Ok(remote_version.solana_core)
 }
 
-pub fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    Ok(format!(
-        "blockhash: {}\nlamports per signature: {}",
-        recent_blockhash, fee_calculator.lamports_per_signature
-    ))
+pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let result = rpc_client.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
+    let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
+    let fees = CliFees {
+        slot: result.context.slot,
+        blockhash: recent_blockhash.to_string(),
+        lamports_per_signature: fee_calculator.lamports_per_signature,
+        last_valid_slot,
+    };
+    Ok(config.output_format.formatted_string(&fees))
 }
 
 pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
