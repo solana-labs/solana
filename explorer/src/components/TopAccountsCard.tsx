@@ -27,7 +27,7 @@ export default function TopAccountsCard() {
     return <ErrorCard text={richList} retry={fetchRichList} />;
   }
 
-  const { accounts, circulatingSupply: supply } = richList;
+  const { accounts, totalSupply: supply } = richList;
 
   return (
     <div className="card">
@@ -40,7 +40,7 @@ export default function TopAccountsCard() {
               <th className="text-muted">Rank</th>
               <th className="text-muted">Address</th>
               <th className="text-muted">Balance (SOL)</th>
-              <th className="text-muted">% of Circulating Supply</th>
+              <th className="text-muted">% of Total Supply</th>
               <th className="text-muted">Details</th>
             </tr>
           </thead>
@@ -60,7 +60,7 @@ const renderHeader = () => {
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
-          <h4 className="card-header-title">Top 20 Active Accounts</h4>
+          <h4 className="card-header-title">Largest Accounts</h4>
         </div>
       </div>
     </div>

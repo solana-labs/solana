@@ -49,9 +49,7 @@ async function fetch(dispatch: Dispatch, url: string) {
   try {
     const connection = new Connection(url, "max");
     const supply = (await connection.getSupply()).value;
-    const accounts = (
-      await connection.getLargestAccounts({ filter: "circulating" })
-    ).value;
+    const accounts = (await connection.getLargestAccounts()).value;
 
     // Update state if still connecting
     dispatch(state => {
