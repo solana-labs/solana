@@ -58,6 +58,12 @@ impl BlockhashQueue {
             .map(|age| self.hash_height - age.hash_height <= max_age as u64)
     }
 
+    pub fn get_hash_age(&self, hash: &Hash) -> Option<u64> {
+        self.ages
+            .get(hash)
+            .map(|age| self.hash_height - age.hash_height)
+    }
+
     /// check if hash is valid
     #[cfg(test)]
     pub fn check_hash(&self, hash: Hash) -> bool {
@@ -118,6 +124,10 @@ impl BlockhashQueue {
         (&self.ages)
             .iter()
             .map(|(k, v)| recent_blockhashes::IterItem(v.hash_height, k, &v.fee_calculator))
+    }
+
+    pub fn len(&self) -> usize {
+        self.max_age
     }
 }
 #[cfg(test)]

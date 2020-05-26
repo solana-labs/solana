@@ -207,6 +207,25 @@ impl JsonRpcRequestProcessor {
         )
     }
 
+    fn get_recent_blockhash_last_valid_slot(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan> {
+        let bank = &*self.bank(commitment)?;
+        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
+        let last_valid_slot = bank
+            .get_blockhash_last_valid_slot(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
+        new_response(
+            bank,
+            RpcBlockhashFeeCalculatorLifespan {
+                blockhash: blockhash.to_string(),
+                fee_calculator,
+                last_valid_slot,
+            },
+        )
+    }
+
     fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
@@ -793,6 +812,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
+    #[rpc(meta, name = "getRecentBlockhashLastValidSlot")]
+    fn get_recent_blockhash_last_valid_slot(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan>;
+
     #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
     fn get_fee_calculator_for_blockhash(
         &self,
@@ -1124,6 +1150,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_recent_blockhash(commitment)
+    }
+
+    fn get_recent_blockhash_last_valid_slot(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan> {
+        debug!("get_recent_blockhash_last_valid_slot rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_recent_blockhash_last_valid_slot(commitment)
     }
 
     fn get_fee_calculator_for_blockhash(
@@ -1571,6 +1609,7 @@ pub mod tests {
         get_tmp_ledger_path,
     };
     use solana_sdk::{
+        clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -2507,6 +2546,38 @@ pub mod tests {
                 "feeCalculator": {
                     "lamportsPerSignature": 0,
                 }
+            }},
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_blockhash_last_valid_slot() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhashLastValidSlot"}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+            "context":{"slot":0},
+            "value":{
+                "blockhash": blockhash.to_string(),
+                "feeCalculator": {
+                    "lamportsPerSignature": 0,
+                },
+                "lastValidSlot": MAX_RECENT_BLOCKHASHES,
             }},
             "id": 1
         });
