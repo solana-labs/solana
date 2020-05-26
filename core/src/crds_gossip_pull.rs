@@ -9,7 +9,6 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
-use solana_measure::measure::Measure;
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
@@ -17,6 +16,7 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
+use solana_measure::measure::Measure;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -364,8 +364,14 @@ impl CrdsGossipPull {
             filters.iter_mut().for_each(|filter| filter.add(value_hash));
         }
         purge_time.stop();
-        info!("{} {} {} crds.table.len: {} purged: {}",
-            new_set, add_time, purge_time, crds.table.len(), self.purged_values.len());
+        info!(
+            "{} {} {} crds.table.len: {} purged: {}",
+            new_set,
+            add_time,
+            purge_time,
+            crds.table.len(),
+            self.purged_values.len()
+        );
         filters
     }
     /// filter values that fail the bloom filter up to max_bytes
