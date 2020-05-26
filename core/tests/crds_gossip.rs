@@ -426,23 +426,21 @@ fn network_run_pull(
                     .map(|f| f.filter.bits.len() as usize / 8)
                     .sum::<usize>();
                 bytes += serialized_size(&caller_info).unwrap() as usize;
-                let filters = filters
+                let filters: Vec<_> = filters
                     .into_iter()
                     .map(|f| (caller_info.clone(), f))
                     .collect();
-                let rsp = network
+                let rsp: Vec<_> = network
                     .get(&to)
                     .map(|node| {
-                        let mut rsp = vec![];
-                        rsp.append(
-                            &mut node
-                                .lock()
-                                .unwrap()
-                                .process_pull_requests(filters, now)
-                                .into_iter()
-                                .flatten()
-                                .collect(),
-                        );
+                        let rsp = node
+                            .lock()
+                            .unwrap()
+                            .generate_pull_responses(&filters)
+                            .into_iter()
+                            .flatten()
+                            .collect();
+                        node.lock().unwrap().process_pull_requests(filters, now);
                         rsp
                     })
                     .unwrap();
