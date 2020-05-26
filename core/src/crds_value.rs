@@ -71,6 +71,7 @@ pub enum CrdsData {
     EpochSlots(EpochSlotIndex, EpochSlots),
     SnapshotHashes(SnapshotHash),
     AccountsHashes(SnapshotHash),
+    NewEpochSlotsPlaceholder, // Reserve this enum entry for the v1.1 version of EpochSlots
     Version(Version),
 }
 
@@ -123,6 +124,7 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
+            CrdsData::NewEpochSlotsPlaceholder => Err(SanitizeError::InvalidValue), // Not supported on v1.0
             CrdsData::Version(version) => version.sanitize(),
         }
     }
@@ -266,6 +268,7 @@ pub enum CrdsValueLabel {
     EpochSlots(Pubkey),
     SnapshotHashes(Pubkey),
     AccountsHashes(Pubkey),
+    NewEpochSlotsPlaceholder,
     Version(Pubkey),
 }
 
@@ -277,6 +280,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
             CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
+            CrdsValueLabel::NewEpochSlotsPlaceholder => write!(f, "NewEpochSlotsPlaceholder"),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
         }
     }
@@ -290,6 +294,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::EpochSlots(p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::AccountsHashes(p) => *p,
+            CrdsValueLabel::NewEpochSlotsPlaceholder => Pubkey::default(),
             CrdsValueLabel::Version(p) => *p,
         }
     }
@@ -318,6 +323,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, vote) => vote.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::AccountsHashes(hash) => hash.wallclock,
+            CrdsData::NewEpochSlotsPlaceholder => 0,
             CrdsData::Version(version) => version.wallclock,
         }
     }
@@ -328,6 +334,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, slots) => slots.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::AccountsHashes(hash) => hash.from,
+            CrdsData::NewEpochSlotsPlaceholder => Pubkey::default(),
             CrdsData::Version(version) => version.from,
         }
     }
@@ -338,6 +345,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, _) => CrdsValueLabel::EpochSlots(self.pubkey()),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
+            CrdsData::NewEpochSlotsPlaceholder => CrdsValueLabel::NewEpochSlotsPlaceholder,
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
         }
     }
@@ -456,6 +464,7 @@ mod test {
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
                 CrdsValueLabel::Version(_) => hits[4] = true,
                 CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 5] = true,
+                CrdsValueLabel::NewEpochSlotsPlaceholder => unreachable!(),
             }
         }
         assert!(hits.iter().all(|x| *x));
