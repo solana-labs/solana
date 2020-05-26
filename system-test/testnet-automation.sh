@@ -140,6 +140,9 @@ function launch_testnet() {
   if [[ $NUMBER_OF_CLIENT_NODES -gt 0 ]]; then
     execution_step "Starting ${NUMBER_OF_CLIENT_NODES} client nodes"
     "${REPO_ROOT}"/net/net.sh startclients "$maybeClientOptions" "$CLIENT_OPTIONS"
+    # It takes roughly 3 minutes from the time the client nodes return from starting to when they have finished loading the
+    # accounts file and actually start sending transactions
+    sleep 180
   fi
 
   SECONDS=0
