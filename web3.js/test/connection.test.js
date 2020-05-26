@@ -1056,7 +1056,7 @@ test('get confirmed block', async () => {
 
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
-  for (const commitment of ['max', 'recent', 'root', 'single']) {
+  for (const commitment of ['max', 'recent', 'root', 'single', 'singleGossip']) {
     mockGetRecentBlockhash(commitment);
 
     const {blockhash, feeCalculator} = await connection.getRecentBlockhash(
