@@ -1212,7 +1212,7 @@ impl AccountsDB {
         // Account hashing will be updated to include owner at this slot on the devnet.
         // For testnet, it fully transitioned already thanks to eager rent collection,
         // so, this check is irrelevant, strictly speaking.
-        slot >= 6_500_000
+        slot >= 5_800_000
     }
 
     pub fn hash_account_data(
