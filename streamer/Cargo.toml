@@ -15,7 +15,7 @@ solana-sdk = { path = "../sdk", version = "1.2.0" }
 thiserror = "1.0"
 solana-measure = { path = "../measure", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
-libc = "0.2.70"
+libc = "0.2.71"
 nix = "0.17.0"
 solana-perf = { path = "../perf", version = "1.2.0" }
 
