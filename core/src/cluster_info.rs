@@ -1588,11 +1588,20 @@ impl ClusterInfo {
                                 warn!("PullRequest ignored, I'm talking to myself");
                                 inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                             } else {
-                                gossip_pull_data.push(PullData {
-                                    from_addr,
-                                    caller,
-                                    filter,
-                                });
+                                if contact_info.shred_version == 0
+                                    || contact_info.shred_version == me.my_shred_version()
+                                {
+                                    gossip_pull_data.push(PullData {
+                                        from_addr,
+                                        caller,
+                                        filter,
+                                    });
+                                } else {
+                                    info!(
+                                        "skipping pull request with shred_version: {}",
+                                        contact_info.shred_version
+                                    );
+                                }
                             }
                         }
                         datapoint_debug!(
@@ -1824,6 +1833,17 @@ impl ClusterInfo {
     ) {
         let len = data.len();
         trace!("PullResponse me: {} from: {} len={}", me.id, from, len);
+
+        if let Some(shred_version) = me.lookup_contact_info(from, |ci| ci.shred_version) {
+            if shred_version != 0 && shred_version != me.my_shred_version() {
+                info!(
+                    "skipping pull with version {} from: {}",
+                    shred_version, from
+                );
+                return;
+            }
+        }
+
         let (_fail, timeout_count) = me
             .time_gossip_write_lock("process_pull", &me.stats.process_pull_response)
             .process_pull_response(from, timeouts, data, timestamp());
@@ -1843,6 +1863,16 @@ impl ClusterInfo {
     ) -> Option<Packets> {
         let self_id = me.id();
         inc_new_counter_debug!("cluster_info-push_message", 1);
+
+        if let Some(shred_version) = me.lookup_contact_info(from, |ci| ci.shred_version) {
+            if shred_version != 0 && shred_version != me.my_shred_version() {
+                info!(
+                    "skipping push with version {} from: {}",
+                    shred_version, from
+                );
+                return None;
+            }
+        }
 
         let updated: Vec<_> = me
             .time_gossip_write_lock("process_push", &me.stats.process_push_message)
