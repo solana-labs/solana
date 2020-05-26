@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-banking-bench"
-version = "1.0.24"
+version = "1.0.25"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -10,12 +10,12 @@ homepage = "https://solana.com/"
 [dependencies]
 log = "0.4.6"
 rayon = "1.2.0"
-solana-core = { path = "../core", version = "1.0.24" }
-solana-ledger = { path = "../ledger", version = "1.0.24" }
-solana-logger = { path = "../logger", version = "1.0.24" }
-solana-runtime = { path = "../runtime", version = "1.0.24" }
-solana-measure = { path = "../measure", version = "1.0.24" }
-solana-sdk = { path = "../sdk", version = "1.0.24" }
+solana-core = { path = "../core", version = "1.0.25" }
+solana-ledger = { path = "../ledger", version = "1.0.25" }
+solana-logger = { path = "../logger", version = "1.0.25" }
+solana-runtime = { path = "../runtime", version = "1.0.25" }
+solana-measure = { path = "../measure", version = "1.0.25" }
+solana-sdk = { path = "../sdk", version = "1.0.25" }
 rand = "0.7.0"
 crossbeam-channel = "0.3"
 
