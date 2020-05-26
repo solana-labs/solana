@@ -72,9 +72,7 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
             }
         }
         OperatingMode::Stable => {
-            if epoch == std::u64::MAX - 1 {
-                // The epoch of std::u64::MAX - 1 is a placeholder and is expected to be reduced in
-                // a future hard fork.
+            if epoch == 34 {
                 Some(vec![solana_bpf_loader_program!()])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
@@ -163,7 +161,7 @@ mod tests {
     #[test]
     fn test_softlaunch_programs() {
         assert_eq!(get_programs(OperatingMode::Stable, 1), None);
-        assert!(get_programs(OperatingMode::Stable, std::u64::MAX - 1).is_some());
+        assert!(get_programs(OperatingMode::Stable, 34).is_some());
         assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }

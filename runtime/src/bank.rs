@@ -860,8 +860,7 @@ impl Bank {
             // DANGER: Adjust this guard after tds has transitioned to the eager rent
             // collection and ABSOLUTELY after the mainnet-beta transitions to v1.1.
             if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 47
-                || self.operating_mode() == OperatingMode::Stable
-                    && self.epoch() < Epoch::max_value())
+                || self.operating_mode() == OperatingMode::Stable && self.epoch() < 34)
             {
                 self.collect_rent_eagerly();
             }
