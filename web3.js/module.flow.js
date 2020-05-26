@@ -59,7 +59,7 @@ declare module '@solana/web3.js' {
     value: T,
   };
 
-  declare export type Commitment = 'max' | 'recent' | 'root' | 'single';
+  declare export type Commitment = 'max' | 'recent' | 'root' | 'single' | 'singleGossip';
 
   declare export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 
