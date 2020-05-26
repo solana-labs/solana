@@ -86,7 +86,7 @@ To sign an account with program derived addresses, a program may `invoke_signed(
         invoke_signed(
             &instruction,
             accounts,
-            &[&["First addresses seed"], 
+            &[&["First addresses seed"],
               &["Second addresses first seed", "Second addresses second seed"]],
         )?;
 
