@@ -3,8 +3,8 @@
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_slots::ClusterSlots,
-    repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
+    repair_service::{ConfirmedSlotsReceiver, DuplicateSlotsResetSender},
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
@@ -341,6 +341,7 @@ impl RetransmitStage {
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+        confirmed_slots_receiver: ConfirmedSlotsReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -358,6 +359,7 @@ impl RetransmitStage {
             completed_slots_receiver,
             epoch_schedule,
             duplicate_slots_reset_sender,
+            confirmed_slots_receiver,
         };
         let leader_schedule_cache = leader_schedule_cache.clone();
         let window_service = WindowService::new(

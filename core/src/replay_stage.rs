@@ -10,7 +10,7 @@ use crate::{
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
     pubkey_references::PubkeyReferences,
-    repair_service::DuplicateSlotsResetReceiver,
+    repair_service::{ConfirmedSlotsSender, DuplicateSlotsResetReceiver},
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -156,6 +156,7 @@ impl ReplayStage {
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
         duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
+        confirmed_slots_sender: ConfirmedSlotsSender,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -300,12 +301,15 @@ impl ReplayStage {
                             &bank_forks,
                         );
 
-                        for slot in confirmed_forks {
-                            progress
-                                .get_mut(&slot)
-                                .unwrap()
-                                .fork_stats
-                                .confirmation_reported = true;
+                        if !confirmed_forks.is_empty() {
+                            for slot in &confirmed_forks {
+                                progress
+                                    .get_mut(&slot)
+                                    .unwrap()
+                                    .fork_stats
+                                    .confirmation_reported = true;
+                            }
+                            let _ = confirmed_slots_sender.send(confirmed_forks);
                         }
                     }
 
@@ -757,9 +761,8 @@ impl ReplayStage {
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect())
-                        .unwrap();
+                    let _ = retransmit_slots_sender
+                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
                 }
                 return;
             }

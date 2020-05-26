@@ -3031,7 +3031,7 @@ mod tests {
         assert_eq!(update_slots, range);
 
         // Test with fewer epoch slots than needed, modified EpochSlots should wrap around
-        let (_, _, since) = get_modified_epoch_slots(
+        let _ = get_modified_epoch_slots(
             &cluster_info,
             &range,
             crds_value::MAX_COMPLETED_EPOCH_SLOTS,
@@ -3060,7 +3060,13 @@ mod tests {
             since = new_since;
             let first = range[0];
             // Find last instance of `first`, that must be where the write started
-            let begin_index = update_slots.len() - update_slots.iter().rev().position(|slot| *slot == first).unwrap() - 1;
+            let begin_index = update_slots.len()
+                - update_slots
+                    .iter()
+                    .rev()
+                    .position(|slot| *slot == first)
+                    .unwrap()
+                - 1;
             update_slots.rotate_left(begin_index);
             update_slots.truncate(range.len());
             assert_eq!(update_slots, range);

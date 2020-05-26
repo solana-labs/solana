@@ -30,6 +30,8 @@ use std::{
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
+pub type ConfirmedSlotsSender = CrossbeamSender<Vec<Slot>>;
+pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
 
 #[derive(Default)]
 pub struct RepairStatsGroup {
@@ -64,6 +66,7 @@ pub struct RepairInfo {
     pub completed_slots_receiver: CompletedSlotsReceiver,
     pub epoch_schedule: EpochSchedule,
     pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+    pub confirmed_slots_receiver: ConfirmedSlotsReceiver,
 }
 
 pub struct RepairSlotRange {
@@ -146,6 +149,7 @@ impl RepairService {
                 let lowest_slot = blockstore.lowest_slot();
                 Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                 Self::update_completed_slots(&repair_info.completed_slots_receiver, &cluster_info);
+                Self::update_confirmed_slots(&repair_info.confirmed_slots_receiver, &cluster_info);
                 cluster_slots.update(new_root, &cluster_info, &repair_info.bank_forks);
                 let new_duplicate_slots = Self::find_new_duplicate_slots(
                     &duplicate_slot_repair_statuses,
@@ -376,7 +380,7 @@ impl RepairService {
     ) {
         for slot in new_duplicate_slots {
             warn!(
-                "Cluster completed slot: {}, dumping our current version and repairing",
+                "Cluster confirmed slot: {}, dumping our current version and repairing",
                 slot
             );
             // Clear the slot signatures from status cache for this slot
@@ -537,7 +541,7 @@ impl RepairService {
     }
 
     fn update_confirmed_slots(
-        confirmed_slots_receiver: &CompletedSlotsReceiver,
+        confirmed_slots_receiver: &ConfirmedSlotsReceiver,
         cluster_info: &ClusterInfo,
     ) {
         let mut slots: Vec<Slot> = vec![];
@@ -546,11 +550,7 @@ impl RepairService {
         }
         slots.sort();
         if !slots.is_empty() {
-            cluster_info.push_epoch_slots(
-                &slots,
-                MAX_COMPLETED_EPOCH_SLOTS,
-                MAX_EPOCH_SLOTS - MAX_COMPLETED_EPOCH_SLOTS + 1,
-            );
+            Self::push_confirmed_epoch_slots(&slots, &cluster_info);
         }
     }
 
@@ -564,7 +564,7 @@ impl RepairService {
         }
         slots.sort();
         if !slots.is_empty() {
-            cluster_info.push_epoch_slots(&slots, 0, MAX_COMPLETED_EPOCH_SLOTS);
+            Self::push_completed_epoch_slots(&slots, cluster_info);
         }
     }
 
@@ -595,8 +595,21 @@ impl RepairService {
         slots.sort();
         slots.dedup();
         if !slots.is_empty() {
-            cluster_info.push_epoch_slots(&slots, 0, MAX_COMPLETED_EPOCH_SLOTS);
+            Self::push_completed_epoch_slots(&slots, cluster_info);
         }
+        Self::push_confirmed_epoch_slots(&[root], &cluster_info);
+    }
+
+    fn push_confirmed_epoch_slots(slots: &[Slot], cluster_info: &ClusterInfo) {
+        cluster_info.push_epoch_slots(
+            slots,
+            MAX_COMPLETED_EPOCH_SLOTS,
+            MAX_EPOCH_SLOTS - MAX_COMPLETED_EPOCH_SLOTS + 1,
+        );
+    }
+
+    fn push_completed_epoch_slots(slots: &[Slot], cluster_info: &ClusterInfo) {
+        cluster_info.push_epoch_slots(slots, 0, MAX_COMPLETED_EPOCH_SLOTS);
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -965,7 +978,7 @@ mod test {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let valid_repair_peer = Node::new_localhost().info;
 
-        // Signal that this peer has completed the dead slot, and is thus
+        // Signal that this peer has confirmed the dead slot, and is thus
         // a valid target for repair
         let dead_slot = 9;
         let cluster_slots = ClusterSlots::default();
@@ -1128,7 +1141,7 @@ mod test {
         )
         .is_empty());
 
-        // If superminoorty reports slot was confirmed, then dead slot should be
+        // If superminority reports slot was confirmed, then dead slot should be
         // marked as a duplicate that needs to be repaired
         cluster_slots.insert_node_id(dead_slot, only_node_id, MAX_COMPLETED_EPOCH_SLOTS);
         assert_eq!(

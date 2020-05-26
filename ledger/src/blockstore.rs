@@ -74,7 +74,7 @@ const TIMESTAMP_SLOT_RANGE: usize = 16;
 // (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
-pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
+pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
 
 // ledger window
 pub struct Blockstore {
