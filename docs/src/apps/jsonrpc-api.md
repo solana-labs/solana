@@ -39,10 +39,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
-* [getSlotsPerSegment](jsonrpc-api.md#getslotspersegment)
-* [getStoragePubkeysForSlot](jsonrpc-api.md#getstoragepubkeysforslot)
-* [getStorageTurn](jsonrpc-api.md#getstorageturn)
-* [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
 * [getSupply](jsonrpc-api.md#getsupply)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -860,93 +856,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
-```
-
-### getSlotsPerSegment
-
-Returns the current storage segment size in terms of slots
-
-#### Parameters:
-
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<u64>` - Number of slots in a storage segment
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":1024,"id":1}
-```
-
-### getStoragePubkeysForSlot
-
-Returns the storage Pubkeys for a particular slot
-
-#### Parameters:
-
-None
-
-#### Results:
-
-An array of Pubkeys, as base-58 encoded strings
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStoragePubkeysForSlot","params":[1]}' http://localhost:8899
- // Result
-{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"],"id":1}
-```
-
-### getStorageTurn
-
-Returns the current storage turn's blockhash and slot
-
-#### Parameters:
-
-None
-
-#### Results:
-
-A JSON object consisting of
-
-* `blockhash: <string>` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
-* `slot: <u64>` - the current storage turn slot
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurn"}' http://localhost:8899
- // Result
-{"jsonrpc":"2.0","result":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "slot": 2048},"id":1}
-```
-
-### getStorageTurnRate
-
-Returns the current storage turn rate in terms of slots per turn
-
-#### Parameters:
-
-None
-
-#### Results:
-
-* `<u64>` - Number of slots in storage turn
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurnRate"}' http://localhost:8899
- // Result
-{"jsonrpc":"2.0","result":1024,"id":1}
 ```
 
 ### getSupply
