@@ -36,6 +36,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
+* [getRecentBlockhashLastValidSlot](jsonrpc-api.md#getrecentblockhashlastvalidslot)
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
@@ -769,7 +770,35 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"burnPercent":50,"lamportsPerSignature":5000,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"lamportsPerSignature":5000}}},"id":1}
+```
+
+### getRecentBlockhashLastValidSlot
+
+Returns a recent block hash from the ledger, a fee schedule that can be used to
+compute the cost of submitting a transaction using it, and the last slot in
+which the blockhash will be valid.
+
+#### Parameters:
+
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
+
+* `blockhash: <string>` - a Hash as base-58 encoded string
+* `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
+* `lastValidSlot: <u64>` - last slot in which a blockhash will be valid
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhashLastValidSlot"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{lamportsPerSignature":5000},"lastValidSlot":297}},"id":1}
 ```
 
 ### getSignatureStatuses
