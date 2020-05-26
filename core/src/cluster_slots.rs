@@ -227,6 +227,7 @@ mod tests {
     fn test_default() {
         let cs = ClusterSlots::default();
         assert!(cs.completed_cluster_slots.read().unwrap().is_empty());
+        assert!(cs.confirmed_cluster_slots.read().unwrap().is_empty());
         assert!(cs.since.read().unwrap().is_none());
     }
 
@@ -235,6 +236,7 @@ mod tests {
         let cs = ClusterSlots::default();
         cs.update_internal(0, (vec![], None));
         assert!(cs.completed_cluster_slots.read().unwrap().is_empty());
+        assert!(cs.confirmed_cluster_slots.read().unwrap().is_empty());
         assert!(cs.since.read().unwrap().is_none());
     }
 
@@ -242,9 +244,13 @@ mod tests {
     fn test_update_empty() {
         let cs = ClusterSlots::default();
         let epoch_slot = EpochSlots::default();
-        cs.update_internal(0, (vec![(0, epoch_slot)], Some(0)));
+        cs.update_internal(0, (vec![(0, epoch_slot.clone())], Some(0)));
         assert_eq!(*cs.since.read().unwrap(), Some(0));
         assert!(cs.lookup_completed(0).is_none());
+
+        cs.update_internal(0, (vec![(MAX_COMPLETED_EPOCH_SLOTS, epoch_slot)], Some(0)));
+        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert!(cs.lookup_confirmed(0).is_none());
     }
 
     #[test]
@@ -253,9 +259,13 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[0], 0);
-        cs.update_internal(0, (vec![(0, epoch_slot)], Some(0)));
+        cs.update_internal(0, (vec![(0, epoch_slot.clone())], Some(0)));
         assert_eq!(*cs.since.read().unwrap(), Some(0));
         assert!(cs.lookup_completed(0).is_none());
+
+        cs.update_internal(0, (vec![(MAX_COMPLETED_EPOCH_SLOTS, epoch_slot)], Some(0)));
+        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert!(cs.lookup_confirmed(0).is_none());
     }
 
     #[test]
@@ -263,12 +273,27 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, (vec![(0, epoch_slot)], Some(0)));
+        cs.update_internal(0, (vec![(0, epoch_slot.clone())], Some(0)));
         assert_eq!(*cs.since.read().unwrap(), Some(0));
         assert!(cs.lookup_completed(0).is_none());
         assert!(cs.lookup_completed(1).is_some());
         assert_eq!(
             cs.lookup_completed(1)
+                .unwrap()
+                .read()
+                .unwrap()
+                .get(&Pubkey::default()),
+            Some(&0)
+        );
+        assert!(cs.lookup_confirmed(0).is_none());
+        assert!(cs.lookup_confirmed(1).is_none());
+
+        cs.update_internal(0, (vec![(MAX_COMPLETED_EPOCH_SLOTS, epoch_slot)], Some(0)));
+        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert!(cs.lookup_confirmed(0).is_none());
+        assert!(cs.lookup_confirmed(1).is_some());
+        assert_eq!(
+            cs.lookup_confirmed(1)
                 .unwrap()
                 .read()
                 .unwrap()
@@ -394,10 +419,21 @@ mod tests {
         );
 
         *cs.validator_stakes.write().unwrap() = map;
-        cs.update_internal(0, (vec![(0, epoch_slot)], None));
+        cs.update_internal(0, (vec![(0, epoch_slot.clone())], None));
         assert!(cs.lookup_completed(1).is_some());
         assert_eq!(
             cs.lookup_completed(1)
+                .unwrap()
+                .read()
+                .unwrap()
+                .get(&Pubkey::default()),
+            Some(&1)
+        );
+
+        cs.update_internal(0, (vec![(MAX_COMPLETED_EPOCH_SLOTS, epoch_slot)], None));
+        assert!(cs.lookup_confirmed(1).is_some());
+        assert_eq!(
+            cs.lookup_confirmed(1)
                 .unwrap()
                 .read()
                 .unwrap()

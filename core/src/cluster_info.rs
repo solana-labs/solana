@@ -599,10 +599,12 @@ impl ClusterInfo {
     // that can be modified
     pub fn push_epoch_slots(&self, update: &[Slot], start_index: u8, num_epoch_slots: u8) {
         assert!(
-            start_index as u16 + num_epoch_slots as u16 - 1 <= crds_value::MAX_EPOCH_SLOTS as u16
+            num_epoch_slots > 0
+                && start_index as u16 + num_epoch_slots as u16 - 1
+                    <= crds_value::MAX_EPOCH_SLOTS as u16
         );
         let mut num = 0;
-        let mut current_slots: Vec<_> = (start_index..start_index + num_epoch_slots)
+        let mut current_slots: Vec<_> = (start_index..start_index + (num_epoch_slots - 1))
             .filter_map(|ix| {
                 Some((
                     self.time_gossip_read_lock(
@@ -2287,6 +2289,7 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 mod tests {
     use super::*;
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
+    use rand::Rng;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
@@ -2979,7 +2982,6 @@ mod tests {
 
     #[test]
     fn test_push_epoch_slots_large() {
-        use rand::Rng;
         let node_keypair = Arc::new(Keypair::new());
         let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
@@ -2991,12 +2993,78 @@ mod tests {
             let last = *range.last().unwrap_or(&0);
             range.push(last + rand::thread_rng().gen_range(1, 32));
         }
-        cluster_info.push_epoch_slots(&range[..16000], 0, crds_value::MAX_COMPLETED_EPOCH_SLOTS);
-        cluster_info.push_epoch_slots(&range[16000..], 0, crds_value::MAX_COMPLETED_EPOCH_SLOTS);
-        let (slots, since) = cluster_info.get_epoch_slots_since(None);
-        let slots: Vec<_> = slots.iter().flat_map(|(_, x)| x.to_slots(0)).collect();
-        assert_eq!(slots, range);
-        assert!(since.is_some());
+        let (_, update_slots, _) =
+            get_modified_epoch_slots(&cluster_info, &range, 0, crds_value::MAX_EPOCH_SLOTS, None);
+        assert_eq!(update_slots, range);
+    }
+
+    #[test]
+    fn test_push_epoch_slots_range() {
+        let node_keypair = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair.clone(),
+        );
+        let mut range: Vec<Slot> = vec![];
+        //random should be hard to compress
+        for _ in 0..32000 {
+            let last = *range.last().unwrap_or(&0);
+            range.push(last + rand::thread_rng().gen_range(1, 32));
+        }
+        let (epoch_slots, update_slots, since) =
+            get_modified_epoch_slots(&cluster_info, &range, 0, crds_value::MAX_EPOCH_SLOTS, None);
+
+        // Integrity checks
+        assert_eq!(update_slots, range);
+        let num_modified_epoch_slots = epoch_slots.len();
+        assert!(num_modified_epoch_slots <= crds_value::MAX_EPOCH_SLOTS as usize);
+        assert!(num_modified_epoch_slots > 20);
+
+        // Test with exactly as many EpochSlots as needed
+        let (_, update_slots, since) = get_modified_epoch_slots(
+            &cluster_info,
+            &range,
+            crds_value::MAX_COMPLETED_EPOCH_SLOTS,
+            num_modified_epoch_slots as u8,
+            since,
+        );
+        assert_eq!(update_slots, range);
+
+        // Test with fewer epoch slots than needed, modified EpochSlots should wrap around
+        let (_, _, since) = get_modified_epoch_slots(
+            &cluster_info,
+            &range,
+            crds_value::MAX_COMPLETED_EPOCH_SLOTS,
+            num_modified_epoch_slots as u8 - 10,
+            since,
+        );
+
+        // Test that with multiple writes that cause modified EpochSlots to wrap around,
+        // correctness is still upheld
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+        let mut since = None;
+        let num_iterations = 2
+            * ((crds_value::MAX_EPOCH_SLOTS - crds_value::MAX_COMPLETED_EPOCH_SLOTS + 1) as usize)
+            / num_modified_epoch_slots;
+        for _ in 0..=num_iterations {
+            let (_, mut update_slots, new_since) = get_modified_epoch_slots(
+                &cluster_info,
+                &range,
+                crds_value::MAX_COMPLETED_EPOCH_SLOTS,
+                crds_value::MAX_EPOCH_SLOTS - crds_value::MAX_COMPLETED_EPOCH_SLOTS + 1,
+                since,
+            );
+            since = new_since;
+            let first = range[0];
+            // Find last instance of `first`, that must be where the write started
+            let begin_index = update_slots.len() - update_slots.iter().rev().position(|slot| *slot == first).unwrap() - 1;
+            update_slots.rotate_left(begin_index);
+            update_slots.truncate(range.len());
+            assert_eq!(update_slots, range);
+        }
     }
 
     #[test]
@@ -3024,5 +3092,39 @@ mod tests {
         };
         let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
         assert!(bincode::serialized_size(&vote).unwrap() <= MAX_PROTOCOL_PAYLOAD_SIZE);
+    }
+
+    fn get_modified_epoch_slots(
+        cluster_info: &ClusterInfo,
+        slots: &[Slot],
+        start_epoch_slot_index: u8,
+        num_epoch_slots: u8,
+        since: Option<u64>,
+    ) -> (Vec<(EpochSlotsIndex, EpochSlots)>, Vec<Slot>, Option<u64>) {
+        cluster_info.push_epoch_slots(
+            &slots[0..(slots.len() / 2)],
+            start_epoch_slot_index,
+            num_epoch_slots,
+        );
+        cluster_info.push_epoch_slots(
+            &slots[(slots.len() / 2)..],
+            start_epoch_slot_index,
+            num_epoch_slots,
+        );
+        let (epoch_slots, new_since) = cluster_info.get_epoch_slots_since(since);
+        let update_slots: Vec<_> = epoch_slots
+            .iter()
+            .flat_map(|(i, x)| {
+                assert!(
+                    *i >= start_epoch_slot_index
+                        && *i <= start_epoch_slot_index + (num_epoch_slots - 1)
+                );
+                let res = x.to_slots(0);
+                res
+            })
+            .collect();
+        assert!(new_since.is_some());
+        assert!(epoch_slots.len() <= num_epoch_slots as usize);
+        (epoch_slots, update_slots, new_since)
     }
 }
