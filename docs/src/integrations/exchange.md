@@ -303,18 +303,23 @@ For greater flexibility, you can submit withdrawal transfers asynchronously. In
 these cases, it is your responsibility to verify that the transaction succeeded
 and was finalized by the cluster.
 
-**Note:** Each transaction contains a [recent
-blockhash](../transaction.md#blockhash-format) to indicate its liveness. It is
-**critical** to wait until this blockhash expires before retrying a withdrawal
-transfer that does not appear to have been confirmed or finalized by the
-cluster. Otherwise, you risk a double spend. See [blockhash expiration](#blockhash-expiration)
-below.
+**Note:** Each transaction contains a [recent blockhash](../transaction.md#blockhash-format)
+to indicate its liveness. It is **critical** to wait until this blockhash
+expires before retrying a withdrawal transfer that does not appear to have been
+confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
+more on [blockhash expiration](#blockhash-expiration) below.
+
+First, get a recent blockhash using the [`getFees` endpoint](../apps/jsonrpc-api.md#getfees)
+or the CLI command:
+```bash
+solana fees --url http://localhost:8899
+```
 
 In the command-line tool, pass the `--no-wait` argument to send a transfer
-asynchronously:
+asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --keypair <KEYPAIR> --url http://localhost:8899
+solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
@@ -362,19 +367,18 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Blockhash Expiration
 
-To check whether a recent blockhash is still valid, send a
+When you request a recent blockhash for your withdrawal transaction using the
+[`getFees` endpoint](../apps/jsonrpc-api.md#getfees) or `solana fees`, the
+response will include the `lastValidSlot`, the last slot in which the blockhash
+will be valid. You can check the cluster slot with a
+[`getSlot` query](../apps/jsonrpc-api.md#getslot); once the cluster slot is
+greater than `lastValidSlot`, the withdrawal transaction using that blockhash
+should never succeed.
+
+You can also doublecheck whether a particular blockhash is still valid by sending a
 [`getFeeCalculatorForBlockhash`](../apps/jsonrpc-api.md#getfeecalculatorforblockhash)
 request with the blockhash as a parameter. If the response value is null, the
 blockhash is expired, and the withdrawal transaction should never succeed.
-
-You can also use the
-[`getBlockhashLifespan` endpoint](../apps/jsonrpc-api.md#getblockhashlifespan)
-to determine how many slots a blockhash is valid for in the current epoch. When
-you request a [recent blockhash](../apps/jsonrpc-api.md#getrecentblockhash), the
-response includes the slot context. The blockhash is valid until `blockhashSlot +
-blockhashQueueLength`. Note that blockhash lifespan may change on epoch
-boundaries; check the [`getEpochInfo` endpoint](../apps/jsonrpc-api.md#getepochinfo)
-to see when the current epoch will end.
 
 ## Testing the Integration
 
