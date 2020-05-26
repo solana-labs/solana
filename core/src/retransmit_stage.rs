@@ -162,7 +162,7 @@ fn update_retransmit_stats(
         packets_by_slot.clear();
         drop(packets_by_slot);
         let mut packets_by_source = stats.packets_by_source.lock().unwrap();
-        info!("retransmit: packets_by_source: {:#?}", packets_by_source);
+        //info!("retransmit: packets_by_source: {:#?}", packets_by_source);
         packets_by_source.clear();
     }
 }
