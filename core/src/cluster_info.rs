@@ -2772,13 +2772,14 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
 
         // Create the biggest possible vote transaction
-        let vote_ix = vote_instruction::vote_switch(
+        let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
+        let add_switch_proof_ix = vote_instruction::add_switch_proof(
             &keypair.pubkey(),
             &keypair.pubkey(),
-            vote,
             Hash::default(),
         );
-        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&keypair.pubkey()));
+        let mut vote_tx =
+            Transaction::new_with_payer(&[vote_ix, add_switch_proof_ix], Some(&keypair.pubkey()));
 
         vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());
         vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());

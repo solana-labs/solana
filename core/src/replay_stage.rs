@@ -35,10 +35,7 @@ use solana_sdk::{
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
-use solana_vote_program::{
-    vote_instruction,
-    vote_state::{Vote, VoteState},
-};
+use solana_vote_program::vote_state::{Vote, VoteState};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -997,34 +994,15 @@ impl ReplayStage {
         let node_keypair = cluster_info.keypair.clone();
 
         // Send our last few votes along with the new one
-        let vote_ix = if bank.slot() > UNLOCK_SWITCH_VOTE_SLOT {
-            match switch_fork_decision {
-                SwitchForkDecision::FailedSwitchThreshold => {
-                    panic!("Switch threshold failure should not lead to voting")
-                }
-                SwitchForkDecision::NoSwitch => vote_instruction::vote(
-                    &vote_account_pubkey,
-                    &authorized_voter_keypair.pubkey(),
-                    vote,
-                ),
-                SwitchForkDecision::SwitchProof(switch_proof_hash) => {
-                    vote_instruction::vote_switch(
-                        &vote_account_pubkey,
-                        &authorized_voter_keypair.pubkey(),
-                        vote,
-                        *switch_proof_hash,
-                    )
-                }
-            }
-        } else {
-            vote_instruction::vote(
-                &vote_account_pubkey,
-                &authorized_voter_keypair.pubkey(),
-                vote,
-            )
-        };
-
-        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+        let vote_ixs = switch_fork_decision.to_vote_instructions(
+            vote,
+            &vote_account_pubkey,
+            &authorized_voter_keypair.pubkey(),
+        );
+        // `switch_fork_decision` should not be FailedSwitchThreshold, so should
+        // not return an empty list of instructions
+        assert!(!vote_ixs.is_empty());
+        let mut vote_tx = Transaction::new_with_payer(&vote_ixs, Some(&node_keypair.pubkey()));
 
         let blockhash = bank.last_blockhash();
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);

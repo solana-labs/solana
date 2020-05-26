@@ -9,10 +9,14 @@ use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     hash::Hash,
+    instruction::Instruction,
     pubkey::Pubkey,
 };
-use solana_vote_program::vote_state::{
-    BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
+use solana_vote_program::{
+    vote_instruction,
+    vote_state::{
+        BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
+    },
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -25,6 +29,34 @@ pub enum SwitchForkDecision {
     SwitchProof(Hash),
     NoSwitch,
     FailedSwitchThreshold,
+}
+
+impl SwitchForkDecision {
+    pub fn to_vote_instructions(
+        &self,
+        vote: Vote,
+        vote_account_pubkey: &Pubkey,
+        authorized_voter_pubkey: &Pubkey,
+    ) -> Vec<Instruction> {
+        if let SwitchForkDecision::FailedSwitchThreshold = self {
+            vec![]
+        } else {
+            let mut instructions = vec![vote_instruction::vote(
+                vote_account_pubkey,
+                authorized_voter_pubkey,
+                vote,
+            )];
+
+            if let SwitchForkDecision::SwitchProof(switch_proof_hash) = self {
+                instructions.push(vote_instruction::add_switch_proof(
+                    vote_account_pubkey,
+                    authorized_voter_pubkey,
+                    *switch_proof_hash,
+                ));
+            }
+            instructions
+        }
+    }
 }
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
@@ -923,6 +955,36 @@ pub mod test {
             stakes.push((Pubkey::new_rand(), (*lamports, account)));
         }
         stakes
+    }
+
+    #[test]
+    fn test_to_vote_instructions() {
+        let vote = Vote::default();
+        let mut decision = SwitchForkDecision::FailedSwitchThreshold;
+        assert!(decision
+            .to_vote_instructions(vote.clone(), &Pubkey::default(), &Pubkey::default())
+            .is_empty());
+        decision = SwitchForkDecision::NoSwitch;
+        assert_eq!(
+            decision.to_vote_instructions(vote.clone(), &Pubkey::default(), &Pubkey::default()),
+            vec![vote_instruction::vote(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                vote.clone(),
+            )]
+        );
+        decision = SwitchForkDecision::SwitchProof(Hash::default());
+        assert_eq!(
+            decision.to_vote_instructions(vote.clone(), &Pubkey::default(), &Pubkey::default()),
+            vec![
+                vote_instruction::vote(&Pubkey::default(), &Pubkey::default(), vote,),
+                vote_instruction::add_switch_proof(
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    Hash::default()
+                )
+            ]
+        );
     }
 
     #[test]

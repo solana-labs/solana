@@ -104,7 +104,7 @@ pub enum VoteInstruction {
     ///    0 - Vote account to vote with
     ///    1 - Slot hashes sysvar
     ///    2 - Clock sysvar
-    VoteSwitch(Vote, Hash),
+    AddSwitchProof(Hash),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -205,10 +205,9 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
     Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
-pub fn vote_switch(
+pub fn add_switch_proof(
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey,
-    vote: Vote,
     proof_hash: Hash,
 ) -> Instruction {
     let account_metas = vec![
@@ -220,7 +219,7 @@ pub fn vote_switch(
 
     Instruction::new(
         id(),
-        &VoteInstruction::VoteSwitch(vote, proof_hash),
+        &VoteInstruction::AddSwitchProof(proof_hash),
         account_metas,
     )
 }
@@ -275,7 +274,7 @@ pub fn process_instruction(
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
         ),
-        VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+        VoteInstruction::Vote(vote) => {
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,
@@ -289,6 +288,7 @@ pub fn process_instruction(
             let to = next_keyed_account(keyed_accounts)?;
             vote_state::withdraw(me, lamports, to, &signers)
         }
+        VoteInstruction::AddSwitchProof(_) => Ok(()),
     }
 }
 
@@ -359,13 +359,12 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&vote_switch(
+            process_instruction(&add_switch_proof(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                Vote::default(),
                 Hash::default(),
             )),
-            Err(InstructionError::InvalidAccountData),
+            Ok(())
         );
         assert_eq!(
             process_instruction(&authorize(
