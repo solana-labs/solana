@@ -900,6 +900,7 @@ impl fmt::Display for CliSignOnlyData {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSignature {
     pub signature: String,
 }
@@ -913,6 +914,7 @@ impl fmt::Display for CliSignature {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliAccountBalances {
     pub accounts: Vec<RpcAccountBalance>,
 }
@@ -937,6 +939,7 @@ impl fmt::Display for CliAccountBalances {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSupply {
     pub total: u64,
     pub circulating: u64,
@@ -978,6 +981,28 @@ impl fmt::Display for CliSupply {
                 writeln!(f, "  {}", account)?;
             }
         }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFees {
+    pub slot: Slot,
+    pub blockhash: String,
+    pub lamports_per_signature: u64,
+    pub last_valid_slot: Slot,
+}
+
+impl fmt::Display for CliFees {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Blockhash:", &self.blockhash)?;
+        writeln_name_value(
+            f,
+            "Lamports per signature:",
+            &self.lamports_per_signature.to_string(),
+        )?;
+        writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
         Ok(())
     }
 }
