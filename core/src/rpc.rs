@@ -207,10 +207,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_recent_blockhash_last_valid_slot(
-        &self,
-        commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan> {
+    fn get_fees(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcFees> {
         let bank = &*self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         let last_valid_slot = bank
@@ -218,7 +215,7 @@ impl JsonRpcRequestProcessor {
             .expect("bank blockhash queue should contain blockhash");
         new_response(
             bank,
-            RpcBlockhashFeeCalculatorLifespan {
+            RpcFees {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
                 last_valid_slot,
@@ -812,12 +809,12 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
-    #[rpc(meta, name = "getRecentBlockhashLastValidSlot")]
-    fn get_recent_blockhash_last_valid_slot(
+    #[rpc(meta, name = "getFees")]
+    fn get_fees(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan>;
+    ) -> RpcResponse<RpcFees>;
 
     #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
     fn get_fee_calculator_for_blockhash(
@@ -1152,16 +1149,13 @@ impl RpcSol for RpcSolImpl {
             .get_recent_blockhash(commitment)
     }
 
-    fn get_recent_blockhash_last_valid_slot(
+    fn get_fees(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculatorLifespan> {
-        debug!("get_recent_blockhash_last_valid_slot rpc request received");
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_recent_blockhash_last_valid_slot(commitment)
+    ) -> RpcResponse<RpcFees> {
+        debug!("get_fees rpc request received");
+        meta.request_processor.read().unwrap().get_fees(commitment)
     }
 
     fn get_fee_calculator_for_blockhash(
@@ -2557,7 +2551,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_get_recent_blockhash_last_valid_slot() {
+    fn test_rpc_get_fees() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler {
             io,
@@ -2566,7 +2560,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhashLastValidSlot"}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFees"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",

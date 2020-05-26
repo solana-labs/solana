@@ -627,16 +627,14 @@ impl RpcClient {
         let (context, blockhash, fee_calculator, last_valid_slot) = if let Ok(Response {
             context,
             value:
-                RpcBlockhashFeeCalculatorLifespan {
+                RpcFees {
                     blockhash,
                     fee_calculator,
                     last_valid_slot,
                 },
         }) =
-            self.send::<Response<RpcBlockhashFeeCalculatorLifespan>>(
-                RpcRequest::GetRecentBlockhashLastValidSlot,
-                json!([commitment_config]),
-            ) {
+            self.send::<Response<RpcFees>>(RpcRequest::GetFees, json!([commitment_config]))
+        {
             (context, blockhash, fee_calculator, last_valid_slot)
         } else if let Ok(Response {
             context,
@@ -652,10 +650,7 @@ impl RpcClient {
             (context, blockhash, fee_calculator, 0)
         } else {
             return Err(ClientError::new_with_request(
-                RpcError::ParseError(
-                    "RpcBlockhashFeeCalculator or RpcBlockhashFeeCalculatorLifespan".to_string(),
-                )
-                .into(),
+                RpcError::ParseError("RpcBlockhashFeeCalculator or RpcFees".to_string()).into(),
                 RpcRequest::GetRecentBlockhash,
             ));
         };
