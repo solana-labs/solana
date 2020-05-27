@@ -16,11 +16,8 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
-<<<<<<< HEAD
     env,
-=======
     fmt,
->>>>>>> e3b444834... Add more logging while unpacking snapshots (#10266)
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
