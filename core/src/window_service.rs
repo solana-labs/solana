@@ -6,10 +6,10 @@ use crate::{
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
+    outstanding_requests::OutstandingRequests,
     repair_response,
-    repair_service::{RepairInfo, RepairService},
+    repair_service::{OutstandingRepairs, RepairInfo, RepairService},
     result::{Error, Result},
-    serve_repair::DEFAULT_NONCE,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
@@ -28,6 +28,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
+use std::collections::HashSet;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
@@ -123,10 +124,20 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair(repair_info: &Option<RepairMeta>) -> bool {
-    repair_info
+fn verify_repair(
+    outstanding_requests: &OutstandingRepairs,
+    shred: &Shred,
+    repair_meta: &Option<RepairMeta>,
+) -> bool {
+    repair_meta
         .as_ref()
-        .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
+        .map(|repair_meta| {
+            outstanding_requests.register_response(
+                &repair_meta.from_addr,
+                repair_meta.nonce,
+                &shred,
+            )
+        })
         .unwrap_or(true)
 }
 
@@ -137,6 +148,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+    outstanding_requests: &Arc<OutstandingRepairs>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -150,8 +162,20 @@ where
 
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
-    shreds.retain(|_shred| (verify_repair(&repair_infos[i]), i += 1).0);
-    repair_infos.retain(|repair_info| verify_repair(&repair_info));
+    let mut removed = HashSet::new();
+    shreds.retain(|shred| {
+        let should_keep = (
+            verify_repair(outstanding_requests, &shred, &repair_infos[i]),
+            i += 1,
+        )
+            .0;
+        if !should_keep {
+            removed.insert(i);
+        }
+        should_keep
+    });
+    i = 0;
+    repair_infos.retain(|_repair_info| (removed.contains(&i), i += 1).0);
     assert_eq!(shreds.len(), repair_infos.len());
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
@@ -222,7 +246,7 @@ where
                                     if packet.meta.repair {
                                         if let Some(nonce) = repair_response::nonce(&packet.data) {
                                             let repair_info = RepairMeta {
-                                                _from_addr: packet.meta.addr(),
+                                                from_addr: packet.meta.addr(),
                                                 nonce,
                                             };
                                             Some(repair_info)
@@ -282,7 +306,7 @@ where
 }
 
 struct RepairMeta {
-    _from_addr: SocketAddr,
+    from_addr: SocketAddr,
     nonce: Nonce,
 }
 
@@ -334,6 +358,9 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        let outstanding_requests: Arc<OutstandingRepairs> =
+            Arc::new(OutstandingRequests::default());
+
         let bank_forks = Some(repair_info.bank_forks.clone());
 
         let repair_service = RepairService::new(
@@ -344,6 +371,7 @@ impl WindowService {
             repair_info,
             cluster_slots,
             verified_vote_receiver,
+            outstanding_requests.clone(),
         );
 
         let (insert_sender, insert_receiver) = unbounded();
@@ -364,6 +392,7 @@ impl WindowService {
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
+            outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -424,6 +453,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
+        outstanding_requests: Arc<OutstandingRepairs>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -453,6 +483,7 @@ impl WindowService {
                         &handle_duplicate,
                         &mut metrics,
                         &completed_data_sets_sender,
+                        &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
