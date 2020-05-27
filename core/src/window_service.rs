@@ -4,10 +4,11 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
+    outstanding_requests::OutstandingRequests,
     repair_response,
     repair_service::{RepairInfo, RepairService},
     result::{Error, Result},
-    serve_repair::DEFAULT_NONCE,
+    serve_repair::RepairType,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
@@ -110,10 +111,20 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair(_shred: &Shred, repair_info: &Option<RepairMeta>) -> bool {
-    repair_info
+fn verify_repair(
+    outstanding_requests: &OutstandingRequests<RepairType, Shred>,
+    shred: &Shred,
+    repair_meta: &Option<RepairMeta>,
+) -> bool {
+    repair_meta
         .as_ref()
-        .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
+        .map(|repair_meta| {
+            outstanding_requests.register_response(
+                &repair_meta.from_addr,
+                repair_meta.nonce,
+                &shred,
+            )
+        })
         .unwrap_or(true)
 }
 
@@ -123,6 +134,7 @@ fn run_insert<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
+    outstanding_requests: &Arc<OutstandingRequests<RepairType, Shred>>,
 ) -> Result<()>
 where
     F: Fn(Shred) -> (),
@@ -136,7 +148,13 @@ where
 
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
-    shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
+    shreds.retain(|shred| {
+        (
+            verify_repair(outstanding_requests, &shred, &repair_infos[i]),
+            i += 1,
+        )
+            .0
+    });
 
     blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -199,7 +217,7 @@ where
                                     if packet.meta.repair {
                                         if let Some(nonce) = repair_response::nonce(&packet.data) {
                                             let repair_info = RepairMeta {
-                                                _from_addr: packet.meta.addr(),
+                                                from_addr: packet.meta.addr(),
                                                 nonce,
                                             };
                                             Some(repair_info)
@@ -259,7 +277,7 @@ where
 }
 
 struct RepairMeta {
-    _from_addr: SocketAddr,
+    from_addr: SocketAddr,
     nonce: Nonce,
 }
 
@@ -308,6 +326,9 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        let outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>> =
+            Arc::new(OutstandingRequests::default());
+
         let bank_forks = Some(repair_info.bank_forks.clone());
 
         let repair_service = RepairService::new(
@@ -317,6 +338,7 @@ impl WindowService {
             cluster_info.clone(),
             repair_info,
             cluster_slots,
+            outstanding_requests.clone(),
         );
 
         let (insert_sender, insert_receiver) = unbounded();
@@ -331,6 +353,7 @@ impl WindowService {
             leader_schedule_cache,
             insert_receiver,
             duplicate_sender,
+            outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -385,6 +408,7 @@ impl WindowService {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         duplicate_sender: CrossbeamSender<Shred>,
+        outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -413,6 +437,7 @@ impl WindowService {
                         &leader_schedule_cache,
                         &handle_duplicate,
                         &mut metrics,
+                        &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;

@@ -4,14 +4,15 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
     consensus::VOTE_THRESHOLD_SIZE,
+    outstanding_requests::{OutstandingRequests, DEFAULT_REQUEST_EXPIRATION_MS},
     result::Result,
-    serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
+    serve_repair::{RepairType, ServeRepair},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-    shred::Nonce,
+    shred::{Nonce, Shred},
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
@@ -97,6 +98,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
+        outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -108,6 +110,7 @@ impl RepairService {
                     cluster_info,
                     repair_info,
                     &cluster_slots,
+                    &outstanding_requests,
                 )
             })
             .unwrap();
@@ -122,6 +125,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: &ClusterSlots,
+        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
@@ -134,9 +138,15 @@ impl RepairService {
             &cluster_info,
             &repair_info.completed_slots_receiver,
         );
+        let mut last_request_purge = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
+            }
+
+            if last_request_purge.elapsed().as_millis() > DEFAULT_REQUEST_EXPIRATION_MS as u128 {
+                outstanding_requests.purge_expired();
+                last_request_purge = Instant::now();
             }
 
             let repairs = {
@@ -168,6 +178,7 @@ impl RepairService {
                     &serve_repair,
                     &mut repair_stats,
                     &repair_socket,
+                    outstanding_requests,
                 );
                 Self::generate_repairs(
                     blockstore,
@@ -185,6 +196,7 @@ impl RepairService {
                         repair_request,
                         &mut cache,
                         &mut repair_stats,
+                        outstanding_requests,
                     ) {
                         repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                             info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -305,6 +317,7 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
+        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
@@ -313,13 +326,15 @@ impl RepairService {
 
                 if let Some(repairs) = repairs {
                     for repair_type in repairs {
+                        let nonce =
+                            outstanding_requests.add_request(&repair_addr, repair_type.clone());
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
                             &repair_addr,
                             serve_repair,
                             repair_stats,
-                            DEFAULT_NONCE,
+                            nonce,
                         ) {
                             info!("repair req send_to({}) error {:?}", repair_addr, e);
                         }
@@ -895,6 +910,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &OutstandingRequests::default(),
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -917,6 +933,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &OutstandingRequests::default(),
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -933,6 +950,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &OutstandingRequests::default(),
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }
