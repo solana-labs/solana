@@ -655,7 +655,7 @@ mod tests {
         bank::Bank,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     };
-    use solana_sdk::hash::Hash;
+    use solana_sdk::hash::{self, Hash};
     use solana_sdk::signature::Signature;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::vote_transaction;
@@ -1366,5 +1366,31 @@ mod tests {
     fn test_bad_vote() {
         run_test_bad_vote(None);
         run_test_bad_vote(Some(Hash::default()));
+    }
+
+    fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let auth_voter_keypair = Keypair::new();
+        let bank_hash = Hash::default();
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            bank_hash,
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &auth_voter_keypair,
+            input_hash,
+        );
+        let (key, vote, hash) = ClusterInfoVoteListener::parse_vote_transaction(&vote_tx).unwrap();
+        assert_eq!(hash, input_hash);
+        assert_eq!(vote, Vote::new(vec![42], bank_hash));
+        assert_eq!(key, vote_keypair.pubkey());
+    }
+
+    #[test]
+    fn test_parse_vote_transaction() {
+        run_test_parse_vote_transaction(None);
+        run_test_parse_vote_transaction(Some(hash::hash(&[42u8])));
     }
 }
