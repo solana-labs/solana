@@ -17,22 +17,20 @@ pub fn new_vote_transaction(
     switch_proof_hash: Option<Hash>,
 ) -> Transaction {
     let votes = Vote::new(slots, bank_hash);
-    let vote_ix = if let Some(switch_proof_hash) = switch_proof_hash {
-        vote_instruction::vote_switch(
+    let mut instructions = vec![vote_instruction::vote(
+        &vote_keypair.pubkey(),
+        &authorized_voter_keypair.pubkey(),
+        votes,
+    )];
+    if let Some(switch_proof_hash) = switch_proof_hash {
+        instructions.push(vote_instruction::add_switch_proof(
             &vote_keypair.pubkey(),
             &authorized_voter_keypair.pubkey(),
-            votes,
             switch_proof_hash,
-        )
-    } else {
-        vote_instruction::vote(
-            &vote_keypair.pubkey(),
-            &authorized_voter_keypair.pubkey(),
-            votes,
-        )
-    };
+        ));
+    }
 
-    let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+    let mut vote_tx = Transaction::new_with_payer(&instructions, Some(&node_keypair.pubkey()));
 
     vote_tx.partial_sign(&[node_keypair], blockhash);
     vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
