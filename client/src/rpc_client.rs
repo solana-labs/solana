@@ -350,6 +350,14 @@ impl RpcClient {
         self.send(RpcRequest::GetInflation, Value::Null)
     }
 
+    pub fn get_inflation_governor(&self) -> ClientResult<RpcInflationGovernor> {
+        self.send(RpcRequest::GetInflationGovernor, Value::Null)
+    }
+
+    pub fn get_inflation_rate(&self) -> ClientResult<RpcInflationRate> {
+        self.send(RpcRequest::GetInflationRate, Value::Null)
+    }
+
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
         self.send(RpcRequest::GetVersion, Value::Null)
     }
