@@ -516,19 +516,25 @@ impl fmt::Display for CliStakeState {
             writeln!(f, "Withdraw Authority: {}", authorized.withdrawer)?;
             Ok(())
         }
-        fn show_lockup(f: &mut fmt::Formatter, lockup: &CliLockup) -> fmt::Result {
-            writeln!(
-                f,
-                "Lockup Timestamp: {} (UnixTimestamp: {})",
-                DateTime::<Utc>::from_utc(
-                    NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0),
-                    Utc
-                )
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-                lockup.unix_timestamp
-            )?;
-            writeln!(f, "Lockup Epoch: {}", lockup.epoch)?;
-            writeln!(f, "Lockup Custodian: {}", lockup.custodian)?;
+        fn show_lockup(f: &mut fmt::Formatter, lockup: Option<&CliLockup>) -> fmt::Result {
+            if let Some(lockup) = lockup {
+                if lockup.unix_timestamp != UnixTimestamp::default() {
+                    writeln!(
+                        f,
+                        "Lockup Timestamp: {} (UnixTimestamp: {})",
+                        DateTime::<Utc>::from_utc(
+                            NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0),
+                            Utc
+                        )
+                        .to_rfc3339_opts(SecondsFormat::Secs, true),
+                        lockup.unix_timestamp
+                    )?;
+                }
+                if lockup.epoch != Epoch::default() {
+                    writeln!(f, "Lockup Epoch: {}", lockup.epoch)?;
+                }
+                writeln!(f, "Lockup Custodian: {}", lockup.custodian)?;
+            }
             Ok(())
         }
 
@@ -552,7 +558,7 @@ impl fmt::Display for CliStakeState {
             CliStakeType::Initialized => {
                 writeln!(f, "Stake account is undelegated")?;
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
-                show_lockup(f, self.lockup.as_ref().unwrap())?;
+                show_lockup(f, self.lockup.as_ref())?;
             }
             CliStakeType::Stake => {
                 let show_delegation = {
@@ -650,7 +656,7 @@ impl fmt::Display for CliStakeState {
                     writeln!(f, "Stake account is undelegated")?;
                 }
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
-                show_lockup(f, self.lockup.as_ref().unwrap())?;
+                show_lockup(f, self.lockup.as_ref())?;
             }
         }
         Ok(())

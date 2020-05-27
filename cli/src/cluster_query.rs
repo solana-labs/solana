@@ -1190,9 +1190,13 @@ pub fn process_show_stakes(
     let all_stake_accounts = rpc_client.get_program_accounts(&solana_stake_program::id())?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     progress_bar.finish_and_clear();
+    let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
 
     let stake_history = StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+    })?;
+    let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+        CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
     })?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
@@ -1208,6 +1212,7 @@ pub fn process_show_stakes(
                                 &stake_state,
                                 use_lamports_unit,
                                 &stake_history,
+                                &clock,
                             ),
                         });
                     }
@@ -1225,6 +1230,7 @@ pub fn process_show_stakes(
                                 &stake_state,
                                 use_lamports_unit,
                                 &stake_history,
+                                &clock,
                             ),
                         });
                     }

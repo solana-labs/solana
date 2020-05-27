@@ -16,10 +16,12 @@ use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
+    clock::Clock,
     message::Message,
     pubkey::Pubkey,
     system_instruction::SystemError,
     sysvar::{
+        clock,
         stake_history::{self, StakeHistory},
         Sysvar,
     },
@@ -30,7 +32,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
-use std::{ops::Deref, sync::Arc};
+use std::{collections::HashSet, ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
@@ -1269,6 +1271,7 @@ pub fn build_stake_state(
     stake_state: &StakeState,
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
+    clock: &Clock,
 ) -> CliStakeState {
     match stake_state {
         StakeState::Stake(
@@ -1279,11 +1282,15 @@ pub fn build_stake_state(
             },
             stake,
         ) => {
-            // The first entry in stake history is the previous epoch, so +1 for current
-            let current_epoch = stake_history.iter().next().unwrap().0 + 1;
+            let current_epoch = clock.epoch;
             let (active_stake, activating_stake, deactivating_stake) = stake
                 .delegation
                 .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            let lockup = if lockup.is_in_force(clock, &HashSet::new()) {
+                Some(lockup.into())
+            } else {
+                None
+            };
             CliStakeState {
                 stake_type: CliStakeType::Stake,
                 account_balance,
@@ -1306,7 +1313,7 @@ pub fn build_stake_state(
                     None
                 },
                 authorized: Some(authorized.into()),
-                lockup: Some(lockup.into()),
+                lockup,
                 use_lamports_unit,
                 current_epoch,
                 rent_exempt_reserve: Some(*rent_exempt_reserve),
@@ -1328,15 +1335,22 @@ pub fn build_stake_state(
             rent_exempt_reserve,
             authorized,
             lockup,
-        }) => CliStakeState {
-            stake_type: CliStakeType::Initialized,
-            account_balance,
-            authorized: Some(authorized.into()),
-            lockup: Some(lockup.into()),
-            use_lamports_unit,
-            rent_exempt_reserve: Some(*rent_exempt_reserve),
-            ..CliStakeState::default()
-        },
+        }) => {
+            let lockup = if lockup.is_in_force(clock, &HashSet::new()) {
+                Some(lockup.into())
+            } else {
+                None
+            };
+            CliStakeState {
+                stake_type: CliStakeType::Initialized,
+                account_balance,
+                authorized: Some(authorized.into()),
+                lockup,
+                use_lamports_unit,
+                rent_exempt_reserve: Some(*rent_exempt_reserve),
+                ..CliStakeState::default()
+            }
+        }
     }
 }
 
@@ -1361,12 +1375,17 @@ pub fn process_show_stake_account(
                 StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
                     CliError::RpcRequestError("Failed to deserialize stake history".to_string())
                 })?;
+            let clock_account = rpc_client.get_account(&clock::id())?;
+            let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+                CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
+            })?;
 
             let state = build_stake_state(
                 stake_account.lamports,
                 &stake_state,
                 use_lamports_unit,
                 &stake_history,
+                &clock,
             );
             Ok(config.output_format.formatted_string(&state))
         }
