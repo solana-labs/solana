@@ -8,6 +8,7 @@ use crate::{
     cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
+    rpc_subscriptions::RpcSubscriptions,
     sigverify::TransactionSigVerifier,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
 };
@@ -44,6 +45,7 @@ impl Tpu {
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_sockets: Vec<UdpSocket>,
         sigverify_disabled: bool,
+        subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
@@ -79,6 +81,7 @@ impl Tpu {
             &poh_recorder,
             vote_tracker,
             bank_forks,
+            subscriptions.clone(),
         );
 
         let banking_stage = BankingStage::new(
