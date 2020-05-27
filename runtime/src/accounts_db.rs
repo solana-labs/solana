@@ -43,6 +43,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, RwLock},
+    time::Instant,
 };
 use tempfile::TempDir;
 
@@ -1816,7 +1817,15 @@ impl AccountsDB {
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
-        for slot in slots.iter() {
+
+        let mut last_log_update = Instant::now();
+        for (index, slot) in slots.iter().enumerate() {
+            let now = Instant::now();
+            if now.duration_since(last_log_update).as_secs() >= 10 {
+                info!("generating index: {}/{} slots...", index, slots.len());
+                last_log_update = now;
+            }
+
             let accumulator: Vec<HashMap<Pubkey, Vec<(u64, AccountInfo)>>> = self
                 .scan_account_storage(
                     *slot,
