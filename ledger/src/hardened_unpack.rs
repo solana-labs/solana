@@ -77,6 +77,8 @@ where
     let mut total_size: u64 = 0;
     let mut total_count: u64 = 0;
 
+    let mut total_entries = 0;
+    let mut last_log_update = Instant::now();
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
@@ -110,8 +112,15 @@ where
 
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
-        check_unpack_result(entry.unpack_in(&unpack_dir)?, path_str)?
+        check_unpack_result(entry.unpack_in(&unpack_dir)?, path_str)?;
+        total_entries += 1;
+        let now = Instant::now();
+        if now.duration_since(last_log_update).as_secs() >= 10 {
+            info!("unpacked {} entries so far...", total_entries);
+            last_log_update = now;
+        }
     }
+    info!("unpacked {} entries total", total_entries);
 
     Ok(())
 }

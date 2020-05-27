@@ -16,7 +16,11 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
+<<<<<<< HEAD
     env,
+=======
+    fmt,
+>>>>>>> e3b444834... Add more logging while unpacking snapshots (#10266)
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -241,7 +245,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
 pub fn get_snapshot_paths<P: AsRef<Path>>(snapshot_path: P) -> Vec<SlotSnapshotPaths>
 where
-    P: std::fmt::Debug,
+    P: fmt::Debug,
 {
     match fs::read_dir(&snapshot_path) {
         Ok(paths) => {
