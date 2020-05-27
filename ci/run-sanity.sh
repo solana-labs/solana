@@ -19,6 +19,9 @@ while [[ ! -f config/run/init-completed ]]; do
   fi
 done
 
+while [[ $($solana_cli slot --commitment recent) -eq 0 ]]; do
+  sleep 1
+done
 curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' http://localhost:8899
 
 wait $pid
