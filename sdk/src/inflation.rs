@@ -27,7 +27,7 @@ const DEFAULT_TERMINAL: f64 = 0.015;
 const DEFAULT_TAPER: f64 = 0.15;
 const DEFAULT_FOUNDATION: f64 = 0.05;
 const DEFAULT_FOUNDATION_TERM: f64 = 7.0;
-const DEFAULT_STORAGE: f64 = 0.10;
+const DEFAULT_STORAGE: f64 = 0.0;
 
 impl Default for Inflation {
     fn default() -> Self {
