@@ -172,10 +172,6 @@ impl JsonRpcRequestProcessor {
             .collect())
     }
 
-    pub fn get_inflation(&self, commitment: Option<CommitmentConfig>) -> Result<Inflation> {
-        Ok(self.bank(commitment)?.inflation())
-    }
-
     pub fn get_inflation_governor(
         &self,
         commitment: Option<CommitmentConfig>,
@@ -779,13 +775,6 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
-    #[rpc(meta, name = "getInflation")]
-    fn get_inflation(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Inflation>;
-
     #[rpc(meta, name = "getInflationGovernor")]
     fn get_inflation_governor(
         &self,
@@ -1056,18 +1045,6 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_program_accounts(&program_id, commitment)
-    }
-
-    fn get_inflation(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Inflation> {
-        debug!("get_inflation rpc request received");
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_inflation(commitment)
     }
 
     fn get_inflation_governor(

@@ -31,7 +31,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getIdentity](jsonrpc-api.md#getidentity)
-* [getInflation](jsonrpc-api.md#getinflation)
 * [getInflationGovernor](jsonrpc-api.md#getinflationgovernor)
 * [getInflationRate](jsonrpc-api.md#getinflationrate)
 * [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
@@ -635,35 +634,6 @@ The result field will be a JSON object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getIdentity"}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
-```
-
-### getInflation
-
-Returns the inflation configuration of the cluster
-
-#### Parameters:
-
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-The result field will be an Inflation object with the following fields:
-
-* `initial: <f64>`, the initial inflation percentage from time 0
-* `terminal: <f64>`, terminal inflation percentage
-* `taper: <f64>`, rate per year at which inflation is lowered
-* `foundation: <f64>`, percentage of total inflation allocated to the foundation
-* `foundationTerm: <f64>`, duration of foundation pool inflation in years
-* `storage: <f64>`, percentage of total inflation allocated to storage rewards
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflation"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"foundation":0.05,"foundationTerm":7.0,"initial":0.15,"storage":0.1,"taper":0.15,"terminal":0.015},"id":1}
 ```
 
 ### getInflationGovernor

@@ -21,7 +21,6 @@ pub enum RpcRequest {
     GetFees,
     GetGenesisHash,
     GetIdentity,
-    GetInflation,
     GetInflationGovernor,
     GetInflationRate,
     GetLargestAccounts,
@@ -69,7 +68,6 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetGenesisHash => "getGenesisHash",
             RpcRequest::GetIdentity => "getIdentity",
-            RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetInflationGovernor => "getInflationGovernor",
             RpcRequest::GetInflationRate => "getInflationRate",
             RpcRequest::GetLargestAccounts => "getLargestAccounts",
@@ -149,10 +147,6 @@ mod tests {
         let test_request = RpcRequest::GetEpochInfo;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getEpochInfo");
-
-        let test_request = RpcRequest::GetInflation;
-        let request = test_request.build_request_json(1, Value::Null);
-        assert_eq!(request["method"], "getInflation");
 
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, Value::Null);
