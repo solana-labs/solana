@@ -17,6 +17,7 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
+    fmt,
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -295,7 +296,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
 
 pub fn get_snapshot_paths<P: AsRef<Path>>(snapshot_path: P) -> Vec<SlotSnapshotPaths>
 where
-    P: std::fmt::Debug,
+    P: fmt::Debug,
 {
     match fs::read_dir(&snapshot_path) {
         Ok(paths) => {
