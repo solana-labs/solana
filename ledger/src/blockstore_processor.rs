@@ -623,7 +623,7 @@ fn process_bank_0(
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
     confirm_full_slot(blockstore, bank0, opts, recyclers, &mut progress)
-        .expect("processing for bank 0 must succceed");
+        .expect("processing for bank 0 must succeed");
     bank0.freeze();
     Ok(())
 }
