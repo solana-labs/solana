@@ -238,3 +238,40 @@ test('createWithSeed', async () => {
     ),
   ).toBe(true);
 });
+
+test('createProgramAddress', async () => {
+  const programId = new PublicKey(
+    'BPFLoader1111111111111111111111111111111111',
+  );
+
+  let programAddress = await PublicKey.createProgramAddress([''], programId);
+  expect(
+    programAddress.equals(
+      new PublicKey('CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc'),
+    ),
+  ).toBe(true);
+  programAddress = await PublicKey.createProgramAddress(['☉'], programId);
+  expect(
+    programAddress.equals(
+      new PublicKey('A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF'),
+    ),
+  ).toBe(true);
+  programAddress = await PublicKey.createProgramAddress(
+    ['Talking', 'Squirrels'],
+    programId,
+  );
+  expect(
+    programAddress.equals(
+      new PublicKey('CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu'),
+    ),
+  ).toBe(true);
+  programAddress = await PublicKey.createProgramAddress(
+    ['Talking', 'Squirrels'],
+    programId,
+  );
+  const programAddress2 = await PublicKey.createProgramAddress(
+    ['Talking'],
+    programId,
+  );
+  expect(programAddress.equals(programAddress2)).toBe(false);
+});

@@ -78,7 +78,7 @@ export class PublicKey {
   }
 
   /**
-   * Derive a public key from another key, a seed, and a programId.
+   * Derive a public key from another key, a seed, and a program ID.
    */
   static async createWithSeed(
     fromPublicKey: PublicKey,
@@ -91,6 +91,27 @@ export class PublicKey {
       programId.toBuffer(),
     ]);
     const hash = await sha256(new Uint8Array(buffer));
+    return new PublicKey('0x' + hash);
+  }
+
+  /**
+   * Derive a program address from seeds and a program ID.
+   */
+  static async createProgramAddress(
+    seeds: Array<string>,
+    programId: PublicKey,
+  ): Promise<PublicKey> {
+    let buffer = Buffer.alloc(0);
+    seeds.forEach(function (seed) {
+      buffer = Buffer.concat([buffer, Buffer.from(seed)]);
+    });
+    buffer = Buffer.concat([
+      buffer,
+      programId.toBuffer(),
+      Buffer.from('ProgramDerivedAddress'),
+    ]);
+    let hash = await sha256(new Uint8Array(buffer));
+    hash = await sha256(new Uint8Array(new BN(hash, 16).toBuffer()));
     return new PublicKey('0x' + hash);
   }
 }
