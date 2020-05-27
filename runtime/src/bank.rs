@@ -1917,7 +1917,7 @@ impl Bank {
         self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
-    fn operating_mode(&self) -> OperatingMode {
+    pub fn operating_mode(&self) -> OperatingMode {
         // unwrap is safe; self.operating_mode is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
         self.operating_mode.unwrap()

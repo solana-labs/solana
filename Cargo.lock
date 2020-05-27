@@ -3971,6 +3971,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
+ "solana-genesis-programs",
  "solana-ledger",
  "solana-logger",
  "solana-measure",
