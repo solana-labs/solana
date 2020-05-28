@@ -590,6 +590,8 @@ impl ServeRepair {
                 );
                 if let Some(packet) = packet {
                     res.packets.push(packet);
+                } else {
+                    break;
                 }
                 if meta.is_parent_set() && res.packets.len() <= max_responses {
                     slot = meta.parent_slot;
@@ -864,6 +866,8 @@ mod tests {
         // Should not panic.
         run_orphan(UNLOCK_NONCE_SLOT, 3, None);
         run_orphan(UNLOCK_NONCE_SLOT, 3, Some(9));
+        // Giving no nonce after UNLOCK_NONCE_SLOT should return empty
+        run_orphan(UNLOCK_NONCE_SLOT + 1, 3, None);
     }
 
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Option<Nonce>) {
@@ -902,40 +906,47 @@ mod tests {
 
             // For a orphan request for `slot + num_slots - 1`, we should return the highest shreds
             // from slots in the range [slot, slot + num_slots - 1]
-            let rv: Vec<_> = ServeRepair::run_orphan(
+            let rv = ServeRepair::run_orphan(
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
                 slot + num_slots - 1,
                 5,
                 nonce,
-            )
-            .expect("run_orphan packets")
-            .packets
-            .iter()
-            .map(|b| b.clone())
-            .collect();
+            );
 
-            // Verify responses
-            let expected: Vec<_> = (slot..slot + num_slots)
-                .rev()
-                .filter_map(|slot| {
-                    let nonce = if Shred::is_nonce_unlocked(slot) {
-                        nonce
-                    } else {
-                        None
-                    };
-                    let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
-                    repair_response::repair_response_packet(
-                        &blockstore,
-                        slot,
-                        index,
-                        &socketaddr_any!(),
-                        nonce,
-                    )
-                })
-                .collect();
-            assert_eq!(rv, expected);
+            if Shred::is_nonce_unlocked(slot + num_slots - 1) && nonce.is_none() {
+                // If a nonce is expected but not provided, there should be no
+                // response
+                assert!(rv.is_none());
+            } else {
+                // Verify responses
+                let rv: Vec<_> = rv
+                    .expect("run_orphan packets")
+                    .packets
+                    .iter()
+                    .map(|b| b.clone())
+                    .collect();
+                let expected: Vec<_> = (slot..slot + num_slots)
+                    .rev()
+                    .filter_map(|slot| {
+                        let nonce = if Shred::is_nonce_unlocked(slot) {
+                            nonce
+                        } else {
+                            None
+                        };
+                        let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
+                        repair_response::repair_response_packet(
+                            &blockstore,
+                            slot,
+                            index,
+                            &socketaddr_any!(),
+                            nonce,
+                        )
+                    })
+                    .collect();
+                assert_eq!(rv, expected);
+            }
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
