@@ -252,6 +252,7 @@ pub struct ClusterInfo {
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
+    pull_responses_by_id: RwLock<HashMap<Pubkey, usize>>,
 }
 
 #[derive(Default, Clone)]
@@ -401,6 +402,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             id,
             stats: GossipStats::default(),
+            pull_responses_by_id: RwLock::new(HashMap::new()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -426,6 +428,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
+            pull_responses_by_id: RwLock::new(HashMap::new()),
         }
     }
 
@@ -1852,6 +1855,7 @@ impl ClusterInfo {
             );
         }
         let filtered_len = crds_values.len();
+        *me.pull_responses_by_id.write().unwrap().entry(*from).or_insert(0) += filtered_len;
 
         let (fail, timeout_count, success) = me
             .time_gossip_write_lock("process_pull", &me.stats.process_pull_response)
@@ -2078,6 +2082,21 @@ impl ClusterInfo {
                     self.stats.process_pull_response_count.clear(),
                     i64
                 ),
+                (
+                    "process_pull_resp_success",
+                    self.stats.process_pull_response_success.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_resp_timeout",
+                    self.stats.process_pull_response_timeout.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_resp_fail",
+                    self.stats.process_pull_response_fail.clear(),
+                    i64
+                ),
             );
             datapoint_info!(
                 "cluster_info_stats3",
@@ -2184,6 +2203,11 @@ impl ClusterInfo {
                     i64
                 ),
             );
+            {
+                let mut pull_responses_by_id = self.pull_responses_by_id.write().unwrap();
+                info!("pull_responses_by_id: {:#?}", *pull_responses_by_id);
+                pull_responses_by_id.clear();
+            }
 
             *last_print = Instant::now();
         }
