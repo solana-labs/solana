@@ -16,7 +16,10 @@ use solana_ledger::{
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
+    program_utils::limited_deserialize,
+    transaction::Transaction,
 };
+use solana_transaction_status::RpcTransactionStatusMeta;
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -28,10 +31,8 @@ use std::{
     process::{exit, Command, Stdio},
     str::FromStr,
 };
-use csv::{
-    WriterBuilder,
-    Writer,
-};
+use csv::Writer;
+
 use serde::{
     Serialize,
     Deserialize,
@@ -51,51 +52,48 @@ struct EntryInfo {
     num_transactions: usize,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+struct TransactionInfo {
+    slot: Slot,
+    recent_blockhash: String,
+    txn_sig: String,
+//    accounts: Vec<String>,
+}
+
 fn output_slot_to_csv(
     blockstore: &Blockstore,
     slot: Slot,
     wtr: &mut Writer<File>,
 ) -> Result<(), String> {
-//    println!("Slot Meta {:?}", blockstore.meta(slot));
     let entries = blockstore
         .get_slot_entries(slot, 0, None)
         .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
 
-    for (entry_index, entry) in entries.iter().enumerate() {
-        let entry_info = EntryInfo {
-            index: entry_index,
-            num_hashes: entry.num_hashes,
-            hash: entry.hash.to_string(),
-            num_transactions: entry.transactions.len(),
-        };
-        wtr.serialize(&entry_info);
+    for entry in entries {
+        for transaction in entry.transactions {
+            let transaction_status: Option<RpcTransactionStatusMeta> = blockstore
+                .read_transaction_status((transaction.signatures[0], slot))
+                .unwrap_or_else(|err| {
+                    eprintln!(
+                        "Failed to read transaction status for {} at slot {}: {}",
+                        transaction.signatures[0], slot, err
+                    );
+                    None
+                })
+                .map(|transaction_status| transaction_status.into());
+
+            let message = transaction.message;
+//            let account_keys = message.account_keys;
+
+            let txn_info = TransactionInfo{
+                slot: slot,
+                recent_blockhash: message.recent_blockhash.to_string(),
+                txn_sig: transaction.signatures[0].to_string(),
+//                accounts: message.account_keys.,
+            };
+        wtr.serialize(&txn_info);
         wtr.flush();
-//        println!(
-//            "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
-//            entry_index,
-//            entry.num_hashes,
-//            entry.hash,
-//            entry.transactions.len()
-//        );
-//        for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
-//            println!("    Transaction {}", transactions_index);
-//            let transaction_status = blockstore
-//                .read_transaction_status((transaction.signatures[0], slot))
-//                .unwrap_or_else(|err| {
-//                    eprintln!(
-//                        "Failed to read transaction status for {} at slot {}: {}",
-//                        transaction.signatures[0], slot, err
-//                    );
-//                    None
-//                })
-//                .map(|transaction_status| transaction_status.into());
-//
-//            solana_cli::display::println_transaction(
-//                &transaction,
-//                &transaction_status,
-//                "      ",
-//            );
-//        }
+        }
     }
     Ok(())
 }
