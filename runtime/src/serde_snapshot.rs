@@ -26,6 +26,7 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{atomic::Ordering, Arc},
+        time::Instant,
     },
 };
 
@@ -212,10 +213,20 @@ where
         map
     };
 
+    let mut last_log_update = Instant::now();
+    let mut remaining_slots_to_process = storage.len();
+
     // Remap the deserialized AppendVec paths to point to correct local paths
     let mut storage = storage
         .into_iter()
         .map(|(slot, mut slot_storage)| {
+            let now = Instant::now();
+            if now.duration_since(last_log_update).as_secs() >= 10 {
+                info!("{} slots remaining...", remaining_slots_to_process);
+                last_log_update = now;
+            }
+            remaining_slots_to_process -= 1;
+
             let mut new_slot_storage = HashMap::new();
             for (id, storage_entry) in slot_storage.drain() {
                 let path_index = thread_rng().gen_range(0, accounts_db.paths.len());
