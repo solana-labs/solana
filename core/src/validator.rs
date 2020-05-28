@@ -234,6 +234,7 @@ impl Validator {
             block_commitment_cache.clone(),
         ));
 
+        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
             if ContactInfo::is_valid_address(&node.info.rpc) {
                 assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
@@ -255,6 +256,7 @@ impl Validator {
                     ledger_path,
                     validator_exit.clone(),
                     config.trusted_validators.clone(),
+                    rpc_override_health_check.clone(),
                 ),
                 PubSubService::new(
                     &subscriptions,
@@ -374,7 +376,7 @@ impl Validator {
                 (None, None)
             };
 
-        wait_for_supermajority(config, &bank, &cluster_info);
+        wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check);
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
@@ -620,7 +622,12 @@ fn new_banks_from_blockstore(
     )
 }
 
-fn wait_for_supermajority(config: &ValidatorConfig, bank: &Bank, cluster_info: &ClusterInfo) {
+fn wait_for_supermajority(
+    config: &ValidatorConfig,
+    bank: &Bank,
+    cluster_info: &ClusterInfo,
+    rpc_override_health_check: Arc<AtomicBool>,
+) {
     if config.wait_for_supermajority != Some(bank.slot()) {
         return;
     }
@@ -635,8 +642,13 @@ fn wait_for_supermajority(config: &ValidatorConfig, bank: &Bank, cluster_info: &
         if gossip_stake_percent >= 80 {
             break;
         }
+        // The normal RPC health checks don't apply as the node is waiting, so feign health to
+        // prevent load balancers from removing the node from their list of candidates during a
+        // manual restart.
+        rpc_override_health_check.store(true, Ordering::Relaxed);
         sleep(Duration::new(1, 0));
     }
+    rpc_override_health_check.store(false, Ordering::Relaxed);
 }
 
 pub struct TestValidator {
