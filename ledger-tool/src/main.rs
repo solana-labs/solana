@@ -58,11 +58,21 @@ struct EntryInfo {
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 struct TransactionInfo {
-    slot: Slot,
-    cluster_unix_timestamp: i64,
-    recent_blockhash: String,
-    txn_sig: String,
-//    accounts: Vec<String>,
+    slot: Option<Slot>,
+    cluster_unix_timestamp: Option<i64>,
+    recent_blockhash: Option<String>,
+    txn_sig: Option<String>,
+    fee: Option<f64>,
+    num_instructions: Option<usize>,
+    num_accounts: Option<usize>,
+    account_balance_infos: Vec<AccountBalanceInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+struct AccountBalanceInfo {
+    account_pubkey: String,
+    account_pre_balance: f64,
+    account_post_balance: f64,
 }
 
 fn output_slot_to_csv(
@@ -71,10 +81,6 @@ fn output_slot_to_csv(
     wtr: &mut Writer<File>,
     ledger_path: &PathBuf,
 ) -> Result<(), String> {
-    let genesis_creation_time = open_genesis_config(&ledger_path).creation_time;
-    let seconds_per_slot = DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
-    let seconds_since_genesis = (slot * seconds_per_slot) as i64;
-
     let entries = blockstore
         .get_slot_entries(slot, 0, None)
         .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
@@ -92,21 +98,57 @@ fn output_slot_to_csv(
                 })
                 .map(|transaction_status| transaction_status.into());
 
-//            let message = transaction.message;
-            let account_keys = transaction.message.account_keys;
+            let txn_info = build_txn_info(
+                slot,
+                &ledger_path,
+                &transaction,
+                &transaction_status
+            );
 
-            let txn_info = TransactionInfo{
-                slot: slot,
-                cluster_unix_timestamp: genesis_creation_time + seconds_since_genesis,
-                recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                txn_sig: transaction.signatures[0].to_string(),
-//                accounts: account_keys,
-            };
-        wtr.serialize(&txn_info);
-        wtr.flush();
+            wtr.serialize(&txn_info);
         }
     }
+    wtr.flush();
     Ok(())
+}
+
+fn build_txn_info(
+    slot: Slot,
+    ledger_path: &PathBuf,
+    transaction: &Transaction,
+    transaction_status: &Option<RpcTransactionStatusMeta>
+) -> TransactionInfo {
+    let genesis_creation_time = open_genesis_config(&ledger_path).creation_time;
+    let seconds_per_slot = DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+    let seconds_since_genesis = (slot * seconds_per_slot) as i64;
+
+    let mut txn_info = TransactionInfo{
+        slot: Some(slot),
+        cluster_unix_timestamp: Some(genesis_creation_time + seconds_since_genesis),
+        recent_blockhash: Some(transaction.message.recent_blockhash.to_string()),
+        txn_sig: Some(transaction.signatures[0].to_string()),
+        num_instructions: Some(transaction.message.instructions.len()),
+        num_accounts: Some(transaction.message.account_keys.len()),
+        ..Default::default()
+    };
+
+    if let Some(transaction_status) = transaction_status {
+        txn_info.fee = Some(lamports_to_sol(transaction_status.fee));
+
+        for (i, (pre, post)) in transaction_status
+        .pre_balances
+        .iter()
+        .zip(transaction_status.post_balances.iter())
+        .enumerate()
+        {
+            txn_info.account_balance_infos.push(AccountBalanceInfo{
+                account_pubkey: bs58::encode(transaction.message.account_keys[i]).into_string(),
+                account_pre_balance: lamports_to_sol(*pre),
+                account_post_balance: lamports_to_sol(*post),
+            })
+        };
+    }
+    txn_info
 }
 
 fn output_slot_rewards(
@@ -943,7 +985,12 @@ fn main() {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let blockstore = open_blockstore(&ledger_path);
             let csv_file = value_t_or_exit!(arg_matches, "csv_file", String);
-            let mut wtr = csv::WriterBuilder::new().from_path(csv_file).unwrap();
+            let mut wtr = csv::WriterBuilder::new()
+                .has_headers(false)
+                .flexible(true)
+                .from_path(csv_file)
+                .unwrap();
+
             for slot in slots {
                 println!("Slot {}", slot);
                 if let Err(err) = output_slot_to_csv(&blockstore, slot, &mut wtr, &ledger_path) {
