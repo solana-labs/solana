@@ -401,7 +401,7 @@ impl Blockstore {
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
 
         let mut delete_range_timer = Measure::start("delete_range");
-        let mut columns_empty = self
+        let columns_empty = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
             .unwrap_or(false)
@@ -451,7 +451,6 @@ impl Blockstore {
                 self.purge_special_columns_with_primary_index(
                     &mut write_batch,
                     &mut w_active_transaction_status_index,
-                    &mut columns_empty,
                     to_slot,
                 )?;
             }
@@ -1915,7 +1914,6 @@ impl Blockstore {
         &self,
         write_batch: &mut WriteBatch,
         w_active_transaction_status_index: &mut u64,
-        columns_empty: &mut bool,
         to_slot: Slot,
     ) -> Result<()> {
         if let Some(index) = self.toggle_transaction_status_index(
@@ -1923,14 +1921,12 @@ impl Blockstore {
             w_active_transaction_status_index,
             to_slot,
         )? {
-            *columns_empty &= self
-                .db
+            self.db
                 .delete_range_cf::<cf::TransactionStatus>(write_batch, index, index + 1)
-                .unwrap_or(false)
-                & self
-                    .db
-                    .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
-                    .unwrap_or(false);
+                .unwrap_or(false);
+            self.db
+                .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
+                .unwrap_or(false);
         }
         Ok(())
     }
