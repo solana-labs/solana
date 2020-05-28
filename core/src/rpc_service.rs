@@ -19,6 +19,7 @@ use std::{
     collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
@@ -44,6 +45,7 @@ struct RpcRequestMiddleware {
     cluster_info: Arc<ClusterInfo>,
     trusted_validators: Option<HashSet<Pubkey>>,
     bank_forks: Arc<RwLock<BankForks>>,
+    override_health_check: Arc<AtomicBool>,
 }
 
 impl RpcRequestMiddleware {
@@ -53,6 +55,7 @@ impl RpcRequestMiddleware {
         cluster_info: Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
         bank_forks: Arc<RwLock<BankForks>>,
+        override_health_check: Arc<AtomicBool>,
     ) -> Self {
         Self {
             ledger_path,
@@ -64,6 +67,7 @@ impl RpcRequestMiddleware {
             cluster_info,
             trusted_validators,
             bank_forks,
+            override_health_check,
         }
     }
 
@@ -134,7 +138,9 @@ impl RpcRequestMiddleware {
     }
 
     fn health_check(&self) -> &'static str {
-        let response = if let Some(trusted_validators) = &self.trusted_validators {
+        let response = if self.override_health_check.load(Ordering::Relaxed) {
+            "ok"
+        } else if let Some(trusted_validators) = &self.trusted_validators {
             let (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) = {
                 (
                     self.cluster_info
@@ -290,6 +296,7 @@ impl JsonRpcService {
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
         trusted_validators: Option<HashSet<Pubkey>>,
+        override_health_check: Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -320,6 +327,7 @@ impl JsonRpcService {
                     cluster_info.clone(),
                     trusted_validators,
                     bank_forks.clone(),
+                    override_health_check,
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
@@ -395,7 +403,6 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::Signer;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::sync::atomic::AtomicBool;
 
     #[test]
     fn test_rpc_new() {
@@ -431,6 +438,7 @@ mod tests {
             &PathBuf::from("farf"),
             validator_exit,
             None,
+            Arc::new(AtomicBool::new(false)),
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
@@ -481,6 +489,7 @@ mod tests {
             cluster_info.clone(),
             None,
             bank_forks.clone(),
+            Arc::new(AtomicBool::new(false)),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
@@ -493,6 +502,7 @@ mod tests {
             cluster_info,
             None,
             bank_forks,
+            Arc::new(AtomicBool::new(false)),
         );
 
         assert!(rrm.is_file_get_path("/genesis.tar.bz2"));
@@ -526,6 +536,7 @@ mod tests {
             cluster_info,
             None,
             create_bank_forks(),
+            Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(rm.health_check(), "ok");
     }
@@ -534,6 +545,7 @@ mod tests {
     fn test_health_check_with_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
+        let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
@@ -541,6 +553,7 @@ mod tests {
             cluster_info.clone(),
             Some(trusted_validators.clone().into_iter().collect()),
             create_bank_forks(),
+            override_health_check.clone(),
         );
 
         // No account hashes for this node or any trusted validators == "behind"
@@ -549,6 +562,9 @@ mod tests {
         // No account hashes for any trusted validators == "behind"
         cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
         assert_eq!(rm.health_check(), "behind");
+        override_health_check.store(true, Ordering::Relaxed);
+        assert_eq!(rm.health_check(), "ok");
+        override_health_check.store(false, Ordering::Relaxed);
 
         // This node is ahead of the trusted validators == "ok"
         cluster_info
