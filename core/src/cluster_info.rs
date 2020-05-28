@@ -255,6 +255,7 @@ pub struct ClusterInfo {
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
+    pull_responses_by_id: RwLock<HashMap<Pubkey, usize>>,
 }
 
 impl Default for ClusterInfo {
@@ -410,6 +411,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             id,
             stats: GossipStats::default(),
+            pull_responses_by_id: RwLock::new(HashMap::new()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -435,6 +437,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
+            pull_responses_by_id: RwLock::new(HashMap::new()),
         }
     }
 
@@ -1888,6 +1891,7 @@ impl ClusterInfo {
             );
         }
         let filtered_len = crds_values.len();
+        *me.pull_responses_by_id.write().unwrap().entry(*from).or_insert(0) += filtered_len;
 
         let mut pull_stats = ProcessPullStats::default();
         let (filtered_pulls, filtered_pulls_no_timeout) = me
@@ -2266,6 +2270,11 @@ impl ClusterInfo {
                     i64
                 ),
             );
+            {
+                let mut pull_responses_by_id = self.pull_responses_by_id.write().unwrap();
+                info!("pull_responses_by_id: {:#?}", *pull_responses_by_id);
+                pull_responses_by_id.clear();
+            }
 
             *last_print = Instant::now();
         }
