@@ -1572,10 +1572,10 @@ dependencies = [
  "hyper 0.13.5",
  "log 0.4.8",
  "rustls",
- "rustls-native-certs",
  "tokio 0.2.20",
  "tokio-rustls",
  "webpki",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3150,11 +3150,11 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.10.4"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b81e49ddec5109a9dcfc5f2a317ff53377c915e9ae9d4f2fb50914b85614e2"
+checksum = "4be79e8610ce0c2d646aa03bff67653f76d394c4e0a5e7bc255007008fcc6ba8"
 dependencies = [
- "base64 0.11.0",
+ "base64 0.12.1",
  "bytes 0.5.4",
  "encoding_rs",
  "futures-core",
@@ -3174,7 +3174,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "time",
  "tokio 0.2.20",
  "tokio-rustls",
  "url 2.1.1",
@@ -3182,7 +3181,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots",
- "winreg 0.6.2",
+ "winreg",
 ]
 
 [[package]]
@@ -3264,18 +3263,6 @@ dependencies = [
  "ring",
  "sct",
  "webpki",
-]
-
-[[package]]
-name = "rustls-native-certs"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75ffeb84a6bd9d014713119542ce415db3a3e4748f0bfce1e1416cd224a23a5"
-dependencies = [
- "openssl-probe",
- "rustls",
- "schannel",
- "security-framework",
 ]
 
 [[package]]
@@ -4177,7 +4164,7 @@ dependencies = [
  "tempdir",
  "url 2.1.1",
  "winapi 0.3.8",
- "winreg 0.7.0",
+ "winreg",
 ]
 
 [[package]]
@@ -6229,9 +6216,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91cd5736df7f12a964a5067a12c62fa38e1bd8080aff1f80bc29be7c80d19ab4"
+checksum = "f8eff4b7516a57307f9349c64bf34caa34b940b66fed4b2fb3136cb7386e5739"
 dependencies = [
  "webpki",
 ]
@@ -6338,15 +6325,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "winreg"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
-dependencies = [
- "winapi 0.3.8",
-]
 
 [[package]]
 name = "winreg"
