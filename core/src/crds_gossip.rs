@@ -158,14 +158,18 @@ impl CrdsGossip {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
-    pub fn process_pull_requests(
-        &mut self,
-        filters: Vec<(CrdsValue, CrdsFilter)>,
-        now: u64,
-    ) -> Vec<Vec<CrdsValue>> {
+    pub fn process_pull_requests(&mut self, filters: Vec<(CrdsValue, CrdsFilter)>, now: u64) {
         self.pull
-            .process_pull_requests(&mut self.crds, filters, now)
+            .process_pull_requests(&mut self.crds, filters, now);
     }
+
+    pub fn generate_pull_responses(
+        &self,
+        filters: &[(CrdsValue, CrdsFilter)],
+    ) -> Vec<Vec<CrdsValue>> {
+        self.pull.generate_pull_responses(&self.crds, filters)
+    }
+
     /// process a pull response
     pub fn process_pull_response(
         &mut self,
@@ -173,7 +177,7 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
-    ) -> (usize, usize) {
+    ) -> (usize, usize, usize) {
         self.pull
             .process_pull_response(&mut self.crds, from, timeouts, response, now)
     }

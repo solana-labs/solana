@@ -204,14 +204,13 @@ impl CrdsGossipPull {
         self.purged_values.push_back((hash, timestamp))
     }
 
-    /// process a pull request and create a response
+    /// process a pull request
     pub fn process_pull_requests(
         &mut self,
         crds: &mut Crds,
         requests: Vec<(CrdsValue, CrdsFilter)>,
         now: u64,
-    ) -> Vec<Vec<CrdsValue>> {
-        let rv = self.filter_crds_values(crds, &requests);
+    ) {
         requests.into_iter().for_each(|(caller, _)| {
             let key = caller.label().pubkey();
             let old = crds.insert(caller, now);
@@ -221,8 +220,17 @@ impl CrdsGossipPull {
             }
             crds.update_record_timestamp(&key, now);
         });
-        rv
     }
+
+    /// Create gossip responses to pull requests
+    pub fn generate_pull_responses(
+        &self,
+        crds: &Crds,
+        requests: &[(CrdsValue, CrdsFilter)],
+    ) -> Vec<Vec<CrdsValue>> {
+        self.filter_crds_values(crds, requests)
+    }
+
     /// process a pull response
     pub fn process_pull_response(
         &mut self,
@@ -231,9 +239,10 @@ impl CrdsGossipPull {
         timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
-    ) -> (usize, usize) {
+    ) -> (usize, usize, usize) {
         let mut failed = 0;
         let mut timeout_count = 0;
+        let mut success = 0;
         for r in response {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
@@ -274,7 +283,11 @@ impl CrdsGossipPull {
                 }
             }
             let old = crds.insert(r, now);
-            failed += old.is_err() as usize;
+            if old.is_err() {
+                failed += 1;
+            } else {
+                success += 1;
+            }
             old.ok().map(|opt| {
                 crds.update_record_timestamp(&owner, now);
                 opt.map(|val| {
@@ -284,7 +297,7 @@ impl CrdsGossipPull {
             });
         }
         crds.update_record_timestamp(from, now);
-        (failed, timeout_count)
+        (failed, timeout_count, success)
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
@@ -573,8 +586,9 @@ mod test {
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
-        let filters = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.process_pull_requests(&mut dest_crds, filters, 1);
+        let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+        let rsp = dest.generate_pull_responses(&dest_crds, &filters);
+        dest.process_pull_requests(&mut dest_crds, filters, 1);
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
         assert_eq!(
@@ -643,8 +657,9 @@ mod test {
                 PACKET_DATA_SIZE,
             );
             let (_, filters, caller) = req.unwrap();
-            let filters = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.process_pull_requests(&mut dest_crds, filters, 0);
+            let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters);
+            dest.process_pull_requests(&mut dest_crds, filters, 0);
             // if there is a false positive this is empty
             // prob should be around 0.1 per iteration
             if rsp.is_empty() {
