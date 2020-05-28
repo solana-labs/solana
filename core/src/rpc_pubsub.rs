@@ -921,8 +921,8 @@ mod tests {
         });
 
         // Process votes and check they were notified.
-	// FIXME - clone belwow is required for testcase to pass
-	#[allow(clippy::redundant_clone)]
+        // FIXME - clone belwow is required for testcase to pass
+        #[allow(clippy::redundant_clone)]
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,

@@ -99,9 +99,9 @@ mod tests {
         slot_history.add(MAX_ENTRIES);
         assert_eq!(slot_history.check(0), Check::TooOld);
         assert_eq!(slot_history.check(1), Check::NotFound);
-        assert_eq!(slot_history.check(2), Check::Found);
-        assert_eq!(slot_history.check(20), Check::Found);
-        assert_eq!(slot_history.check(MAX_ENTRIES), Check::Found);
+        for i in &[2, 20, MAX_ENTRIES] {
+            assert_eq!(slot_history.check(*i), Check::Found);
+        }
         for i in 3..20 {
             assert_eq!(slot_history.check(i), Check::NotFound, "i: {}", i);
         }
@@ -113,12 +113,9 @@ mod tests {
         info!("add max_entries + 3");
         let slot = 3 * MAX_ENTRIES + 3;
         slot_history.add(slot);
-        assert_eq!(slot_history.check(0), Check::TooOld);
-        assert_eq!(slot_history.check(1), Check::TooOld);
-        assert_eq!(slot_history.check(2), Check::TooOld);
-        assert_eq!(slot_history.check(20), Check::TooOld);
-        assert_eq!(slot_history.check(21), Check::TooOld);
-        assert_eq!(slot_history.check(MAX_ENTRIES), Check::TooOld);
+        for i in &[0, 1, 2, 20, 21, MAX_ENTRIES] {
+            assert_eq!(slot_history.check(*i), Check::TooOld);
+        }
         let start = slot - MAX_ENTRIES + 1;
         let end = slot;
         for i in start..end {
