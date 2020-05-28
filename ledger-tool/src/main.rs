@@ -14,7 +14,11 @@ use solana_ledger::{
     snapshot_utils,
 };
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
+    clock::Slot,
+    clock::DEFAULT_TICKS_PER_SECOND,
+    clock::DEFAULT_TICKS_PER_SLOT,
+    genesis_config::GenesisConfig,
+    native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
     program_utils::limited_deserialize,
     transaction::Transaction,
@@ -55,6 +59,7 @@ struct EntryInfo {
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 struct TransactionInfo {
     slot: Slot,
+    cluster_unix_timestamp: i64,
     recent_blockhash: String,
     txn_sig: String,
 //    accounts: Vec<String>,
@@ -64,7 +69,12 @@ fn output_slot_to_csv(
     blockstore: &Blockstore,
     slot: Slot,
     wtr: &mut Writer<File>,
+    ledger_path: &PathBuf,
 ) -> Result<(), String> {
+    let genesis_creation_time = open_genesis_config(&ledger_path).creation_time;
+    let seconds_per_slot = DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+    let seconds_since_genesis = (slot * seconds_per_slot) as i64;
+
     let entries = blockstore
         .get_slot_entries(slot, 0, None)
         .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
@@ -82,14 +92,15 @@ fn output_slot_to_csv(
                 })
                 .map(|transaction_status| transaction_status.into());
 
-            let message = transaction.message;
-//            let account_keys = message.account_keys;
+//            let message = transaction.message;
+            let account_keys = transaction.message.account_keys;
 
             let txn_info = TransactionInfo{
                 slot: slot,
-                recent_blockhash: message.recent_blockhash.to_string(),
+                cluster_unix_timestamp: genesis_creation_time + seconds_since_genesis,
+                recent_blockhash: transaction.message.recent_blockhash.to_string(),
                 txn_sig: transaction.signatures[0].to_string(),
-//                accounts: message.account_keys.,
+//                accounts: account_keys,
             };
         wtr.serialize(&txn_info);
         wtr.flush();
@@ -935,7 +946,7 @@ fn main() {
             let mut wtr = csv::WriterBuilder::new().from_path(csv_file).unwrap();
             for slot in slots {
                 println!("Slot {}", slot);
-                if let Err(err) = output_slot_to_csv(&blockstore, slot, &mut wtr) {
+                if let Err(err) = output_slot_to_csv(&blockstore, slot, &mut wtr, &ledger_path) {
                     eprintln!("{}", err);
                 }
             }
