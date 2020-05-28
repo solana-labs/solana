@@ -18,6 +18,7 @@ use solana_sdk::{
     clock::DEFAULT_TICKS_PER_SECOND,
     clock::DEFAULT_TICKS_PER_SLOT,
     genesis_config::GenesisConfig,
+    instruction::CompiledInstruction,
     native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
     program_utils::limited_deserialize,
@@ -42,6 +43,8 @@ use serde::{
     Deserialize,
 };
 
+use base64;
+
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
     Print,
@@ -54,6 +57,14 @@ struct EntryInfo {
     num_hashes: u64,
     hash: String,
     num_transactions: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+struct InstructionInfo {
+    txn_sig: Option<String>,
+    program_pubkey: Option<String>,
+    program_instruction: Option<String>,
+    instruction_accounts: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -78,7 +89,8 @@ struct AccountBalanceInfo {
 fn output_slot_to_csv(
     blockstore: &Blockstore,
     slot: Slot,
-    wtr: &mut Writer<File>,
+    txn_wtr: &mut Writer<File>,
+    instruction_wtr: &mut Writer<File>,
     ledger_path: &PathBuf,
 ) -> Result<(), String> {
     let entries = blockstore
@@ -87,6 +99,12 @@ fn output_slot_to_csv(
 
     for entry in entries {
         for transaction in entry.transactions {
+            // Skip any vote transactions
+//            let program_pubkey = transaction
+//                .message
+//                .account_keys[transaction.message.instructions[0].program_id_index as usize];
+//            if program_pubkey == solana_vote_program::id() { continue; }
+
             let transaction_status: Option<RpcTransactionStatusMeta> = blockstore
                 .read_transaction_status((transaction.signatures[0], slot))
                 .unwrap_or_else(|err| {
@@ -98,18 +116,65 @@ fn output_slot_to_csv(
                 })
                 .map(|transaction_status| transaction_status.into());
 
+            for instruction in &transaction.message.instructions {
+                let instruction_info = build_instruction_info(
+                    &instruction,
+                    &transaction,
+                    &transaction_status
+                );
+                instruction_wtr.serialize(&instruction_info);
+            }
+
             let txn_info = build_txn_info(
                 slot,
                 &ledger_path,
                 &transaction,
                 &transaction_status
             );
-
-            wtr.serialize(&txn_info);
+            txn_wtr.serialize(&txn_info);
         }
     }
-    wtr.flush();
+    instruction_wtr.flush();
+    txn_wtr.flush();
     Ok(())
+}
+
+fn build_instruction_info(
+    instruction: &CompiledInstruction,
+    transaction: &Transaction,
+    transaction_status: &Option<RpcTransactionStatusMeta>
+) -> InstructionInfo {
+    let program_pubkey = transaction
+        .message
+        .account_keys[instruction.program_id_index as usize];
+
+    let mut instruction_info = InstructionInfo{
+        txn_sig: Some(transaction.signatures[0].to_string()),
+        program_pubkey: Some(bs58::encode(program_pubkey).into_string()),
+        ..Default::default()
+    };
+
+    // Need to figure out how to decode vote_instruction to String
+    instruction_info.program_instruction = Some("foo".to_string());
+//    if program_pubkey == solana_vote_program::id() {
+//        if let Ok(vote_instruction) = limited_deserialize::<
+//            solana_vote_program::vote_instruction::VoteInstruction,
+//        >(&instruction.data)
+//        {
+//            instruction_info.program_instruction = Some(std::str::from_utf8(&vote_instruction).unwrap().to_string());
+//        }
+//    }
+
+    for account in &instruction.accounts {
+        instruction_info
+            .instruction_accounts
+            .push(bs58::encode(transaction
+                .message
+                .account_keys[*account as usize])
+                .into_string())
+    }
+
+    instruction_info
 }
 
 fn build_txn_info(
@@ -700,8 +765,15 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Add a hard fork at this slot");
-    let csv_file_arg = Arg::with_name("csv_file")
-        .long("csv-file")
+    let txn_csv_file_arg = Arg::with_name("txn_csv_file")
+        .short("t")
+        .long("txn-csv-file")
+        .value_name("PATH")
+        .takes_value(true)
+        .help("File path to new or existing CSV file for writing");
+    let instruction_csv_file_arg = Arg::with_name("instruction_csv_file")
+        .short("i")
+        .long("instruction-csv-file")
         .value_name("PATH")
         .takes_value(true)
         .help("File path to new or existing CSV file for writing");
@@ -750,7 +822,8 @@ fn main() {
                         .required(true)
                         .help("Slots to print"),
                 )
-                .arg(&csv_file_arg)
+                .arg(&txn_csv_file_arg)
+                .arg(&instruction_csv_file_arg)
         )
         .subcommand(
             SubCommand::with_name("set-dead-slot")
@@ -984,16 +1057,22 @@ fn main() {
         ("slot-csv", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let blockstore = open_blockstore(&ledger_path);
-            let csv_file = value_t_or_exit!(arg_matches, "csv_file", String);
-            let mut wtr = csv::WriterBuilder::new()
+            let txn_csv_file = value_t_or_exit!(arg_matches, "txn_csv_file", String);
+            let instruction_csv_file = value_t_or_exit!(arg_matches, "instruction_csv_file", String);
+            let mut txn_wtr = csv::WriterBuilder::new()
                 .has_headers(false)
                 .flexible(true)
-                .from_path(csv_file)
+                .from_path(txn_csv_file)
+                .unwrap();
+            let mut instruction_wtr = csv::WriterBuilder::new()
+                .has_headers(false)
+                .flexible(true)
+                .from_path(instruction_csv_file)
                 .unwrap();
 
             for slot in slots {
                 println!("Slot {}", slot);
-                if let Err(err) = output_slot_to_csv(&blockstore, slot, &mut wtr, &ledger_path) {
+                if let Err(err) = output_slot_to_csv(&blockstore, slot, &mut txn_wtr, &mut instruction_wtr, &ledger_path) {
                     eprintln!("{}", err);
                 }
             }
