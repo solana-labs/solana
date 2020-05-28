@@ -121,8 +121,12 @@ pub fn verify_reachable_ports(
         let (sender, receiver) = channel();
         std::thread::spawn(move || {
             debug!("Waiting for incoming connection on tcp/{}", port);
-            let _ = tcp_listener.incoming().next().expect("tcp incoming failed");
-            sender.send(()).expect("send failure");
+            match tcp_listener.incoming().next() {
+                Some(_) => sender
+                    .send(())
+                    .unwrap_or_else(|err| warn!("send failure: {}", err)),
+                None => warn!("tcp incoming failed"),
+            }
         });
         match receiver.recv_timeout(Duration::from_secs(5)) {
             Ok(_) => {
@@ -152,8 +156,12 @@ pub fn verify_reachable_ports(
             std::thread::spawn(move || {
                 let mut buf = [0; 1];
                 debug!("Waiting for incoming datagram on udp/{}", port);
-                let _ = udp_socket.recv(&mut buf).expect("udp recv failure");
-                sender.send(()).expect("send failure");
+                match udp_socket.recv(&mut buf) {
+                    Ok(_) => sender
+                        .send(())
+                        .unwrap_or_else(|err| warn!("send failure: {}", err)),
+                    Err(err) => warn!("udp recv failure: {}", err),
+                }
             });
             match receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(_) => {
