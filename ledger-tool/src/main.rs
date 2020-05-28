@@ -43,8 +43,6 @@ use serde::{
     Deserialize,
 };
 
-use base64;
-
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
     Print,
@@ -100,10 +98,10 @@ fn output_slot_to_csv(
     for entry in entries {
         for transaction in entry.transactions {
             // Skip any vote transactions
-//            let program_pubkey = transaction
-//                .message
-//                .account_keys[transaction.message.instructions[0].program_id_index as usize];
-//            if program_pubkey == solana_vote_program::id() { continue; }
+            let program_pubkey = transaction
+                .message
+                .account_keys[transaction.message.instructions[0].program_id_index as usize];
+            if program_pubkey == solana_vote_program::id() { continue; }
 
             let transaction_status: Option<RpcTransactionStatusMeta> = blockstore
                 .read_transaction_status((transaction.signatures[0], slot))
@@ -154,16 +152,30 @@ fn build_instruction_info(
         ..Default::default()
     };
 
-    // Need to figure out how to decode vote_instruction to String
+    // Need to figure out how to decode program instruction to String
     instruction_info.program_instruction = Some("foo".to_string());
-//    if program_pubkey == solana_vote_program::id() {
-//        if let Ok(vote_instruction) = limited_deserialize::<
-//            solana_vote_program::vote_instruction::VoteInstruction,
+//    instruction_info.program_instruction =
+//                Some(std::str::from_utf8(&instruction.data).unwrap().to_string());
+
+
+//    if program_pubkey == solana_stake_program::id() {
+//        if let Ok(stake_instruction) = limited_deserialize::<
+//            solana_stake_program::stake_instruction::StakeInstruction,
 //        >(&instruction.data)
 //        {
-//            instruction_info.program_instruction = Some(std::str::from_utf8(&vote_instruction).unwrap().to_string());
+//            instruction_info.program_instruction =
+//                Some(std::str::from_utf8(&stake_instruction).unwrap().to_string());
+//        }
+//    } else if program_pubkey == solana_sdk::system_program::id() {
+//        if let Ok(system_instruction) = limited_deserialize::<
+//            solana_sdk::system_instruction::SystemInstruction,
+//        >(&instruction.data)
+//        {
+//            instruction_info.program_instruction =
+//                Some(std::str::from_utf8(&system_instruction).unwrap().to_string());
 //        }
 //    }
+
 
     for account in &instruction.accounts {
         instruction_info
@@ -291,6 +303,42 @@ fn output_slot(
     }
 
     output_slot_rewards(blockstore, slot, method)
+}
+
+fn output_ledger_to_csv(blockstore: &Blockstore,
+                        ledger_path: &PathBuf,
+                        starting_slot: Slot,
+                        txn_csv_file: String,
+                        instruction_csv_file: String) {
+    let rooted_slot_iterator =
+        RootedSlotIterator::new(starting_slot, &blockstore).unwrap_or_else(|err| {
+            eprintln!(
+                "Failed to load entries starting from slot {}: {:?}",
+                starting_slot, err
+            );
+            exit(1);
+        });
+
+    let mut txn_wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_path(txn_csv_file)
+        .unwrap();
+    let mut instruction_wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_path(instruction_csv_file)
+        .unwrap();
+
+    for (slot, slot_meta) in rooted_slot_iterator {
+        output_slot_to_csv(
+            blockstore,
+            slot,
+            &mut txn_wtr,
+            &mut instruction_wtr,
+            ledger_path,
+        );
+    }
 }
 
 fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutputMethod) {
@@ -796,6 +844,13 @@ fn main() {
             .arg(&starting_slot_arg)
         )
         .subcommand(
+            SubCommand::with_name("print-csv")
+                .about("Write the ledger to CSV files")
+                .arg(&starting_slot_arg)
+                .arg(&txn_csv_file_arg)
+                .arg(&instruction_csv_file_arg)
+        )
+        .subcommand(
             SubCommand::with_name("slot")
             .about("Print the contents of one or more slots")
             .arg(
@@ -1011,6 +1066,20 @@ fn main() {
                 LedgerOutputMethod::Print,
             );
         }
+        ("print-csv", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let txn_csv_file = value_t_or_exit!(arg_matches, "txn_csv_file", String);
+            let instruction_csv_file = value_t_or_exit!(arg_matches, "instruction_csv_file", String);
+            let blockstore = open_blockstore(&ledger_path);
+            output_ledger_to_csv(
+                &blockstore,
+                &ledger_path,
+                starting_slot,
+                txn_csv_file,
+                instruction_csv_file,
+            );
+        }
+
         ("genesis", Some(_arg_matches)) => {
             println!("{}", open_genesis_config(&ledger_path));
         }
