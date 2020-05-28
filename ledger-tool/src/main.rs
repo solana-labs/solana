@@ -1187,6 +1187,7 @@ fn main() {
             let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
             let blockstore = open_blockstore(&ledger_path);
             blockstore.purge_slots(start_slot, end_slot);
+            blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
             let blockstore = open_blockstore(&ledger_path);
