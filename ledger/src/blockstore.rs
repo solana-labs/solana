@@ -5933,6 +5933,56 @@ pub mod tests {
     }
 
     #[test]
+    fn test_purge_front_of_ledger() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let max_slot = 10;
+            for x in 0..max_slot {
+                let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+                blockstore
+                    .write_transaction_status(
+                        x,
+                        Signature::new(&random_bytes),
+                        vec![&Pubkey::new(&random_bytes[0..32])],
+                        vec![&Pubkey::new(&random_bytes[32..])],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            // Purge to freeze index 0
+            blockstore.run_purge(0, 1).unwrap();
+
+            for x in max_slot..2 * max_slot {
+                let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+                blockstore
+                    .write_transaction_status(
+                        x,
+                        Signature::new(&random_bytes),
+                        vec![&Pubkey::new(&random_bytes[0..32])],
+                        vec![&Pubkey::new(&random_bytes[32..])],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+
+            // Purging range outside of TransactionStatus max slots should not affect TransactionStatus data
+            blockstore.run_purge(20, 30).unwrap();
+
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::From(
+                    cf::TransactionStatus::as_index(0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            let entry = status_entry_iterator.next().unwrap().0;
+            assert_eq!(entry.0, 0);
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status() {
         let blockstore_path = get_tmp_ledger_path!();
