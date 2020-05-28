@@ -30,8 +30,9 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let mut stakes = HashMap::new();
     const NUM_PEERS: usize = 200;
     for _ in 0..NUM_PEERS {
-        let id = Pubkey::new_rand();
-        let contact_info = ContactInfo::new_localhost(&id, timestamp());
+        let validator_id = Pubkey::new_rand();
+        let node_id = Pubkey::new_rand();
+        let contact_info = ContactInfo::new_localhost(&validator_id, &node_id, timestamp());
         cluster_info.insert_info(contact_info);
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
