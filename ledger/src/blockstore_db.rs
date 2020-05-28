@@ -337,10 +337,14 @@ impl Column for columns::TransactionStatus {
     }
 
     fn index(key: &[u8]) -> (u64, Signature, Slot) {
-        let index = BigEndian::read_u64(&key[0..8]);
-        let signature = Signature::new(&key[8..72]);
-        let slot = BigEndian::read_u64(&key[72..80]);
-        (index, signature, slot)
+        if key.len() != 80 {
+            Self::as_index(0)
+        } else {
+            let index = BigEndian::read_u64(&key[0..8]);
+            let signature = Signature::new(&key[8..72]);
+            let slot = BigEndian::read_u64(&key[72..80]);
+            (index, signature, slot)
+        }
     }
 
     fn primary_index(index: Self::Index) -> u64 {
