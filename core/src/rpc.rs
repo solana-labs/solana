@@ -213,8 +213,9 @@ impl JsonRpcRequestProcessor {
     fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
+        commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
-        let bank = &*self.bank(None)?;
+        let bank = &*self.bank(commitment)?;
         let fee_calculator = bank.get_fee_calculator(blockhash);
         new_response(
             bank,
@@ -832,6 +833,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         blockhash: String,
+        commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcFeeCalculator>>;
 
     #[rpc(meta, name = "getFeeRateGovernor")]
@@ -1189,6 +1191,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         blockhash: String,
+        commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
         debug!("get_fee_calculator_for_blockhash rpc request received");
         let blockhash =
@@ -1196,7 +1199,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_fee_calculator_for_blockhash(&blockhash)
+            .get_fee_calculator_for_blockhash(&blockhash, commitment)
     }
 
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
