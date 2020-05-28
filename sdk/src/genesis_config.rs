@@ -198,6 +198,7 @@ impl fmt::Display for GenesisConfig {
              Warmup epochs: {}abled\n\
              {:?}\n\
              {:?}\n\
+             {:?}\n\
              Capitalization: {} SOL in {} accounts\n\
              ",
             Utc.timestamp(self.creation_time, 0).to_rfc3339(),
@@ -211,6 +212,7 @@ impl fmt::Display for GenesisConfig {
             } else {
                 "dis"
             },
+            self.inflation,
             self.rent,
             self.fee_rate_governor,
             lamports_to_sol(
