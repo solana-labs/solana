@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.1.15"
+version = "1.1.16"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,15 +14,15 @@ clap = "2.33.0"
 histogram = "*"
 serde_json = "1.0.48"
 serde_yaml = "0.8.11"
-solana-clap-utils = { path = "../clap-utils", version = "1.1.15" }
-solana-cli = { path = "../cli", version = "1.1.15" }
-solana-ledger = { path = "../ledger", version = "1.1.15" }
-solana-logger = { path = "../logger", version = "1.1.15" }
-solana-runtime = { path = "../runtime", version = "1.1.15" }
-solana-sdk = { path = "../sdk", version = "1.1.15" }
-solana-stake-program = { path = "../programs/stake", version = "1.1.15" }
-solana-transaction-status = { path = "../transaction-status", version = "1.1.15" }
-solana-vote-program = { path = "../programs/vote", version = "1.1.15" }
+solana-clap-utils = { path = "../clap-utils", version = "1.1.16" }
+solana-cli = { path = "../cli", version = "1.1.16" }
+solana-ledger = { path = "../ledger", version = "1.1.16" }
+solana-logger = { path = "../logger", version = "1.1.16" }
+solana-runtime = { path = "../runtime", version = "1.1.16" }
+solana-sdk = { path = "../sdk", version = "1.1.16" }
+solana-stake-program = { path = "../programs/stake", version = "1.1.16" }
+solana-transaction-status = { path = "../transaction-status", version = "1.1.16" }
+solana-vote-program = { path = "../programs/vote", version = "1.1.16" }
 tempfile = "3.1.0"
 
 [dev-dependencies]
