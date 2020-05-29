@@ -152,29 +152,23 @@ fn build_instruction_info(
         ..Default::default()
     };
 
-    // Need to figure out how to decode program instruction to String
-    instruction_info.program_instruction = Some("foo".to_string());
-//    instruction_info.program_instruction =
-//                Some(std::str::from_utf8(&instruction.data).unwrap().to_string());
-
-
-//    if program_pubkey == solana_stake_program::id() {
-//        if let Ok(stake_instruction) = limited_deserialize::<
-//            solana_stake_program::stake_instruction::StakeInstruction,
-//        >(&instruction.data)
-//        {
-//            instruction_info.program_instruction =
-//                Some(std::str::from_utf8(&stake_instruction).unwrap().to_string());
-//        }
-//    } else if program_pubkey == solana_sdk::system_program::id() {
-//        if let Ok(system_instruction) = limited_deserialize::<
-//            solana_sdk::system_instruction::SystemInstruction,
-//        >(&instruction.data)
-//        {
-//            instruction_info.program_instruction =
-//                Some(std::str::from_utf8(&system_instruction).unwrap().to_string());
-//        }
-//    }
+    if program_pubkey == solana_stake_program::id() {
+        if let Ok(stake_instruction) = limited_deserialize::<
+            solana_stake_program::stake_instruction::StakeInstruction,
+        >(&instruction.data)
+        {
+            instruction_info.program_instruction =
+                Some(format!("{:?}",stake_instruction));
+        }
+    } else if program_pubkey == solana_sdk::system_program::id() {
+        if let Ok(system_instruction) = limited_deserialize::<
+            solana_sdk::system_instruction::SystemInstruction,
+        >(&instruction.data)
+        {
+            instruction_info.program_instruction =
+                Some(format!("{:?}", system_instruction));
+        }
+    }
 
 
     for account in &instruction.accounts {
@@ -185,7 +179,6 @@ fn build_instruction_info(
                 .account_keys[*account as usize])
                 .into_string())
     }
-
     instruction_info
 }
 
