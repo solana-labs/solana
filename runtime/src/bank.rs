@@ -1917,7 +1917,7 @@ impl Bank {
         self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
-    fn operating_mode(&self) -> OperatingMode {
+    pub fn operating_mode(&self) -> OperatingMode {
         // unwrap is safe; self.operating_mode is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
         self.operating_mode.unwrap()
@@ -6891,25 +6891,41 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "hRgSMcWvZVveC8TqHHBfeU3h6vkPy6qzR5bHXfDTCyd"
+=======
+                    "DX3Jk7ae6VdogRb73iC1zdyrYN5UzinLcSFES2FQx8dY"
+>>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "C2isNuN27FB9wVFpR1txa6SsXi94td6WSy7Va5deGpX5"
+=======
+                    "FqLpq1gmTdzEmdEPa2JttEFDqRtuKwkKFKuLuqNSiYwH"
+>>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "2FJC56qpMyDFNtCvbr1MhyR2bawrhLtViaLVoBEMbj1n"
+=======
+                    "rBbDCyHuCBWQrLY37zjj2zwsEnzNERWHwoH3W2NpRYe"
+>>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
+<<<<<<< HEAD
                     "GUae7X3qX6aRu5UJ6MTRmPEUNi94GP6thagRi9uFRHpG"
+=======
+                    "E9DThiAPbheGeLWBDsts8uzuwF3bJQzDWh5uo8ovtYiy"
+>>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
                 );
                 break;
             }
