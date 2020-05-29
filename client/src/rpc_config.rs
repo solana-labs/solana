@@ -1,4 +1,4 @@
-use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::{clock::Epoch, commitment_config::CommitmentConfig};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,4 +25,12 @@ pub struct RpcLargestAccountsConfig {
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub filter: Option<RpcLargestAccountsFilter>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcInflationConfig {
+    pub epoch: Option<Epoch>,
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }

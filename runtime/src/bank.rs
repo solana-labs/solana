@@ -1917,7 +1917,7 @@ impl Bank {
         self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
-    fn operating_mode(&self) -> OperatingMode {
+    pub fn operating_mode(&self) -> OperatingMode {
         // unwrap is safe; self.operating_mode is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
         self.operating_mode.unwrap()
@@ -6891,25 +6891,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "hRgSMcWvZVveC8TqHHBfeU3h6vkPy6qzR5bHXfDTCyd"
+                    "4qpzttntyJ4g144CA5uTC9yRw9bZALk2BvYVpRAEasYo"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "C2isNuN27FB9wVFpR1txa6SsXi94td6WSy7Va5deGpX5"
+                    "32H83DKDGWs7h9419KWbXXvhsUpWc8quqkTH9t8XmCCW"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "2FJC56qpMyDFNtCvbr1MhyR2bawrhLtViaLVoBEMbj1n"
+                    "EdKHbx8z3wJ7r3ZPA8FExbKTz9HUdgZEqSBa62tUcbpQ"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "GUae7X3qX6aRu5UJ6MTRmPEUNi94GP6thagRi9uFRHpG"
+                    "RiGo5uEeSP2kT7wrNVMBkZzUY1QRhCUYxeQ22ey51XZ"
                 );
                 break;
             }
