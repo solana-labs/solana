@@ -1,5 +1,5 @@
 use crate::{
-    instruction::{AccountMeta, Instruction, WithSigner},
+    instruction::{AccountMeta, Instruction},
     nonce,
     program_utils::DecodeError,
     pubkey::Pubkey,
@@ -234,8 +234,8 @@ pub fn create_account_with_seed(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
-    ]
-    .with_signer(base);
+        AccountMeta::new_readonly(*base, true),
+    ];
 
     Instruction::new(
         system_program::id(),
@@ -265,7 +265,10 @@ pub fn assign_with_seed(
     seed: &str,
     owner: &Pubkey,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*address, false)].with_signer(base);
+    let account_metas = vec![
+        AccountMeta::new(*address, false),
+        AccountMeta::new_readonly(*base, true),
+    ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::AssignWithSeed {
@@ -305,7 +308,10 @@ pub fn allocate_with_seed(
     space: u64,
     owner: &Pubkey,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*address, false)].with_signer(base);
+    let account_metas = vec![
+        AccountMeta::new(*address, false),
+        AccountMeta::new_readonly(*base, true),
+    ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::AllocateWithSeed {
@@ -386,8 +392,8 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
     let account_metas = vec![
         AccountMeta::new(*nonce_pubkey, false),
         AccountMeta::new_readonly(recent_blockhashes::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::AdvanceNonceAccount,
@@ -406,8 +412,8 @@ pub fn withdraw_nonce_account(
         AccountMeta::new(*to_pubkey, false),
         AccountMeta::new_readonly(recent_blockhashes::id(), false),
         AccountMeta::new_readonly(rent::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::WithdrawNonceAccount(lamports),
@@ -420,7 +426,10 @@ pub fn authorize_nonce_account(
     authorized_pubkey: &Pubkey,
     new_authority: &Pubkey,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*nonce_pubkey, false)].with_signer(authorized_pubkey);
+    let account_metas = vec![
+        AccountMeta::new(*nonce_pubkey, false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::AuthorizeNonceAccount(*new_authority),
