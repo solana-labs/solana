@@ -252,6 +252,7 @@ pub struct ClusterInfo {
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
+    start_time: u64,
 }
 
 #[derive(Default, Clone)]
@@ -392,6 +393,7 @@ impl ClusterInfo {
         let id = contact_info.id;
         let me = Self {
             gossip: RwLock::new(CrdsGossip::default()),
+            start_time: timestamp(),
             keypair,
             entrypoint: RwLock::new(None),
             outbound_budget: RwLock::new(DataBudget {
@@ -426,6 +428,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
+            start_time: self.start_time,
         }
     }
 
@@ -1681,7 +1684,12 @@ impl ClusterInfo {
         let self_id = me.id();
 
         //skip messages that are likely to be pushed
-        let push_timer = Some(now - CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS);
+        let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
+        let push_timer = if min_filter_time < now {
+            Some(now - CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS)
+        } else {
+            None
+        };
         let pull_responses = me
             .time_gossip_read_lock("generate_pull_responses", &me.stats.generate_pull_responses)
             .generate_pull_responses(&caller_and_filters, push_timer);
@@ -2061,6 +2069,16 @@ impl ClusterInfo {
                 (
                     "generate_pull_responses",
                     self.stats.generate_pull_responses.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_response_fail",
+                    self.stats.process_pull_response_fail.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_response_success",
+                    self.stats.process_pull_response_success.clear(),
                     i64
                 ),
                 ("process_prune", self.stats.process_prune.clear(), i64),
