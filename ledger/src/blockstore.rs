@@ -3087,6 +3087,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
+        message::Message,
         native_token::sol_to_lamports,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
@@ -5488,9 +5489,8 @@ pub mod tests {
                 timestamp,
             };
             let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
-
-            let vote_tx =
-                Transaction::new_signed_instructions(&[keypair], &[vote_ix], Hash::default());
+            let vote_msg = Message::new_with_payer(&[vote_ix], Some(&keypair.pubkey()));
+            let vote_tx = Transaction::new(&[keypair], vote_msg, Hash::default());
 
             vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
             let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
