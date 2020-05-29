@@ -118,7 +118,6 @@ fn output_slot_to_csv(
                 let instruction_info = build_instruction_info(
                     &instruction,
                     &transaction,
-                    &transaction_status
                 );
                 instruction_wtr.serialize(&instruction_info);
             }
@@ -140,7 +139,6 @@ fn output_slot_to_csv(
 fn build_instruction_info(
     instruction: &CompiledInstruction,
     transaction: &Transaction,
-    transaction_status: &Option<RpcTransactionStatusMeta>
 ) -> InstructionInfo {
     let program_pubkey = transaction
         .message
@@ -323,7 +321,7 @@ fn output_ledger_to_csv(blockstore: &Blockstore,
         .from_path(instruction_csv_file)
         .unwrap();
 
-    for (slot, slot_meta) in rooted_slot_iterator {
+    for (slot, _slot_meta) in rooted_slot_iterator {
         output_slot_to_csv(
             blockstore,
             slot,
