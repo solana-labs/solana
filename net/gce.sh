@@ -162,7 +162,7 @@ Manage testnet instances
                     - If set, reclaims all reservations on all colo nodes, regardless of owner, pre-emptibility, or creator.
 
  info-specific options:
-   --eval           - Output in a form that can be eval-ed by a shell: eval $(gce.sh info)
+   --eval           - Output in a form that can be eval-ed by a shell: eval \$(gce.sh info --eval)
 
    none
 
