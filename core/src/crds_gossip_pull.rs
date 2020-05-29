@@ -227,8 +227,9 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
+        now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
-        self.filter_crds_values(crds, requests)
+        self.filter_crds_values(crds, requests, now)
     }
 
     /// process a pull response
@@ -322,9 +323,15 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
+        now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
+        let now = now.unwrap_or(u64::MAX);
         for v in crds.table.values() {
+            //skip messages that are newer than now
+            if v.insert_timestamp > now {
+                continue;
+            }
             filters.iter().enumerate().for_each(|(i, (_, filter))| {
                 if !filter.contains(&v.value_hash) {
                     ret[i].push(v.value.clone());
@@ -587,7 +594,7 @@ mod test {
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters);
+        let rsp = dest.generate_pull_responses(&dest_crds, &filters, None);
         dest.process_pull_requests(&mut dest_crds, filters, 1);
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
@@ -658,7 +665,7 @@ mod test {
             );
             let (_, filters, caller) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters);
+            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters, None);
             dest.process_pull_requests(&mut dest_crds, filters, 0);
             // if there is a false positive this is empty
             // prob should be around 0.1 per iteration
