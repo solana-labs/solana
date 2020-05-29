@@ -6891,41 +6891,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "hRgSMcWvZVveC8TqHHBfeU3h6vkPy6qzR5bHXfDTCyd"
-=======
-                    "DX3Jk7ae6VdogRb73iC1zdyrYN5UzinLcSFES2FQx8dY"
->>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
+                    "4qpzttntyJ4g144CA5uTC9yRw9bZALk2BvYVpRAEasYo"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "C2isNuN27FB9wVFpR1txa6SsXi94td6WSy7Va5deGpX5"
-=======
-                    "FqLpq1gmTdzEmdEPa2JttEFDqRtuKwkKFKuLuqNSiYwH"
->>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
+                    "32H83DKDGWs7h9419KWbXXvhsUpWc8quqkTH9t8XmCCW"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "2FJC56qpMyDFNtCvbr1MhyR2bawrhLtViaLVoBEMbj1n"
-=======
-                    "rBbDCyHuCBWQrLY37zjj2zwsEnzNERWHwoH3W2NpRYe"
->>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
+                    "EdKHbx8z3wJ7r3ZPA8FExbKTz9HUdgZEqSBa62tUcbpQ"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "GUae7X3qX6aRu5UJ6MTRmPEUNi94GP6thagRi9uFRHpG"
-=======
-                    "E9DThiAPbheGeLWBDsts8uzuwF3bJQzDWh5uo8ovtYiy"
->>>>>>> b563b49ed... Improve Rpc inflation tooling (#10309)
+                    "RiGo5uEeSP2kT7wrNVMBkZzUY1QRhCUYxeQ22ey51XZ"
                 );
                 break;
             }
