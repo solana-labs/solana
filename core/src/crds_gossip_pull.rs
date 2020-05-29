@@ -229,7 +229,7 @@ impl CrdsGossipPull {
         requests: &[(CrdsValue, CrdsFilter)],
         now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
-        self.filter_crds_values(crds, requests, now)
+        Self::filter_crds_values(crds, requests, now)
     }
 
     /// process a pull response
@@ -320,7 +320,6 @@ impl CrdsGossipPull {
     }
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(
-        &self,
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
         now: Option<u64>,
@@ -707,6 +706,29 @@ mod test {
         }
         assert!(done);
     }
+    #[test]
+    fn test_filter_crds_values() {
+        let mut node_crds = Crds::default();
+        let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::new_rand(),
+            0,
+        )));
+
+        let caller = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::new_rand(),
+            0,
+        )));
+
+        let node_label = entry.label();
+        let node_pubkey = node_label.pubkey();
+        node_crds.insert(entry, 1).unwrap();
+        let requests = [(caller, CrdsFilter::default())];
+        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, None);
+        assert_eq!(rsp[0][0].pubkey(), node_pubkey);
+        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(1));
+        assert!(rsp[0].is_empty());
+    }
+
     #[test]
     fn test_gossip_purge() {
         let mut node_crds = Crds::default();
