@@ -857,6 +857,8 @@ impl Blockstore {
                     &mut index_meta_time,
                     is_trusted,
                     handle_duplicate,
+                    leader_schedule,
+                    false,
                 ) {
                     num_inserted += 1;
                 }
@@ -901,6 +903,8 @@ impl Blockstore {
                             &mut index_meta_time,
                             is_trusted,
                             &handle_duplicate,
+                            leader_schedule,
+                            true,
                         );
                     }
                 }
@@ -1113,6 +1117,8 @@ impl Blockstore {
         index_meta_time: &mut u64,
         is_trusted: bool,
         handle_duplicate: &F,
+        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        is_recovered: bool,
     ) -> bool
     where
         F: Fn(Shred) -> (),
@@ -1133,7 +1139,13 @@ impl Blockstore {
             if Self::is_data_shred_present(&shred, slot_meta, &index_meta.data()) {
                 handle_duplicate(shred);
                 return false;
-            } else if !Blockstore::should_insert_data_shred(&shred, slot_meta, &self.last_root) {
+            } else if !Blockstore::should_insert_data_shred(
+                &shred,
+                slot_meta,
+                &self.last_root,
+                leader_schedule,
+                is_recovered,
+            ) {
                 return false;
             }
         }
@@ -1211,6 +1223,8 @@ impl Blockstore {
         shred: &Shred,
         slot_meta: &SlotMeta,
         last_root: &RwLock<u64>,
+        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        is_recovered: bool,
     ) -> bool {
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
@@ -1225,13 +1239,16 @@ impl Blockstore {
         // for the slot
         let last_index = slot_meta.last_index;
         if shred_index >= last_index {
+            let leader_pubkey = leader_schedule
+                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                .unwrap_or(None);
             datapoint_error!(
                 "blockstore_error",
                 (
                     "error",
                     format!(
-                        "Slot {}: received index {} >= slot.last_index {}",
-                        slot, shred_index, last_index
+                        "Leader {:?}, slot {}: received index {} >= slot.last_index {}, is_recovered: {}",
+                        leader_pubkey, slot, shred_index, last_index, is_recovered
                     ),
                     String
                 )
@@ -1241,13 +1258,16 @@ impl Blockstore {
         // Check that we do not receive a shred with "last_index" true, but shred_index
         // less than our current received
         if last_in_slot && shred_index < slot_meta.received {
+            let leader_pubkey = leader_schedule
+                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                .unwrap_or(None);
             datapoint_error!(
                 "blockstore_error",
                 (
                     "error",
                     format!(
-                        "Slot {}: received shred_index {} < slot.received {}",
-                        slot, shred_index, slot_meta.received
+                        "Leader {:?}, slot {}: received shred_index {} < slot.received {}, is_recovered: {}",
+                        leader_pubkey, slot, shred_index, slot_meta.received, is_recovered
                     ),
                     String
                 )
@@ -4720,7 +4740,7 @@ pub mod tests {
                 }
             };
             assert_eq!(
-                Blockstore::should_insert_data_shred(&shred7, &slot_meta, &last_root),
+                Blockstore::should_insert_data_shred(&shred7, &slot_meta, &last_root, None, false),
                 false
             );
 
@@ -4736,7 +4756,7 @@ pub mod tests {
                 panic!("Shred in unexpected format")
             }
             assert_eq!(
-                Blockstore::should_insert_data_shred(&shred7, &slot_meta, &last_root),
+                Blockstore::should_insert_data_shred(&shred7, &slot_meta, &last_root, None, false),
                 false
             );
         }
