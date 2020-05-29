@@ -18,7 +18,7 @@ pub struct Inflation {
     /// Duration of foundation pool inflation, in years
     pub foundation_term: f64,
 
-    /// Percentage of total inflation allocated to storage rewards
+    /// DEPRECATED, this field is currently unused
     pub storage: f64,
 }
 
@@ -69,8 +69,8 @@ impl Inflation {
         self.total(year) - self.storage(year) - self.foundation(year)
     }
 
-    /// portion of total that goes to storage mining
-    pub fn storage(&self, year: f64) -> f64 {
+    /// DEPRECATED
+    fn storage(&self, year: f64) -> f64 {
         self.total(year) * self.storage
     }
 
