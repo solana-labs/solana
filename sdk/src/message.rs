@@ -103,11 +103,24 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
         keys_and_signed.insert(0, &payer_account_meta);
     }
 
+    let mut unique_metas: Vec<AccountMeta> = vec![];
+    for account_meta in keys_and_signed {
+        // Promote to writable if a later AccountMeta requires it
+        if let Some(x) = unique_metas
+            .iter_mut()
+            .find(|x| x.pubkey == account_meta.pubkey)
+        {
+            x.is_writable |= account_meta.is_writable;
+            continue;
+        }
+        unique_metas.push(account_meta.clone());
+    }
+
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
     let mut num_readonly_signed_accounts = 0;
     let mut num_readonly_unsigned_accounts = 0;
-    for account_meta in keys_and_signed.into_iter().unique_by(|x| x.pubkey) {
+    for account_meta in unique_metas {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
             if !account_meta.is_writable {
@@ -424,6 +437,38 @@ mod tests {
             None,
         );
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
+    }
+
+    #[test]
+    fn test_message_unique_keys_one_readonly_signed() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, true)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
+            ],
+            None,
+        );
+
+        // Ensure the key is no longer readonly
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
+    }
+
+    #[test]
+    fn test_message_unique_keys_one_readonly_unsigned() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+            ],
+            None,
+        );
+
+        // Ensure the key is no longer readonly
+        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0], 0, 0));
     }
 
     #[test]
