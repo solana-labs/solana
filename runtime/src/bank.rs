@@ -2856,6 +2856,7 @@ mod tests {
         bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
             let mut inflation = Inflation::default();
             inflation.initial = 1_000_000.0;
+            inflation.storage = 0.10;
             bank.set_inflation(inflation)
         }));
         let bank1 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH + 1);
