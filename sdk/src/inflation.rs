@@ -70,7 +70,7 @@ impl Inflation {
     }
 
     /// DEPRECATED
-    fn storage(&self, year: f64) -> f64 {
+    pub fn storage(&self, year: f64) -> f64 {
         self.total(year) * self.storage
     }
 
