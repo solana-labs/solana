@@ -1845,8 +1845,23 @@ impl Bank {
                     true,
                 ));
 
-                // ... for current epoch
-                partitions.push(self.partition_from_slot_indexes(0, 0, current_epoch, true));
+                // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
+                // which depends on OperatingMode::Stable
+                #[cfg(test)]
+                let should_enable = true;
+
+                #[cfg(not(test))]
+                let should_enable = match self.operating_mode() {
+                    OperatingMode::Development => true,
+                    OperatingMode::Preview => current_epoch >= 55,
+                    OperatingMode::Stable => current_epoch >= Epoch::max_value(),
+                };
+                // this needs to be gated because this potentially can change the behavior
+                // (= bank hash) at each start of epochs
+                if should_enable {
+                    // ... for current epoch
+                    partitions.push(self.partition_from_slot_indexes(0, 0, current_epoch, true));
+                }
             }
             parent_slot_index = 0;
         }
