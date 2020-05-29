@@ -25,10 +25,6 @@ use std::{
 };
 use tokio::prelude::Future;
 
-// If trusted validators are specified, consider this validator healthy if its latest account hash
-// is no further behind than this distance from the latest trusted validator account hash
-const HEALTH_CHECK_SLOT_DISTANCE: u64 = 150;
-
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
@@ -45,6 +41,7 @@ struct RpcRequestMiddleware {
     cluster_info: Arc<ClusterInfo>,
     trusted_validators: Option<HashSet<Pubkey>>,
     bank_forks: Arc<RwLock<BankForks>>,
+    health_check_slot_distance: u64,
     override_health_check: Arc<AtomicBool>,
 }
 
@@ -55,6 +52,7 @@ impl RpcRequestMiddleware {
         cluster_info: Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
         bank_forks: Arc<RwLock<BankForks>>,
+        health_check_slot_distance: u64,
         override_health_check: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -67,6 +65,7 @@ impl RpcRequestMiddleware {
             cluster_info,
             trusted_validators,
             bank_forks,
+            health_check_slot_distance,
             override_health_check,
         }
     }
@@ -171,12 +170,12 @@ impl RpcRequestMiddleware {
             };
 
             // This validator is considered healthy if its latest account hash slot is within
-            // `HEALTH_CHECK_SLOT_DISTANCE` of the latest trusted validator's account hash slot
+            // `health_check_slot_distance` of the latest trusted validator's account hash slot
             if latest_account_hash_slot > 0
                 && latest_trusted_validator_account_hash_slot > 0
                 && latest_account_hash_slot
                     > latest_trusted_validator_account_hash_slot
-                        .saturating_sub(HEALTH_CHECK_SLOT_DISTANCE)
+                        .saturating_sub(self.health_check_slot_distance)
             {
                 "ok"
             } else {
@@ -300,6 +299,7 @@ impl JsonRpcService {
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
+        let health_check_slot_distance = config.health_check_slot_distance;
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
@@ -327,6 +327,7 @@ impl JsonRpcService {
                     cluster_info.clone(),
                     trusted_validators,
                     bank_forks.clone(),
+                    health_check_slot_distance,
                     override_health_check,
                 );
                 let server = ServerBuilder::with_meta_extractor(
@@ -489,6 +490,7 @@ mod tests {
             cluster_info.clone(),
             None,
             bank_forks.clone(),
+            42,
             Arc::new(AtomicBool::new(false)),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
@@ -502,6 +504,7 @@ mod tests {
             cluster_info,
             None,
             bank_forks,
+            42,
             Arc::new(AtomicBool::new(false)),
         );
 
@@ -536,6 +539,7 @@ mod tests {
             cluster_info,
             None,
             create_bank_forks(),
+            42,
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(rm.health_check(), "ok");
@@ -545,6 +549,8 @@ mod tests {
     fn test_health_check_with_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
+        let health_check_slot_distance = 123;
+
         let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
         let rm = RpcRequestMiddleware::new(
@@ -553,6 +559,7 @@ mod tests {
             cluster_info.clone(),
             Some(trusted_validators.clone().into_iter().collect()),
             create_bank_forks(),
+            health_check_slot_distance,
             override_health_check.clone(),
         );
 
@@ -595,7 +602,7 @@ mod tests {
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[1],
-                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
+                    vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
                 1,
             )
@@ -611,7 +618,7 @@ mod tests {
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[2],
-                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
+                    vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),
                 1,
             )
