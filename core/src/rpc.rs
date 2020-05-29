@@ -26,12 +26,11 @@ use solana_ledger::{
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
+    clock::{Epoch, Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     hash::Hash,
-    inflation::Inflation,
     pubkey::Pubkey,
     signature::Signature,
     timing::slot_duration_from_slots_per_year,
@@ -173,8 +172,27 @@ impl JsonRpcRequestProcessor {
             .collect())
     }
 
-    pub fn get_inflation(&self, commitment: Option<CommitmentConfig>) -> Result<Inflation> {
-        Ok(self.bank(commitment)?.inflation())
+    pub fn get_inflation_governor(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcInflationGovernor> {
+        Ok(self.bank(commitment)?.inflation().into())
+    }
+
+    pub fn get_inflation_rate(&self, epoch: Option<Epoch>) -> Result<RpcInflationRate> {
+        let bank = self.bank(None)?;
+        let operating_mode = bank.operating_mode();
+        let epoch = epoch.unwrap_or_else(|| bank.epoch());
+        let inflation = solana_genesis_programs::get_inflation_for_epoch(operating_mode, epoch);
+        let year =
+            (bank.epoch_schedule().get_last_slot_in_epoch(epoch)) as f64 / bank.slots_per_year();
+
+        Ok(RpcInflationRate {
+            total: inflation.total(year),
+            validator: inflation.validator(year),
+            foundation: inflation.foundation(year),
+            epoch,
+        })
     }
 
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
@@ -757,12 +775,19 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
-    #[rpc(meta, name = "getInflation")]
-    fn get_inflation(
+    #[rpc(meta, name = "getInflationGovernor")]
+    fn get_inflation_governor(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Inflation>;
+    ) -> Result<RpcInflationGovernor>;
+
+    #[rpc(meta, name = "getInflationRate")]
+    fn get_inflation_rate(
+        &self,
+        meta: Self::Metadata,
+        epoch: Option<Epoch>,
+    ) -> Result<RpcInflationRate>;
 
     #[rpc(meta, name = "getEpochSchedule")]
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule>;
@@ -1022,16 +1047,28 @@ impl RpcSol for RpcSolImpl {
             .get_program_accounts(&program_id, commitment)
     }
 
-    fn get_inflation(
+    fn get_inflation_governor(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Inflation> {
-        debug!("get_inflation rpc request received");
+    ) -> Result<RpcInflationGovernor> {
+        debug!("get_inflation_governor rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_inflation(commitment)
+            .get_inflation_governor(commitment)
+    }
+
+    fn get_inflation_rate(
+        &self,
+        meta: Self::Metadata,
+        epoch: Option<Epoch>,
+    ) -> Result<RpcInflationRate> {
+        debug!("get_inflation_rate rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_inflation_rate(epoch)
     }
 
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
@@ -2066,11 +2103,11 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflation"}"#;
-        let rep = io.handle_request_sync(&req, meta);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationGovernor"}"#;
+        let rep = io.handle_request_sync(&req, meta.clone());
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
-        let inflation: Inflation = if let Response::Single(res) = res {
+        let inflation_governor: RpcInflationGovernor = if let Response::Single(res) = res {
             if let Output::Success(res) = res {
                 serde_json::from_value(res.result).unwrap()
             } else {
@@ -2079,7 +2116,57 @@ pub mod tests {
         } else {
             panic!("Expected single response");
         };
-        assert_eq!(inflation, bank.inflation());
+        let expected_inflation_governor: RpcInflationGovernor = bank.inflation().into();
+        assert_eq!(inflation_governor, expected_inflation_governor);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationRate"}"#; // Queries current epoch by default
+        let rep = io.handle_request_sync(&req, meta.clone());
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let inflation_rate: RpcInflationRate = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        let operating_mode = bank.operating_mode();
+        let inflation = solana_genesis_programs::get_inflation_for_epoch(operating_mode, 0);
+        let year = (bank.epoch_schedule().get_last_slot_in_epoch(0)) as f64 / bank.slots_per_year();
+        let expected_inflation_rate = RpcInflationRate {
+            total: inflation.total(year),
+            validator: inflation.validator(year),
+            foundation: inflation.foundation(year),
+            epoch: 0,
+        };
+        assert_eq!(inflation_rate, expected_inflation_rate);
+
+        let epoch = 40_000_000; // After default foundation term
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getInflationRate","params":[{}]}}"#,
+            epoch
+        ); // Queries current epoch by default
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let inflation_rate: RpcInflationRate = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        let expected_inflation_rate = RpcInflationRate {
+            total: 0.015,
+            validator: 0.015,
+            foundation: 0.0,
+            epoch,
+        };
+        assert_eq!(inflation_rate, expected_inflation_rate);
     }
 
     #[test]

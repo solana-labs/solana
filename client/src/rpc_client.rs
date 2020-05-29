@@ -22,7 +22,6 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
-    inflation::Inflation,
     pubkey::Pubkey,
     signature::Signature,
     signers::Signers,
@@ -346,8 +345,12 @@ impl RpcClient {
         })
     }
 
-    pub fn get_inflation(&self) -> ClientResult<Inflation> {
-        self.send(RpcRequest::GetInflation, Value::Null)
+    pub fn get_inflation_governor(&self) -> ClientResult<RpcInflationGovernor> {
+        self.send(RpcRequest::GetInflationGovernor, Value::Null)
+    }
+
+    pub fn get_inflation_rate(&self) -> ClientResult<RpcInflationRate> {
+        self.send(RpcRequest::GetInflationRate, Value::Null)
     }
 
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
