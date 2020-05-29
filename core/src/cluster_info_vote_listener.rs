@@ -957,7 +957,7 @@ mod tests {
             &exit,
             Arc::new(RwLock::new(bank_forks)),
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                blockstore.clone(),
+                blockstore,
             ))),
         ));
 
@@ -1072,7 +1072,7 @@ mod tests {
             &exit,
             Arc::new(RwLock::new(bank_forks)),
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                blockstore.clone(),
+                blockstore,
             ))),
         ));
 

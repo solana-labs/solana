@@ -745,11 +745,11 @@ mod tests {
         );
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
+            BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
         ));
 
         let subscriptions =
-            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache.clone());
+            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache);
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -895,8 +895,7 @@ mod tests {
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("voteNotification");
 
         // Setup Subscriptions
-        let subscriptions =
-            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache.clone());
+        let subscriptions = RpcSubscriptions::new(&exit, bank_forks, block_commitment_cache);
         rpc.subscriptions = Arc::new(subscriptions);
         rpc.vote_subscribe(session, subscriber);
 
@@ -922,6 +921,8 @@ mod tests {
         });
 
         // Process votes and check they were notified.
+        // FIX-ME-BETTER-LATER - clone below is required for testcase to pass
+        #[allow(clippy::redundant_clone)]
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,

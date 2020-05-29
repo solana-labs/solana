@@ -2321,7 +2321,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"simulateTransaction","params":["{}"]}}"#,
             tx_serialized_encoded,
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -2361,7 +2361,7 @@ pub mod tests {
         );
 
         // should panic because `bank` is not frozen
-        let _ = io.handle_request_sync(&req, meta.clone());
+        let _ = io.handle_request_sync(&req, meta);
     }
 
     #[test]

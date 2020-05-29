@@ -2618,7 +2618,7 @@ pub(crate) mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+            BlockCommitmentCache::default_with_blockstore(blockstore),
         ));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,

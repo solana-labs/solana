@@ -561,7 +561,7 @@ mod tests {
     }
 
     fn pubkeys(signers: &[&dyn Signer]) -> Vec<Pubkey> {
-        signers.into_iter().map(|x| x.pubkey()).collect()
+        signers.iter().map(|x| x.pubkey()).collect()
     }
 
     #[test]

@@ -15,6 +15,8 @@ use std::{
     sync::Arc,
 };
 
+type IndexShredsMap = BTreeMap<u32, Vec<Shred>>;
+
 #[test]
 fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
@@ -123,9 +125,9 @@ fn test_multi_fec_block_different_size_coding() {
         let num_data = fec_data_shreds.len();
         let num_coding = fec_coding_shreds.len();
         let all_shreds: Vec<Shred> = fec_data_shreds
-            .into_iter()
+            .iter()
             .step_by(2)
-            .chain(fec_coding_shreds.into_iter().step_by(2))
+            .chain(fec_coding_shreds.iter().step_by(2))
             .cloned()
             .collect();
 
@@ -162,8 +164,8 @@ fn test_multi_fec_block_different_size_coding() {
 fn sort_data_coding_into_fec_sets(
     data_shreds: Vec<Shred>,
     coding_shreds: Vec<Shred>,
-    fec_data: &mut BTreeMap<u32, Vec<Shred>>,
-    fec_coding: &mut BTreeMap<u32, Vec<Shred>>,
+    fec_data: &mut IndexShredsMap,
+    fec_coding: &mut IndexShredsMap,
     data_slot_and_index: &mut HashSet<(Slot, u32)>,
     coding_slot_and_index: &mut HashSet<(Slot, u32)>,
 ) {
@@ -175,7 +177,7 @@ fn sort_data_coding_into_fec_sets(
         data_slot_and_index.insert(key);
         let fec_entry = fec_data
             .entry(shred.common_header.fec_set_index)
-            .or_insert(vec![]);
+            .or_insert_with(|| vec![]);
         fec_entry.push(shred);
     }
     for shred in coding_shreds {
@@ -186,16 +188,17 @@ fn sort_data_coding_into_fec_sets(
         coding_slot_and_index.insert(key);
         let fec_entry = fec_coding
             .entry(shred.common_header.fec_set_index)
-            .or_insert(vec![]);
+            .or_insert_with(|| vec![]);
         fec_entry.push(shred);
     }
 }
 
+#[allow(clippy::assertions_on_constants)]
 fn setup_different_sized_fec_blocks(
     slot: Slot,
     parent_slot: Slot,
     keypair: Arc<Keypair>,
-) -> (BTreeMap<u32, Vec<Shred>>, BTreeMap<u32, Vec<Shred>>, usize) {
+) -> (IndexShredsMap, IndexShredsMap, usize) {
     let shredder =
         Shredder::new(slot, parent_slot, 1.0, keypair, 0, 0).expect("Failed in creating shredder");
     let keypair0 = Keypair::new();
