@@ -65,6 +65,7 @@ pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
+    pub health_check_slot_distance: u64,
 }
 
 #[derive(Clone)]
