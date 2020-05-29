@@ -18,6 +18,7 @@ serde_yaml = "0.8.11"
 solana-clap-utils = { path = "../clap-utils", version = "1.1.16" }
 solana-genesis-programs = { path = "../genesis-programs", version = "1.1.16" }
 solana-ledger = { path = "../ledger", version = "1.1.16" }
+solana-logger = { path = "../logger", version = "1.1.16" }
 solana-sdk = { path = "../sdk", version = "1.1.16" }
 solana-stake-program = { path = "../programs/stake", version = "1.1.16" }
 solana-storage-program = { path = "../programs/storage", version = "1.1.16" }

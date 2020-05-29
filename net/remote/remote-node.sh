@@ -229,7 +229,7 @@ EOF
       fi
       multinode-demo/setup.sh "${args[@]}"
 
-      solana-ledger-tool -l config/bootstrap-validator shred-version | tee config/shred-version
+      solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
     fi
     args=(
       --gossip-host "$entrypointIp"
