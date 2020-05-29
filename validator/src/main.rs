@@ -516,16 +516,18 @@ pub fn main() {
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
-                .help("Validator vote account public key.  If unspecified voting will be disabled. \
-                       The authorized voter for the account must either be the --identity keypair \
-                       or with the --authorized-voter argument")
+                .help("Validator vote account public key.  \
+                       If unspecified voting will be disabled. \
+                       The authorized voter for the account must either be the \
+                       --identity keypair or with the --authorized-voter argument")
         )
         .arg(
             Arg::with_name("init_complete_file")
                 .long("init-complete-file")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("Create this file, if it doesn't already exist, once node initialization is complete"),
+                .help("Create this file if it doesn't already exist \
+                       once node initialization is complete"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -550,7 +552,8 @@ pub fn main() {
                 .long("no-snapshot-fetch")
                 .takes_value(false)
                 .requires("entrypoint")
-                .help("Do not attempt to fetch a snapshot from the cluster, start from a local snapshot if present"),
+                .help("Do not attempt to fetch a snapshot from the cluster, \
+                      start from a local snapshot if present"),
         )
         .arg(
             Arg::with_name("no_genesis_fetch")
@@ -599,19 +602,35 @@ pub fn main() {
             Arg::with_name("enable_rpc_exit")
                 .long("enable-rpc-exit")
                 .takes_value(false)
-                .help("Enable the JSON RPC 'validatorExit' API.  Only enable in a debug environment"),
+                .help("Enable the JSON RPC 'validatorExit' API. \
+                       Only enable in a debug environment"),
         )
         .arg(
             Arg::with_name("enable_rpc_set_log_filter")
                 .long("enable-rpc-set-log-filter")
                 .takes_value(false)
-                .help("Enable the JSON RPC 'setLogFilter' API.  Only enable in a debug environment"),
+                .help("Enable the JSON RPC 'setLogFilter' API. \
+                       Only enable in a debug environment"),
         )
         .arg(
             Arg::with_name("enable_rpc_transaction_history")
                 .long("enable-rpc-transaction-history")
                 .takes_value(false)
-                .help("Enable historical transaction info over JSON RPC, including the 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
+                .help("Enable historical transaction info over JSON RPC, \
+                       including the 'getConfirmedBlock' API.  \
+                       This will cause an increase in disk usage  and IOPS"),
+        )
+        .arg(
+            Arg::with_name("health_check_slot_distance")
+                .long("health-check-slot-distance")
+                .value_name("SLOT_DISTANCE")
+                .takes_value(true)
+                .default_value("150")
+                .help("If --trusted-validators are specified, report this validator healthy \
+                       if its latest account hash is no further behind than this number of \
+                       slots from the latest trusted validator account hash. \
+                       If no --trusted-validators are specified, the validator will always \
+                       report itself to be healthy")
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")
@@ -651,7 +670,8 @@ pub fn main() {
                 .takes_value(true)
                 .conflicts_with("entrypoint")
                 .validator(solana_net_utils::is_host)
-                .help("IP address for the node to advertise in gossip when --entrypoint is not provided [default: 127.0.0.1]"),
+                .help("IP address for the node to advertise in gossip when \
+                      --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
             Arg::with_name("dynamic_port_range")
@@ -668,7 +688,8 @@ pub fn main() {
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
                 .default_value("100")
-                .help("Number of slots between generating snapshots, 0 to disable snapshots"),
+                .help("Number of slots between generating snapshots, \
+                      0 to disable snapshots"),
         )
         .arg(
             Arg::with_name("accounts_hash_interval_slots")
@@ -874,6 +895,11 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
+            health_check_slot_distance: value_t_or_exit!(
+                matches,
+                "health_check_slot_distance",
+                u64
+            ),
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
