@@ -3991,7 +3991,7 @@ dependencies = [
  "systemstat",
  "tempfile",
  "thiserror",
- "tokio 0.1.22",
+ "tokio 0.2.21",
  "tokio-codec",
  "tokio-fs",
  "tokio-io",
@@ -4095,7 +4095,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
- "tokio 0.1.22",
+ "tokio 0.2.21",
  "tokio-codec",
 ]
 
@@ -4424,7 +4424,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-logger",
  "solana-version",
- "tokio 0.1.22",
+ "tokio 0.2.21",
  "tokio-codec",
 ]
 
