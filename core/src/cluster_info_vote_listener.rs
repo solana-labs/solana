@@ -27,7 +27,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -461,6 +461,35 @@ impl ClusterInfoVoteListener {
         Ok(optimistic_confirmed_slots)
     }
 
+    fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<Hash>)> {
+        // Check first instruction for a vote
+        tx.message
+            .instructions
+            .first()
+            .and_then(|first_instruction| {
+                first_instruction
+                    .accounts
+                    .first()
+                    .and_then(|first_account| {
+                        tx.message
+                            .account_keys
+                            .get(*first_account as usize)
+                            .and_then(|key| {
+                                let vote_instruction =
+                                    limited_deserialize(&first_instruction.data).ok();
+                                vote_instruction.and_then(|vote_instruction| match vote_instruction
+                                {
+                                    VoteInstruction::Vote(vote) => Some((*key, vote, None)),
+                                    VoteInstruction::VoteSwitch(vote, hash) => {
+                                        Some((*key, vote, Some(hash)))
+                                    }
+                                    _ => None,
+                                })
+                            })
+                    })
+            })
+    }
+
     fn process_votes(
         vote_tracker: &VoteTracker,
         vote_txs: Vec<Transaction>,
@@ -472,30 +501,10 @@ impl ClusterInfoVoteListener {
         {
             let all_slot_trackers = &vote_tracker.slot_vote_trackers;
             for tx in vote_txs {
-                if let (Some(vote_pubkey), Some(vote_instruction)) = tx
-                    .message
-                    .instructions
-                    .first()
-                    .and_then(|first_instruction| {
-                        first_instruction.accounts.first().map(|offset| {
-                            (
-                                tx.message.account_keys.get(*offset as usize),
-                                limited_deserialize(&first_instruction.data).ok(),
-                            )
-                        })
-                    })
-                    .unwrap_or((None, None))
+                if let Some((vote_pubkey, vote, switch_proof_hash)) =
+                    Self::parse_vote_transaction(&tx)
                 {
-                    let (vote, is_switch_vote) = {
-                        match vote_instruction {
-                            VoteInstruction::Vote(vote) => (vote, false),
-                            VoteInstruction::VoteSwitch(vote, _) => (vote, true),
-                            _ => {
-                                continue;
-                            }
-                        }
-                    };
-
+                    let is_switch_vote = switch_proof_hash.is_some();
                     if vote.slots.is_empty() {
                         continue;
                     }
@@ -537,17 +546,17 @@ impl ClusterInfoVoteListener {
                         let maybe_slot_tracker =
                             all_slot_trackers.read().unwrap().get(slot).cloned();
                         if let Some(slot_tracker) = maybe_slot_tracker {
-                            if slot_tracker.read().unwrap().voted.contains(vote_pubkey) {
+                            if slot_tracker.read().unwrap().voted.contains(&vote_pubkey) {
                                 continue;
                             }
                         }
-                        let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
+                        let unduplicated_pubkey = vote_tracker.keys.get_or_insert(&vote_pubkey);
 
                         // The vote for the greatest slot in the stack of votes in a non-switching vote
                         // qualifies for optimistic confirmation.
                         let should_update_switch = if (slot == last_vote_slot) && !is_switch_vote {
                             let stake = epoch_vote_accounts
-                                .get(vote_pubkey)
+                                .get(&vote_pubkey)
                                 .map(|(stake, _)| *stake)
                                 .unwrap_or(0);
                             Some((stake, last_vote_hash))
@@ -738,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn vote_contains_authorized_voter() {
+    fn test_vote_contains_authorized_voter() {
         run_vote_contains_authorized_voter(None);
         run_vote_contains_authorized_voter(Some(Hash::default()));
     }
