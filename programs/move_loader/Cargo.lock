@@ -2086,9 +2086,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.3.8"
+version = "1.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "226ddd1197737bcb937489322ec1b9edaac1709d46792886e70f2113923585a6"
+checksum = "9c3780fcf44b193bc4d09f36d2a3c87b251da4a046c87795a0d35f4f927ad8e6"
 dependencies = [
  "aho-corasick",
  "memchr",
