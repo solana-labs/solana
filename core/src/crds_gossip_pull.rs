@@ -100,6 +100,9 @@ impl CrdsFilter {
         accum
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
+        if self.mask_bits == 0 {
+            return true;
+        }
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
         let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
         let bits = Self::hash_as_u64(item) | ones;
@@ -722,11 +725,19 @@ mod test {
         let node_label = entry.label();
         let node_pubkey = node_label.pubkey();
         node_crds.insert(entry, 1).unwrap();
-        let requests = [(caller, CrdsFilter::default())];
+        let mut filter = CrdsFilter::new_rand(1, 128);
+        filter.mask_bits = 0;
+        let requests = [(caller, filter)];
+
         let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, None);
         assert_eq!(rsp[0][0].pubkey(), node_pubkey);
-        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(1));
+
+        //skip 1 since its newer than 0
+        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(0));
         assert!(rsp[0].is_empty());
+
+        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(1));
+        assert_eq!(rsp[0][0].pubkey(), node_pubkey);
     }
 
     #[test]
@@ -792,6 +803,15 @@ mod test {
         let h: Hash = hash(h.as_ref());
         assert!(!filter.contains(&h));
     }
+
+    #[test]
+    fn test_crds_filter_test_mask_default() {
+        let filter = CrdsFilter::default();
+        assert_eq!(filter.mask_bits, 0);
+        let h: Hash = Hash::default();
+        assert_eq!(filter.test_mask(&h), true);
+    }
+
     #[test]
     fn test_crds_filter_add_mask() {
         let mut filter = CrdsFilter::new_rand(1000, 10);
