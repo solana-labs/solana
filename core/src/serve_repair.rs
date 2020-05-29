@@ -532,6 +532,8 @@ impl ServeRepair {
                 );
                 if let Some(packet) = packet {
                     res.packets.push(packet);
+                } else {
+                    break;
                 }
                 if meta.is_parent_set() && res.packets.len() <= max_responses {
                     slot = meta.parent_slot;
@@ -859,6 +861,66 @@ mod tests {
                     )
                 })
                 .collect();
+            assert_eq!(rv, expected);
+        }
+
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn run_orphan_corrupted_shred_size() {
+        solana_logger::setup();
+        let recycler = PacketsRecycler::default();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            // Create slots [1, 2] with 1 shred apiece
+            let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
+
+            // Make shred for slot 1 too large
+            assert_eq!(shreds[0].slot(), 1);
+            assert_eq!(shreds[0].index(), 0);
+            shreds[0].payload.push(10);
+            blockstore
+                .insert_shreds(shreds, None, false)
+                .expect("Expect successful ledger write");
+            let nonce = 42;
+            // Make sure repair response is corrupted
+            assert!(repair_response::repair_response_packet(
+                &blockstore,
+                1,
+                0,
+                &socketaddr_any!(),
+                nonce,
+            )
+            .is_none());
+
+            // Orphan request for slot 2 should only return slot 1 since
+            // calling `repair_response_packet` on slot 1's shred will
+            // be corrupted
+            let rv: Vec<_> = ServeRepair::run_orphan(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                2,
+                5,
+                nonce,
+            )
+            .expect("run_orphan packets")
+            .packets
+            .iter()
+            .cloned()
+            .collect();
+
+            // Verify responses
+            let expected = vec![repair_response::repair_response_packet(
+                &blockstore,
+                2,
+                0,
+                &socketaddr_any!(),
+                nonce,
+            )
+            .unwrap()];
             assert_eq!(rv, expected);
         }
 
