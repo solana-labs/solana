@@ -9,53 +9,16 @@ use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     hash::Hash,
-    instruction::Instruction,
     pubkey::Pubkey,
 };
-use solana_vote_program::{
-    vote_instruction,
-    vote_state::{
-        BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
-    },
+use solana_vote_program::vote_state::{
+    BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Bound::{Included, Unbounded},
     sync::Arc,
 };
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum SwitchForkDecision {
-    SwitchProof(Hash),
-    NoSwitch,
-    FailedSwitchThreshold,
-}
-
-impl SwitchForkDecision {
-    pub fn to_vote_instruction(
-        &self,
-        vote: Vote,
-        vote_account_pubkey: &Pubkey,
-        authorized_voter_pubkey: &Pubkey,
-    ) -> Option<Instruction> {
-        match self {
-            SwitchForkDecision::FailedSwitchThreshold => None,
-            SwitchForkDecision::NoSwitch => Some(vote_instruction::vote(
-                vote_account_pubkey,
-                authorized_voter_pubkey,
-                vote,
-            )),
-            SwitchForkDecision::SwitchProof(switch_proof_hash) => {
-                Some(vote_instruction::vote_switch(
-                    vote_account_pubkey,
-                    authorized_voter_pubkey,
-                    vote,
-                    *switch_proof_hash,
-                ))
-            }
-        }
-    }
-}
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
@@ -382,7 +345,7 @@ impl Tower {
         progress: &ProgressMap,
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
-    ) -> SwitchForkDecision {
+    ) -> bool {
         self.last_vote()
             .slots
             .last()
@@ -392,18 +355,14 @@ impl Tower {
 
                 if switch_slot == *last_vote || switch_slot_ancestors.contains(last_vote) {
                     // If the `switch_slot is a descendant of the last vote,
-                    // no switching proof is necessary
-                    return SwitchForkDecision::NoSwitch;
+                    // no switching proof is neceessary
+                    return true;
                 }
 
                 // Should never consider switching to an ancestor
                 // of your last vote
                 assert!(!last_vote_ancestors.contains(&switch_slot));
 
-                // By this point, we know the `switch_slot` is on a different fork
-                // (is neither an ancestor nor descendant of `last_vote`), so a
-                // switching proof is necessary
-                let switch_proof = Hash::default();
                 let mut locked_out_stake = 0;
                 let mut locked_out_vote_accounts = HashSet::new();
                 for (candidate_slot, descendants) in descendants.iter() {
@@ -464,14 +423,9 @@ impl Tower {
                         }
                     }
                 }
-
-                if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
-                    SwitchForkDecision::SwitchProof(switch_proof)
-                } else {
-                    SwitchForkDecision::FailedSwitchThreshold
-                }
+                (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD
             })
-            .unwrap_or(SwitchForkDecision::NoSwitch)
+            .unwrap_or(true)
     }
 
     pub fn check_vote_stake_threshold(
@@ -629,7 +583,7 @@ pub mod test {
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         progress_map::ForkProgress,
-        replay_stage::{HeaviestForkFailures, ReplayStage, SelectVoteAndResetForkResult},
+        replay_stage::{HeaviestForkFailures, ReplayStage},
     };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
@@ -762,10 +716,7 @@ pub mod test {
 
             // Try to vote on the given slot
             let descendants = self.bank_forks.read().unwrap().descendants();
-            let SelectVoteAndResetForkResult {
-                heaviest_fork_failures,
-                ..
-            } = ReplayStage::select_vote_and_reset_forks(
+            let (_, _, failure_reasons) = ReplayStage::select_vote_and_reset_forks(
                 &Some(vote_bank.clone()),
                 &None,
                 &ancestors,
@@ -776,8 +727,8 @@ pub mod test {
 
             // Make sure this slot isn't locked out or failing threshold
             info!("Checking vote: {}", vote_bank.slot());
-            if !heaviest_fork_failures.is_empty() {
-                return heaviest_fork_failures;
+            if !failure_reasons.is_empty() {
+                return failure_reasons;
             }
             let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
@@ -955,34 +906,6 @@ pub mod test {
     }
 
     #[test]
-    fn test_to_vote_instruction() {
-        let vote = Vote::default();
-        let mut decision = SwitchForkDecision::FailedSwitchThreshold;
-        assert!(decision
-            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
-            .is_none());
-        decision = SwitchForkDecision::NoSwitch;
-        assert_eq!(
-            decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
-            Some(vote_instruction::vote(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                vote.clone(),
-            ))
-        );
-        decision = SwitchForkDecision::SwitchProof(Hash::default());
-        assert_eq!(
-            decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
-            Some(vote_instruction::vote_switch(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                vote,
-                Hash::default()
-            ))
-        );
-    }
-
-    #[test]
     fn test_simple_votes() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
@@ -1052,106 +975,85 @@ pub mod test {
         tower.record_vote(47, Hash::default());
 
         // Trying to switch to a descendant of last vote should always work
-        assert_eq!(
-            tower.check_switch_threshold(
-                48,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::NoSwitch
-        );
+        assert!(tower.check_switch_threshold(
+            48,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // Trying to switch to another fork at 110 should fail
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::FailedSwitchThreshold
-        );
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // Adding another validator lockout on a descendant of last vote should
         // not count toward the switch threshold
         vote_simulator.simulate_lockout_interval(50, (49, 100), &other_vote_account);
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::FailedSwitchThreshold
-        );
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // Adding another validator lockout on an ancestor of last vote should
         // not count toward the switch threshold
         vote_simulator.simulate_lockout_interval(50, (45, 100), &other_vote_account);
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::FailedSwitchThreshold
-        );
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // Adding another validator lockout on a different fork, but the lockout
         // doesn't cover the last vote, should not satisfy the switch threshold
         vote_simulator.simulate_lockout_interval(14, (12, 46), &other_vote_account);
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::FailedSwitchThreshold
-        );
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // Adding another validator lockout on a different fork, and the lockout
         // covers the last vote, should satisfy the switch threshold
         vote_simulator.simulate_lockout_interval(14, (12, 47), &other_vote_account);
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &ancestors,
-                &descendants,
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::SwitchProof(Hash::default())
-        );
+        assert!(tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
 
         // If we set a root, then any lockout intervals below the root shouldn't
         // count toward the switch threshold. This means the other validator's
         // vote lockout no longer counts
         vote_simulator.set_root(43);
-        assert_eq!(
-            tower.check_switch_threshold(
-                110,
-                &vote_simulator.bank_forks.read().unwrap().ancestors(),
-                &vote_simulator.bank_forks.read().unwrap().descendants(),
-                &vote_simulator.progress,
-                total_stake,
-                bank0.epoch_vote_accounts(0).unwrap(),
-            ),
-            SwitchForkDecision::FailedSwitchThreshold
-        );
+        assert!(!tower.check_switch_threshold(
+            110,
+            &vote_simulator.bank_forks.read().unwrap().ancestors(),
+            &vote_simulator.bank_forks.read().unwrap().descendants(),
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
     }
 
     #[test]
