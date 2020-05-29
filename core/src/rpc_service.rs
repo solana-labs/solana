@@ -601,13 +601,8 @@ mod tests {
             .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-<<<<<<< HEAD
                     trusted_validators[1].clone(),
-                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
-=======
-                    trusted_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
->>>>>>> eb45aaa6c... Added --health-check-slot-distance (#10324)
                 ))),
                 1,
             )
@@ -622,13 +617,8 @@ mod tests {
             .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-<<<<<<< HEAD
                     trusted_validators[2].clone(),
-                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
-=======
-                    trusted_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
->>>>>>> eb45aaa6c... Added --health-check-slot-distance (#10324)
                 ))),
                 1,
             )
