@@ -25,7 +25,7 @@ fi
 _ cargo +"$rust_stable" fmt --all -- --check
 
 _ cargo +"$rust_stable" clippy --version
-_ cargo +"$rust_stable" clippy --workspace -- --deny=warnings
+_ cargo +"$rust_stable" clippy --workspace --tests -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
