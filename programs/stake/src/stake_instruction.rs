@@ -43,86 +43,75 @@ impl<E> DecodeError<E> for StakeError {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum StakeInstruction {
-    /// `Initialize` a stake with Lockup and Authorized information
+    /// Initialize a stake with lockup and authorization information
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Uninitialized StakeAccount
-    ///    1 - Rent sysvar
+    /// # Account references
+    ///   0. [WRITE] Uninitialized stake account
+    ///   1. [] Rent sysvar
     ///
     /// Authorized carries pubkeys that must sign staker transactions
     ///   and withdrawer transactions.
     /// Lockup carries information about withdrawal restrictions
-    ///
     Initialize(Authorized, Lockup),
 
     /// Authorize a key to manage stake or withdrawal
-    ///    requires Authorized::staker or Authorized::withdrawer
-    ///    signature, depending on which key's being updated
     ///
-    /// Expects 2 Accounts:
-    ///    0 - StakeAccount to be updated with the Pubkey for
-    ///          authorization
-    ///    1 - (reserved for future use) Clock sysvar Account that carries
-    ///        clock bank epoch
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [] (reserved for future use) Clock sysvar
+    ///   2. [SIGNER] The stake or withdraw authority
     Authorize(Pubkey, StakeAuthorize),
 
-    /// `Delegate` a stake to a particular vote account
-    ///    requires Authorized::staker signature
+    /// Delegate a stake to a particular vote account
     ///
-    /// Expects 4 Accounts:
-    ///    0 - Initialized StakeAccount to be delegated
-    ///    1 - VoteAccount to which this Stake will be delegated
-    ///    2 - Clock sysvar Account that carries clock bank epoch
-    ///    3 - Config Account that carries stake config
+    /// # Account references
+    ///   0. [WRITE] Initialized stake account to be delegated
+    ///   1. [] Vote account to which this stake will be delegated
+    ///   2. [] Clock sysvar
+    ///   3. [] Stake history sysvar that carries stake warmup/cooldown history
+    ///   4. [] Address of config account that carries stake config
+    ///   5. [SIGNER] Stake authority
     ///
     /// The entire balance of the staking account is staked.  DelegateStake
     ///   can be called multiple times, but re-delegation is delayed
     ///   by one epoch
-    ///
     DelegateStake,
 
-    /// Split u64 tokens and stake off a stake account into another stake
-    ///   account. Requires Authorized::staker signature and the
-    ///   signature of the split-off stake address.
+    /// Split u64 tokens and stake off a stake account into another stake account.
     ///
-    /// The source stake must be either Initialized or a Stake.
-    ///
-    /// Expects 2 Accounts:
-    ///    0 - StakeAccount to be split
-    ///    1 - Uninitialized StakeAcount that will take the split-off amount
-    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be split; must be in the Initialized or Stake state
+    ///   1. [WRITE] Uninitialized stake account that will take the split-off amount
+    ///   2. [SIGNER] Stake authority
     Split(u64),
 
     /// Withdraw unstaked lamports from the stake account
-    ///    requires Authorized::withdrawer signature.  If withdrawal
-    ///    is before lockup has expired, also requires signature
-    ///    of the lockup custodian.
     ///
-    /// Expects 4 Accounts:
-    ///    0 - StakeAccount from which to withdraw
-    ///    1 - Account to which the lamports will be transferred
-    ///    2 - Syscall Account that carries epoch
-    ///    3 - StakeHistory sysvar that carries stake warmup/cooldown history
+    /// # Account references
+    ///   0. [WRITE] Stake account from which to withdraw
+    ///   1. [WRITE] Recipient account
+    ///   2. [] Clock sysvar
+    ///   3. [] Stake history sysvar that carries stake warmup/cooldown history
+    ///   4. [SIGNER] Withdraw authority
+    ///   5. Optional: [SIGNER] Lockup authority, if before lockup expiration
     ///
-    /// The u64 is the portion of the Stake account balance to be withdrawn,
-    ///    must be <= StakeAccount.lamports - staked lamports.
+    /// The u64 is the portion of the stake account balance to be withdrawn,
+    ///    must be `<= StakeAccount.lamports - staked_lamports`.
     Withdraw(u64),
 
     /// Deactivates the stake in the account
-    ///    requires Authorized::staker signature
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Delegate StakeAccount
-    ///    1 - Syscall Account that carries epoch
-    ///
+    /// # Account references
+    ///   0. [WRITE] Delegated stake account
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] Stake authority
     Deactivate,
 
     /// Set stake lockup
-    ///    requires Lockup::custodian signature
     ///
-    /// Expects 1 Account:
-    ///    0 - initialized StakeAccount
-    ///
+    /// # Account references
+    ///   0. [WRITE] Initialized stake account
+    ///   1. [SIGNER] Lockup authority
     SetLockup(LockupArgs),
 }
 
