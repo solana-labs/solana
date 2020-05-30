@@ -4,8 +4,10 @@ use serial_test_derive::serial;
 use solana_client::rpc_client::RpcClient;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
-    gossip_service::discover_cluster, validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType,
+    consensus::{SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+    gossip_service::discover_cluster,
+    validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::{
@@ -405,6 +407,137 @@ fn test_kill_heaviest_partition() {
         empty,
         on_partition_resolved,
     )
+}
+
+#[allow(clippy::assertions_on_constants)]
+fn run_kill_partition_switch_threshold<F>(
+    failures_stake: u64,
+    alive_stake_1: u64,
+    alive_stake_2: u64,
+    on_partition_resolved: F,
+) where
+    F: Fn(&mut LocalCluster),
+{
+    // Needs to be at least 1/3 or there will be no overlap
+    // with the confirmation supermajority 2/3
+    assert!(SWITCH_FORK_THRESHOLD >= 1f64 / 3f64);
+    info!(
+        "stakes: {} {} {}",
+        failures_stake, alive_stake_1, alive_stake_2
+    );
+
+    // This test:
+    // 1) Spins up three partitions
+    // 2) Kills the first partition with the stake `failures_stake`
+    // 5) runs `on_partition_resolved`
+    let mut leader_schedule = vec![];
+    let num_slots_per_validator = 8;
+    let partitions: [&[usize]; 3] = [
+        &[(failures_stake as usize)],
+        &[(alive_stake_1 as usize)],
+        &[(alive_stake_2 as usize)],
+    ];
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(partitions.len())
+        .collect();
+    for (i, k) in validator_keys.iter().enumerate() {
+        let num_slots = {
+            if i == 0 {
+                // Set up the leader to have 50% of the slots
+                num_slots_per_validator * (partitions.len() - 1)
+            } else {
+                num_slots_per_validator
+            }
+        };
+        for _ in 0..num_slots {
+            leader_schedule.push(k.pubkey())
+        }
+    }
+    info!("leader_schedule: {}", leader_schedule.len());
+
+    let validator_to_kill = validator_keys[0].pubkey();
+    let on_partition_start = |cluster: &mut LocalCluster| {
+        info!("Killing validator with id: {}", validator_to_kill);
+        cluster.exit_node(&validator_to_kill);
+    };
+    run_cluster_partition(
+        &partitions,
+        Some((
+            LeaderSchedule::new_from_schedule(leader_schedule),
+            validator_keys,
+        )),
+        on_partition_start,
+        on_partition_resolved,
+    )
+}
+
+#[test]
+#[serial]
+fn test_kill_partition_switch_threshold_no_progress() {
+    let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
+    let total_stake = 10_000;
+    let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
+
+    let failures_stake = max_failures_stake;
+    let total_alive_stake = total_stake - failures_stake;
+    let alive_stake_1 = total_alive_stake / 2;
+    let alive_stake_2 = total_alive_stake - alive_stake_1;
+
+    // Check that no new roots were set 400 slots after partition resolves (gives time
+    // for lockouts built during partition to resolve and gives validators an opportunity
+    // to try and switch forks)
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_no_new_roots(400, &"PARTITION_TEST");
+    };
+
+    // This kills `max_failures_stake`, so no progress should be made
+    run_kill_partition_switch_threshold(
+        failures_stake,
+        alive_stake_1,
+        alive_stake_2,
+        on_partition_resolved,
+    );
+}
+
+#[test]
+#[serial]
+fn test_kill_partition_switch_threshold() {
+    let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
+    let total_stake = 10_000;
+
+    // Kill `< max_failures_stake` of the validators
+    let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
+    let failures_stake = max_failures_stake - 1;
+    let total_alive_stake = total_stake - failures_stake;
+
+    // Partition the remaining alive validators, should still make progress
+    // once the partition resolves
+    let alive_stake_1 = total_alive_stake / 2;
+    let alive_stake_2 = total_alive_stake - alive_stake_1;
+    let bigger = std::cmp::max(alive_stake_1, alive_stake_2);
+    let smaller = std::cmp::min(alive_stake_1, alive_stake_2);
+
+    // At least one of the forks must have > SWITCH_FORK_THRESHOLD in order
+    // to guarantee switching proofs can be created. Make sure the other fork
+    // is <= SWITCH_FORK_THRESHOLD to make sure progress can be made. Caches
+    // bugs such as liveness issues bank-weighted fork choice, which may stall
+    // because the fork with less stake could have more weight, but other fork would:
+    // 1) Not be able to generate a switching proof
+    // 2) Other more staked fork stops voting, so doesn't catch up in bank weight.
+    assert!(
+        bigger as f64 / total_stake as f64 > SWITCH_FORK_THRESHOLD
+            && smaller as f64 / total_stake as f64 <= SWITCH_FORK_THRESHOLD
+    );
+
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
+    run_kill_partition_switch_threshold(
+        failures_stake,
+        alive_stake_1,
+        alive_stake_2,
+        on_partition_resolved,
+    );
 }
 
 #[test]
