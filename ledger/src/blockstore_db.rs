@@ -150,7 +150,7 @@ impl Rocks {
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        let db_options = get_db_options();
+        let mut db_options = get_db_options();
 
         // Column family names
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
@@ -209,6 +209,10 @@ impl Rocks {
                         warn!("Error when opening as primary: {}", err);
                         warn!("Trying as secondary at : {:?}", secondary_path);
                         warn!("This active secondary db use may temporarily cause the performance of another db use (like by validator) to degrade");
+
+                        // This is needed according to https://github.com/facebook/rocksdb/wiki/Secondary-instance
+                        db_options.set_max_open_files(-1);
+
                         Rocks(
                             DB::open_cf_as_secondary(&db_options, path, &secondary_path, names)?,
                             ActualAccessType::Secondary,
