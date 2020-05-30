@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+#[derive(PartialEq)]
 pub enum RpcHealthStatus {
     Ok,
     Behind, // Validator is behind its trusted validators
@@ -87,5 +88,17 @@ impl RpcHealth {
             // because it's running
             RpcHealthStatus::Ok
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn stub() -> Arc<Self> {
+        Arc::new(Self::new(
+            Arc::new(ClusterInfo::new_with_invalid_keypair(
+                crate::contact_info::ContactInfo::default(),
+            )),
+            None,
+            42,
+            Arc::new(AtomicBool::new(false)),
+        ))
     }
 }
