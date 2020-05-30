@@ -55,66 +55,87 @@ pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {
     /// Create a new account
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - new account key
-    /// * lamports - number of lamports to transfer to the new account
-    /// * space - number of bytes of memory to allocate
-    /// * owner - the program that will own the new account
+    ///
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [WRITE, SIGNER] New account
     CreateAccount {
+        /// Number of lamports to transfer to the new account
         lamports: u64,
+
+        /// Number of bytes of memory to allocate
         space: u64,
+
+        /// Address of program that will own the new account
         owner: Pubkey,
     },
+
     /// Assign account to a program
-    /// * Transaction::keys[0] - account to assign
-    Assign { owner: Pubkey },
-    /// Transfer lamports
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - destination
-    Transfer { lamports: u64 },
-    /// Create a new account at an address derived from
-    ///    a base pubkey and a seed
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - new account key
-    /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
-    /// * lamports - number of lamports to transfer to the new account
-    /// * space - number of bytes of memory to allocate
-    /// * owner - the program that will own the new account
-    CreateAccountWithSeed {
-        base: Pubkey,
-        seed: String,
-        lamports: u64,
-        space: u64,
+    ///
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Assigned account public key
+    Assign {
+        /// Owner program account
         owner: Pubkey,
     },
-    /// `AdvanceNonceAccount` consumes a stored nonce, replacing it with a successor
+
+    /// Transfer lamports
     ///
-    /// Expects 2 Accounts:
-    ///     0 - A NonceAccount
-    ///     1 - RecentBlockhashes sysvar
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [WRITE] Recipient account
+    Transfer { lamports: u64 },
+
+    /// Create a new account at an address derived from a base pubkey and a seed
     ///
-    /// The current authority must sign a transaction executing this instrucion
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [WRITE] Created account
+    ///   2. [SIGNER] Base account
+    CreateAccountWithSeed {
+        /// Base public key
+        base: Pubkey,
+
+        /// String of ASCII chars, no longer than `Pubkey::MAX_SEED_LEN`
+        seed: String,
+
+        /// Number of lamports to transfer to the new account
+        lamports: u64,
+
+        /// Number of bytes of memory to allocate
+        space: u64,
+
+        /// Owner program account address
+        owner: Pubkey,
+    },
+
+    /// Consumes a stored nonce, replacing it with a successor
+    ///
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Nonce account
+    ///   1. [] RecentBlockhashes sysvar
+    ///   2. [SIGNER] Nonce authority
     AdvanceNonceAccount,
-    /// `WithdrawNonceAccount` transfers funds out of the nonce account
+
+    /// Withdraw funds from a nonce account
     ///
-    /// Expects 4 Accounts:
-    ///     0 - A NonceAccount
-    ///     1 - A system account to which the lamports will be transferred
-    ///     2 - RecentBlockhashes sysvar
-    ///     3 - Rent sysvar
+    /// # Account references
+    ///   0. [WRITE] Nonce account
+    ///   1. [WRITE] Recipient account
+    ///   2. [] RecentBlockhashes sysvar
+    ///   3. [] Rent sysvar
+    ///   4. [SIGNER] Nonce authority
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
-    ///
-    /// The current authority must sign a transaction executing this instruction
     WithdrawNonceAccount(u64),
-    /// `InitializeNonceAccount` drives state of Uninitalized NonceAccount to Initialized,
-    /// setting the nonce value.
+
+    /// Drive state of Uninitalized nonce account to Initialized, setting the nonce value
     ///
-    /// Expects 3 Accounts:
-    ///     0 - A NonceAccount in the Uninitialized state
-    ///     1 - RecentBlockHashes sysvar
-    ///     2 - Rent sysvar
+    /// # Account references
+    ///   0. [WRITE] Nonce account
+    ///   1. [] RecentBlockhashes sysvar
+    ///   2. [] Rent sysvar
     ///
     /// The `Pubkey` parameter specifies the entity authorized to execute nonce
     /// instruction on the account
@@ -122,39 +143,57 @@ pub enum SystemInstruction {
     /// No signatures are required to execute this instruction, enabling derived
     /// nonce account addresses
     InitializeNonceAccount(Pubkey),
-    /// `AuthorizeNonceAccount` changes the entity authorized to execute nonce instructions
-    /// on the account
+
+    /// Change the entity authorized to execute nonce instructions on the account
     ///
-    /// Expects 1 Account:
-    ///     0 - A NonceAccount
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Nonce account
     ///
     /// The `Pubkey` parameter identifies the entity to authorize
-    ///
-    /// The current authority must sign a transaction executing this instruction
     AuthorizeNonceAccount(Pubkey),
+
     /// Allocate space in a (possibly new) account without funding
-    /// * Transaction::keys[0] - new account key
-    /// * space - number of bytes of memory to allocate
-    Allocate { space: u64 },
-    /// Allocate space for and assign an account at an address
-    ///    derived from a base pubkey and a seed
-    /// * Transaction::keys[0] - new account key
-    /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
-    /// * space - number of bytes of memory to allocate
-    /// * owner - the program that will own the new account
-    AllocateWithSeed {
-        base: Pubkey,
-        seed: String,
+    ///
+    /// # Account references
+    ///   0. [WRITE, SIGNER] New account
+    Allocate {
+        /// Number of bytes of memory to allocate
         space: u64,
+    },
+
+    /// Allocate space for and assign an account at an address
+    ///    derived from a base public key and a seed
+    ///
+    /// # Account references
+    ///   0. [WRITE] Allocated account
+    ///   1. [SIGNER] Base account
+    AllocateWithSeed {
+        /// Base public key
+        base: Pubkey,
+
+        /// String of ASCII chars, no longer than `pubkey::MAX_SEED_LEN`
+        seed: String,
+
+        /// Number of bytes of memory to allocate
+        space: u64,
+
+        /// Owner program account
         owner: Pubkey,
     },
+
     /// Assign account to a program based on a seed
-    /// * Transaction::keys[0] - account to assign
-    /// * seed - string of ascii chars, no longer than pubkey::MAX_SEED_LEN
-    /// * owner - the program that will own the new account
+    ///
+    /// # Account references
+    ///   0. [WRITE] Assigned account
+    ///   1. [SIGNER] Base account
     AssignWithSeed {
+        /// Base public key
         base: Pubkey,
+
+        /// String of ASCII chars, no longer than `pubkey::MAX_SEED_LEN`
         seed: String,
+
+        /// Owner program account
         owner: Pubkey,
     },
 }
