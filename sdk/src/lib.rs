@@ -99,6 +99,7 @@ extern crate serde_derive;
 pub extern crate bs58;
 extern crate log as logger;
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
 #[cfg(test)]
 #[macro_use]
 extern crate solana_sdk_macro_frozen_abi;
