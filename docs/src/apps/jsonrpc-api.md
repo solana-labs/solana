@@ -1065,11 +1065,20 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### sendTransaction
 
-Creates new transaction
+Submits a signed transaction to the cluster for processing.
+
+Before submitting, the following preflight checks are performed:
+1. The transaction signatures are verified
+2. The transaction is simulated against the latest max confirmed bank
+and on failure an error will be returned.  Preflight checks may be disabled if
+desired.
 
 #### Parameters:
 
 * `<string>` - fully-signed Transaction, as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following field:
+  * `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
+
 
 #### Results:
 

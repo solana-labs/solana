@@ -713,6 +713,19 @@ fn verify_signature(input: &str) -> Result<Signature> {
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))
 }
 
+/// Run transactions against a frozen bank without committing the results
+fn run_transaction_simulation(
+    bank: &Bank,
+    transactions: &[Transaction],
+) -> transaction::Result<()> {
+    assert!(bank.is_frozen());
+
+    let batch = bank.prepare_batch(transactions, None);
+    let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
+        bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
+    executed[0].0.clone().map(|_| ())
+}
+
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
@@ -904,7 +917,12 @@ pub trait RpcSol {
     ) -> Result<String>;
 
     #[rpc(meta, name = "sendTransaction")]
-    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String>;
+    fn send_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSendTransactionConfig>,
+    ) -> Result<String>;
 
     #[rpc(meta, name = "simulateTransaction")]
     fn simulate_transaction(
@@ -1406,8 +1424,36 @@ impl RpcSol for RpcSolImpl {
         }
     }
 
-    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
+    fn send_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSendTransactionConfig>,
+    ) -> Result<String> {
+        let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
+        let signature = transaction.signatures[0].to_string();
+
+        if !config.skip_preflight {
+            if transaction.verify().is_err() {
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: "Transaction signature verification failed".into(),
+                }
+                .into());
+            }
+
+            let bank = &*meta.request_processor.read().unwrap().bank(None)?;
+            if let Err(err) = run_transaction_simulation(&bank, &[transaction]) {
+                // Note: it's possible that the transaction simulation failed but the actual
+                // transaction would succeed. In these cases the user should use the
+                // config.skip_preflight flag
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: format!("Transaction simulation failed: {}", err),
+                }
+                .into());
+            }
+        }
+
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         transactions_socket
@@ -1416,7 +1462,6 @@ impl RpcSol for RpcSolImpl {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let signature = transaction.signatures[0].to_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
             wire_transaction.len(),
@@ -1432,10 +1477,7 @@ impl RpcSol for RpcSolImpl {
         config: Option<RpcSimulateTransactionConfig>,
     ) -> RpcResponse<TransactionStatus> {
         let (_, transaction) = deserialize_bs58_transaction(data)?;
-        let config = config.unwrap_or(RpcSimulateTransactionConfig { sig_verify: false });
-
-        let bank = &*meta.request_processor.read().unwrap().bank(None)?;
-        assert!(bank.is_frozen());
+        let config = config.unwrap_or_default();
 
         let mut result = if config.sig_verify {
             transaction.verify()
@@ -1443,17 +1485,10 @@ impl RpcSol for RpcSolImpl {
             Ok(())
         };
 
+        let bank = &*meta.request_processor.read().unwrap().bank(None)?;
+
         if result.is_ok() {
-            let transactions = [transaction];
-            let batch = bank.prepare_batch(&transactions, None);
-            let (
-                _loaded_accounts,
-                executed,
-                _retryable_transactions,
-                _transaction_count,
-                _signature_count,
-            ) = bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
-            result = executed[0].0.clone();
+            result = run_transaction_simulation(&bank, &[transaction]);
         }
 
         new_response(
