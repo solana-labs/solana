@@ -6,6 +6,7 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     rpc_error::RpcCustomError,
+    rpc_health::*,
     validator::ValidatorExit,
 };
 use bincode::serialize;
@@ -74,6 +75,7 @@ pub struct JsonRpcRequestProcessor {
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+    health: Arc<RpcHealth>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -128,6 +130,7 @@ impl JsonRpcRequestProcessor {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        health: Arc<RpcHealth>,
     ) -> Self {
         JsonRpcRequestProcessor {
             config,
@@ -135,6 +138,7 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache,
             blockstore,
             validator_exit,
+            health,
         }
     }
 
@@ -1442,6 +1446,13 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
+            if meta.request_processor.read().unwrap().health.check() != RpcHealthStatus::Ok {
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: "RPC node is unhealthy, unable to simulate transaction".into(),
+                }
+                .into());
+            }
+
             let bank = &*meta.request_processor.read().unwrap().bank(None)?;
             if let Err(err) = run_transaction_simulation(&bank, &[transaction]) {
                 // Note: it's possible that the transaction simulation failed but the actual
@@ -1832,6 +1843,7 @@ pub mod tests {
             block_commitment_cache.clone(),
             blockstore,
             validator_exit,
+            RpcHealth::stub(),
         )));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
@@ -1880,6 +1892,7 @@ pub mod tests {
             block_commitment_cache,
             blockstore,
             validator_exit,
+            RpcHealth::stub(),
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -2824,6 +2837,7 @@ pub mod tests {
                     block_commitment_cache,
                     blockstore,
                     validator_exit,
+                    RpcHealth::stub(),
                 );
                 Arc::new(RwLock::new(request_processor))
             },
@@ -2894,7 +2908,9 @@ pub mod tests {
         )
     }
 
-    pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+    pub(crate) fn create_validator_exit(
+        exit: &Arc<AtomicBool>,
+    ) -> Arc<RwLock<Option<ValidatorExit>>> {
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
@@ -2916,6 +2932,7 @@ pub mod tests {
             block_commitment_cache,
             blockstore,
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -2938,6 +2955,7 @@ pub mod tests {
             block_commitment_cache,
             blockstore,
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -3020,6 +3038,7 @@ pub mod tests {
             block_commitment_cache,
             blockstore,
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
