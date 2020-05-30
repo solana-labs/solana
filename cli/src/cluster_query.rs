@@ -27,20 +27,14 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     native_token::lamports_to_sol,
-<<<<<<< HEAD
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_instruction,
-    sysvar::{self, Sysvar},
-=======
     pubkey::{self, Pubkey},
+    signature::{Keypair, Signer},
     system_instruction, system_program,
     sysvar::{
         self,
         stake_history::{self, StakeHistory},
         Sysvar,
     },
->>>>>>> f9ee97d6f... CLI: Improve stake (de)activation display
     transaction::Transaction,
 };
 use std::{
