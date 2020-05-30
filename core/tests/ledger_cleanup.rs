@@ -171,7 +171,7 @@ mod tests {
     }
 
     fn emit_stats(
-        time_initial: &Instant,
+        time_initial: Instant,
         time_previous: &mut Instant,
         storage_previous: &mut u64,
         start_slot: u64,
@@ -187,7 +187,7 @@ mod tests {
 
         println!(
             "{},{},{},{},{},{},{},{},{},{},{}",
-            time_now.duration_since(*time_initial).as_millis(),
+            time_now.duration_since(time_initial).as_millis(),
             time_now.duration_since(*time_previous).as_millis(),
             start_slot,
             batch_size,
@@ -249,7 +249,7 @@ mod tests {
 
         emit_header();
         emit_stats(
-            &time_initial,
+            time_initial,
             &mut time_previous,
             &mut storage_previous,
             0,
@@ -273,7 +273,7 @@ mod tests {
             sender.send(x).unwrap();
 
             emit_stats(
-                &time_initial,
+                time_initial,
                 &mut time_previous,
                 &mut storage_previous,
                 x,
@@ -303,7 +303,7 @@ mod tests {
         sender.send(benchmark_slots).unwrap();
 
         emit_stats(
-            &time_initial,
+            time_initial,
             &mut time_previous,
             &mut storage_previous,
             benchmark_slots,
@@ -324,7 +324,7 @@ mod tests {
         }
 
         emit_stats(
-            &time_initial,
+            time_initial,
             &mut time_previous,
             &mut storage_previous,
             benchmark_slots,

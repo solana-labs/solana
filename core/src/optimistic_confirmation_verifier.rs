@@ -157,7 +157,7 @@ mod test {
         assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
         assert!(optimistic_confirmation_verifier
             .unchecked_slots
-            .contains(&((snapshot_start_slot + 1, bank_hash))));
+            .contains(&(snapshot_start_slot + 1, bank_hash)));
     }
 
     #[test]
@@ -170,8 +170,7 @@ mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let optimistic_slots = vec![(1, bad_bank_hash), (3, Hash::default())];
-            optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
             let vote_simulator = setup_forks();
             let bank1 = vote_simulator
                 .bank_forks
@@ -265,7 +264,7 @@ mod test {
                 .unwrap();
             assert_eq!(
                 optimistic_confirmation_verifier.check_optimistic_slots_rooted(&bank4, &blockstore),
-                vec![optimistic_slots[1].clone()]
+                vec![optimistic_slots[1]]
             );
             // 4 is bigger than only slots 1 and 3, so slot 5 should be left over
             assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
@@ -310,8 +309,7 @@ mod test {
 
             // If we know set the root in blockstore, should return nothing
             blockstore.set_roots(&[1, 3]).unwrap();
-            optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
             assert!(optimistic_confirmation_verifier
                 .check_optimistic_slots_rooted(&bank7, &blockstore)
                 .is_empty());

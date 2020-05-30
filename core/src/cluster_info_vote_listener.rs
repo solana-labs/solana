@@ -439,7 +439,7 @@ impl ClusterInfoVoteListener {
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
     ) -> Result<Vec<(Slot, Hash)>> {
-        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, last_root, subscriptions)
+        Self::get_and_process_votes(vote_txs_receiver, vote_tracker, root_bank, subscriptions)
     }
 
     fn get_and_process_votes(
@@ -858,7 +858,7 @@ mod tests {
         let vote_slots = vec![1, 2];
         let bank_hash = Hash::default();
         send_vote_txs(
-            vote_slots.clone(),
+            vote_slots,
             &validator_voting_keypairs,
             None,
             &votes_sender,
@@ -883,7 +883,7 @@ mod tests {
             .get_first_slot_in_epoch(unknown_epoch);
         let vote_slots = vec![first_slot_in_unknown_epoch, first_slot_in_unknown_epoch + 1];
         send_vote_txs(
-            vote_slots.clone(),
+            vote_slots,
             &validator_voting_keypairs,
             None,
             &votes_sender,
