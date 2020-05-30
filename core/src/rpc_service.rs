@@ -1,8 +1,13 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
+<<<<<<< HEAD
     cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*,
     storage_stage::StorageState, validator::ValidatorExit,
+=======
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
+    validator::ValidatorExit,
+>>>>>>> 9dbf3d543... Factor out RpcHealth module
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -20,7 +25,7 @@ use std::{
     collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::AtomicBool,
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
@@ -39,33 +44,24 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
-    cluster_info: Arc<ClusterInfo>,
-    trusted_validators: Option<HashSet<Pubkey>>,
     bank_forks: Arc<RwLock<BankForks>>,
-    health_check_slot_distance: u64,
-    override_health_check: Arc<AtomicBool>,
+    health: Arc<RpcHealth>,
 }
 
 impl RpcRequestMiddleware {
     pub fn new(
         ledger_path: PathBuf,
         snapshot_config: Option<SnapshotConfig>,
-        cluster_info: Arc<ClusterInfo>,
-        trusted_validators: Option<HashSet<Pubkey>>,
         bank_forks: Arc<RwLock<BankForks>>,
-        health_check_slot_distance: u64,
-        override_health_check: Arc<AtomicBool>,
+        health: Arc<RpcHealth>,
     ) -> Self {
         Self {
             ledger_path,
             snapshot_archive_path_regex: Regex::new(r"/snapshot-\d+-[[:alnum:]]+\.tar\.bz2$")
                 .unwrap(),
             snapshot_config,
-            cluster_info,
-            trusted_validators,
             bank_forks,
-            health_check_slot_distance,
-            override_health_check,
+            health,
         }
     }
 
@@ -136,60 +132,10 @@ impl RpcRequestMiddleware {
     }
 
     fn health_check(&self) -> &'static str {
-        let response = if self.override_health_check.load(Ordering::Relaxed) {
-            "ok"
-        } else if let Some(trusted_validators) = &self.trusted_validators {
-            let (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) = {
-                (
-                    self.cluster_info
-                        .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
-                            hashes
-                                .iter()
-                                .max_by(|a, b| a.0.cmp(&b.0))
-                                .map(|slot_hash| slot_hash.0)
-                        })
-                        .flatten()
-                        .unwrap_or(0),
-                    trusted_validators
-                        .iter()
-                        .map(|trusted_validator| {
-                            self.cluster_info
-                                .get_accounts_hash_for_node(&trusted_validator, |hashes| {
-                                    hashes
-                                        .iter()
-                                        .max_by(|a, b| a.0.cmp(&b.0))
-                                        .map(|slot_hash| slot_hash.0)
-                                })
-                                .flatten()
-                                .unwrap_or(0)
-                        })
-                        .max()
-                        .unwrap_or(0),
-                )
-            };
-
-            // This validator is considered healthy if its latest account hash slot is within
-            // `health_check_slot_distance` of the latest trusted validator's account hash slot
-            if latest_account_hash_slot > 0
-                && latest_trusted_validator_account_hash_slot > 0
-                && latest_account_hash_slot
-                    > latest_trusted_validator_account_hash_slot
-                        .saturating_sub(self.health_check_slot_distance)
-            {
-                "ok"
-            } else {
-                warn!(
-                    "health check: me={}, latest trusted_validator={}",
-                    latest_account_hash_slot, latest_trusted_validator_account_hash_slot
-                );
-                "behind"
-            }
-        } else {
-            // No trusted validator point of reference available, so this validator is healthy
-            // because it's running
-            "ok"
+        let response = match self.health.check() {
+            RpcHealthStatus::Ok => "ok",
+            RpcHealthStatus::Behind => "behind",
         };
-
         info!("health check: {}", response);
         response
     }
@@ -299,7 +245,14 @@ impl JsonRpcService {
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
-        let health_check_slot_distance = config.health_check_slot_distance;
+
+        let health = Arc::new(RpcHealth::new(
+            cluster_info.clone(),
+            trusted_validators,
+            config.health_check_slot_distance,
+            override_health_check,
+        ));
+
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
@@ -325,11 +278,8 @@ impl JsonRpcService {
                 let request_middleware = RpcRequestMiddleware::new(
                     ledger_path,
                     snapshot_config,
-                    cluster_info.clone(),
-                    trusted_validators,
                     bank_forks.clone(),
-                    health_check_slot_distance,
-                    override_health_check,
+                    health.clone(),
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
@@ -403,7 +353,10 @@ mod tests {
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::Signer;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        sync::atomic::Ordering,
+    };
 
     #[test]
     fn test_rpc_new() {
@@ -482,18 +435,16 @@ mod tests {
 
     #[test]
     fn test_is_file_get_path() {
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
         let bank_forks = create_bank_forks();
-
-        let rrm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
+        let health = Arc::new(RpcHealth::new(
+            Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
             None,
-            cluster_info.clone(),
-            None,
-            bank_forks.clone(),
             42,
             Arc::new(AtomicBool::new(false)),
-        );
+        ));
+
+        let rrm =
+            RpcRequestMiddleware::new(PathBuf::from("/"), None, bank_forks.clone(), health.clone());
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
@@ -501,11 +452,8 @@ mod tests {
                 snapshot_package_output_path: PathBuf::from("/"),
                 snapshot_path: PathBuf::from("/"),
             }),
-            cluster_info,
-            None,
             bank_forks,
-            42,
-            Arc::new(AtomicBool::new(false)),
+            health,
         );
 
         assert!(rrm.is_file_get_path("/genesis.tar.bz2"));
@@ -531,37 +479,41 @@ mod tests {
 
     #[test]
     fn test_health_check_with_no_trusted_validators() {
+<<<<<<< HEAD
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             None,
             cluster_info.clone(),
+=======
+        let health = Arc::new(RpcHealth::new(
+            Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
+>>>>>>> 9dbf3d543... Factor out RpcHealth module
             None,
-            create_bank_forks(),
             42,
             Arc::new(AtomicBool::new(false)),
-        );
+        ));
+
+        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
         assert_eq!(rm.health_check(), "ok");
     }
 
     #[test]
     fn test_health_check_with_trusted_validators() {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
-
         let health_check_slot_distance = 123;
-
         let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
-        let rm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
-            None,
+
+        let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
             Some(trusted_validators.clone().into_iter().collect()),
-            create_bank_forks(),
             health_check_slot_distance,
             override_health_check.clone(),
-        );
+        ));
+
+        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
 
         // No account hashes for this node or any trusted validators == "behind"
         assert_eq!(rm.health_check(), "behind");
