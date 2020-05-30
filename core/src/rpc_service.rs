@@ -260,6 +260,7 @@ impl JsonRpcService {
             blockstore,
             storage_state,
             validator_exit.clone(),
+            health.clone(),
         )));
 
         #[cfg(test)]
@@ -436,15 +437,12 @@ mod tests {
     #[test]
     fn test_is_file_get_path() {
         let bank_forks = create_bank_forks();
-        let health = Arc::new(RpcHealth::new(
-            Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
+        let rrm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
             None,
-            42,
-            Arc::new(AtomicBool::new(false)),
-        ));
-
-        let rrm =
-            RpcRequestMiddleware::new(PathBuf::from("/"), None, bank_forks.clone(), health.clone());
+            bank_forks.clone(),
+            RpcHealth::stub(),
+        );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
@@ -453,7 +451,7 @@ mod tests {
                 snapshot_path: PathBuf::from("/"),
             }),
             bank_forks,
-            health,
+            RpcHealth::stub(),
         );
 
         assert!(rrm.is_file_get_path("/genesis.tar.bz2"));
@@ -480,6 +478,7 @@ mod tests {
     #[test]
     fn test_health_check_with_no_trusted_validators() {
 <<<<<<< HEAD
+<<<<<<< HEAD
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let rm = RpcRequestMiddleware::new(
@@ -490,12 +489,14 @@ mod tests {
         let health = Arc::new(RpcHealth::new(
             Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
 >>>>>>> 9dbf3d543... Factor out RpcHealth module
+=======
+        let rm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
+>>>>>>> 9158479dc... Add node health check to transaction preflight
             None,
-            42,
-            Arc::new(AtomicBool::new(false)),
-        ));
-
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
+            create_bank_forks(),
+            RpcHealth::stub(),
+        );
         assert_eq!(rm.health_check(), "ok");
     }
 
