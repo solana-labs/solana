@@ -126,11 +126,22 @@ pub mod columns {
     pub struct Rewards;
 }
 
+pub enum AccessType {
+    OnlyPrimary,
+    AllowSecondary,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ActualAccessType {
+    Primary,
+    Secondary,
+}
+
 #[derive(Debug)]
-struct Rocks(rocksdb::DB);
+struct Rocks(rocksdb::DB, ActualAccessType);
 
 impl Rocks {
-    fn open(path: &Path) -> Result<Rocks> {
+    fn open(path: &Path, access_type: AccessType) -> Result<Rocks> {
         use columns::{
             AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
             Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
@@ -165,23 +176,47 @@ impl Rocks {
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
 
         let cfs = vec![
-            meta_cf_descriptor,
-            dead_slots_cf_descriptor,
-            duplicate_slots_cf_descriptor,
-            erasure_meta_cf_descriptor,
-            orphans_cf_descriptor,
-            root_cf_descriptor,
-            index_cf_descriptor,
-            shred_data_cf_descriptor,
-            shred_code_cf_descriptor,
-            transaction_status_cf_descriptor,
-            address_signatures_cf_descriptor,
-            transaction_status_index_cf_descriptor,
-            rewards_cf_descriptor,
+            (SlotMeta::NAME, meta_cf_descriptor),
+            (DeadSlots::NAME, dead_slots_cf_descriptor),
+            (DuplicateSlots::NAME, duplicate_slots_cf_descriptor),
+            (ErasureMeta::NAME, erasure_meta_cf_descriptor),
+            (Orphans::NAME, orphans_cf_descriptor),
+            (Root::NAME, root_cf_descriptor),
+            (Index::NAME, index_cf_descriptor),
+            (ShredData::NAME, shred_data_cf_descriptor),
+            (ShredCode::NAME, shred_code_cf_descriptor),
+            (TransactionStatus::NAME, transaction_status_cf_descriptor),
+            (AddressSignatures::NAME, address_signatures_cf_descriptor),
+            (
+                TransactionStatusIndex::NAME,
+                transaction_status_index_cf_descriptor,
+            ),
+            (Rewards::NAME, rewards_cf_descriptor),
         ];
 
         // Open the database
-        let db = Rocks(DB::open_cf_descriptors(&db_options, path, cfs)?);
+        let db = match access_type {
+            AccessType::OnlyPrimary => Rocks(
+                DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
+                ActualAccessType::Primary,
+            ),
+            AccessType::AllowSecondary => {
+                let secondary_path = path.join("solana-secondary");
+                let names: Vec<&str> = cfs.iter().map(|c| c.0).collect();
+                match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
+                    Ok(db) => Rocks(db, ActualAccessType::Primary),
+                    Err(err) => {
+                        warn!("Error when opening as primary: {}", err);
+                        warn!("Trying as secondary at : {:?}", secondary_path);
+                        warn!("This active secondary db use may temporarily cause the performance of another db use (like by validator) to degrade");
+                        Rocks(
+                            DB::open_cf_as_secondary(&db_options, path, &secondary_path, names)?,
+                            ActualAccessType::Secondary,
+                        )
+                    }
+                }
+            }
+        };
 
         Ok(db)
     }
@@ -265,6 +300,10 @@ impl Rocks {
     fn write(&self, batch: RWriteBatch) -> Result<()> {
         self.0.write(batch)?;
         Ok(())
+    }
+
+    fn is_primary_access(&self) -> bool {
+        self.1 == ActualAccessType::Primary
     }
 }
 
@@ -577,8 +616,8 @@ pub struct WriteBatch<'a> {
 }
 
 impl Database {
-    pub fn open(path: &Path) -> Result<Self> {
-        let backend = Arc::new(Rocks::open(path)?);
+    pub fn open(path: &Path, access_type: AccessType) -> Result<Self> {
+        let backend = Arc::new(Rocks::open(path, access_type)?);
 
         Ok(Database {
             backend,
@@ -677,6 +716,10 @@ impl Database {
             .unwrap_or(0);
         let end = max_slot <= to;
         result.map(|_| end)
+    }
+
+    pub fn is_primary_access(&self) -> bool {
+        self.backend.is_primary_access()
     }
 }
 

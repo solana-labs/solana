@@ -336,9 +336,11 @@ pub fn process_blockstore_from_root(
         }
     }
 
-    blockstore
-        .set_roots(&[start_slot])
-        .expect("Couldn't set root slot on startup");
+    if blockstore.is_primary_access() {
+        blockstore
+            .set_roots(&[start_slot])
+            .expect("Couldn't set root slot on startup");
+    }
 
     if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
         if let Some((slot, _meta)) = metas.last() {

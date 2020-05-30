@@ -4,8 +4,8 @@
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use crate::{
     blockstore_db::{
-        columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
-        WriteBatch,
+        columns as cf, AccessType, Column, Database, IteratorDirection, IteratorMode, LedgerColumn,
+        Result, WriteBatch,
     },
     blockstore_meta::*,
     entry::{create_ticks, Entry},
@@ -176,7 +176,7 @@ impl Blockstore {
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
-    pub fn open(ledger_path: &Path) -> Result<Blockstore> {
+    pub fn open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
@@ -185,7 +185,7 @@ impl Blockstore {
         // Open the database
         let mut measure = Measure::start("open");
         info!("Opening database at {:?}", blockstore_path);
-        let db = Database::open(&blockstore_path)?;
+        let db = Database::open(&blockstore_path, access_type)?;
 
         // Create the metadata column family
         let meta_cf = db.column();
@@ -266,8 +266,9 @@ impl Blockstore {
 
     pub fn open_with_signal(
         ledger_path: &Path,
+        access_type: AccessType,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blockstore = Self::open(ledger_path)?;
+        let mut blockstore = Self::open(ledger_path, access_type)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -2355,6 +2356,10 @@ impl Blockstore {
     pub fn storage_size(&self) -> Result<u64> {
         self.db.storage_size()
     }
+
+    pub fn is_primary_access(&self) -> bool {
+        self.db.is_primary_access()
+    }
 }
 
 fn update_slot_meta(
@@ -2787,12 +2792,13 @@ pub fn create_new_ledger(
     ledger_path: &Path,
     genesis_config: &GenesisConfig,
     max_genesis_archive_unpacked_size: u64,
+    access_type: AccessType,
 ) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
     genesis_config.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore = Blockstore::open(ledger_path)?;
+    let blockstore = Blockstore::open(ledger_path, access_type)?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
@@ -2923,7 +2929,11 @@ pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
 #[macro_export]
 macro_rules! create_new_tmp_ledger {
     ($genesis_config:expr) => {
-        $crate::blockstore::create_new_ledger_from_name($crate::tmp_ledger_name!(), $genesis_config)
+        $crate::blockstore::create_new_ledger_from_name(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            AccessType::OnlyPrimary,
+        )
     };
 }
 
@@ -2949,12 +2959,17 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> boo
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
 // ticks)
-pub fn create_new_ledger_from_name(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
+pub fn create_new_ledger_from_name(
+    name: &str,
+    genesis_config: &GenesisConfig,
+    access_type: AccessType,
+) -> (PathBuf, Hash) {
     let ledger_path = get_ledger_path_from_name(name);
     let blockhash = create_new_ledger(
         &ledger_path,
         genesis_config,
         MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        access_type,
     )
     .unwrap();
     (ledger_path, blockhash)

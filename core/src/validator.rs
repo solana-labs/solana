@@ -27,6 +27,7 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore_db::AccessType,
     blockstore_processor, create_new_tmp_ledger,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
@@ -583,7 +584,8 @@ fn new_banks_from_blockstore(
     }
 
     let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+        Blockstore::open_with_signal(blockstore_path, AccessType::OnlyPrimary)
+            .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {
