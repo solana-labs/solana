@@ -256,6 +256,7 @@ pub struct ClusterInfo {
     id: Pubkey,
     stats: GossipStats,
     pull_responses_by_id: RwLock<HashMap<Pubkey, usize>>,
+    pull_responses_by_type: RwLock<HashMap<String, usize>>,
 }
 
 impl Default for ClusterInfo {
@@ -412,6 +413,7 @@ impl ClusterInfo {
             id,
             stats: GossipStats::default(),
             pull_responses_by_id: RwLock::new(HashMap::new()),
+            pull_responses_by_type: RwLock::new(HashMap::new()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -438,6 +440,7 @@ impl ClusterInfo {
             id: *new_id,
             stats: GossipStats::default(),
             pull_responses_by_id: RwLock::new(HashMap::new()),
+            pull_responses_by_type: RwLock::new(HashMap::new()),
         }
     }
 
@@ -1891,7 +1894,26 @@ impl ClusterInfo {
             );
         }
         let filtered_len = crds_values.len();
-        *me.pull_responses_by_id.write().unwrap().entry(*from).or_insert(0) += filtered_len;
+        *me.pull_responses_by_id
+            .write()
+            .unwrap()
+            .entry(*from)
+            .or_insert(0) += filtered_len;
+        {
+            let mut by_type = me.pull_responses_by_type.write().unwrap();
+            for v in &crds_values {
+                let key = match &v.data {
+                    CrdsData::ContactInfo(_) => "ci",
+                    CrdsData::Vote(_, _) => "vote",
+                    CrdsData::LowestSlot(_, _) => "lowest_slot",
+                    CrdsData::SnapshotHashes(_) => "snapshot_hashes",
+                    CrdsData::AccountsHashes(_) => "accounts_hashes",
+                    CrdsData::EpochSlots(_, _) => "epoch_slots",
+                    CrdsData::Version(_) => "version",
+                };
+                *by_type.entry(key.to_string()).or_insert(0) += 1;
+            }
+        }
 
         let mut pull_stats = ProcessPullStats::default();
         let (filtered_pulls, filtered_pulls_no_timeout) = me
@@ -2274,6 +2296,11 @@ impl ClusterInfo {
                 let mut pull_responses_by_id = self.pull_responses_by_id.write().unwrap();
                 info!("pull_responses_by_id: {:#?}", *pull_responses_by_id);
                 pull_responses_by_id.clear();
+            }
+            {
+                let mut pull_responses_by_type = self.pull_responses_by_type.write().unwrap();
+                info!("pull_responses_by_type: {:#?}", *pull_responses_by_type);
+                pull_responses_by_type.clear();
             }
 
             *last_print = Instant::now();
