@@ -5,6 +5,7 @@ members = [
     "bench-tps",
     "accounts-bench",
     "banking-bench",
+    "clap-utils",
     "cli-config",
     "client",
     "core",
