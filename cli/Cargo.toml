@@ -15,7 +15,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.4", features = ["termination"] }
-console = "0.10.1"
+console = "0.11.3"
 dirs = "2.0.2"
 log = "0.4.8"
 Inflector = "0.11.4"

@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 clap = "2.33.0"
-console = "0.10.3"
+console = "0.11.3"
 csv = "1.1.3"
 dirs = "2.0.2"
 indexmap = "1.3.2"
