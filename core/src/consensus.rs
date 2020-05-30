@@ -383,6 +383,7 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
+        let root = self.lockouts.root_slot.unwrap_or(0);
         self.last_vote()
             .slots
             .last()
@@ -407,12 +408,18 @@ impl Tower {
                 let mut locked_out_stake = 0;
                 let mut locked_out_vote_accounts = HashSet::new();
                 for (candidate_slot, descendants) in descendants.iter() {
-                    // 1) Only consider lockouts a tips of forks as that
-                    //    includes all ancestors of that fork.
-                    // 2) Don't consider lockouts on the `last_vote` itself
-                    // 3) Don't consider lockouts on any descendants of
+                    // 1) Don't consider any banks that haven't been frozen yet
+                    //    because the neededd stats are unavailable
+                    // 2) Only consider lockouts at the latest `frozen` bank
+                    //    on each fork, as that bank will contain all the
+                    //    lockout intervals for ancestors on that fork as well.
+                    // 3) Don't consider lockouts on the `last_vote` itself
+                    // 4) Don't consider lockouts on any descendants of
                     //    `last_vote`
-                    if !descendants.is_empty()
+                    // 5) Don't consider any banks before the root because
+                    //    all lockouts must be ancestors of `last_vote`
+                    if !progress.get_fork_stats(*candidate_slot).map(|stats| stats.computed).unwrap_or(false)
+                        || descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
                         || candidate_slot == last_vote
                         || ancestors
                             .get(&candidate_slot)
@@ -421,6 +428,7 @@ impl Tower {
                                 exist in the ancestors map",
                             )
                             .contains(last_vote)
+                        || *candidate_slot <= root
                     {
                         continue;
                     }
@@ -448,10 +456,11 @@ impl Tower {
                             // 2) Not from before the current root as we can't determine if
                             // anything before the root was an ancestor of `last_vote` or not
                             if !last_vote_ancestors.contains(lockout_interval_start)
-                                // The check if the key exists in the ancestors map
-                                // is equivalent to checking if the key is above the
-                                // current root.
-                                && ancestors.contains_key(lockout_interval_start)
+                                // Given a `lockout_interval_start` < root that appears in a
+                                // bank for a `candidate_slot`, it must be that `lockout_interval_start`
+                                // is an ancestor of the current root, because `candidate_slot` is a
+                                // descendant of the current root
+                                && *lockout_interval_start > root
                                 && !locked_out_vote_accounts.contains(vote_account_pubkey)
                             {
                                 let stake = epoch_vote_accounts
