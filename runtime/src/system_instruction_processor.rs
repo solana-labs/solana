@@ -195,15 +195,7 @@ pub fn process_instruction(
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
             let to_address = Address::create(to.unsigned_key(), None)?;
-            create_account(
-                from,
-                to,
-                &to_address,
-                lamports,
-                space,
-                &owner,
-                &signers,
-            )
+            create_account(from, to, &to_address, lamports, space, &owner, &signers)
         }
         SystemInstruction::CreateAccountWithSeed {
             base,
@@ -215,15 +207,7 @@ pub fn process_instruction(
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
             let to_address = Address::create(&to.unsigned_key(), Some((&base, &seed, &owner)))?;
-            create_account(
-                from,
-                &to,
-                &to_address,
-                lamports,
-                space,
-                &owner,
-                &signers,
-            )
+            create_account(from, &to, &to_address, lamports, space, &owner, &signers)
         }
         SystemInstruction::Assign { owner } => {
             let keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -565,7 +549,10 @@ mod tests {
         );
         assert!(result.is_ok());
         assert_eq!(to_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().data.len() as u64, MAX_PERMITTED_DATA_LENGTH);
+        assert_eq!(
+            to_account.borrow().data.len() as u64,
+            MAX_PERMITTED_DATA_LENGTH
+        );
     }
 
     #[test]
@@ -720,7 +707,8 @@ mod tests {
         let populated_account = Account {
             data: vec![0, 1, 2, 3],
             ..Account::default()
-        }.into();
+        }
+        .into();
 
         let signers = [from, populated_key]
             .iter()
