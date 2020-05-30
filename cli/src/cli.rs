@@ -3241,6 +3241,7 @@ mod tests {
         // Success cases
         let mut config = CliConfig::default();
         config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
+        config.json_rpc_url = "http://127.0.0.1:8899".to_string();
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey().to_string();
