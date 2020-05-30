@@ -5293,7 +5293,11 @@ pub mod tests {
                 timestamp,
             };
             let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
+<<<<<<< HEAD
             let vote_msg = Message::new(&[vote_ix], Some(&keypair.pubkey()));
+=======
+            let vote_msg = Message::new_with_payer(&[vote_ix], Some(&keypair.pubkey()));
+>>>>>>> 19d11800b... Remove WithSigner (#10325)
             let vote_tx = Transaction::new(&[keypair], vote_msg, Hash::default());
 
             vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));

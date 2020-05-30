@@ -2036,7 +2036,11 @@ pub mod tests {
         hash::{hash, Hash},
         instruction::InstructionError,
         message::Message,
+<<<<<<< HEAD
         nonce, rpc_port,
+=======
+        rpc_port,
+>>>>>>> 19d11800b... Remove WithSigner (#10325)
         signature::{Keypair, Signer},
         system_instruction, system_program, system_transaction,
         transaction::{self, TransactionError},
@@ -2125,7 +2129,11 @@ pub mod tests {
             &leader_vote_keypair.pubkey(),
             vote,
         );
+<<<<<<< HEAD
         let vote_msg = Message::new(&[vote_ix], Some(&leader_vote_keypair.pubkey()));
+=======
+        let vote_msg = Message::new_with_payer(&[vote_ix], Some(&leader_vote_keypair.pubkey()));
+>>>>>>> 19d11800b... Remove WithSigner (#10325)
         let vote_tx = Transaction::new(&[&leader_vote_keypair], vote_msg, Hash::default());
         let shreds = entries_to_test_shreds(
             vec![next_entry_mut(&mut Hash::default(), 0, vec![vote_tx])],
@@ -4042,7 +4050,11 @@ pub mod tests {
             bank.get_minimum_balance_for_rent_exemption(VoteState::size_of()),
         );
 
+<<<<<<< HEAD
         let message = Message::new(&instructions, Some(&alice.pubkey()));
+=======
+        let message = Message::new_with_payer(&instructions, Some(&alice.pubkey()));
+>>>>>>> 19d11800b... Remove WithSigner (#10325)
         let transaction = Transaction::new(
             &[&alice, &alice_vote_keypair],
             message,

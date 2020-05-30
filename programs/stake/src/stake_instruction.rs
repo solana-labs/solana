@@ -8,9 +8,14 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, next_keyed_account, KeyedAccount},
     clock::{Epoch, UnixTimestamp},
+<<<<<<< HEAD
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     program_utils::limited_deserialize,
+=======
+    instruction::{AccountMeta, Instruction, InstructionError},
+    program_utils::{limited_deserialize, next_keyed_account, DecodeError},
+>>>>>>> 19d11800b... Remove WithSigner (#10325)
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},
@@ -202,8 +207,8 @@ fn _split(
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*split_stake_pubkey, false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
 
     Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
 }
@@ -331,8 +336,8 @@ pub fn authorize(
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
 
     Instruction::new(
         id(),
@@ -352,8 +357,8 @@ pub fn delegate_stake(
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(sysvar::stake_history::id(), false),
         AccountMeta::new_readonly(crate::config::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
@@ -369,11 +374,11 @@ pub fn withdraw(
         AccountMeta::new(*to_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(sysvar::stake_history::id(), false),
-    ]
-    .with_signer(withdrawer_pubkey);
+        AccountMeta::new_readonly(*withdrawer_pubkey, true),
+    ];
 
     if let Some(custodian_pubkey) = custodian_pubkey {
-        account_metas = account_metas.with_signer(custodian_pubkey)
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
     }
 
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
@@ -383,8 +388,8 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
@@ -393,7 +398,10 @@ pub fn set_lockup(
     lockup: &LockupArgs,
     custodian_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*stake_pubkey, false)].with_signer(custodian_pubkey);
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*custodian_pubkey, true),
+    ];
     Instruction::new(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
 }
 
