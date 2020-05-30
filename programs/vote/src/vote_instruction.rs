@@ -13,7 +13,7 @@ use solana_sdk::{
     account::{get_signers, next_keyed_account, KeyedAccount},
     decode_error::DecodeError,
     hash::Hash,
-    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
+    instruction::{AccountMeta, Instruction, InstructionError},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
@@ -116,8 +116,8 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::rent::id(), false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(&vote_init.node_pubkey);
+        AccountMeta::new_readonly(vote_init.node_pubkey, true),
+    ];
 
     Instruction::new(
         id(),
@@ -170,8 +170,8 @@ pub fn authorize(
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(authorized_pubkey);
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
 
     Instruction::new(
         id(),
@@ -188,8 +188,8 @@ pub fn update_validator_identity(
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*node_pubkey, true),
-    ]
-    .with_signer(authorized_withdrawer_pubkey);
+        AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
+    ];
 
     Instruction::new(
         id(),
@@ -220,8 +220,8 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(authorized_voter_pubkey);
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
 
     Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
@@ -236,8 +236,8 @@ pub fn vote_switch(
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ]
-    .with_signer(authorized_voter_pubkey);
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
 
     Instruction::new(
         id(),
@@ -255,8 +255,8 @@ pub fn withdraw(
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(*to_pubkey, false),
-    ]
-    .with_signer(authorized_withdrawer_pubkey);
+        AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
+    ];
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
