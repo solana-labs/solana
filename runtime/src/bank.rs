@@ -1987,7 +1987,7 @@ impl Bank {
         self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
-    fn operating_mode(&self) -> OperatingMode {
+    pub fn operating_mode(&self) -> OperatingMode {
         // unwrap is safe; self.operating_mode is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
         self.operating_mode.unwrap()
@@ -2856,6 +2856,7 @@ mod tests {
         bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
             let mut inflation = Inflation::default();
             inflation.initial = 1_000_000.0;
+            inflation.storage = 0.10;
             bank.set_inflation(inflation)
         }));
         let bank1 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH + 1);

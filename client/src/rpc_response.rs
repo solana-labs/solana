@@ -3,6 +3,7 @@ use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
+    inflation::Inflation,
     pubkey::Pubkey,
     transaction::{Result, TransactionError},
 };
@@ -53,6 +54,37 @@ pub struct RpcFeeCalculator {
 #[serde(rename_all = "camelCase")]
 pub struct RpcFeeRateGovernor {
     pub fee_rate_governor: FeeRateGovernor,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcInflationGovernor {
+    pub initial: f64,
+    pub terminal: f64,
+    pub taper: f64,
+    pub foundation: f64,
+    pub foundation_term: f64,
+}
+
+impl From<Inflation> for RpcInflationGovernor {
+    fn from(inflation: Inflation) -> Self {
+        Self {
+            initial: inflation.initial,
+            terminal: inflation.terminal,
+            taper: inflation.taper,
+            foundation: inflation.foundation,
+            foundation_term: inflation.foundation_term,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcInflationRate {
+    pub total: f64,
+    pub validator: f64,
+    pub foundation: f64,
+    pub epoch: Epoch,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
