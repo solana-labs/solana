@@ -91,7 +91,7 @@ pub enum SystemInstruction {
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
     ///   1. [WRITE] Created account
-    ///   2. [READ, SIGNER] Base account
+    ///   2. [SIGNER] Base account
     CreateAccountWithSeed {
         /// Base public key
         base: Pubkey,
@@ -113,8 +113,8 @@ pub enum SystemInstruction {
     ///
     /// # Account references
     ///   0. [WRITE, SIGNER] Nonce account
-    ///   1. [READ] RecentBlockhashes sysvar
-    ///   2. [READ, SIGNER] Nonce authority
+    ///   1. [] RecentBlockhashes sysvar
+    ///   2. [SIGNER] Nonce authority
     AdvanceNonceAccount,
 
     /// Withdraw funds from a nonce account
@@ -122,9 +122,9 @@ pub enum SystemInstruction {
     /// # Account references
     ///   0. [WRITE] Nonce account
     ///   1. [WRITE] Recipient account
-    ///   2. [READ] RecentBlockhashes sysvar
-    ///   3. [READ] Rent sysvar
-    ///   4. [READ, SIGNER] Nonce authority
+    ///   2. [] RecentBlockhashes sysvar
+    ///   3. [] Rent sysvar
+    ///   4. [SIGNER] Nonce authority
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
@@ -134,8 +134,8 @@ pub enum SystemInstruction {
     ///
     /// # Account references
     ///   0. [WRITE] Nonce account
-    ///   1. [READ] RecentBlockhashes sysvar
-    ///   2. [READ] Rent sysvar
+    ///   1. [] RecentBlockhashes sysvar
+    ///   2. [] Rent sysvar
     ///
     /// The `Pubkey` parameter specifies the entity authorized to execute nonce
     /// instruction on the account
@@ -166,7 +166,7 @@ pub enum SystemInstruction {
     ///
     /// # Account references
     ///   0. [WRITE] Allocated account
-    ///   1. [READ, SIGNER] Base account
+    ///   1. [SIGNER] Base account
     AllocateWithSeed {
         /// Base public key
         base: Pubkey,
@@ -185,7 +185,7 @@ pub enum SystemInstruction {
     ///
     /// # Account references
     ///   0. [WRITE] Assigned account
-    ///   1. [READ, SIGNER] Base account
+    ///   1. [SIGNER] Base account
     AssignWithSeed {
         /// Base public key
         base: Pubkey,

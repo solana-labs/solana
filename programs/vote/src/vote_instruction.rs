@@ -55,26 +55,26 @@ pub enum VoteInstruction {
     ///
     /// # Account references
     ///   0. [WRITE] Uninitialized vote account
-    ///   1. [READ] Rent sysvar
-    ///   2. [READ] Clock sysvar
-    ///   3. [READ, SIGNER] New validator identity (node_pubkey)
+    ///   1. [] Rent sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] New validator identity (node_pubkey)
     InitializeAccount(VoteInit),
 
     /// Authorize a key to send votes or issue a withdrawal
     ///
     /// # Account references
     ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
-    ///   1. [READ] Clock sysvar
-    ///   2. [READ, SIGNER] Vote or withdraw authority
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] Vote or withdraw authority
     Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
     ///
     /// # Account references
     ///   0. [WRITE] Vote account to vote with
-    ///   1. [READ] Slot hashes sysvar
-    ///   2. [READ] Clock sysvar
-    ///   3. [READ, SIGNER] Vote authority
+    ///   1. [] Slot hashes sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] Vote authority
     Vote(Vote),
 
     /// Withdraw some amount of funds
@@ -82,24 +82,24 @@ pub enum VoteInstruction {
     /// # Account references
     ///   0. [WRITE] Vote account to withdraw from
     ///   1. [WRITE] Recipient account
-    ///   2. [READ, SIGNER] Withdraw authority
+    ///   2. [SIGNER] Withdraw authority
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node_pubkey)
     ///
     /// # Account references
     ///   0. [WRITE] Vote account to be updated with the given authority public key
-    ///   1. [READ, SIGNER] New validator identity (node_pubkey)
-    ///   2. [READ, SIGNER] Withdraw authority
+    ///   1. [SIGNER] New validator identity (node_pubkey)
+    ///   2. [SIGNER] Withdraw authority
     UpdateValidatorIdentity,
 
     /// A Vote instruction with recent votes
     ///
     /// # Account references
     ///   0. [WRITE] Vote account to vote with
-    ///   1. [READ] Slot hashes sysvar
-    ///   2. [READ] Clock sysvar
-    ///   3. [READ, SIGNER] Vote authority
+    ///   1. [] Slot hashes sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] Vote authority
     VoteSwitch(Vote, Hash),
 }
 

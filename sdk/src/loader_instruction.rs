@@ -23,7 +23,7 @@ pub enum LoaderInstruction {
     ///
     /// # Account accesses
     ///   * 0. [WRITE, SIGNER] The account to prepare for execution
-    ///   * 1. [READ] Rent sysvar
+    ///   * 1. [] Rent sysvar
     Finalize,
 }
 
