@@ -31,6 +31,8 @@ use std::{
     str::FromStr,
 };
 
+use log::*;
+
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
     Print,
@@ -520,7 +522,7 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
 }
 
 fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
-    match Blockstore::open(ledger_path, access_type) {
+    match Blockstore::open_with_access_type(ledger_path, access_type) {
         Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
@@ -567,13 +569,18 @@ fn load_bank_forks(
     };
     let blockstore = open_blockstore(&ledger_path, access_type);
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        if !blockstore.is_primary_access() {
+            // Be defenstive, when default account dir is explicitly specified, it's still possible
+            // to wipe the dir possibly shared by the running validator!
+            panic!("custom accounts path is not supported under secondary access");
+        }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
         vec![ledger_path.join("accounts")]
     } else {
         let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
-        eprintln!(
-            "Default accounts path is switched aligning with Blockstore's non-primary access: {:?}",
+        warn!(
+            "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
         );
         vec![non_primary_accounts_path]

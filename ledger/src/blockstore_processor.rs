@@ -6,6 +6,7 @@ use crate::{
     blockstore_meta::SlotMeta,
     entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
+    rooted_slot_iterator::RootedSlotIterator,
 };
 use crossbeam_channel::Sender;
 use itertools::Itertools;
@@ -336,10 +337,14 @@ pub fn process_blockstore_from_root(
         }
     }
 
+    // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
             .set_roots(&[start_slot])
             .expect("Couldn't set root slot on startup");
+    } else {
+        let mut roots = RootedSlotIterator::new(0, &blockstore).expect("Failed to get rooted slot");
+        roots.find(|(s, _)| *s == start_slot).unwrap_or_else(|| panic!("starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot));
     }
 
     if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {

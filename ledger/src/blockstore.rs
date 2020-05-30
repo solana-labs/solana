@@ -176,7 +176,18 @@ impl Blockstore {
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
-    pub fn open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
+    pub fn open(ledger_path: &Path) -> Result<Blockstore> {
+        Self::do_open(ledger_path, AccessType::OnlyPrimary)
+    }
+
+    pub fn open_with_access_type(
+        ledger_path: &Path,
+        access_type: AccessType,
+    ) -> Result<Blockstore> {
+        Self::do_open(ledger_path, access_type)
+    }
+
+    pub fn do_open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
@@ -266,9 +277,22 @@ impl Blockstore {
 
     pub fn open_with_signal(
         ledger_path: &Path,
+    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
+        Self::do_open_with_signal(ledger_path, AccessType::OnlyPrimary)
+    }
+
+    pub fn open_with_signal_with_access_type(
+        ledger_path: &Path,
         access_type: AccessType,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blockstore = Self::open(ledger_path, access_type)?;
+        Self::do_open_with_signal(ledger_path, access_type)
+    }
+
+    pub fn do_open_with_signal(
+        ledger_path: &Path,
+        access_type: AccessType,
+    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
+        let mut blockstore = Self::open_with_access_type(ledger_path, access_type)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -2798,7 +2822,7 @@ pub fn create_new_ledger(
     genesis_config.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore = Blockstore::open(ledger_path, access_type)?;
+    let blockstore = Blockstore::open_with_access_type(ledger_path, access_type)?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
@@ -2932,7 +2956,7 @@ macro_rules! create_new_tmp_ledger {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            AccessType::OnlyPrimary,
+            $crate::blockstore_db::AccessType::OnlyPrimary,
         )
     };
 }
