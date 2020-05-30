@@ -213,8 +213,10 @@ atomic_example_impls! { AtomicI64 }
 atomic_example_impls! { AtomicIsize }
 atomic_example_impls! { AtomicBool }
 
-use generic_array::GenericArray;
-impl<T: Default, U: generic_array::ArrayLength<T>> AbiExample for GenericArray<T, U> {
+#[cfg(not(feature = "program"))]
+use generic_array::{ArrayLength, GenericArray};
+#[cfg(not(feature = "program"))]
+impl<T: Default, U: ArrayLength<T>> AbiExample for GenericArray<T, U> {
     fn example() -> Self {
         Self::default()
     }
