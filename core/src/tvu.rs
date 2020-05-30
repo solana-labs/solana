@@ -239,8 +239,8 @@ pub mod tests {
     use crate::banking_stage::create_test_recorder;
     use crate::cluster_info::{ClusterInfo, Node};
     use serial_test_derive::serial;
+    use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::{blockstore_db::AccessType, create_new_tmp_ledger};
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
@@ -265,7 +265,7 @@ pub mod tests {
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
         let (blockstore, l_receiver, completed_slots_receiver) =
-            Blockstore::open_with_signal(&blockstore_path, AccessType::OnlyPrimary)
+            Blockstore::open_with_signal(&blockstore_path)
                 .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();

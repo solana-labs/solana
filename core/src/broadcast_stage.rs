@@ -526,7 +526,7 @@ pub mod test {
     fn test_duplicate_retransmit_signal() {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let (transmit_sender, transmit_receiver) = channel();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
@@ -585,7 +585,7 @@ pub mod test {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
     ) -> MockBroadcastStage {
         // Make the database ledger
-        let blockstore = Arc::new(Blockstore::open_as_primary(ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);

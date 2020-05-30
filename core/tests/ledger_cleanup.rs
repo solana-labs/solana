@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn test_ledger_cleanup_compaction() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&blockstore_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let config = get_benchmark_config();
         eprintln!("BENCHMARK CONFIG: {:?}", config);
         eprintln!("LEDGER_PATH: {:?}", &blockstore_path);
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn test_compaction() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&blockstore_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
 
         let n = 10_000;
         let batch_size = 100;

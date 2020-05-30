@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn test_rooted_slot_iterator() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         blockstore.set_roots(&[0]).unwrap();
         let ticks_per_slot = 5;
         /*
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn test_skipping_rooted_slot_iterator() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let ticks_per_slot = 5;
         /*
             Build a blockstore in the ledger with the following fork structure:

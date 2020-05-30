@@ -877,7 +877,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config(100);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -971,7 +971,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config(100);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -1059,7 +1059,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config(100);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let mut bank_forks = BankForks::new(0, bank);
@@ -1215,7 +1215,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -1267,7 +1267,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -1365,7 +1365,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config(100);
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

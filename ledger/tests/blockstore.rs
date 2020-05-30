@@ -10,7 +10,7 @@ use std::thread::Builder;
 #[test]
 fn test_multiple_threads_insert_shred() {
     let blockstore_path = get_tmp_ledger_path!();
-    let blockstore = Arc::new(Blockstore::open_as_primary(&blockstore_path).unwrap());
+    let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
 
     for _ in 0..100 {
         let num_threads = 10;

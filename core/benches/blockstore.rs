@@ -16,8 +16,8 @@ use test::Bencher;
 
 // Given some shreds and a ledger at ledger_path, benchmark writing the shreds to the ledger
 fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Path) {
-    let blockstore = Blockstore::open_as_primary(ledger_path)
-        .expect("Expected to be able to open database ledger");
+    let blockstore =
+        Blockstore::open(ledger_path).expect("Expected to be able to open database ledger");
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -71,8 +71,8 @@ fn bench_write_big(bench: &mut Bencher) {
 #[ignore]
 fn bench_read_sequential(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
-    let mut blockstore = Blockstore::open_as_primary(&ledger_path)
-        .expect("Expected to be able to open database ledger");
+    let mut blockstore =
+        Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
 
     // Insert some big and small shreds into the ledger
     let num_small_shreds = 32 * 1024;
@@ -98,8 +98,8 @@ fn bench_read_sequential(bench: &mut Bencher) {
 #[ignore]
 fn bench_read_random(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
-    let mut blockstore = Blockstore::open_as_primary(&ledger_path)
-        .expect("Expected to be able to open database ledger");
+    let mut blockstore =
+        Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
 
     // Insert some big and small shreds into the ledger
     let num_small_shreds = 32 * 1024;
@@ -129,8 +129,8 @@ fn bench_read_random(bench: &mut Bencher) {
 #[ignore]
 fn bench_insert_data_shred_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Blockstore::open_as_primary(&ledger_path)
-        .expect("Expected to be able to open database ledger");
+    let blockstore =
+        Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
@@ -144,8 +144,8 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
 #[ignore]
 fn bench_insert_data_shred_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Blockstore::open_as_primary(&ledger_path)
-        .expect("Expected to be able to open database ledger");
+    let blockstore =
+        Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {

@@ -420,8 +420,7 @@ mod test {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(
-            Blockstore::open_as_primary(&ledger_path)
-                .expect("Expected to be able to open database ledger"),
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();

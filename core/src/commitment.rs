@@ -450,7 +450,7 @@ mod tests {
     fn test_get_confirmations() {
         let bank = Arc::new(Bank::default());
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         // Build BlockCommitmentCache with votes at depths 0 and 1 for 2 slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_confirmation_stake(1, 5);
@@ -481,7 +481,7 @@ mod tests {
     fn test_is_confirmed_rooted() {
         let bank = Arc::new(Bank::default());
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         blockstore.set_roots(&[0, 1]).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
@@ -532,7 +532,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&GenesisConfig::default()));
         let bank_slot_5 = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 5));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let total_stake = 50;
 
         // Build cache with confirmation_count 2 given total_stake

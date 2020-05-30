@@ -560,7 +560,7 @@ mod test {
     #[test]
     fn test_process_shred() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&blockstore_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
@@ -650,7 +650,7 @@ mod test {
     #[test]
     fn test_run_check_duplicate() {
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open_as_primary(&blockstore_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let (sender, receiver) = unbounded();
         let (shreds, _) = make_many_slot_entries(5, 5, 10);
         blockstore

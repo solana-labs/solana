@@ -225,7 +225,7 @@ mod tests {
     fn test_cleanup() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -258,7 +258,7 @@ mod tests {
     fn test_cleanup_speed() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
-        let mut blockstore = Blockstore::open_as_primary(&blockstore_path).unwrap();
+        let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         blockstore.set_no_compaction(true);
         let blockstore = Arc::new(blockstore);
         let (sender, receiver) = channel();
