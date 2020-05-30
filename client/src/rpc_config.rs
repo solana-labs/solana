@@ -6,7 +6,13 @@ pub struct RpcSignatureStatusConfig {
     pub search_transaction_history: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSendTransactionConfig {
+    pub skip_preflight: bool,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSimulateTransactionConfig {
     pub sig_verify: bool,
