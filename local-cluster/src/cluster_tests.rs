@@ -284,7 +284,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     }
 }
 
-pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) {
+pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], test_name: &str) {
     let mut roots = vec![HashSet::new(); contact_infos.len()];
     let mut done = false;
     let mut last_print = Instant::now();
@@ -295,12 +295,66 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) 
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
             if last_print.elapsed().as_secs() > 3 {
-                info!("PARTITION_TEST min observed roots {}/16", min_node);
+                info!("{} min observed roots {}/16", test_name, min_node);
                 last_print = Instant::now();
             }
             done = min_node >= num_new_roots;
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
+    }
+}
+
+pub fn check_no_new_roots(
+    num_slots_to_wait: usize,
+    contact_infos: &[ContactInfo],
+    test_name: &str,
+) {
+    assert!(!contact_infos.is_empty());
+    let mut roots = vec![0; contact_infos.len()];
+    let max_slot = contact_infos
+        .iter()
+        .enumerate()
+        .map(|(i, ingress_node)| {
+            let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
+            let initial_root = client
+                .get_slot()
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id));
+            roots[i] = initial_root;
+            client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id))
+        })
+        .max()
+        .unwrap();
+
+    let end_slot = max_slot + num_slots_to_wait as u64;
+    let mut current_slot;
+    let mut last_print = Instant::now();
+    let client = create_client(contact_infos[0].client_facing_addr(), VALIDATOR_PORT_RANGE);
+    loop {
+        current_slot = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
+        if current_slot > end_slot {
+            break;
+        }
+        if last_print.elapsed().as_secs() > 3 {
+            info!(
+                "{} current slot: {}, waiting for slot: {}",
+                test_name, current_slot, end_slot
+            );
+            last_print = Instant::now();
+        }
+    }
+
+    for (i, ingress_node) in contact_infos.iter().enumerate() {
+        let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
+        assert_eq!(
+            client
+                .get_slot()
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id)),
+            roots[i]
+        );
     }
 }
 

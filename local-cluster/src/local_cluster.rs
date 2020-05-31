@@ -354,7 +354,26 @@ impl LocalCluster {
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
         info!("{} looking for new roots on all nodes", test_name);
-        cluster_tests::check_for_new_roots(num_new_roots, &alive_node_contact_infos);
+        cluster_tests::check_for_new_roots(num_new_roots, &alive_node_contact_infos, test_name);
+        info!("{} done waiting for roots", test_name);
+    }
+
+    pub fn check_no_new_roots(&self, num_slots_to_wait: usize, test_name: &str) {
+        let alive_node_contact_infos: Vec<_> = self
+            .validators
+            .values()
+            .map(|v| v.info.contact_info.clone())
+            .collect();
+        assert!(!alive_node_contact_infos.is_empty());
+        info!("{} discovering nodes", test_name);
+        let cluster_nodes = discover_cluster(
+            &alive_node_contact_infos[0].gossip,
+            alive_node_contact_infos.len(),
+        )
+        .unwrap();
+        info!("{} discovered {} nodes", test_name, cluster_nodes.len());
+        info!("{} making sure no new roots on any nodes", test_name);
+        cluster_tests::check_no_new_roots(num_slots_to_wait, &alive_node_contact_infos, test_name);
         info!("{} done waiting for roots", test_name);
     }
 

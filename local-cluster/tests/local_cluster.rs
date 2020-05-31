@@ -409,24 +409,18 @@ fn test_kill_partition() {
     )
 }
 
-#[test]
-#[serial]
 #[allow(clippy::assertions_on_constants)]
-fn test_kill_partition_switch_threshold() {
+fn run_kill_partition_switch_threshold<F>(
+    failures_stake: u64,
+    alive_stake_1: u64,
+    alive_stake_2: u64,
+    on_partition_resolved: F,
+) where
+    F: Fn(&mut LocalCluster) -> (),
+{
     // Needs to be at least 1/3 or there will be no overlap
     // with the confirmation supermajority 2/3
     assert!(SWITCH_FORK_THRESHOLD >= 1f64 / 3f64);
-
-    let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
-    let total_stake = 10_000;
-    let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
-    let failures_stake = max_failures_stake - 2;
-    let total_alive_stake = total_stake - failures_stake;
-    let alive_stake_1 = total_alive_stake / 2;
-    let alive_stake_2 = total_alive_stake - alive_stake_1;
-
-    assert!(alive_stake_1 as f64 / total_stake as f64 > SWITCH_FORK_THRESHOLD);
-    assert!(alive_stake_2 as f64 / total_stake as f64 > SWITCH_FORK_THRESHOLD);
     info!(
         "stakes: {} {} {}",
         failures_stake, alive_stake_1, alive_stake_2
@@ -435,7 +429,7 @@ fn test_kill_partition_switch_threshold() {
     // This test:
     // 1) Spins up three partitions
     // 2) Kills the first partition with the stake `failures_stake`
-    // 5) Check for recovery
+    // 5) runs `on_partition_resolved`
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
     let partitions: [&[usize]; 3] = [
@@ -466,9 +460,6 @@ fn test_kill_partition_switch_threshold() {
         info!("Killing validator with id: {}", validator_to_kill);
         cluster.exit_node(&validator_to_kill);
     };
-    let on_partition_resolved = |cluster: &mut LocalCluster| {
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
-    };
     run_cluster_partition(
         &partitions,
         Some((
@@ -478,6 +469,61 @@ fn test_kill_partition_switch_threshold() {
         on_partition_start,
         on_partition_resolved,
     )
+}
+
+#[test]
+#[serial]
+fn test_kill_partition_switch_threshold_no_progress() {
+    let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
+    let total_stake = 10_000;
+    let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
+
+    let failures_stake = max_failures_stake;
+    let total_alive_stake = total_stake - failures_stake;
+    let alive_stake_1 = total_alive_stake / 2;
+    let alive_stake_2 = total_alive_stake - alive_stake_1;
+
+    // Check that no new roots were set 400 slots after partition resolves (gives time
+    // for lockouts built during partition to resolve and gives validators an opportunity
+    // to try and switch forks)
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_no_new_roots(400, &"PARTITION_TEST");
+    };
+
+    // This kills `max_failures_stake`, so no progress should be made
+    run_kill_partition_switch_threshold(
+        failures_stake,
+        alive_stake_1,
+        alive_stake_2,
+        on_partition_resolved,
+    );
+}
+
+#[test]
+#[serial]
+fn test_kill_partition_switch_threshold() {
+    let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
+    let total_stake = 10_000;
+    let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
+    let failures_stake = max_failures_stake - 2;
+    let total_alive_stake = total_stake - failures_stake;
+    let alive_stake_1 = total_alive_stake / 2;
+    let alive_stake_2 = total_alive_stake - alive_stake_1;
+
+    // Both remaining validators must be > SWITCH_FORK_THRESHOLD in order
+    // to guarantee progress in reasonable amount of time
+    assert!(alive_stake_1 as f64 / total_stake as f64 > SWITCH_FORK_THRESHOLD);
+    assert!(alive_stake_2 as f64 / total_stake as f64 > SWITCH_FORK_THRESHOLD);
+
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
+    run_kill_partition_switch_threshold(
+        failures_stake,
+        alive_stake_1,
+        alive_stake_2,
+        on_partition_resolved,
+    );
 }
 
 #[test]
