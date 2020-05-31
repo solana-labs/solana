@@ -1499,7 +1499,7 @@ impl ClusterInfo {
                     }
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
-                    if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS/2 {
+                    if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
                         obj.push_self(&stakes);
                         last_push = timestamp();
                     }
@@ -1685,7 +1685,7 @@ impl ClusterInfo {
         //skip messages that are likely to be pushed
         let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let push_timer = if min_filter_time < now {
-            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS/2)
+            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2)
         } else {
             None
         };
