@@ -2126,7 +2126,7 @@ impl ClusterInfo {
                 ("tvu_peers", self.stats.tvu_peers.clear(), i64),
                 (
                     "new_push_requests_num",
-                    self.stats.new_push_requests2.clear(),
+                    self.stats.new_push_requests_num.clear(),
                     i64
                 ),
             );
