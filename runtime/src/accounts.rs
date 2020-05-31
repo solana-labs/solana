@@ -1368,38 +1368,6 @@ mod tests {
     }
 
     #[test]
-    fn test_load_account_pay_to_self() {
-        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-
-        let keypair = Keypair::new();
-        let pubkey = keypair.pubkey();
-
-        let account = Account::new(10, 1, &Pubkey::default());
-        accounts.push((pubkey, account));
-
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
-        // Simulate pay-to-self transaction, which loads the same account twice
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[pubkey],
-            Hash::default(),
-            vec![native_loader::id()],
-            instructions,
-        );
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
-
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            (
-                Err(TransactionError::InvalidAccountForFee),
-                Some(HashAgeKind::Extant)
-            )
-        );
-    }
-
-    #[test]
     fn test_load_by_program_slot() {
         let accounts = Accounts::new(Vec::new());
 
