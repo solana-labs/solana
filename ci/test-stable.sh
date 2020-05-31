@@ -39,9 +39,9 @@ test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 rm -rf target/xargo # Issue #3105
 
 # Limit compiler jobs to reduce memory usage
-# on machines with 1gb/thread of memory
+# on machines with 2gb/thread of memory
 NPROC=$(nproc)
-NPROC=$((NPROC>16 ? 16 : NPROC))
+NPROC=$((NPROC>14 ? 14 : NPROC))
 
 echo "Executing $testName"
 case $testName in
