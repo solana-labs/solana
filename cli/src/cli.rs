@@ -1530,11 +1530,6 @@ fn process_transfer(
 ) -> ProcessResult {
     let from = config.signers[from];
 
-    check_unique_pubkeys(
-        (&from.pubkey(), "cli keypair".to_string()),
-        (to, "to".to_string()),
-    )?;
-
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
 
