@@ -122,18 +122,21 @@ fn allocate_and_assign(
 
 fn create_account(
     from: &KeyedAccount,
-    to: &mut Account,
+    to: &KeyedAccount,
     to_address: &Address,
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    allocate_and_assign(to, to_address, space, program_id, signers)?;
+    {
+        let mut to_account = to.try_account_ref_mut()?;
+        allocate_and_assign(&mut to_account, to_address, space, program_id, signers)?;
+    }
     transfer(from, to, lamports)
 }
 
-fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), InstructionError> {
+fn transfer(from: &KeyedAccount, to: &KeyedAccount, lamports: u64) -> Result<(), InstructionError> {
     if lamports == 0 {
         return Ok(());
     }
@@ -157,7 +160,7 @@ fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), 
     }
 
     from.try_account_ref_mut()?.lamports -= lamports;
-    to.lamports += lamports;
+    to.try_account_ref_mut()?.lamports += lamports;
     Ok(())
 }
 
@@ -182,11 +185,10 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            let mut to_account = to.try_account_ref_mut()?;
             let to_address = Address::create(to.unsigned_key(), None)?;
             create_account(
                 from,
-                &mut to_account,
+                to,
                 &to_address,
                 lamports,
                 space,
@@ -203,12 +205,11 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            let mut to_account = to.try_account_ref_mut()?;
             let to_address =
                 Address::create(&to.unsigned_key(), Some((&base, &seed, &program_id)))?;
             create_account(
                 from,
-                &mut to_account,
+                &to,
                 &to_address,
                 lamports,
                 space,
@@ -224,8 +225,8 @@ pub fn process_instruction(
         }
         SystemInstruction::Transfer { lamports } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
-            let mut to_account = next_keyed_account(keyed_accounts_iter)?.try_account_ref_mut()?;
-            transfer(from, &mut to_account, lamports)
+            let to = next_keyed_account(keyed_accounts_iter)?;
+            transfer(from, to, lamports)
         }
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
@@ -452,13 +453,13 @@ mod tests {
         let to = Pubkey::create_with_seed(&from, seed, &new_program_owner).unwrap();
 
         let from_account = Account::new_ref(100, 0, &system_program::id());
-        let mut to_account = Account::new(0, 0, &Pubkey::default());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
         let to_address = Address::create(&to, Some((&from, seed, &new_program_owner))).unwrap();
 
         assert_eq!(
             create_account(
                 &KeyedAccount::new(&from, false, &from_account),
-                &mut to_account,
+                &KeyedAccount::new(&to, false, &to_account),
                 &to_address,
                 50,
                 2,
@@ -468,7 +469,7 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature)
         );
         assert_eq!(from_account.borrow().lamports, 100);
-        assert_eq!(to_account, Account::default());
+        assert_eq!(*to_account.borrow(), Account::default());
     }
 
     #[test]
@@ -479,12 +480,12 @@ mod tests {
         let from_account = Account::new_ref(100, 1, &Pubkey::new_rand()); // not from system account
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(0, 0, &Pubkey::default());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             create_account(
                 &KeyedAccount::new(&from, false, &from_account), // no signer
-                &mut to_account,
+                &KeyedAccount::new(&to, false, &to_account),
                 &to.into(),
                 0,
                 2,
@@ -495,13 +496,13 @@ mod tests {
         );
 
         let from_lamports = from_account.borrow().lamports;
-        let to_lamports = to_account.lamports;
-        let to_owner = to_account.owner;
-        let to_data = to_account.data.clone();
+        let to_lamports = to_account.borrow().lamports;
+        let to_owner = to_account.borrow().owner;
+        let to_data = &to_account.borrow().data;
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
         assert_eq!(to_owner, new_program_owner);
-        assert_eq!(to_data, [0, 0]);
+        assert_eq!(*to_data, [0, 0]);
     }
 
     #[test]
@@ -512,11 +513,11 @@ mod tests {
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(0, 0, &Pubkey::default());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut to_account,
+            &KeyedAccount::new(&from, false, &to_account),
             &to.into(),
             150,
             2,
@@ -530,7 +531,7 @@ mod tests {
     fn test_request_more_than_allowed_data_length() {
         let from_account = Account::new_ref(100, 0, &system_program::id());
         let from = Pubkey::new_rand();
-        let mut to_account = Account::default();
+        let to_account = Account::new_ref(0, 0, &system_program::id());
         let to = Pubkey::new_rand();
 
         let signers = &[from, to].iter().cloned().collect::<HashSet<_>>();
@@ -539,7 +540,7 @@ mod tests {
         // Trying to request more data length than permitted will result in failure
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut to_account,
+            &KeyedAccount::new(&to, false, &to_account),
             &address,
             50,
             MAX_PERMITTED_DATA_LENGTH + 1,
@@ -555,7 +556,7 @@ mod tests {
         // Trying to request equal or less data length than permitted will be successful
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut to_account,
+            &KeyedAccount::new(&to, false, &to_account),
             &address,
             50,
             MAX_PERMITTED_DATA_LENGTH,
@@ -563,8 +564,11 @@ mod tests {
             &signers,
         );
         assert!(result.is_ok());
-        assert_eq!(to_account.lamports, 50);
-        assert_eq!(to_account.data.len() as u64, MAX_PERMITTED_DATA_LENGTH);
+        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(
+            to_account.borrow().data.len() as u64,
+            MAX_PERMITTED_DATA_LENGTH
+        );
     }
 
     #[test]
@@ -576,7 +580,7 @@ mod tests {
 
         let original_program_owner = Pubkey::new(&[5; 32]);
         let owned_key = Pubkey::new_rand();
-        let mut owned_account = Account::new(0, 0, &original_program_owner);
+        let owned_account = Account::new_ref(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
         let signers = &[from, owned_key].iter().cloned().collect::<HashSet<_>>();
@@ -584,7 +588,7 @@ mod tests {
 
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, false, &owned_account),
             &owned_address,
             50,
             2,
@@ -598,11 +602,11 @@ mod tests {
         assert_eq!(owned_account, unchanged_account);
 
         // Attempt to create system account in account that already has data
-        let mut owned_account = Account::new(0, 1, &Pubkey::default());
-        let unchanged_account = owned_account.clone();
+        let owned_account = Account::new_ref(0, 1, &Pubkey::default());
+        let unchanged_account = owned_account.borrow().clone();
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, false, &owned_account),
             &owned_address,
             50,
             2,
@@ -612,13 +616,13 @@ mod tests {
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.borrow().lamports;
         assert_eq!(from_lamports, 100);
-        assert_eq!(owned_account, unchanged_account);
+        assert_eq!(*owned_account.borrow(), unchanged_account);
 
         // Verify that create_account works even if `to` has a non-zero balance
-        let mut owned_account = Account::new(1, 0, &Pubkey::default());
+        let owned_account = Account::new_ref(1, 0, &Pubkey::default());
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, false, &owned_account),
             &owned_address,
             50,
             2,
@@ -627,7 +631,7 @@ mod tests {
         );
         assert_eq!(result, Ok(()));
         assert_eq!(from_account.borrow().lamports, from_lamports - 50);
-        assert_eq!(owned_account.lamports, 1 + 50);
+        assert_eq!(owned_account.borrow().lamports, 1 + 50);
     }
 
     #[test]
@@ -638,14 +642,14 @@ mod tests {
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let owned_key = Pubkey::new_rand();
-        let mut owned_account = Account::new(0, 0, &Pubkey::default());
+        let owned_account = Account::new_ref(0, 0, &Pubkey::default());
 
         let owned_address = owned_key.into();
 
         // Haven't signed from account
         let result = create_account(
             &KeyedAccount::new(&from, false, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, false, &owned_account),
             &owned_address,
             50,
             2,
@@ -655,10 +659,10 @@ mod tests {
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
         // Haven't signed to account
-        let mut owned_account = Account::new(0, 0, &Pubkey::default());
+        let owned_account = Account::new_ref(0, 0, &Pubkey::default());
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, true, &owned_account),
             &owned_address,
             50,
             2,
@@ -668,10 +672,10 @@ mod tests {
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
         // support creation/assignment with zero lamports (ephemeral account)
-        let mut owned_account = Account::new(0, 0, &Pubkey::default());
+        let owned_account = Account::new_ref(0, 0, &Pubkey::default());
         let result = create_account(
             &KeyedAccount::new(&from, false, &from_account),
-            &mut owned_account,
+            &KeyedAccount::new(&owned_key, false, &owned_account),
             &owned_address,
             0,
             2,
@@ -688,7 +692,7 @@ mod tests {
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::default();
+        let to_account = Account::new_ref(0, 0, &system_program::id());
 
         let signers = [from, to].iter().cloned().collect::<HashSet<_>>();
         let to_address = to.into();
@@ -696,7 +700,7 @@ mod tests {
         // fail to create a sysvar::id() owned account
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut to_account,
+            &KeyedAccount::new(&to, false, &to_account),
             &to_address,
             50,
             2,
@@ -715,10 +719,11 @@ mod tests {
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let populated_key = Pubkey::new_rand();
-        let mut populated_account = Account {
+        let populated_account = Account {
             data: vec![0, 1, 2, 3],
             ..Account::default()
-        };
+        }
+        .into();
 
         let signers = [from, populated_key]
             .iter()
@@ -728,7 +733,7 @@ mod tests {
 
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
-            &mut populated_account,
+            &KeyedAccount::new(&populated_key, false, &populated_account),
             &populated_address,
             50,
             2,
@@ -752,15 +757,16 @@ mod tests {
         let from = KeyedAccount::new(&nonce, true, &nonce_account);
         let new = Pubkey::new_rand();
 
-        let mut new_account = Account::default();
+        let new_account = Account::new_ref(0, 0, &system_program::id());
 
         let signers = [nonce, new].iter().cloned().collect::<HashSet<_>>();
         let new_address = new.into();
+        let new_keyed_account = KeyedAccount::new(&new, false, &new_account);
 
         assert_eq!(
             create_account(
                 &from,
-                &mut new_account,
+                &new_keyed_account,
                 &new_address,
                 42,
                 0,
@@ -857,26 +863,28 @@ mod tests {
     fn test_transfer_lamports() {
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
-        let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
+        let to = Pubkey::new(&[3; 32]);
+        let to_account = Account::new_ref(1, 0, &to); // account owner should not matter
         let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        transfer(&from_keyed_account, &mut to_account, 50).unwrap();
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+        transfer(&from_keyed_account, &to_keyed_account, 50).unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
-        let to_lamports = to_account.lamports;
+        let to_lamports = to_keyed_account.account.borrow().lamports;
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
         // Attempt to move more lamports than remaining in from_account
         let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let result = transfer(&from_keyed_account, &mut to_account, 100);
+        let result = transfer(&from_keyed_account, &to_keyed_account, 100);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_account.lamports, 51);
+        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
 
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-        assert!(transfer(&from_keyed_account, &mut to_account, 0,).is_ok(),);
+        assert!(transfer(&from_keyed_account, &to_keyed_account, 0,).is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_account.lamports, 51);
+        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
     }
 
     #[test]
@@ -896,11 +904,12 @@ mod tests {
             Some(SystemAccountKind::Nonce)
         );
 
-        let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
+        let to = Pubkey::new(&[3; 32]);
+        let to_account = Account::new_ref(1, 0, &to); // account owner should not matter
         assert_eq!(
             transfer(
                 &KeyedAccount::new(&from, true, &from_account),
-                &mut to_account,
+                &KeyedAccount::new(&to, false, &to_account),
                 50,
             ),
             Err(InstructionError::InvalidArgument),
