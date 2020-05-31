@@ -1053,8 +1053,11 @@ pub mod test {
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         let mut tower = Tower::new_with_key(&my_pubkey);
 
         // Last vote is 47
@@ -1132,8 +1135,41 @@ pub mod test {
         );
 
         // Adding another validator lockout on a different fork, and the lockout
+        // covers the last vote would count towards the switch threshold,
+        // unless the bank is not the most recent frozen bank on the fork (14 is a
+        // frozen/computed bank > 13 on the same fork in this case)
+        vote_simulator.simulate_lockout_interval(13, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::FailedSwitchThreshold
+        );
+
+        // Adding another validator lockout on a different fork, and the lockout
         // covers the last vote, should satisfy the switch threshold
         vote_simulator.simulate_lockout_interval(14, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // Adding another unfrozen descendant of the tip of 14 should not remove
+        // slot 14 from consideration because it is still the most recent frozen
+        // bank on its fork
+        descendants.get_mut(&14).unwrap().insert(10000);
         assert_eq!(
             tower.check_switch_threshold(
                 110,
@@ -1149,7 +1185,7 @@ pub mod test {
         // If we set a root, then any lockout intervals below the root shouldn't
         // count toward the switch threshold. This means the other validator's
         // vote lockout no longer counts
-        vote_simulator.set_root(43);
+        tower.lockouts.root_slot = Some(43);
         assert_eq!(
             tower.check_switch_threshold(
                 110,
