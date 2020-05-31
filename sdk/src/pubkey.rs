@@ -1,5 +1,5 @@
 use crate::{
-    hash::{hashv, Hasher},
+    hash::{hash, hashv, Hasher},
     program_utils::DecodeError,
 };
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -84,7 +84,10 @@ impl Pubkey {
         ))
     }
 
-    pub fn create_program_address(seeds: &[&str], owner: &Pubkey) -> Result<Pubkey, PubkeyError> {
+    pub fn create_program_address(
+        seeds: &[&str],
+        program_id: &Pubkey,
+    ) -> Result<Pubkey, PubkeyError> {
         let mut hasher = Hasher::default();
         for seed in seeds.iter() {
             if seed.len() > MAX_SEED_LEN {
@@ -92,9 +95,9 @@ impl Pubkey {
             }
             hasher.hash(seed.as_ref());
         }
-        hasher.hashv(&[owner.as_ref(), "ProgramDerivedAddress".as_ref()]);
+        hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
 
-        Ok(Pubkey::new(hashv(&[hasher.result().as_ref()]).as_ref()))
+        Ok(Pubkey::new(hash(hasher.result().as_ref()).as_ref()))
     }
 
     #[cfg(not(feature = "program"))]
@@ -242,7 +245,7 @@ mod tests {
     fn test_create_program_address() {
         let exceeded_seed = from_utf8(&[127; MAX_SEED_LEN + 1]).unwrap();
         let max_seed = from_utf8(&[0; MAX_SEED_LEN]).unwrap();
-        let program_id = Pubkey::new(b"BPFLoader11111111111111111111111");
+        let program_id = Pubkey::from_str("BPFLoader1111111111111111111111111111111111").unwrap();
 
         assert_eq!(
             Pubkey::create_program_address(&[exceeded_seed], &program_id),
@@ -255,19 +258,19 @@ mod tests {
         assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand(),).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[""], &program_id),
-            Ok("FXjJsFsMXM8LFXynZvEkED7yECADnaEgAzWD6yyg91QG"
+            Ok("CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉"], &program_id),
-            Ok("MAuKBzPvme5QmCNALp5iAEasZeazkpRyCZbwtJVkJEG"
+            Ok("A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["Talking", "Squirrels"], &program_id),
-            Ok("3beXgJ9MfstiGfzav45bicJ7ygiwUEoCfsM4W94EuRii"
+            Ok("CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu"
                 .parse()
                 .unwrap())
         );
