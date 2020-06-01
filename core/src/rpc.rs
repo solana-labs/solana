@@ -722,7 +722,7 @@ fn run_transaction_simulation(
     bank: &Bank,
     transactions: &[Transaction],
 ) -> transaction::Result<()> {
-    assert!(bank.is_frozen());
+    assert!(bank.is_frozen(), "simulation bank must be frozen");
 
     let batch = bank.prepare_batch(transactions, None);
     let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
@@ -1456,8 +1456,10 @@ impl RpcSol for RpcSolImpl {
             let bank = &*meta.request_processor.read().unwrap().bank(None)?;
             if let Err(err) = run_transaction_simulation(&bank, &[transaction]) {
                 // Note: it's possible that the transaction simulation failed but the actual
-                // transaction would succeed. In these cases the user should use the
-                // config.skip_preflight flag
+                // transaction would succeed, such as when a transaction depends on an earlier
+                // transaction that has yet to reach max confirmations. In these cases the user
+                // should use the config.skip_preflight flag, and potentially in the future
+                // additional controls over what bank is used for preflight should be exposed.
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: format!("Transaction simulation failed: {}", err),
                 }
@@ -2850,6 +2852,103 @@ pub mod tests {
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let error = &json["error"];
         assert_eq!(error["code"], ErrorCode::InvalidParams.code());
+    }
+
+    #[test]
+    fn test_rpc_send_transaction_preflight() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
+        let bank_forks = new_bank_forks().0;
+        let health = RpcHealth::stub();
+
+        // Freeze bank 0 to prevent a panic in `run_transaction_simulation()`
+        bank_forks.write().unwrap().get(0).unwrap().freeze();
+
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        let meta = Meta {
+            request_processor: {
+                let request_processor = JsonRpcRequestProcessor::new(
+                    JsonRpcConfig::default(),
+                    bank_forks,
+                    block_commitment_cache,
+                    blockstore,
+                    validator_exit,
+                    health.clone(),
+                );
+                Arc::new(RwLock::new(request_processor))
+            },
+            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(
+                ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+            )),
+            genesis_hash: Hash::default(),
+        };
+
+        let mut bad_transaction =
+            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
+
+        // sendTransaction will fail because the blockhash is invalid
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found"},"id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will fail due to poor node health
+        health.stub_set_health_status(Some(RpcHealthStatus::Behind));
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"RPC node is unhealthy, unable to simulate transaction"},"id":1}"#.to_string(),
+            )
+        );
+        health.stub_set_health_status(None);
+
+        // sendTransaction will fail due to invalid signature
+        bad_transaction.signatures[0] = Signature::default();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction signature verification failed"},"id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will now succeed because skipPreflight=true even though it's a bad
+        // transaction
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","result":"1111111111111111111111111111111111111111111111111111111111111111","id":1}"#.to_string(),
+            )
+        );
     }
 
     #[test]
