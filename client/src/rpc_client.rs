@@ -37,7 +37,6 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
-    error,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -423,6 +422,7 @@ impl RpcClient {
         }
     }
 
+<<<<<<< HEAD
     pub fn send_and_confirm_transactions<T: Signers>(
         &self,
         mut transactions: Vec<Transaction>,
@@ -491,6 +491,8 @@ impl RpcClient {
         }
     }
 
+=======
+>>>>>>> 202512d46... Adapt `solana deploy`
     pub fn resign_transaction<T: Signers>(
         &self,
         tx: &mut Transaction,
@@ -966,6 +968,17 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
+        self.send_and_confirm_transaction_with_spinner_and_config(
+            transaction,
+            RpcSendTransactionConfig::default(),
+        )
+    }
+
+    pub fn send_and_confirm_transaction_with_spinner_and_config(
+        &self,
+        transaction: &Transaction,
+        config: RpcSendTransactionConfig,
+    ) -> ClientResult<Signature> {
         let mut confirmations = 0;
 
         let progress_bar = new_spinner_progress_bar();
@@ -980,7 +993,7 @@ impl RpcClient {
             ));
             let mut status_retries = 15;
             let (signature, status) = loop {
-                let signature = self.send_transaction(transaction)?;
+                let signature = self.send_transaction_with_config(transaction, config.clone())?;
 
                 // Get recent commitment in order to count confirmations for successful transactions
                 let status = self
