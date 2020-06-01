@@ -2,7 +2,7 @@ use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     http_sender::HttpSender,
     mock_sender::{MockSender, Mocks},
-    rpc_config::RpcLargestAccountsConfig,
+    rpc_config::{RpcLargestAccountsConfig, RpcSendTransactionConfig},
     rpc_request::{RpcError, RpcRequest},
     rpc_response::*,
     rpc_sender::RpcSender,
@@ -94,10 +94,20 @@ impl RpcClient {
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
+        self.send_transaction_with_config(transaction, RpcSendTransactionConfig::default())
+    }
+
+    pub fn send_transaction_with_config(
+        &self,
+        transaction: &Transaction,
+        config: RpcSendTransactionConfig,
+    ) -> ClientResult<Signature> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
 
-        let signature_base58_str: String =
-            self.send(RpcRequest::SendTransaction, json!([serialized_encoded]))?;
+        let signature_base58_str: String = self.send(
+            RpcRequest::SendTransaction,
+            json!([serialized_encoded, config]),
+        )?;
 
         let signature = signature_base58_str
             .parse::<Signature>()
