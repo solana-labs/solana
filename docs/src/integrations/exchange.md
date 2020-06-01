@@ -102,8 +102,9 @@ The easiest way to track all the deposit accounts for your exchange is to poll
 for each confirmed block and inspect for addresses of interest, using the
 JSON-RPC service of your Solana api node.
 
-1. To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
+* To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
 passing the last block you have already processed as the start-slot parameter:
+
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
 
@@ -111,7 +112,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ```
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-2. For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
+* For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
@@ -176,6 +177,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
   "id": 1
 }
 ```
+
 The `preBalances` and `postBalances` fields allow you to track the balance
 changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
@@ -193,8 +195,9 @@ can request the block from RPC in binary format, and parse it using either our
 
 You can also query the transaction history of a specific address.
 
-1. Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+* Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
 request to the api node, specifying a range of recent slots:
+
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 10]}' localhost:8899
 
@@ -209,8 +212,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-2. For each signature returned, get the transaction details by sending a
+* For each signature returned, get the transaction details by sending a
 [`getConfirmedTransaction`](../apps/jsonrpc-api.md#getconfirmedtransaction) request:
+
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
 
