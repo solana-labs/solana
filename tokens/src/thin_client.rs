@@ -1,4 +1,4 @@
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
     account::Account,
@@ -32,8 +32,13 @@ pub trait Client {
 
 impl Client for RpcClient {
     fn send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
-        self.send_transaction(&transaction)
-            .map_err(|e| TransportError::Custom(e.to_string()))
+        self.send_transaction_with_config(
+            &transaction,
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+            },
+        )
+        .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
     fn get_signature_statuses1(
