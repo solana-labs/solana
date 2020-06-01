@@ -132,7 +132,12 @@ if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
-set -x
-cp -fv target/$buildVariant/deps/libsolana*program.* "$installDir/bin/deps"
+(
+  set -x
+  cp -fv target/$buildVariant/deps/libsolana*program.* "$installDir/bin/deps"
+)
 
 echo "Done after $SECONDS seconds"
+echo
+echo "To use these binaries:"
+echo "  export PATH=\"$installDir\"/bin:\"\$PATH\""
