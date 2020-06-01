@@ -187,7 +187,7 @@ impl Blockstore {
         Self::do_open(ledger_path, access_type)
     }
 
-    pub fn do_open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
+    fn do_open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
