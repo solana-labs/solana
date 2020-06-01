@@ -1,5 +1,6 @@
 use crate::cli::SettingType;
 use console::style;
+use indicatif::{ProgressBar, ProgressStyle};
 use solana_sdk::{
     hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
     transaction::Transaction,
@@ -199,4 +200,13 @@ pub fn println_transaction(
             print!("{}", s);
         }
     }
+}
+
+/// Creates a new process bar for processing that will take an unknown amount of time
+pub fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
 }
