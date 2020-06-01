@@ -101,6 +101,7 @@
   * [Cross-Program Invocation](implemented-proposals/cross-program-invocation.md)
   * [Program Derived Addresses](implemented-proposals/program-derived-addresses.md)
 * [Accepted Design Proposals](proposals/README.md)
+  * [Ledger Replication](proposals/ledger-replication-to-implement.md)
   * [Optimistic Confirmation and Slashing](proposals/optimistic-confirmation-and-slashing.md)
   * [Secure Vote Signing](proposals/vote-signing-to-implement.md)
   * [Cluster Test Framework](proposals/cluster-test-framework.md)
