@@ -43,6 +43,7 @@ Operate a configured testnet
  stopnode     - Stop an individual node
  startclients - Start client nodes only
  update       - Deploy a new software update to the cluster
+ upgrade      - Upgrade software on bootstrap validator. (Restart bootstrap validator manually to run it)
 
  start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
@@ -980,6 +981,12 @@ stop)
   ;;
 update)
   deployUpdate
+  ;;
+upgrade)
+  bootstrapValidatorIp="${validatorIpList[0]}"
+  prepareDeploy
+  deployBootstrapValidator "$bootstrapValidatorIp"
+  # (start|stop)Node need refactored to support restarting the bootstrap validator
   ;;
 stopnode)
   if [[ -z $nodeAddress ]]; then
