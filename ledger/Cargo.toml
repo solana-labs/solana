@@ -28,7 +28,7 @@ rand_chacha = "0.2.2"
 rayon = "1.3.0"
 reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 regex = "1.3.9"
-serde = "1.0.110"
+serde = "1.0.111"
 serde_bytes = "0.11.4"
 solana-transaction-status = { path = "../transaction-status", version = "1.3.0" }
 solana-genesis-programs = { path = "../genesis-programs", version = "1.3.0" }
