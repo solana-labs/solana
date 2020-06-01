@@ -278,21 +278,7 @@ impl Blockstore {
     pub fn open_with_signal(
         ledger_path: &Path,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        Self::do_open_with_signal(ledger_path, AccessType::OnlyPrimary)
-    }
-
-    pub fn open_with_signal_with_access_type(
-        ledger_path: &Path,
-        access_type: AccessType,
-    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        Self::do_open_with_signal(ledger_path, access_type)
-    }
-
-    pub fn do_open_with_signal(
-        ledger_path: &Path,
-        access_type: AccessType,
-    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blockstore = Self::open_with_access_type(ledger_path, access_type)?;
+        let mut blockstore = Self::open_with_access_type(ledger_path, AccessType::OnlyPrimary)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
