@@ -381,6 +381,7 @@ pub fn broadcast_shreds(
         update_peer_stats(1, 1, last_datapoint_submit);
         return Ok(());
     }
+    let mut shred_select = Measure::start("shred_select");
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
@@ -389,6 +390,7 @@ pub fn broadcast_shreds(
             (&shred.payload, &peers[broadcast_index].tvu)
         })
         .collect();
+    shred_select.stop();
 
     let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");

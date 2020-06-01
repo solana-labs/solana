@@ -9,6 +9,7 @@ use solana_ledger::{
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::duration_as_us};
 use std::collections::HashMap;
+use std::sync::RwLock;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -23,6 +24,14 @@ pub struct StandardBroadcastRun {
     shred_version: u16,
     last_datapoint_submit: Arc<AtomicU64>,
     num_batches: usize,
+    broadcast_peer_cache: Arc<RwLock<BroadcastPeerCache>>,
+    last_peer_update: Arc<AtomicU64>,
+}
+
+#[derive(Default)]
+struct BroadcastPeerCache {
+    peers: Vec<ContactInfo>,
+    peers_and_stakes: Vec<(u64, usize)>,
 }
 
 impl StandardBroadcastRun {
@@ -38,6 +47,8 @@ impl StandardBroadcastRun {
             shred_version,
             last_datapoint_submit: Arc::new(AtomicU64::new(0)),
             num_batches: 0,
+            broadcast_peer_cache: Arc::new(RwLock::new(BroadcastPeerCache::default())),
+            last_peer_update: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -296,8 +307,21 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let get_peers_start = Instant::now();
-        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
+        let now = timestamp();
+        let last = self.last_peer_update.load(Ordering::Relaxed);
+        if now - last > 1000
+            && self
+                .last_peer_update
+                .compare_and_swap(now, last, Ordering::Relaxed)
+                == last
+        {
+            let mut w_broadcast_peer_cache = self.broadcast_peer_cache.write().unwrap();
+            let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
+            w_broadcast_peer_cache.peers = peers;
+            w_broadcast_peer_cache.peers_and_stakes = peers_and_stakes;
+        }
         let get_peers_elapsed = get_peers_start.elapsed();
+        let r_broadcast_peer_cache = self.broadcast_peer_cache.read().unwrap();
 
         // Broadcast the shreds
         let transmit_start = Instant::now();
@@ -305,11 +329,12 @@ impl StandardBroadcastRun {
         broadcast_shreds(
             sock,
             &shreds,
-            &peers_and_stakes,
-            &peers,
+            &r_broadcast_peer_cache.peers_and_stakes,
+            &r_broadcast_peer_cache.peers,
             &self.last_datapoint_submit,
             &mut send_mmsg_total,
         )?;
+        drop(r_broadcast_peer_cache);
         let transmit_elapsed = transmit_start.elapsed();
         let new_transmit_shreds_stats = TransmitShredsStats {
             transmit_elapsed: duration_as_us(&transmit_elapsed),
