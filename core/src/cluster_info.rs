@@ -214,6 +214,7 @@ struct GossipStats {
     repair_peers: Counter,
     new_push_requests: Counter,
     new_push_requests2: Counter,
+    new_push_requests_num: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
     process_pull_response_len: Counter,
@@ -236,6 +237,7 @@ struct GossipStats {
     skip_push_message_shred_version: Counter,
     push_message_count: Counter,
     push_message_value_count: Counter,
+    push_response_count: Counter,
 }
 
 pub struct ClusterInfo {
@@ -1362,7 +1364,7 @@ impl ClusterInfo {
         let (_, push_messages) = self
             .time_gossip_write_lock("new_push_requests", &self.stats.new_push_requests)
             .new_push_messages(timestamp());
-        push_messages
+        let messages: Vec<_> = push_messages
             .into_iter()
             .filter_map(|(peer, messages)| {
                 let peer_label = CrdsValueLabel::ContactInfo(peer);
@@ -1377,7 +1379,11 @@ impl ClusterInfo {
                     .into_iter()
                     .map(move |payload| (peer, Protocol::PushMessage(self_id, payload)))
             })
-            .collect()
+            .collect();
+        self.stats
+            .new_push_requests_num
+            .add_relaxed(messages.len() as u64);
+        messages
     }
 
     fn gossip_request(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
@@ -1891,6 +1897,9 @@ impl ClusterInfo {
             return None;
         }
         let mut packets = to_packets_with_destination(recycler.clone(), &rsp);
+        me.stats
+            .push_response_count
+            .add_relaxed(packets.packets.len() as u64);
         if !packets.is_empty() {
             let pushes: Vec<_> = me.new_push_requests();
             inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
@@ -1982,6 +1991,11 @@ impl ClusterInfo {
                 ),
                 ("all_tvu_peers", self.stats.all_tvu_peers.clear(), i64),
                 ("tvu_peers", self.stats.tvu_peers.clear(), i64),
+                (
+                    "new_push_requests_num",
+                    self.stats.new_push_requests2.clear(),
+                    i64
+                ),
             );
             datapoint_info!(
                 "cluster_info_stats2",
@@ -2006,6 +2020,26 @@ impl ClusterInfo {
                 (
                     "process_pull_resp_count",
                     self.stats.process_pull_response_count.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_resp_success",
+                    self.stats.process_pull_response_success.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_resp_timeout",
+                    self.stats.process_pull_response_timeout.clear(),
+                    i64
+                ),
+                (
+                    "process_pull_resp_fail",
+                    self.stats.process_pull_response_fail.clear(),
+                    i64
+                ),
+                (
+                    "push_response_count",
+                    self.stats.push_response_count.clear(),
                     i64
                 ),
             );
