@@ -225,6 +225,29 @@ syncScripts() {
     "$ipAddress":~/solana/ > /dev/null
 }
 
+# Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
+# binaries from it
+deployBootstrapValidator() {
+  declare ipAddress=$1
+
+  echo "Deploying software to bootstrap validator ($ipAddress)"
+  case $deployMethod in
+  tar)
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
+    ;;
+  local)
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+    ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
+    ;;
+  skip)
+    ;;
+  *)
+    usage "Internal error: invalid deployMethod: $deployMethod"
+    ;;
+  esac
+}
+
 startBootstrapLeader() {
   declare ipAddress=$1
   declare nodeIndex="$2"
@@ -232,28 +255,13 @@ startBootstrapLeader() {
   echo "--- Starting bootstrap validator: $ipAddress"
   echo "start log: $logFile"
 
-  # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
-  # binaries from it
   (
     set -x
     startCommon "$ipAddress" || exit 1
     [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
       "$ipAddress:$remoteExternalPrimordialAccountsFile"
-    case $deployMethod in
-    tar)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
-      ;;
-    local)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
-      ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
-      ;;
-    skip)
-      ;;
-    *)
-      usage "Internal error: invalid deployMethod: $deployMethod"
-      ;;
-    esac
+
+    deployBootstrapValidator "$ipAddress"
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
