@@ -10,6 +10,7 @@ give you a trusted entrypoint to the network, allow you full control over how
 much data is retained, and ensure you do not miss any data if one node fails.
 
 To run an api node:
+
 1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
 2. Boot the node with at least the following parameters:
 ```bash
@@ -101,7 +102,7 @@ The easiest way to track all the deposit accounts for your exchange is to poll
 for each confirmed block and inspect for addresses of interest, using the
 JSON-RPC service of your Solana api node.
 
-1. To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
+* To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
 passing the last block you have already processed as the start-slot parameter:
 
 ```bash
@@ -111,7 +112,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ```
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-2. For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
+* For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
@@ -180,7 +181,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 The `preBalances` and `postBalances` fields allow you to track the balance
 changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
-[lamports](../terminology.md#lamports), indexed to the `accountKeys` list. For
+[lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
 example, if the deposit address if interest is
 `47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
 transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
@@ -194,7 +195,7 @@ can request the block from RPC in binary format, and parse it using either our
 
 You can also query the transaction history of a specific address.
 
-1. Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+* Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
 request to the api node, specifying a range of recent slots:
 
 ```bash
@@ -211,7 +212,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-2. For each signature returned, get the transaction details by sending a
+* For each signature returned, get the transaction details by sending a
 [`getConfirmedTransaction`](../apps/jsonrpc-api.md#getconfirmedtransaction) request:
 
 ```bash
