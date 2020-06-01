@@ -2,7 +2,7 @@ use crate::{
     checks::*,
     cli_output::{CliAccount, CliSignOnlyData, CliSignature, OutputFormat},
     cluster_query::*,
-    display::println_name_value,
+    display::{new_spinner_progress_bar, println_name_value, println_transaction},
     nonce::{self, *},
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::*,
@@ -27,7 +27,7 @@ use solana_clap_utils::{
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
-    rpc_config::RpcLargestAccountsFilter,
+    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
     rpc_response::{RpcAccount, RpcKeyedAccount},
 };
 #[cfg(not(test))]
@@ -37,7 +37,7 @@ use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader,
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -48,6 +48,7 @@ use solana_sdk::{
     program_utils::DecodeError,
     pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{Keypair, Signature, Signer, SignerError},
+    signers::Signers,
     system_instruction::{self, SystemError},
     system_program,
     transaction::{Transaction, TransactionError},
@@ -1159,7 +1160,7 @@ fn process_confirm(
                                 "\nTransaction executed in slot {}:",
                                 confirmed_transaction.slot
                             );
-                            crate::display::println_transaction(
+                            println_transaction(
                                 &confirmed_transaction
                                     .transaction
                                     .transaction
@@ -1189,7 +1190,7 @@ fn process_confirm(
 }
 
 fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
-    crate::display::println_transaction(transaction, &None, "");
+    println_transaction(transaction, &None, "");
     Ok("".to_string())
 }
 
@@ -1225,6 +1226,103 @@ fn process_show_account(
     }
 
     Ok(account_string)
+}
+
+fn send_and_confirm_transactions_with_spinner<T: Signers>(
+    rpc_client: &RpcClient,
+    mut transactions: Vec<Transaction>,
+    signer_keys: &T,
+) -> Result<(), Box<dyn error::Error>> {
+    let progress_bar = new_spinner_progress_bar();
+    let mut send_retries = 5;
+    loop {
+        let mut status_retries = 15;
+
+        // Send all transactions
+        let mut transactions_signatures = vec![];
+        let num_transactions = transactions.len();
+        for transaction in transactions {
+            if cfg!(not(test)) {
+                // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
+                // when all the write transactions modify the same program account (eg, deploying a
+                // new program)
+                sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
+            }
+
+            let signature = rpc_client
+                .send_transaction_with_config(
+                    &transaction,
+                    RpcSendTransactionConfig {
+                        skip_preflight: true,
+                    },
+                )
+                .ok();
+            transactions_signatures.push((transaction, signature));
+
+            progress_bar.set_message(&format!(
+                "[{}/{}] Transactions sent",
+                transactions_signatures.len(),
+                num_transactions
+            ));
+        }
+
+        // Collect statuses for all the transactions, drop those that are confirmed
+        while status_retries > 0 {
+            status_retries -= 1;
+
+            progress_bar.set_message(&format!(
+                "[{}/{}] Transactions confirmed",
+                num_transactions - transactions_signatures.len(),
+                num_transactions
+            ));
+
+            if cfg!(not(test)) {
+                // Retry twice a second
+                sleep(Duration::from_millis(500));
+            }
+
+            transactions_signatures = transactions_signatures
+                .into_iter()
+                .filter(|(_transaction, signature)| {
+                    if let Some(signature) = signature {
+                        if let Ok(status) = rpc_client.get_signature_status(&signature) {
+                            if rpc_client
+                                .get_num_blocks_since_signature_confirmation(&signature)
+                                .unwrap_or(0)
+                                > 1
+                            {
+                                return false;
+                            } else {
+                                return match status {
+                                    None => true,
+                                    Some(result) => result.is_err(),
+                                };
+                            }
+                        }
+                    }
+                    true
+                })
+                .collect();
+
+            if transactions_signatures.is_empty() {
+                return Ok(());
+            }
+        }
+
+        if send_retries == 0 {
+            return Err("Transactions failed".into());
+        }
+        send_retries -= 1;
+
+        // Re-sign any failed transactions with a new blockhash and retry
+        let (blockhash, _fee_calculator) = rpc_client
+            .get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
+        transactions = vec![];
+        for (mut transaction, _) in transactions_signatures.into_iter() {
+            transaction.try_sign(signer_keys, blockhash)?;
+            transactions.push(transaction);
+        }
+    }
 }
 
 fn process_deploy(
@@ -1294,15 +1392,18 @@ fn process_deploy(
     })?;
 
     trace!("Writing program data");
-    rpc_client
-        .send_and_confirm_transactions_with_spinner(write_transactions, &signers)
-        .map_err(|_| {
-            CliError::DynamicProgramError("Data writes to program account failed".to_string())
-        })?;
+    send_and_confirm_transactions_with_spinner(&rpc_client, write_transactions, &signers).map_err(
+        |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
+    )?;
 
     trace!("Finalizing program account");
     rpc_client
-        .send_and_confirm_transaction_with_spinner(&finalize_tx)
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &finalize_tx,
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+            },
+        )
         .map_err(|e| {
             CliError::DynamicProgramError(format!("Finalizing program account failed: {}", e))
         })?;

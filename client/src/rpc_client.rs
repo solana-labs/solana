@@ -32,7 +32,6 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
-    error,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -412,96 +411,6 @@ impl RpcClient {
                                           and insufficient fee-payer funds".to_string()).into(),
                     );
                 }
-            }
-        }
-    }
-
-    pub fn send_and_confirm_transactions_with_spinner<T: Signers>(
-        &self,
-        mut transactions: Vec<Transaction>,
-        signer_keys: &T,
-    ) -> Result<(), Box<dyn error::Error>> {
-        let progress_bar = new_spinner_progress_bar();
-        let mut send_retries = 5;
-        loop {
-            let mut status_retries = 15;
-
-            // Send all transactions
-            let mut transactions_signatures = vec![];
-            let num_transactions = transactions.len();
-            for transaction in transactions {
-                if cfg!(not(test)) {
-                    // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-                    // when all the write transactions modify the same program account (eg, deploying a
-                    // new program)
-                    sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
-                }
-
-                let signature = self.send_transaction(&transaction).ok();
-                transactions_signatures.push((transaction, signature));
-
-                progress_bar.set_message(&format!(
-                    "[{}/{}] Transactions sent",
-                    transactions_signatures.len(),
-                    num_transactions
-                ));
-            }
-
-            // Collect statuses for all the transactions, drop those that are confirmed
-            while status_retries > 0 {
-                status_retries -= 1;
-
-                progress_bar.set_message(&format!(
-                    "[{}/{}] Transactions confirmed",
-                    num_transactions - transactions_signatures.len(),
-                    num_transactions
-                ));
-
-                if cfg!(not(test)) {
-                    // Retry twice a second
-                    sleep(Duration::from_millis(500));
-                }
-
-                transactions_signatures = transactions_signatures
-                    .into_iter()
-                    .filter(|(_transaction, signature)| {
-                        if let Some(signature) = signature {
-                            if let Ok(status) = self.get_signature_status(&signature) {
-                                if self
-                                    .get_num_blocks_since_signature_confirmation(&signature)
-                                    .unwrap_or(0)
-                                    > 1
-                                {
-                                    return false;
-                                } else {
-                                    return match status {
-                                        None => true,
-                                        Some(result) => result.is_err(),
-                                    };
-                                }
-                            }
-                        }
-                        true
-                    })
-                    .collect();
-
-                if transactions_signatures.is_empty() {
-                    return Ok(());
-                }
-            }
-
-            if send_retries == 0 {
-                return Err(RpcError::ForUser("Transactions failed".to_string()).into());
-            }
-            send_retries -= 1;
-
-            // Re-sign any failed transactions with a new blockhash and retry
-            let (blockhash, _fee_calculator) =
-                self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
-            transactions = vec![];
-            for (mut transaction, _) in transactions_signatures.into_iter() {
-                transaction.try_sign(signer_keys, blockhash)?;
-                transactions.push(transaction);
             }
         }
     }
@@ -963,6 +872,17 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
+        self.send_and_confirm_transaction_with_spinner_and_config(
+            transaction,
+            RpcSendTransactionConfig::default(),
+        )
+    }
+
+    pub fn send_and_confirm_transaction_with_spinner_and_config(
+        &self,
+        transaction: &Transaction,
+        config: RpcSendTransactionConfig,
+    ) -> ClientResult<Signature> {
         let mut confirmations = 0;
 
         let progress_bar = new_spinner_progress_bar();
@@ -977,7 +897,7 @@ impl RpcClient {
             ));
             let mut status_retries = 15;
             let (signature, status) = loop {
-                let signature = self.send_transaction(transaction)?;
+                let signature = self.send_transaction_with_config(transaction, config.clone())?;
 
                 // Get recent commitment in order to count confirmations for successful transactions
                 let status = self
