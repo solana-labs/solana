@@ -8,23 +8,25 @@ use crate::{
 pub enum LoaderInstruction {
     /// Write program data into an account
     ///
-    /// * key[0] - the account to write into.
-    ///
-    /// The transaction must be signed by key[0]
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Account to write to
     Write {
+        /// Offset at which to write the given bytes
         offset: u32,
+
+        /// Serialized program data
         #[serde(with = "serde_bytes")]
         bytes: Vec<u8>,
     },
 
-    /// Finalize an account loaded with program data for execution.
+    /// Finalize an account loaded with program data for execution
+    ///
     /// The exact preparation steps is loader specific but on success the loader must set the executable
-    /// bit of the Account
+    /// bit of the account.
     ///
-    /// * key[0] - the account to prepare for execution
-    /// * key[1] - rent sysvar account
-    ///
-    /// The transaction must be signed by key[0]
+    /// # Account references
+    ///   0. [WRITE, SIGNER] The account to prepare for execution
+    ///   1. [] Rent sysvar
     Finalize,
 }
 

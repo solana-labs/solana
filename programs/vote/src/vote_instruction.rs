@@ -51,59 +51,55 @@ impl<E> DecodeError<E> for VoteError {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
-    /// Initialize the VoteState for this `vote account`
-    ///    requires VoteInit::node_pubkey signature
+    /// Initialize a vote account
     ///
-    /// Expects 3 Accounts:
-    ///    0 - Uninitialized Vote account
-    ///    1 - Rent sysvar
-    ///    2 - Clock sysvar
-    ///
+    /// # Account references
+    ///   0. [WRITE] Uninitialized vote account
+    ///   1. [] Rent sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] New validator identity (node_pubkey)
     InitializeAccount(VoteInit),
 
     /// Authorize a key to send votes or issue a withdrawal
-    ///    requires authorized voter or authorized withdrawer signature,
-    ///    depending on which key's being updated
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Vote account to be updated with the Pubkey for authorization
-    ///    1 - Clock sysvar
-    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
+    ///   1. [] Clock sysvar
+    ///   2. [SIGNER] Vote or withdraw authority
     Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
-    ///    requires authorized voter signature
     ///
-    /// Expects 3 Accounts:
-    ///    0 - Vote account to vote with
-    ///    1 - Slot hashes sysvar
-    ///    2 - Clock sysvar
+    /// # Account references
+    ///   0. [WRITE] Vote account to vote with
+    ///   1. [] Slot hashes sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] Vote authority
     Vote(Vote),
 
     /// Withdraw some amount of funds
-    ///    requires authorized withdrawer signature
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Vote account to withdraw from
-    ///    1 - Destination account for the withdrawal
+    /// # Account references
+    ///   0. [WRITE] Vote account to withdraw from
+    ///   1. [WRITE] Recipient account
+    ///   2. [SIGNER] Withdraw authority
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node_pubkey)
-    ///    requires authorized withdrawer and new validator identity signature
     ///
-    /// Expects 2 Accounts:
-    ///    0 - Vote account to be updated with the Pubkey for authorization
-    ///    1 - New validator identity (node_pubkey)
-    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to be updated with the given authority public key
+    ///   1. [SIGNER] New validator identity (node_pubkey)
+    ///   2. [SIGNER] Withdraw authority
     UpdateValidatorIdentity,
 
     /// A Vote instruction with recent votes
-    ///    requires authorized voter signature
     ///
-    /// Expects 3 Accounts:
-    ///    0 - Vote account to vote with
-    ///    1 - Slot hashes sysvar
-    ///    2 - Clock sysvar
+    /// # Account references
+    ///   0. [WRITE] Vote account to vote with
+    ///   1. [] Slot hashes sysvar
+    ///   2. [] Clock sysvar
+    ///   3. [SIGNER] Vote authority
     VoteSwitch(Vote, Hash),
 }
 
