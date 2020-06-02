@@ -329,6 +329,7 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
 mod test {
     use super::*;
     use serial_test_derive::serial;
+    use solana_client::rpc_config::RpcSendTransactionConfig;
     use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_sdk::{
@@ -443,20 +444,25 @@ mod test {
 
         // Withdraw instruction causes non-compliance
         let stake3_withdraw_signature = rpc_client
-            .send_transaction(&Transaction::new(
-                &[&payer, &stake3_keypair],
-                Message::new_with_payer(
-                    &[stake_instruction::withdraw(
-                        &stake3_keypair.pubkey(),
-                        &stake3_keypair.pubkey(),
-                        &payer.pubkey(),
-                        one_sol,
-                        None,
-                    )],
-                    Some(&payer.pubkey()),
+            .send_transaction_with_config(
+                &Transaction::new(
+                    &[&payer, &stake3_keypair],
+                    Message::new_with_payer(
+                        &[stake_instruction::withdraw(
+                            &stake3_keypair.pubkey(),
+                            &stake3_keypair.pubkey(),
+                            &payer.pubkey(),
+                            one_sol,
+                            None,
+                        )],
+                        Some(&payer.pubkey()),
+                    ),
+                    blockhash,
                 ),
-                blockhash,
-            ))
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                },
+            )
             .unwrap();
 
         rpc_client
@@ -492,19 +498,24 @@ mod test {
         // Split stake4 into stake5
         let stake5_keypair = Keypair::new();
         let stake45_split_signature = rpc_client
-            .send_transaction(&Transaction::new(
-                &[&payer, &stake5_keypair],
-                Message::new_with_payer(
-                    &stake_instruction::split(
-                        &stake4_keypair.pubkey(),
-                        &payer.pubkey(),
-                        one_sol,
-                        &stake5_keypair.pubkey(),
+            .send_transaction_with_config(
+                &Transaction::new(
+                    &[&payer, &stake5_keypair],
+                    Message::new_with_payer(
+                        &stake_instruction::split(
+                            &stake4_keypair.pubkey(),
+                            &payer.pubkey(),
+                            one_sol,
+                            &stake5_keypair.pubkey(),
+                        ),
+                        Some(&payer.pubkey()),
                     ),
-                    Some(&payer.pubkey()),
+                    blockhash,
                 ),
-                blockhash,
-            ))
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                },
+            )
             .unwrap();
 
         rpc_client
@@ -539,12 +550,17 @@ mod test {
 
         // Withdraw 1 sol from system 1 to make it non-compliant
         rpc_client
-            .send_transaction(&system_transaction::transfer(
-                &system1_keypair,
-                &payer.pubkey(),
-                one_sol,
-                blockhash,
-            ))
+            .send_transaction_with_config(
+                &system_transaction::transfer(
+                    &system1_keypair,
+                    &payer.pubkey(),
+                    one_sol,
+                    blockhash,
+                ),
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                },
+            )
             .unwrap();
 
         // System transfer 2
@@ -572,12 +588,17 @@ mod test {
 
         // Withdraw 1 sol - 1 lamport from system 2, it's still compliant
         rpc_client
-            .send_transaction(&system_transaction::transfer(
-                &system2_keypair,
-                &payer.pubkey(),
-                one_sol - 1,
-                blockhash,
-            ))
+            .send_transaction_with_config(
+                &system_transaction::transfer(
+                    &system2_keypair,
+                    &payer.pubkey(),
+                    one_sol - 1,
+                    blockhash,
+                ),
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                },
+            )
             .unwrap();
 
         // Process all the transactions

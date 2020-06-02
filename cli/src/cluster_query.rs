@@ -1,11 +1,10 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
-    display::println_name_value,
+    display::{new_spinner_progress_bar, println_name_value},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
-use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{
     commitment::{commitment_arg, COMMITMENT_ARG},
     input_parsers::*,
@@ -467,15 +466,6 @@ pub fn parse_transaction_history(
         },
         signers: vec![],
     })
-}
-
-/// Creates a new process bar for processing that will take an unknown amount of time
-fn new_spinner_progress_bar() -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
-    progress_bar
 }
 
 pub fn process_catchup(

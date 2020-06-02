@@ -6,6 +6,7 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     rpc_error::RpcCustomError,
+    rpc_health::*,
     storage_stage::StorageState,
     validator::ValidatorExit,
 };
@@ -75,6 +76,7 @@ pub struct JsonRpcRequestProcessor {
     config: JsonRpcConfig,
     storage_state: StorageState,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+    health: Arc<RpcHealth>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -130,6 +132,7 @@ impl JsonRpcRequestProcessor {
         blockstore: Arc<Blockstore>,
         storage_state: StorageState,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        health: Arc<RpcHealth>,
     ) -> Self {
         JsonRpcRequestProcessor {
             config,
@@ -138,6 +141,7 @@ impl JsonRpcRequestProcessor {
             blockstore,
             storage_state,
             validator_exit,
+            health,
         }
     }
 
@@ -747,6 +751,19 @@ fn verify_signature(input: &str) -> Result<Signature> {
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))
 }
 
+/// Run transactions against a frozen bank without committing the results
+fn run_transaction_simulation(
+    bank: &Bank,
+    transactions: &[Transaction],
+) -> transaction::Result<()> {
+    assert!(bank.is_frozen(), "simulation bank must be frozen");
+
+    let batch = bank.prepare_batch(transactions, None);
+    let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
+        bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
+    executed[0].0.clone().map(|_| ())
+}
+
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
@@ -938,7 +955,12 @@ pub trait RpcSol {
     ) -> Result<String>;
 
     #[rpc(meta, name = "sendTransaction")]
-    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String>;
+    fn send_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSendTransactionConfig>,
+    ) -> Result<String>;
 
     #[rpc(meta, name = "simulateTransaction")]
     fn simulate_transaction(
@@ -1465,8 +1487,45 @@ impl RpcSol for RpcSolImpl {
         }
     }
 
-    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
+    fn send_transaction(
+        &self,
+        meta: Self::Metadata,
+        data: String,
+        config: Option<RpcSendTransactionConfig>,
+    ) -> Result<String> {
+        let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
+        let signature = transaction.signatures[0].to_string();
+
+        if !config.skip_preflight {
+            if transaction.verify().is_err() {
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: "Transaction signature verification failed".into(),
+                }
+                .into());
+            }
+
+            if meta.request_processor.read().unwrap().health.check() != RpcHealthStatus::Ok {
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: "RPC node is unhealthy, unable to simulate transaction".into(),
+                }
+                .into());
+            }
+
+            let bank = &*meta.request_processor.read().unwrap().bank(None)?;
+            if let Err(err) = run_transaction_simulation(&bank, &[transaction]) {
+                // Note: it's possible that the transaction simulation failed but the actual
+                // transaction would succeed, such as when a transaction depends on an earlier
+                // transaction that has yet to reach max confirmations. In these cases the user
+                // should use the config.skip_preflight flag, and potentially in the future
+                // additional controls over what bank is used for preflight should be exposed.
+                return Err(RpcCustomError::SendTransactionPreflightFailure {
+                    message: format!("Transaction simulation failed: {}", err),
+                }
+                .into());
+            }
+        }
+
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         trace!("send_transaction: leader is {:?}", &tpu_addr);
@@ -1476,7 +1535,6 @@ impl RpcSol for RpcSolImpl {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let signature = transaction.signatures[0].to_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
             wire_transaction.len(),
@@ -1492,10 +1550,7 @@ impl RpcSol for RpcSolImpl {
         config: Option<RpcSimulateTransactionConfig>,
     ) -> RpcResponse<TransactionStatus> {
         let (_, transaction) = deserialize_bs58_transaction(data)?;
-        let config = config.unwrap_or(RpcSimulateTransactionConfig { sig_verify: false });
-
-        let bank = &*meta.request_processor.read().unwrap().bank(None)?;
-        assert!(bank.is_frozen());
+        let config = config.unwrap_or_default();
 
         let mut result = if config.sig_verify {
             transaction.verify()
@@ -1503,17 +1558,10 @@ impl RpcSol for RpcSolImpl {
             Ok(())
         };
 
+        let bank = &*meta.request_processor.read().unwrap().bank(None)?;
+
         if result.is_ok() {
-            let transactions = [transaction];
-            let batch = bank.prepare_batch(&transactions, None);
-            let (
-                _loaded_accounts,
-                executed,
-                _retryable_transactions,
-                _transaction_count,
-                _signature_count,
-            ) = bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
-            result = executed[0].0.clone();
+            result = run_transaction_simulation(&bank, &[transaction]);
         }
 
         new_response(
@@ -1897,6 +1945,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            RpcHealth::stub(),
         )));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
@@ -1946,6 +1995,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            RpcHealth::stub(),
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -2894,6 +2944,7 @@ pub mod tests {
                     blockstore,
                     StorageState::default(),
                     validator_exit,
+                    RpcHealth::stub(),
                 );
                 Arc::new(RwLock::new(request_processor))
             },
@@ -2906,6 +2957,104 @@ pub mod tests {
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let error = &json["error"];
         assert_eq!(error["code"], ErrorCode::InvalidParams.code());
+    }
+
+    #[test]
+    fn test_rpc_send_transaction_preflight() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
+        let bank_forks = new_bank_forks().0;
+        let health = RpcHealth::stub();
+
+        // Freeze bank 0 to prevent a panic in `run_transaction_simulation()`
+        bank_forks.write().unwrap().get(0).unwrap().freeze();
+
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        let meta = Meta {
+            request_processor: {
+                let request_processor = JsonRpcRequestProcessor::new(
+                    JsonRpcConfig::default(),
+                    bank_forks,
+                    block_commitment_cache,
+                    blockstore,
+                    StorageState::default(),
+                    validator_exit,
+                    health.clone(),
+                );
+                Arc::new(RwLock::new(request_processor))
+            },
+            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(
+                ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+            )),
+            genesis_hash: Hash::default(),
+        };
+
+        let mut bad_transaction =
+            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
+
+        // sendTransaction will fail because the blockhash is invalid
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: TransactionError::BlockhashNotFound"},"id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will fail due to poor node health
+        health.stub_set_health_status(Some(RpcHealthStatus::Behind));
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"RPC node is unhealthy, unable to simulate transaction"},"id":1}"#.to_string(),
+            )
+        );
+        health.stub_set_health_status(None);
+
+        // sendTransaction will fail due to invalid signature
+        bad_transaction.signatures[0] = Signature::default();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction signature verification failed"},"id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will now succeed because skipPreflight=true even though it's a bad
+        // transaction
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","result":"1111111111111111111111111111111111111111111111111111111111111111","id":1}"#.to_string(),
+            )
+        );
     }
 
     #[test]
@@ -2964,7 +3113,9 @@ pub mod tests {
         )
     }
 
-    pub fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+    pub(crate) fn create_validator_exit(
+        exit: &Arc<AtomicBool>,
+    ) -> Arc<RwLock<Option<ValidatorExit>>> {
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
@@ -2987,6 +3138,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -3010,6 +3162,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -3093,6 +3246,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            RpcHealth::stub(),
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
