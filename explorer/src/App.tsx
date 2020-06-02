@@ -34,13 +34,16 @@ function App() {
           <Route exact path="/supply">
             <TabbedPage tab="Supply">
               <SupplyCard />
-            </TabbedPage>
-          </Route>
-          <Route exact path="/accounts/top">
-            <TabbedPage tab="Accounts">
               <TopAccountsCard />
             </TabbedPage>
           </Route>
+          <Route
+            exact
+            path="/accounts/top"
+            render={({ location }) => (
+              <Redirect to={{ ...location, pathname: "/supply" }} />
+            )}
+          ></Route>
           <Route
             exact
             path={TX_ALIASES.flatMap(tx => [tx, tx + "s"]).map(

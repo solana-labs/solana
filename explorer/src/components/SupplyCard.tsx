@@ -39,6 +39,11 @@ export default function SupplyCard() {
           <td className="w-100">Circulating Supply (SOL)</td>
           <td>{lamportsToSolString(supply.circulating)}</td>
         </tr>
+
+        <tr>
+          <td className="w-100">Non-Circulating Supply (SOL)</td>
+          <td>{lamportsToSolString(supply.nonCirculating)}</td>
+        </tr>
       </TableCardBody>
     </div>
   );
@@ -49,7 +54,7 @@ const renderHeader = () => {
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
-          <h4 className="card-header-title">Supply Stats</h4>
+          <h4 className="card-header-title">Overview</h4>
         </div>
       </div>
     </div>

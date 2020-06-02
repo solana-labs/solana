@@ -9,13 +9,13 @@ export enum Status {
   Connecting
 }
 
-type RichList = {
-  accounts: AccountBalancePair[];
-  totalSupply: number;
-  circulatingSupply: number;
+type RichLists = {
+  total: AccountBalancePair[];
+  circulating: AccountBalancePair[];
+  nonCirculating: AccountBalancePair[];
 };
 
-type State = RichList | Status | string;
+type State = RichLists | Status | string;
 
 type Dispatch = React.Dispatch<React.SetStateAction<State>>;
 const StateContext = React.createContext<State | undefined>(undefined);
@@ -28,9 +28,16 @@ export function RichListProvider({ children }: Props) {
 
   React.useEffect(() => {
     if (state !== Status.Idle) {
-      if (clusterStatus === ClusterStatus.Connecting)
-        setState(Status.Disconnected);
-      if (clusterStatus === ClusterStatus.Connected) fetch(setState, url);
+      switch (clusterStatus) {
+        case ClusterStatus.Connecting: {
+          setState(Status.Disconnected);
+          break;
+        }
+        case ClusterStatus.Connected: {
+          fetch(setState, url);
+          break;
+        }
+      }
     }
   }, [clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -48,17 +55,19 @@ async function fetch(dispatch: Dispatch, url: string) {
 
   try {
     const connection = new Connection(url, "max");
-    const supply = (await connection.getSupply()).value;
-    const accounts = (await connection.getLargestAccounts()).value;
+
+    const [total, circulating, nonCirculating] = (
+      await Promise.all([
+        connection.getLargestAccounts(),
+        connection.getLargestAccounts({ filter: "circulating" }),
+        connection.getLargestAccounts({ filter: "nonCirculating" })
+      ])
+    ).map(response => response.value);
 
     // Update state if still connecting
     dispatch(state => {
       if (state !== Status.Connecting) return state;
-      return {
-        accounts,
-        totalSupply: supply.total,
-        circulatingSupply: supply.circulating
-      };
+      return { total, circulating, nonCirculating };
     });
   } catch (err) {
     console.error("Failed to fetch", err);
