@@ -93,46 +93,46 @@ impl Blockstore {
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
 
         let mut delete_range_timer = Measure::start("delete_range");
-        let columns_empty = self
+        let mut columns_purged = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
-            .unwrap_or(false)
+            .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::Rewards>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false);
+                .is_ok();
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
         match purge_type {
@@ -142,6 +142,7 @@ impl Blockstore {
             PurgeType::PrimaryIndex => {
                 self.purge_special_columns_with_primary_index(
                     &mut write_batch,
+                    &mut columns_purged,
                     &mut w_active_transaction_status_index,
                     to_slot,
                 )?;
@@ -164,7 +165,7 @@ impl Blockstore {
             ("delete_range_us", delete_range_timer.as_us() as i64, i64),
             ("write_batch_us", write_timer.as_us() as i64, i64)
         );
-        Ok(columns_empty)
+        Ok(columns_purged)
     }
 
     pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
@@ -281,6 +282,7 @@ impl Blockstore {
     fn purge_special_columns_with_primary_index(
         &self,
         write_batch: &mut WriteBatch,
+        columns_purged: &mut bool,
         w_active_transaction_status_index: &mut u64,
         to_slot: Slot,
     ) -> Result<()> {
@@ -289,12 +291,14 @@ impl Blockstore {
             w_active_transaction_status_index,
             to_slot,
         )? {
-            self.db
+            *columns_purged &= self
+                .db
                 .delete_range_cf::<cf::TransactionStatus>(write_batch, index, index + 1)
-                .unwrap_or(false);
-            self.db
-                .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
-                .unwrap_or(false);
+                .is_ok()
+                & self
+                    .db
+                    .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
+                    .is_ok();
         }
         Ok(())
     }
@@ -669,11 +673,11 @@ pub mod tests {
         blockstore
             .db
             .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, 0, 3)
-            .unwrap_or(false);
+            .unwrap();
         blockstore
             .db
             .delete_range_cf::<cf::TransactionStatusIndex>(&mut write_batch, 0, 3)
-            .unwrap_or(false);
+            .unwrap();
         blockstore.db.write(write_batch).unwrap();
         blockstore.initialize_transaction_status_index().unwrap();
         *blockstore.active_transaction_status_index.write().unwrap() = 0;
