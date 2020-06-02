@@ -239,18 +239,7 @@ export async function fetchTransactionStatus(
 
     if (value !== null) {
       let blockTime = await connection.getBlockTime(value.slot);
-
-      let timestamp: Timestamp;
-      if (blockTime !== null) {
-        timestamp = blockTime;
-      } else {
-        const epochInfo = await connection.getEpochInfo();
-        if (value.slot < epochInfo.absoluteSlot - epochInfo.slotsInEpoch) {
-          timestamp = "unavailable";
-        } else {
-          throw new Error("Unable to fetch timestamp");
-        }
-      }
+      let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
 
       let confirmations: Confirmations;
       if (typeof value.confirmations === "number") {
