@@ -24,7 +24,6 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::Signature,
-    signers::Signers,
     transaction::{self, Transaction},
 };
 use solana_transaction_status::{
@@ -413,17 +412,6 @@ impl RpcClient {
                 }
             }
         }
-    }
-
-    pub fn resign_transaction<T: Signers>(
-        &self,
-        tx: &mut Transaction,
-        signer_keys: &T,
-    ) -> ClientResult<()> {
-        let (blockhash, _fee_calculator) =
-            self.get_new_blockhash(&tx.message().recent_blockhash)?;
-        tx.try_sign(signer_keys, blockhash)?;
-        Ok(())
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
@@ -1159,28 +1147,6 @@ mod tests {
         if let ClientErrorKind::Io(err) = result.unwrap_err().kind() {
             assert_eq!(err.kind(), io::ErrorKind::Other);
         }
-    }
-
-    #[test]
-    fn test_resign_transaction() {
-        let rpc_client = RpcClient::new_mock("succeeds".to_string());
-
-        let key = Keypair::new();
-        let to = Pubkey::new_rand();
-        let blockhash: Hash = "HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL"
-            .parse()
-            .unwrap();
-        let prev_tx = system_transaction::transfer(&key, &to, 50, blockhash);
-        let mut tx = system_transaction::transfer(&key, &to, 50, blockhash);
-
-        rpc_client.resign_transaction(&mut tx, &[&key]).unwrap();
-
-        assert_ne!(prev_tx, tx);
-        assert_ne!(prev_tx.signatures, tx.signatures);
-        assert_ne!(
-            prev_tx.message().recent_blockhash,
-            tx.message().recent_blockhash
-        );
     }
 
     #[test]
