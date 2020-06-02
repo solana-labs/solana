@@ -3010,7 +3010,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: TransactionError::BlockhashNotFound"},"id":1}"#.to_string(),
             )
         );
 
