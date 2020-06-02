@@ -1,20 +1,30 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { Location } from "history";
 import { AccountBalancePair } from "@solana/web3.js";
 import Copyable from "./Copyable";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
 import LoadingCard from "./common/LoadingCard";
 import ErrorCard from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
+import { useQuery } from "utils/url";
+import { useSupply } from "providers/supply";
+
+type Filter = "circulating" | "nonCirculating" | null;
 
 export default function TopAccountsCard() {
+  const supply = useSupply();
   const richList = useRichList();
   const fetchRichList = useFetchRichList();
+  const [showDropdown, setDropdown] = React.useState(false);
+  const filter = useQueryFilter();
 
   // Fetch on load
   React.useEffect(() => {
-    if (richList === Status.Idle) fetchRichList();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (richList === Status.Idle && typeof supply === "object") fetchRichList();
+  }, [supply]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (typeof supply !== "object") return null;
 
   if (richList === Status.Disconnected) {
     return <ErrorCard text="Not connected to the cluster" />;
@@ -27,41 +37,146 @@ export default function TopAccountsCard() {
     return <ErrorCard text={richList} retry={fetchRichList} />;
   }
 
-  const { accounts, totalSupply: supply } = richList;
+  let supplyCount: number;
+  let accounts, header;
+  switch (filter) {
+    case "circulating": {
+      accounts = richList.circulating;
+      supplyCount = supply.circulating;
+      header = "Circulating";
+      break;
+    }
+    case "nonCirculating": {
+      accounts = richList.nonCirculating;
+      supplyCount = supply.nonCirculating;
+      header = "Non-Circulating";
+      break;
+    }
+    default: {
+      accounts = richList.total;
+      supplyCount = supply.total;
+      header = "Total";
+      break;
+    }
+  }
 
   return (
-    <div className="card">
-      {renderHeader()}
+    <>
+      {showDropdown && (
+        <div className="dropdown-exit" onClick={() => setDropdown(false)} />
+      )}
 
-      <div className="table-responsive mb-0">
-        <table className="table table-sm table-nowrap card-table">
-          <thead>
-            <tr>
-              <th className="text-muted">Rank</th>
-              <th className="text-muted">Address</th>
-              <th className="text-muted">Balance (SOL)</th>
-              <th className="text-muted">% of Total Supply</th>
-              <th className="text-muted">Details</th>
-            </tr>
-          </thead>
-          <tbody className="list">
-            {accounts.map((account, index) =>
-              renderAccountRow(account, index, supply)
-            )}
-          </tbody>
-        </table>
+      <div className="card">
+        <div className="card-header">
+          <div className="row align-items-center">
+            <div className="col">
+              <h4 className="card-header-title">Largest Accounts</h4>
+            </div>
+
+            <div className="col-auto">
+              <FilterDropdown
+                filter={filter}
+                toggle={() => setDropdown(show => !show)}
+                show={showDropdown}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
+                <th className="text-muted">Rank</th>
+                <th className="text-muted">Address</th>
+                <th className="text-muted">Balance (SOL)</th>
+                <th className="text-muted">% of {header} Supply</th>
+                <th className="text-muted">Details</th>
+              </tr>
+            </thead>
+            <tbody className="list">
+              {accounts.map((account, index) =>
+                renderAccountRow(account, index, supplyCount)
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-const renderHeader = () => {
+const useQueryFilter = (): Filter => {
+  const query = useQuery();
+  const filter = query.get("filter");
+  if (filter === "circulating" || filter === "nonCirculating") {
+    return filter;
+  } else {
+    return null;
+  }
+};
+
+const filterTitle = (filter: Filter): string => {
+  switch (filter) {
+    case "circulating": {
+      return "Circulating";
+    }
+    case "nonCirculating": {
+      return "Non-Circulating";
+    }
+    default: {
+      return "All";
+    }
+  }
+};
+
+type DropdownProps = {
+  filter: Filter;
+  toggle: () => void;
+  show: boolean;
+};
+
+const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
+  const buildLocation = (location: Location, filter: Filter) => {
+    const params = new URLSearchParams(location.search);
+    if (filter === null) {
+      params.delete("filter");
+    } else {
+      params.set("filter", filter);
+    }
+    return {
+      ...location,
+      search: params.toString()
+    };
+  };
+
+  const FILTERS: Filter[] = [null, "circulating", "nonCirculating"];
   return (
-    <div className="card-header">
-      <div className="row align-items-center">
-        <div className="col">
-          <h4 className="card-header-title">Largest Accounts</h4>
-        </div>
+    <div className="dropdown">
+      <button
+        className="btn btn-white btn-sm dropdown-toggle"
+        type="button"
+        onClick={toggle}
+      >
+        {filterTitle(filter)}
+      </button>
+      <div
+        className={`dropdown-menu-right dropdown-menu${show ? " show" : ""}`}
+      >
+        {FILTERS.map(filterOption => {
+          return (
+            <Link
+              key={filterOption || "null"}
+              to={location => buildLocation(location, filterOption)}
+              className={`dropdown-item${
+                filterOption === filter ? " active" : ""
+              }`}
+              onClick={toggle}
+            >
+              {filterTitle(filterOption)}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
