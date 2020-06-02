@@ -1,15 +1,9 @@
 use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-<<<<<<< HEAD
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
-    rpc_config::RpcLargestAccountsConfig,
-=======
-    http_sender::HttpSender,
-    mock_sender::{MockSender, Mocks},
     rpc_config::{RpcLargestAccountsConfig, RpcSendTransactionConfig},
->>>>>>> f1733ab12... Add send_transaction_with_config
     rpc_request::{RpcError, RpcRequest},
     rpc_response::*,
 };
@@ -422,77 +416,6 @@ impl RpcClient {
         }
     }
 
-<<<<<<< HEAD
-    pub fn send_and_confirm_transactions<T: Signers>(
-        &self,
-        mut transactions: Vec<Transaction>,
-        signer_keys: &T,
-    ) -> Result<(), Box<dyn error::Error>> {
-        let mut send_retries = 5;
-        loop {
-            let mut status_retries = 15;
-
-            // Send all transactions
-            let mut transactions_signatures = vec![];
-            for transaction in transactions {
-                if cfg!(not(test)) {
-                    // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-                    // when all the write transactions modify the same program account (eg, deploying a
-                    // new program)
-                    sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
-                }
-
-                let signature = self.send_transaction(&transaction).ok();
-                transactions_signatures.push((transaction, signature))
-            }
-
-            // Collect statuses for all the transactions, drop those that are confirmed
-            while status_retries > 0 {
-                status_retries -= 1;
-
-                if cfg!(not(test)) {
-                    // Retry twice a second
-                    sleep(Duration::from_millis(500));
-                }
-
-                transactions_signatures = transactions_signatures
-                    .into_iter()
-                    .filter(|(_transaction, signature)| {
-                        if let Some(signature) = signature {
-                            if let Ok(status) = self.get_signature_status(&signature) {
-                                if status.is_none() {
-                                    return false;
-                                }
-                                return status.unwrap().is_err();
-                            }
-                        }
-                        true
-                    })
-                    .collect();
-
-                if transactions_signatures.is_empty() {
-                    return Ok(());
-                }
-            }
-
-            if send_retries == 0 {
-                return Err(RpcError::ForUser("Transactions failed".to_string()).into());
-            }
-            send_retries -= 1;
-
-            // Re-sign any failed transactions with a new blockhash and retry
-            let (blockhash, _fee_calculator) =
-                self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
-            transactions = vec![];
-            for (mut transaction, _) in transactions_signatures.into_iter() {
-                transaction.try_sign(signer_keys, blockhash)?;
-                transactions.push(transaction);
-            }
-        }
-    }
-
-=======
->>>>>>> 202512d46... Adapt `solana deploy`
     pub fn resign_transaction<T: Signers>(
         &self,
         tx: &mut Transaction,
@@ -504,11 +427,7 @@ impl RpcClient {
         Ok(())
     }
 
-    pub fn retry_get_balance(
-        &self,
-        pubkey: &Pubkey,
-        _retries: usize,
-    ) -> Result<Option<u64>, Box<dyn error::Error>> {
+    pub fn retry_get_balance(&self, pubkey: &Pubkey, _retries: usize) -> ClientResult<Option<u64>> {
         let request = RpcRequest::GetBalance;
         let balance_json = self
             .client

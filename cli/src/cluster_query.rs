@@ -1,12 +1,7 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
-<<<<<<< HEAD
-    display::println_name_value,
-=======
     display::{new_spinner_progress_bar, println_name_value},
-    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
->>>>>>> 202512d46... Adapt `solana deploy`
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};

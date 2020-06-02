@@ -1464,13 +1464,9 @@ fn process_deploy(
     })?;
 
     trace!("Writing program data");
-<<<<<<< HEAD
-    rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
-=======
     send_and_confirm_transactions_with_spinner(&rpc_client, write_transactions, &signers).map_err(
         |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
     )?;
->>>>>>> 202512d46... Adapt `solana deploy`
 
     trace!("Finalizing program account");
     rpc_client

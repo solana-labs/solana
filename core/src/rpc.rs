@@ -6,11 +6,8 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     rpc_error::RpcCustomError,
-<<<<<<< HEAD
-    storage_stage::StorageState,
-=======
     rpc_health::*,
->>>>>>> 9158479dc... Add node health check to transaction preflight
+    storage_stage::StorageState,
     validator::ValidatorExit,
 };
 use bincode::serialize;
@@ -2987,6 +2984,7 @@ pub mod tests {
                     bank_forks,
                     block_commitment_cache,
                     blockstore,
+                    StorageState::default(),
                     validator_exit,
                     health.clone(),
                 );

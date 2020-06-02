@@ -1,13 +1,8 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-<<<<<<< HEAD
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*,
-    storage_stage::StorageState, validator::ValidatorExit,
-=======
     cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
-    validator::ValidatorExit,
->>>>>>> 9dbf3d543... Factor out RpcHealth module
+    storage_stage::StorageState, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -477,22 +472,8 @@ mod tests {
 
     #[test]
     fn test_health_check_with_no_trusted_validators() {
-<<<<<<< HEAD
-<<<<<<< HEAD
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
-
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
-            None,
-            cluster_info.clone(),
-=======
-        let health = Arc::new(RpcHealth::new(
-            Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
->>>>>>> 9dbf3d543... Factor out RpcHealth module
-=======
-        let rm = RpcRequestMiddleware::new(
-            PathBuf::from("/"),
->>>>>>> 9158479dc... Add node health check to transaction preflight
             None,
             create_bank_forks(),
             RpcHealth::stub(),
