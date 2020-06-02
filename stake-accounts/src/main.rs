@@ -205,7 +205,11 @@ fn send_message<S: Signers>(
     no_wait: bool,
 ) -> Result<Signature, ClientError> {
     let mut transaction = Transaction::new_unsigned(message);
-    client.resign_transaction(&mut transaction, signers)?;
+
+    let (blockhash, _fee_calculator) =
+        client.get_new_blockhash(&transaction.message().recent_blockhash)?;
+    transaction.try_sign(signers, blockhash)?;
+
     if no_wait {
         client.send_transaction(&transaction)
     } else {
