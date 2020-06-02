@@ -278,7 +278,7 @@ impl fmt::Display for CliValidators {
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>7}  {}",
+                "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>10}  {}",
                 if delinquent {
                     WARNING.to_string()
                 } else {
@@ -294,7 +294,7 @@ impl fmt::Display for CliValidators {
                     format!(
                         "{} ({:.2}%)",
                         build_balance_message(validator.activated_stake, use_lamports_unit, true),
-                        100. * validator.activated_stake as f64 / total_active_stake as f64
+                        100. * validator.activated_stake as f64 / total_active_stake as f64,
                     )
                 } else {
                     "-".into()
@@ -335,7 +335,7 @@ impl fmt::Display for CliValidators {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:<44}  {}  {}  {}  {:>7}  {}",
+                "  {:<44}  {:<44}  {}  {}  {}  {:>10}  {}",
                 "Identity Pubkey",
                 "Vote Account Pubkey",
                 "Commission",
