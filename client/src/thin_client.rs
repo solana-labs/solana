@@ -254,37 +254,6 @@ impl ThinClient {
         .into())
     }
 
-    pub fn poll_balance_with_timeout_and_commitment(
-        &self,
-        pubkey: &Pubkey,
-        polling_frequency: &Duration,
-        timeout: &Duration,
-        commitment_config: CommitmentConfig,
-    ) -> TransportResult<u64> {
-        self.rpc_client()
-            .poll_balance_with_timeout_and_commitment(
-                pubkey,
-                polling_frequency,
-                timeout,
-                commitment_config,
-            )
-            .map_err(|e| e.into())
-    }
-
-    pub fn poll_balance_with_timeout(
-        &self,
-        pubkey: &Pubkey,
-        polling_frequency: &Duration,
-        timeout: &Duration,
-    ) -> TransportResult<u64> {
-        self.poll_balance_with_timeout_and_commitment(
-            pubkey,
-            polling_frequency,
-            timeout,
-            CommitmentConfig::default(),
-        )
-    }
-
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
         self.poll_get_balance_with_commitment(pubkey, CommitmentConfig::default())
     }
@@ -328,12 +297,6 @@ impl ThinClient {
         self.rpc_client()
             .poll_for_signature_with_commitment(signature, commitment_config)
             .map_err(|e| e.into())
-    }
-
-    /// Check a signature in the bank. This method blocks
-    /// until the server sends a response.
-    pub fn check_signature(&self, signature: &Signature) -> bool {
-        self.rpc_client().check_signature(signature)
     }
 
     pub fn validator_exit(&self) -> TransportResult<bool> {

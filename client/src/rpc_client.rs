@@ -655,7 +655,7 @@ impl RpcClient {
         Ok(hash)
     }
 
-    pub fn poll_balance_with_timeout_and_commitment(
+    fn poll_balance_with_timeout_and_commitment(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
@@ -748,36 +748,6 @@ impl RpcClient {
             sleep(Duration::from_millis(250));
         }
         Ok(())
-    }
-
-    /// Check a signature in the bank.
-    pub fn check_signature(&self, signature: &Signature) -> bool {
-        trace!("check_signature: {:?}", signature);
-
-        for _ in 0..30 {
-            let response =
-                self.confirm_transaction_with_commitment(signature, CommitmentConfig::recent());
-            match response {
-                Ok(Response {
-                    value: signature_status,
-                    ..
-                }) => {
-                    if signature_status {
-                        trace!("Response found signature");
-                    } else {
-                        trace!("Response signature not found");
-                    }
-
-                    return signature_status;
-                }
-                Err(err) => {
-                    debug!("check_signature request failed: {:?}", err);
-                }
-            };
-            sleep(Duration::from_millis(250));
-        }
-
-        panic!("Couldn't check signature of {}", signature);
     }
 
     /// Poll the server to confirm a transaction.
