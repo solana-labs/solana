@@ -177,7 +177,7 @@ impl Blockstore {
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
-        Self::do_open(ledger_path, AccessType::OnlyPrimary)
+        Self::do_open(ledger_path, AccessType::PrimaryOnly)
     }
 
     pub fn open_with_access_type(
@@ -278,7 +278,7 @@ impl Blockstore {
     pub fn open_with_signal(
         ledger_path: &Path,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blockstore = Self::open_with_access_type(ledger_path, AccessType::OnlyPrimary)?;
+        let mut blockstore = Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -2942,7 +2942,7 @@ macro_rules! create_new_tmp_ledger {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::AccessType::OnlyPrimary,
+            $crate::blockstore_db::AccessType::PrimaryOnly,
         )
     };
 }

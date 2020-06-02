@@ -127,8 +127,8 @@ pub mod columns {
 }
 
 pub enum AccessType {
-    OnlyPrimary,
-    AllowSecondary,
+    PrimaryOnly,
+    TryPrimaryThenSecondary,
 }
 
 #[derive(Debug, PartialEq)]
@@ -196,11 +196,11 @@ impl Rocks {
 
         // Open the database
         let db = match access_type {
-            AccessType::OnlyPrimary => Rocks(
+            AccessType::PrimaryOnly => Rocks(
                 DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
                 ActualAccessType::Primary,
             ),
-            AccessType::AllowSecondary => {
+            AccessType::TryPrimaryThenSecondary => {
                 let names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 
                 match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
