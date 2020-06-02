@@ -55,7 +55,7 @@ Add programs to the chain.
 * Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/LATEST_SOLANA_RELEASE_VERSION/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
 
 The BPF Loader marks itself as its "owner" of the executable account it
-creates to store your program. When a user invokes an instructions via the
-program ID, the Solana runtime will load both your executable account and
-its owner, the BPF Loader. The runtime then passes your program to the BPF
-Loader to process the instruction.
+creates to store your program. When a user invokes an instruction via a
+program ID, the Solana runtime will load both your executable account and its
+owner, the BPF Loader. The runtime then passes your program to the BPF Loader
+to process the instruction.
