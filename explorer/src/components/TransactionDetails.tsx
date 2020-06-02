@@ -165,7 +165,7 @@ function StatusCard({ signature }: Props) {
               <InfoTooltip
                 bottom
                 right
-                text="Timestamps older than 5 epochs are not available at this time"
+                text="Timestamps are available for confirmed blocks within the past 5 epochs"
               >
                 Unavailable
               </InfoTooltip>
@@ -185,7 +185,11 @@ function StatusCard({ signature }: Props) {
 
         {blockhash && (
           <tr>
-            <td>Blockhash</td>
+            <td>
+              <InfoTooltip text="Transactions use a previously confirmed blockhash as a nonce prevent double spends">
+                Nonce
+              </InfoTooltip>
+            </td>
             <td className="text-right">
               <code>{blockhash}</code>
             </td>
