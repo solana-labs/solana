@@ -544,12 +544,8 @@ fn load_bank_forks(
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path: ledger_path.clone(),
-<<<<<<< HEAD
-            snapshot_path: ledger_path.clone().join("snapshot"),
-=======
             snapshot_path,
             compression: CompressionType::Bzip2,
->>>>>>> b515cc3ae... Don't share same snapshot dir for secondary access (#10384)
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
