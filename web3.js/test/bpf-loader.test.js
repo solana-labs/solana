@@ -44,7 +44,10 @@ test('load BPF C program', async () => {
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId: program.publicKey,
   });
-  await sendAndConfirmTransaction(connection, transaction, [from], 1);
+  await sendAndConfirmTransaction(connection, transaction, [from], {
+    confirmations: 1,
+    skipPreflight: true,
+  });
 });
 
 test('load BPF Rust program', async () => {
@@ -73,5 +76,8 @@ test('load BPF Rust program', async () => {
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId: program.publicKey,
   });
-  await sendAndConfirmTransaction(connection, transaction, [from], 1);
+  await sendAndConfirmTransaction(connection, transaction, [from], {
+    confirmations: 1,
+    skipPreflight: true,
+  });
 });

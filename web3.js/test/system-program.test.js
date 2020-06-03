@@ -297,7 +297,7 @@ test('live Nonce actions', async () => {
     connection,
     createNonceAccount,
     [from, nonceAccount],
-    0,
+    {confirmations: 0, skipPreflight: true},
   );
   const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
   expect(nonceBalance).toEqual(minimumAmount);
@@ -325,7 +325,10 @@ test('live Nonce actions', async () => {
       authorizedPubkey: from.publicKey,
     }),
   );
-  await sendAndConfirmTransaction(connection, advanceNonce, [from], 0);
+  await sendAndConfirmTransaction(connection, advanceNonce, [from], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
   if (nonceQuery3 === null) {
     expect(nonceQuery3).not.toBeNull();
@@ -344,7 +347,10 @@ test('live Nonce actions', async () => {
       newAuthorizedPubkey: newAuthority.publicKey,
     }),
   );
-  await sendAndConfirmTransaction(connection, authorizeNonce, [from], 0);
+  await sendAndConfirmTransaction(connection, authorizeNonce, [from], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
 
   let transfer = SystemProgram.transfer({
     fromPubkey: from.publicKey,
@@ -359,12 +365,10 @@ test('live Nonce actions', async () => {
     }),
   };
 
-  await sendAndConfirmTransaction(
-    connection,
-    transfer,
-    [from, newAuthority],
-    0,
-  );
+  await sendAndConfirmTransaction(connection, transfer, [from, newAuthority], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
   const toBalance = await connection.getBalance(to.publicKey);
   expect(toBalance).toEqual(minimumAmount);
 
@@ -380,7 +384,10 @@ test('live Nonce actions', async () => {
       toPubkey: withdrawAccount.publicKey,
     }),
   );
-  await sendAndConfirmTransaction(connection, withdrawNonce, [newAuthority], 0);
+  await sendAndConfirmTransaction(connection, withdrawNonce, [newAuthority], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
   expect(await connection.getBalance(nonceAccount.publicKey)).toEqual(0);
   const withdrawBalance = await connection.getBalance(
     withdrawAccount.publicKey,
