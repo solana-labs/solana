@@ -3,6 +3,7 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
+use solana_core::broadcast_stage::broadcast_metrics::TransmitShredsStats;
 use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
@@ -47,7 +48,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &peers_and_stakes,
             &peers,
             &last_datapoint,
-            &mut 0,
+            &mut TransmitShredsStats::default(),
         )
         .unwrap();
     });

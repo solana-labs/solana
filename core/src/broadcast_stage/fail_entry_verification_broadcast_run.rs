@@ -137,14 +137,13 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         // Broadcast data
         let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
 
-        let mut send_mmsg_total = 0;
         broadcast_shreds(
             sock,
             &shreds,
             &peers_and_stakes,
             &peers,
             &Arc::new(AtomicU64::new(0)),
-            &mut send_mmsg_total,
+            &mut TransmitShredsStats::default(),
         )?;
 
         Ok(())
