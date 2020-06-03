@@ -10,7 +10,7 @@ import { lamportsToSolString } from "utils";
 import { useQuery } from "utils/url";
 import { useSupply } from "providers/supply";
 
-type Filter = "circulating" | "nonCirculating" | null;
+type Filter = "circulating" | "nonCirculating" | "all" | null;
 
 export default function TopAccountsCard() {
   const supply = useSupply();
@@ -40,22 +40,23 @@ export default function TopAccountsCard() {
   let supplyCount: number;
   let accounts, header;
   switch (filter) {
-    case "circulating": {
-      accounts = richList.circulating;
-      supplyCount = supply.circulating;
-      header = "Circulating";
-      break;
-    }
     case "nonCirculating": {
       accounts = richList.nonCirculating;
       supplyCount = supply.nonCirculating;
       header = "Non-Circulating";
       break;
     }
-    default: {
+    case "all": {
       accounts = richList.total;
       supplyCount = supply.total;
       header = "Total";
+      break;
+    }
+    case "circulating":
+    default: {
+      accounts = richList.circulating;
+      supplyCount = supply.circulating;
+      header = "Circulating";
       break;
     }
   }
@@ -109,7 +110,11 @@ export default function TopAccountsCard() {
 const useQueryFilter = (): Filter => {
   const query = useQuery();
   const filter = query.get("filter");
-  if (filter === "circulating" || filter === "nonCirculating") {
+  if (
+    filter === "circulating" ||
+    filter === "nonCirculating" ||
+    filter === "all"
+  ) {
     return filter;
   } else {
     return null;
@@ -118,14 +123,15 @@ const useQueryFilter = (): Filter => {
 
 const filterTitle = (filter: Filter): string => {
   switch (filter) {
-    case "circulating": {
-      return "Circulating";
-    }
     case "nonCirculating": {
       return "Non-Circulating";
     }
-    default: {
+    case "all": {
       return "All";
+    }
+    case "circulating":
+    default: {
+      return "Circulating";
     }
   }
 };
@@ -150,7 +156,7 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
     };
   };
 
-  const FILTERS: Filter[] = [null, "circulating", "nonCirculating"];
+  const FILTERS: Filter[] = [null, "nonCirculating", "all"];
   return (
     <div className="dropdown">
       <button
