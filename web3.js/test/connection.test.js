@@ -324,7 +324,7 @@ test('get inflation', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getInflation',
+      method: 'getInflationGovernor',
       params: [],
     },
     {
@@ -333,14 +333,13 @@ test('get inflation', async () => {
         foundation: 0.05,
         foundationTerm: 7.0,
         initial: 0.15,
-        storage: 0.1,
         taper: 0.15,
         terminal: 0.015,
       },
     },
   ]);
 
-  const inflation = await connection.getInflation();
+  const inflation = await connection.getInflationGovernor();
 
   for (const key of [
     'initial',
@@ -348,7 +347,6 @@ test('get inflation', async () => {
     'taper',
     'foundation',
     'foundationTerm',
-    'storage',
   ]) {
     expect(inflation).toHaveProperty(key);
     expect(inflation[key]).toBeGreaterThan(0);
@@ -1529,9 +1527,14 @@ test('transaction failure', async () => {
     newAccountPubkey: newAccount.publicKey,
     lamports: 1000,
     space: 0,
-    programId: SystemProgram.programId
+    programId: SystemProgram.programId,
   });
-  await sendAndConfirmTransaction(connection, transaction, [account, newAccount], {confirmations: 1, skipPreflight: true});
+  await sendAndConfirmTransaction(
+    connection,
+    transaction,
+    [account, newAccount],
+    {confirmations: 1, skipPreflight: true},
+  );
 
   mockRpc.push([
     url,
@@ -1551,9 +1554,13 @@ test('transaction failure', async () => {
     newAccountPubkey: newAccount.publicKey,
     lamports: 10,
     space: 0,
-    programId: SystemProgram.programId
+    programId: SystemProgram.programId,
   });
-  const signature = await connection.sendTransaction(transaction, [account, newAccount], {skipPreflight: true});
+  const signature = await connection.sendTransaction(
+    transaction,
+    [account, newAccount],
+    {skipPreflight: true},
+  );
 
   const expectedErr = {InstructionError: [0, {Custom: 0}]};
   mockRpc.push([
@@ -1738,9 +1745,11 @@ test('transaction', async () => {
     toPubkey: accountTo.publicKey,
     lamports: 10,
   });
-  const signature = await connection.sendTransaction(transaction, [
-    accountFrom,
-  ], {skipPreflight: true});
+  const signature = await connection.sendTransaction(
+    transaction,
+    [accountFrom],
+    {skipPreflight: true},
+  );
 
   mockRpc.push([
     url,
@@ -1942,10 +1951,11 @@ test('multi-instruction transaction', async () => {
       lamports: 100,
     }),
   );
-  const signature = await connection.sendTransaction(transaction, [
-    accountFrom,
-    accountTo,
-  ], {skipPreflight: true});
+  const signature = await connection.sendTransaction(
+    transaction,
+    [accountFrom, accountTo],
+    {skipPreflight: true},
+  );
 
   await connection.confirmTransaction(signature, 1);
 

@@ -170,11 +170,10 @@ declare module '@solana/web3.js' {
     err: TransactionError | null;
   };
 
-  export type Inflation = {
+  export type InflationGovernor = {
     foundation: number;
     foundationTerm: number;
     initial: number;
-    storage: number;
     taper: number;
     terminal: number;
   };
@@ -266,7 +265,7 @@ declare module '@solana/web3.js' {
     getTransactionCount(commitment?: Commitment): Promise<number>;
     getTotalSupply(commitment?: Commitment): Promise<number>;
     getVersion(): Promise<Version>;
-    getInflation(commitment?: Commitment): Promise<Inflation>;
+    getInflationGovernor(commitment?: Commitment): Promise<InflationGovernor>;
     getEpochSchedule(): Promise<EpochSchedule>;
     getEpochInfo(commitment?: Commitment): Promise<EpochInfo>;
     getRecentBlockhashAndContext(

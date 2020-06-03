@@ -105,10 +105,11 @@ test('transaction-payer', async () => {
     lamports: 10,
   });
 
-  const signature = await connection.sendTransaction(transaction, [
-    accountPayer,
-    accountFrom,
-  ], {skipPreflight: true});
+  const signature = await connection.sendTransaction(
+    transaction,
+    [accountPayer, accountFrom],
+    {skipPreflight: true},
+  );
 
   mockRpc.push([
     url,

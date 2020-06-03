@@ -212,28 +212,25 @@ type VoteAccountStatus = {
  * Network Inflation
  * (see https://docs.solana.com/implemented-proposals/ed_overview)
  *
- * @typedef {Object} Inflation
+ * @typedef {Object} InflationGovernor
  * @property {number} foundation
  * @property {number} foundation_term
  * @property {number} initial
- * @property {number} storage
  * @property {number} taper
  * @property {number} terminal
  */
-type Inflation = {
+type InflationGovernor = {
   foundation: number,
   foundationTerm: number,
   initial: number,
-  storage: number,
   taper: number,
   terminal: number,
 };
 
-const GetInflationResult = struct({
+const GetInflationGovernorResult = struct({
   foundation: 'number',
   foundationTerm: 'number',
   initial: 'number',
-  storage: 'number',
   taper: 'number',
   terminal: 'number',
 });
@@ -395,13 +392,13 @@ function createRpcRequest(url): RpcRequest {
 }
 
 /**
- * Expected JSON RPC response for the "getInflation" message
+ * Expected JSON RPC response for the "getInflationGovernor" message
  */
-const GetInflationRpcResult = struct({
+const GetInflationGovernorRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
-  result: GetInflationResult,
+  result: GetInflationGovernorResult,
 });
 
 /**
@@ -1425,17 +1422,19 @@ export class Connection {
   }
 
   /**
-   * Fetch the cluster Inflation parameters
+   * Fetch the cluster InflationGovernor parameters
    */
-  async getInflation(commitment: ?Commitment): Promise<Inflation> {
+  async getInflationGovernor(
+    commitment: ?Commitment,
+  ): Promise<InflationGovernor> {
     const args = this._argsWithCommitment([], commitment);
-    const unsafeRes = await this._rpcRequest('getInflation', args);
-    const res = GetInflationRpcResult(unsafeRes);
+    const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
+    const res = GetInflationGovernorRpcResult(unsafeRes);
     if (res.error) {
       throw new Error('failed to get inflation: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return GetInflationResult(res.result);
+    return GetInflationGovernorResult(res.result);
   }
 
   /**
