@@ -7,8 +7,8 @@ use solana_clap_utils::{
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{
-    blockstore::create_new_ledger, hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-    poh::compute_hashes_per_tick,
+    blockstore::create_new_ledger, blockstore_db::AccessType,
+    hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, poh::compute_hashes_per_tick,
 };
 use solana_sdk::{
     account::Account,
@@ -540,6 +540,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &ledger_path,
         &genesis_config,
         max_genesis_archive_unpacked_size,
+        AccessType::PrimaryOnly,
     )?;
 
     println!("{}", genesis_config);

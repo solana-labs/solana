@@ -9,7 +9,7 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::Blockstore,
-    blockstore_db::{self, Column, Database},
+    blockstore_db::{self, AccessType, Column, Database},
     blockstore_processor::ProcessOptions,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
@@ -30,6 +30,8 @@ use std::{
     process::{exit, Command, Stdio},
     str::FromStr,
 };
+
+use log::*;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -519,8 +521,8 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
     Ok(())
 }
 
-fn open_blockstore(ledger_path: &Path) -> Blockstore {
-    match Blockstore::open(ledger_path) {
+fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
+    match Blockstore::open_with_access_type(ledger_path, access_type) {
         Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
@@ -529,8 +531,8 @@ fn open_blockstore(ledger_path: &Path) -> Blockstore {
     }
 }
 
-fn open_database(ledger_path: &Path) -> Database {
-    match Database::open(&ledger_path.join("rocksdb")) {
+fn open_database(ledger_path: &Path, access_type: AccessType) -> Database {
+    match Database::open(&ledger_path.join("rocksdb"), access_type) {
         Ok(database) => database,
         Err(err) => {
             eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
@@ -553,6 +555,7 @@ fn load_bank_forks(
     ledger_path: &PathBuf,
     genesis_config: &GenesisConfig,
     process_options: ProcessOptions,
+    access_type: AccessType,
 ) -> bank_forks_utils::LoadResult {
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
@@ -564,15 +567,29 @@ fn load_bank_forks(
             compression: CompressionType::Bzip2,
         })
     };
+    let blockstore = open_blockstore(&ledger_path, access_type);
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        if !blockstore.is_primary_access() {
+            // Be defenstive, when default account dir is explicitly specified, it's still possible
+            // to wipe the dir possibly shared by the running validator!
+            eprintln!("Error: custom accounts path is not supported under secondary access");
+            exit(1);
+        }
         account_paths.split(',').map(PathBuf::from).collect()
-    } else {
+    } else if blockstore.is_primary_access() {
         vec![ledger_path.join("accounts")]
+    } else {
+        let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
+        warn!(
+            "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
+            non_primary_accounts_path
+        );
+        vec![non_primary_accounts_path]
     };
 
     bank_forks_utils::load(
         &genesis_config,
-        &open_blockstore(&ledger_path),
+        &blockstore,
         account_paths,
         snapshot_config.as_ref(),
         process_options,
@@ -862,7 +879,7 @@ fn main() {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
-                open_blockstore(&ledger_path),
+                open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary),
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
@@ -885,7 +902,13 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!(
                         "{}",
@@ -904,7 +927,7 @@ fn main() {
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-            let blockstore = open_blockstore(&ledger_path);
+            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
             for slot in slots {
                 println!("Slot {}", slot);
                 if let Err(err) = output_slot(
@@ -921,7 +944,7 @@ fn main() {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
-                open_blockstore(&ledger_path),
+                open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary),
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Json,
@@ -929,7 +952,7 @@ fn main() {
         }
         ("set-dead-slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-            let blockstore = open_blockstore(&ledger_path);
+            let blockstore = open_blockstore(&ledger_path, AccessType::PrimaryOnly);
             for slot in slots {
                 match blockstore.set_dead_slot(slot) {
                     Ok(_) => println!("Slot {} dead", slot),
@@ -954,6 +977,7 @@ fn main() {
                 &ledger_path,
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
+                AccessType::TryPrimaryThenSecondary,
             )
             .unwrap_or_else(|err| {
                 eprintln!("Ledger verification failed: {:?}", err);
@@ -976,6 +1000,7 @@ fn main() {
                 &ledger_path,
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
+                AccessType::TryPrimaryThenSecondary,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
@@ -1012,7 +1037,13 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", snapshot_slot);
@@ -1079,7 +1110,13 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
@@ -1121,7 +1158,13 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
@@ -1185,12 +1228,12 @@ fn main() {
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
-            let blockstore = open_blockstore(&ledger_path);
+            let blockstore = open_blockstore(&ledger_path, AccessType::PrimaryOnly);
             blockstore.purge_slots(start_slot, end_slot);
             blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
-            let blockstore = open_blockstore(&ledger_path);
+            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
             let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
@@ -1243,7 +1286,9 @@ fn main() {
                 });
         }
         ("bounds", Some(arg_matches)) => {
-            match open_blockstore(&ledger_path).slot_meta_iterator(0) {
+            match open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary)
+                .slot_meta_iterator(0)
+            {
                 Ok(metas) => {
                     let all = arg_matches.is_present("all");
 
@@ -1269,15 +1314,20 @@ fn main() {
                 }
             }
         }
-        ("analyze-storage", _) => match analyze_storage(&open_database(&ledger_path)) {
-            Ok(()) => {
-                println!("Ok.");
+        ("analyze-storage", _) => {
+            match analyze_storage(&open_database(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+            )) {
+                Ok(()) => {
+                    println!("Ok.");
+                }
+                Err(err) => {
+                    eprintln!("Unable to read the Ledger: {:?}", err);
+                    exit(1);
+                }
             }
-            Err(err) => {
-                eprintln!("Unable to read the Ledger: {:?}", err);
-                exit(1);
-            }
-        },
+        }
         ("", _) => {
             eprintln!("{}", matches.usage());
             exit(1);
