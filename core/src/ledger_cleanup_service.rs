@@ -1,6 +1,6 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use solana_ledger::blockstore::Blockstore;
+use solana_ledger::blockstore::{Blockstore, PurgeType};
 use solana_ledger::blockstore_db::Result as BlockstoreResult;
 use solana_measure::measure::Measure;
 use solana_sdk::clock::Slot;
@@ -172,6 +172,7 @@ impl LedgerCleanupService {
                         first_slot,
                         lowest_cleanup_slot,
                         delay_between_purges,
+                        PurgeType::PrimaryIndex,
                     );
                     purge_time.stop();
                     info!("{}", purge_time);
