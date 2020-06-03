@@ -30,14 +30,15 @@ use std::{
 // deprecated default that is no longer used
 pub const UNUSED_DEFAULT: u64 = 1024;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, AbiEnumVisitor, AbiExample)]
 pub enum OperatingMode {
     Preview,     // Next set of cluster features to be promoted to Stable
     Stable,      // Stable cluster features
     Development, // All features (including experimental features)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[frozen_abi(digest = "2KQs7m2DbLxkEx6pY9Z6qwYJAhN2Q4AdoNgUcULmscgB")]
+#[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
     pub creation_time: UnixTimestamp,

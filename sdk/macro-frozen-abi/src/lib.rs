@@ -307,7 +307,7 @@ fn quote_for_test(
         #[cfg(test)]
         mod #test_mod_ident {
             use super::*;
-            use ::solana_sdk::{abi_digester::AbiEnumVisitor, abi_example::AbiExample};
+            use ::solana_sdk::abi_example::{AbiExample, AbiEnumVisitor};
 
             #[test]
             fn test_abi_digest() {

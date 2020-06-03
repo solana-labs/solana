@@ -10,7 +10,7 @@ use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
 
 /// Structure representing a node on the network
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
 pub struct ContactInfo {
     pub id: Pubkey,
     /// gossip address

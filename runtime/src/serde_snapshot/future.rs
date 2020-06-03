@@ -7,6 +7,9 @@ pub(super) struct SerializableAccountStorageEntry {
     accounts_current_len: usize,
 }
 
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+impl solana_sdk::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
+
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {
         Self {

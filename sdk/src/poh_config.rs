@@ -1,7 +1,7 @@
 use crate::clock::DEFAULT_TICKS_PER_SECOND;
 use std::time::Duration;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
 pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,

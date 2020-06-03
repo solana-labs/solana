@@ -2,6 +2,8 @@ use serde::{
     ser::{SerializeSeq, SerializeTuple},
     Serialize, Serializer,
 };
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+use solana_sdk::abi_example::IgnoreAsHelper;
 
 // consumes an iterator and returns an object that will serialize as a serde seq
 #[allow(dead_code)]
@@ -14,6 +16,9 @@ where
     struct SerializableSequencedIterator<I> {
         iter: std::cell::RefCell<Option<I>>,
     }
+
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
 
     impl<I> Serialize for SerializableSequencedIterator<I>
     where
@@ -51,6 +56,9 @@ where
         iter: std::cell::RefCell<Option<I>>,
     }
 
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
+
     impl<I> Serialize for SerializableSequencedIterator<I>
     where
         I: IntoIterator,
@@ -86,6 +94,9 @@ where
     struct SerializableMappedIterator<I> {
         iter: std::cell::RefCell<Option<I>>,
     }
+
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    impl<I> IgnoreAsHelper for SerializableMappedIterator<I> {}
 
     impl<K, V, I> Serialize for SerializableMappedIterator<I>
     where

@@ -14,7 +14,7 @@ use std::result;
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
-#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
     /// that does not support parallelism
@@ -88,7 +88,8 @@ pub enum TransactionError {
 pub type Result<T> = result::Result<T, TransactionError>;
 
 /// An atomic transaction
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+#[frozen_abi(digest = "GoxM5ZMMjM2FSuY1VtuMhs1j8u9kMuYsH3dpYcSVVnTe")]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first
     /// signatures.len() keys of account_keys

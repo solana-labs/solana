@@ -26,7 +26,9 @@ impl<T> DecodeError<T> for PubkeyError {
 }
 
 #[repr(transparent)]
-#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+)]
 pub struct Pubkey([u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}
