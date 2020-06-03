@@ -793,10 +793,14 @@ fn process_single_slot(
     // see DuplicateSignature errors later in ReplayStage
     confirm_full_slot(blockstore, bank, opts, recyclers, progress).map_err(|err| {
         let slot = bank.slot();
-        blockstore
-            .set_dead_slot(slot)
-            .expect("Failed to mark slot as dead in blockstore");
         warn!("slot {} failed to verify: {}", slot, err);
+        if blockstore.is_primary_access() {
+            blockstore
+                .set_dead_slot(slot)
+                .expect("Failed to mark slot as dead in blockstore");
+        } else if !blockstore.is_dead(slot) {
+            panic!("Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
+        }
         err
     })?;
 
