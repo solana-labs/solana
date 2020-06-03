@@ -86,7 +86,7 @@ function wait_for_bootstrap_validator_stake_drop {
 function get_slot {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
-  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana slot'
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 slot'
 }
 
 function get_bootstrap_validator_ip_address {
