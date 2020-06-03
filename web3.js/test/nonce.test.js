@@ -103,7 +103,9 @@ test('create and query nonce account', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, [from, nonceAccount], {skipPreflight: true});
+  await connection.sendTransaction(transaction, [from, nonceAccount], {
+    skipPreflight: true,
+  });
 
   mockRpc.push([
     url,
