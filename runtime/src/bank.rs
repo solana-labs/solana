@@ -10,6 +10,7 @@ use crate::{
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
+    builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
@@ -21,7 +22,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
-    system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -513,6 +514,13 @@ impl Bank {
             }
         }
 
+        if let Some(builtin_programs) =
+            get_epoch_activated_builtin_programs(new.operating_mode(), new.epoch)
+        {
+            for program in builtin_programs.iter() {
+                new.add_static_program(&program.name, program.id, program.process_instruction);
+            }
+        }
         new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
@@ -2123,26 +2131,10 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        self.add_static_program(
-            "system_program",
-            solana_sdk::system_program::id(),
-            system_instruction_processor::process_instruction,
-        );
-        self.add_static_program(
-            "config_program",
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        );
-        self.add_static_program(
-            "stake_program",
-            solana_stake_program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        );
-        self.add_static_program(
-            "vote_program",
-            solana_vote_program::id(),
-            solana_vote_program::vote_instruction::process_instruction,
-        );
+        let builtin_programs = get_builtin_programs(self.operating_mode(), self.epoch);
+        for program in builtin_programs.iter() {
+            self.add_static_program(&program.name, program.id, program.process_instruction);
+        }
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -2659,6 +2651,7 @@ mod tests {
     use crate::{
         accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
         accounts_index::Ancestors,
+        builtin_programs::new_system_program_activation_epoch,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
@@ -6821,6 +6814,77 @@ mod tests {
         // Ensure that no rent was collected, and the entire burn amount was removed from bank
         // capitalization
         assert_eq!(bank.capitalization(), pre_capitalization - burn_amount);
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_stable() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Stable;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch > bank0.epoch());
+
+        // Transfer to self is not supported by legacy_system_instruction_processor0
+        bank0
+            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap_err();
+
+        // Activate system_instruction_processor
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(activation_epoch),
+        );
+
+        // Transfer to self is supported by system_instruction_processor
+        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_preview() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Preview;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch > bank0.epoch());
+
+        // Transfer to self is not supported by legacy_system_instruction_processor0
+        bank0
+            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap_err();
+
+        // Activate system_instruction_processor
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(activation_epoch),
+        );
+
+        // Transfer to self is supported by system_instruction_processor
+        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_development() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Development;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch == bank0.epoch());
+
+        // Transfer to self is supported by system_instruction_processor
+        bank0
+            .transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
     }
 
     #[test]
