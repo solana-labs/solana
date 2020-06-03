@@ -7,7 +7,6 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
-build = "../../sdk/build.rs"
 
 [dependencies]
 bincode = "1.2.1"
