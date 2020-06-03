@@ -557,17 +557,22 @@ fn load_bank_forks(
     process_options: ProcessOptions,
     access_type: AccessType,
 ) -> bank_forks_utils::LoadResult {
+    let blockstore = open_blockstore(&ledger_path, access_type);
+    let snapshot_path = ledger_path.clone().join(if blockstore.is_primary_access() {
+        "snapshot"
+    } else {
+        "snapshot.ledger-tool"
+    });
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path: ledger_path.clone(),
-            snapshot_path: ledger_path.clone().join("snapshot"),
+            snapshot_path,
             compression: CompressionType::Bzip2,
         })
     };
-    let blockstore = open_blockstore(&ledger_path, access_type);
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
         if !blockstore.is_primary_access() {
             // Be defenstive, when default account dir is explicitly specified, it's still possible
