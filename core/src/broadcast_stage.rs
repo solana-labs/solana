@@ -35,7 +35,7 @@ use std::{
 };
 
 mod broadcast_fake_shreds_run;
-pub(crate) mod broadcast_metrics;
+pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
@@ -374,13 +374,14 @@ pub fn broadcast_shreds(
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
-    send_mmsg_total: &mut u64,
+    transmit_stats: &mut TransmitShredsStats,
 ) -> Result<()> {
     let broadcast_len = peers_and_stakes.len();
     if broadcast_len == 0 {
         update_peer_stats(1, 1, last_datapoint_submit);
         return Ok(());
     }
+    let mut shred_select = Measure::start("shred_select");
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
@@ -389,6 +390,8 @@ pub fn broadcast_shreds(
             (&shred.payload, &peers[broadcast_index].tvu)
         })
         .collect();
+    shred_select.stop();
+    transmit_stats.shred_select += shred_select.as_us();
 
     let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
@@ -401,7 +404,7 @@ pub fn broadcast_shreds(
         }
     }
     send_mmsg_time.stop();
-    *send_mmsg_total += send_mmsg_time.as_us();
+    transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
     let num_live_peers = num_live_peers(&peers);
     update_peer_stats(
