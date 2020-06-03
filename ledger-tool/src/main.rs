@@ -8,13 +8,8 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::Blockstore,
-<<<<<<< HEAD
-    blockstore_db::{self, Column, Database},
-    blockstore_processor::{BankForksInfo, ProcessOptions},
-=======
     blockstore_db::{self, AccessType, Column, Database},
-    blockstore_processor::ProcessOptions,
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
+    blockstore_processor::{BankForksInfo, ProcessOptions},
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
@@ -863,13 +858,6 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-<<<<<<< HEAD
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let bank_info = &bank_forks_info[0];
-                    let bank = bank_forks[bank_info.bank_slot].clone();
-
-=======
             match load_bank_forks(
                 arg_matches,
                 &ledger_path,
@@ -877,8 +865,10 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
+                    let bank_info = &bank_forks_info[0];
+                    let bank = bank_forks[bank_info.bank_slot].clone();
+
                     println!(
                         "{}",
                         compute_shred_version(
@@ -895,12 +885,7 @@ fn main() {
         }
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-<<<<<<< HEAD
-            let blockstore = open_blockstore(&ledger_path);
-=======
-            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
             for slot in slots {
                 println!("Slot {}", slot);
                 if let Err(err) = output_slot(&blockstore, slot, &LedgerOutputMethod::Print) {
@@ -1007,10 +992,6 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-<<<<<<< HEAD
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-=======
             match load_bank_forks(
                 arg_matches,
                 &ledger_path,
@@ -1018,8 +999,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
+                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", snapshot_slot);
                         exit(1);
@@ -1082,8 +1062,13 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
-<<<<<<< HEAD
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = dev_halt_at_slot.unwrap_or_else(|| {
                         if bank_forks_info.len() > 1 {
@@ -1093,17 +1078,6 @@ fn main() {
                         bank_forks_info[0].bank_slot
                     });
 
-=======
-            match load_bank_forks(
-                arg_matches,
-                &ledger_path,
-                &genesis_config,
-                process_options,
-                AccessType::TryPrimaryThenSecondary,
-            ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
-                    let slot = bank_forks.working_bank().slot();
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);
@@ -1143,8 +1117,13 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-<<<<<<< HEAD
-            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+            ) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = dev_halt_at_slot.unwrap_or_else(|| {
                         if bank_forks_info.len() > 1 {
@@ -1154,17 +1133,6 @@ fn main() {
                         bank_forks_info[0].bank_slot
                     });
 
-=======
-            match load_bank_forks(
-                arg_matches,
-                &ledger_path,
-                &genesis_config,
-                process_options,
-                AccessType::TryPrimaryThenSecondary,
-            ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
-                    let slot = bank_forks.working_bank().slot();
->>>>>>> caa7f7a0c... Support opening an in-use rocksdb as secondary (#10209)
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);
