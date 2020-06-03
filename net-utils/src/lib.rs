@@ -147,7 +147,7 @@ pub fn verify_reachable_ports(
         return ok;
     }
 
-    for _udp_retries in 0..5 {
+    for udp_remaining_retry in (0_usize..5).rev() {
         // Wait for a datagram to arrive at each UDP port
         for udp_socket in udp_sockets {
             let port = udp_socket.local_addr().unwrap().port();
@@ -179,14 +179,18 @@ pub fn verify_reachable_ports(
         if ok {
             break;
         }
-        ok = true;
 
-        // Might have lost a UDP packet, retry a couple times
-        let _ = ip_echo_server_request(
-            ip_echo_server_addr,
-            IpEchoServerMessage::new(&[], &udp_ports),
-        )
-        .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+        if udp_remaining_retry > 0 {
+            // Might have lost a UDP packet, retry a couple times
+            ok = true;
+            let _ = ip_echo_server_request(
+                ip_echo_server_addr,
+                IpEchoServerMessage::new(&[], &udp_ports),
+            )
+            .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+        } else {
+            error!("maximum retry count is reached....");
+        }
     }
 
     ok
