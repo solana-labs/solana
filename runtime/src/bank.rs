@@ -10,6 +10,7 @@ use crate::{
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
+    builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
@@ -21,7 +22,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
-    system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -513,6 +514,13 @@ impl Bank {
             }
         }
 
+        if let Some(builtin_programs) =
+            get_epoch_activated_builtin_programs(new.operating_mode(), new.epoch)
+        {
+            for program in builtin_programs.iter() {
+                new.add_static_program(&program.name, program.id, program.process_instruction);
+            }
+        }
         new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
@@ -2123,26 +2131,10 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        self.add_static_program(
-            "system_program",
-            solana_sdk::system_program::id(),
-            system_instruction_processor::process_instruction,
-        );
-        self.add_static_program(
-            "config_program",
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        );
-        self.add_static_program(
-            "stake_program",
-            solana_stake_program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        );
-        self.add_static_program(
-            "vote_program",
-            solana_vote_program::id(),
-            solana_vote_program::vote_instruction::process_instruction,
-        );
+        let builtin_programs = get_builtin_programs(self.operating_mode(), self.epoch);
+        for program in builtin_programs.iter() {
+            self.add_static_program(&program.name, program.id, program.process_instruction);
+        }
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
