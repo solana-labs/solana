@@ -628,8 +628,6 @@ mod tests {
         assert_eq!(*owned_account.borrow(), unchanged_account);
 
         // Attempt to create an account that already has lamports
-        //let mut owned_account = Account::new(1, 0, &Pubkey::default());
-        //let unchanged_account = owned_account.clone();
         let unchanged_account = owned_account.borrow().clone();
         let result = create_account(
             &KeyedAccount::new(&from, true, &from_account),
