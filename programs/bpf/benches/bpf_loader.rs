@@ -6,7 +6,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
 use solana_sdk::{
     account::Account,
-    entrypoint_native::InvokeContext,
+    entrypoint_native::{InvokeContext, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -151,5 +151,8 @@ impl InvokeContext for MockInvokeContext {
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         Ok(&self.key)
+    }
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
+        &[]
     }
 }
