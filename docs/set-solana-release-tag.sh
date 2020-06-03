@@ -13,6 +13,11 @@ else
   )
 fi
 
+if [[ -z "$LATEST_SOLANA_RELEASE_VERSION" ]]; then
+  echo Error: release version not defined
+  exit 1
+fi
+
 set -x
 find html/ -name \*.html -exec sed -i "s/LATEST_SOLANA_RELEASE_VERSION/$LATEST_SOLANA_RELEASE_VERSION/g" {} \;
 if [[ -n $CI ]]; then
