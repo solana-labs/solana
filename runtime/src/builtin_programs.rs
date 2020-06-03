@@ -19,11 +19,11 @@ impl BuiltinProgram {
     }
 }
 
-fn new_system_program_activation_epoch(operating_mode: OperatingMode) -> Epoch {
+pub(crate) fn new_system_program_activation_epoch(operating_mode: OperatingMode) -> Epoch {
     match operating_mode {
         OperatingMode::Development => 0,
-        OperatingMode::Preview => std::u64::MAX / 2,
-        OperatingMode::Stable => std::u64::MAX / 2,
+        OperatingMode::Preview => 1_000_000,
+        OperatingMode::Stable => 1_000_000,
     }
 }
 
