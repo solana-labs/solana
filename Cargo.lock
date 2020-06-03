@@ -4244,6 +4244,7 @@ dependencies = [
  "bytecount",
  "clap",
  "histogram",
+ "log 0.4.8",
  "serde_json",
  "serde_yaml",
  "solana-clap-utils",
