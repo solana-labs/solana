@@ -1,7 +1,24 @@
 import { useLocation } from "react-router-dom";
+import { Location } from "history";
 
 export function useQuery() {
   return new URLSearchParams(useLocation().search);
+}
+
+export function pickCluster(location: Location): Location {
+  const cluster = new URLSearchParams(location.search).get("cluster");
+
+  let search = "";
+  if (cluster) {
+    const params = new URLSearchParams();
+    params.set("cluster", cluster);
+    search = params.toString();
+  }
+
+  return {
+    ...location,
+    search
+  };
 }
 
 export function findGetParameter(parameterName: string): string | null {

@@ -12,6 +12,7 @@ import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
 import TabbedPage from "components/TabbedPage";
 import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
+import { pickCluster } from "utils/url";
 
 function App() {
   return (
@@ -22,7 +23,9 @@ function App() {
           <div className="container">
             <div className="row align-items-end">
               <div className="col">
-                <Link to={location => ({ ...location, pathname: "/" })}>
+                <Link
+                  to={location => ({ ...pickCluster(location), pathname: "/" })}
+                >
                   <img src={Logo} width="250" alt="Solana Explorer" />
                 </Link>
               </div>

@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useClusterModal } from "providers/cluster";
 import ClusterStatusButton from "components/ClusterStatusButton";
+import { pickCluster } from "utils/url";
 
 export type Tab = "Transactions" | "Accounts" | "Supply";
 
@@ -64,7 +65,7 @@ function NavLink({
 
   return (
     <Link
-      to={location => ({ ...location, pathname: href })}
+      to={location => ({ ...pickCluster(location), pathname: href })}
       className={classes}
     >
       {tab}
