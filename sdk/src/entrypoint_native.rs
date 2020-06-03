@@ -146,6 +146,8 @@ macro_rules! declare_loader(
     )
 );
 
+pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+
 /// Cross-program invocation context passed to loaders
 pub trait InvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
@@ -157,4 +159,5 @@ pub trait InvokeContext {
         accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError>;
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
 }

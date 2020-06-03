@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
-    entrypoint_native::InvokeContext,
+    entrypoint_native::{InvokeContext, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
@@ -151,21 +151,28 @@ impl PreAccount {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ThisInvokeContext {
     pub program_ids: Vec<Pubkey>,
     pub rent: Rent,
     pub pre_accounts: Vec<PreAccount>,
+    pub programs: Vec<(Pubkey, ProcessInstruction)>,
 }
 impl ThisInvokeContext {
     const MAX_INVOCATION_DEPTH: usize = 5;
-    pub fn new(program_id: &Pubkey, rent: Rent, pre_accounts: Vec<PreAccount>) -> Self {
+    pub fn new(
+        program_id: &Pubkey,
+        rent: Rent,
+        pre_accounts: Vec<PreAccount>,
+        programs: Vec<(Pubkey, ProcessInstruction)>,
+    ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
         Self {
             program_ids,
             rent,
             pre_accounts,
+            programs,
         }
     }
 }
@@ -207,9 +214,12 @@ impl InvokeContext for ThisInvokeContext {
             .last()
             .ok_or(InstructionError::GenericError)
     }
+
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
+        &self.programs
+    }
 }
 
-pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 pub type ProcessInstructionWithContext =
     fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
@@ -479,6 +489,7 @@ impl MessageProcessor {
             instruction.program_id(&message.account_keys),
             rent_collector.rent,
             pre_accounts,
+            self.programs.clone(),
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -555,7 +566,7 @@ mod tests {
             ))
         }
         let mut invoke_context =
-            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts);
+            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts, vec![]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
@@ -1303,6 +1314,7 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             vec![owned_preaccount, not_owned_preaccount],
+            vec![],
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
