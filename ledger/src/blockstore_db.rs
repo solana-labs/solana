@@ -337,10 +337,14 @@ impl Column for columns::TransactionStatus {
     }
 
     fn index(key: &[u8]) -> (u64, Signature, Slot) {
-        let index = BigEndian::read_u64(&key[0..8]);
-        let signature = Signature::new(&key[8..72]);
-        let slot = BigEndian::read_u64(&key[72..80]);
-        (index, signature, slot)
+        if key.len() != 80 {
+            Self::as_index(0)
+        } else {
+            let index = BigEndian::read_u64(&key[0..8]);
+            let signature = Signature::new(&key[8..72]);
+            let slot = BigEndian::read_u64(&key[72..80]);
+            (index, signature, slot)
+        }
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -660,23 +664,15 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    // Adds a range to delete to the given write batch and returns whether or not the column has reached
-    // its end
-    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<bool>
+    // Adds a range to delete to the given write batch
+    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
         let from_index = C::as_index(from);
         let to_index = C::as_index(to);
-        let result = batch.delete_range_cf::<C>(cf, from_index, to_index);
-        let max_slot = self
-            .iter::<C>(IteratorMode::End)?
-            .next()
-            .map(|(i, _)| C::primary_index(i))
-            .unwrap_or(0);
-        let end = max_slot <= to;
-        result.map(|_| end)
+        batch.delete_range_cf::<C>(cf, from_index, to_index)
     }
 }
 
