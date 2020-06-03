@@ -128,7 +128,7 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
   );
 }
 
-export async function fetchDetails(
+async function fetchDetails(
   dispatch: Dispatch,
   signature: TransactionSignature,
   url: string
@@ -150,4 +150,18 @@ export async function fetchDetails(
     fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({ type: ActionType.Update, fetchStatus, signature, transaction });
+}
+
+export function useFetchTransactionDetails() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(
+      `useFetchTransactionDetails must be used within a TransactionsProvider`
+    );
+  }
+
+  const { url } = useCluster();
+  return (signature: TransactionSignature) => {
+    url && fetchDetails(dispatch, signature, url);
+  };
 }

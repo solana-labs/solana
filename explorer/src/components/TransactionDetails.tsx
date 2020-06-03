@@ -3,10 +3,9 @@ import {
   useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
-  useDetailsDispatch,
   FetchStatus
 } from "../providers/transactions";
-import { fetchDetails } from "providers/transactions/details";
+import { useFetchTransactionDetails } from "providers/transactions/details";
 import { useCluster, useClusterModal } from "providers/cluster";
 import {
   TransactionSignature,
@@ -206,12 +205,11 @@ function StatusCard({ signature }: Props) {
 
 function AccountsCard({ signature }: Props) {
   const details = useTransactionDetails(signature);
-  const dispatch = useDetailsDispatch();
-  const { url } = useCluster();
 
   const fetchStatus = useFetchTransactionStatus();
+  const fetchDetails = useFetchTransactionDetails();
   const refreshStatus = () => fetchStatus(signature);
-  const refreshDetails = () => fetchDetails(dispatch, signature, url);
+  const refreshDetails = () => fetchDetails(signature);
   const transaction = details?.transaction?.transaction;
   const message = React.useMemo(() => {
     return transaction?.compileMessage();
@@ -308,9 +306,8 @@ function AccountsCard({ signature }: Props) {
 function InstructionsSection({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
-  const dispatch = useDetailsDispatch();
-  const { url } = useCluster();
-  const refreshDetails = () => fetchDetails(dispatch, signature, url);
+  const fetchDetails = useFetchTransactionDetails();
+  const refreshDetails = () => fetchDetails(signature);
 
   if (!status || !status.info || !details || !details.transaction) return null;
 

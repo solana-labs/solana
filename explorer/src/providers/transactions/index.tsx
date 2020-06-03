@@ -12,8 +12,7 @@ import { useQuery } from "../../utils/url";
 import { useCluster, Cluster, ClusterStatus } from "../cluster";
 import {
   DetailsProvider,
-  StateContext as DetailsStateContext,
-  DispatchContext as DetailsDispatchContext
+  StateContext as DetailsStateContext
 } from "./details";
 import base58 from "bs58";
 import { useFetchAccountInfo } from "../accounts";
@@ -306,16 +305,6 @@ export function useTransactionDetails(signature: TransactionSignature) {
   }
 
   return context[signature];
-}
-
-export function useDetailsDispatch() {
-  const context = React.useContext(DetailsDispatchContext);
-  if (!context) {
-    throw new Error(
-      `useDetailsDispatch must be used within a TransactionsProvider`
-    );
-  }
-  return context;
 }
 
 export function useFetchTransactionStatus() {
