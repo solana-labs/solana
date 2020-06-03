@@ -2,6 +2,7 @@
 
 import {Connection} from '../connection';
 import type {TransactionSignature} from '../transaction';
+import type {ConfirmOptions} from '../connection';
 
 /**
  * Send and confirm a raw transaction
@@ -9,12 +10,19 @@ import type {TransactionSignature} from '../transaction';
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
-  confirmations: ?number,
+  options?: ConfirmOptions,
 ): Promise<TransactionSignature> {
   const start = Date.now();
-  const signature = await connection.sendRawTransaction(rawTransaction);
-  const status = (await connection.confirmTransaction(signature, confirmations))
-    .value;
+  const signature = await connection.sendRawTransaction(
+    rawTransaction,
+    options,
+  );
+  const status = (
+    await connection.confirmTransaction(
+      signature,
+      options && options.confirmations,
+    )
+  ).value;
 
   if (status) {
     if (status.err) {

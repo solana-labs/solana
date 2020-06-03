@@ -32,6 +32,28 @@ type Context = {
 };
 
 /**
+ * Options for sending transactions
+ *
+ * @typedef {Object} SendOptions
+ * @property {boolean} skipPreflight disable transaction verification step
+ */
+export type SendOptions = {
+  skipPreflight: boolean,
+};
+
+/**
+ * Options for confirming transactions
+ *
+ * @typedef {Object} ConfirmOptions
+ * @property {boolean} skipPreflight disable transaction verification step
+ * @property {number} confirmations desired number of cluster confirmations
+ */
+export type ConfirmOptions = {
+  confirmations: number,
+  skipPreflight: boolean,
+};
+
+/**
  * RPC Response with extra contextual information
  *
  * @typedef {Object} RpcResponseAndContext
@@ -1663,6 +1685,7 @@ export class Connection {
   async sendTransaction(
     transaction: Transaction,
     signers: Array<Account>,
+    options?: SendOptions,
   ): Promise<TransactionSignature> {
     if (transaction.nonceInfo) {
       transaction.sign(...signers);
@@ -1696,7 +1719,7 @@ export class Connection {
         let attempts = 0;
         const startTime = Date.now();
         for (;;) {
-          const {blockhash} = await this.getRecentBlockhash();
+          const {blockhash} = await this.getRecentBlockhash('max');
 
           if (this._blockhashInfo.recentBlockhash != blockhash) {
             this._blockhashInfo = {
@@ -1723,7 +1746,7 @@ export class Connection {
     }
 
     const wireTransaction = transaction.serialize();
-    return await this.sendRawTransaction(wireTransaction);
+    return await this.sendRawTransaction(wireTransaction, options);
   }
 
   /**
@@ -1745,9 +1768,13 @@ export class Connection {
    */
   async sendRawTransaction(
     rawTransaction: Buffer | Uint8Array | Array<number>,
+    options: ?SendOptions,
   ): Promise<TransactionSignature> {
     const encodedTransaction = bs58.encode(toBuffer(rawTransaction));
-    const result = await this.sendEncodedTransaction(encodedTransaction);
+    const result = await this.sendEncodedTransaction(
+      encodedTransaction,
+      options,
+    );
     return result;
   }
 
@@ -1757,10 +1784,12 @@ export class Connection {
    */
   async sendEncodedTransaction(
     encodedTransaction: string,
+    options: ?SendOptions,
   ): Promise<TransactionSignature> {
-    const unsafeRes = await this._rpcRequest('sendTransaction', [
-      encodedTransaction,
-    ]);
+    const args = [encodedTransaction];
+    const skipPreflight = options && options.skipPreflight;
+    if (skipPreflight) args.push({skipPreflight});
+    const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
       throw new Error('failed to send transaction: ' + res.error.message);

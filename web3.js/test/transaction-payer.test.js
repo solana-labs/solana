@@ -86,7 +86,7 @@ test('transaction-payer', async () => {
   ]);
   await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -108,7 +108,7 @@ test('transaction-payer', async () => {
   const signature = await connection.sendTransaction(transaction, [
     accountPayer,
     accountFrom,
-  ]);
+  ], {skipPreflight: true});
 
   mockRpc.push([
     url,

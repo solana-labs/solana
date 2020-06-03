@@ -84,7 +84,7 @@ test('create and query nonce account', async () => {
   const balance = await connection.getBalance(from.publicKey);
   expect(balance).toBe(minimumAmount * 2);
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -103,7 +103,7 @@ test('create and query nonce account', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, [from, nonceAccount]);
+  await connection.sendTransaction(transaction, [from, nonceAccount], {skipPreflight: true});
 
   mockRpc.push([
     url,
@@ -201,7 +201,7 @@ test('create and query nonce account with seed', async () => {
   const balance = await connection.getBalance(from.publicKey);
   expect(balance).toBe(minimumAmount * 2);
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -222,7 +222,7 @@ test('create and query nonce account with seed', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, [from]);
+  await connection.sendTransaction(transaction, [from], {skipPreflight: true});
 
   mockRpc.push([
     url,

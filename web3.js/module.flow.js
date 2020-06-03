@@ -54,12 +54,26 @@ declare module '@solana/web3.js' {
     slot: number,
   };
 
+  declare export type SendOptions = {
+    skipPreflight: boolean;
+  };
+
+  declare export type ConfirmOptions = {
+    confirmations: number;
+    skipPreflight: boolean;
+  };
+
   declare export type RpcResponseAndContext<T> = {
     context: Context,
     value: T,
   };
 
-  declare export type Commitment = 'max' | 'recent' | 'root' | 'single' | 'singleGossip';
+  declare export type Commitment =
+    | 'max'
+    | 'recent'
+    | 'root'
+    | 'single'
+    | 'singleGossip';
 
   declare export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 
@@ -282,12 +296,15 @@ declare module '@solana/web3.js' {
     sendTransaction(
       transaction: Transaction,
       signers: Array<Account>,
+      options?: SendOptions,
     ): Promise<TransactionSignature>;
     sendEncodedTransaction(
       encodedTransaction: string,
+      options?: SendOptions,
     ): Promise<TransactionSignature>;
     sendRawTransaction(
       wireTransaction: Buffer | Uint8Array | Array<number>,
+      options?: SendOptions,
     ): Promise<TransactionSignature>;
     onAccountChange(
       publickey: PublicKey,
@@ -809,14 +826,14 @@ declare module '@solana/web3.js' {
     connection: Connection,
     transaction: Transaction,
     signers: Array<Account>,
-    confirmations: ?number,
+    options: ?ConfirmOptions,
   ): Promise<TransactionSignature>;
 
   // === src/util/send-and-confirm-raw-transaction.js ===
   declare export function sendAndConfirmRawTransaction(
     connection: Connection,
     wireTransaction: Buffer,
-    confirmations: ?number,
+    options: ?ConfirmOptions,
   ): Promise<TransactionSignature>;
 
   // === src/util/cluster.js ===

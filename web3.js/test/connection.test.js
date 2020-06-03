@@ -117,7 +117,7 @@ test('get program accounts', async () => {
   await connection.requestAirdrop(account0.publicKey, LAMPORTS_PER_SOL);
   await connection.requestAirdrop(account1.publicKey, 0.5 * LAMPORTS_PER_SOL);
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -160,7 +160,10 @@ test('get program accounts', async () => {
     accountPubkey: account0.publicKey,
     programId: programId.publicKey,
   });
-  await sendAndConfirmTransaction(connection, transaction, [account0], 1);
+  await sendAndConfirmTransaction(connection, transaction, [account0], {
+    confirmations: 1,
+    skipPreflight: true,
+  });
 
   mockRpc.push([
     url,
@@ -205,7 +208,10 @@ test('get program accounts', async () => {
     programId: programId.publicKey,
   });
 
-  await sendAndConfirmTransaction(connection, transaction, [account1], 1);
+  await sendAndConfirmTransaction(connection, transaction, [account1], {
+    confirmations: 1,
+    skipPreflight: true,
+  });
 
   mockGetRecentBlockhash('recent');
   const {feeCalculator} = await connection.getRecentBlockhash();
@@ -1056,7 +1062,13 @@ test('get confirmed block', async () => {
 
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
-  for (const commitment of ['max', 'recent', 'root', 'single', 'singleGossip']) {
+  for (const commitment of [
+    'max',
+    'recent',
+    'root',
+    'single',
+    'singleGossip',
+  ]) {
     mockGetRecentBlockhash(commitment);
 
     const {blockhash, feeCalculator} = await connection.getRecentBlockhash(
@@ -1471,7 +1483,7 @@ test('transaction failure', async () => {
     minimumAmount + 100010,
   );
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -1484,14 +1496,66 @@ test('transaction failure', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.transfer({
-    fromPubkey: account.publicKey,
-    toPubkey: account.publicKey,
-    lamports: 10,
-  });
-  const signature = await connection.sendTransaction(transaction, [account]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatuses',
+      params: [
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: 1,
+            err: null,
+          },
+        ],
+      },
+    },
+  ]);
 
-  const expectedErr = {InstructionError: [0, 'AccountBorrowFailed']};
+  const newAccount = new Account();
+  let transaction = SystemProgram.createAccount({
+    fromPubkey: account.publicKey,
+    newAccountPubkey: newAccount.publicKey,
+    lamports: 1000,
+    space: 0,
+    programId: SystemProgram.programId
+  });
+  await sendAndConfirmTransaction(connection, transaction, [account, newAccount], {confirmations: 1, skipPreflight: true});
+
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+
+  // This should fail because the account is already created
+  transaction = SystemProgram.createAccount({
+    fromPubkey: account.publicKey,
+    newAccountPubkey: newAccount.publicKey,
+    lamports: 10,
+    space: 0,
+    programId: SystemProgram.programId
+  });
+  const signature = await connection.sendTransaction(transaction, [account, newAccount], {skipPreflight: true});
+
+  const expectedErr = {InstructionError: [0, {Custom: 0}]};
   mockRpc.push([
     url,
     {
@@ -1656,7 +1720,7 @@ test('transaction', async () => {
     minimumAmount + 21,
   );
 
-  mockGetRecentBlockhash('recent');
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
@@ -1676,7 +1740,7 @@ test('transaction', async () => {
   });
   const signature = await connection.sendTransaction(transaction, [
     accountFrom,
-  ]);
+  ], {skipPreflight: true});
 
   mockRpc.push([
     url,
@@ -1881,7 +1945,7 @@ test('multi-instruction transaction', async () => {
   const signature = await connection.sendTransaction(transaction, [
     accountFrom,
     accountTo,
-  ]);
+  ], {skipPreflight: true});
 
   await connection.confirmTransaction(signature, 1);
 
@@ -1934,7 +1998,10 @@ test('account change notification', async () => {
       toPubkey: programAccount.publicKey,
       lamports: balanceNeeded,
     });
-    await sendAndConfirmTransaction(connection, transaction, [owner], 1);
+    await sendAndConfirmTransaction(connection, transaction, [owner], {
+      confirmations: 1,
+      skipPreflight: true,
+    });
   } catch (err) {
     await connection.removeAccountChangeListener(subscriptionId);
     throw err;
@@ -1998,7 +2065,10 @@ test('program account change notification', async () => {
       toPubkey: programAccount.publicKey,
       lamports: balanceNeeded,
     });
-    await sendAndConfirmTransaction(connection, transaction, [owner], 1);
+    await sendAndConfirmTransaction(connection, transaction, [owner], {
+      confirmations: 1,
+      skipPreflight: true,
+    });
   } catch (err) {
     await connection.removeProgramAccountChangeListener(subscriptionId);
     throw err;

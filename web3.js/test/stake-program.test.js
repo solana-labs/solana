@@ -272,7 +272,7 @@ test('live staking actions', async () => {
       connection,
       createAndInitialize,
       [from, newStakeAccount],
-      0,
+      {confirmations: 0, skipPreflight: true},
     );
     expect(await connection.getBalance(newStakeAccount.publicKey)).toEqual(
       minimumAmount + 42,
@@ -283,7 +283,10 @@ test('live staking actions', async () => {
       authorizedPubkey: authorized.publicKey,
       votePubkey,
     });
-    await sendAndConfirmTransaction(connection, delegation, [authorized], 0);
+    await sendAndConfirmTransaction(connection, delegation, [authorized], {
+      confirmations: 0,
+      skipPreflight: true,
+    });
   }
 
   // Create Stake account with seed
@@ -308,7 +311,7 @@ test('live staking actions', async () => {
     connection,
     createAndInitializeWithSeed,
     [from],
-    0,
+    {confirmations: 0, skipPreflight: true},
   );
   let originalStakeBalance = await connection.getBalance(newAccountPubkey);
   expect(originalStakeBalance).toEqual(3 * minimumAmount + 42);
@@ -318,7 +321,10 @@ test('live staking actions', async () => {
     authorizedPubkey: authorized.publicKey,
     votePubkey,
   });
-  await sendAndConfirmTransaction(connection, delegation, [authorized], 0);
+  await sendAndConfirmTransaction(connection, delegation, [authorized], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
 
   // Test that withdraw fails before deactivation
   const recipient = new Account();
@@ -329,7 +335,10 @@ test('live staking actions', async () => {
     lamports: 1000,
   });
   await expect(
-    sendAndConfirmTransaction(connection, withdraw, [authorized], 0),
+    sendAndConfirmTransaction(connection, withdraw, [authorized], {
+      confirmations: 0,
+      skipPreflight: true,
+    }),
   ).rejects.toThrow();
 
   // Split stake
@@ -340,7 +349,10 @@ test('live staking actions', async () => {
     splitStakePubkey: newStake.publicKey,
     lamports: minimumAmount + 20,
   });
-  await sendAndConfirmTransaction(connection, split, [authorized, newStake], 0);
+  await sendAndConfirmTransaction(connection, split, [authorized, newStake], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
 
   // Authorize to new account
   const newAuthorized = new Account();
@@ -352,14 +364,20 @@ test('live staking actions', async () => {
     newAuthorizedPubkey: newAuthorized.publicKey,
     stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
   });
-  await sendAndConfirmTransaction(connection, authorize, [authorized], 0);
+  await sendAndConfirmTransaction(connection, authorize, [authorized], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
   authorize = StakeProgram.authorize({
     stakePubkey: newAccountPubkey,
     authorizedPubkey: authorized.publicKey,
     newAuthorizedPubkey: newAuthorized.publicKey,
     stakeAuthorizationType: StakeAuthorizationLayout.Staker,
   });
-  await sendAndConfirmTransaction(connection, authorize, [authorized], 0);
+  await sendAndConfirmTransaction(connection, authorize, [authorized], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
 
   // Test old authorized can't deactivate
   let deactivateNotAuthorized = StakeProgram.deactivate({
@@ -371,7 +389,7 @@ test('live staking actions', async () => {
       connection,
       deactivateNotAuthorized,
       [authorized],
-      0,
+      {confirmations: 0, skipPreflight: true},
     ),
   ).rejects.toThrow();
 
@@ -380,7 +398,10 @@ test('live staking actions', async () => {
     stakePubkey: newAccountPubkey,
     authorizedPubkey: newAuthorized.publicKey,
   });
-  await sendAndConfirmTransaction(connection, deactivate, [newAuthorized], 0);
+  await sendAndConfirmTransaction(connection, deactivate, [newAuthorized], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
 
   // Test that withdraw succeeds after deactivation
   withdraw = StakeProgram.withdraw({
@@ -389,7 +410,10 @@ test('live staking actions', async () => {
     toPubkey: recipient.publicKey,
     lamports: minimumAmount + 20,
   });
-  await sendAndConfirmTransaction(connection, withdraw, [newAuthorized], 0);
+  await sendAndConfirmTransaction(connection, withdraw, [newAuthorized], {
+    confirmations: 0,
+    skipPreflight: true,
+  });
   const balance = await connection.getBalance(newAccountPubkey);
   expect(balance).toEqual(minimumAmount + 2);
   const recipientBalance = await connection.getBalance(recipient.publicKey);

@@ -4,6 +4,7 @@ import {Connection} from '../connection';
 import {Transaction} from '../transaction';
 import {sleep} from './sleep';
 import type {Account} from '../account';
+import type {ConfirmOptions} from '../connection';
 import type {TransactionSignature} from '../transaction';
 
 const NUM_SEND_RETRIES = 10;
@@ -17,15 +18,22 @@ export async function sendAndConfirmTransaction(
   connection: Connection,
   transaction: Transaction,
   signers: Array<Account>,
-  confirmations: ?number,
+  options?: ConfirmOptions,
 ): Promise<TransactionSignature> {
   const start = Date.now();
   let sendRetries = NUM_SEND_RETRIES;
 
   for (;;) {
-    const signature = await connection.sendTransaction(transaction, signers);
+    const signature = await connection.sendTransaction(
+      transaction,
+      signers,
+      options,
+    );
     const status = (
-      await connection.confirmTransaction(signature, confirmations)
+      await connection.confirmTransaction(
+        signature,
+        options && options.confirmations,
+      )
     ).value;
 
     if (status) {

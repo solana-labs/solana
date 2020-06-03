@@ -69,7 +69,10 @@ export class Loader {
         connection,
         transaction,
         [payer, program],
-        1,
+        {
+          confirmations: 1,
+          skipPreflight: true,
+        },
       );
     }
 
@@ -107,7 +110,10 @@ export class Loader {
         data,
       });
       transactions.push(
-        sendAndConfirmTransaction(connection, transaction, [payer, program], 1),
+        sendAndConfirmTransaction(connection, transaction, [payer, program], {
+          confirmations: 1,
+          skipPreflight: true,
+        }),
       );
 
       // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
@@ -152,7 +158,10 @@ export class Loader {
         connection,
         transaction,
         [payer, program],
-        1,
+        {
+          confirmations: 1,
+          skipPreflight: true,
+        },
       );
     }
   }
