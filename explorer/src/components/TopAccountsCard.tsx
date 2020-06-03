@@ -107,6 +107,39 @@ export default function TopAccountsCard() {
   );
 }
 
+const renderAccountRow = (
+  account: AccountBalancePair,
+  index: number,
+  supply: number
+) => {
+  const base58AccountPubkey = account.address.toBase58();
+  return (
+    <tr key={index}>
+      <td>
+        <span className="badge badge-soft-dark badge-pill">{index + 1}</span>
+      </td>
+      <td>
+        <Copyable text={base58AccountPubkey}>
+          <code>{base58AccountPubkey}</code>
+        </Copyable>
+      </td>
+      <td>{lamportsToSolString(account.lamports, 0)}</td>
+      <td>{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
+      <td>
+        <Link
+          to={location => ({
+            ...location,
+            pathname: "/account/" + base58AccountPubkey
+          })}
+          className="btn btn-rounded-circle btn-white btn-sm"
+        >
+          <span className="fe fe-arrow-right"></span>
+        </Link>
+      </td>
+    </tr>
+  );
+};
+
 const useQueryFilter = (): Filter => {
   const query = useQuery();
   const filter = query.get("filter");
@@ -156,7 +189,7 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
     };
   };
 
-  const FILTERS: Filter[] = [null, "nonCirculating", "all"];
+  const FILTERS: Filter[] = ["all", null, "nonCirculating"];
   return (
     <div className="dropdown">
       <button
@@ -185,38 +218,5 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
         })}
       </div>
     </div>
-  );
-};
-
-const renderAccountRow = (
-  account: AccountBalancePair,
-  index: number,
-  supply: number
-) => {
-  const base58AccountPubkey = account.address.toBase58();
-  return (
-    <tr key={index}>
-      <td>
-        <span className="badge badge-soft-dark badge-pill">{index + 1}</span>
-      </td>
-      <td>
-        <Copyable text={base58AccountPubkey}>
-          <code>{base58AccountPubkey}</code>
-        </Copyable>
-      </td>
-      <td>{lamportsToSolString(account.lamports, 0)}</td>
-      <td>{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
-      <td>
-        <Link
-          to={location => ({
-            ...location,
-            pathname: "/account/" + base58AccountPubkey
-          })}
-          className="btn btn-rounded-circle btn-white btn-sm"
-        >
-          <span className="fe fe-arrow-right"></span>
-        </Link>
-      </td>
-    </tr>
   );
 };
