@@ -1,6 +1,7 @@
 import React from "react";
 import { clusterApiUrl, Connection } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
+import { useHistory, useLocation } from "react-router-dom";
 
 export enum ClusterStatus {
   Connected,
@@ -22,7 +23,7 @@ export const CLUSTERS = [
   Cluster.Custom
 ];
 
-export function clusterSlug(cluster: Cluster): string | undefined {
+export function clusterSlug(cluster: Cluster): string {
   switch (cluster) {
     case Cluster.MainnetBeta:
       return "mainnet-beta";
@@ -31,7 +32,7 @@ export function clusterSlug(cluster: Cluster): string | undefined {
     case Cluster.Devnet:
       return "devnet";
     case Cluster.Custom:
-      return undefined;
+      return "custom";
   }
 }
 
@@ -52,8 +53,20 @@ export const MAINNET_BETA_URL = clusterApiUrl("mainnet-beta");
 export const TESTNET_URL = clusterApiUrl("testnet");
 export const DEVNET_URL = clusterApiUrl("devnet");
 
+export function clusterUrl(cluster: Cluster, customUrl: string): string {
+  switch (cluster) {
+    case Cluster.Devnet:
+      return DEVNET_URL;
+    case Cluster.MainnetBeta:
+      return MAINNET_BETA_URL;
+    case Cluster.Testnet:
+      return TESTNET_URL;
+    case Cluster.Custom:
+      return customUrl;
+  }
+}
+
 export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
-export const DEFAULT_CUSTOM_URL = "http://localhost:8899";
 
 interface State {
   cluster: Cluster;
@@ -88,51 +101,19 @@ function clusterReducer(state: State, action: Action): State {
   }
 }
 
-function parseQuery(
-  query: URLSearchParams
-): { cluster: Cluster; customUrl: string } {
+function parseQuery(query: URLSearchParams): Cluster {
   const clusterParam = query.get("cluster");
-  const clusterUrlParam = query.get("clusterUrl");
-
-  let cluster;
-  let customUrl = DEFAULT_CUSTOM_URL;
-  switch (clusterUrlParam) {
-    case MAINNET_BETA_URL:
-      cluster = Cluster.MainnetBeta;
-      break;
-    case DEVNET_URL:
-      cluster = Cluster.Devnet;
-      break;
-    case TESTNET_URL:
-      cluster = Cluster.Testnet;
-      break;
-  }
-
   switch (clusterParam) {
-    case "mainnet-beta":
-      cluster = Cluster.MainnetBeta;
-      break;
+    case "custom":
+      return Cluster.Custom;
     case "devnet":
-      cluster = Cluster.Devnet;
-      break;
+      return Cluster.Devnet;
     case "testnet":
-      cluster = Cluster.Testnet;
-      break;
+      return Cluster.Testnet;
+    case "mainnet-beta":
+    default:
+      return Cluster.MainnetBeta;
   }
-
-  if (!cluster) {
-    if (!clusterUrlParam) {
-      cluster = DEFAULT_CLUSTER;
-    } else {
-      cluster = Cluster.Custom;
-      customUrl = clusterUrlParam;
-    }
-  }
-
-  return {
-    cluster,
-    customUrl
-  };
 }
 
 type SetShowModal = React.Dispatch<React.SetStateAction<boolean>>;
@@ -146,16 +127,28 @@ type ClusterProviderProps = { children: React.ReactNode };
 export function ClusterProvider({ children }: ClusterProviderProps) {
   const [state, dispatch] = React.useReducer(clusterReducer, {
     cluster: DEFAULT_CLUSTER,
-    customUrl: DEFAULT_CUSTOM_URL,
+    customUrl: "",
     status: ClusterStatus.Connecting
   });
   const [showModal, setShowModal] = React.useState(false);
-  const { cluster, customUrl } = parseQuery(useQuery());
+  const query = useQuery();
+  const cluster = parseQuery(query);
+  const history = useHistory();
+  const location = useLocation();
 
-  // Reconnect to cluster when it changes
+  // Reconnect to cluster when params change
   React.useEffect(() => {
-    updateCluster(dispatch, cluster, customUrl);
-  }, [cluster, customUrl]);
+    if (cluster === Cluster.Custom) {
+      // Remove cluster param if custom url has not been set
+      if (state.customUrl.length === 0) {
+        query.delete("cluster");
+        history.push({ ...location, search: query.toString() });
+        return;
+      }
+    }
+
+    updateCluster(dispatch, cluster, state.customUrl);
+  }, [cluster, state.customUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -166,19 +159,6 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
-}
-
-export function clusterUrl(cluster: Cluster, customUrl: string): string {
-  switch (cluster) {
-    case Cluster.Devnet:
-      return DEVNET_URL;
-    case Cluster.MainnetBeta:
-      return MAINNET_BETA_URL;
-    case Cluster.Testnet:
-      return TESTNET_URL;
-    case Cluster.Custom:
-      return customUrl;
-  }
 }
 
 async function updateCluster(
@@ -205,6 +185,17 @@ async function updateCluster(
     console.error("Failed to update cluster", error);
     dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
   }
+}
+
+export function useUpdateCustomUrl() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(`useUpdateCustomUrl must be used within a ClusterProvider`);
+  }
+
+  return (customUrl: string) => {
+    updateCluster(dispatch, Cluster.Custom, customUrl);
+  };
 }
 
 export function useCluster() {

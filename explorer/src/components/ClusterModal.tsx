@@ -1,5 +1,6 @@
 import React from "react";
-import { Link, useLocation, useHistory } from "react-router-dom";
+import { Link, useHistory, useLocation } from "react-router-dom";
+import { useDebounceCallback } from "@react-hook/debounce";
 import { Location } from "history";
 import {
   useCluster,
@@ -9,10 +10,12 @@ import {
   clusterSlug,
   CLUSTERS,
   Cluster,
-  useClusterModal
+  useClusterModal,
+  useUpdateCustomUrl
 } from "../providers/cluster";
 import { assertUnreachable } from "../utils";
 import Overlay from "./Overlay";
+import { useQuery } from "utils/url";
 
 function ClusterModal() {
   const [show, setShow] = useClusterModal();
@@ -46,34 +49,35 @@ function ClusterModal() {
 type InputProps = { activeSuffix: string; active: boolean };
 function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const { customUrl } = useCluster();
+  const updateCustomUrl = useUpdateCustomUrl();
   const [editing, setEditing] = React.useState(false);
+  const query = useQuery();
   const history = useHistory();
   const location = useLocation();
 
   const customClass = (prefix: string) =>
     active ? `${prefix}-${activeSuffix}` : "";
 
-  const clusterLocation = (location: Location, url: string) => {
-    const params = new URLSearchParams(location.search);
-    params.set("clusterUrl", url);
-    params.delete("cluster");
+  const clusterLocation = (location: Location) => {
+    if (customUrl.length > 0) query.set("cluster", "custom");
     return {
       ...location,
-      search: params.toString()
+      search: query.toString()
     };
   };
 
-  const updateCustomUrl = React.useCallback(
-    (url: string) => {
-      history.push(clusterLocation(location, url));
-    },
-    [history, location]
-  );
+  const onUrlInput = useDebounceCallback((url: string) => {
+    updateCustomUrl(url);
+    if (url.length > 0) {
+      query.set("cluster", "custom");
+      history.push({ ...location, search: query.toString() });
+    }
+  }, 500);
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
     <Link
-      to={location => clusterLocation(location, customUrl)}
+      to={location => clusterLocation(location)}
       className="btn input-group input-group-merge p-0"
     >
       <input
@@ -84,7 +88,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
         )}`}
         onFocus={() => setEditing(true)}
         onBlur={() => setEditing(false)}
-        onInput={e => updateCustomUrl(e.currentTarget.value)}
+        onInput={e => onUrlInput(e.currentTarget.value)}
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
@@ -133,14 +137,10 @@ function ClusterToggle() {
         const clusterLocation = (location: Location) => {
           const params = new URLSearchParams(location.search);
           const slug = clusterSlug(net);
-          if (slug && slug !== "mainnet-beta") {
+          if (slug !== "mainnet-beta") {
             params.set("cluster", slug);
-            params.delete("clusterUrl");
           } else {
             params.delete("cluster");
-            if (slug === "mainnet-beta") {
-              params.delete("clusterUrl");
-            }
           }
           return {
             ...location,
