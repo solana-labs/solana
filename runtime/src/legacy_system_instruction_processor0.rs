@@ -2,7 +2,7 @@ use log::*;
 use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
     instruction::InstructionError,
-    nonce::{Account as NonceAccount},
+    nonce::Account as NonceAccount,
     program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},

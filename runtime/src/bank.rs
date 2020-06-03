@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtin_programs::get_builtin_programs,
+    builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::MessageProcessor,
     nonce_utils,
@@ -456,6 +456,14 @@ impl Bank {
                 parent.entered_epoch_callback.read().unwrap().as_ref()
             {
                 entered_epoch_callback(&mut new)
+            }
+
+            if let Some(builtin_programs) =
+                get_epoch_activated_builtin_programs(new.operating_mode(), new.epoch)
+            {
+                for program in builtin_programs.iter() {
+                    new.add_builtin_program(&program.name, program.id, program.process_instruction);
+                }
             }
         }
 
@@ -2049,7 +2057,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtin_programs = get_builtin_programs();
+        let builtin_programs = get_builtin_programs(self.operating_mode(), self.epoch);
         for program in builtin_programs.iter() {
             self.add_builtin_program(&program.name, program.id, program.process_instruction);
         }
