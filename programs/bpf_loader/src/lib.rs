@@ -259,7 +259,8 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_sdk::{
-        account::Account, instruction::CompiledInstruction, message::Message, rent::Rent,
+        account::Account, entrypoint_native::ProcessInstruction, instruction::CompiledInstruction,
+        message::Message, rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
@@ -282,6 +283,9 @@ mod tests {
         }
         fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
             Ok(&self.key)
+        }
+        fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
+            &[]
         }
     }
 

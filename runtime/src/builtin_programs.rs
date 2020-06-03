@@ -1,5 +1,5 @@
-use crate::{message_processor::ProcessInstruction, system_instruction_processor};
-use solana_sdk::{pubkey::Pubkey, system_program};
+use crate::system_instruction_processor;
+use solana_sdk::{entrypoint_native::ProcessInstruction, pubkey::Pubkey, system_program};
 
 pub struct BuiltinProgram {
     pub name: String,
