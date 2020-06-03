@@ -6,7 +6,7 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
-use solana_runtime::{builtin_programs::get_builtin_programs, message_processor::MessageProcessor};
+use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::Account,
     account::KeyedAccount,
@@ -767,9 +767,8 @@ fn call<'a>(
     let program_account = (*accounts[callee_program_id_index]).clone();
     let executable_accounts = vec![(callee_program_id, program_account)];
     let mut message_processor = MessageProcessor::default();
-    let builtin_programs = get_builtin_programs();
-    for program in builtin_programs.iter() {
-        message_processor.add_program(program.id, program.process_instruction);
+    for (program_id, process_instruction) in invoke_context.get_programs().iter() {
+        message_processor.add_program(*program_id, *process_instruction);
     }
     message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
 
