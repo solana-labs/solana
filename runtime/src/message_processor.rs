@@ -516,15 +516,10 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-            let executable_index = message
-                .program_position(instruction.program_id_index as usize)
-                .ok_or(TransactionError::InvalidAccountIndex)?;
-            let executable_accounts = &loaders[executable_index];
-
             self.execute_instruction(
                 message,
                 instruction,
-                executable_accounts,
+                &loaders[instruction_index],
                 accounts,
                 rent_collector,
             )
