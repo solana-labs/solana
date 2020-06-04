@@ -1746,9 +1746,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-http-server"
-version = "14.1.0"
+version = "14.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d52860f0549694aa4abb12766856f56952ab46d3fb9f0815131b2db3d9cc2f29"
+checksum = "0da906d682799df05754480dac1b9e70ec92e12c19ebafd2662a5ea1c9fd6522"
 dependencies = [
  "hyper 0.12.35",
  "jsonrpc-core",
@@ -1773,9 +1773,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-server-utils"
-version = "14.1.0"
+version = "14.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f06add502b48351e05dd95814835327fb115e4e9f834ca42fd522d3b769d4d2"
+checksum = "56cbfb462e7f902e21121d9f0d1c2b77b2c5b642e1a4e8f4ebfa2e15b94402bb"
 dependencies = [
  "bytes 0.4.12",
  "globset",
