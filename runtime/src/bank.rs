@@ -6942,7 +6942,7 @@ mod tests {
 
         let instruction = Instruction::new(program2_pubkey, &10, vec![]);
         let tx = Transaction::new_signed_with_payer(
-            &[instruction.clone(), instruction.clone()],
+            &[instruction.clone(), instruction],
             Some(&mint_keypair.pubkey()),
             &[&mint_keypair],
             bank.last_blockhash(),
