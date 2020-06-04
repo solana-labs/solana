@@ -357,20 +357,18 @@ fn test_cluster_partition_1_1_1() {
 
 #[test]
 #[serial]
-fn test_kill_partition() {
+fn test_kill_heaviest_partition() {
     // This test:
-    // 1) Spins up three partitions
-    // 2) Forces more slots in the leader schedule for the first partition so
-    // that this partition will be the heaviiest
-    // 3) Schedules the other validators for sufficient slots in the schedule
+    // 1) Spins up four partitions, the heaviest being the first with more stake
+    // 2) Schedules the other validators for sufficient slots in the schedule
     // so that they will still be locked out of voting for the major partitoin
     // when the partition resolves
-    // 4) Kills the major partition. Validators are locked out, but should be
-    // able to reset to the major partition
-    // 5) Check for recovery
+    // 3) Kills the most staked partition. Validators are locked out, but should all
+    // eventually choose the major partition
+    // 4) Check for recovery
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
-    let partitions: [&[usize]; 3] = [&[9], &[10], &[10]];
+    let partitions: [&[usize]; 4] = [&[11], &[10], &[10], &[10]];
     let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
         .take(partitions.len())
         .collect();
