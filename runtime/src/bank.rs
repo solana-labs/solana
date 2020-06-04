@@ -6915,7 +6915,7 @@ mod tests {
     }
 
     #[test]
-    fn test_same_program_id_reuses_executable_accounts() {
+    fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
