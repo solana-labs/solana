@@ -22,8 +22,8 @@ impl BuiltinProgram {
 pub(crate) fn new_system_program_activation_epoch(operating_mode: OperatingMode) -> Epoch {
     match operating_mode {
         OperatingMode::Development => 0,
-        OperatingMode::Preview => 1_000_000,
-        OperatingMode::Stable => 1_000_000,
+        OperatingMode::Preview => 58,
+        OperatingMode::Stable => 38,
     }
 }
 
