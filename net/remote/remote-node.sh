@@ -27,6 +27,7 @@ extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 maybeWarpSlot="${20}"
 waitForNodeInit="${21}"
+extraPrimordialStakes="${22:=0}"
 set +x
 
 missing() {
@@ -142,8 +143,20 @@ EOF
         declare name=$1
         if [[ -f net/keypairs/"$name".json ]]; then
           cp net/keypairs/"$name".json config/"$name".json
+          if [[ "$name" =~ ^validator-identity- ]]; then
+            name="${name//-identity-/-vote-}"
+            cp net/keypairs/"$name".json config/"$name".json
+            name="${name//-vote-/-stake-}"
+            cp net/keypairs/"$name".json config/"$name".json
+          fi
         else
           solana-keygen new --no-passphrase -so config/"$name".json
+          if [[ "$name" =~ ^validator-identity- ]]; then
+            name="${name//-identity-/-vote-}"
+            solana-keygen new --no-passphrase -so config/"$name".json
+            name="${name//-vote-/-stake-}"
+            solana-keygen new --no-passphrase -so config/"$name".json
+          fi
         fi
         if [[ -n $internalNodesLamports ]]; then
           declare pubkey
@@ -212,7 +225,35 @@ EOF
       if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
+      if [[ "$extraPrimordialStakes" -gt 0 ]]; then
+        if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then
+          echo "warning: extraPrimordialStakes($extraPrimordialStakes) clamped to numNodes($numNodes)"
+          extraPrimordialStakes=$numNodes
+        fi
+        for i in $(seq "$extraPrimordialStakes"); do
+          args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
+                                       "$(solana-keygen pubkey "config/validator-vote-$i.json")"
+                                       "$(solana-keygen pubkey "config/validator-stake-$i.json")"
+          )
+        done
+      fi
+
       multinode-demo/setup.sh "${args[@]}"
+
+      maybeWaitForSupermajority=
+      # shellcheck disable=SC2086 # Do not want to quote $extraNodeArgs
+      set -- $extraNodeArgs
+      while [[ -n $1 ]]; do
+        if [[ $1 = "--wait-for-supermajority" ]]; then
+          maybeWaitForSupermajority=$2
+          break
+        fi
+        shift
+      done
+
+      if [[ -z "$maybeWarpSlot" ]]; then
+        maybeWarpSlot="--warp-slot $maybeWaitForSupermajority"
+      fi
 
       if [[ -n "$maybeWarpSlot" ]]; then
         # shellcheck disable=SC2086 # Do not want to quote $maybeWarSlot
@@ -220,6 +261,12 @@ EOF
       fi
 
       solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
+
+      if [[ -n "$maybeWaitForSupermajority" ]]; then
+        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash)
+        extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
+        echo "$bankHash" > config/bank-hash
+      fi
     fi
     args=(
       --gossip-host "$entrypointIp"
@@ -262,9 +309,16 @@ EOF
       else
         net/scripts/rsync-retry.sh -vPrc \
           "$entrypointIp":~/solana/config/validator-identity-"$nodeIndex".json config/validator-identity.json
+        net/scripts/rsync-retry.sh -vPrc \
+          "$entrypointIp":~/solana/config/validator-stake-"$nodeIndex".json config/stake-account.json
+        net/scripts/rsync-retry.sh -vPrc \
+          "$entrypointIp":~/solana/config/validator-vote-"$nodeIndex".json config/vote-account.json
       fi
       net/scripts/rsync-retry.sh -vPrc \
         "$entrypointIp":~/solana/config/shred-version config/shred-version
+
+      net/scripts/rsync-retry.sh -vPrc \
+        "$entrypointIp":~/solana/config/bank-hash config/bank-hash || true
 
       net/scripts/rsync-retry.sh -vPrc \
         "$entrypointIp":~/solana/config/faucet.json config/faucet.json
@@ -293,9 +347,17 @@ EOF
       solana-keygen new --no-passphrase -so config/validator-identity.json
     fi
     args+=(--identity config/validator-identity.json)
+    if [[ ! -f config/vote-account.json ]]; then
+      solana-keygen new --no-passphrase -so config/vote-account.json
+    fi
+    args+=(--vote-account config/vote-account.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
+    fi
+
+    if [[ -r config/bank-hash ]]; then
+      args+=(--expected-bank-hash "$(cat config/bank-hash)")
     fi
 
     set -x
@@ -350,7 +412,9 @@ EOF
         args+=(--keypair config/validator-identity.json)
       fi
 
-      multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
+      if [[ ${#extraPrimordialStakes} -eq 0 ]]; then
+        multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
+      fi
     fi
     ;;
   *)

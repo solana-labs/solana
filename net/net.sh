@@ -71,6 +71,10 @@ Operate a configured testnet
                                       - If set, disables the faucet keypair.  Nodes must be funded in genesis config
    --faucet-lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
+   --extra-primordial-stakes NUM_EXTRA_PRIMORDIAL_STAKES
+                                      - Number of extra nodes to be initially staked in genesis.
+                                        Implies --wait-for-supermajority 1 --async-node-init and the supermajority
+                                        wait slot may be overridden with the corresponding flag
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to stake internal nodes.
    --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
@@ -284,6 +288,7 @@ startBootstrapLeader() {
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
+         \"$extraPrimordialStakes\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -354,6 +359,7 @@ startNode() {
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
+         \"$extraPrimordialStakes\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -759,6 +765,7 @@ clientDelayStart=0
 netLogDir=
 maybeWarpSlot=
 waitForNodeInit=true
+extraPrimordialStakes=0
 
 command=$1
 [[ -n $command ]] || usage
@@ -865,6 +872,15 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
       shift 1
+    elif [[ $1 == --extra-primordial-stakes ]]; then
+      extraPrimordialStakes=$2
+      # Extra primoridial stakes require that all of the validators start at
+      # the same time. Force async init and wait for supermajority here.
+      waitForNodeInit=false
+      if [[ -z "$maybeWaitForSupermajority" ]]; then
+        maybeWaitForSupermajority="--wait-for-supermajority 1"
+      fi
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -979,6 +995,16 @@ if [[ "$numClientsRequested" -eq 0 ]]; then
 else
   if [[ "$numClientsRequested" -gt "$numClients" ]]; then
     echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
+    exit 1
+  fi
+fi
+
+if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
+  read -r _ waitSlot <<<"$maybeWaitForSupermajority"
+  read -r _ warpSlot <<<"$maybeWarpSlot"
+  if [[ $waitSlot -ne $warpSlot ]]; then
+    echo "Error: When specifying both --wait-for-supermajority and --warp-slot,"
+    echo "they must use the same slot. ($waitSlot != $warpSlot)"
     exit 1
   fi
 fi
