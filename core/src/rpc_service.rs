@@ -30,7 +30,7 @@ pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
     #[cfg(test)]
-    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
+    pub request_processor: JsonRpcRequestProcessor, // Used only by test_rpc_new()...
 
     close_handle: Option<CloseHandle>,
 }
@@ -249,14 +249,14 @@ impl JsonRpcService {
             override_health_check,
         ));
 
-        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
+        let request_processor = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit.clone(),
             health.clone(),
-        )));
+        );
 
         #[cfg(test)]
         let test_request_processor = request_processor.clone();
@@ -398,8 +398,6 @@ mod tests {
             10_000,
             rpc_service
                 .request_processor
-                .read()
-                .unwrap()
                 .get_balance(Ok(mint_keypair.pubkey()), None)
                 .unwrap()
                 .value
