@@ -13,6 +13,7 @@ use solana_notifier::Notifier;
 use solana_sdk::{
     account_utils::StateMut,
     clock::{Epoch, Slot},
+    commitment_config::CommitmentConfig,
     message::Message,
     native_token::*,
     pubkey::Pubkey,
@@ -20,7 +21,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction, stake_state::StakeState};
-use solana_transaction_status::TransactionStatus;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -31,7 +31,7 @@ use std::{
     process,
     str::FromStr,
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 mod validator_list;
@@ -381,7 +381,6 @@ fn simulate_transactions(
     Ok(simulated_transactions)
 }
 
-#[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn transact(
     rpc_client: &RpcClient,
     dry_run: bool,
@@ -394,7 +393,9 @@ fn transact(
         lamports_to_sol(authorized_staker_balance)
     );
 
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, last_valid_slot) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::max())?
+        .value;
     info!("{} transactions to send", transactions.len());
 
     let required_fee = transactions.iter().fold(0, |fee, (transaction, _)| {
@@ -405,29 +406,14 @@ fn transact(
         return Err("Authorized staker has insufficient funds".into());
     }
 
-    struct PendingTransaction {
-        transaction: Transaction,
-        memo: String,
-        last_status: Option<TransactionStatus>,
-        last_status_update: Instant,
-    };
-
     let mut pending_transactions = HashMap::new();
     for (mut transaction, memo) in transactions.into_iter() {
         transaction.sign(&[authorized_staker], blockhash);
 
+        pending_transactions.insert(transaction.signatures[0], memo);
         if !dry_run {
             rpc_client.send_transaction(&transaction)?;
         }
-        pending_transactions.insert(
-            transaction.signatures[0],
-            PendingTransaction {
-                transaction,
-                memo,
-                last_status: None,
-                last_status_update: Instant::now(),
-            },
-        );
     }
 
     let mut finalized_transactions = vec![];
@@ -436,21 +422,26 @@ fn transact(
             break;
         }
 
-        if rpc_client
-            .get_fee_calculator_for_blockhash(&blockhash)?
-            .is_none()
-        {
+        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+        info!(
+            "Current slot={}, last_valid_slot={} (slots remaining: {}) ",
+            slot,
+            last_valid_slot,
+            last_valid_slot.saturating_sub(slot)
+        );
+
+        if slot > last_valid_slot {
             error!(
                 "Blockhash {} expired with {} pending transactions",
                 blockhash,
                 pending_transactions.len()
             );
 
-            for (signature, pending_transaction) in pending_transactions.into_iter() {
+            for (signature, memo) in pending_transactions.into_iter() {
                 finalized_transactions.push(ConfirmedTransaction {
                     success: false,
                     signature,
-                    memo: pending_transaction.memo,
+                    memo,
                 });
             }
             break;
@@ -474,17 +465,12 @@ fn transact(
         }
         assert_eq!(statuses.len(), pending_signatures.len());
 
-        let now = Instant::now();
-        let mut progressing_pending_transactions = 0;
-
         for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
-            let mut pending_transaction = pending_transactions.get_mut(&signature).unwrap();
-
-            trace!("{}: status={:?}", signature, status);
-            let confirmed = if dry_run {
+            info!("{}: status={:?}", signature, status);
+            let completed = if dry_run {
                 Some(true)
             } else if let Some(status) = &status {
-                if status.confirmations.is_none() {
+                if status.confirmations.is_none() || status.err.is_some() {
                     Some(status.err.is_none())
                 } else {
                     None
@@ -493,42 +479,17 @@ fn transact(
                 None
             };
 
-            if let Some(success) = confirmed {
-                debug!("{}: confirmed", signature);
-                let pending_transaction = pending_transactions.remove(&signature).unwrap();
+            if let Some(success) = completed {
+                warn!("{}: completed.  success={}", signature, success);
+                let memo = pending_transactions.remove(&signature).unwrap();
                 finalized_transactions.push(ConfirmedTransaction {
                     success,
                     signature,
-                    memo: pending_transaction.memo,
+                    memo,
                 });
-            } else if pending_transaction.last_status != status {
-                debug!("{}: made progress", signature);
-                progressing_pending_transactions += 1;
-                pending_transaction.last_status = status;
-                pending_transaction.last_status_update = now;
-            } else if now
-                .duration_since(pending_transaction.last_status_update)
-                .as_secs()
-                > 10
-            {
-                info!("{} - stale transaction, resending", signature);
-                if !dry_run {
-                    rpc_client.send_transaction(&pending_transaction.transaction)?;
-                }
-                pending_transaction.last_status = None;
-                pending_transaction.last_status_update = now;
-            } else {
-                debug!("{}: no progress", signature);
             }
         }
-
-        info!(
-            "{} pending transactions ({} of which made progress), {} finalized transactions",
-            pending_transactions.len(),
-            progressing_pending_transactions,
-            finalized_transactions.len()
-        );
-        sleep(Duration::from_millis(4000));
+        sleep(Duration::from_secs(5));
     }
 
     Ok(finalized_transactions)
