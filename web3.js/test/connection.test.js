@@ -203,6 +203,7 @@ test('get program accounts', async () => {
       },
     },
   ]);
+
   transaction = SystemProgram.assign({
     accountPubkey: account1.publicKey,
     programId: programId.publicKey,
@@ -213,8 +214,40 @@ test('get program accounts', async () => {
     skipPreflight: true,
   });
 
-  mockGetRecentBlockhash('recent');
-  const {feeCalculator} = await connection.getRecentBlockhash();
+  mockRpc.push([
+    url,
+    {
+      method: 'getFeeCalculatorForBlockhash',
+      params: [transaction.recentBlockhash, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: {
+          feeCalculator: {
+            lamportsPerSignature: 42,
+          },
+        },
+      },
+    },
+  ]);
+
+  if (transaction.recentBlockhash === null) {
+    expect(transaction.recentBlockhash).not.toBeNull();
+    return;
+  }
+
+  const feeCalculator = (
+    await connection.getFeeCalculatorForBlockhash(transaction.recentBlockhash)
+  ).value;
+
+  if (feeCalculator === null) {
+    expect(feeCalculator).not.toBeNull();
+    return;
+  }
 
   mockRpc.push([
     url,
@@ -1075,6 +1108,43 @@ test('get recent blockhash', async () => {
     expect(blockhash.length).toBeGreaterThanOrEqual(43);
     expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
   }
+});
+
+test('get fee calculator', async () => {
+  const connection = new Connection(url);
+
+  mockGetRecentBlockhash('recent');
+  const {blockhash} = await connection.getRecentBlockhash('recent');
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getFeeCalculatorForBlockhash',
+      params: [blockhash, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: {
+          feeCalculator: {
+            lamportsPerSignature: 5000,
+          },
+        },
+      },
+    },
+  ]);
+
+  const feeCalculator = (
+    await connection.getFeeCalculatorForBlockhash(blockhash, 'recent')
+  ).value;
+  if (feeCalculator === null) {
+    expect(feeCalculator).not.toBeNull();
+    return;
+  }
+  expect(feeCalculator.lamportsPerSignature).toEqual(5000);
 });
 
 test('get block time', async () => {

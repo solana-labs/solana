@@ -784,6 +784,20 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
 );
 
 /**
+ * Expected JSON RPC response for the "getFeeCalculatorForBlockhash" message
+ */
+const GetFeeCalculatorRpcResult = jsonRpcResultAndContext(
+  struct.union([
+    'null',
+    struct({
+      feeCalculator: struct({
+        lamportsPerSignature: 'number',
+      }),
+    }),
+  ]),
+);
+
+/**
  * Expected JSON RPC response for the "requestAirdrop" message
  */
 const RequestAirdropRpcResult = jsonRpcResult('string');
@@ -1504,6 +1518,31 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
+  }
+
+  /**
+   * Fetch the fee calculator for a recent blockhash from the cluster, return with context
+   */
+  async getFeeCalculatorForBlockhash(
+    blockhash: Blockhash,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<FeeCalculator | null>> {
+    const args = this._argsWithCommitment([blockhash], commitment);
+    const unsafeRes = await this._rpcRequest(
+      'getFeeCalculatorForBlockhash',
+      args,
+    );
+
+    const res = GetFeeCalculatorRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get fee calculator: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    const {context, value} = res.result;
+    return {
+      context,
+      value: value && value.feeCalculator,
+    };
   }
 
   /**
