@@ -6993,4 +6993,42 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
     }
+
+    #[test]
+    fn test_same_program_id_uses_unqiue_executable_accounts() {
+        fn nested_processor(
+            _program_id: &Pubkey,
+            keyed_accounts: &[KeyedAccount],
+            _data: &[u8],
+        ) -> result::Result<(), InstructionError> {
+            assert_eq!(42, keyed_accounts[0].lamports().unwrap());
+            let mut account = keyed_accounts[0].try_account_ref_mut()?;
+            account.lamports += 1;
+            Ok(())
+        }
+
+        let (genesis_config, mint_keypair) = create_genesis_config(50000);
+        let mut bank = Bank::new(&genesis_config);
+
+        // Add a new program
+        let program1_pubkey = Pubkey::new_rand();
+        bank.add_builtin_program("program", program1_pubkey, nested_processor);
+
+        // Add a new program owned by the first
+        let program2_pubkey = Pubkey::new_rand();
+        let mut program2_account = Account::new(42, 1, &program1_pubkey);
+        program2_account.executable = true;
+        bank.store_account(&program2_pubkey, &program2_account);
+
+        let instruction = Instruction::new(program2_pubkey, &10, vec![]);
+        let tx = Transaction::new_signed_with_payer(
+            &[instruction.clone(), instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+        assert!(bank.process_transaction(&tx).is_ok());
+        assert_eq!(1, bank.get_balance(&program1_pubkey));
+        assert_eq!(42, bank.get_balance(&program2_pubkey));
+    }
 }
