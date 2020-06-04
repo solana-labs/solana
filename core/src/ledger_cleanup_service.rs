@@ -123,7 +123,7 @@ impl LedgerCleanupService {
             }
         }
 
-        (true, lowest_cleanup_slot, first_slot, total_shreds)
+        (true, first_slot, lowest_cleanup_slot, total_shreds)
     }
 
     fn receive_new_roots(new_root_receiver: &Receiver<Slot>) -> Result<Slot, RecvTimeoutError> {
@@ -157,12 +157,12 @@ impl LedgerCleanupService {
         );
         *last_purge_slot = root;
 
-        let (slots_to_clean, lowest_cleanup_slot, first_slot, total_shreds) =
+        let (slots_to_clean, purge_first_slot, lowest_cleanup_slot, total_shreds) =
             Self::find_slots_to_clean(&blockstore, root, max_ledger_shreds);
 
         if slots_to_clean {
             let mut compact_first_slot = std::u64::MAX;
-            if root.saturating_sub(*last_compaction_slot) > compaction_interval {
+            if lowest_cleanup_slot.saturating_sub(*last_compaction_slot) > compaction_interval {
                 compact_first_slot = *last_compaction_slot;
                 *last_compaction_slot = lowest_cleanup_slot;
             }
@@ -179,12 +179,12 @@ impl LedgerCleanupService {
 
                     info!(
                         "purging data from slots {} to {}",
-                        first_slot, lowest_cleanup_slot
+                        purge_first_slot, lowest_cleanup_slot
                     );
 
                     let mut purge_time = Measure::start("purge_slots_with_delay");
                     blockstore.purge_slots_with_delay(
-                        first_slot,
+                        purge_first_slot,
                         lowest_cleanup_slot,
                         delay_between_purges,
                         PurgeType::PrimaryIndex,
