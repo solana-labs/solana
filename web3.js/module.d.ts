@@ -271,6 +271,10 @@ declare module '@solana/web3.js' {
     getRecentBlockhashAndContext(
       commitment?: Commitment,
     ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>>;
+    getFeeCalculatorForBlockhash(
+      blockhash: Blockhash,
+      commitment?: Commitment,
+    ): Promise<RpcResponseAndContext<FeeCalculator | null>>;
     getRecentBlockhash(
       commitment?: Commitment,
     ): Promise<BlockhashAndFeeCalculator>;
