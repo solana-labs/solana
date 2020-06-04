@@ -276,7 +276,10 @@ pub enum CliCommand {
         lamports: u64,
     },
     // Program Deployment
-    Deploy(String),
+    Deploy {
+        program_location: String,
+        address: Option<SignerIndex>,
+    },
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
@@ -662,15 +665,27 @@ pub fn parse_command(
             parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
         }
         // Program Deployment
-        ("deploy", Some(matches)) => Ok(CliCommandInfo {
-            command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
-            signers: vec![signer_from_path(
+        ("deploy", Some(matches)) => {
+            let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
+            let mut signers = vec![signer_from_path(
                 matches,
                 default_signer_path,
                 "keypair",
                 wallet_manager,
-            )?],
-        }),
+            )?];
+            let address = address_signer.map(|signer| {
+                signers.push(signer);
+                1
+            });
+
+            Ok(CliCommandInfo {
+                command: CliCommand::Deploy {
+                    program_location: matches.value_of("program_location").unwrap().to_string(),
+                    address,
+                },
+                signers,
+            })
+        }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
             parse_stake_create_account(matches, default_signer_path, wallet_manager)
@@ -1329,8 +1344,14 @@ fn process_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
+    address: Option<SignerIndex>,
 ) -> ProcessResult {
-    let program_id = Keypair::new();
+    let new_keypair = Keypair::new(); // Create ephemeral keypair to use for program address, if not provided
+    let program_id = if let Some(i) = address {
+        config.signers[i]
+    } else {
+        &new_keypair
+    };
     let mut file = File::open(program_location).map_err(|err| {
         CliError::DynamicProgramError(format!("Unable to open program file: {}", err))
     })?;
@@ -1352,9 +1373,9 @@ fn process_deploy(
     );
     let message = Message::new(&[ix]);
     let mut create_account_tx = Transaction::new_unsigned(message);
-    create_account_tx.try_sign(&[config.signers[0], &program_id], blockhash)?;
+    let signers = [config.signers[0], program_id];
+    create_account_tx.try_sign(&signers, blockhash)?;
     messages.push(&create_account_tx.message);
-    let signers = [config.signers[0], &program_id];
     let mut write_transactions = vec![];
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
@@ -1882,9 +1903,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Program Deployment
 
         // Deploy a custom program to the chain
-        CliCommand::Deploy(ref program_location) => {
-            process_deploy(&rpc_client, config, program_location)
-        }
+        CliCommand::Deploy {
+            program_location,
+            address,
+        } => process_deploy(&rpc_client, config, program_location, *address),
 
         // Stake Commands
 
@@ -2525,6 +2547,14 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
+                )
+                .arg(
+                    Arg::with_name("address_signer")
+                        .index(2)
+                        .value_name("SIGNER_KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help("The signer for the desired address of the program [default: new random address]")
                 ),
         )
         .subcommand(
@@ -2969,8 +2999,34 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy("/Users/test/program.o".to_string()),
+                command: CliCommand::Deploy {
+                    program_location: "/Users/test/program.o".to_string(),
+                    address: None,
+                },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        let custom_address = Keypair::new();
+        let custom_address_file = make_tmp_path("custom_address_file");
+        write_keypair_file(&custom_address, &custom_address_file).unwrap();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deploy",
+            "/Users/test/program.o",
+            &custom_address_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Deploy {
+                    program_location: "/Users/test/program.o".to_string(),
+                    address: Some(1),
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&custom_address_file).unwrap().into(),
+                ],
             }
         );
 
@@ -3672,7 +3728,10 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-        config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
+        config.command = CliCommand::Deploy {
+            program_location: pathbuf.to_str().unwrap().to_string(),
+            address: None,
+        };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let program_id = json
@@ -3686,7 +3745,10 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Deploy("bad/file/location.so".to_string());
+        config.command = CliCommand::Deploy {
+            program_location: "bad/file/location.so".to_string(),
+            address: None,
+        };
         assert!(process_command(&config).is_err());
     }
 
