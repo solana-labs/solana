@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtin_programs::get_builtin_programs,
+    builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::MessageProcessor,
     nonce_utils,
@@ -456,6 +456,14 @@ impl Bank {
                 parent.entered_epoch_callback.read().unwrap().as_ref()
             {
                 entered_epoch_callback(&mut new)
+            }
+
+            if let Some(builtin_programs) =
+                get_epoch_activated_builtin_programs(new.operating_mode(), new.epoch)
+            {
+                for program in builtin_programs.iter() {
+                    new.add_builtin_program(&program.name, program.id, program.process_instruction);
+                }
             }
         }
 
@@ -2049,7 +2057,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtin_programs = get_builtin_programs();
+        let builtin_programs = get_builtin_programs(self.operating_mode(), self.epoch);
         for program in builtin_programs.iter() {
             self.add_builtin_program(&program.name, program.id, program.process_instruction);
         }
@@ -2552,6 +2560,7 @@ mod tests {
     use super::*;
     use crate::{
         accounts_index::Ancestors,
+        builtin_programs::new_system_program_activation_epoch,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
@@ -6587,6 +6596,77 @@ mod tests {
         // Ensure that no rent was collected, and the entire burn amount was removed from bank
         // capitalization
         assert_eq!(bank.capitalization(), pre_capitalization - burn_amount);
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_stable() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Stable;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch > bank0.epoch());
+
+        // Transfer to self is not supported by legacy_system_instruction_processor0
+        bank0
+            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap_err();
+
+        // Activate system_instruction_processor
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(activation_epoch),
+        );
+
+        // Transfer to self is supported by system_instruction_processor
+        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_preview() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Preview;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch > bank0.epoch());
+
+        // Transfer to self is not supported by legacy_system_instruction_processor0
+        bank0
+            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap_err();
+
+        // Activate system_instruction_processor
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(activation_epoch),
+        );
+
+        // Transfer to self is supported by system_instruction_processor
+        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_legacy_system_instruction_processor0_development() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.operating_mode = OperatingMode::Development;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
+        assert!(activation_epoch == bank0.epoch());
+
+        // Transfer to self is supported by system_instruction_processor
+        bank0
+            .transfer(2, &mint_keypair, &mint_keypair.pubkey())
+            .unwrap();
     }
 
     #[test]

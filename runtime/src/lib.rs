@@ -9,6 +9,7 @@ pub mod bloom;
 pub mod builtin_programs;
 pub mod epoch_stakes;
 pub mod genesis_utils;
+mod legacy_system_instruction_processor0;
 pub mod loader_utils;
 pub mod message_processor;
 mod native_loader;
