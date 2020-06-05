@@ -76,7 +76,10 @@ pub struct JsonRpcRequestProcessor {
     config: JsonRpcConfig,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     health: Arc<RpcHealth>,
+    cluster_info: Arc<ClusterInfo>,
+    genesis_hash: Hash,
 }
+impl Metadata for JsonRpcRequestProcessor {}
 
 impl JsonRpcRequestProcessor {
     fn bank(&self, commitment: Option<CommitmentConfig>) -> Result<Arc<Bank>> {
@@ -131,14 +134,18 @@ impl JsonRpcRequestProcessor {
         blockstore: Arc<Blockstore>,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
         health: Arc<RpcHealth>,
+        cluster_info: Arc<ClusterInfo>,
+        genesis_hash: Hash,
     ) -> Self {
-        JsonRpcRequestProcessor {
+        Self {
             config,
             bank_forks,
             block_commitment_cache,
             blockstore,
             validator_exit,
             health,
+            cluster_info,
+            genesis_hash,
         }
     }
 
@@ -739,8 +746,6 @@ fn run_transaction_simulation(
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
-    pub cluster_info: Arc<ClusterInfo>,
-    pub genesis_hash: Hash,
 }
 impl Metadata for Meta {}
 
@@ -1102,7 +1107,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
-        let cluster_info = &meta.cluster_info;
+        let cluster_info = &meta.request_processor.cluster_info;
         fn valid_address_or_none(addr: &SocketAddr) -> Option<SocketAddr> {
             if ContactInfo::is_valid_address(addr) {
                 Some(*addr)
@@ -1153,7 +1158,7 @@ impl RpcSol for RpcSolImpl {
 
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
         debug!("get_genesis_hash rpc request received");
-        Ok(meta.genesis_hash.to_string())
+        Ok(meta.request_processor.genesis_hash.to_string())
     }
 
     fn get_leader_schedule(
@@ -1345,7 +1350,7 @@ impl RpcSol for RpcSolImpl {
         })?;
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
+        let tpu_addr = get_tpu_addr(&meta.request_processor.cluster_info)?;
         transactions_socket
             .send_to(&data, tpu_addr)
             .map_err(|err| {
@@ -1420,7 +1425,7 @@ impl RpcSol for RpcSolImpl {
         }
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
+        let tpu_addr = get_tpu_addr(&meta.request_processor.cluster_info)?;
         transactions_socket
             .send_to(&wire_transaction, tpu_addr)
             .map_err(|err| {
@@ -1761,6 +1766,13 @@ pub mod tests {
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
 
+        let cluster_info = Arc::new(ClusterInfo::default());
+
+        cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            &leader_pubkey,
+            &socketaddr!("127.0.0.1:1234"),
+        ));
+
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
@@ -1772,22 +1784,14 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
+            cluster_info,
+            Hash::default(),
         );
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
-
-        cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
-            &leader_pubkey,
-            &socketaddr!("127.0.0.1:1234"),
-        ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            cluster_info,
-            genesis_hash: Hash::default(),
-        };
+        let meta = Meta { request_processor };
         RpcHandler {
             io,
             meta,
@@ -1821,6 +1825,8 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
+            Arc::new(ClusterInfo::default()),
+            Hash::default(),
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -2765,9 +2771,9 @@ pub mod tests {
                 blockstore,
                 validator_exit,
                 RpcHealth::stub(),
+                Arc::new(ClusterInfo::default()),
+                Hash::default(),
             ),
-            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
-            genesis_hash: Hash::default(),
         };
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
@@ -2803,11 +2809,11 @@ pub mod tests {
                 blockstore,
                 validator_exit,
                 health.clone(),
+                Arc::new(ClusterInfo::new_with_invalid_keypair(
+                    ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+                )),
+                Hash::default(),
             ),
-            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(
-                ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-            )),
-            genesis_hash: Hash::default(),
         };
 
         let mut bad_transaction =
@@ -2952,6 +2958,8 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
+            Arc::new(ClusterInfo::default()),
+            Hash::default(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -2975,6 +2983,8 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
+            Arc::new(ClusterInfo::default()),
+            Hash::default(),
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -3058,6 +3068,8 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
+            Arc::new(ClusterInfo::default()),
+            Hash::default(),
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
