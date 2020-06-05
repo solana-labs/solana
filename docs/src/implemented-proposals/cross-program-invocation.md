@@ -89,6 +89,7 @@ To sign an account with program derived addresses, a program may `invoke_signed(
             &[&["First addresses seed"], 
               &["Second addresses first seed", "Second addresses second seed"]],
         )?;
+```
 
 ### Reentrancy
 
