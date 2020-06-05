@@ -12,6 +12,13 @@ Note: The rent rate can change in the future.
 
 As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is roughly 2 days.
 
+This value is calculated to target 0.01 SOL per MiByte-year:
+
+```
+Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(MiByte) / (365.25/2)(epochs in 1 year)
+```
+And rent calculation is done with the `f64` precision and the final result is truncated to integers in lamports.
+
 The rent calculation includes account metadata (address, owner, lamports, etc) in the size of an account. Therefore the smallest an account can be for rent calculations is 128 bytes.
 
 For example, an account is created with the initial transfer of 10,000 lamports and no additional data. Rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports:
