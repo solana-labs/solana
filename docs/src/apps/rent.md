@@ -12,7 +12,7 @@ Note: The rent rate can change in the future.
 
 As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is roughly 2 days.
 
-This value is calculated to target 0.01 SOL per mebibyte-day:
+This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching to 3.56 SOL per mebibyte-year):
 
 ```
 Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(MiByte) / (365.25/2)(epochs in 1 year)
