@@ -231,6 +231,7 @@ struct GossipStats {
     epoch_slots_push: Counter,
     push_message: Counter,
     new_pull_requests: Counter,
+    new_pull_requests_count: Counter,
     mark_pull_request: Counter,
     skip_pull_response_shred_version: Counter,
     skip_pull_shred_version: Counter,
@@ -1353,6 +1354,9 @@ impl ClusterInfo {
                 .collect()
         };
         self.append_entrypoint_to_pulls(&mut pulls);
+        self.stats
+            .new_pull_requests_count
+            .add_relaxed(pulls.len() as u64);
         pulls
             .into_iter()
             .map(|(peer, filter, gossip, self_info)| {
@@ -2112,7 +2116,7 @@ impl ClusterInfo {
                 ),
             );
             datapoint_info!(
-                "cluster_info_shred_version_skip",
+                "cluster_info_stats4",
                 (
                     "skip_push_message_shred_version",
                     self.stats.skip_push_message_shred_version.clear(),
@@ -2136,6 +2140,11 @@ impl ClusterInfo {
                 (
                     "push_message_value_count",
                     self.stats.push_message_value_count.clear(),
+                    i64
+                ),
+                (
+                    "new_pull_requests_count",
+                    self.stats.new_pull_requests_count.clear(),
                     i64
                 ),
             );
