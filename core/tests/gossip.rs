@@ -4,13 +4,14 @@ extern crate log;
 use rayon::iter::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
+use solana_ledger::bank_forks::BankForks;
 
 use solana_perf::packet::Packet;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -19,6 +20,28 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
     let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);
+    let _ = cluster_info.my_contact_info();
+    (
+        cluster_info,
+        gossip_service,
+        test_node.sockets.tvu.pop().unwrap(),
+    )
+}
+
+fn test_node_with_bank(
+    node_keypair: Keypair,
+    exit: &Arc<AtomicBool>,
+    bank_forks: Arc<RwLock<BankForks>>,
+) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
+    let keypair = Arc::new(node_keypair);
+    let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        Some(bank_forks),
+        test_node.sockets.gossip,
+        exit,
+    );
     let _ = cluster_info.my_contact_info();
     (
         cluster_info,
@@ -180,4 +203,95 @@ pub fn cluster_info_retransmit() {
     dr1.join().unwrap();
     dr2.join().unwrap();
     dr3.join().unwrap();
+}
+
+#[test]
+pub fn cluster_info_scale() {
+    use solana_core::crds_value::MAX_VOTES;
+    use solana_measure::measure::Measure;
+    use solana_perf::test_tx::test_tx;
+    use solana_runtime::bank::Bank;
+    use solana_runtime::genesis_utils::{
+        create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+    };
+    solana_logger::setup();
+    let exit = Arc::new(AtomicBool::new(false));
+    let num_nodes: usize = std::env::var("NUM_NODES")
+        .unwrap_or("10".to_string())
+        .parse()
+        .expect("could not parse NUM_NODES as a number");
+
+    let vote_keypairs: Vec<_> = (0..num_nodes)
+        .into_iter()
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect();
+    let genesis_config_info = create_genesis_config_with_vote_accounts(10_000, &vote_keypairs, 100);
+    let bank0 = Bank::new(&genesis_config_info.genesis_config);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+
+    let nodes: Vec<_> = vote_keypairs
+        .into_iter()
+        .map(|keypairs| test_node_with_bank(keypairs.node_keypair, &exit, bank_forks.clone()))
+        .collect();
+    let ci0 = nodes[0].0.my_contact_info();
+    for node in &nodes[1..] {
+        node.0.insert_info(ci0.clone());
+    }
+
+    let mut time = Measure::start("time");
+    let mut done;
+    let mut success = false;
+    for _ in 0..30 {
+        done = true;
+        for (i, node) in nodes.iter().enumerate() {
+            warn!("node {} peers: {}", i, node.0.gossip_peers().len());
+            if node.0.gossip_peers().len() != num_nodes - 1 {
+                done = false;
+                break;
+            }
+        }
+        if done {
+            success = true;
+            break;
+        }
+        sleep(Duration::from_secs(1));
+    }
+    time.stop();
+    warn!("found {} nodes in {} success: {}", num_nodes, time, success);
+
+    //let num_votes = MAX_VOTES as usize;
+    let num_votes = 1;
+    let mut time = Measure::start("votes");
+    /*for node in &nodes {
+        for i in 0..num_votes {
+            node.0.push_vote(i, test_tx());
+        }
+    }*/
+
+    nodes[0].0.push_vote(0, test_tx());
+
+    let mut success = false;
+    for s in 0..(30 * 5) {
+        done = true;
+        for (i, node) in nodes.iter().enumerate() {
+            warn!("s: {} node {} votes: {}", s, i, node.0.get_votes(0).1.len());
+            //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
+            if node.0.get_votes(0).1.len() != 1 {
+                done = false;
+                break;
+            }
+        }
+        if done {
+            success = true;
+            break;
+        }
+        sleep(Duration::from_millis(200));
+    }
+    time.stop();
+    warn!("propagated vote in {} success: {}", time, success);
+
+    exit.store(true, Ordering::Relaxed);
+    for node in nodes {
+        node.1.join().unwrap();
+    }
 }
