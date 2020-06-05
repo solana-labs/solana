@@ -28,7 +28,7 @@ A program may be written in any programming language that can target the Berkley
 
 If the program needs to store state between transactions, it does so using _accounts_. Accounts are similar to files in operating systems such as Linux. Like a file, an account may hold arbitrary data and that data persists beyond the lifetime of a program. Also like a file, an account includes metadata that tells the runtime who is allowed to access the data and how.
 
-Unlike a file, the account includes metadata for the lifetime of the file. That lifetime is expressed in "tokens", which is a number of fractional native tokens, called _lamports_. Accounts are held in validator memory and pay ["rent"](rent.md) to stay there. Each validator periodically scan all accounts and collects rent. Any account that drops to zero lamports is purged.
+Unlike a file, the account includes metadata for the lifetime of the file. That lifetime is expressed in "tokens", which is a number of fractional native tokens, called _lamports_. Accounts are held in validator memory and pay ["rent"](rent.md) to stay there. Each validator periodically scans all accounts and collects rent. Any account that drops to zero lamports is purged.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client uses _addresses_ to look up accounts. The address is usually plain a 256-bit public key and presented as Base58 on user interfaces. To create an account with a public key, the client generates a _keypair_ and registers its public key using the `CreateAccount` instruction with preallocated fixed storage size in bytes. In fact, the account address can be arbitrary 32-bytes binary. As such there is a mechanism for derived addresses for advanced use (`CreateAccountWithSeed`).
 
@@ -49,4 +49,3 @@ After the runtime executes each of the transaction's instructions, it uses the a
 ## Smart Contracts
 
 Programs don't always require transaction signatures, as the System program does. Instead, the program may manage _smart contracts_. A smart contract is a set of constraints that once satisfied, signal to a program that a token transfer or account update is permitted. For example, one could use the Budget program to create a smart contract that authorizes a token transfer only after some date. Once evidence that the date has past, the contract progresses, and token transfer completes.
-

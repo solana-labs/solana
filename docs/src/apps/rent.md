@@ -1,46 +1,45 @@
 # Storage Rent for Accounts
 
-Keeping accounts alive incurs storage cost called _rent_ because the cluster must actively maintain the data to process any future transactions on it. This is not like Bitcoin or Ethereum, where account storages don't incur any costs.
+Keeping accounts alive on Solana incurs a storage cost called _rent_ because the cluster must actively maintain the data to process any future transactions on it. This is different from Bitcoin and Ethereum, where storing accounts doesn't incur any costs.
 
 The rent is debited from an account's balance by the runtime upon the first access in the current epoch by transactions or once per an epoch if there are no transactions. The rent is paid upfront for the next epoch. If an account can't pay rent for the next epoch, it's purged immediately at the start of a new epoch. The fee is currently a fixed rate, measured in bytes-times-epochs. The fee may change in the future.
 
-Accounts can be exempt from paying rent by maintaining a minimum balance, this rent-exemption is described below.
+Accounts can be exempt from paying rent if they maintain a minimum balance. This rent-exemption is described below.
 
 ## Calculation of rent
 
-Note: The rent rate can change in the future. And this applies to the testnet and mainnet-beta.
+Note: The rent rate can change in the future.
 
-As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch. And an epoch is roughly 2 days.
+As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is roughly 2 days.
 
-Firstly, the rent calculation considers the size of an account including the metadata including its address, owner, lamports, etc. Thus the rent fee starts from 128 bytes as the minimum to be rented even if an account has no data.
+The rent calculation includes account metadata (address, owner, lamports, etc) in the size of an account. Therefore the smallest an account can be for rent calculations is 128 bytes.
 
-For example, if a no-data account is created with the initial transfer of 10,000 lamports. The rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports.
+For example, an account is created with the initial transfer of 10,000 lamports and no additional data. Rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports:
 
-You can calculate like this:
-
-```
-7,561 = 10,000 (= transfered lamports) - 2,439 (= this account's rent fee for a epoch)
-2,439 = 19.055441478439427 (= rent rate) * 128 bytes (= minimum account size) * 1 (= epoch)
-```
-
-And the account balance will be reduced to 5,122 lamports at the next epoch even if there is no activity:
 
 ```
-5,122 = 7,561 (= current balance) - 2,439 (= this account's rent fee for a epoch)
+Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
+Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
 ```
 
-This also indicates an account will be immediately removed after creation if the transferred lamports is less than or equal to 2,439.
+The account balance will be reduced to 5,122 lamports at the next epoch even if there is no activity:
+
+```
+Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fee for an epoch)
+```
+
+Accordingly, a minimum-size account will be immediately removed after creation if the transferred lamports are less than or equal to 2,439.
 
 ## Rent exemption
 
-Alternatively, an account can be exempt from rent collection entirely by depositing a certain amount of lamports. Such a minimum amount is defined as the 2 years worth of rent fee. This is checked every time an account's balance is reduced and the rent is immediately debited once the balance goes below the minimum amount.
+Alternatively, an account can be made entirely exempt from rent collection by depositing at least 2 years-worth of rent. This is checked every time an account's balance is reduced and rent is immediately debited once the balance goes below the minimum amount.
 
-Program executable account required to be rent-exempt by the runtime to avoid being purged.
+Program executable accounts are required by the runtime to be rent-exempt to avoid being purged.
 
-Note: there is an RPC endpoint specifically to calculate this ([`getMinimumBalanceForRentExemption`](jsonrpc-api.md#getminimumbalanceforrentexemption)). Apps should rely on it. The following calculation is illustrative only.
+Note: Use the [`getMinimumBalanceForRentExemption` RPC endpoint](jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the minimum balance for a particular account size. The following calculation is illustrative only.
 
-For example, 105,290,880 lamports (=~ 0.105 SOL) is needed to be rent-exempt for a program executable with the size of 15,000 bytes:
+For example, a program executable with the size of 15,000 bytes requires a balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
 
 ```
-105,290,880 = 19.055441478439427 (= fee rate) * (128 + 15_000)(= account size including metadata) * ((365.25/2) * 2)(=epochs in 2 years)
+105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
