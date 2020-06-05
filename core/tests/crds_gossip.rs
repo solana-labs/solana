@@ -436,7 +436,7 @@ fn network_run_pull(
                         let rsp = node
                             .lock()
                             .unwrap()
-                            .generate_pull_responses(&filters)
+                            .generate_pull_responses(&filters, None)
                             .into_iter()
                             .flatten()
                             .collect();
