@@ -345,20 +345,18 @@ impl Blockstore {
                 }
             }
         }
-
-        if !self.no_compaction {
-            if let Err(e) = self.compact_storage(from_slot, to_slot) {
-                // This error is not fatal and indicates an internal error
-                error!(
-                    "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                    e, from_slot, to_slot
-                );
-            }
-        }
     }
 
+    // TODO: rename purge_slots() to purge_and_compact_slots()
     pub fn purge_slots(&self, from_slot: Slot, to_slot: Slot) {
-        self.purge_slots_with_delay(from_slot, to_slot, None)
+        self.purge_slots_with_delay(from_slot, to_slot, None);
+        if let Err(e) = self.compact_storage(from_slot, to_slot) {
+            // This error is not fatal and indicates an internal error?
+            error!(
+                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                e, from_slot, to_slot
+            );
+        }
     }
 
     /// Ensures that the SlotMeta::next_slots vector for all slots contain no references in the
@@ -475,6 +473,10 @@ impl Blockstore {
     }
 
     pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
+        if self.no_compaction {
+            info!("compact_storage: compaction disabled");
+            return Ok(false);
+        }
         info!("compact_storage: from {} to {}", from_slot, to_slot);
         let mut compact_timer = Measure::start("compact_range");
         let result = self
