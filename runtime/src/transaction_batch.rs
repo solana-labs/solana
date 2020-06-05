@@ -81,6 +81,23 @@ mod tests {
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
+    #[test]
+    fn test_simulation_batch() {
+        let (bank, txs) = setup();
+
+        // Prepare batch without locks
+        let batch = bank.prepare_simulation_batch(&txs);
+        assert!(batch.lock_results().iter().all(|x| x.is_ok()));
+
+        // Grab locks
+        let batch2 = bank.prepare_batch(&txs, None);
+        assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
+
+        // Prepare another batch without locks
+        let batch3 = bank.prepare_simulation_batch(&txs);
+        assert!(batch3.lock_results().iter().all(|x| x.is_ok()));
+    }
+
     fn setup() -> (Bank, Vec<Transaction>) {
         let dummy_leader_pubkey = Pubkey::new_rand();
         let GenesisConfigInfo {
