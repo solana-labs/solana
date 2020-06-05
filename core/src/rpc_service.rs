@@ -256,7 +256,7 @@ impl JsonRpcService {
             blockstore,
             validator_exit.clone(),
             health.clone(),
-            cluster_info.clone(),
+            cluster_info,
             genesis_hash,
         );
 
@@ -281,9 +281,7 @@ impl JsonRpcService {
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
-                    move |_req: &hyper::Request<hyper::Body>| Meta {
-                        request_processor: request_processor.clone(),
-                    },
+                    move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
                 .threads(num_cpus::get())
                 .cors(DomainsValidation::AllowOnly(vec![

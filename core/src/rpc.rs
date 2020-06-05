@@ -743,12 +743,6 @@ fn run_transaction_simulation(
     (executed[0].0.clone().map(|_| ()), log_collector.output())
 }
 
-#[derive(Clone)]
-pub struct Meta {
-    pub request_processor: JsonRpcRequestProcessor,
-}
-impl Metadata for Meta {}
-
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
@@ -1018,7 +1012,7 @@ pub trait RpcSol {
 
 pub struct RpcSolImpl;
 impl RpcSol for RpcSolImpl {
-    type Metadata = Meta;
+    type Metadata = JsonRpcRequestProcessor;
 
     fn confirm_transaction(
         &self,
@@ -1028,8 +1022,7 @@ impl RpcSol for RpcSolImpl {
     ) -> RpcResponse<bool> {
         debug!("confirm_transaction rpc request received: {:?}", id);
         let signature = verify_signature(&id);
-        meta.request_processor
-            .confirm_transaction(signature, commitment)
+        meta.confirm_transaction(signature, commitment)
     }
 
     fn get_account_info(
@@ -1040,7 +1033,7 @@ impl RpcSol for RpcSolImpl {
     ) -> RpcResponse<Option<RpcAccount>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
-        meta.request_processor.get_account_info(pubkey, commitment)
+        meta.get_account_info(pubkey, commitment)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -1053,8 +1046,7 @@ impl RpcSol for RpcSolImpl {
             "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
             data_len
         );
-        meta.request_processor
-            .get_minimum_balance_for_rent_exemption(data_len, commitment)
+        meta.get_minimum_balance_for_rent_exemption(data_len, commitment)
     }
 
     fn get_program_accounts(
@@ -1068,8 +1060,7 @@ impl RpcSol for RpcSolImpl {
             program_id_str
         );
         let program_id = verify_pubkey(program_id_str)?;
-        meta.request_processor
-            .get_program_accounts(&program_id, commitment)
+        meta.get_program_accounts(&program_id, commitment)
     }
 
     fn get_inflation_governor(
@@ -1078,7 +1069,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcInflationGovernor> {
         debug!("get_inflation_governor rpc request received");
-        meta.request_processor.get_inflation_governor(commitment)
+        meta.get_inflation_governor(commitment)
     }
 
     fn get_inflation_rate(
@@ -1087,12 +1078,12 @@ impl RpcSol for RpcSolImpl {
         epoch: Option<Epoch>,
     ) -> Result<RpcInflationRate> {
         debug!("get_inflation_rate rpc request received");
-        meta.request_processor.get_inflation_rate(epoch)
+        meta.get_inflation_rate(epoch)
     }
 
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
         debug!("get_epoch_schedule rpc request received");
-        meta.request_processor.get_epoch_schedule()
+        meta.get_epoch_schedule()
     }
 
     fn get_balance(
@@ -1103,11 +1094,11 @@ impl RpcSol for RpcSolImpl {
     ) -> RpcResponse<u64> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
-        meta.request_processor.get_balance(pubkey, commitment)
+        meta.get_balance(pubkey, commitment)
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
-        let cluster_info = &meta.request_processor.cluster_info;
+        let cluster_info = &meta.cluster_info;
         fn valid_address_or_none(addr: &SocketAddr) -> Option<SocketAddr> {
             if ContactInfo::is_valid_address(addr) {
                 Some(*addr)
@@ -1144,7 +1135,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<EpochInfo> {
-        let bank = meta.request_processor.bank(commitment)?;
+        let bank = meta.bank(commitment)?;
         Ok(bank.get_epoch_info())
     }
 
@@ -1153,12 +1144,12 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         block: Slot,
     ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
-        Ok(meta.request_processor.get_block_commitment(block))
+        Ok(meta.get_block_commitment(block))
     }
 
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
         debug!("get_genesis_hash rpc request received");
-        Ok(meta.request_processor.genesis_hash.to_string())
+        Ok(meta.genesis_hash.to_string())
     }
 
     fn get_leader_schedule(
@@ -1167,7 +1158,7 @@ impl RpcSol for RpcSolImpl {
         slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<RpcLeaderSchedule>> {
-        let bank = meta.request_processor.bank(commitment)?;
+        let bank = meta.bank(commitment)?;
         let slot = slot.unwrap_or_else(|| bank.slot());
         let epoch = bank.epoch_schedule().get_epoch(slot);
 
@@ -1194,7 +1185,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         debug!("get_recent_blockhash rpc request received");
-        meta.request_processor.get_recent_blockhash(commitment)
+        meta.get_recent_blockhash(commitment)
     }
 
     fn get_fees(
@@ -1203,7 +1194,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcFees> {
         debug!("get_fees rpc request received");
-        meta.request_processor.get_fees(commitment)
+        meta.get_fees(commitment)
     }
 
     fn get_fee_calculator_for_blockhash(
@@ -1215,13 +1206,12 @@ impl RpcSol for RpcSolImpl {
         debug!("get_fee_calculator_for_blockhash rpc request received");
         let blockhash =
             Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-        meta.request_processor
-            .get_fee_calculator_for_blockhash(&blockhash, commitment)
+        meta.get_fee_calculator_for_blockhash(&blockhash, commitment)
     }
 
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
         debug!("get_fee_rate_governor rpc request received");
-        meta.request_processor.get_fee_rate_governor()
+        meta.get_fee_rate_governor()
     }
 
     fn get_signature_confirmation(
@@ -1235,9 +1225,7 @@ impl RpcSol for RpcSolImpl {
             signature_str
         );
         let signature = verify_signature(&signature_str)?;
-        Ok(meta
-            .request_processor
-            .get_signature_confirmation_status(signature, commitment))
+        Ok(meta.get_signature_confirmation_status(signature, commitment))
     }
 
     fn get_signature_status(
@@ -1247,9 +1235,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<transaction::Result<()>>> {
         let signature = verify_signature(&signature_str)?;
-        Ok(meta
-            .request_processor
-            .get_signature_status(signature, commitment))
+        Ok(meta.get_signature_status(signature, commitment))
     }
 
     fn get_signature_statuses(
@@ -1268,12 +1254,11 @@ impl RpcSol for RpcSolImpl {
         for signature_str in signature_strs {
             signatures.push(verify_signature(&signature_str)?);
         }
-        meta.request_processor
-            .get_signature_statuses(signatures, config)
+        meta.get_signature_statuses(signatures, config)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        meta.request_processor.get_slot(commitment)
+        meta.get_slot(commitment)
     }
 
     fn get_transaction_count(
@@ -1282,7 +1267,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64> {
         debug!("get_transaction_count rpc request received");
-        meta.request_processor.get_transaction_count(commitment)
+        meta.get_transaction_count(commitment)
     }
 
     fn get_total_supply(
@@ -1291,7 +1276,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64> {
         debug!("get_total_supply rpc request received");
-        meta.request_processor.get_total_supply(commitment)
+        meta.get_total_supply(commitment)
     }
 
     fn get_largest_accounts(
@@ -1300,7 +1285,7 @@ impl RpcSol for RpcSolImpl {
         config: Option<RpcLargestAccountsConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>> {
         debug!("get_largest_accounts rpc request received");
-        meta.request_processor.get_largest_accounts(config)
+        meta.get_largest_accounts(config)
     }
 
     fn get_supply(
@@ -1309,7 +1294,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcSupply> {
         debug!("get_supply rpc request received");
-        meta.request_processor.get_supply(commitment)
+        meta.get_supply(commitment)
     }
 
     fn request_airdrop(
@@ -1326,18 +1311,10 @@ impl RpcSol for RpcSolImpl {
             &commitment
         );
 
-        let faucet_addr = meta
-            .request_processor
-            .config
-            .faucet_addr
-            .ok_or_else(Error::invalid_request)?;
+        let faucet_addr = meta.config.faucet_addr.ok_or_else(Error::invalid_request)?;
         let pubkey = verify_pubkey(pubkey_str)?;
 
-        let blockhash = meta
-            .request_processor
-            .bank(commitment.clone())?
-            .confirmed_last_blockhash()
-            .0;
+        let blockhash = meta.bank(commitment.clone())?.confirmed_last_blockhash().0;
         let transaction = request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
@@ -1350,7 +1327,7 @@ impl RpcSol for RpcSolImpl {
         })?;
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.request_processor.cluster_info)?;
+        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         transactions_socket
             .send_to(&data, tpu_addr)
             .map_err(|err| {
@@ -1366,10 +1343,7 @@ impl RpcSol for RpcSolImpl {
             _ => 30,
         };
         loop {
-            signature_status = meta
-                .request_processor
-                .get_signature_statuses(vec![signature], None)?
-                .value[0]
+            signature_status = meta.get_signature_statuses(vec![signature], None)?.value[0]
                 .clone()
                 .filter(|result| result.satisfies_commitment(commitment.unwrap_or_default()))
                 .map(|x| x.status);
@@ -1403,14 +1377,14 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            if meta.request_processor.health.check() != RpcHealthStatus::Ok {
+            if meta.health.check() != RpcHealthStatus::Ok {
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: "RPC node is unhealthy, unable to simulate transaction".into(),
                 }
                 .into());
             }
 
-            let bank = &*meta.request_processor.bank(None)?;
+            let bank = &*meta.bank(None)?;
             if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction) {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
@@ -1425,7 +1399,7 @@ impl RpcSol for RpcSolImpl {
         }
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.request_processor.cluster_info)?;
+        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         transactions_socket
             .send_to(&wire_transaction, tpu_addr)
             .map_err(|err| {
@@ -1455,7 +1429,7 @@ impl RpcSol for RpcSolImpl {
             Ok(())
         };
 
-        let bank = &*meta.request_processor.bank(None)?;
+        let bank = &*meta.bank(None)?;
         let logs = if result.is_ok() {
             let sim_result = run_transaction_simulation(&bank, transaction);
             result = sim_result.0;
@@ -1478,11 +1452,11 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String> {
-        meta.request_processor.get_slot_leader(commitment)
+        meta.get_slot_leader(commitment)
     }
 
     fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
-        meta.request_processor.minimum_ledger_slot()
+        meta.minimum_ledger_slot()
     }
 
     fn get_vote_accounts(
@@ -1490,16 +1464,16 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcVoteAccountStatus> {
-        meta.request_processor.get_vote_accounts(commitment)
+        meta.get_vote_accounts(commitment)
     }
 
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
-        meta.request_processor.validator_exit()
+        meta.validator_exit()
     }
 
     fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity> {
         Ok(RpcIdentity {
-            identity: meta.request_processor.config.identity_pubkey.to_string(),
+            identity: meta.config.identity_pubkey.to_string(),
         })
     }
 
@@ -1510,7 +1484,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn set_log_filter(&self, meta: Self::Metadata, filter: String) -> Result<()> {
-        meta.request_processor.set_log_filter(filter)
+        meta.set_log_filter(filter)
     }
 
     fn get_confirmed_block(
@@ -1519,7 +1493,7 @@ impl RpcSol for RpcSolImpl {
         slot: Slot,
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
-        meta.request_processor.get_confirmed_block(slot, encoding)
+        meta.get_confirmed_block(slot, encoding)
     }
 
     fn get_confirmed_blocks(
@@ -1528,12 +1502,11 @@ impl RpcSol for RpcSolImpl {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
-        meta.request_processor
-            .get_confirmed_blocks(start_slot, end_slot)
+        meta.get_confirmed_blocks(start_slot, end_slot)
     }
 
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        meta.request_processor.get_block_time(slot)
+        meta.get_block_time(slot)
     }
 
     fn get_confirmed_transaction(
@@ -1543,8 +1516,7 @@ impl RpcSol for RpcSolImpl {
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         let signature = verify_signature(&signature_str)?;
-        meta.request_processor
-            .get_confirmed_transaction(signature, encoding)
+        meta.get_confirmed_transaction(signature, encoding)
     }
 
     fn get_confirmed_signatures_for_address(
@@ -1567,8 +1539,7 @@ impl RpcSol for RpcSolImpl {
                 MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
             )));
         }
-        meta.request_processor
-            .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
+        meta.get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
             .map(|signatures| {
                 signatures
                     .iter()
@@ -1578,7 +1549,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
-        meta.request_processor.get_first_available_block()
+        meta.get_first_available_block()
     }
 }
 
@@ -1648,8 +1619,8 @@ pub mod tests {
     const TEST_SLOTS_PER_EPOCH: u64 = 50;
 
     struct RpcHandler {
-        io: MetaIoHandler<Meta>,
-        meta: Meta,
+        io: MetaIoHandler<JsonRpcRequestProcessor>,
+        meta: JsonRpcRequestProcessor,
         bank: Arc<Bank>,
         bank_forks: Arc<RwLock<BankForks>>,
         blockhash: Hash,
@@ -1773,7 +1744,7 @@ pub mod tests {
             &socketaddr!("127.0.0.1:1234"),
         ));
 
-        let request_processor = JsonRpcRequestProcessor::new(
+        let meta = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
                 identity_pubkey: *pubkey,
@@ -1791,7 +1762,6 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta { request_processor };
         RpcHandler {
             io,
             meta,
@@ -2763,18 +2733,16 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(
-                JsonRpcConfig::default(),
-                new_bank_forks().0,
-                block_commitment_cache,
-                blockstore,
-                validator_exit,
-                RpcHealth::stub(),
-                Arc::new(ClusterInfo::default()),
-                Hash::default(),
-            ),
-        };
+        let meta = JsonRpcRequestProcessor::new(
+            JsonRpcConfig::default(),
+            new_bank_forks().0,
+            block_commitment_cache,
+            blockstore,
+            validator_exit,
+            RpcHealth::stub(),
+            Arc::new(ClusterInfo::default()),
+            Hash::default(),
+        );
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
@@ -2801,20 +2769,18 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(
-                JsonRpcConfig::default(),
-                bank_forks,
-                block_commitment_cache,
-                blockstore,
-                validator_exit,
-                health.clone(),
-                Arc::new(ClusterInfo::new_with_invalid_keypair(
-                    ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-                )),
-                Hash::default(),
-            ),
-        };
+        let meta = JsonRpcRequestProcessor::new(
+            JsonRpcConfig::default(),
+            bank_forks,
+            block_commitment_cache,
+            blockstore,
+            validator_exit,
+            health.clone(),
+            Arc::new(ClusterInfo::new_with_invalid_keypair(
+                ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+            )),
+            Hash::default(),
+        );
 
         let mut bad_transaction =
             system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
