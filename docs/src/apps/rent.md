@@ -37,7 +37,7 @@ Alternatively, an account can be exempt from rent collection entirely by deposit
 
 Program executable account required to be rent-exempt by the runtime to avoid being purged.
 
-Note: there is an RPC endpoint specifically to calculate this (`getMinimumBalanceForRentExemption`). Apps should rely on it. The following calculation is illustrative only.
+Note: there is an RPC endpoint specifically to calculate this ([`getMinimumBalanceForRentExemption`](../jsonrpc-api.md#getminimumbalanceforrentexemption)). Apps should rely on it. The following calculation is illustrative only.
 
 For example, 105,290,880 lamports (=~ 0.105 SOL) is needed to be rent-exempt for a program executable with the size of 15,000 bytes:
 
