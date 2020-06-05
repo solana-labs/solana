@@ -374,14 +374,17 @@ mod tests {
         // send signal to cleanup slots
         let (sender, receiver) = channel();
         sender.send(n).unwrap();
-        let mut next_purge_batch = 0;
+        let mut last_purge_slot = 0;
+        let mut last_compaction_slot = 0;
         LedgerCleanupService::cleanup_ledger(
             &receiver,
             &blockstore,
             max_ledger_shreds,
-            &mut next_purge_batch,
+            &mut last_purge_slot,
             10,
             None,
+            &mut last_compaction_slot,
+            10,
         )
         .unwrap();
 
