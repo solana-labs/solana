@@ -3,7 +3,7 @@
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::blockstore_db::Result as BlockstoreResult;
 use solana_measure::measure::Measure;
-use solana_sdk::clock::{Slot, DEFAULT_SLOTS_PER_EPOCH};
+use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY};
 use std::string::ToString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -32,8 +32,9 @@ pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
 // Delay between purges to cooperate with other blockstore users
 pub const DEFAULT_DELAY_BETWEEN_PURGES: Duration = Duration::from_millis(500);
 
-// Compacting at a slower interval than purging helps keep IOPS down
-const DEFAULT_COMPACTION_SLOT_INTERVAL: u64 = DEFAULT_SLOTS_PER_EPOCH;
+// Compacting at a slower interval than purging helps keep IOPS down.
+// Once a day should be ample
+const DEFAULT_COMPACTION_SLOT_INTERVAL: u64 = TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
 
 pub struct LedgerCleanupService {
     t_cleanup: JoinHandle<()>,
