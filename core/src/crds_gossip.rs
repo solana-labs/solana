@@ -166,8 +166,9 @@ impl CrdsGossip {
     pub fn generate_pull_responses(
         &self,
         filters: &[(CrdsValue, CrdsFilter)],
+        now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
-        self.pull.generate_pull_responses(&self.crds, filters)
+        self.pull.generate_pull_responses(&self.crds, filters, now)
     }
 
     /// process a pull response
