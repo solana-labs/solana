@@ -10,7 +10,7 @@ Accounts can be exempt from paying rent by maintaining a minimum balance, this r
 
 Note: The rent rate can change in the future. And this applies to the testnet and mainnet-beta.
 
-As of writing, the fixed rent fee is 19.055441478439427 lamports (bytes-epochs). And an epoch is roughly 2 days.
+As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch. And an epoch is roughly 2 days.
 
 Firstly, the rent calculation considers the size of an account including the metadata including its address, owner, lamports, etc. Thus the rent fee starts from 128 bytes as the minimum to be rented even if an account has no data.
 
