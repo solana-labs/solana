@@ -284,7 +284,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     }
 }
 
-pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) {
+pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], test_name: &str) {
     let mut roots = vec![HashSet::new(); contact_infos.len()];
     let mut done = false;
     let mut last_print = Instant::now();
@@ -295,7 +295,7 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) 
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
             if last_print.elapsed().as_secs() > 3 {
-                info!("PARTITION_TEST min observed roots {}/16", min_node);
+                info!("{} min observed roots {}/16", test_name, min_node);
                 last_print = Instant::now();
             }
             done = min_node >= num_new_roots;
