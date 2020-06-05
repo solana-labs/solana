@@ -17,6 +17,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+    crds_gossip_push::{CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS},
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
         Version, Vote, MAX_WALLCLOCK,
@@ -1687,11 +1688,11 @@ impl ClusterInfo {
         let self_id = me.id();
 
         //skip messages that are likely to be pushed
-        let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+        //let this warm up
+        let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
         let push_timer = if min_filter_time < now {
-            // reason for / 3 is to allow push_self which has a /2 timeout to propagate
-            // first through push before responding with those values.
-            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 3)
+            // let messages go through push before responding with those values.
+            Some(now - CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS / 2)
         } else {
             None
         };

@@ -330,8 +330,8 @@ impl CrdsGossipPull {
         let mut ret = vec![vec![]; filters.len()];
         let now = now.unwrap_or(u64::MAX);
         for v in crds.table.values() {
-            //skip messages that are newer than now
-            if v.insert_timestamp > now {
+            //skip messages that are newer than now except for CI
+            if v.insert_timestamp > now &&  v.value.contact_info().is_none() {
                 continue;
             }
             filters.iter().enumerate().for_each(|(i, (_, filter))| {
@@ -712,12 +712,12 @@ mod test {
     #[test]
     fn test_filter_crds_values() {
         let mut node_crds = Crds::default();
-        let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+        let entry = CrdsValue::new_unsigned(CrdsData::Version(Version::new(
             &Pubkey::new_rand(),
             0,
         )));
 
-        let caller = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+        let caller = CrdsValue::new_unsigned(CrdsData::Version(Version::new(
             &Pubkey::new_rand(),
             0,
         )));
@@ -739,6 +739,31 @@ mod test {
         let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(1));
         assert_eq!(rsp[0][0].pubkey(), node_pubkey);
     }
+
+    #[test]
+    fn test_filter_crds_values_ci() {
+        let mut node_crds = Crds::default();
+        let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::new_rand(),
+            0,
+        )));
+
+        let caller = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::new_rand(),
+            0,
+        )));
+
+        let node_label = entry.label();
+        let node_pubkey = node_label.pubkey();
+        node_crds.insert(entry, 1).unwrap();
+        let mut filter = CrdsFilter::new_rand(1, 128);
+        filter.mask_bits = 0;
+        let requests = [(caller, filter)];
+
+        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(0));
+        assert_eq!(rsp[0][0].pubkey(), node_pubkey);
+    }
+
 
     #[test]
     fn test_gossip_purge() {
