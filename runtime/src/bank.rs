@@ -1058,6 +1058,15 @@ impl Bank {
         TransactionBatch::new(results, &self, txs, iteration_order)
     }
 
+    pub fn prepare_simulation_batch<'a, 'b>(
+        &'a self,
+        txs: &'b [Transaction],
+    ) -> TransactionBatch<'a, 'b> {
+        let mut batch = TransactionBatch::new(vec![Ok(()); txs.len()], &self, txs, None);
+        batch.needs_unlock = false;
+        batch
+    }
+
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;

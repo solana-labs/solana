@@ -718,13 +718,11 @@ fn verify_signature(input: &str) -> Result<Signature> {
 }
 
 /// Run transactions against a frozen bank without committing the results
-fn run_transaction_simulation(
-    bank: &Bank,
-    transactions: &[Transaction],
-) -> transaction::Result<()> {
+fn run_transaction_simulation(bank: &Bank, transaction: Transaction) -> transaction::Result<()> {
     assert!(bank.is_frozen(), "simulation bank must be frozen");
 
-    let batch = bank.prepare_batch(transactions, None);
+    let txs = &[transaction];
+    let batch = bank.prepare_simulation_batch(txs);
     let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
         bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
     executed[0].0.clone().map(|_| ())
@@ -1454,7 +1452,7 @@ impl RpcSol for RpcSolImpl {
             }
 
             let bank = &*meta.request_processor.read().unwrap().bank(None)?;
-            if let Err(err) = run_transaction_simulation(&bank, &[transaction]) {
+            if let Err(err) = run_transaction_simulation(&bank, transaction) {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -1501,7 +1499,7 @@ impl RpcSol for RpcSolImpl {
         let bank = &*meta.request_processor.read().unwrap().bank(None)?;
 
         if result.is_ok() {
-            result = run_transaction_simulation(&bank, &[transaction]);
+            result = run_transaction_simulation(&bank, transaction);
         }
 
         new_response(
