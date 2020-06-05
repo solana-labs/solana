@@ -1,4 +1,7 @@
-use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
+use crate::{
+    cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
+    cluster_tests,
+};
 use itertools::izip;
 use log::*;
 use solana_client::thin_client::{create_client, ThinClient};
@@ -137,7 +140,7 @@ impl LocalCluster {
             OperatingMode::Stable | OperatingMode::Preview => {
                 genesis_config.native_instruction_processors =
                     solana_genesis_programs::get_programs(genesis_config.operating_mode, 0)
-                        .unwrap_or_else(|| vec![])
+                        .unwrap_or_default()
             }
             _ => (),
         }
@@ -334,6 +337,25 @@ impl LocalCluster {
             VALIDATOR_PORT_RANGE,
         );
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
+    }
+
+    pub fn check_for_new_roots(&self, num_new_roots: usize, test_name: &str) {
+        let alive_node_contact_infos: Vec<_> = self
+            .validators
+            .values()
+            .map(|v| v.info.contact_info.clone())
+            .collect();
+        assert!(!alive_node_contact_infos.is_empty());
+        info!("{} discovering nodes", test_name);
+        let cluster_nodes = discover_cluster(
+            &alive_node_contact_infos[0].gossip,
+            alive_node_contact_infos.len(),
+        )
+        .unwrap();
+        info!("{} discovered {} nodes", test_name, cluster_nodes.len());
+        info!("{} looking for new roots on all nodes", test_name);
+        cluster_tests::check_for_new_roots(num_new_roots, &alive_node_contact_infos, test_name);
+        info!("{} done waiting for roots", test_name);
     }
 
     fn transfer_with_client(
