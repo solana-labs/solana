@@ -226,7 +226,7 @@ impl EntryVerificationState {
 
                 verify_check_time.stop();
                 verification_state.duration_ms += gpu_time_ms + verify_check_time.as_ms();
-                inc_new_counter_warn!(
+                inc_new_counter_info!(
                     "entry_verify-duration",
                     verification_state.duration_ms as usize
                 );
