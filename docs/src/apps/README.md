@@ -36,13 +36,13 @@ In the same way that a Linux user uses a path to look up a file, a Solana client
 
 The created account is initialized to be _owned_ by a built-in program called the System program and is called a _system account_ aptly. An account includes "owner" metadata. The owner is a program ID. The runtime grants the program write access to the account if its ID matches the owner. For the case of the System program, the runtime allows clients to transfer lamports and importantly _assign_ account ownership, meaning changing owner to different program ID. If an account is not owned by a program, the program is only permitted to read its data and credit the account.
 
-Also, if an account is marked "executable" in metadata, it will only be used by a _loader_ to run programs. Moreover, programs are just executable accounts owned by a _loader_. For example, a BPF-compiled program is marked executable and loaded by the BPF loader when executing its transactions. This is like a file in a sense that the `ls` command is just a executable file and loaded by the `ld` loader. However, no program is allowed to modify the contents of an executable account once deployed unlike a file as a blockchain security assumption.
+Also, if an account is marked "executable" in metadata, it will only be used by a _loader_ to run programs. Moreover, programs are just executable accounts owned by a _loader_. For example, a BPF-compiled program is marked executable and loaded by the BPF loader when executing its transactions. This is like a file in a sense that the `ls` command is just an executable file and loaded by the `ld` loader. However, no program is allowed to modify the contents of an executable account once deployed unlike a file as a blockchain security assumption.
 
 ## Runtime Capability of Programs on Accounts
 
 The runtime only permits the owner program to debit the account or modify its data. The program then defines additional rules for whether the client can modify accounts it owns. In the case of the System program, it allows users to transfer lamports by recognizing transaction signatures. If it sees the client signed the transaction using the keypair's _private key_, it knows the client authorized the token transfer.
 
-In other words, the entire set of assigned accounts can be regarded as a key-value store where key is the account address and value is program-specific arbitrary binary data. A program author can decide how to manage the program's whole state as possibly many accounts.
+In other words, the entire set of assigned accounts can be regarded as a key-value store where a key is the account address and value is program-specific arbitrary binary data. A program author can decide how to manage the program's whole state as possibly many accounts.
 
 After the runtime executes each of the transaction's instructions, it uses the account metadata to verify that none of the access rules were violated. If a program violates an access rule, the runtime discards all account changes made by all instructions and marks the transaction as failed.
 
