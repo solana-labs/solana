@@ -207,16 +207,21 @@ fn test_leader_failure_4() {
 /// * `leader_schedule` - An option that specifies whether the cluster should
 /// run with a fixed, predetermined leader schedule
 #[allow(clippy::cognitive_complexity)]
-fn run_cluster_partition(
-    partitions: &[&[(usize, bool)]],
+fn run_cluster_partition<E, F>(
+    partitions: &[&[usize]],
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
-) {
+    on_partition_start: E,
+    on_partition_resolved: F,
+) where
+    E: Fn(&mut LocalCluster) -> (),
+    F: Fn(&mut LocalCluster) -> (),
+{
     solana_logger::setup();
     info!("PARTITION_TEST!");
     let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
         .iter()
-        .flat_map(|p| p.iter().map(|(stake_weight, _)| 100 * *stake_weight as u64))
+        .flat_map(|p| p.iter().map(|stake_weight| 100 * *stake_weight as u64))
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
@@ -226,7 +231,7 @@ fn run_cluster_partition(
     validator_config.enable_partition = Some(enable_partition.clone());
 
     // Returns:
-    // 1) The keys for the validiators
+    // 1) The keys for the validators
     // 2) The amount of time it would take to iterate through one full iteration of the given
     // leader schedule
     let (validator_keys, leader_schedule_time): (Vec<_>, u64) = {
@@ -252,7 +257,6 @@ fn run_cluster_partition(
         }
     };
 
-    let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
     let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
@@ -287,7 +291,8 @@ fn run_cluster_partition(
 
         if reached_epoch {
             info!("PARTITION_TEST start partition");
-            enable_partition.clone().store(false, Ordering::Relaxed);
+            enable_partition.store(false, Ordering::Relaxed);
+            on_partition_start(&mut cluster);
             break;
         } else {
             sleep(Duration::from_millis(100));
@@ -298,56 +303,22 @@ fn run_cluster_partition(
     info!("PARTITION_TEST remove partition");
     enable_partition.store(true, Ordering::Relaxed);
 
-    let mut dead_nodes = HashSet::new();
-    let mut alive_node_contact_infos = vec![];
-    let should_exits: Vec<_> = partitions
-        .iter()
-        .flat_map(|p| p.iter().map(|(_, should_exit)| should_exit))
-        .collect();
-    assert_eq!(should_exits.len(), validator_pubkeys.len());
-    let timeout = 10;
-    if timeout > 0 {
-        // Give partitions time to propagate their blocks from during the partition
-        // after the partition resolves
-        let propagation_time = leader_schedule_time;
-        info!("PARTITION_TEST resolving partition. sleeping {}ms", timeout);
-        sleep(Duration::from_millis(10_000));
-        info!(
-            "PARTITION_TEST waiting for blocks to propagate after partition {}ms",
-            propagation_time
-        );
-        sleep(Duration::from_millis(propagation_time));
-        info!("PARTITION_TEST resuming normal operation");
-        for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
-            if *should_exit {
-                info!("Killing validator with id: {}", pubkey);
-                cluster.exit_node(pubkey);
-                dead_nodes.insert(*pubkey);
-            } else {
-                alive_node_contact_infos.push(
-                    cluster
-                        .validators
-                        .get(pubkey)
-                        .unwrap()
-                        .info
-                        .contact_info
-                        .clone(),
-                );
-            }
-        }
-    }
-
-    assert_eq!(alive_node_contact_infos.is_empty(), false);
-    info!("PARTITION_TEST discovering nodes");
-    let cluster_nodes = discover_cluster(
-        &alive_node_contact_infos[0].gossip,
-        alive_node_contact_infos.len(),
-    )
-    .unwrap();
-    info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
-    info!("PARTITION_TEST looking for new roots on all nodes");
-    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
-    info!("PARTITION_TEST done waiting for roots");
+    // Give partitions time to propagate their blocks from during the partition
+    // after the partition resolves
+    let timeout = 10_000;
+    let propagation_time = leader_schedule_time;
+    info!(
+        "PARTITION_TEST resolving partition. sleeping {} ms",
+        timeout
+    );
+    sleep(Duration::from_millis(timeout));
+    info!(
+        "PARTITION_TEST waiting for blocks to propagate after partition {}ms",
+        propagation_time
+    );
+    sleep(Duration::from_millis(propagation_time));
+    info!("PARTITION_TEST resuming normal operation");
+    on_partition_resolved(&mut cluster);
 }
 
 #[allow(unused_attributes)]
@@ -355,7 +326,11 @@ fn run_cluster_partition(
 #[test]
 #[serial]
 fn test_cluster_partition_1_2() {
-    run_cluster_partition(&[&[(1, false)], &[(1, false), (1, false)]], None)
+    let empty = |_: &mut LocalCluster| {};
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
+    run_cluster_partition(&[&[1], &[1, 1]], None, empty, on_partition_resolved)
 }
 
 #[allow(unused_attributes)]
@@ -363,13 +338,21 @@ fn test_cluster_partition_1_2() {
 #[test]
 #[serial]
 fn test_cluster_partition_1_1() {
-    run_cluster_partition(&[&[(1, false)], &[(1, false)]], None)
+    let empty = |_: &mut LocalCluster| {};
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
+    run_cluster_partition(&[&[1], &[1]], None, empty, on_partition_resolved)
 }
 
 #[test]
 #[serial]
 fn test_cluster_partition_1_1_1() {
-    run_cluster_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]], None)
+    let empty = |_: &mut LocalCluster| {};
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
+    run_cluster_partition(&[&[1], &[1], &[1]], None, empty, on_partition_resolved)
 }
 
 #[test]
@@ -387,7 +370,7 @@ fn test_kill_partition() {
     // 5) Check for recovery
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
-    let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
+    let partitions: [&[usize]; 3] = [&[9], &[10], &[10]];
     let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
         .take(partitions.len())
         .collect();
@@ -406,12 +389,21 @@ fn test_kill_partition() {
     }
     info!("leader_schedule: {}", leader_schedule.len());
 
+    let empty = |_: &mut LocalCluster| {};
+    let validator_to_kill = validator_keys[0].pubkey();
+    let on_partition_resolved = |cluster: &mut LocalCluster| {
+        info!("Killing validator with id: {}", validator_to_kill);
+        cluster.exit_node(&validator_to_kill);
+        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+    };
     run_cluster_partition(
         &partitions,
         Some((
             LeaderSchedule::new_from_schedule(leader_schedule),
             validator_keys,
         )),
+        empty,
+        on_partition_resolved,
     )
 }
 
@@ -1113,12 +1105,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let cluster = LocalCluster::new(&cluster_config);
 
     // Check for new roots
-    let alive_node_contact_infos: Vec<_> = cluster
-        .validators
-        .values()
-        .map(|v| v.info.contact_info.clone())
-        .collect();
-    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
+    cluster.check_for_new_roots(16, &"test_faulty_node");
 }
 
 #[test]
