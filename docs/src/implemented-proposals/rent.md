@@ -30,7 +30,7 @@ Finally, rent collection happens according to the protocol-level account updates
 
 ### Current design rationale
 
-Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts are always pay rent exactly once for each epoch.
+Under the preceding design, it is NOT possible to have accounts that linger, never get touched, and never have to pay rent. Accounts are always pay rent exactly once for each epoch, except rent-exempt, sysvar and executable accounts.
 
 This is intended design choice. Otherwise, it would be possible to trigger unauthorized rent collection with `Noop` instruction by anyone who may unfairly profit the rent (a leader at the moment) or save the rent given anticipated fluctuating rent cost.
 
