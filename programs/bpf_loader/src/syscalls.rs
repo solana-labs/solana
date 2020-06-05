@@ -77,13 +77,30 @@ pub fn register_syscalls<'a>(
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     // Syscall function common across languages
     vm.register_syscall_ex("abort", syscall_abort)?;
-    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
-    vm.register_syscall_ex("sol_log_", syscall_sol_log)?;
-    vm.register_syscall_ex("sol_log_64_", syscall_sol_log_u64)?;
 
-    // Cross-program invocation syscalls
     {
         let invoke_context = Rc::new(RefCell::new(invoke_context));
+
+        vm.register_syscall_with_context_ex(
+            "sol_panic_",
+            Box::new(SyscallPanic {
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+        vm.register_syscall_with_context_ex(
+            "sol_log_",
+            Box::new(SyscallLog {
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+        vm.register_syscall_with_context_ex(
+            "sol_log_64_",
+            Box::new(SyscallLogU64 {
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+
+        // Cross-program invocation syscalls
         vm.register_syscall_with_context_ex(
             "sol_invoke_signed_c",
             Box::new(SyscallProcessSolInstructionC {
@@ -184,7 +201,7 @@ fn translate_string_and_do(
     addr: u64,
     len: u64,
     regions: &[MemoryRegion],
-    work: &dyn Fn(&str) -> Result<u64, EbpfError<BPFError>>,
+    work: &mut dyn FnMut(&str) -> Result<u64, EbpfError<BPFError>>,
 ) -> Result<u64, EbpfError<BPFError>> {
     let buf = translate_slice!(u8, addr, len, regions)?;
     let i = match buf.iter().position(|byte| *byte == 0) {
@@ -215,56 +232,101 @@ pub fn syscall_abort(
 
 /// Panic syscall function, called when the BPF program calls 'sol_panic_()`
 /// Causes the BPF program to be halted immediately
-pub fn syscall_sol_panic(
-    file: u64,
-    len: u64,
-    line: u64,
-    column: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    translate_string_and_do(file, len, ro_regions, &|string: &str| {
-        Err(SyscallError::Panic(string.to_string(), line, column).into())
-    })
+pub struct SyscallPanic<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+}
+impl<'a> SyscallPanic<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
+        self.invoke_context
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
+    }
+}
+impl<'a> SyscallObject<BPFError> for SyscallPanic<'a> {
+    fn call(
+        &mut self,
+        file: u64,
+        len: u64,
+        line: u64,
+        column: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        let mut invoke_context = self.get_context_mut()?;
+        translate_string_and_do(file, len, ro_regions, &mut |string: &str| {
+            if invoke_context.log_enabled() {
+                invoke_context.log(&format!("panicked at '{}' on {}:{}", string, line, column));
+            }
+            Err(SyscallError::Panic(string.to_string(), line, column).into())
+        })
+    }
 }
 
 /// Log a user's info message
-pub fn syscall_sol_log(
-    addr: u64,
-    len: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    if log_enabled!(log::Level::Info) {
-        translate_string_and_do(addr, len, ro_regions, &|string: &str| {
-            info!("info!: {}", string);
-            Ok(0)
-        })?;
+pub struct SyscallLog<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+}
+impl<'a> SyscallLog<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
+        self.invoke_context
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
     }
-    Ok(0)
+}
+impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
+    fn call(
+        &mut self,
+        addr: u64,
+        len: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        let mut invoke_context = self.get_context_mut()?;
+        if invoke_context.log_enabled() {
+            translate_string_and_do(addr, len, ro_regions, &mut |string: &str| {
+                invoke_context.log(string);
+                Ok(0)
+            })?;
+        }
+        Ok(0)
+    }
 }
 
 /// Log 5 64-bit values
-pub fn syscall_sol_log_u64(
-    arg1: u64,
-    arg2: u64,
-    arg3: u64,
-    arg4: u64,
-    arg5: u64,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    if log_enabled!(log::Level::Info) {
-        info!(
-            "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-            arg1, arg2, arg3, arg4, arg5
-        );
+pub struct SyscallLogU64<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+}
+impl<'a> SyscallLogU64<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
+        self.invoke_context
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
     }
-    Ok(0)
+}
+impl<'a> SyscallObject<BPFError> for SyscallLogU64<'a> {
+    fn call(
+        &mut self,
+        arg1: u64,
+        arg2: u64,
+        arg3: u64,
+        arg4: u64,
+        arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        let mut invoke_context = self.get_context_mut()?;
+        if invoke_context.log_enabled() {
+            invoke_context.log(&format!(
+                "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+                arg1, arg2, arg3, arg4, arg5
+            ));
+        }
+        Ok(0)
+    }
 }
 
 /// Dynamic memory allocation syscall called when the BPF program calls
@@ -801,6 +863,8 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::MockInvokeContext;
+    use solana_sdk::entrypoint_native::InvokeContext;
 
     #[test]
     fn test_translate() {
@@ -904,7 +968,7 @@ mod tests {
         }];
         assert_eq!(
             42,
-            translate_string_and_do(100, string.len() as u64, &regions, &|string: &str| {
+            translate_string_and_do(100, string.len() as u64, &regions, &mut |string: &str| {
                 assert_eq!(string, "Gaggablaghblagh!");
                 Ok(42)
             })
@@ -924,29 +988,41 @@ mod tests {
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
     fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
-        let addr = string.as_ptr() as *const _ as u64;
-        let ro_region = MemoryRegion {
-            addr_host: addr,
-            addr_vm: 100,
-            len: string.len() as u64,
+
+        let mut mock_invoke_context = MockInvokeContext::default();
+        let result = {
+            let invoke_context: &mut dyn InvokeContext = &mut mock_invoke_context;
+            let mut syscall_sol_panic = SyscallPanic {
+                invoke_context: Rc::new(RefCell::new(invoke_context)),
+            };
+
+            let addr = string.as_ptr() as *const _ as u64;
+            let ro_region = MemoryRegion {
+                addr_host: addr,
+                addr_vm: 100,
+                len: string.len() as u64,
+            };
+            let rw_region = MemoryRegion::default();
+            syscall_sol_panic.call(
+                100,
+                string.len() as u64,
+                42,
+                84,
+                0,
+                &[ro_region],
+                &[rw_region],
+            )
         };
-        let rw_region = MemoryRegion::default();
-        syscall_sol_panic(
-            100,
-            string.len() as u64,
-            42,
-            84,
-            0,
-            &[ro_region],
-            &[rw_region],
-        )
-        .unwrap();
+        assert_eq!(mock_invoke_context.log.len(), 1);
+        assert_eq!(
+            mock_invoke_context.log[0],
+            "panicked at \'Gaggablaghblagh!\' on 42:84"
+        );
+
+        result.unwrap();
     }
 
-    // Ignore this test: solana_logger conflicts when running tests concurrently,
-    // this results in the bad string length being ignored and not returning an error
     #[test]
-    #[ignore]
     fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
@@ -956,31 +1032,51 @@ mod tests {
             len: string.len() as u64,
         }];
         let rw_regions = &[MemoryRegion::default()];
-        solana_logger::setup_with_default("solana=info");
-        syscall_sol_log(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions).unwrap();
-        solana_logger::setup_with_default("solana=info");
-        syscall_sol_log(
-            100,
-            string.len() as u64 * 2,
-            0,
-            0,
-            0,
-            ro_regions,
-            rw_regions,
-        )
-        .unwrap_err();
+
+        let mut mock_invoke_context = MockInvokeContext::default();
+        {
+            let invoke_context: &mut dyn InvokeContext = &mut mock_invoke_context;
+            let mut syscall_sol_log = SyscallLog {
+                invoke_context: Rc::new(RefCell::new(invoke_context)),
+            };
+
+            syscall_sol_log
+                .call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
+                .unwrap();
+
+            syscall_sol_log
+                .call(
+                    100,
+                    string.len() as u64 * 2, // AccessViolation
+                    0,
+                    0,
+                    0,
+                    ro_regions,
+                    rw_regions,
+                )
+                .unwrap_err();
+        }
+        assert_eq!(mock_invoke_context.log.len(), 1);
+        assert_eq!(mock_invoke_context.log[0], "Gaggablaghblagh!");
     }
 
-    // Ignore this test: solana_logger conflicts when running tests concurrently,
-    // this results in the bad string length being ignored and not returning an error
     #[test]
-    #[ignore]
     fn test_syscall_sol_log_u64() {
-        solana_logger::setup_with_default("solana=info");
+        let mut mock_invoke_context = MockInvokeContext::default();
+        {
+            let invoke_context: &mut dyn InvokeContext = &mut mock_invoke_context;
+            let mut syscall_sol_log_u64 = SyscallLogU64 {
+                invoke_context: Rc::new(RefCell::new(invoke_context)),
+            };
 
-        let ro_regions = &[MemoryRegion::default()];
-        let rw_regions = &[MemoryRegion::default()];
-        syscall_sol_log_u64(1, 2, 3, 4, 5, ro_regions, rw_regions).unwrap();
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::default()];
+            syscall_sol_log_u64
+                .call(1, 2, 3, 4, 5, ro_regions, rw_regions)
+                .unwrap();
+        }
+        assert_eq!(mock_invoke_context.log.len(), 1);
+        assert_eq!(mock_invoke_context.log[0], "0x1, 0x2, 0x3, 0x4, 0x5");
     }
 
     #[test]

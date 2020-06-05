@@ -25,7 +25,7 @@ use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
+use solana_runtime::{accounts::AccountAddressFilter, bank::Bank, log_collector::LogCollector};
 use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -718,14 +718,22 @@ fn verify_signature(input: &str) -> Result<Signature> {
 }
 
 /// Run transactions against a frozen bank without committing the results
-fn run_transaction_simulation(bank: &Bank, transaction: Transaction) -> transaction::Result<()> {
+fn run_transaction_simulation(
+    bank: &Bank,
+    transaction: Transaction,
+) -> (transaction::Result<()>, Vec<String>) {
     assert!(bank.is_frozen(), "simulation bank must be frozen");
 
     let txs = &[transaction];
     let batch = bank.prepare_simulation_batch(txs);
+    let log_collector = LogCollector::default();
     let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
-        bank.load_and_execute_transactions(&batch, solana_sdk::clock::MAX_PROCESSING_AGE);
-    executed[0].0.clone().map(|_| ())
+        bank.load_and_execute_transactions(
+            &batch,
+            solana_sdk::clock::MAX_PROCESSING_AGE,
+            Some(&log_collector),
+        );
+    (executed[0].0.clone().map(|_| ()), log_collector.output())
 }
 
 #[derive(Clone)]
@@ -932,7 +940,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
-    ) -> RpcResponse<TransactionStatus>;
+    ) -> RpcResponse<RpcSimulateTransactionResult>;
 
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(
@@ -1452,7 +1460,7 @@ impl RpcSol for RpcSolImpl {
             }
 
             let bank = &*meta.request_processor.read().unwrap().bank(None)?;
-            if let Err(err) = run_transaction_simulation(&bank, transaction) {
+            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction) {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -1486,7 +1494,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
-    ) -> RpcResponse<TransactionStatus> {
+    ) -> RpcResponse<RpcSimulateTransactionResult> {
         let (_, transaction) = deserialize_bs58_transaction(data)?;
         let config = config.unwrap_or_default();
 
@@ -1497,18 +1505,19 @@ impl RpcSol for RpcSolImpl {
         };
 
         let bank = &*meta.request_processor.read().unwrap().bank(None)?;
-
-        if result.is_ok() {
-            result = run_transaction_simulation(&bank, transaction);
-        }
+        let logs = if result.is_ok() {
+            let sim_result = run_transaction_simulation(&bank, transaction);
+            result = sim_result.0;
+            Some(sim_result.1)
+        } else {
+            None
+        };
 
         new_response(
             &bank,
-            TransactionStatus {
-                slot: bank.slot(),
-                confirmations: Some(0),
-                status: result.clone(),
+            RpcSimulateTransactionResult {
                 err: result.err(),
+                logs,
             },
         )
     }
@@ -2400,7 +2409,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+                "value":{"err":null, "logs":[]}
             },
             "id": 1,
         });
@@ -2420,7 +2429,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"confirmations":0,"slot":0,"status":{"Err":"SignatureFailure"},"err":"SignatureFailure"}
+                "value":{"err":"SignatureFailure", "logs":null}
             },
             "id": 1,
         });
@@ -2440,7 +2449,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+                "value":{"err":null, "logs":[]}
             },
             "id": 1,
         });
@@ -2460,7 +2469,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"confirmations":0,"slot": 0,"status":{"Ok":null},"err":null}
+                "value":{"err":null, "logs":[]}
             },
             "id": 1,
         });
