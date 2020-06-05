@@ -44,6 +44,8 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
+The `--trusted-validator`s is operated by Solana
+
 
 ## Testnet
 * Testnet is where we stress test recent release features on a live
@@ -72,6 +74,7 @@ $ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
+    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQAD \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
@@ -81,6 +84,10 @@ $ solana-validator \
     --expected-shred-version 56096 \
     --limit-ledger-size
 ```
+
+The identity of the `--trusted-validator`s are:
+* `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
+* `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 
 ## Mainnet Beta
 A permissionless, persistent cluster for early token holders and launch partners.
@@ -117,3 +124,5 @@ $ solana-validator \
     --expected-shred-version 64864 \
     --limit-ledger-size
 ```
+
+All four `--trusted-validator`s are operated by Solana
