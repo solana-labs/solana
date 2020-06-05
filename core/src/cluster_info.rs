@@ -1685,7 +1685,9 @@ impl ClusterInfo {
         //skip messages that are likely to be pushed
         let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let push_timer = if min_filter_time < now {
-            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2)
+            // reason for / 3 is to allow push_self which has a /2 timeout to propagate
+            // first through push before responding with those values.
+            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 3)
         } else {
             None
         };
