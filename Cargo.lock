@@ -1761,13 +1761,14 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-pubsub"
-version = "14.1.0"
+version = "14.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4ca5e391d6c6a2261d4adca029f427fe63ea546ad6cef2957c654c08495ec16"
+checksum = "2d44f5602a11d657946aac09357956d2841299ed422035edf140c552cb057986"
 dependencies = [
  "jsonrpc-core",
  "log 0.4.8",
  "parking_lot 0.10.2",
+ "rand 0.7.3",
  "serde",
 ]
 
