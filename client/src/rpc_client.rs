@@ -129,7 +129,7 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
         sig_verify: bool,
-    ) -> RpcResult<TransactionStatus> {
+    ) -> RpcResult<RpcSimulateTransactionResult> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
         self.send(
             RpcRequest::SimulateTransaction,

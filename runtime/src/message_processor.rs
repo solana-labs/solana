@@ -1,4 +1,7 @@
-use crate::{native_loader::NativeLoader, rent_collector::RentCollector};
+use crate::{
+    log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
+};
+use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
@@ -152,19 +155,22 @@ impl PreAccount {
 }
 
 #[derive(Default)]
-pub struct ThisInvokeContext {
+pub struct ThisInvokeContext<'a> {
     pub program_ids: Vec<Pubkey>,
     pub rent: Rent,
     pub pre_accounts: Vec<PreAccount>,
     pub programs: Vec<(Pubkey, ProcessInstruction)>,
+    pub log_collector: Option<&'a LogCollector>,
 }
-impl ThisInvokeContext {
+
+impl<'a> ThisInvokeContext<'a> {
     const MAX_INVOCATION_DEPTH: usize = 5;
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
+        log_collector: Option<&'a LogCollector>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
@@ -173,10 +179,12 @@ impl ThisInvokeContext {
             rent,
             pre_accounts,
             programs,
+            log_collector,
         }
     }
 }
-impl InvokeContext for ThisInvokeContext {
+
+impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
         if self.program_ids.len() >= Self::MAX_INVOCATION_DEPTH {
             return Err(InstructionError::CallDepth);
@@ -217,6 +225,17 @@ impl InvokeContext for ThisInvokeContext {
 
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &self.programs
+    }
+
+    fn log_enabled(&self) -> bool {
+        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+    }
+
+    fn log(&mut self, message: &str) {
+        info!("{}", message);
+        if let Some(log_collector) = self.log_collector {
+            log_collector.log(message);
+        }
     }
 }
 
@@ -483,6 +502,7 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
+        log_collector: Option<&LogCollector>,
     ) -> Result<(), InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let mut invoke_context = ThisInvokeContext::new(
@@ -490,6 +510,7 @@ impl MessageProcessor {
             rent_collector.rent,
             pre_accounts,
             self.programs.clone(),
+            log_collector,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -514,6 +535,7 @@ impl MessageProcessor {
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
+        log_collector: Option<&LogCollector>,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             self.execute_instruction(
@@ -522,6 +544,7 @@ impl MessageProcessor {
                 &loaders[instruction_index],
                 accounts,
                 rent_collector,
+                log_collector,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -561,7 +584,7 @@ mod tests {
             ))
         }
         let mut invoke_context =
-            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts, vec![]);
+            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts, vec![], None);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
@@ -1085,7 +1108,7 @@ mod tests {
         )]);
 
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
@@ -1097,7 +1120,7 @@ mod tests {
         )]);
 
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1113,7 +1136,7 @@ mod tests {
         )]);
 
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1210,7 +1233,7 @@ mod tests {
             account_metas.clone(),
         )]);
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1226,7 +1249,7 @@ mod tests {
             account_metas.clone(),
         )]);
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
@@ -1239,7 +1262,7 @@ mod tests {
             account_metas,
         )]);
         let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
@@ -1310,6 +1333,7 @@ mod tests {
             Rent::default(),
             vec![owned_preaccount, not_owned_preaccount],
             vec![],
+            None,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

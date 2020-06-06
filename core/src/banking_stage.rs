@@ -514,7 +514,7 @@ impl BankingStage {
             vec![]
         };
         let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(batch, MAX_PROCESSING_AGE);
+            bank.load_and_execute_transactions(batch, MAX_PROCESSING_AGE, None);
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
