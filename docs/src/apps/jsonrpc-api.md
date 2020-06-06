@@ -1107,6 +1107,10 @@ Simulate sending a transaction
 #### Results:
 
 An RpcResponse containing a TransactionStatus object
+The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
+
+* `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+* `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 #### Example:
 

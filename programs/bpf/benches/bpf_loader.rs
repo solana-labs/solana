@@ -155,4 +155,8 @@ impl InvokeContext for MockInvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &[]
     }
+    fn log_enabled(&self) -> bool {
+        false
+    }
+    fn log(&mut self, _message: &str) {}
 }

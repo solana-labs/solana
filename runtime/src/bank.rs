@@ -12,6 +12,7 @@ use crate::{
     blockhash_queue::BlockhashQueue,
     builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
+    log_collector::LogCollector,
     message_processor::MessageProcessor,
     nonce_utils,
     rent_collector::RentCollector,
@@ -1333,6 +1334,7 @@ impl Bank {
         &self,
         batch: &TransactionBatch,
         max_age: usize,
+        log_collector: Option<&LogCollector>,
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
@@ -1392,6 +1394,7 @@ impl Bank {
                         &loader_refcells,
                         &account_refcells,
                         &self.rent_collector,
+                        log_collector,
                     );
 
                     Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);
@@ -1412,6 +1415,7 @@ impl Bank {
             execution_time.as_us(),
             txs.len(),
         );
+
         let mut tx_count: u64 = 0;
         let err_count = &mut error_counters.total;
         for ((r, _hash_age_kind), tx) in executed.iter().zip(txs.iter()) {
@@ -1955,7 +1959,7 @@ impl Bank {
             vec![]
         };
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(batch, max_age);
+            self.load_and_execute_transactions(batch, max_age, None);
 
         let results = self.commit_transactions(
             batch.transactions(),
