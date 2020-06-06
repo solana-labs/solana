@@ -89,18 +89,22 @@ impl PohService {
         let poh = poh_recorder.lock().unwrap().poh.clone();
         let mut now = Instant::now();
         let mut num_ticks = 0;
+        let mut num_hashes = 0;
         loop {
+            num_hashes += NUM_HASHES_PER_BATCH;
             if poh.lock().unwrap().hash(NUM_HASHES_PER_BATCH) {
                 // Lock PohRecorder only for the final hash...
                 poh_recorder.lock().unwrap().tick();
                 num_ticks += 1;
                 if num_ticks >= DEFAULT_TICKS_PER_SLOT * 2 {
-                    datapoint_debug!(
+                    datapoint_info!(
                         "poh-service",
                         ("ticks", num_ticks as i64, i64),
+                        ("hashes", num_hashes as i64, i64),
                         ("elapsed_ms", now.elapsed().as_millis() as i64, i64),
                     );
                     num_ticks = 0;
+                    num_hashes = 0;
                     now = Instant::now();
                 }
                 if poh_exit.load(Ordering::Relaxed) {
