@@ -22,7 +22,7 @@ fn bench_slot_history_add_new(b: &mut Bencher) {
     b.iter(|| {
         for _ in 0..5 {
             slot_history.add(slot);
-            slot += 100000;
+            slot += 100_000;
         }
     });
 }

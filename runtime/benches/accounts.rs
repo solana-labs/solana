@@ -48,7 +48,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         &[],
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
-    deposit_many(&bank1, &mut pubkeys, 250000);
+    deposit_many(&bank1, &mut pubkeys, 250_000);
     bank1.freeze();
 
     // Measures the performance of the squash operation.
