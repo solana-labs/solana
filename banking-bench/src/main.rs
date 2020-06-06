@@ -209,7 +209,7 @@ fn main() {
         bank.clear_signatures();
     }
 
-    let mut verified: Vec<_> = to_packets_chunked(&transactions.clone(), packets_per_chunk);
+    let mut verified: Vec<_> = to_packets_chunked(&transactions, packets_per_chunk);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(

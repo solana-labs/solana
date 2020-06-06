@@ -133,7 +133,7 @@ fn slot_key_data_for_gpu<
             let key = slot_keys.get(slot).unwrap();
             keys_to_slots
                 .entry(*key)
-                .or_insert_with(|| vec![])
+                .or_insert_with(Vec::new)
                 .push(*slot);
         }
     }

@@ -152,7 +152,7 @@ impl CrdsGossipPush {
         let new_value = crds.new_versioned(now, value);
         let value_hash = new_value.value_hash;
         if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
-            received_set.insert(from.clone());
+            received_set.insert(*from);
             return Err(CrdsGossipError::PushMessageAlreadyReceived);
         }
         let old = crds.insert_versioned(new_value);
@@ -160,7 +160,7 @@ impl CrdsGossipPush {
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
         let mut received_set = HashSet::new();
-        received_set.insert(from.clone());
+        received_set.insert(*from);
         self.push_messages.insert(label, value_hash);
         self.received_cache.insert(value_hash, (now, received_set));
         Ok(old.ok().and_then(|opt| opt))

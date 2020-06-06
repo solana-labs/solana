@@ -165,7 +165,7 @@ impl Tower {
                 let key = all_pubkeys.get_or_insert(&key);
                 lockout_intervals
                     .entry(vote.expiration_slot())
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(Vec::new)
                     .push((vote.slot, key));
             }
 

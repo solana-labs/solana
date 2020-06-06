@@ -142,22 +142,22 @@ impl Faucet {
         }
     }
     pub fn process_faucet_request(&mut self, bytes: &BytesMut) -> Result<Bytes, io::Error> {
-        let req: FaucetRequest = deserialize(bytes).or_else(|err| {
-            Err(io::Error::new(
+        let req: FaucetRequest = deserialize(bytes).map_err(|err| {
+            io::Error::new(
                 io::ErrorKind::Other,
                 format!("deserialize packet in faucet: {:?}", err),
-            ))
+            )
         })?;
 
         info!("Airdrop transaction requested...{:?}", req);
         let res = self.build_airdrop_transaction(req);
         match res {
             Ok(tx) => {
-                let response_vec = bincode::serialize(&tx).or_else(|err| {
-                    Err(io::Error::new(
+                let response_vec = bincode::serialize(&tx).map_err(|err| {
+                    io::Error::new(
                         io::ErrorKind::Other,
                         format!("deserialize packet in faucet: {:?}", err),
-                    ))
+                    )
                 })?;
 
                 let mut response_vec_with_length = vec![0; 2];
@@ -205,12 +205,12 @@ pub fn request_airdrop_transaction(
 
     // Read length of transaction
     let mut buffer = [0; 2];
-    stream.read_exact(&mut buffer).or_else(|err| {
+    stream.read_exact(&mut buffer).map(|err| {
         info!(
             "request_airdrop_transaction: buffer length read_exact error: {:?}",
             err
         );
-        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+        Error::new(ErrorKind::Other, "Airdrop failed")
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
     if transaction_length >= PACKET_DATA_SIZE {
@@ -226,19 +226,19 @@ pub fn request_airdrop_transaction(
     // Read the transaction
     let mut buffer = Vec::new();
     buffer.resize(transaction_length, 0);
-    stream.read_exact(&mut buffer).or_else(|err| {
+    stream.read_exact(&mut buffer).map_err(|err| {
         info!(
             "request_airdrop_transaction: buffer read_exact error: {:?}",
             err
         );
-        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+        Error::new(ErrorKind::Other, "Airdrop failed")
     })?;
 
-    let transaction: Transaction = deserialize(&buffer).or_else(|err| {
-        Err(Error::new(
+    let transaction: Transaction = deserialize(&buffer).map_err(|err| {
+        Error::new(
             ErrorKind::Other,
             format!("request_airdrop_transaction deserialize failure: {:?}", err),
-        ))
+        )
     })?;
     Ok(transaction)
 }

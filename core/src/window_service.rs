@@ -125,7 +125,7 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
 ) -> Result<()>
 where
-    F: Fn(Shred) -> (),
+    F: Fn(Shred),
 {
     let timer = Duration::from_millis(200);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
@@ -503,8 +503,8 @@ impl WindowService {
 
     fn should_exit_on_error<F, H>(e: Error, handle_timeout: &mut F, handle_error: &H) -> bool
     where
-        F: FnMut() -> (),
-        H: Fn() -> (),
+        F: FnMut(),
+        H: Fn(),
     {
         match e {
             Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => true,

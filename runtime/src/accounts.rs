@@ -153,12 +153,12 @@ impl Accounts {
                         }
                         let (account, rent) =
                             AccountsDB::load(storage, ancestors, accounts_index, key)
-                                .and_then(|(mut account, _)| {
+                                .map(|(mut account, _)| {
                                     if message.is_writable(i) && !account.executable {
                                         let rent_due = rent_collector.update(&key, &mut account);
-                                        Some((account, rent_due))
+                                        (account, rent_due)
                                     } else {
-                                        Some((account, 0))
+                                        (account, 0)
                                     }
                                 })
                                 .unwrap_or_default();

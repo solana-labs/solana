@@ -332,9 +332,8 @@ lazy_static! {
 }
 
 pub fn set_host_id(host_id: String) {
-    let mut rw = HOST_ID.write().unwrap();
     info!("host id: {}", host_id);
-    std::mem::replace(&mut *rw, host_id);
+    *HOST_ID.write().unwrap() = host_id;
 }
 
 /// Submits a new point from any thread.  Note that points are internally queued

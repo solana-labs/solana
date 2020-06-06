@@ -664,7 +664,7 @@ impl RpcClient {
     ) -> ClientResult<u64> {
         let now = Instant::now();
         loop {
-            match self.get_balance_with_commitment(&pubkey, commitment_config.clone()) {
+            match self.get_balance_with_commitment(&pubkey, commitment_config) {
                 Ok(bal) => {
                     return Ok(bal.value);
                 }
@@ -699,8 +699,7 @@ impl RpcClient {
     ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
-            let balance_result =
-                self.poll_get_balance_with_commitment(pubkey, commitment_config.clone());
+            let balance_result = self.poll_get_balance_with_commitment(pubkey, commitment_config);
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
@@ -734,7 +733,7 @@ impl RpcClient {
         let now = Instant::now();
         loop {
             if let Ok(Some(_)) =
-                self.get_signature_status_with_commitment(&signature, commitment_config.clone())
+                self.get_signature_status_with_commitment(&signature, commitment_config)
             {
                 break;
             }

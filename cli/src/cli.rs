@@ -754,25 +754,18 @@ pub fn parse_command(
         ("airdrop", Some(matches)) => {
             let faucet_port = matches
                 .value_of("faucet_port")
-                .unwrap()
+                .ok_or_else(|| CliError::BadParameter("Missing faucet port".to_string()))?
                 .parse()
-                .or_else(|err| {
-                    Err(CliError::BadParameter(format!(
-                        "Invalid faucet port: {}",
-                        err
-                    )))
-                })?;
+                .map_err(|err| CliError::BadParameter(format!("Invalid faucet port: {}", err)))?;
 
-            let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
-                Some(solana_net_utils::parse_host(faucet_host).or_else(|err| {
-                    Err(CliError::BadParameter(format!(
-                        "Invalid faucet host: {}",
-                        err
-                    )))
-                })?)
-            } else {
-                None
-            };
+            let faucet_host = matches
+                .value_of("faucet_host")
+                .map(|faucet_host| {
+                    solana_net_utils::parse_host(faucet_host).map_err(|err| {
+                        CliError::BadParameter(format!("Invalid faucet host: {}", err))
+                    })
+                })
+                .transpose()?;
             let pubkey = pubkey_of_signer(matches, "to", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]

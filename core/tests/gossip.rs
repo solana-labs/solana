@@ -33,7 +33,7 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(num: usize, topo: F)
 where
-    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>),
 {
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();

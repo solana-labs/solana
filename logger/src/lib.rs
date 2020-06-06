@@ -23,10 +23,8 @@ impl log::Log for LoggerShim {
 }
 
 fn replace_logger(logger: env_logger::Logger) {
-    let max_level = logger.filter();
-    log::set_max_level(max_level);
-    let mut rw = LOGGER.write().unwrap();
-    std::mem::replace(&mut *rw, logger);
+    log::set_max_level(logger.filter());
+    *LOGGER.write().unwrap() = logger;
     let _ = log::set_boxed_logger(Box::new(LoggerShim {}));
 }
 

@@ -177,7 +177,7 @@ fn sort_data_coding_into_fec_sets(
         data_slot_and_index.insert(key);
         let fec_entry = fec_data
             .entry(shred.common_header.fec_set_index)
-            .or_insert_with(|| vec![]);
+            .or_insert_with(Vec::new);
         fec_entry.push(shred);
     }
     for shred in coding_shreds {
@@ -188,7 +188,7 @@ fn sort_data_coding_into_fec_sets(
         coding_slot_and_index.insert(key);
         let fec_entry = fec_coding
             .entry(shred.common_header.fec_set_index)
-            .or_insert_with(|| vec![]);
+            .or_insert_with(Vec::new);
         fec_entry.push(shred);
     }
 }

@@ -213,8 +213,8 @@ fn run_cluster_partition<E, F>(
     on_partition_start: E,
     on_partition_resolved: F,
 ) where
-    E: Fn(&mut LocalCluster) -> (),
-    F: Fn(&mut LocalCluster) -> (),
+    E: Fn(&mut LocalCluster),
+    F: Fn(&mut LocalCluster),
 {
     solana_logger::setup();
     info!("PARTITION_TEST!");

@@ -24,7 +24,7 @@ pub struct AccountsIndex<T> {
 impl<'a, T: 'a + Clone> AccountsIndex<T> {
     fn do_scan_accounts<F, I>(&self, ancestors: &Ancestors, mut func: F, iter: I)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
         I: Iterator<Item = (&'a Pubkey, &'a AccountMapEntry<T>)>,
     {
         for (pubkey, list) in iter {
@@ -38,7 +38,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors
     pub fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
     {
         self.do_scan_accounts(ancestors, func, self.account_maps.iter());
     }
@@ -46,7 +46,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors with range
     pub fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
         self.do_scan_accounts(ancestors, func, self.account_maps.range(range));

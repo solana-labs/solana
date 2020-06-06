@@ -271,7 +271,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 .or_insert((slot, sig_index, HashMap::new()));
         sig_map.0 = std::cmp::max(slot, sig_map.0);
 
-        let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(|| vec![]);
+        let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(Vec::new);
         sig_forks.push((slot, res.clone()));
         let slot_deltas = self.slot_deltas.entry(slot).or_default();
         let mut fork_entry = slot_deltas.lock().unwrap();

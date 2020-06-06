@@ -617,7 +617,6 @@ impl AccountsDB {
     pub fn clean_accounts(&self) {
         self.report_store_stats();
 
-        let no_ancestors = HashMap::new();
         let mut accounts_scan = Measure::start("accounts_scan");
         let accounts_index = self.accounts_index.read().unwrap();
         let pubkeys: Vec<Pubkey> = accounts_index.account_maps.keys().cloned().collect();
@@ -625,6 +624,7 @@ impl AccountsDB {
         let (mut purges, purges_in_root) = pubkeys
             .par_chunks(4096)
             .map(|pubkeys: &[Pubkey]| {
+		let no_ancestors = HashMap::new();
                 let mut purges_in_root = Vec::new();
                 let mut purges = HashMap::new();
                 for pubkey in pubkeys {
@@ -641,16 +641,11 @@ impl AccountsDB {
             })
             .reduce(
                 || (HashMap::new(), Vec::new()),
-                |m1, m2| {
+                |mut m1, m2| {
                     // Collapse down the hashmaps/vecs into one.
-                    let x = m2.0.iter().fold(m1.0, |mut acc, (k, vs)| {
-                        acc.insert(k.clone(), vs.clone());
-                        acc
-                    });
-                    let mut y = vec![];
-                    y.extend(m1.1);
-                    y.extend(m2.1);
-                    (x, y)
+                    m1.0.extend(m2.0);
+                    m1.1.extend(m2.1);
+                    m1
                 },
             );
 
@@ -927,7 +922,7 @@ impl AccountsDB {
 
     pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
     {
         let mut collector = A::default();
@@ -946,7 +941,7 @@ impl AccountsDB {
 
     pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
         R: RangeBounds<Pubkey>,
     {
@@ -968,7 +963,7 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
+        F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
         B: Send + Default,
     {
         let storage_maps: Vec<Arc<AccountStorageEntry>> = self
@@ -1839,7 +1834,7 @@ impl AccountsDB {
                         };
                         let entry = accum
                             .entry(stored_account.meta.pubkey)
-                            .or_insert_with(|| vec![]);
+                            .or_insert_with(Vec::new);
                         entry.push((stored_account.meta.write_version, account_info));
                     },
                 );
@@ -1847,7 +1842,7 @@ impl AccountsDB {
             let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
             for accumulator_entry in accumulator.iter() {
                 for (pubkey, storage_entry) in accumulator_entry {
-                    let entry = accounts_map.entry(*pubkey).or_insert_with(|| vec![]);
+                    let entry = accounts_map.entry(*pubkey).or_insert_with(Vec::new);
                     entry.extend(storage_entry.iter().cloned());
                 }
             }
