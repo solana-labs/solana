@@ -191,8 +191,7 @@ mod tests {
 
         // Test request with CommitmentConfig and params
         let test_request = RpcRequest::GetBalance;
-        let request =
-            test_request.build_request_json(1, json!([addr, commitment_config]));
+        let request = test_request.build_request_json(1, json!([addr, commitment_config]));
         assert_eq!(request["params"], json!([addr, commitment_config]));
     }
 }
