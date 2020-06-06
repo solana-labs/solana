@@ -10,18 +10,15 @@ use test::Bencher;
 #[bench]
 fn bench_accounts_index(bencher: &mut Bencher) {
     const NUM_PUBKEYS: usize = 10_000;
-    let pubkeys: Vec<_> = (0..NUM_PUBKEYS)
-        .into_iter()
-        .map(|_| Pubkey::new_rand())
-        .collect();
+    let pubkeys: Vec<_> = (0..NUM_PUBKEYS).map(|_| Pubkey::new_rand()).collect();
 
     const NUM_FORKS: u64 = 16;
 
     let mut reclaims = vec![];
     let mut index = AccountsIndex::<AccountInfo>::default();
     for f in 0..NUM_FORKS {
-        for _p in 0..NUM_PUBKEYS {
-            index.insert(f, &pubkeys[_p], AccountInfo::default(), &mut reclaims);
+        for pubkey in pubkeys.iter().take(NUM_PUBKEYS) {
+            index.insert(f, pubkey, AccountInfo::default(), &mut reclaims);
         }
     }
 

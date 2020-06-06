@@ -37,16 +37,14 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         let from_keypair = Keypair::new();
         let to_keypair = Keypair::new();
         let txs: Vec<_> = (0..len)
-            .into_iter()
             .map(|_| {
                 let amount = thread_rng().gen();
-                let tx = system_transaction::transfer(
+                system_transaction::transfer(
                     &from_keypair,
                     &to_keypair.pubkey(),
                     amount,
                     Hash::default(),
-                );
-                tx
+                )
             })
             .collect();
         to_packets_chunked(&txs, chunk_size)

@@ -22,7 +22,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
     let leader_pubkey = Pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-    let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
+    let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     const NUM_SHREDS: usize = 32;
@@ -37,7 +37,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     }
     let stakes = Arc::new(stakes);
     let cluster_info = Arc::new(cluster_info);
-    let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes.clone()));
+    let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes));
     let shreds = Arc::new(shreds);
     let last_datapoint = Arc::new(AtomicU64::new(0));
     bencher.iter(move || {

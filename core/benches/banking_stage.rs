@@ -109,7 +109,6 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
 fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
     let progs = 4;
     (0..txes)
-        .into_iter()
         .map(|_| {
             let mut instructions = vec![];
             let from_key = Keypair::new();
@@ -181,7 +180,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
+    let verified: Vec<_> = to_packets_chunked(&transactions, PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -207,7 +206,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         // If it is dropped before poh_service, then poh_service will error when
         // calling send() on the channel.
         let signal_receiver = Arc::new(signal_receiver);
-        let signal_receiver2 = signal_receiver.clone();
+        let signal_receiver2 = signal_receiver;
         bencher.iter(move || {
             let now = Instant::now();
             let mut sent = 0;
@@ -262,7 +261,7 @@ fn simulate_process_entries(
     mint_keypair: &Keypair,
     mut tx_vector: Vec<Transaction>,
     genesis_config: &GenesisConfig,
-    keypairs: &Vec<Keypair>,
+    keypairs: &[Keypair],
     initial_lamports: u64,
     num_accounts: usize,
 ) {
@@ -288,7 +287,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, &vec![entry], randomize_txs, None).unwrap();
+    process_entries(&bank, &[entry], randomize_txs, None).unwrap();
 }
 
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {

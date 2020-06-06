@@ -47,10 +47,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
     // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
     let blockhash = hash(Hash::default().as_ref());
     //    info!("blockhash = {:?}", blockhash);
-    let keys = (0..27)
-        .into_iter()
-        .map(|i| blockhash.hash_at_index(i))
-        .collect();
+    let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
     let mut sigs: Bloom<Signature> = Bloom::new(38_340_234, keys);
 
     let mut id = blockhash;
