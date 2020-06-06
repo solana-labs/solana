@@ -230,6 +230,13 @@ pub struct RpcSignatureConfirmation {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionResult {
+    pub err: Option<TransactionError>,
+    pub logs: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcStorageTurn {
     pub blockhash: String,
     pub slot: Slot,
