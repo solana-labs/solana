@@ -2,7 +2,7 @@
 
 ## What is Solana?
 
-Solana is an open source project implementing a new, high-performance, permissionless blockchain. Solana is also the name of a company headquartered in San Francisco that maintains the open source project.
+Solana is an open source project implementing a new, high-performance, permissionless blockchain. The Solana Foundation is based in Geneva, Switzerland and maintains the open source project. 
 
 ## Why Solana?
 
