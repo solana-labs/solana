@@ -2,7 +2,7 @@
 name = "solana-sdk"
 version = "1.3.0"
 description = "Solana SDK"
-authors = ["Solana Maintainers <maintainers@solana.com>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 license = "Apache-2.0"

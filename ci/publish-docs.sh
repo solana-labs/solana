@@ -17,7 +17,7 @@ if [[ -n $CI_BRANCH ]]; then
     set -x
     git add -f docs/src
     if ! git diff-index --quiet HEAD; then
-      git config user.email maintainers@solana.com
+      git config user.email maintainers@solana.foundation
       git config user.name "$(basename "$0")"
       git commit -m "gitbook-cage update $(date -Is)"
       git push -f git@github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"

@@ -1,5 +1,5 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.com>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 description = "I will find you and I will stake you"
 edition = "2018"
 homepage = "https://solana.com/"

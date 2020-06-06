@@ -2,7 +2,7 @@
 name = "solana-upload-perf"
 version = "1.3.0"
 description = "Metrics Upload Utility"
-authors = ["Solana Maintainers <maintainers@solana.com>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 edition = "2018"

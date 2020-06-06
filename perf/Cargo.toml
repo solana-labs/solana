@@ -2,7 +2,7 @@
 name = "solana-perf"
 version = "1.3.0"
 description = "Solana Performance APIs"
-authors = ["Solana Maintainers <maintainers@solana.com>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
