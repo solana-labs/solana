@@ -267,6 +267,7 @@ mod tests {
     #[derive(Debug, Default)]
     pub struct MockInvokeContext {
         key: Pubkey,
+        pub log: Vec<String>,
     }
     impl InvokeContext for MockInvokeContext {
         fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -286,6 +287,13 @@ mod tests {
         }
         fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
             &[]
+        }
+        fn log_enabled(&self) -> bool {
+            true
+        }
+        fn log(&mut self, message: &str) {
+            info!("[MockInvokeContext::log] {}", message);
+            self.log.push(message.to_string());
         }
     }
 

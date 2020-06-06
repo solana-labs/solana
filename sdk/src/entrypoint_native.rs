@@ -160,4 +160,6 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
+    fn log_enabled(&self) -> bool;
+    fn log(&mut self, message: &str);
 }
