@@ -48,6 +48,7 @@ pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
 pub mod rpc_service;
 pub mod rpc_subscriptions;
+pub mod send_transaction_service;
 pub mod serve_repair;
 pub mod serve_repair_service;
 pub mod sigverify;

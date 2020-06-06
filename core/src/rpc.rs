@@ -7,6 +7,7 @@ use crate::{
     non_circulating_supply::calculate_non_circulating_supply,
     rpc_error::RpcCustomError,
     rpc_health::*,
+    send_transaction_service::SendTransactionService,
     validator::ValidatorExit,
 };
 use bincode::serialize;
@@ -44,11 +45,9 @@ use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
-    net::{SocketAddr, UdpSocket},
+    net::SocketAddr,
     str::FromStr,
     sync::{Arc, RwLock},
-    thread::sleep,
-    time::{Duration, Instant},
 };
 
 type RpcResponse<T> = Result<Response<T>>;
@@ -78,6 +77,7 @@ pub struct JsonRpcRequestProcessor {
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
+    send_transaction_service: Arc<SendTransactionService>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -136,6 +136,7 @@ impl JsonRpcRequestProcessor {
         health: Arc<RpcHealth>,
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
+        send_transaction_service: Arc<SendTransactionService>,
     ) -> Self {
         Self {
             config,
@@ -146,6 +147,7 @@ impl JsonRpcRequestProcessor {
             health,
             cluster_info,
             genesis_hash,
+            send_transaction_service,
         }
     }
 
@@ -705,11 +707,6 @@ impl JsonRpcRequestProcessor {
             .get_first_available_block()
             .unwrap_or_default())
     }
-}
-
-fn get_tpu_addr(cluster_info: &ClusterInfo) -> Result<SocketAddr> {
-    let contact_info = cluster_info.my_contact_info();
-    Ok(contact_info.tpu)
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
@@ -1314,49 +1311,32 @@ impl RpcSol for RpcSolImpl {
         let faucet_addr = meta.config.faucet_addr.ok_or_else(Error::invalid_request)?;
         let pubkey = verify_pubkey(pubkey_str)?;
 
-        let blockhash = meta.bank(commitment)?.confirmed_last_blockhash().0;
+        let (blockhash, last_valid_slot) = {
+            let bank = meta.bank(commitment)?;
+
+            let blockhash = bank.confirmed_last_blockhash().0;
+            (
+                blockhash,
+                bank.get_blockhash_last_valid_slot(&blockhash).unwrap_or(0),
+            )
+        };
+
         let transaction = request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
             Error::internal_error()
         })?;
+        let signature = transaction.signatures[0];
 
-        let data = serialize(&transaction).map_err(|err| {
+        let wire_transaction = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
             Error::internal_error()
         })?;
 
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
-        transactions_socket
-            .send_to(&data, tpu_addr)
-            .map_err(|err| {
-                info!("request_airdrop: send_to error: {:?}", err);
-                Error::internal_error()
-            })?;
+        meta.send_transaction_service
+            .send(signature, wire_transaction, last_valid_slot);
 
-        let signature = transaction.signatures[0];
-        let now = Instant::now();
-        let mut signature_status;
-        let signature_timeout = match &commitment {
-            Some(config) if config.commitment == CommitmentLevel::Recent => 5,
-            _ => 30,
-        };
-        loop {
-            signature_status = meta.get_signature_statuses(vec![signature], None)?.value[0]
-                .clone()
-                .filter(|result| result.satisfies_commitment(commitment.unwrap_or_default()))
-                .map(|x| x.status);
-
-            if signature_status == Some(Ok(())) {
-                info!("airdrop signature ok");
-                return Ok(signature.to_string());
-            } else if now.elapsed().as_secs() > signature_timeout {
-                info!("airdrop signature timeout");
-                return Err(Error::internal_error());
-            }
-            sleep(Duration::from_millis(100));
-        }
+        Ok(signature.to_string())
     }
 
     fn send_transaction(
@@ -1367,7 +1347,11 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<String> {
         let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
-        let signature = transaction.signatures[0].to_string();
+        let signature = transaction.signatures[0];
+        let bank = &*meta.bank(None)?;
+        let last_valid_slot = bank
+            .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
+            .unwrap_or(0);
 
         if !config.skip_preflight {
             if transaction.verify().is_err() {
@@ -1384,7 +1368,6 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            let bank = &*meta.bank(None)?;
             if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction) {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
@@ -1398,20 +1381,9 @@ impl RpcSol for RpcSolImpl {
             }
         }
 
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
-        transactions_socket
-            .send_to(&wire_transaction, tpu_addr)
-            .map_err(|err| {
-                info!("send_transaction: send_to error: {:?}", err);
-                Error::internal_error()
-            })?;
-        trace!(
-            "send_transaction: sent {} bytes, signature={}",
-            wire_transaction.len(),
-            signature
-        );
-        Ok(signature)
+        meta.send_transaction_service
+            .send(signature, wire_transaction, last_valid_slot);
+        Ok(signature.to_string())
     }
 
     fn simulate_transaction(
@@ -1755,9 +1727,19 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            cluster_info,
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
+
+        cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            &leader_pubkey,
+            &socketaddr!("127.0.0.1:1234"),
+        ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1788,15 +1770,21 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            bank_forks,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit,
             RpcHealth::stub(),
             Arc::new(ClusterInfo::default()),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -2733,6 +2721,8 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
+        let cluster_info = Arc::new(ClusterInfo::default());
+        let bank_forks = new_bank_forks().0;
         let meta = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             new_bank_forks().0,
@@ -2740,8 +2730,13 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
@@ -2769,17 +2764,23 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
+            ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+        ));
         let meta = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            bank_forks,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit,
             health.clone(),
-            Arc::new(ClusterInfo::new_with_invalid_keypair(
-                ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-            )),
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
 
         let mut bad_transaction =
@@ -2844,17 +2845,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_get_tpu_addr() {
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-        ));
-        assert_eq!(
-            get_tpu_addr(&cluster_info),
-            Ok(socketaddr!("127.0.0.1:1234"))
-        );
-    }
-
-    #[test]
     fn test_rpc_verify_pubkey() {
         let pubkey = Pubkey::new_rand();
         assert_eq!(verify_pubkey(pubkey.to_string()).unwrap(), pubkey);
@@ -2879,7 +2869,7 @@ pub mod tests {
         );
     }
 
-    fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair, Keypair) {
+    pub(crate) fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair, Keypair) {
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
@@ -2917,15 +2907,22 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
+        let cluster_info = Arc::new(ClusterInfo::default());
+        let bank_forks = new_bank_forks().0;
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            new_bank_forks().0,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -2942,15 +2939,22 @@ pub mod tests {
         ));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
+        let bank_forks = new_bank_forks().0;
+        let cluster_info = Arc::new(ClusterInfo::default());
         let request_processor = JsonRpcRequestProcessor::new(
             config,
-            new_bank_forks().0,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -3027,15 +3031,21 @@ pub mod tests {
 
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
+        let cluster_info = Arc::new(ClusterInfo::default());
         let request_processor = JsonRpcRequestProcessor::new(
             config,
-            bank_forks,
+            bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
+            cluster_info.clone(),
             Hash::default(),
+            Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
