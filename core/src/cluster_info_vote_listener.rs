@@ -385,7 +385,7 @@ impl ClusterInfoVoteListener {
                 &vote_txs_receiver,
                 &vote_tracker,
                 root_bank.slot(),
-                subscriptions.clone(),
+                &subscriptions,
                 epoch_stakes,
             ) {
                 match e {
@@ -404,9 +404,9 @@ impl ClusterInfoVoteListener {
     #[cfg(test)]
     pub fn get_and_process_votes_for_tests(
         vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
-        vote_tracker: &Arc<VoteTracker>,
+        vote_tracker: &VoteTracker,
         last_root: Slot,
-        subscriptions: Arc<RpcSubscriptions>,
+        subscriptions: &RpcSubscriptions,
     ) -> Result<()> {
         Self::get_and_process_votes(
             vote_txs_receiver,
@@ -419,9 +419,9 @@ impl ClusterInfoVoteListener {
 
     fn get_and_process_votes(
         vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
-        vote_tracker: &Arc<VoteTracker>,
+        vote_tracker: &VoteTracker,
         last_root: Slot,
-        subscriptions: Arc<RpcSubscriptions>,
+        subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
@@ -443,7 +443,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         vote_txs: Vec<Transaction>,
         root: Slot,
-        subscriptions: Arc<RpcSubscriptions>,
+        subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
@@ -574,7 +574,7 @@ impl ClusterInfoVoteListener {
     fn notify_for_stake_change(
         current_stake: u64,
         previous_stake: u64,
-        subscriptions: &Arc<RpcSubscriptions>,
+        subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
         slot: Slot,
     ) {
@@ -804,7 +804,7 @@ mod tests {
             &votes_receiver,
             &vote_tracker,
             0,
-            subscriptions,
+            &subscriptions,
             None,
         )
         .unwrap();
@@ -854,7 +854,7 @@ mod tests {
             &votes_receiver,
             &vote_tracker,
             0,
-            subscriptions,
+            &subscriptions,
             None,
         )
         .unwrap();
@@ -974,13 +974,7 @@ mod tests {
             &validator0_keypairs.vote_keypair,
         )];
 
-        ClusterInfoVoteListener::process_votes(
-            &vote_tracker,
-            vote_tx,
-            0,
-            subscriptions.clone(),
-            None,
-        );
+        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0, &subscriptions, None);
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
@@ -1031,7 +1025,7 @@ mod tests {
             })
             .collect();
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_txs, 0, subscriptions, None);
+        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_txs, 0, &subscriptions, None);
 
         let ref_count = Arc::strong_count(
             &vote_tracker

@@ -387,7 +387,7 @@ mod tests {
     };
 
     fn process_transaction_and_notify(
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
         current_slot: Slot,
@@ -921,13 +921,11 @@ mod tests {
         });
 
         // Process votes and check they were notified.
-        // FIX-ME-BETTER-LATER - clone below is required for testcase to pass
-        #[allow(clippy::redundant_clone)]
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
             0,
-            rpc.subscriptions.clone(),
+            &rpc.subscriptions,
         )
         .unwrap();
 
