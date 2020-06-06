@@ -2,7 +2,9 @@
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the cluster must actively maintain the data to process any future transactions on it. This is different from Bitcoin and Ethereum, where storing accounts doesn't incur any costs.
 
-The rent is debited from an account's balance by the runtime upon the first access in the current epoch by transactions or once per an epoch if there are no transactions. The rent is paid upfront for the next epoch. If an account can't pay rent for the next epoch, it's purged immediately at the start of a new epoch. The fee is currently a fixed rate, measured in bytes-times-epochs. The fee may change in the future.
+The rent is debited from an account's balance by the runtime upon the first access (including the initial account creation) in the current epoch by transactions or once per an epoch if there are no transactions. The fee is currently a fixed rate, measured in bytes-times-epochs. The fee may change in the future.
+
+For the sake of simple rent calculation, minimum duration is a single epoch. The rent is not paid on a pro rata basis, meaning there is no fee/refund for a partial epoch rent. Thereby, the rent can be regarded to be paid upfront in full for each upcoming epoch. For newly-created accounts, this means the first rent isn't for the current partial epoch, but for the next full epoch, and subsequent rents are for further future epochs. If an already-rent-collected account balance remains to be below another rent fee, it'll be purged immediately at the start of the upcoming epoch.
 
 Accounts can be exempt from paying rent if they maintain a minimum balance. This rent-exemption is described below.
 
@@ -15,7 +17,7 @@ As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch 
 This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching to 3.56 SOL per mebibyte-year):
 
 ```
-Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(MiByte) / (365.25/2)(epochs in 1 year)
+Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
 ```
 And rent calculation is done with the `f64` precision and the final result is truncated to integers in lamports.
 
