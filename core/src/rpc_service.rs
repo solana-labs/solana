@@ -2,7 +2,7 @@
 
 use crate::{
     cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
-    validator::ValidatorExit,
+    send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -20,7 +20,7 @@ use std::{
     collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, Ordering},
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
@@ -249,6 +249,13 @@ impl JsonRpcService {
             override_health_check,
         ));
 
+        let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
+        let send_transaction_service = Arc::new(SendTransactionService::new(
+            &cluster_info,
+            &bank_forks,
+            &exit_send_transaction_service,
+        ));
+
         let request_processor = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
@@ -258,6 +265,7 @@ impl JsonRpcService {
             health.clone(),
             cluster_info,
             genesis_hash,
+            send_transaction_service,
         );
 
         #[cfg(test)]
@@ -304,6 +312,7 @@ impl JsonRpcService {
                 let server = server.unwrap();
                 close_handle_sender.send(server.close_handle()).unwrap();
                 server.wait();
+                exit_send_transaction_service.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
@@ -347,10 +356,7 @@ mod tests {
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::Signer;
-    use std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        sync::atomic::Ordering,
-    };
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_rpc_new() {
