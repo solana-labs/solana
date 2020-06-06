@@ -4988,7 +4988,7 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let initial_state = bank0.hash_internal_state();
-        let bank1 = Bank::new_from_parent(&bank0.clone(), &Pubkey::default(), 1);
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         assert_ne!(bank1.hash_internal_state(), initial_state);
 
         info!("transfer bank1");

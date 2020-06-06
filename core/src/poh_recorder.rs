@@ -721,7 +721,7 @@ mod tests {
             assert_eq!(poh_recorder.tick_height, 5);
             assert!(poh_recorder.working_bank.is_none());
             let mut num_entries = 0;
-            while let Ok(_) = entry_receiver.try_recv() {
+            while entry_receiver.try_recv().is_ok() {
                 num_entries += 1;
             }
             assert_eq!(num_entries, 3);
@@ -1409,7 +1409,7 @@ mod tests {
             for _ in 0..(bank.ticks_per_slot() * 2) {
                 poh_recorder.tick();
             }
-            poh_recorder.set_bank(&bank.clone());
+            poh_recorder.set_bank(&bank);
             assert_eq!(Some(false), bank.check_hash_age(&genesis_hash, 1));
         }
     }

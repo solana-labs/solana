@@ -2183,14 +2183,14 @@ pub mod tests {
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((t + 1) as u64, space, &Account::default().owner);
-            pubkeys.push(pubkey.clone());
+            pubkeys.push(pubkey);
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store(slot, &[(&pubkey, &account)]);
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((num + t + 1) as u64, space, &solana_vote_program::id());
-            pubkeys.push(pubkey.clone());
+            pubkeys.push(pubkey);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store(slot, &[(&pubkey, &account)]);

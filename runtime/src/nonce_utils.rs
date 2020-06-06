@@ -206,7 +206,7 @@ mod tests {
     fn verify_nonce_ok() {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_account.signer_key().unwrap().clone());
+            signers.insert(nonce_account.signer_key().unwrap());
             let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
@@ -236,7 +236,7 @@ mod tests {
     fn verify_nonce_bad_query_hash_fail() {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_account.signer_key().unwrap().clone());
+            signers.insert(nonce_account.signer_key().unwrap());
             let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);

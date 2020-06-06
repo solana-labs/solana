@@ -459,7 +459,7 @@ mod test {
     fn test_keys_and_values() {
         let v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().contact_info().unwrap().id;
+        let key = v.contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
         let v = CrdsValue::new_unsigned(CrdsData::Vote(
@@ -467,7 +467,7 @@ mod test {
             Vote::new(&Pubkey::default(), test_tx(), 0),
         ));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().vote().unwrap().from;
+        let key = v.vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
         let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
@@ -475,7 +475,7 @@ mod test {
             LowestSlot::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().lowest_slot().unwrap().from;
+        let key = v.lowest_slot().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
     }
 

@@ -2931,7 +2931,7 @@ mod tests {
         assert_eq!(slots.len(), 1);
         assert!(since.is_some());
 
-        let (slots, since2) = cluster_info.get_epoch_slots_since(since.clone());
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since);
         assert!(slots.is_empty());
         assert_eq!(since2, since);
     }
