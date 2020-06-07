@@ -256,6 +256,8 @@ pub struct ClusterInfo {
     stats: GossipStats,
     pull_responses_by_id: RwLock<HashMap<Pubkey, usize>>,
     pull_responses_by_type: RwLock<HashMap<String, usize>>,
+    pull_requests_by_id: RwLock<HashMap<Pubkey, u64>>,
+    pull_latency_by_id: RwLock<HashMap<Pubkey, u64>>,
 }
 
 #[derive(Default, Clone)]
@@ -407,6 +409,8 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             pull_responses_by_id: RwLock::new(HashMap::new()),
             pull_responses_by_type: RwLock::new(HashMap::new()),
+            pull_requests_by_id: RwLock::new(HashMap::new()),
+            pull_latency_by_id: RwLock::new(HashMap::new()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -434,6 +438,8 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             pull_responses_by_id: RwLock::new(HashMap::new()),
             pull_responses_by_type: RwLock::new(HashMap::new()),
+            pull_requests_by_id: RwLock::new(HashMap::new()),
+            pull_latency_by_id: RwLock::new(HashMap::new()),
         }
     }
 
@@ -1403,6 +1409,7 @@ impl ClusterInfo {
                         .lookup(&peer_label)
                         .and_then(CrdsValue::contact_info)
                         .map(move |peer_info| {
+                            self.pull_requests_by_id.write().unwrap().insert(peer_info.id, timestamp());
                             filters
                                 .into_iter()
                                 .map(move |f| (peer, f, peer_info.gossip, me.clone()))
@@ -1864,6 +1871,8 @@ impl ClusterInfo {
             );
         }
         let filtered_len = crds_values.len();
+        let time = *me.pull_requests_by_id.read().unwrap().get(from).unwrap_or(&0);
+        me.pull_latency_by_id.write().unwrap().insert(*from, timestamp() - time);
         *me.pull_responses_by_id
             .write()
             .unwrap()
@@ -2254,6 +2263,12 @@ impl ClusterInfo {
                 info!("pull_responses_by_type: {:#?}", *pull_responses_by_type);
                 pull_responses_by_type.clear();
             }
+            {
+                let mut pull_latency_by_id = self.pull_latency_by_id.write().unwrap();
+                info!("pull_latency_by_id: {:#?}", *pull_latency_by_id);
+                pull_latency_by_id.clear();
+            }
+
 
             *last_print = Instant::now();
         }
