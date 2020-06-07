@@ -17,7 +17,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_gossip_push::{CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS},
+    crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
         Version, Vote, MAX_WALLCLOCK,

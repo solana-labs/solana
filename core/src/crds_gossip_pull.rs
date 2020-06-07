@@ -331,7 +331,7 @@ impl CrdsGossipPull {
         let now = now.unwrap_or(u64::MAX);
         for v in crds.table.values() {
             //skip messages that are newer than now except for CI
-            if v.insert_timestamp > now &&  v.value.contact_info().is_none() {
+            if v.insert_timestamp > now && v.value.contact_info().is_none() {
                 continue;
             }
             filters.iter().enumerate().for_each(|(i, (_, filter))| {
@@ -401,7 +401,7 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::crds_value::{CrdsData, Vote};
+    use crate::crds_value::{CrdsData, Version, Vote};
     use itertools::Itertools;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::hash::hash;
@@ -712,15 +712,9 @@ mod test {
     #[test]
     fn test_filter_crds_values() {
         let mut node_crds = Crds::default();
-        let entry = CrdsValue::new_unsigned(CrdsData::Version(Version::new(
-            &Pubkey::new_rand(),
-            0,
-        )));
+        let entry = CrdsValue::new_unsigned(CrdsData::Version(Version::new(Pubkey::new_rand())));
 
-        let caller = CrdsValue::new_unsigned(CrdsData::Version(Version::new(
-            &Pubkey::new_rand(),
-            0,
-        )));
+        let caller = CrdsValue::new_unsigned(CrdsData::Version(Version::new(Pubkey::new_rand())));
 
         let node_label = entry.label();
         let node_pubkey = node_label.pubkey();
@@ -763,7 +757,6 @@ mod test {
         let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(0));
         assert_eq!(rsp[0][0].pubkey(), node_pubkey);
     }
-
 
     #[test]
     fn test_gossip_purge() {
