@@ -218,6 +218,7 @@ impl Tower {
             }
             total_staked += lamports;
         }
+
         ComputedBankState {
             stake_lockouts,
             total_staked,
@@ -473,25 +474,21 @@ impl Tower {
         lockouts.process_slot_vote_unchecked(slot);
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
-            if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
-                let lockout = fork_stake.stake as f64 / total_staked as f64;
-                trace!(
-                    "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
-                    slot, vote.slot, lockout, fork_stake.stake, total_staked
-                );
-                if vote.confirmation_count as usize > self.threshold_depth {
-                    for old_vote in &self.lockouts.votes {
-                        if old_vote.slot == vote.slot
-                            && old_vote.confirmation_count == vote.confirmation_count
-                        {
-                            return true;
-                        }
+            let fork_stake = stake_lockouts
+                .get(&vote.slot)
+                .map(|lockouts| lockouts.stake)
+                .unwrap_or(0);
+            let lockout = fork_stake as f64 / total_staked as f64;
+            if vote.confirmation_count as usize > self.threshold_depth {
+                for old_vote in &self.lockouts.votes {
+                    if old_vote.slot == vote.slot
+                        && old_vote.confirmation_count == vote.confirmation_count
+                    {
+                        return true;
                     }
                 }
-                lockout > self.threshold_size
-            } else {
-                false
             }
+            lockout > self.threshold_size
         } else {
             true
         }

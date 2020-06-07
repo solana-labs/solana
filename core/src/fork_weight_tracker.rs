@@ -554,19 +554,22 @@ mod test {
 
         // If an earlier ancestor than the direct parent already has another `best_slot`,
         // it shouldn't change.
-        // New leaf slot stops being the `best_slot` at slot 1
-        let other_best_slot = 2;
-        for slot in 0..=1 {
-            fork_weight_tracker
-                .fork_infos
-                .get_mut(&slot)
-                .unwrap()
-                .best_slot = other_best_slot;
+        let stake = 100;
+        let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(3, stake);
+        let other_best_leaf = 4;
+        // Leaf slot 9 stops being the `best_slot` at slot 1 b/c there are votes
+        // for slot 2
+        for pubkey in &vote_pubkeys[0..1] {
+            fork_weight_tracker.add_votes(
+                &[(*pubkey, other_best_leaf)],
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule(),
+            );
         }
         fork_weight_tracker.add_new_leaf_slot(8, Some(6));
         let ancestors = fork_weight_tracker.ancestor_iterator(8).collect::<Vec<_>>();
         for a in ancestors.into_iter().chain(std::iter::once(8)) {
-            let best_slot = if a > 1 { 8 } else { other_best_slot };
+            let best_slot = if a > 1 { 8 } else { other_best_leaf };
             assert_eq!(fork_weight_tracker.best_slot(a).unwrap(), best_slot);
         }
 
@@ -574,16 +577,17 @@ mod test {
         // for it, then the `best_slot` should not change, even with a lower
         // leaf being added
         assert_eq!(fork_weight_tracker.best_slot(6).unwrap(), 8);
-        fork_weight_tracker
-            .fork_infos
-            .get_mut(&8)
-            .unwrap()
-            .stake_voted_subtree = 1;
+        // Add a vote for slot 8
+        fork_weight_tracker.add_votes(
+            &[(vote_pubkeys[2], 8)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
         fork_weight_tracker.add_new_leaf_slot(7, Some(6));
         let ancestors = fork_weight_tracker.ancestor_iterator(7).collect::<Vec<_>>();
         // best_slot's remain unchanged
         for a in ancestors.into_iter().chain(std::iter::once(8)) {
-            let best_slot = if a > 1 { 8 } else { other_best_slot };
+            let best_slot = if a > 1 { 8 } else { other_best_leaf };
             assert_eq!(fork_weight_tracker.best_slot(a).unwrap(), best_slot);
         }
 
