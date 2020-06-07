@@ -1244,6 +1244,9 @@ impl ReplayStage {
                 bank_slot,
                 &stats.stake_lockouts,
                 stats.total_staked,
+                ancestors
+                    .get(&bank_slot)
+                    .expect("Frozen bank must exist in ancestors"),
             );
             stats.is_locked_out = tower.is_locked_out(bank_slot, &ancestors);
             stats.has_voted = tower.has_voted(bank_slot);

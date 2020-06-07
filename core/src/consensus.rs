@@ -469,26 +469,31 @@ impl Tower {
         slot: Slot,
         stake_lockouts: &HashMap<u64, StakeLockout>,
         total_staked: u64,
+        ancestors: &HashSet<Slot>,
     ) -> bool {
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
-            let fork_stake = stake_lockouts
-                .get(&vote.slot)
-                .map(|lockouts| lockouts.stake)
-                .unwrap_or(0);
-            let lockout = fork_stake as f64 / total_staked as f64;
-            if vote.confirmation_count as usize > self.threshold_depth {
-                for old_vote in &self.lockouts.votes {
-                    if old_vote.slot == vote.slot
-                        && old_vote.confirmation_count == vote.confirmation_count
-                    {
-                        return true;
+            if ancestors.contains(&vote.slot) {
+                let fork_stake = stake_lockouts
+                    .get(&vote.slot)
+                    .map(|lockouts| lockouts.stake)
+                    .unwrap_or(0);
+                let lockout = fork_stake as f64 / total_staked as f64;
+                if vote.confirmation_count as usize > self.threshold_depth {
+                    for old_vote in &self.lockouts.votes {
+                        if old_vote.slot == vote.slot
+                            && old_vote.confirmation_count == vote.confirmation_count
+                        {
+                            return true;
+                        }
                     }
                 }
+                lockout > self.threshold_size
+            } else {
+                false
             }
-            lockout > self.threshold_size
         } else {
             true
         }
@@ -1312,7 +1317,7 @@ pub mod test {
     fn test_check_vote_threshold_without_votes() {
         let tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, StakeLockout { stake: 1 })].into_iter().collect();
-        assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(0, &stakes, 2, &vec![0].into_iter().collect()));
     }
 
     #[test]
@@ -1320,11 +1325,18 @@ pub mod test {
         solana_logger::setup();
         let mut tower = Tower::new_for_tests(4, 0.67);
         let mut stakes = HashMap::new();
+        let mut ancestors = HashSet::new();
         for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
             stakes.insert(i, StakeLockout { stake: 1 });
             tower.record_vote(i, Hash::default());
+            ancestors.insert(i);
         }
-        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(
+            MAX_LOCKOUT_HISTORY as u64 + 1,
+            &stakes,
+            2,
+            &ancestors
+        ));
     }
 
     #[test]
@@ -1459,14 +1471,14 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, StakeLockout { stake: 1 })].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2, &vec![0].into_iter().collect()));
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, StakeLockout { stake: 2 })].into_iter().collect();
         tower.record_vote(0, Hash::default());
-        assert!(tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(1, &stakes, 2, &vec![0].into_iter().collect()));
     }
 
     #[test]
@@ -1476,7 +1488,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(6, &stakes, 2, &vec![0].into_iter().collect()));
     }
 
     #[test]
@@ -1484,7 +1496,7 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = HashMap::new();
         tower.record_vote(0, Hash::default());
-        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(1, &stakes, 2, &vec![0].into_iter().collect()));
     }
 
     #[test]
@@ -1500,7 +1512,12 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2));
+        assert!(tower.check_vote_stake_threshold(
+            6,
+            &stakes,
+            2,
+            &vec![0, 1, 2].into_iter().collect()
+        ));
     }
 
     #[test]
@@ -1579,7 +1596,7 @@ pub mod test {
         let total_stake = 4;
         let threshold_size = 0.67;
         let threshold_stake = (f64::ceil(total_stake as f64 * threshold_size)) as u64;
-        let tower_votes: Vec<u64> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
+        let tower_votes: Vec<Slot> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
         let accounts = gen_stakes(&[
             (threshold_stake, &[(VOTE_THRESHOLD_DEPTH - 2) as u64]),
             (total_stake - threshold_stake, &tower_votes[..]),
@@ -1606,7 +1623,12 @@ pub mod test {
             &ancestors,
             &mut PubkeyReferences::default(),
         );
-        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &stake_lockouts, total_staked));
+        assert!(tower.check_vote_stake_threshold(
+            vote_to_evaluate,
+            &stake_lockouts,
+            total_staked,
+            ancestors.get(&vote_to_evaluate).unwrap()
+        ));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
@@ -1622,7 +1644,12 @@ pub mod test {
             &ancestors,
             &mut PubkeyReferences::default(),
         );
-        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &stake_lockouts, total_staked));
+        assert!(!tower.check_vote_stake_threshold(
+            vote_to_evaluate,
+            &stake_lockouts,
+            total_staked,
+            ancestors.get(&vote_to_evaluate).unwrap()
+        ));
     }
 
     fn vote_and_check_recent(num_votes: usize) {
