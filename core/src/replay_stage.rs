@@ -6,7 +6,8 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
-    consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
+    consensus::{StakeLockout, SwitchForkDecision, Tower},
+    fork_choice::{ComputedBankState, SelectVoteAndResetForkResult},
     fork_weight_tracker::ForkWeightTracker,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
@@ -139,12 +140,6 @@ impl ReplayTiming {
             self.select_vote_and_reset_forks_elapsed = 0;
         }
     }
-}
-
-pub(crate) struct SelectVoteAndResetForkResult {
-    pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
-    pub reset_bank: Option<Arc<Bank>>,
-    pub heaviest_fork_failures: Vec<HeaviestForkFailures>,
 }
 
 pub struct ReplayStage {
@@ -2689,10 +2684,11 @@ pub(crate) mod tests {
             fork_weight_tracker.stake_voted_subtree(2).unwrap()
         );
 
-        let (heaviest_slot, _) = ReplayStage::select_forks(&tower, &fork_weight_tracker);
+        let (heaviest_bank, _) =
+            ReplayStage::select_forks(&tower, &fork_weight_tracker, &vote_simulator.bank_forks);
 
         // Should pick the lower of the two equally weighted banks
-        assert_eq!(heaviest_slot, 1);
+        assert_eq!(heaviest_bank.slot(), 1);
     }
 
     #[test]

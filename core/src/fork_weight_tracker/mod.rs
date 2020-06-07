@@ -13,6 +13,7 @@ use std::{
 #[cfg(test)]
 use trees::{Tree, TreeWalk};
 
+mod heaviest_subtree_fork_choice;
 pub type ForkWeight = u64;
 
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]

@@ -1,6 +1,5 @@
 use crate::{
-    progress_map::{LockoutIntervals, ProgressMap},
-    pubkey_references::PubkeyReferences,
+    fork_choice::ComputedBankState, progress_map::ProgressMap, pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
 use solana_runtime::bank::Bank;
@@ -75,13 +74,6 @@ impl StakeLockout {
     }
 }
 
-pub struct ComputedBankState {
-    pub stake_lockouts: HashMap<Slot, StakeLockout>,
-    pub total_staked: u64,
-    pub lockout_intervals: LockoutIntervals,
-    pub pubkey_votes: Vec<(Pubkey, Slot)>,
-}
-
 pub struct Tower {
     node_pubkey: Pubkey,
     threshold_depth: usize,
@@ -133,7 +125,7 @@ impl Tower {
         }
     }
 
-    pub fn collect_vote_lockouts<F>(
+    pub(crate) fn collect_vote_lockouts<F>(
         &self,
         bank_slot: u64,
         vote_accounts: F,
@@ -568,9 +560,10 @@ pub mod test {
     use crate::{
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
+        fork_choice::SelectVoteAndResetForkResult,
         fork_weight_tracker::ForkWeightTracker,
         progress_map::ForkProgress,
-        replay_stage::{HeaviestForkFailures, ReplayStage, SelectVoteAndResetForkResult},
+        replay_stage::{HeaviestForkFailures, ReplayStage},
     };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{

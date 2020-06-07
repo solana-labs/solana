@@ -26,6 +26,7 @@ pub mod crds_gossip_push;
 pub mod crds_value;
 pub mod epoch_slots;
 pub mod fetch_stage;
+pub mod fork_choice;
 pub mod fork_weight_tracker;
 pub mod gen_keys;
 pub mod gossip_service;
