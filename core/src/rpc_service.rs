@@ -30,7 +30,7 @@ pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
     #[cfg(test)]
-    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
+    pub request_processor: JsonRpcRequestProcessor, // Used only by test_rpc_new()...
 
     close_handle: Option<CloseHandle>,
 }
@@ -249,14 +249,16 @@ impl JsonRpcService {
             override_health_check,
         ));
 
-        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
+        let request_processor = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
             validator_exit.clone(),
             health.clone(),
-        )));
+            cluster_info,
+            genesis_hash,
+        );
 
         #[cfg(test)]
         let test_request_processor = request_processor.clone();
@@ -279,11 +281,7 @@ impl JsonRpcService {
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
-                    move |_req: &hyper::Request<hyper::Body>| Meta {
-                        request_processor: request_processor.clone(),
-                        cluster_info: cluster_info.clone(),
-                        genesis_hash,
-                    },
+                    move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
                 .threads(num_cpus::get())
                 .cors(DomainsValidation::AllowOnly(vec![
@@ -339,7 +337,6 @@ impl JsonRpcService {
 mod tests {
     use super::*;
     use crate::{
-        contact_info::ContactInfo,
         crds_value::{CrdsData, CrdsValue, SnapshotHash},
         rpc::tests::create_validator_exit,
     };
@@ -365,7 +362,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank = Bank::new(&genesis_config);
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
+        let cluster_info = Arc::new(ClusterInfo::default());
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
             ip_addr,
@@ -398,8 +395,6 @@ mod tests {
             10_000,
             rpc_service
                 .request_processor
-                .read()
-                .unwrap()
                 .get_balance(Ok(mint_keypair.pubkey()), None)
                 .unwrap()
                 .value
@@ -484,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_health_check_with_trusted_validators() {
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
+        let cluster_info = Arc::new(ClusterInfo::default());
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
