@@ -4,7 +4,7 @@ Accounts on Solana may have owner-controlled state \(`Account::data`\) that's se
 
 ## Two-tiered rent regime
 
-Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per kilobyte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
+Accounts which maintain a minimum balance equivalent to 2 years of rent payments are exempt. The _2 years_ is drawn from the fact hardware cost drops by 50% in price every 2 years and the resulting convergence due to being a geometric series. Accounts whose balance falls below this threshold are charged rent at a rate specified in genesis, in lamports per byte-year. The network charges rent on a per-epoch basis, in credit for the next epoch, and `Account::rent_epoch` keeps track of the next time rent should be collected from the account.
 
 Currently, the rent cost is fixed at the genesis. However, it's anticipated to be dynamic, reflecting the underlying hardware storage cost at the time. So the price is generally expected to decrease as the hardware cost declines as the technology advances.
 
