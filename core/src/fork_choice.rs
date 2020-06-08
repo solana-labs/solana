@@ -57,18 +57,6 @@ pub(crate) trait ForkChoice {
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>);
-
-    // Given a heaviest bank, `heaviest_bank` and the next votable bank
-    // `heaviest_bank_on_same_voted_fork` as the validator's last vote, return
-    // a bank to vote on, a bank to reset to,
-    fn select_vote_and_reset_forks(
-        heaviest_bank: &Arc<Bank>,
-        heaviest_bank_on_same_voted_fork: &Option<Arc<Bank>>,
-        ancestors: &HashMap<u64, HashSet<u64>>,
-        descendants: &HashMap<u64, HashSet<u64>>,
-        progress: &ProgressMap,
-        tower: &Tower,
-    ) -> SelectVoteAndResetForkResult;
 }
 
 /// Update stake for all the ancestors.

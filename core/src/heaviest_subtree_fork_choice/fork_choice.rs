@@ -1,10 +1,9 @@
 use crate::{
-    consensus::{SwitchForkDecision, Tower},
-    fork_choice::{self, ComputedBankState, ForkChoice, SelectVoteAndResetForkResult},
+    consensus::Tower,
+    fork_choice::{self, ComputedBankState, ForkChoice},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     progress_map::ProgressMap,
     pubkey_references::PubkeyReferences,
-    replay_stage::HeaviestForkFailures,
 };
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -172,113 +171,5 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
                     .clone()
             }),
         )
-    }
-
-    // Given a heaviest bank, `heaviest_bank` and the next votable bank
-    // `heaviest_bank_on_same_voted_fork` as the validator's last vote, return
-    // a bank to vote on, a bank to reset to,
-    fn select_vote_and_reset_forks(
-        heaviest_bank: &Arc<Bank>,
-        heaviest_bank_on_same_voted_fork: &Option<Arc<Bank>>,
-        ancestors: &HashMap<u64, HashSet<u64>>,
-        descendants: &HashMap<u64, HashSet<u64>>,
-        progress: &ProgressMap,
-        tower: &Tower,
-    ) -> SelectVoteAndResetForkResult {
-        // Try to vote on the actual heaviest fork. If the heaviest bank is
-        // locked out or fails the threshold check, the validator will:
-        // 1) Not continue to vote on current fork, waiting for lockouts to expire/
-        //    threshold check to pass
-        // 2) Will reset PoH to heaviest fork in order to make sure the heaviest
-        //    fork is propagated
-        // This above behavior should ensure correct voting and resetting PoH
-        // behavior under all cases:
-        // 1) The best "selected" bank is on same fork
-        // 2) The best "selected" bank is on a different fork,
-        //    switch_threshold fails
-        // 3) The best "selected" bank is on a different fork,
-        //    switch_threshold succceeds
-        let mut failure_reasons = vec![];
-        let selected_fork = {
-            let switch_fork_decision = tower.check_switch_threshold(
-                heaviest_bank.slot(),
-                &ancestors,
-                &descendants,
-                &progress,
-                heaviest_bank.total_epoch_stake(),
-                heaviest_bank
-                    .epoch_vote_accounts(heaviest_bank.epoch())
-                    .expect("Bank epoch vote accounts must contain entry for the bank's own epoch"),
-            );
-            if switch_fork_decision == SwitchForkDecision::FailedSwitchThreshold {
-                // If we can't switch, then reset to the the next votable
-                // bank on the same fork as our last vote, but don't vote
-                info!(
-                    "Waiting to switch vote to {}, resetting to slot {:?} on same fork for now",
-                    heaviest_bank.slot(),
-                    heaviest_bank_on_same_voted_fork.as_ref().map(|b| b.slot())
-                );
-                failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
-                    heaviest_bank.slot(),
-                ));
-                heaviest_bank_on_same_voted_fork
-                    .as_ref()
-                    .map(|b| (b, switch_fork_decision))
-            } else {
-                // If the switch threshold is observed, halt voting on
-                // the current fork and attempt to vote/reset Poh to
-                // the heaviest bank
-                Some((heaviest_bank, switch_fork_decision))
-            }
-        };
-
-        if let Some((bank, switch_fork_decision)) = selected_fork {
-            let (is_locked_out, vote_threshold, is_leader_slot) = {
-                let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
-                let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
-                (
-                    fork_stats.is_locked_out,
-                    fork_stats.vote_threshold,
-                    propagated_stats.is_leader_slot,
-                )
-            };
-
-            let propagation_confirmed = is_leader_slot || progress.is_propagated(bank.slot());
-
-            if is_locked_out {
-                failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
-            }
-            if !vote_threshold {
-                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
-            }
-            if !propagation_confirmed {
-                failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
-            }
-
-            if !is_locked_out
-                && vote_threshold
-                && propagation_confirmed
-                && switch_fork_decision != SwitchForkDecision::FailedSwitchThreshold
-            {
-                info!("voting: {}", bank.slot());
-                SelectVoteAndResetForkResult {
-                    vote_bank: Some((bank.clone(), switch_fork_decision)),
-                    reset_bank: Some(bank.clone()),
-                    heaviest_fork_failures: failure_reasons,
-                }
-            } else {
-                SelectVoteAndResetForkResult {
-                    vote_bank: None,
-                    reset_bank: Some(bank.clone()),
-                    heaviest_fork_failures: failure_reasons,
-                }
-            }
-        } else {
-            SelectVoteAndResetForkResult {
-                vote_bank: None,
-                reset_bank: None,
-                heaviest_fork_failures: failure_reasons,
-            }
-        }
     }
 }
