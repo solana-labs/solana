@@ -104,9 +104,7 @@ impl RpcHealth {
     #[cfg(test)]
     pub(crate) fn stub() -> Arc<Self> {
         Arc::new(Self::new(
-            Arc::new(ClusterInfo::new_with_invalid_keypair(
-                crate::contact_info::ContactInfo::default(),
-            )),
+            Arc::new(ClusterInfo::default()),
             None,
             42,
             Arc::new(AtomicBool::new(false)),
