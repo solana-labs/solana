@@ -331,7 +331,7 @@ impl CrdsGossipPull {
         let now = now.unwrap_or(u64::MAX);
         for v in crds.table.values() {
             //skip messages that are newer than now except for CI
-            if v.insert_timestamp > now && v.value.contact_info().is_none() {
+            if v.insert_timestamp > now && !(v.value.contact_info().is_some() || v.value.vote().is_some()){
                 continue;
             }
             filters.iter().enumerate().for_each(|(i, (_, filter))| {
