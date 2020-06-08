@@ -7,6 +7,7 @@ use crate::{
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+use solana_vote_program::vote_state::Lockout;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
@@ -21,6 +22,7 @@ pub(crate) struct SelectVoteAndResetForkResult {
 pub(crate) struct ComputedBankState {
     pub stake_lockouts: HashMap<Slot, StakeLockout>,
     pub total_staked: u64,
+    pub total_weight: u64,
     pub lockout_intervals: LockoutIntervals,
     pub pubkey_votes: Vec<(Pubkey, Slot)>,
 }
@@ -78,5 +80,26 @@ pub(crate) fn update_ancestor_stakes(
     for slot in slot_with_ancestors {
         let entry = &mut stake_lockouts.entry(slot).or_default();
         entry.stake += lamports;
+    }
+}
+
+/// Update lockouts for all the ancestors
+pub(crate) fn update_ancestor_lockouts(
+    stake_lockouts: &mut HashMap<Slot, StakeLockout>,
+    vote: &Lockout,
+    ancestors: &HashMap<Slot, HashSet<Slot>>,
+) {
+    // If there's no ancestors, that means this slot must be from before the current root,
+    // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
+    // this slot
+    let vote_slot_ancestors = ancestors.get(&vote.slot);
+    if vote_slot_ancestors.is_none() {
+        return;
+    }
+    let mut slot_with_ancestors = vec![vote.slot];
+    slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
+    for slot in slot_with_ancestors {
+        let entry = &mut stake_lockouts.entry(slot).or_default();
+        entry.lockout += vote.lockout();
     }
 }
