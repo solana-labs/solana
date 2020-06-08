@@ -914,7 +914,7 @@ impl AccountsDB {
     // Infinitely returns rooted roots in cyclic order
     fn next_shrink_slot(&self) -> Option<Slot> {
         // hold a lock to keep reset_uncleaned_roots() from updating candidates;
-        // we might update in this fn it if it's empty
+        // we might update it in this fn if it's empty
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
         let next = candidates.pop();
 
@@ -3881,14 +3881,12 @@ pub mod tests {
         actual_slots.sort();
         assert_eq!(actual_slots, vec![0, 1, 2]);
 
-        let mut actual_slots = (0..6)
+        accounts.accounts_index.write().unwrap().roots.clear();
+        let mut actual_slots = (0..5)
             .map(|_| accounts.next_shrink_slot())
             .collect::<Vec<_>>();
         actual_slots.sort();
-        assert_eq!(
-            actual_slots,
-            vec![Some(0), Some(0), Some(1), Some(1), Some(2), Some(2)],
-        );
+        assert_eq!(actual_slots, vec![None, None, Some(0), Some(1), Some(2)],);
     }
 
     #[test]

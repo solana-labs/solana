@@ -2542,6 +2542,10 @@ impl Bank {
         self.rc.accounts.accounts_db.process_stale_slot()
     }
 
+    pub fn shrink_all_slots(&self) {
+        self.rc.accounts.accounts_db.shrink_all_slots();
+    }
+
     pub fn process_stale_slot_with_budget(
         &self,
         mut consumed_budget: usize,
@@ -2558,10 +2562,6 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
-    }
-
-    pub fn shrink_all_slots(&self) {
-        self.rc.accounts.accounts_db.shrink_all_slots();
     }
 }
 
