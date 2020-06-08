@@ -20,8 +20,8 @@ use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet};
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // The maximum age of a value received over pull responses
@@ -243,6 +243,7 @@ impl CrdsGossipPull {
         let mut failed = 0;
         let mut timeout_count = 0;
         let mut success = 0;
+        let mut owners = HashSet::new();
         for r in response {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
@@ -289,14 +290,17 @@ impl CrdsGossipPull {
                 success += 1;
             }
             old.ok().map(|opt| {
-                crds.update_record_timestamp(&owner, now);
+                owners.insert(owner);
                 opt.map(|val| {
                     self.purged_values
                         .push_back((val.value_hash, val.local_timestamp))
                 })
             });
         }
-        crds.update_record_timestamp(from, now);
+        owners.insert(*from);
+        for owner in owners {
+            crds.update_record_timestamp(&owner, now);
+        }
         (failed, timeout_count, success)
     }
     // build a set of filters of the current crds table

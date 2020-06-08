@@ -1559,6 +1559,7 @@ impl ClusterInfo {
         let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
         let timeouts = me.gossip.read().unwrap().make_timeouts(&stakes, epoch_ms);
+        let mut pull_responses = HashMap::new();
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
@@ -1606,7 +1607,8 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        Self::handle_pull_response(me, &from, data, &timeouts);
+                        let pull_entry = pull_responses.entry(from).or_insert_with(Vec::new);
+                        pull_entry.extend(data);
                         datapoint_debug!(
                             "solana-gossip-listen-memory",
                             ("pull_response", (allocated.get() - start) as i64, i64),
@@ -1668,6 +1670,11 @@ impl ClusterInfo {
                     }
                 })
         });
+
+        for (from, data) in pull_responses {
+            Self::handle_pull_response(me, &from, data, &timeouts);
+        }
+
         // process the collected pulls together
         let rsp = Self::handle_pull_requests(me, recycler, gossip_pull_data, stakes);
         if let Some(rsp) = rsp {
