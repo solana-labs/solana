@@ -3,6 +3,7 @@ use crate::{
     pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
+use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -20,6 +21,7 @@ use solana_vote_program::{
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Bound::{Included, Unbounded},
+    sync::{Arc, RwLock},
 };
 
 #[derive(PartialEq, Clone, Debug)]
@@ -137,7 +139,7 @@ impl Tower {
     }
 
     pub(crate) fn collect_vote_lockouts<F>(
-        &self,
+        node_pubkey: &Pubkey,
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
@@ -157,7 +159,7 @@ impl Tower {
             if lamports == 0 {
                 continue;
             }
-            trace!("{} {} with stake {}", self.node_pubkey, key, lamports);
+            trace!("{} {} with stake {}", node_pubkey, key, lamports);
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
                 datapoint_warn!(
@@ -180,7 +182,7 @@ impl Tower {
                     .push((vote.slot, key));
             }
 
-            if key == self.node_pubkey || vote_state.node_pubkey == self.node_pubkey {
+            if key == *node_pubkey || vote_state.node_pubkey == *node_pubkey {
                 debug!("vote state {:?}", vote_state);
                 debug!(
                     "observed slot {}",
@@ -552,6 +554,28 @@ impl Tower {
         }
     }
 
+    pub(crate) fn find_heaviest_bank(
+        bank_forks: &RwLock<BankForks>,
+        node_pubkey: &Pubkey,
+    ) -> Option<Arc<Bank>> {
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let mut bank_weights: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .map(|b| {
+                (
+                    Self::bank_weight(node_pubkey, b, &ancestors),
+                    b.parents().len(),
+                    b.clone(),
+                )
+            })
+            .collect();
+        bank_weights.sort_by_key(|b| (b.0, b.1));
+        bank_weights.pop().map(|b| b.2)
+    }
+
     /// Update stake for all the ancestors.
     /// Note, stake is the same for all the ancestor.
     fn update_ancestor_stakes(
@@ -572,6 +596,21 @@ impl Tower {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.stake += lamports;
         }
+    }
+
+    fn bank_weight(
+        node_pubkey: &Pubkey,
+        bank: &Bank,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+    ) -> u128 {
+        let ComputedBankState { bank_weight, .. } = Self::collect_vote_lockouts(
+            node_pubkey,
+            bank.slot(),
+            bank.vote_accounts().into_iter(),
+            ancestors,
+            &mut PubkeyReferences::default(),
+        );
+        bank_weight
     }
 
     fn initialize_lockouts_from_bank_forks(
@@ -619,6 +658,7 @@ impl Tower {
 pub mod test {
     use super::*;
     use crate::{
+        bank_weight_fork_choice::BankWeightForkChoice,
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
@@ -746,6 +786,7 @@ pub mod test {
                 .collect();
 
             let _ = ReplayStage::compute_bank_stats(
+                &my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
                 tower,
@@ -755,6 +796,7 @@ pub mod test {
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
                 &mut self.heaviest_subtree_fork_choice,
+                &mut BankWeightForkChoice::default(),
             );
 
             let vote_bank = self
@@ -1314,7 +1356,6 @@ pub mod test {
         let account_latest_votes: Vec<(Pubkey, Slot)> =
             accounts.iter().map(|(pubkey, _)| (*pubkey, 0)).collect();
 
-        let tower = Tower::new_for_tests(0, 0.67);
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
@@ -1324,7 +1365,8 @@ pub mod test {
             bank_weight,
             mut pubkey_votes,
             ..
-        } = tower.collect_vote_lockouts(
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             1,
             accounts.into_iter(),
             &ancestors,
@@ -1377,7 +1419,8 @@ pub mod test {
             bank_weight,
             mut pubkey_votes,
             ..
-        } = tower.collect_vote_lockouts(
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
@@ -1752,7 +1795,8 @@ pub mod test {
             stake_lockouts,
             total_staked,
             ..
-        } = tower.collect_vote_lockouts(
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             vote_to_evaluate,
             accounts.clone().into_iter(),
             &ancestors,
@@ -1768,7 +1812,8 @@ pub mod test {
             stake_lockouts,
             total_staked,
             ..
-        } = tower.collect_vote_lockouts(
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             vote_to_evaluate,
             accounts.into_iter(),
             &ancestors,

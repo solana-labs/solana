@@ -1,13 +1,14 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::{
+    bank_weight_fork_choice::BankWeightForkChoice,
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
-    fork_choice::SelectVoteAndResetForkResult,
+    fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
@@ -216,18 +217,26 @@ impl ReplayStage {
                         ),
                     );
                 }
-                let root = bank_forks.read().unwrap().root();
+                let root_bank = bank_forks.read().unwrap().root_bank().clone();
+                let root = root_bank.slot();
+                let unlock_heaviest_subtree_fork_choice_slot =
+                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
                 let mut heaviest_subtree_fork_choice =
                     HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
-                let heaviest_bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(heaviest_subtree_fork_choice.best_overall_slot())
-                    .expect(
-                        "The best overall slot must be one of `frozen_banks` which all 
-                exist in bank_forks",
-                    )
-                    .clone();
+                let mut bank_weight_fork_choice = BankWeightForkChoice::default();
+                let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .get(heaviest_subtree_fork_choice.best_overall_slot())
+                        .expect(
+                            "The best overall slot must be one of `frozen_banks` which all
+                    exist in bank_forks",
+                        )
+                        .clone()
+                } else {
+                    Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or(root_bank)
+                };
                 let mut tower = Tower::new(&my_pubkey, &vote_account, root, &heaviest_bank);
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -295,6 +304,7 @@ impl ReplayStage {
                         .collect();
                     let now = Instant::now();
                     let newly_computed_slot_stats = Self::compute_bank_stats(
+                        &my_pubkey,
                         &ancestors,
                         &mut frozen_banks,
                         &tower,
@@ -304,6 +314,7 @@ impl ReplayStage {
                         &bank_forks,
                         &mut all_pubkeys,
                         &mut heaviest_subtree_fork_choice,
+                        &mut bank_weight_fork_choice,
                     );
                     let compute_bank_stats_elapsed = now.elapsed().as_micros();
                     for slot in newly_computed_slot_stats {
@@ -325,8 +336,14 @@ impl ReplayStage {
                         }
                     }
 
-                    let (heaviest_bank, heaviest_bank_on_same_voted_fork) =
-                        Self::select_forks(&tower, &heaviest_subtree_fork_choice, &bank_forks);
+                    let fork_choice: &mut dyn ForkChoice =
+                        if forks_root > unlock_heaviest_subtree_fork_choice_slot {
+                            &mut heaviest_subtree_fork_choice
+                        } else {
+                            &mut bank_weight_fork_choice
+                        };
+                    let (heaviest_bank, heaviest_bank_on_same_voted_fork) = fork_choice
+                        .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
 
                     Self::report_memory(&allocated, "select_fork", start);
 
@@ -1167,7 +1184,9 @@ impl ReplayStage {
         did_complete_bank
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compute_bank_stats(
+        my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         frozen_banks: &mut Vec<Arc<Bank>>,
         tower: &Tower,
@@ -1176,7 +1195,8 @@ impl ReplayStage {
         cluster_slots: &ClusterSlots,
         bank_forks: &RwLock<BankForks>,
         all_pubkeys: &mut PubkeyReferences,
-        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        heaviest_subtree_fork_choice: &mut dyn ForkChoice,
+        bank_weight_fork_choice: &mut dyn ForkChoice,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -1186,41 +1206,59 @@ impl ReplayStage {
             // is if this node was the leader for this slot as those banks
             // are not replayed in replay_active_banks()
             {
-                let stats = progress
+                let is_computed = progress
                     .get_fork_stats_mut(bank_slot)
-                    .expect("All frozen banks must exist in the Progress map");
-
-                if !stats.computed {
-                    let ComputedBankState {
-                        stake_lockouts,
-                        total_staked,
-                        lockout_intervals,
-                        pubkey_votes,
-                        ..
-                    } = tower.collect_vote_lockouts(
+                    .expect("All frozen banks must exist in the Progress map")
+                    .computed;
+                if !is_computed {
+                    let computed_bank_state = Tower::collect_vote_lockouts(
+                        my_pubkey,
                         bank_slot,
                         bank.vote_accounts().into_iter(),
                         &ancestors,
                         all_pubkeys,
                     );
-                    // Update `heaviest_subtree_fork_choice` to find the best fork to build on
-                    let best_overall_slot = heaviest_subtree_fork_choice.add_votes(
-                        &pubkey_votes,
-                        bank.epoch_stakes_map(),
-                        bank.epoch_schedule(),
+                    heaviest_subtree_fork_choice.compute_bank_stats(
+                        &bank,
+                        tower,
+                        progress,
+                        &computed_bank_state,
                     );
+                    bank_weight_fork_choice.compute_bank_stats(
+                        &bank,
+                        tower,
+                        progress,
+                        &computed_bank_state,
+                    );
+                    let ComputedBankState {
+                        stake_lockouts,
+                        total_staked,
+                        lockout_intervals,
+                        ..
+                    } = computed_bank_state;
+                    let stats = progress
+                        .get_fork_stats_mut(bank_slot)
+                        .expect("All frozen banks must exist in the Progress map");
                     stats.total_staked = total_staked;
-
-                    datapoint_info!(
-                        "best_slot",
-                        ("slot", bank_slot, i64),
-                        ("best_slot", best_overall_slot, i64),
-                    );
                     stats.stake_lockouts = stake_lockouts;
                     stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
                     stats.computed = true;
                     new_stats.push(bank_slot);
+                    datapoint_info!(
+                        "bank_weight",
+                        ("slot", bank_slot, i64),
+                        // u128 too large for influx, convert to hex
+                        ("weight", format!("{:X}", stats.weight), String),
+                    );
+                    info!(
+                        "{} slot_weight: {} {} {} {}",
+                        my_pubkey,
+                        bank_slot,
+                        stats.weight,
+                        stats.fork_weight,
+                        bank.parent().map(|b| b.slot()).unwrap_or(0)
+                    );
                 }
             }
 
@@ -1308,38 +1346,6 @@ impl ReplayStage {
             bank_forks,
             all_pubkeys,
         );
-    }
-
-    // Returns:
-    // 1) The heaviest overall bbank
-    // 2) The heavest bank on the same fork as the last vote (doesn't require a
-    // switching proof to vote for)
-    pub(crate) fn select_forks(
-        tower: &Tower,
-        heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
-        bank_forks: &RwLock<BankForks>,
-    ) -> (Arc<Bank>, Option<Arc<Bank>>) {
-        let last_vote = tower.last_vote().slots.last().cloned();
-        let heaviest_slot_on_same_voted_fork = last_vote.map(|last_vote| {
-            let heaviest_slot_on_same_voted_fork =
-                heaviest_subtree_fork_choice.best_slot(last_vote).expect("last_vote is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
-            if heaviest_slot_on_same_voted_fork == last_vote {
-                None
-            } else {
-                Some(heaviest_slot_on_same_voted_fork)
-            }
-        }).unwrap_or(None);
-        let heaviest_slot = heaviest_subtree_fork_choice.best_overall_slot();
-        let r_bank_forks = bank_forks.read().unwrap();
-        (
-            r_bank_forks.get(heaviest_slot).unwrap().clone(),
-            heaviest_slot_on_same_voted_fork.map(|heaviest_slot_on_same_voted_fork| {
-                r_bank_forks
-                    .get(heaviest_slot_on_same_voted_fork)
-                    .unwrap()
-                    .clone()
-            }),
-        )
     }
 
     // Given a heaviest bank, `heaviest_bank` and the next votable bank
@@ -1739,6 +1745,14 @@ impl ReplayStage {
     }
 
     pub fn get_unlock_switch_vote_slot(operating_mode: OperatingMode) -> Slot {
+        match operating_mode {
+            OperatingMode::Development => std::u64::MAX / 2,
+            OperatingMode::Stable => std::u64::MAX / 2,
+            OperatingMode::Preview => std::u64::MAX / 2,
+        }
+    }
+
+    pub fn get_unlock_heaviest_subtree_fork_choice(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => std::u64::MAX / 2,
             OperatingMode::Stable => std::u64::MAX / 2,
@@ -2558,6 +2572,7 @@ pub(crate) mod tests {
             .collect();
         let tower = Tower::new_for_tests(0, 0.67);
         let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -2567,6 +2582,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
+            &mut BankWeightForkChoice::default(),
         );
         assert_eq!(newly_computed, vec![0]);
         // The only vote is in bank 1, and bank_forks does not currently contain
@@ -2599,6 +2615,7 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -2608,6 +2625,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
+            &mut BankWeightForkChoice::default(),
         );
 
         assert_eq!(newly_computed, vec![1]);
@@ -2632,6 +2650,7 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -2641,6 +2660,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
+            &mut BankWeightForkChoice::default(),
         );
         // No new stats should have been computed
         assert!(newly_computed.is_empty());
@@ -2668,6 +2688,7 @@ pub(crate) mod tests {
 
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         ReplayStage::compute_bank_stats(
+            &node_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -2677,6 +2698,7 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
+            &mut BankWeightForkChoice::default(),
         );
 
         assert_eq!(
@@ -2684,9 +2706,22 @@ pub(crate) mod tests {
             heaviest_subtree_fork_choice.stake_voted_subtree(2).unwrap()
         );
 
-        let (heaviest_bank, _) = ReplayStage::select_forks(
+        let (heaviest_bank, _) = heaviest_subtree_fork_choice.select_forks(
+            &frozen_banks,
             &tower,
-            &heaviest_subtree_fork_choice,
+            &vote_simulator.progress,
+            &ancestors,
+            &vote_simulator.bank_forks,
+        );
+
+        // Should pick the lower of the two equally weighted banks
+        assert_eq!(heaviest_bank.slot(), 1);
+
+        let (heaviest_bank, _) = BankWeightForkChoice::default().select_forks(
+            &frozen_banks,
+            &tower,
+            &vote_simulator.progress,
+            &ancestors,
             &vote_simulator.bank_forks,
         );
 
@@ -2727,6 +2762,7 @@ pub(crate) mod tests {
             .collect();
 
         ReplayStage::compute_bank_stats(
+            &node_pubkey,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),
             &mut frozen_banks,
             &tower,
@@ -2736,6 +2772,7 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
             &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut BankWeightForkChoice::default(),
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());

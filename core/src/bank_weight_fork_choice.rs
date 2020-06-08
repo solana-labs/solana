@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+#[derive(Default)]
 pub struct BankWeightForkChoice {}
 
 impl ForkChoice for BankWeightForkChoice {
@@ -39,20 +40,6 @@ impl ForkChoice for BankWeightForkChoice {
         let ComputedBankState { bank_weight, .. } = computed_bank_stats;
         stats.weight = *bank_weight;
         stats.fork_weight = stats.weight + parent_weight;
-
-        datapoint_info!(
-            "bank_weight",
-            ("slot", bank_slot, i64),
-            // u128 too large for influx, convert to hex
-            ("weight", format!("{:X}", stats.weight), String),
-        );
-        info!(
-            "slot_weight: {} {} {} {}",
-            bank_slot,
-            stats.weight,
-            stats.fork_weight,
-            bank.parent().map(|b| b.slot()).unwrap_or(0)
-        );
     }
 
     // Returns:
