@@ -1196,6 +1196,7 @@ impl ReplayStage {
                         total_staked,
                         lockout_intervals,
                         pubkey_votes,
+                        ..
                     } = tower.collect_vote_lockouts(
                         bank_slot,
                         bank.vote_accounts().into_iter(),

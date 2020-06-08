@@ -22,7 +22,7 @@ pub(crate) struct SelectVoteAndResetForkResult {
 pub(crate) struct ComputedBankState {
     pub stake_lockouts: HashMap<Slot, StakeLockout>,
     pub total_staked: u64,
-    pub total_weight: u64,
+    pub bank_weight: u128,
     pub lockout_intervals: LockoutIntervals,
     pub pubkey_votes: Vec<(Pubkey, Slot)>,
 }

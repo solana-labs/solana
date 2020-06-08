@@ -213,6 +213,7 @@ impl Tower {
 
         ComputedBankState {
             stake_lockouts,
+            bank_weight: 0,
             total_staked,
             lockout_intervals,
             pubkey_votes,
