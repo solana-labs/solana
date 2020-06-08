@@ -1179,9 +1179,8 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-<<<<<<< HEAD
     ) -> Result<RpcEpochInfo> {
-        let bank = meta.request_processor.read().unwrap().bank(commitment)?;
+        let bank = meta.bank(commitment)?;
         let epoch_schedule = bank.epoch_schedule();
 
         let slot = bank.slot();
@@ -1192,11 +1191,6 @@ impl RpcSol for RpcSolImpl {
             slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
             absolute_slot: slot,
         })
-=======
-    ) -> Result<EpochInfo> {
-        let bank = meta.bank(commitment)?;
-        Ok(bank.get_epoch_info())
->>>>>>> af8c21c55... Remove lock around JsonRpcRequestProcessor (#10417)
     }
 
     fn get_block_commitment(
@@ -1529,14 +1523,11 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_turn_rate()
+        meta.get_storage_turn_rate()
     }
 
     fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn> {
-        meta.request_processor.read().unwrap().get_storage_turn()
+        meta.get_storage_turn()
     }
 
     fn get_slots_per_segment(
@@ -1544,10 +1535,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_slots_per_segment(commitment)
+        meta.get_slots_per_segment(commitment)
     }
 
     fn get_storage_pubkeys_for_slot(
@@ -1555,10 +1543,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         slot: Slot,
     ) -> Result<Vec<String>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_pubkeys_for_slot(slot)
+        meta.get_storage_pubkeys_for_slot(slot)
     }
 
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
@@ -2838,35 +2823,17 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-<<<<<<< HEAD
-        let meta = Meta {
-            request_processor: {
-                let request_processor = JsonRpcRequestProcessor::new(
-                    JsonRpcConfig::default(),
-                    new_bank_forks().0,
-                    block_commitment_cache,
-                    blockstore,
-                    StorageState::default(),
-                    validator_exit,
-                    RpcHealth::stub(),
-                );
-                Arc::new(RwLock::new(request_processor))
-            },
-            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
-            genesis_hash: Hash::default(),
-        };
-=======
         let meta = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             new_bank_forks().0,
             block_commitment_cache,
             blockstore,
+            StorageState::default(),
             validator_exit,
             RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
+            Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
             Hash::default(),
         );
->>>>>>> af8c21c55... Remove lock around JsonRpcRequestProcessor (#10417)
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
@@ -2893,31 +2860,15 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-<<<<<<< HEAD
-        let meta = Meta {
-            request_processor: {
-                let request_processor = JsonRpcRequestProcessor::new(
-                    JsonRpcConfig::default(),
-                    bank_forks,
-                    block_commitment_cache,
-                    blockstore,
-                    StorageState::default(),
-                    validator_exit,
-                    health.clone(),
-                );
-                Arc::new(RwLock::new(request_processor))
-            },
-            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(
-=======
         let meta = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
             blockstore,
+            StorageState::default(),
             validator_exit,
             health.clone(),
             Arc::new(ClusterInfo::new_with_invalid_keypair(
->>>>>>> af8c21c55... Remove lock around JsonRpcRequestProcessor (#10417)
                 ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
             )),
             Hash::default(),
