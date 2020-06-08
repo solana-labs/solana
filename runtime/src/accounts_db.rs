@@ -175,7 +175,6 @@ pub struct AccountStorageEntry {
     ///
     /// This is used as a rough estimate for slot shrinking. As such a relaxed
     /// use case, this value ARE NOT strictly synchronized with count_and_status!
-    #[serde(skip)]
     approx_store_count: AtomicUsize,
 }
 
@@ -186,6 +185,7 @@ impl Default for AccountStorageEntry {
             slot: 0,
             accounts: AppendVec::new_empty_map(0),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            approx_store_count: AtomicUsize::new(0),
         }
     }
 }
@@ -211,6 +211,7 @@ impl AccountStorageEntry {
             slot: 0,
             accounts: AppendVec::new_empty_map(accounts_current_len),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
+            approx_store_count: AtomicUsize::new(0),
         }
     }
 
