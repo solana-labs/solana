@@ -100,9 +100,6 @@ impl CrdsFilter {
         accum
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
-        if self.mask_bits == 0 {
-            return true;
-        }
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
         let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
         let bits = Self::hash_as_u64(item) | ones;
@@ -230,9 +227,8 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
-        now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
-        Self::filter_crds_values(crds, requests, now)
+        self.filter_crds_values(crds, requests)
     }
 
     /// process a pull response
@@ -323,17 +319,12 @@ impl CrdsGossipPull {
     }
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(
+        &self,
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
-        now: Option<u64>,
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
-        let now = now.unwrap_or(u64::MAX);
         for v in crds.table.values() {
-            //skip messages that are newer than now
-            if v.insert_timestamp > now {
-                continue;
-            }
             filters.iter().enumerate().for_each(|(i, (_, filter))| {
                 if !filter.contains(&v.value_hash) {
                     ret[i].push(v.value.clone());
@@ -596,7 +587,7 @@ mod test {
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters, None);
+        let rsp = dest.generate_pull_responses(&dest_crds, &filters);
         dest.process_pull_requests(&mut dest_crds, filters, 1);
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
@@ -667,7 +658,7 @@ mod test {
             );
             let (_, filters, caller) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters, None);
+            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters);
             dest.process_pull_requests(&mut dest_crds, filters, 0);
             // if there is a false positive this is empty
             // prob should be around 0.1 per iteration
@@ -709,37 +700,6 @@ mod test {
         }
         assert!(done);
     }
-    #[test]
-    fn test_filter_crds_values() {
-        let mut node_crds = Crds::default();
-        let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
-            0,
-        )));
-
-        let caller = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
-            0,
-        )));
-
-        let node_label = entry.label();
-        let node_pubkey = node_label.pubkey();
-        node_crds.insert(entry, 1).unwrap();
-        let mut filter = CrdsFilter::new_rand(1, 128);
-        filter.mask_bits = 0;
-        let requests = [(caller, filter)];
-
-        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, None);
-        assert_eq!(rsp[0][0].pubkey(), node_pubkey);
-
-        //skip 1 since its newer than 0
-        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(0));
-        assert!(rsp[0].is_empty());
-
-        let rsp = CrdsGossipPull::filter_crds_values(&node_crds, &requests, Some(1));
-        assert_eq!(rsp[0][0].pubkey(), node_pubkey);
-    }
-
     #[test]
     fn test_gossip_purge() {
         let mut node_crds = Crds::default();
@@ -803,15 +763,6 @@ mod test {
         let h: Hash = hash(h.as_ref());
         assert!(!filter.contains(&h));
     }
-
-    #[test]
-    fn test_crds_filter_test_mask_default() {
-        let filter = CrdsFilter::default();
-        assert_eq!(filter.mask_bits, 0);
-        let h: Hash = Hash::default();
-        assert_eq!(filter.test_mask(&h), true);
-    }
-
     #[test]
     fn test_crds_filter_add_mask() {
         let mut filter = CrdsFilter::new_rand(1000, 10);
