@@ -557,10 +557,9 @@ impl AccountsDB {
             let mut accounts_index = self.accounts_index.write().unwrap();
             accounts_index.reset_uncleaned_roots()
         };
-        {
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            candidates.extend(previous_roots);
-        }
+
+        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+        candidates.extend(previous_roots);
     }
 
     fn inc_store_counts(
@@ -914,7 +913,8 @@ impl AccountsDB {
 
     // Infinitely returns rooted roots in cyclic order
     fn next_shrink_slot(&self) -> Option<Slot> {
-        // hold a lock to keep reset_uncleaned_roots() from updating candidates
+        // hold a lock to keep reset_uncleaned_roots() from updating candidates;
+        // we might update in this fn it if it's empty
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
         let next = candidates.pop();
 
@@ -3873,6 +3873,10 @@ pub mod tests {
         accounts.add_root(2);
 
         accounts.reset_uncleaned_roots();
+        let actual_slots = accounts.shrink_candidate_slots.lock().unwrap().clone();
+        assert_eq!(actual_slots, vec![] as Vec<Slot>);
+
+        accounts.reset_uncleaned_roots();
         let mut actual_slots = accounts.shrink_candidate_slots.lock().unwrap().clone();
         actual_slots.sort();
         assert_eq!(actual_slots, vec![0, 1, 2]);
@@ -3990,12 +3994,15 @@ pub mod tests {
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
+
+        // Only, try to shrink stale slots.
         accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
 
+        // Now, do full-shrink.
         accounts.shrink_all_slots();
         assert_eq!(
             pubkey_count_after_shrink,

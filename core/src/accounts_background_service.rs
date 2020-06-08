@@ -23,7 +23,7 @@ impl AccountsBackgroundService {
     pub fn new(bank_forks: Arc<RwLock<BankForks>>, exit: &Arc<AtomicBool>) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
-        let mut shrinking_budget = 0;
+        let mut consumed_budget = 0;
         let t_background = Builder::new()
             .name("solana-accounts-background".to_string())
             .spawn(move || loop {
@@ -34,17 +34,8 @@ impl AccountsBackgroundService {
 
                 bank.process_dead_slots();
 
-                if shrinking_budget == 0 {
-                    let shrunken_account_count = bank.process_stale_slot();
-                    if shrunken_account_count > 0 {
-                        datapoint_info!(
-                            "stale_slot_shrink",
-                            ("accounts", shrunken_account_count, i64)
-                        );
-                        shrinking_budget += shrunken_account_count;
-                    }
-                }
-                shrinking_budget = shrinking_budget.saturating_sub(SHRUNKEN_ACCOUNT_PER_INTERVAL);
+                consumed_budget = bank
+                    .process_stale_slot_with_budget(consumed_budget, SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
                 sleep(Duration::from_millis(INTERVAL_MS));
             })
