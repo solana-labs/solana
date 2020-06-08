@@ -242,7 +242,6 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     pub fn reset_uncleaned_roots(&mut self) -> Vec<Slot> {
         let empty = HashSet::new();
         let new_previous = std::mem::replace(&mut self.uncleaned_roots, empty);
-        dbg!("{:?}", &new_previous);
         std::mem::replace(&mut self.previous_uncleaned_roots, new_previous)
             .into_iter()
             .collect()
@@ -389,13 +388,11 @@ mod tests {
         index.clean_dead_slot(1);
         assert_eq!(3, index.roots.len());
         assert_eq!(2, index.uncleaned_roots.len());
-        //eprintln!("{:?}", &index.previous_uncleaned_roots);
         assert_eq!(1, index.previous_uncleaned_roots.len());
 
         index.clean_dead_slot(2);
         assert_eq!(2, index.roots.len());
         assert_eq!(1, index.uncleaned_roots.len());
-        //eprintln!("{:?}", &index.previous_uncleaned_roots);
         assert_eq!(1, index.previous_uncleaned_roots.len());
     }
 
