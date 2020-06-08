@@ -169,8 +169,14 @@ pub struct AccountStorageEntry {
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
     count_and_status: RwLock<(usize, AccountStorageStatus)>,
 
+    /// This is the total number of accounts stored ever since initialized to keep
+    /// track of lifetime count of all store operations. And this differs from
+    /// count_and_status in that this field won't be decremented.
+    ///
+    /// This is used as a rough estimate for slot shrinking. As such a relaxed
+    /// use case, this value ARE NOT strictly synchronized with count_and_status!
     #[serde(skip)]
-    store_count: AtomicUsize,
+    approx_store_count: AtomicUsize,
 }
 
 impl Default for AccountStorageEntry {
@@ -195,7 +201,7 @@ impl AccountStorageEntry {
             slot,
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
-            store_count: AtomicUsize::new(0),
+            approx_store_count: AtomicUsize::new(0),
         }
     }
 
@@ -237,8 +243,8 @@ impl AccountStorageEntry {
         self.count_and_status.read().unwrap().0
     }
 
-    pub fn stored_count(&self) -> usize {
-        self.store_count.load(Ordering::Relaxed)
+    pub fn approx_stored_count(&self) -> usize {
+        self.approx_store_count.load(Ordering::Relaxed)
     }
 
     pub fn has_accounts(&self) -> bool {
@@ -260,7 +266,7 @@ impl AccountStorageEntry {
     fn add_account(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
-        self.store_count.fetch_add(1, Ordering::Relaxed);
+        self.approx_store_count.fetch_add(1, Ordering::Relaxed);
     }
 
     fn try_available(&self) -> bool {
@@ -799,7 +805,7 @@ impl AccountsDB {
                 let mut stored_count = 0;
                 for store in stores.values() {
                     alive_count += store.count();
-                    stored_count += store.stored_count();
+                    stored_count += store.approx_stored_count();
                 }
                 if (alive_count as f32 / stored_count as f32) >= 0.80 && !forced {
                     trace!(
@@ -908,6 +914,7 @@ impl AccountsDB {
 
     // Infinitely returns rooted roots in cyclic order
     fn next_shrink_slot(&self) -> Option<Slot> {
+        // hold a lock to keep reset_uncleaned_roots() from updating candidates
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
         let next = candidates.pop();
 
@@ -916,6 +923,7 @@ impl AccountsDB {
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
+            // update candidates under the lock finally!
             *candidates = new_all_slots;
 
             next
@@ -942,6 +950,13 @@ impl AccountsDB {
         inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);
 
         count
+    }
+
+    #[cfg(test)]
+    fn shrink_all_stale_slots(&self) {
+        for slot in self.all_slots_in_storage() {
+            self.shrink_stale_slot(slot);
+        }
     }
 
     pub fn shrink_all_slots(&self) {
@@ -1912,12 +1927,13 @@ impl AccountsDB {
                         store.count_and_status.read().unwrap().0
                     );
                     store.count_and_status.write().unwrap().0 = *count;
-                    store.store_count.store(*count, Ordering::Relaxed);
                 } else {
                     trace!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
-                    store.store_count.store(0, Ordering::Relaxed);
                 }
+                store
+                    .approx_store_count
+                    .store(store.accounts.accounts(0).len(), Ordering::Relaxed);
             }
         }
     }
@@ -2095,7 +2111,11 @@ pub mod tests {
             assert_eq!(slot_1_stores.len(), 1);
             assert_eq!(slot_0_stores[&0].count(), 2);
             assert_eq!(slot_1_stores[&1].count(), 2);
+            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
         }
+
+        // adding root doesn't change anything
         db.add_root(1);
         {
             let stores = db.storage.read().unwrap();
@@ -2105,6 +2125,23 @@ pub mod tests {
             assert_eq!(slot_1_stores.len(), 1);
             assert_eq!(slot_0_stores[&0].count(), 2);
             assert_eq!(slot_1_stores[&1].count(), 2);
+            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
+        }
+
+        // overwrite old rooted account version; only the slot_0_stores.count() should be
+        // decremented
+        db.store(2, &[(&pubkeys[0], &account)]);
+        {
+            let stores = db.storage.read().unwrap();
+            let slot_0_stores = &stores.0.get(&0).unwrap();
+            let slot_1_stores = &stores.0.get(&1).unwrap();
+            assert_eq!(slot_0_stores.len(), 1);
+            assert_eq!(slot_1_stores.len(), 1);
+            assert_eq!(slot_0_stores[&0].count(), 1);
+            assert_eq!(slot_1_stores[&1].count(), 2);
+            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
         }
     }
 
@@ -2258,6 +2295,14 @@ pub mod tests {
             total_count += store.count();
         }
         assert_eq!(total_count, count);
+        let (expected_store_count, actual_store_count): (usize, usize) = (
+            slot_storage.values().map(|s| s.approx_stored_count()).sum(),
+            slot_storage
+                .values()
+                .map(|s| s.accounts.accounts(0).len())
+                .sum(),
+        );
+        assert_eq!(expected_store_count, actual_store_count);
         total_count == count
     }
 
@@ -2501,10 +2546,16 @@ pub mod tests {
 
             let slot_storage = storage.0.get(&slot);
             if let Some(slot_storage) = slot_storage {
-                slot_storage
+                let count = slot_storage
                     .values()
                     .map(|store| store.accounts.accounts(0).len())
-                    .sum()
+                    .sum();
+                let stored_count: usize = slot_storage
+                    .values()
+                    .map(|store| store.approx_stored_count())
+                    .sum();
+                assert_eq!(stored_count, count);
+                count
             } else {
                 0
             }
@@ -3761,11 +3812,11 @@ pub mod tests {
     }
 
     #[test]
-    fn test_shrink_slots_none() {
+    fn test_shrink_all_slots_none() {
         let accounts = AccountsDB::new_single();
 
         for _ in 0..10 {
-            accounts.process_stale_slot();
+            assert_eq!(0, accounts.process_stale_slot());
         }
 
         accounts.shrink_all_slots();
@@ -3804,6 +3855,35 @@ pub mod tests {
         assert!(
             vec![Some(7), Some(8), Some(7), Some(8), Some(7), Some(8)] == slots
                 || vec![Some(8), Some(7), Some(8), Some(7), Some(8), Some(7)] == slots
+        );
+    }
+
+    #[test]
+    fn test_shrink_reset_uncleaned_roots() {
+        let accounts = AccountsDB::new_single();
+
+        accounts.reset_uncleaned_roots();
+        assert_eq!(
+            *accounts.shrink_candidate_slots.lock().unwrap(),
+            vec![] as Vec<Slot>
+        );
+
+        accounts.add_root(0);
+        accounts.add_root(1);
+        accounts.add_root(2);
+
+        accounts.reset_uncleaned_roots();
+        let mut actual_slots = accounts.shrink_candidate_slots.lock().unwrap().clone();
+        actual_slots.sort();
+        assert_eq!(actual_slots, vec![0, 1, 2]);
+
+        let mut actual_slots = (0..6)
+            .map(|_| accounts.next_shrink_slot())
+            .collect::<Vec<_>>();
+        actual_slots.sort();
+        assert_eq!(
+            actual_slots,
+            vec![Some(0), Some(0), Some(1), Some(1), Some(2), Some(2)],
         );
     }
 
@@ -3910,9 +3990,15 @@ pub mod tests {
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
-        accounts.shrink_all_slots();
+        accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count,
+            accounts.all_account_count_in_append_vec(shrink_slot)
+        );
+
+        accounts.shrink_all_slots();
+        assert_eq!(
+            pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
     }
