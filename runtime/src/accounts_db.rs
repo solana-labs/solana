@@ -624,11 +624,10 @@ impl AccountsDB {
         let (mut purges, purges_in_root) = pubkeys
             .par_chunks(4096)
             .map(|pubkeys: &[Pubkey]| {
-                let no_ancestors = HashMap::new();
                 let mut purges_in_root = Vec::new();
                 let mut purges = HashMap::new();
                 for pubkey in pubkeys {
-                    if let Some((list, index)) = accounts_index.get(pubkey, &no_ancestors) {
+                    if let Some((list, index)) = accounts_index.get(pubkey, None) {
                         let (slot, account_info) = &list[index];
                         if account_info.lamports == 0 {
                             purges.insert(*pubkey, accounts_index.would_purge(pubkey));
@@ -801,7 +800,6 @@ impl AccountsDB {
         }
 
         let alive_accounts: Vec<_> = {
-            let no_ancestors = HashMap::new();
             let accounts_index = self.accounts_index.read().unwrap();
             stored_accounts
                 .iter()
@@ -814,7 +812,7 @@ impl AccountsDB {
                         (store_id, offset),
                         _write_version,
                     )| {
-                        if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
+                        if let Some((list, _)) = accounts_index.get(pubkey, None) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
                         } else {
@@ -1015,7 +1013,7 @@ impl AccountsDB {
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
-        let (lock, index) = accounts_index.get(pubkey, ancestors)?;
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors))?;
         let slot = lock[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
@@ -1032,7 +1030,7 @@ impl AccountsDB {
     #[cfg(test)]
     fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
         let accounts_index = self.accounts_index.read().unwrap();
-        let (lock, index) = accounts_index.get(pubkey, ancestors).unwrap();
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors)).unwrap();
         let slot = lock[index].0;
         let storage = self.storage.read().unwrap();
         let slot_storage = storage.0.get(&slot).unwrap();
@@ -1444,7 +1442,7 @@ impl AccountsDB {
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
-                if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
+                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors)) {
                     let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         storage
@@ -2113,7 +2111,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, &ancestors)
+            .get(&key, Some(&ancestors))
             .is_some());
         assert_load_account(&db, unrooted_slot, key, 1);
 
@@ -2134,7 +2132,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, &ancestors)
+            .get(&key, Some(&ancestors))
             .is_none());
 
         // Test we can store for the same slot again and get the right information
@@ -2430,7 +2428,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let id = {
             let index = accounts.accounts_index.read().unwrap();
-            let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
+            let (list, idx) = index.get(&pubkey, Some(&ancestors)).unwrap();
             list[idx].1.store_id
         };
         accounts.add_root(1);
