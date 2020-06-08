@@ -243,6 +243,12 @@ pub struct ClusterInfo {
     stats: GossipStats,
 }
 
+impl Default for ClusterInfo {
+    fn default() -> Self {
+        Self::new_with_invalid_keypair(ContactInfo::default())
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct Locality {
     /// The bounds of the neighborhood represented by this locality
