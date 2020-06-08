@@ -178,18 +178,6 @@ pub struct AccountStorageEntry {
     approx_store_count: AtomicUsize,
 }
 
-impl Default for AccountStorageEntry {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            slot: 0,
-            accounts: AppendVec::new_empty_map(0),
-            count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
-            approx_store_count: AtomicUsize::new(0),
-        }
-    }
-}
-
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot: Slot, id: usize, file_size: u64) -> Self {
         let tail = AppendVec::new_relative_path(slot, id);
