@@ -6,8 +6,8 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
-    consensus::{StakeLockout, SwitchForkDecision, Tower},
-    fork_choice::{ComputedBankState, SelectVoteAndResetForkResult},
+    consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
+    fork_choice::SelectVoteAndResetForkResult,
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
@@ -1241,9 +1241,6 @@ impl ReplayStage {
                 bank_slot,
                 &stats.stake_lockouts,
                 stats.total_staked,
-                ancestors
-                    .get(&bank_slot)
-                    .expect("Frozen bank must exist in ancestors"),
             );
             stats.is_locked_out = tower.is_locked_out(bank_slot, &ancestors);
             stats.has_voted = tower.has_voted(bank_slot);
@@ -1404,13 +1401,14 @@ impl ReplayStage {
         };
 
         if let Some((bank, switch_fork_decision)) = selected_fork {
-            let (is_locked_out, vote_threshold, is_leader_slot) = {
+            let (is_locked_out, vote_threshold, is_leader_slot, fork_weight) = {
                 let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
                 let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
                     propagated_stats.is_leader_slot,
+                    fork_stats.weight,
                 )
             };
 
@@ -1431,7 +1429,7 @@ impl ReplayStage {
                 && propagation_confirmed
                 && switch_fork_decision != SwitchForkDecision::FailedSwitchThreshold
             {
-                info!("voting: {}", bank.slot());
+                info!("voting: {} {}", bank.slot(), fork_weight);
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((bank.clone(), switch_fork_decision)),
                     reset_bank: Some(bank.clone()),
@@ -2741,6 +2739,19 @@ pub(crate) mod tests {
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());
+        for pair in frozen_banks.windows(2) {
+            let first = vote_simulator
+                .progress
+                .get_fork_stats(pair[0].slot())
+                .unwrap()
+                .fork_weight;
+            let second = vote_simulator
+                .progress
+                .get_fork_stats(pair[1].slot())
+                .unwrap()
+                .fork_weight;
+            assert!(second >= first);
+        }
         for bank in frozen_banks {
             // The only leaf should always be chosen over parents
             assert_eq!(

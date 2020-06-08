@@ -1,146 +1,20 @@
 use crate::{
-    consensus::Tower,
-    fork_choice::{self, ComputedBankState, ForkChoice},
+    consensus::{ComputedBankState, Tower},
+    fork_choice::ForkChoice,
     progress_map::{ForkStats, ProgressMap},
-    pubkey_references::PubkeyReferences,
 };
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
-use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey, timing};
-use solana_vote_program::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
+use solana_sdk::timing;
 use std::time::Instant;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
 pub struct BankWeightForkChoice {}
 
 impl ForkChoice for BankWeightForkChoice {
-    fn collect_vote_lockouts<F>(
-        &self,
-        node_pubkey: &Pubkey,
-        bank_slot: u64,
-        vote_accounts: F,
-        ancestors: &HashMap<Slot, HashSet<u64>>,
-        all_pubkeys: &mut PubkeyReferences,
-    ) -> ComputedBankState
-    where
-        F: Iterator<Item = (Pubkey, (u64, Account))>,
-    {
-        let mut stake_lockouts = HashMap::new();
-        let mut total_staked = 0;
-        let mut bank_weight = 0;
-        // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
-        // keyed by end of the range
-        let mut lockout_intervals = BTreeMap::new();
-        for (key, (lamports, account)) in vote_accounts {
-            if lamports == 0 {
-                continue;
-            }
-            trace!("{} {} with stake {}", node_pubkey, key, lamports);
-            let vote_state = VoteState::from(&account);
-            if vote_state.is_none() {
-                datapoint_warn!(
-                    "tower_warn",
-                    (
-                        "warn",
-                        format!("Unable to get vote_state from account {}", key),
-                        String
-                    ),
-                );
-                continue;
-            }
-            let mut vote_state = vote_state.unwrap();
-
-            for vote in &vote_state.votes {
-                let key = all_pubkeys.get_or_insert(&key);
-                lockout_intervals
-                    .entry(vote.expiration_slot())
-                    .or_insert_with(|| vec![])
-                    .push((vote.slot, key));
-            }
-
-            if key == *node_pubkey || vote_state.node_pubkey == *node_pubkey {
-                debug!("vote state {:?}", vote_state);
-                debug!(
-                    "observed slot {}",
-                    vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
-                );
-                debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
-                datapoint_info!(
-                    "tower-observed",
-                    (
-                        "slot",
-                        vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0),
-                        i64
-                    ),
-                    ("root", vote_state.root_slot.unwrap_or(0), i64)
-                );
-            }
-            let start_root = vote_state.root_slot;
-
-            vote_state.process_slot_vote_unchecked(bank_slot);
-
-            for vote in &vote_state.votes {
-                bank_weight += vote.lockout() as u128 * lamports as u128;
-                fork_choice::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
-            }
-
-            if start_root != vote_state.root_slot {
-                if let Some(root) = start_root {
-                    let vote = Lockout {
-                        confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                        slot: root,
-                    };
-                    trace!("ROOT: {}", vote.slot);
-                    bank_weight += vote.lockout() as u128 * lamports as u128;
-                    fork_choice::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
-                }
-            }
-            if let Some(root) = vote_state.root_slot {
-                let vote = Lockout {
-                    confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                    slot: root,
-                };
-                bank_weight += vote.lockout() as u128 * lamports as u128;
-                fork_choice::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
-            }
-
-            // The last vote in the vote stack is a simulated vote on bank_slot, which
-            // we added to the vote stack earlier in this function by calling process_vote().
-            // We don't want to update the ancestors stakes of this vote b/c it does not
-            // represent an actual vote by the validator.
-
-            // Note: It should not be possible for any vote state in this bank to have
-            // a vote for a slot >= bank_slot, so we are guaranteed that the last vote in
-            // this vote stack is the simulated vote, so this fetch should be sufficient
-            // to find the last unsimulated vote.
-            assert_eq!(
-                vote_state.nth_recent_vote(0).map(|l| l.slot),
-                Some(bank_slot)
-            );
-            if let Some(vote) = vote_state.nth_recent_vote(1) {
-                // Update all the parents of this last vote with the stake of this vote account
-                fork_choice::update_ancestor_stakes(
-                    &mut stake_lockouts,
-                    vote.slot,
-                    lamports,
-                    ancestors,
-                );
-            }
-            total_staked += lamports;
-        }
-
-        ComputedBankState {
-            stake_lockouts,
-            total_staked,
-            bank_weight,
-            lockout_intervals,
-            pubkey_votes: vec![],
-        }
-    }
-
     fn compute_bank_stats(
         &mut self,
         bank: &Bank,
