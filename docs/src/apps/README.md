@@ -42,7 +42,7 @@ Also, if an account is marked "executable" in metadata, it will only be used by 
 
 The runtime only permits the owner program to debit the account or modify its data. The program then defines additional rules for whether the client can modify accounts it owns. In the case of the System program, it allows users to transfer lamports by recognizing transaction signatures. If it sees the client signed the transaction using the keypair's _private key_, it knows the client authorized the token transfer.
 
-In other words, the entire set of assigned accounts can be regarded as a key-value store where a key is the account address and value is program-specific arbitrary binary data. A program author can decide how to manage the program's whole state as possibly many accounts.
+In other words, the entire set of accounts owned by a given program can be regarded as a key-value store where a key is the account address and value is program-specific arbitrary binary data. A program author can decide how to manage the program's whole state as possibly many accounts.
 
 After the runtime executes each of the transaction's instructions, it uses the account metadata to verify that none of the access rules were violated. If a program violates an access rule, the runtime discards all account changes made by all instructions and marks the transaction as failed.
 

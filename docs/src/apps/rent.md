@@ -12,7 +12,7 @@ Accounts can be exempt from paying rent if they maintain a minimum balance. This
 
 Note: The rent rate can change in the future.
 
-As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is roughly 2 days (For devnet, the rent fee is 0.3608183131797095 lamports per byte-epoch with its 54m36s-long epoch).
+As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports per byte-epoch with its 54m36s-long epoch).
 
 This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching to 3.56 SOL per mebibyte-year):
 
