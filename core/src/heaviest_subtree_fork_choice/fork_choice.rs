@@ -1,7 +1,7 @@
 use crate::{
     consensus::{SwitchForkDecision, Tower},
     fork_choice::{self, ComputedBankState, ForkChoice, SelectVoteAndResetForkResult},
-    fork_weight_tracker::ForkWeightTracker,
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     progress_map::ProgressMap,
     pubkey_references::PubkeyReferences,
     replay_stage::HeaviestForkFailures,
@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-impl ForkChoice for ForkWeightTracker {
+impl ForkChoice for HeaviestSubtreeForkChoice {
     fn collect_vote_lockouts<F>(
         &self,
         node_pubkey: &Pubkey,
@@ -76,7 +76,7 @@ impl ForkChoice for ForkWeightTracker {
                     ("root", vote_state.root_slot.unwrap_or(0), i64)
                 );
             }
-            // Add the latest vote to update the `fork_weight_tracker`
+            // Add the latest vote to update the `heaviest_subtree_fork_choice`
             if let Some(latest_vote) = vote_state.votes.back() {
                 pubkey_votes.push((key, latest_vote.slot));
             }
@@ -125,7 +125,7 @@ impl ForkChoice for ForkWeightTracker {
     ) {
         let ComputedBankState { pubkey_votes, .. } = computed_bank_stats;
 
-        // Update `fork_weight_tracker` to find the best fork to build on
+        // Update `heaviest_subtree_fork_choice` to find the best fork to build on
         let best_overall_slot = self.add_votes(
             &pubkey_votes,
             bank.epoch_stakes_map(),
@@ -154,7 +154,7 @@ impl ForkChoice for ForkWeightTracker {
         let last_vote = tower.last_vote().slots.last().cloned();
         let heaviest_slot_on_same_voted_fork = last_vote.map(|last_vote| {
             let heaviest_slot_on_same_voted_fork =
-                self.best_slot(last_vote).expect("last_vote is a frozen bank so must have been added to fork_weight_tracker at time of freezing");
+                self.best_slot(last_vote).expect("last_vote is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
             if heaviest_slot_on_same_voted_fork == last_vote {
                 None
             } else {

@@ -184,7 +184,7 @@ impl Tower {
                     ("root", vote_state.root_slot.unwrap_or(0), i64)
                 );
             }
-            // Add the latest vote to update the `fork_weight_tracker`
+            // Add the latest vote to update the `heaviest_subtree_fork_choice`
             if let Some(latest_vote) = vote_state.votes.back() {
                 pubkey_votes.push((key, latest_vote.slot));
             }
@@ -561,7 +561,7 @@ pub mod test {
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
-        fork_weight_tracker::ForkWeightTracker,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
@@ -596,7 +596,7 @@ pub mod test {
         pub vote_pubkeys: Vec<Pubkey>,
         pub bank_forks: RwLock<BankForks>,
         pub progress: ProgressMap,
-        pub fork_weight_tracker: ForkWeightTracker,
+        pub heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
     }
 
     impl VoteSimulator {
@@ -607,7 +607,7 @@ pub mod test {
                 vote_pubkeys,
                 bank_forks,
                 progress,
-                fork_weight_tracker,
+                heaviest_subtree_fork_choice,
             ) = Self::init_state(num_keypairs);
             Self {
                 validator_keypairs,
@@ -615,7 +615,7 @@ pub mod test {
                 vote_pubkeys,
                 bank_forks: RwLock::new(bank_forks),
                 progress,
-                fork_weight_tracker,
+                heaviest_subtree_fork_choice,
             }
         }
         pub(crate) fn fill_bank_forks(
@@ -658,7 +658,7 @@ pub mod test {
                     }
                 }
                 new_bank.freeze();
-                self.fork_weight_tracker
+                self.heaviest_subtree_fork_choice
                     .add_new_leaf_slot(new_bank.slot(), Some(new_bank.parent_slot()));
                 self.bank_forks.write().unwrap().insert(new_bank);
                 walk.forward();
@@ -693,7 +693,7 @@ pub mod test {
                 &ClusterSlots::default(),
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
-                &mut self.fork_weight_tracker,
+                &mut self.heaviest_subtree_fork_choice,
             );
 
             let vote_bank = self
@@ -739,7 +739,7 @@ pub mod test {
                 &None,
                 &mut PubkeyReferences::default(),
                 None,
-                &mut self.fork_weight_tracker,
+                &mut self.heaviest_subtree_fork_choice,
             )
         }
 
@@ -825,7 +825,7 @@ pub mod test {
             Vec<Pubkey>,
             BankForks,
             ProgressMap,
-            ForkWeightTracker,
+            HeaviestSubtreeForkChoice,
         ) {
             let keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
                 let node_keypair = Keypair::new();
@@ -848,14 +848,15 @@ pub mod test {
                 .map(|keys| keys.vote_keypair.pubkey())
                 .collect();
 
-            let (bank_forks, progress, fork_weight_tracker) = initialize_state(&keypairs, 10_000);
+            let (bank_forks, progress, heaviest_subtree_fork_choice) =
+                initialize_state(&keypairs, 10_000);
             (
                 keypairs,
                 node_pubkeys,
                 vote_pubkeys,
                 bank_forks,
                 progress,
-                fork_weight_tracker,
+                heaviest_subtree_fork_choice,
             )
         }
     }
@@ -864,7 +865,7 @@ pub mod test {
     pub(crate) fn initialize_state(
         validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
         stake: u64,
-    ) -> (BankForks, ProgressMap, ForkWeightTracker) {
+    ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
         let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
             genesis_config,
@@ -885,8 +886,9 @@ pub mod test {
             ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
         );
         let bank_forks = BankForks::new(0, bank0);
-        let fork_weight_tracker = ForkWeightTracker::new_from_bank_forks(&bank_forks);
-        (bank_forks, progress, fork_weight_tracker)
+        let heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
+        (bank_forks, progress, heaviest_subtree_fork_choice)
     }
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
