@@ -1910,7 +1910,7 @@ impl Bank {
             // happens in the middle of a cycle for both gapped and not-gapped cases:
             //
             // epoch (slot range)|slot idx.*1|raw part. idx.|adj. part. idx.|epoch boundary
-            // ------------------+-----------+--------------+---------------+----
+            // ------------------+-----------+--------------+---------------+--------------
             // 3 (20..30)        | [7..8]    |   7.. 8      |   7.. 8
             //                   | [8..9]    |   8.. 9      |   8.. 9
             // 4 (30..40)        | [0..0]    |<10>..10      | <9>..10      <--- not gapped
