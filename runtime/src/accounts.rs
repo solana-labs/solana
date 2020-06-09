@@ -139,7 +139,7 @@ impl Accounts {
                         let (account, rent) =
                             AccountsDB::load(storage, ancestors, accounts_index, key)
                                 .map(|(mut account, _)| {
-                                    if message.is_writable(i) && !account.executable {
+                                    if message.is_writable(i) {
                                         let rent_due = rent_collector
                                             .from_existing_account(&key, &mut account);
                                         (account, rent_due)
