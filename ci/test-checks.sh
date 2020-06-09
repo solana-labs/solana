@@ -13,11 +13,6 @@ export RUSTFLAGS="-D warnings"
 # Look for failed mergify.io backports
 _ git show HEAD --check --oneline
 
-# `clippy` must be run before `check`; otherwise `clippy` wouldn't be run due to
-# too aggresive cargo's caching!
-_ cargo +"$rust_nightly" clippy --version
-_ cargo +"$rust_nightly" clippy --workspace --all-targets -- --deny=warnings
-
 if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
   true
 else
@@ -28,6 +23,10 @@ else
 fi
 
 _ cargo +"$rust_stable" fmt --all -- --check
+
+# -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
+_ cargo +"$rust_nightly" clippy -Zunstable-options --version
+_ cargo +"$rust_nightly" clippy -Zunstable-options --workspace --all-targets -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
