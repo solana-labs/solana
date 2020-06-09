@@ -22,9 +22,6 @@ pub const TICKS_PER_DAY: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY;
 // 1 Epoch ~= 2 days
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 2 * TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
 
-// 4 times longer than the max_lockout to allow enough time for PoRep (128 slots)
-pub const DEFAULT_SLOTS_PER_TURN: u64 = 32 * 4;
-
 // leader schedule is governed by this
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
