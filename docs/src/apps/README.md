@@ -36,7 +36,7 @@ In the same way that a Linux user uses a path to look up a file, a Solana client
 
 The created account is initialized to be _owned_ by a built-in program called the System program and is called a _system account_ aptly. An account includes "owner" metadata. The owner is a program ID. The runtime grants the program write access to the account if its ID matches the owner. For the case of the System program, the runtime allows clients to transfer lamports and importantly _assign_ account ownership, meaning changing owner to different program ID. If an account is not owned by a program, the program is only permitted to read its data and credit the account.
 
-Also, if an account is marked "executable" in metadata, it will only be used by a _loader_ to run programs. Moreover, programs are just executable accounts owned by a _loader_. For example, a BPF-compiled program is marked executable and loaded by the BPF loader when executing its transactions. This is like a file in a sense that the `ls` command is just an executable file and loaded by the `ld` loader. However, no program is allowed to modify the contents of an executable account once deployed unlike a file as a blockchain security assumption.
+Also, if an account is marked "executable" in metadata, it will only be used by a _loader_ to run programs. For example, a BPF-compiled program is marked executable and loaded by the BPF loader when executing its transactions. No program is allowed to modify the contents of an executable account once deployed.
 
 ## Runtime Capability of Programs on Accounts
 
