@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exi
 use log::*;
 use solana_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
-    input_validators::{is_keypair, is_pubkey_or_keypair, is_url},
+    input_validators::{is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
 };
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
@@ -53,7 +53,8 @@ struct Config {
     /// Amount of additional lamports to stake quality block producers in the validator_list
     bonus_stake_amount: u64,
 
-    /// Quality validators produce a block in more than this percentage of their leader slots
+    /// Quality validators produce a block at least this percentage of their leader slots over the
+    /// previous epoch
     quality_block_producer_percentage: usize,
 
     /// A delinquent validator gets this number of slots of grace (from the current slot) before it
@@ -128,7 +129,17 @@ fn get_config() -> Config {
                 .validator(is_keypair)
                 .required(true)
                 .takes_value(true)
-        )        .get_matches();
+        )
+        .arg(
+            Arg::with_name("quality_block_producer_percentage")
+                .long("quality-block-producer-percentage")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("75")
+                .validator(is_valid_percentage)
+                .help("Quality validators produce a block in at least this percentage of their leader slots over the previous epoch")
+        )
+        .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
         solana_cli_config::Config::load(config_file).unwrap_or_default()
@@ -140,6 +151,8 @@ fn get_config() -> Config {
     let authorized_staker = keypair_of(&matches, "authorized_staker").unwrap();
     let dry_run = !matches.is_present("confirm");
     let cluster = value_t!(matches, "cluster", String).unwrap_or_else(|_| "unknown".into());
+    let quality_block_producer_percentage =
+        value_t_or_exit!(matches, "quality_block_producer_percentage", usize);
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -151,11 +164,12 @@ fn get_config() -> Config {
             validator_list::testnet_validators(),
         ),
         "unknown" => {
-            let validator_list_file = File::open(value_t_or_exit!(matches, "validator_list_file", PathBuf))
-                .unwrap_or_else(|err| {
-                    error!("Unable to open validator_list: {}", err);
-                    process::exit(1);
-                });
+            let validator_list_file =
+                File::open(value_t_or_exit!(matches, "validator_list_file", PathBuf))
+                    .unwrap_or_else(|err| {
+                        error!("Unable to open validator_list: {}", err);
+                        process::exit(1);
+                    });
 
             let validator_list = serde_yaml::from_reader::<_, Vec<String>>(validator_list_file)
                 .unwrap_or_else(|err| {
@@ -189,7 +203,7 @@ fn get_config() -> Config {
         baseline_stake_amount: sol_to_lamports(5000.),
         bonus_stake_amount: sol_to_lamports(50_000.),
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
-        quality_block_producer_percentage: 75,
+        quality_block_producer_percentage,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -279,7 +293,8 @@ fn classify_block_producers(
         );
         if validator_slots > 0 {
             let validator_identity = Pubkey::from_str(&validator_identity)?;
-            if validator_blocks * 100 / validator_slots > config.quality_block_producer_percentage {
+            if validator_blocks * 100 / validator_slots >= config.quality_block_producer_percentage
+            {
                 quality_block_producers.insert(validator_identity);
             } else {
                 poor_block_producers.insert(validator_identity);
