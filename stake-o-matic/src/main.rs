@@ -34,7 +34,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod whitelist;
+mod validator_list;
 
 struct Config {
     json_rpc_url: String,
@@ -42,15 +42,15 @@ struct Config {
     source_stake_address: Pubkey,
     authorized_staker: Keypair,
 
-    /// Only validators with an identity pubkey in this whitelist will be staked
-    whitelist: HashSet<Pubkey>,
+    /// Only validators with an identity pubkey in this validator_list will be staked
+    validator_list: HashSet<Pubkey>,
 
     dry_run: bool,
 
-    /// Amount of lamports to stake any validator in the whitelist that is not delinquent
+    /// Amount of lamports to stake any validator in the validator_list that is not delinquent
     baseline_stake_amount: u64,
 
-    /// Amount of additional lamports to stake quality block producers in the whitelist
+    /// Amount of additional lamports to stake quality block producers in the validator_list
     bonus_stake_amount: u64,
 
     /// Quality validators produce a block in more than this percentage of their leader slots
@@ -98,8 +98,8 @@ fn get_config() -> Config {
                 .help("Name of the cluster to operate on")
         )
         .arg(
-            Arg::with_name("whitelist_file")
-                .long("whitelist")
+            Arg::with_name("validator_list_file")
+                .long("validator-list")
                 .value_name("FILE")
                 .required(true)
                 .takes_value(true)
@@ -141,50 +141,50 @@ fn get_config() -> Config {
     let dry_run = !matches.is_present("confirm");
     let cluster = value_t!(matches, "cluster", String).unwrap_or_else(|_| "unknown".into());
 
-    let (json_rpc_url, whitelist) = match cluster.as_str() {
+    let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
             "http://api.mainnet-beta.solana.com".into(),
-            whitelist::mainnet_beta_validators(),
+            validator_list::mainnet_beta_validators(),
         ),
         "testnet" => (
             "http://testnet.solana.com".into(),
-            whitelist::testnet_validators(),
+            validator_list::testnet_validators(),
         ),
         "unknown" => {
-            let whitelist_file = File::open(value_t_or_exit!(matches, "whitelist_file", PathBuf))
+            let validator_list_file = File::open(value_t_or_exit!(matches, "validator_list_file", PathBuf))
                 .unwrap_or_else(|err| {
-                    error!("Unable to open whitelist: {}", err);
+                    error!("Unable to open validator_list: {}", err);
                     process::exit(1);
                 });
 
-            let whitelist = serde_yaml::from_reader::<_, Vec<String>>(whitelist_file)
+            let validator_list = serde_yaml::from_reader::<_, Vec<String>>(validator_list_file)
                 .unwrap_or_else(|err| {
-                    error!("Unable to read whitelist: {}", err);
+                    error!("Unable to read validator_list: {}", err);
                     process::exit(1);
                 })
                 .into_iter()
                 .map(|p| {
                     Pubkey::from_str(&p).unwrap_or_else(|err| {
-                        error!("Invalid whitelist pubkey '{}': {}", p, err);
+                        error!("Invalid validator_list pubkey '{}': {}", p, err);
                         process::exit(1);
                     })
                 })
                 .collect();
             (
                 value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url),
-                whitelist,
+                validator_list,
             )
         }
         _ => unreachable!(),
     };
-    let whitelist = whitelist.into_iter().collect::<HashSet<_>>();
+    let validator_list = validator_list.into_iter().collect::<HashSet<_>>();
 
     let config = Config {
         json_rpc_url,
         cluster,
         source_stake_address,
         authorized_staker,
-        whitelist,
+        validator_list,
         dry_run,
         baseline_stake_amount: sol_to_lamports(5000.),
         bonus_stake_amount: sol_to_lamports(50_000.),
@@ -563,7 +563,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let (quality_block_producers, _poor_block_producers) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
 
-    // Fetch vote account status for all the whitelisted validators
+    // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
     let vote_account_info = vote_account_status
         .current
@@ -571,7 +571,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .chain(vote_account_status.delinquent.into_iter())
         .filter_map(|vai| {
             let node_pubkey = Pubkey::from_str(&vai.node_pubkey).ok()?;
-            if config.whitelist.contains(&node_pubkey) {
+            if config.validator_list.contains(&node_pubkey) {
                 Some(vai)
             } else {
                 None
