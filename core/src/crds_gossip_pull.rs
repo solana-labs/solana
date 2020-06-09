@@ -313,18 +313,23 @@ impl CrdsGossipPull {
         responses_expired_timeout: Vec<VersionedCrdsValue>,
         now: u64,
         stats: &mut ProcessPullStats,
-    ) {
+    ) -> Vec<(CrdsValueLabel, Hash, u64)> {
+        let mut success = vec![];
         let mut owners = HashSet::new();
         for r in responses_expired_timeout {
             stats.failed_insert += crds.insert_versioned(r).is_err() as usize;
         }
         for r in responses {
             let owner = r.value.label().pubkey();
+            let label = r.value.label();
+            let wc = r.value.wallclock();
+            let hash = r.value_hash;
             let old = crds.insert_versioned(r);
             if old.is_err() {
                 stats.failed_insert += 1;
             } else {
                 stats.success += 1;
+                success.push((label, hash, wc));
             }
             old.ok().map(|opt| {
                 owners.insert(owner);
@@ -338,6 +343,7 @@ impl CrdsGossipPull {
         for owner in owners {
             crds.update_record_timestamp(&owner, now);
         }
+        success
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
