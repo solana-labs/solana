@@ -1846,16 +1846,20 @@ impl Bank {
                     parent_epoch,
                 ));
 
-                // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
-                // which depends on OperatingMode::Stable
-                #[cfg(test)]
-                let should_enable = true;
-
-                #[cfg(not(test))]
                 let should_enable = match self.operating_mode() {
                     OperatingMode::Development => true,
                     OperatingMode::Preview => current_epoch >= Epoch::max_value(),
-                    OperatingMode::Stable => current_epoch >= Epoch::max_value(),
+                    OperatingMode::Stable => {
+                        #[cfg(not(test))]
+                        let should_enable = current_epoch >= Epoch::max_value();
+
+                        // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
+                        // which depends on OperatingMode::Stable
+                        #[cfg(test)]
+                        let should_enable = true;
+
+                        should_enable
+                    }
                 };
                 // this needs to be gated because this potentially can change the behavior
                 // (= bank hash) at each start of epochs
