@@ -4,7 +4,7 @@ Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
 
 The rent is debited from an account's balance by the runtime upon the first access (including the initial account creation) in the current epoch by transactions or once per an epoch if there are no transactions. The fee is currently a fixed rate, measured in bytes-times-epochs. The fee may change in the future.
 
-For the sake of simple rent calculation, minimum duration is a single epoch. The rent is not paid on a pro rata basis, meaning there is no fee/refund for a partial epoch rent. Thereby, the rent can be regarded to be paid upfront in full for each upcoming epoch. For newly-created accounts, this means the first rent isn't for the current partial epoch, but for the next full epoch, and subsequent rents are for further future epochs. If an already-rent-collected account balance remains to be below another rent fee, it'll be purged immediately at the start of the upcoming epoch.
+For the sake of simple rent calculation, rent is always collected for a single, full epoch. Rent is not pro-rated, meaning there are neither fees nor refunds for partial epochs. This means that, on account creation, the first rent collected isn't for the current partial epoch, but collected up front for the next full epoch. Subsequent rent collections are for further future epochs. On the other end, if the balance of an already-rent-collected account drops below another rent fee mid-epoch, the account will continue to exist through the current epoch and be purged immediately at the start of the upcoming epoch.
 
 Accounts can be exempt from paying rent if they maintain a minimum balance. This rent-exemption is described below.
 

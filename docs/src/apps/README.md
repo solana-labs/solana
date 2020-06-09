@@ -1,6 +1,6 @@
 # Programming Model
 
-An _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to _programs_ deployed by app developers beforehand. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transfered. Instructions are executed sequentially and atomically for each transaction. If any instruction is invalid, all account changes in the transaction are discarded.
+An _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to _programs_ deployed by app developers beforehand. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transferred. Instructions are executed sequentially and atomically for each transaction. If any instruction is invalid, all account changes in the transaction are discarded.
 
 ### Accounts and Signatures
 
@@ -20,7 +20,7 @@ Each instruction specifies a single program account \(which must be marked execu
 
 ![SDK tools](../.gitbook/assets/sdk-tools.svg)
 
-As shown in the diagram above, a program author creates a program and compiles it to an ELF shared object containing BPF bytecode and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is a _public key_ specified when deploying and is used to reference the program in subsequent transactions.
+As shown in the diagram above, a program author creates a program and compiles it to an ELF shared object containing BPF bytecode and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is a _address_ specified when deploying and is used to reference the program in subsequent transactions.
 
 A program may be written in any programming language that can target the Berkley Packet Filter \(BPF\) safe execution environment. The Solana SDK offers the best support for C/C++ and Rust programs, which are compiled to BPF using the [LLVM compiler infrastructure](https://llvm.org).
 
@@ -30,7 +30,7 @@ If the program needs to store state between transactions, it does so using _acco
 
 Unlike a file, the account includes metadata for the lifetime of the file. That lifetime is expressed in "tokens", which is a number of fractional native tokens, called _lamports_. Accounts are held in validator memory and pay ["rent"](rent.md) to stay there. Each validator periodically scans all accounts and collects rent. Any account that drops to zero lamports is purged.
 
-In the same way that a Linux user uses a path to look up a file, a Solana client uses _addresses_ to look up accounts. The address is usually plain a 256-bit public key and presented as Base58 on user interfaces. To create an account with a public key, the client generates a _keypair_ and registers its public key using the `CreateAccount` instruction with preallocated fixed storage size in bytes. In fact, the account address can be arbitrary 32-bytes binary. As such there is a mechanism for derived addresses for advanced use (`CreateAccountWithSeed`).
+In the same way that a Linux user uses a path to look up a file, a Solana client uses an _address_ to look up an account. The address is usually a 256-bit public key. To create an account with a public-key address, the client generates a _keypair_ and registers its public key using the `CreateAccount` instruction with preallocated fixed storage size in bytes. In fact, the account address can be an arbitrary 32 bytes, and there is a mechanism for advanced users to create derived addresses (`CreateAccountWithSeed`). Addresses are presented in Base58 encoding on user interfaces.
 
 ## Ownership of Accounts and Assignment to Programs
 
