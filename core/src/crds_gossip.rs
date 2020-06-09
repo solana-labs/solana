@@ -190,14 +190,15 @@ impl CrdsGossip {
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
     ) {
-        self.pull.process_pull_responses(
+        let success = self.pull.process_pull_responses(
             &mut self.crds,
             from,
             responses,
             responses_expired_timeout,
             now,
             process_pull_stats,
-        )
+        );
+        self.push.push_pull_responses(success, now);
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
