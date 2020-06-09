@@ -1401,8 +1401,13 @@ impl ClusterInfo {
     fn generate_new_gossip_requests(
         &self,
         stakes: &HashMap<Pubkey, u64>,
+        generate_pull_requests: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
-        let pulls: Vec<_> = self.new_pull_requests(stakes);
+        let pulls: Vec<_> = if generate_pull_requests {
+            self.new_pull_requests(stakes)
+        } else {
+            vec![]
+        };
         let pushes: Vec<_> = self.new_push_requests();
         vec![pulls, pushes].into_iter().flatten().collect()
     }
@@ -1413,8 +1418,9 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         sender: &PacketSender,
+        generate_pull_requests: bool,
     ) -> Result<()> {
-        let reqs = obj.generate_new_gossip_requests(&stakes);
+        let reqs = obj.generate_new_gossip_requests(&stakes, generate_pull_requests);
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
             sender.send(packets)?;
@@ -1499,6 +1505,7 @@ impl ClusterInfo {
 
                 let message = CrdsData::Version(Version::new(obj.id()));
                 obj.push_message(CrdsValue::new_signed(message, &obj.keypair));
+                let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
                     thread_mem_usage::datapoint("solana-gossip");
@@ -1515,7 +1522,8 @@ impl ClusterInfo {
                         None => HashMap::new(),
                     };
 
-                    let _ = Self::run_gossip(&obj, &recycler, &stakes, &sender);
+                    let _ =
+                        Self::run_gossip(&obj, &recycler, &stakes, &sender, generate_pull_requests);
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
@@ -1535,6 +1543,7 @@ impl ClusterInfo {
                         let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                         sleep(Duration::from_millis(time_left));
                     }
+                    generate_pull_requests = !generate_pull_requests;
                 }
             })
             .unwrap()
@@ -2573,7 +2582,7 @@ mod tests {
             .write()
             .unwrap()
             .refresh_push_active_set(&HashMap::new());
-        let reqs = cluster_info.generate_new_gossip_requests(&HashMap::new());
+        let reqs = cluster_info.generate_new_gossip_requests(&HashMap::new(), true);
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
             let res = ContactInfo::is_valid_address(addr);
