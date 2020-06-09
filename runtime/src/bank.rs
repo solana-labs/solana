@@ -1853,7 +1853,7 @@ impl Bank {
                 #[cfg(not(test))]
                 let should_enable = match self.operating_mode() {
                     OperatingMode::Development => true,
-                    OperatingMode::Preview => current_epoch >= 55,
+                    OperatingMode::Preview => current_epoch >= Epoch::max_value(),
                     OperatingMode::Stable => current_epoch >= Epoch::max_value(),
                 };
                 // this needs to be gated because this potentially can change the behavior
@@ -1916,7 +1916,7 @@ impl Bank {
             //                   | [5..6]     |   25..26          |   25..26
             // *: The range of parent_bank.slot() and current_bank.slot() is firstly
             //    split by the epoch boundaries and then the split ones are given to us.
-            //    The oritinal ranges are denoted as [...]
+            //    The original ranges are denoted as [...]
             start_partition_index -= 1;
             if auto_generated {
                 assert_eq!(start_slot_index, end_slot_index);
