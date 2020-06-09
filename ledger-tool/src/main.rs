@@ -14,6 +14,7 @@ use solana_ledger::{
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
 };
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
@@ -28,6 +29,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
+    sync::Arc,
 };
 
 use log::*;
@@ -754,6 +756,17 @@ fn main() {
                     .takes_value(true)
                     .help("Output directory for the snapshot"),
             )
+            .arg(
+                Arg::with_name("warp_slot")
+                    .required(false)
+                    .long("warp-slot")
+                    .takes_value(true)
+                    .value_name("WARP_SLOT")
+                    .validator(is_slot)
+                    .help("After loading the snapshot slot warp the ledger to WARP_SLOT, \
+                           which could be a slot in a galaxy far far away"),
+            )
+
         ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account contents after processing in the ledger")
@@ -990,6 +1003,7 @@ fn main() {
         ("create-snapshot", Some(arg_matches)) => {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
+            let warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
 
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(snapshot_slot),
@@ -1006,12 +1020,26 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
             ) {
                 Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
-                        eprintln!("Error: Slot {} is not available", snapshot_slot);
-                        exit(1);
-                    });
+                    let bank = bank_forks
+                        .get(snapshot_slot)
+                        .unwrap_or_else(|| {
+                            eprintln!("Error: Slot {} is not available", snapshot_slot);
+                            exit(1);
+                        })
+                        .clone();
+
+                    let bank = if let Some(warp_slot) = warp_slot {
+                        Arc::new(Bank::warp_from_parent(
+                            &bank,
+                            bank.collector_id(),
+                            warp_slot,
+                        ))
+                    } else {
+                        bank
+                    };
 
                     println!("Creating a snapshot of slot {}", bank.slot());
+                    assert!(bank.is_complete());
                     bank.squash();
 
                     let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
@@ -1035,7 +1063,8 @@ fn main() {
                             snapshot_utils::archive_snapshot_package(&package).map(|ok| {
                                 println!(
                                     "Successfully created snapshot for slot {}: {:?}",
-                                    snapshot_slot, package.tar_output_file
+                                    bank.slot(),
+                                    package.tar_output_file
                                 );
                                 println!(
                                     "Shred version: {}",
