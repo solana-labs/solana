@@ -16,7 +16,7 @@ use crate::{
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+    crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
         Version, Vote, MAX_WALLCLOCK,
@@ -213,11 +213,13 @@ struct GossipStats {
     new_push_requests: Counter,
     new_push_requests2: Counter,
     new_push_requests_num: Counter,
+    filter_pull_response: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
     process_pull_response_len: Counter,
     process_pull_response_timeout: Counter,
-    process_pull_response_fail: Counter,
+    process_pull_response_fail_insert: Counter,
+    process_pull_response_fail_timeout: Counter,
     process_pull_response_success: Counter,
     process_pull_requests: Counter,
     generate_pull_responses: Counter,
@@ -1843,9 +1845,21 @@ impl ClusterInfo {
         }
         let filtered_len = crds_values.len();
 
-        let (fail, timeout_count, success) = me
-            .time_gossip_write_lock("process_pull", &me.stats.process_pull_response)
-            .process_pull_response(from, timeouts, crds_values, timestamp());
+        let mut pull_stats = ProcessPullStats::default();
+        let (filtered_pulls, filtered_pulls_expired_timeout) = me
+            .time_gossip_read_lock("filter_pull_resp", &me.stats.filter_pull_response)
+            .filter_pull_responses(timeouts, crds_values, timestamp(), &mut pull_stats);
+
+        if !filtered_pulls.is_empty() || !filtered_pulls_expired_timeout.is_empty() {
+            me.time_gossip_write_lock("process_pull_resp", &me.stats.process_pull_response)
+                .process_pull_responses(
+                    from,
+                    filtered_pulls,
+                    filtered_pulls_expired_timeout,
+                    timestamp(),
+                    &mut pull_stats,
+                );
+        }
 
         me.stats
             .skip_pull_response_shred_version
@@ -1856,13 +1870,22 @@ impl ClusterInfo {
             .add_relaxed(filtered_len as u64);
         me.stats
             .process_pull_response_timeout
-            .add_relaxed(timeout_count as u64);
-        me.stats.process_pull_response_fail.add_relaxed(fail as u64);
+            .add_relaxed(pull_stats.timeout_count as u64);
+        me.stats
+            .process_pull_response_fail_insert
+            .add_relaxed(pull_stats.failed_insert as u64);
+        me.stats
+            .process_pull_response_fail_timeout
+            .add_relaxed(pull_stats.failed_timeout as u64);
         me.stats
             .process_pull_response_success
-            .add_relaxed(success as u64);
+            .add_relaxed(pull_stats.success as u64);
 
-        (fail, timeout_count, success)
+        (
+            pull_stats.failed_insert + pull_stats.failed_timeout,
+            pull_stats.timeout_count,
+            pull_stats.success,
+        )
     }
 
     fn filter_by_shred_version(
@@ -2060,8 +2083,23 @@ impl ClusterInfo {
                     i64
                 ),
                 (
+                    "filter_pull_resp",
+                    self.stats.filter_pull_response.clear(),
+                    i64
+                ),
+                (
                     "process_pull_resp_count",
                     self.stats.process_pull_response_count.clear(),
+                    i64
+                ),
+                (
+                    "pull_response_fail_insert",
+                    self.stats.process_pull_response_fail_insert.clear(),
+                    i64
+                ),
+                (
+                    "pull_response_fail_timeout",
+                    self.stats.process_pull_response_fail_timeout.clear(),
                     i64
                 ),
                 (
@@ -2472,6 +2510,7 @@ mod tests {
 
     #[test]
     fn test_handle_pull() {
+        solana_logger::setup();
         let node = Node::new_localhost();
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
 
