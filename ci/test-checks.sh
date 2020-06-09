@@ -13,19 +13,21 @@ export RUSTFLAGS="-D warnings"
 # Look for failed mergify.io backports
 _ git show HEAD --check --oneline
 
+# `clippy` must be run before `check`; otherwise `clippy` wouldn't be run due to
+# too aggresive cargo's caching!
+_ cargo +"$rust_nightly" clippy --version
+_ cargo +"$rust_nightly" clippy --workspace --all-targets -- --deny=warnings
+
 if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
   true
 else
   check_status=$?
   echo "Some Cargo.lock is outdated; please update them as well"
-  echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh update ..."
+  echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh [check|update] ..."
   exit "$check_status"
 fi
 
 _ cargo +"$rust_stable" fmt --all -- --check
-
-_ cargo +"$rust_nightly" clippy --version
-_ cargo +"$rust_nightly" clippy --workspace --all-targets -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
