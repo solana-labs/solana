@@ -12,7 +12,7 @@ use crate::{
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
@@ -1461,13 +1461,15 @@ pub fn process_delegate_stake(
                 "Unable to delegate. Vote account has no root slot".to_string(),
             )),
             Some(root_slot) => {
-                let slot = rpc_client.get_slot()?;
-                if root_slot + solana_sdk::clock::DEFAULT_SLOTS_PER_TURN < slot {
-                    Err(CliError::BadParameter(
-                        format!(
-                        "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
-                        )
-                    ))
+                let min_root_slot = rpc_client
+                    .get_slot()?
+                    .saturating_sub(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
+                if root_slot < min_root_slot {
+                    Err(CliError::DynamicProgramError(format!(
+                        "Unable to delegate.  Vote account appears delinquent \
+                                 because its current root slot, {}, is less than {}",
+                        root_slot, min_root_slot
+                    )))
                 } else {
                     Ok(())
                 }

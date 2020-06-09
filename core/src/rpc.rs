@@ -16,7 +16,7 @@ use jsonrpc_derive::rpc;
 use solana_client::{
     rpc_config::*,
     rpc_request::{
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::*,
@@ -420,8 +420,9 @@ impl JsonRpcRequestProcessor {
                 }
             })
             .partition(|vote_account_info| {
-                if bank.slot() >= MAX_LOCKOUT_HISTORY as u64 {
-                    vote_account_info.last_vote > bank.slot() - MAX_LOCKOUT_HISTORY as u64
+                if bank.slot() >= DELINQUENT_VALIDATOR_SLOT_DISTANCE as u64 {
+                    vote_account_info.last_vote
+                        > bank.slot() - DELINQUENT_VALIDATOR_SLOT_DISTANCE as u64
                 } else {
                     vote_account_info.last_vote > 0
                 }
@@ -1588,7 +1589,7 @@ pub mod tests {
     };
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
-    const TEST_SLOTS_PER_EPOCH: u64 = 50;
+    const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
 
     struct RpcHandler {
         io: MetaIoHandler<JsonRpcRequestProcessor>,
