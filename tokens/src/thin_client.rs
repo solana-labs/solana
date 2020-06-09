@@ -3,6 +3,7 @@ use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
     account::Account,
     client::{AsyncClient, SyncClient},
+    clock::Slot,
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -27,7 +28,7 @@ pub trait Client {
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>>;
     fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64>;
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, u64)>;
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)>;
     fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 }
 
@@ -56,7 +57,7 @@ impl Client for RpcClient {
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, u64)> {
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
         let result = self
             .get_recent_blockhash_with_commitment(CommitmentConfig::default())
             .map_err(|e| TransportError::Custom(e.to_string()))?;
@@ -98,7 +99,7 @@ impl Client for BankClient {
         self.get_balance(pubkey)
     }
 
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, u64)> {
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
         self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
     }
 
@@ -142,7 +143,7 @@ impl<C: Client> ThinClient<C> {
         &self,
         message: Message,
         signers: &S,
-    ) -> Result<(Transaction, u64)> {
+    ) -> Result<(Transaction, Slot)> {
         if self.dry_run {
             return Ok((Transaction::new_unsigned(message), std::u64::MAX));
         }
@@ -165,7 +166,7 @@ impl<C: Client> ThinClient<C> {
         self.send_message(message, &[sender_keypair])
     }
 
-    pub fn get_fees(&self) -> Result<(Hash, FeeCalculator, u64)> {
+    pub fn get_fees(&self) -> Result<(Hash, FeeCalculator, Slot)> {
         self.client.get_fees1()
     }
 
