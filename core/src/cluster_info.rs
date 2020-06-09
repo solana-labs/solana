@@ -438,7 +438,7 @@ impl ClusterInfo {
 
     pub fn update_contact_info<F>(&self, modify: F)
     where
-        F: FnOnce(&mut ContactInfo) -> (),
+        F: FnOnce(&mut ContactInfo),
     {
         let my_id = self.id();
         modify(&mut self.my_contact_info.write().unwrap());
@@ -1917,19 +1917,18 @@ impl ClusterInfo {
             .into_iter()
             .filter_map(|(from, prune_set)| {
                 inc_new_counter_debug!("cluster_info-push_message-prunes", prune_set.len());
-                me.lookup_contact_info(&from, |ci| ci.clone())
-                    .and_then(|ci| {
-                        let mut prune_msg = PruneData {
-                            pubkey: self_id,
-                            prunes: prune_set.into_iter().collect(),
-                            signature: Signature::default(),
-                            destination: from,
-                            wallclock: timestamp(),
-                        };
-                        prune_msg.sign(&me.keypair);
-                        let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                        Some((ci.gossip, rsp))
-                    })
+                me.lookup_contact_info(&from, |ci| ci.clone()).map(|ci| {
+                    let mut prune_msg = PruneData {
+                        pubkey: self_id,
+                        prunes: prune_set.into_iter().collect(),
+                        signature: Signature::default(),
+                        destination: from,
+                        wallclock: timestamp(),
+                    };
+                    prune_msg.sign(&me.keypair);
+                    let rsp = Protocol::PruneMessage(self_id, prune_msg);
+                    (ci.gossip, rsp)
+                })
             })
             .collect();
         if rsp.is_empty() {
@@ -2932,7 +2931,7 @@ mod tests {
         assert_eq!(slots.len(), 1);
         assert!(since.is_some());
 
-        let (slots, since2) = cluster_info.get_epoch_slots_since(since.clone());
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since);
         assert!(slots.is_empty());
         assert_eq!(since2, since);
     }

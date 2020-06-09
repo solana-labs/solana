@@ -8,14 +8,14 @@ use test::Bencher;
 // Return a ShortVec with 127 bytes
 fn create_encoded_short_vec() -> Vec<u8> {
     let mut bytes = vec![127];
-    bytes.extend_from_slice(&vec![0u8; 127]);
+    bytes.extend_from_slice(&[0u8; 127]);
     bytes
 }
 
 // Return a Vec with 127 bytes
 fn create_encoded_vec() -> Vec<u8> {
     let mut bytes = vec![127, 0, 0, 0, 0, 0, 0, 0];
-    bytes.extend_from_slice(&vec![0u8; 127]);
+    bytes.extend_from_slice(&[0u8; 127]);
     bytes
 }
 

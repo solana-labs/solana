@@ -136,12 +136,12 @@ mod tests {
     fn test_build_request_json() {
         let test_request = RpcRequest::GetAccountInfo;
         let addr = json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
-        let request = test_request.build_request_json(1, json!([addr.clone()]));
+        let request = test_request.build_request_json(1, json!([addr]));
         assert_eq!(request["method"], "getAccountInfo");
         assert_eq!(request["params"], json!([addr]));
 
         let test_request = RpcRequest::GetBalance;
-        let request = test_request.build_request_json(1, json!([addr.clone()]));
+        let request = test_request.build_request_json(1, json!([addr]));
         assert_eq!(request["method"], "getBalance");
 
         let test_request = RpcRequest::GetEpochInfo;
@@ -186,13 +186,12 @@ mod tests {
 
         // Test request with CommitmentConfig and no params
         let test_request = RpcRequest::GetRecentBlockhash;
-        let request = test_request.build_request_json(1, json!([commitment_config.clone()]));
+        let request = test_request.build_request_json(1, json!([commitment_config]));
         assert_eq!(request["params"], json!([commitment_config.clone()]));
 
         // Test request with CommitmentConfig and params
         let test_request = RpcRequest::GetBalance;
-        let request =
-            test_request.build_request_json(1, json!([addr.clone(), commitment_config.clone()]));
+        let request = test_request.build_request_json(1, json!([addr, commitment_config]));
         assert_eq!(request["params"], json!([addr, commitment_config]));
     }
 }

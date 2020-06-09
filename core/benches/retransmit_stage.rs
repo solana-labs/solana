@@ -65,7 +65,10 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let tx = test_tx();
     const NUM_PACKETS: usize = 50;
     let chunk_size = NUM_PACKETS / (4 * NUM_THREADS);
-    let batches = to_packets_chunked(&vec![tx; NUM_PACKETS], chunk_size);
+    let batches = to_packets_chunked(
+        &std::iter::repeat(tx).take(NUM_PACKETS).collect::<Vec<_>>(),
+        chunk_size,
+    );
     info!("batches: {}", batches.len());
 
     let retransmitter_handles = retransmitter(
@@ -80,7 +83,6 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     bencher.iter(move || {
         let peer_sockets1 = peer_sockets.clone();
         let handles: Vec<_> = (0..NUM_PEERS)
-            .into_iter()
             .map(|p| {
                 let peer_sockets2 = peer_sockets1.clone();
                 let total2 = total.clone();

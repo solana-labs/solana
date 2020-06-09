@@ -621,7 +621,7 @@ impl Blockstore {
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<()>
     where
-        F: Fn(Shred) -> (),
+        F: Fn(Shred),
     {
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blockstore lock");
@@ -918,7 +918,7 @@ impl Blockstore {
         is_recovered: bool,
     ) -> bool
     where
-        F: Fn(Shred) -> (),
+        F: Fn(Shred),
     {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -1533,7 +1533,7 @@ impl Blockstore {
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
 
-                let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(|| vec![]);
+                let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(Vec::new);
 
                 let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
@@ -1743,7 +1743,7 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_confirmed_transaction".to_string(), String)
         );
-        if let Some((slot, status)) = self.get_transaction_status(signature.clone())? {
+        if let Some((slot, status)) = self.get_transaction_status(signature)? {
             let transaction = self.find_transaction_in_slot(slot, signature)?
                 .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
             let encoding = encoding.unwrap_or(TransactionEncoding::Json);
@@ -4948,7 +4948,7 @@ pub mod tests {
 
             // Insert will fail, slot < root
             blockstore
-                .insert_shreds(shreds1.clone()[..].to_vec(), None, false)
+                .insert_shreds(shreds1[..].to_vec(), None, false)
                 .unwrap();
             assert!(blockstore.get_data_shred(1, 0).unwrap().is_none());
 
@@ -5229,7 +5229,7 @@ pub mod tests {
             stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
         }
         let slot_duration = Duration::from_millis(400);
-        let block_time_slot_3 = blockstore.get_block_time(3, slot_duration.clone(), &stakes);
+        let block_time_slot_3 = blockstore.get_block_time(3, slot_duration, &stakes);
 
         let mut total_stake = 0;
         let mut expected_time: u64 = (0..6)
@@ -5246,7 +5246,7 @@ pub mod tests {
         assert_eq!(block_time_slot_3.unwrap().unwrap() as u64, expected_time);
         assert_eq!(
             blockstore
-                .get_block_time(8, slot_duration.clone(), &stakes)
+                .get_block_time(8, slot_duration, &stakes)
                 .unwrap()
                 .unwrap() as u64,
             expected_time + 2 // At 400ms block duration, 5 slots == 2sec

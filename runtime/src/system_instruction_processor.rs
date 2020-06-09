@@ -933,7 +933,7 @@ mod tests {
 
     fn with_create_zero_lamport<F>(callback: F)
     where
-        F: Fn(&Bank) -> (),
+        F: Fn(&Bank),
     {
         solana_logger::setup();
 

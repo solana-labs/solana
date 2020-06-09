@@ -48,11 +48,16 @@ impl RentCollector {
                 .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
                 .sum();
 
-            let (rent_due, exempt) = self.rent.due(
-                account.lamports,
-                account.data.len(),
-                slots_elapsed as f64 / self.slots_per_year,
-            );
+            // avoid infinite rent in rust 1.45
+            let years_elapsed = if self.slots_per_year != 0.0 {
+                slots_elapsed as f64 / self.slots_per_year
+            } else {
+                0.0
+            };
+
+            let (rent_due, exempt) =
+                self.rent
+                    .due(account.lamports, account.data.len(), years_elapsed);
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {

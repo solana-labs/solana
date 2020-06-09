@@ -298,7 +298,7 @@ impl<T: AbiExample> AbiExample for Box<T> {
     }
 }
 
-impl<T> AbiExample for Box<dyn Fn(&mut T) -> () + Sync + Send> {
+impl<T> AbiExample for Box<dyn Fn(&mut T) + Sync + Send> {
     fn example() -> Self {
         info!("AbiExample for (Box<T>): {}", type_name::<Self>());
         Box::new(move |_t: &mut T| {})

@@ -85,11 +85,11 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
 
                     bincode::deserialize::<IpEchoServerMessage>(&data[4..])
                         .map(Some)
-                        .or_else(|err| {
-                            Err(io::Error::new(
+                        .map_err(|err| {
+                            io::Error::new(
                                 io::ErrorKind::Other,
                                 format!("Failed to deserialize IpEchoServerMessage: {:?}", err),
-                            ))
+                            )
                         })
                 })
                 .and_then(move |maybe_msg| {

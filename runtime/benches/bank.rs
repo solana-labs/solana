@@ -19,13 +19,13 @@ use std::{sync::Arc, thread::sleep, time::Duration};
 use test::Bencher;
 
 const BUILTIN_PROGRAM_ID: [u8; 32] = [
-    098, 117, 105, 108, 116, 105, 110, 095, 112, 114, 111, 103, 114, 097, 109, 095, 105, 100, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    98, 117, 105, 108, 116, 105, 110, 95, 112, 114, 111, 103, 114, 97, 109, 95, 105, 100, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const NOOP_PROGRAM_ID: [u8; 32] = [
-    098, 117, 105, 108, 116, 105, 110, 095, 112, 114, 111, 103, 114, 097, 109, 095, 105, 100, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    98, 117, 105, 108, 116, 105, 110, 95, 112, 114, 111, 103, 114, 97, 109, 95, 105, 100, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
 
 fn process_instruction(
@@ -43,13 +43,12 @@ pub fn create_builtin_transactions(
     let program_id = Pubkey::new(&BUILTIN_PROGRAM_ID);
 
     (0..4096)
-        .into_iter()
         .map(|_| {
             // Seed the signer account
             let rando0 = Keypair::new();
             bank_client
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
-                .expect(&format!("{}:{}", line!(), file!()));
+                .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
@@ -65,13 +64,12 @@ pub fn create_native_loader_transactions(
     let program_id = Pubkey::new(&NOOP_PROGRAM_ID);
 
     (0..4096)
-        .into_iter()
         .map(|_| {
             // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
-                .expect(&format!("{}:{}", line!(), file!()));
+                .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
@@ -80,13 +78,13 @@ pub fn create_native_loader_transactions(
         .collect()
 }
 
-fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &Vec<Transaction>) {
+fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
     let results = bank.process_transactions(&transactions);
     assert!(results.iter().all(Result::is_ok));
 }
 
-fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<Transaction>) {
-    for transaction in transactions.clone() {
+fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Transaction]) {
+    for transaction in transactions.to_owned() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
     for _ in 0..1_000_000_000_u64 {
@@ -98,23 +96,23 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<
         }
         sleep(Duration::from_nanos(1));
     }
-    if !bank
+    if bank
         .get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
         .unwrap()
-        .is_ok()
+        .is_err()
     {
         error!(
             "transaction failed: {:?}",
             bank.get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
                 .unwrap()
         );
-        assert!(false);
+        panic!();
     }
 }
 
 fn do_bench_transactions(
     bencher: &mut Bencher,
-    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &Vec<Transaction>),
+    bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &[Transaction]),
     create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
 ) {
     solana_logger::setup();

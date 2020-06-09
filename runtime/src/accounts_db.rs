@@ -617,7 +617,6 @@ impl AccountsDB {
     pub fn clean_accounts(&self) {
         self.report_store_stats();
 
-        let no_ancestors = HashMap::new();
         let mut accounts_scan = Measure::start("accounts_scan");
         let accounts_index = self.accounts_index.read().unwrap();
         let pubkeys: Vec<Pubkey> = accounts_index.account_maps.keys().cloned().collect();
@@ -628,7 +627,7 @@ impl AccountsDB {
                 let mut purges_in_root = Vec::new();
                 let mut purges = HashMap::new();
                 for pubkey in pubkeys {
-                    if let Some((list, index)) = accounts_index.get(pubkey, &no_ancestors) {
+                    if let Some((list, index)) = accounts_index.get(pubkey, None) {
                         let (slot, account_info) = &list[index];
                         if account_info.lamports == 0 {
                             purges.insert(*pubkey, accounts_index.would_purge(pubkey));
@@ -641,16 +640,11 @@ impl AccountsDB {
             })
             .reduce(
                 || (HashMap::new(), Vec::new()),
-                |m1, m2| {
+                |mut m1, m2| {
                     // Collapse down the hashmaps/vecs into one.
-                    let x = m2.0.iter().fold(m1.0, |mut acc, (k, vs)| {
-                        acc.insert(k.clone(), vs.clone());
-                        acc
-                    });
-                    let mut y = vec![];
-                    y.extend(m1.1);
-                    y.extend(m2.1);
-                    (x, y)
+                    m1.0.extend(m2.0);
+                    m1.1.extend(m2.1);
+                    m1
                 },
             );
 
@@ -806,7 +800,6 @@ impl AccountsDB {
         }
 
         let alive_accounts: Vec<_> = {
-            let no_ancestors = HashMap::new();
             let accounts_index = self.accounts_index.read().unwrap();
             stored_accounts
                 .iter()
@@ -819,7 +812,7 @@ impl AccountsDB {
                         (store_id, offset),
                         _write_version,
                     )| {
-                        if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
+                        if let Some((list, _)) = accounts_index.get(pubkey, None) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
                         } else {
@@ -927,7 +920,7 @@ impl AccountsDB {
 
     pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
     {
         let mut collector = A::default();
@@ -946,7 +939,7 @@ impl AccountsDB {
 
     pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
         R: RangeBounds<Pubkey>,
     {
@@ -968,7 +961,7 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
+        F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
         B: Send + Default,
     {
         let storage_maps: Vec<Arc<AccountStorageEntry>> = self
@@ -1020,7 +1013,7 @@ impl AccountsDB {
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
-        let (lock, index) = accounts_index.get(pubkey, ancestors)?;
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors))?;
         let slot = lock[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
@@ -1037,7 +1030,7 @@ impl AccountsDB {
     #[cfg(test)]
     fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
         let accounts_index = self.accounts_index.read().unwrap();
-        let (lock, index) = accounts_index.get(pubkey, ancestors).unwrap();
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors)).unwrap();
         let slot = lock[index].0;
         let storage = self.storage.read().unwrap();
         let slot_storage = storage.0.get(&slot).unwrap();
@@ -1449,7 +1442,7 @@ impl AccountsDB {
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
-                if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
+                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors)) {
                     let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         storage
@@ -1839,7 +1832,7 @@ impl AccountsDB {
                         };
                         let entry = accum
                             .entry(stored_account.meta.pubkey)
-                            .or_insert_with(|| vec![]);
+                            .or_insert_with(Vec::new);
                         entry.push((stored_account.meta.write_version, account_info));
                     },
                 );
@@ -1847,7 +1840,7 @@ impl AccountsDB {
             let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
             for accumulator_entry in accumulator.iter() {
                 for (pubkey, storage_entry) in accumulator_entry {
-                    let entry = accounts_map.entry(*pubkey).or_insert_with(|| vec![]);
+                    let entry = accounts_map.entry(*pubkey).or_insert_with(Vec::new);
                     entry.extend(storage_entry.iter().cloned());
                 }
             }
@@ -2118,7 +2111,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, &ancestors)
+            .get(&key, Some(&ancestors))
             .is_some());
         assert_load_account(&db, unrooted_slot, key, 1);
 
@@ -2139,7 +2132,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, &ancestors)
+            .get(&key, Some(&ancestors))
             .is_none());
 
         // Test we can store for the same slot again and get the right information
@@ -2188,14 +2181,14 @@ pub mod tests {
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((t + 1) as u64, space, &Account::default().owner);
-            pubkeys.push(pubkey.clone());
+            pubkeys.push(pubkey);
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store(slot, &[(&pubkey, &account)]);
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((num + t + 1) as u64, space, &solana_vote_program::id());
-            pubkeys.push(pubkey.clone());
+            pubkeys.push(pubkey);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store(slot, &[(&pubkey, &account)]);
@@ -2435,7 +2428,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let id = {
             let index = accounts.accounts_index.read().unwrap();
-            let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
+            let (list, idx) = index.get(&pubkey, Some(&ancestors)).unwrap();
             list[idx].1.store_id
         };
         accounts.add_root(1);

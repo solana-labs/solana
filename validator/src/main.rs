@@ -152,12 +152,7 @@ fn start_gossip_node(
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
-    let gossip_service = GossipService::new(
-        &cluster_info.clone(),
-        None,
-        gossip_socket,
-        &gossip_exit_flag,
-    );
+    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &gossip_exit_flag);
     (cluster_info, gossip_exit_flag, gossip_service)
 }
 
@@ -955,7 +950,7 @@ pub fn main() {
         .collect();
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
-    let snapshot_path = ledger_path.clone().join("snapshot");
+    let snapshot_path = ledger_path.join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
@@ -1235,7 +1230,7 @@ pub fn main() {
                         Ok(())
                     }
                 })
-                .and_then(|_| {
+                .map(|_| {
                     if !validator_config.voting_disabled && !no_check_vote_account {
                         check_vote_account(
                             &rpc_client,
@@ -1254,7 +1249,6 @@ pub fn main() {
                             exit(1);
                         });
                     }
-                    Ok(())
                 });
 
                 if result.is_ok() {

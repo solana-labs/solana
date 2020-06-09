@@ -1289,11 +1289,11 @@ impl ReplayStage {
         let newly_voted_pubkeys = slot_vote_tracker
             .as_ref()
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_else(Vec::new);
 
         let cluster_slot_pubkeys = cluster_slot_pubkeys
             .map(|v| v.read().unwrap().keys().cloned().collect())
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_else(Vec::new);
 
         Self::update_fork_propagated_threshold_from_votes(
             progress,

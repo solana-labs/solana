@@ -115,7 +115,7 @@ pub struct ValidatorExit {
 }
 
 impl ValidatorExit {
-    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() -> () + Send + Sync>) {
+    pub fn register_exit(&mut self, exit: Box<dyn FnOnce() + Send + Sync>) {
         self.exits.push(exit);
     }
 

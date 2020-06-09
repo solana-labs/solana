@@ -211,7 +211,7 @@ mod test {
                 ..nonce::state::Data::default()
             };
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
                 .convert_to_current();
@@ -326,7 +326,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = *keyed_account.unsigned_key();
             keyed_account
@@ -347,7 +347,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(63);
             let authorized = *keyed_account.unsigned_key();
             keyed_account
@@ -367,7 +367,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(63);
             let result = keyed_account.advance_nonce_account(&recent_blockhashes, &signers);
             assert_eq!(result, Err(NonceError::BadAccountState.into()));
@@ -384,14 +384,14 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             with_test_keyed_account(42, true, |nonce_authority| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_account.signer_key().unwrap().clone());
+                signers.insert(*nonce_account.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let authorized = *nonce_authority.unsigned_key();
                 nonce_account
                     .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                     .unwrap();
                 let mut signers = HashSet::new();
-                signers.insert(nonce_authority.signer_key().unwrap().clone());
+                signers.insert(*nonce_authority.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(31);
                 let result = nonce_account.advance_nonce_account(&recent_blockhashes, &signers);
                 assert_eq!(result, Ok(()));
@@ -409,7 +409,7 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             with_test_keyed_account(42, false, |nonce_authority| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_account.signer_key().unwrap().clone());
+                signers.insert(*nonce_account.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let authorized = *nonce_authority.unsigned_key();
                 nonce_account
@@ -435,7 +435,7 @@ mod test {
             assert_eq!(state, State::Uninitialized);
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports;
                 let expect_nonce_lamports =
@@ -506,7 +506,7 @@ mod test {
             assert_eq!(state, State::Uninitialized);
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
                 let lamports = nonce_keyed.account.borrow().lamports + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
@@ -531,7 +531,7 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports / 2;
                 let nonce_expect_lamports =
@@ -584,7 +584,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_keyed.signer_key().unwrap().clone());
+            signers.insert(*nonce_keyed.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(31);
             let authority = *nonce_keyed.unsigned_key();
             nonce_keyed
@@ -659,7 +659,7 @@ mod test {
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
@@ -689,7 +689,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
@@ -719,7 +719,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
-                signers.insert(nonce_keyed.signer_key().unwrap().clone());
+                signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports - min_lamports + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
@@ -746,7 +746,7 @@ mod test {
                 .convert_to_current();
             assert_eq!(state, State::Uninitialized);
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authority = *keyed_account.unsigned_key();
             let result =
@@ -773,7 +773,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
-            signers.insert(keyed_account.signer_key().unwrap().clone());
+            signers.insert(*keyed_account.signer_key().unwrap());
             let recent_blockhashes = RecentBlockhashes::from_iter(vec![].into_iter());
             let authorized = *keyed_account.unsigned_key();
             let result =
@@ -827,7 +827,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_account.signer_key().unwrap().clone());
+            signers.insert(*nonce_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(31);
             let authorized = *nonce_account.unsigned_key();
             nonce_account
@@ -857,7 +857,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_account.signer_key().unwrap().clone());
+            signers.insert(*nonce_account.signer_key().unwrap());
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
             assert_eq!(result, Err(NonceError::BadAccountState.into()));
         })
@@ -872,7 +872,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            signers.insert(nonce_account.signer_key().unwrap().clone());
+            signers.insert(*nonce_account.signer_key().unwrap());
             let recent_blockhashes = create_test_recent_blockhashes(31);
             let authorized = &Pubkey::default().clone();
             nonce_account

@@ -257,7 +257,7 @@ pub enum BlockstoreProcessorError {
 }
 
 /// Callback for accessing bank state while processing the blockstore
-pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
+pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {

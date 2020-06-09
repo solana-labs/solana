@@ -24,29 +24,29 @@ pub struct AccountsIndex<T> {
 impl<'a, T: 'a + Clone> AccountsIndex<T> {
     fn do_scan_accounts<F, I>(&self, ancestors: &Ancestors, mut func: F, iter: I)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
         I: Iterator<Item = (&'a Pubkey, &'a AccountMapEntry<T>)>,
     {
         for (pubkey, list) in iter {
             let list_r = &list.1.read().unwrap();
-            if let Some(index) = self.latest_slot(ancestors, &list_r) {
+            if let Some(index) = self.latest_slot(Some(ancestors), &list_r) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
         }
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    pub(crate) fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
     {
         self.do_scan_accounts(ancestors, func, self.account_maps.iter());
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
-    pub fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
+    pub(crate) fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
     where
-        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
         self.do_scan_accounts(ancestors, func, self.account_maps.range(range));
@@ -76,11 +76,14 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
 
     // find the latest slot and T in a slice for a given ancestor
     // returns index into 'slice' if found, None if not.
-    fn latest_slot(&self, ancestors: &Ancestors, slice: SlotSlice<T>) -> Option<usize> {
+    fn latest_slot(&self, ancestors: Option<&Ancestors>, slice: SlotSlice<T>) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= max && (ancestors.contains_key(slot) || self.is_root(*slot)) {
+            if *slot >= max
+                && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
+                    || self.is_root(*slot))
+            {
                 rv = Some((slice.len() - 1) - i);
                 max = *slot;
             }
@@ -90,10 +93,10 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
 
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub fn get(
+    pub(crate) fn get(
         &self,
         pubkey: &Pubkey,
-        ancestors: &Ancestors,
+        ancestors: Option<&Ancestors>,
     ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.1.read().unwrap();
@@ -245,7 +248,8 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), &ancestors).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
+        assert!(index.get(&key.pubkey(), None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -261,7 +265,8 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), &ancestors).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
+        assert!(index.get(&key.pubkey(), None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -277,7 +282,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index.get(&key.pubkey(), &ancestors).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -293,7 +298,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
         assert_eq!(list[idx], (0, true));
 
         let mut num = 0;
@@ -324,9 +329,8 @@ mod tests {
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
-        let ancestors = vec![].into_iter().collect();
         index.add_root(0);
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
         assert_eq!(list[idx], (0, true));
     }
 
@@ -369,14 +373,14 @@ mod tests {
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
         assert_eq!(list[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
         assert_eq!(list[idx], (0, false));
     }
 
@@ -391,10 +395,10 @@ mod tests {
         assert!(gc.is_empty());
         index.insert(1, &key.pubkey(), false, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
         assert_eq!(list[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
         assert_eq!(list[idx], (1, false));
     }
 
@@ -413,13 +417,12 @@ mod tests {
         index.add_root(3);
         index.insert(4, &key.pubkey(), true, &mut gc);
         assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
-        let ancestors = vec![].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
         assert_eq!(list[idx], (3, true));
 
         let mut num = 0;
         let mut found_key = false;
-        index.scan_accounts(&ancestors, |pubkey, _index| {
+        index.scan_accounts(&Ancestors::new(), |pubkey, _index| {
             if pubkey == &key.pubkey() {
                 found_key = true;
                 assert_eq!(_index, (&true, 3));

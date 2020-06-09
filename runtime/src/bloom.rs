@@ -42,15 +42,20 @@ impl<T: BloomHashIndex> Bloom<T> {
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();
         Self::new(num_bits, keys)
     }
-    pub fn num_bits(num_items: f64, false_rate: f64) -> f64 {
+    fn num_bits(num_items: f64, false_rate: f64) -> f64 {
         let n = num_items;
         let p = false_rate;
         ((n * p.ln()) / (1f64 / 2f64.powf(2f64.ln())).ln()).ceil()
     }
-    pub fn num_keys(num_bits: f64, num_items: f64) -> f64 {
+    fn num_keys(num_bits: f64, num_items: f64) -> f64 {
         let n = num_items;
         let m = num_bits;
-        1f64.max(((m / n) * 2f64.ln()).round())
+        // infinity as usize is zero in rust 1.43 but 2^64-1 in rust 1.45; ensure it's zero here
+        if n == 0.0 {
+            0.0
+        } else {
+            1f64.max(((m / n) * 2f64.ln()).round())
+        }
     }
     fn pos(&self, key: &T, k: u64) -> u64 {
         key.hash_at_index(k) % self.bits.len()

@@ -1,6 +1,4 @@
 #![feature(test)]
-use rand;
-
 extern crate solana_ledger;
 extern crate test;
 
