@@ -483,6 +483,20 @@ impl Bank {
         new
     }
 
+    /// Like `new_from_parent` but additionally:
+    /// * Doesn't assume that the parent is anywhere near `slot`, parent could be millions of slots
+    /// in the past
+    /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
+    /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
+    pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+        let mut new = Bank::new_from_parent(parent, collector_id, slot);
+        new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
+        new.tick_height
+            .store(new.max_tick_height(), Ordering::Relaxed);
+        new.freeze();
+        new
+    }
+
     pub fn collector_id(&self) -> &Pubkey {
         &self.collector_id
     }
