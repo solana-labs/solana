@@ -1861,7 +1861,11 @@ impl Bank {
                 // (= bank hash) at each start of epochs
                 if should_enable {
                     // ... for current epoch
-                    partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(0, 0, current_epoch));
+                    partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
+                        0,
+                        0,
+                        current_epoch,
+                    ));
                 }
             }
             parent_slot_index = 0;
