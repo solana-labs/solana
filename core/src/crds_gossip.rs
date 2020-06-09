@@ -179,8 +179,12 @@ impl CrdsGossip {
         response: Vec<CrdsValue>,
         now: u64,
     ) -> (usize, usize, usize) {
-        self.pull
-            .process_pull_response(&mut self.crds, from, timeouts, response, now)
+        let (a, b, success) =
+            self.pull
+                .process_pull_response(&mut self.crds, from, timeouts, response, now);
+        let c = success.len();
+        self.push.push_pull_responses(success, now);
+        (a, b, c)
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {

@@ -243,10 +243,10 @@ impl CrdsGossipPull {
         timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
-    ) -> (usize, usize, usize) {
+    ) -> (usize, usize, Vec<(CrdsValueLabel, Hash, u64)>) {
         let mut failed = 0;
         let mut timeout_count = 0;
-        let mut success = 0;
+        let mut success = vec![];
         for r in response {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
@@ -286,11 +286,14 @@ impl CrdsGossipPull {
                     }
                 }
             }
+            let l = r.label();
+            let wc = r.wallclock();
             let old = crds.insert(r, now);
             if old.is_err() {
                 failed += 1;
             } else {
-                success += 1;
+                let h = crds.lookup_versioned(&l).unwrap().value_hash;
+                success.push((l, h, wc));
             }
             old.ok().map(|opt| {
                 crds.update_record_timestamp(&owner, now);

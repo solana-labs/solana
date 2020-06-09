@@ -166,6 +166,16 @@ impl CrdsGossipPush {
         Ok(old.ok().and_then(|opt| opt))
     }
 
+    /// push pull responses
+    pub fn push_pull_responses(&mut self, values: Vec<(CrdsValueLabel, Hash, u64)>, now: u64) {
+        for (label, value_hash, wc) in values {
+            if now > wc.checked_add(self.msg_timeout).unwrap_or_else(|| 0) {
+                continue;
+            }
+            self.push_messages.insert(label, value_hash);
+        }
+    }
+
     /// New push message to broadcast to peers.
     /// Returns a list of Pubkeys for the selected peers and a list of values to send to all the
     /// peers.
