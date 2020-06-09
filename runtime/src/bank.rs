@@ -1871,7 +1871,7 @@ impl Bank {
             parent_slot_index = 0;
         }
 
-        partitions.push(self.partition_from_slot_indexes(
+        partitions.push(self.partition_from_normal_slot_indexes(
             parent_slot_index,
             current_slot_index,
             current_epoch,
@@ -1939,7 +1939,7 @@ impl Bank {
         (start_partition_index, end_partition_index, partition_count)
     }
 
-    fn partition_from_slot_indexes(
+    fn partition_from_normal_slot_indexes(
         &self,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
