@@ -566,7 +566,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFees"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{lamportsPerSignature":5000},"lastValidSlot":297}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"lamportsPerSignature":5000},"lastValidSlot":297}},"id":1}
 ```
 
 ### getFirstAvailableBlock
