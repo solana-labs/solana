@@ -1,7 +1,7 @@
 use chrono::prelude::*;
 use pickledb::{error::Error, PickleDb, PickleDbDumpPolicy};
 use serde::{Deserialize, Serialize};
-use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature, transaction::Transaction};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, transaction::Transaction};
 use solana_transaction_status::TransactionStatus;
 use std::{cmp::Ordering, fs, io, path::Path};
 
@@ -12,6 +12,7 @@ pub struct TransactionInfo {
     pub new_stake_account_address: Option<Pubkey>,
     pub finalized_date: Option<DateTime<Utc>>,
     pub transaction: Transaction,
+    pub last_valid_slot: Slot,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -35,6 +36,7 @@ impl Default for TransactionInfo {
             new_stake_account_address: None,
             finalized_date: None,
             transaction,
+            last_valid_slot: 0,
         }
     }
 }
@@ -103,6 +105,7 @@ pub fn set_transaction_info(
     transaction: &Transaction,
     new_stake_account_address: Option<&Pubkey>,
     finalized: bool,
+    last_valid_slot: Slot,
 ) -> Result<(), Error> {
     let finalized_date = if finalized { Some(Utc::now()) } else { None };
     let transaction_info = TransactionInfo {
@@ -111,6 +114,7 @@ pub fn set_transaction_info(
         new_stake_account_address: new_stake_account_address.cloned(),
         finalized_date,
         transaction: transaction.clone(),
+        last_valid_slot,
     };
     let signature = transaction.signatures[0];
     db.set(&signature.to_string(), &transaction_info)?;
@@ -119,20 +123,22 @@ pub fn set_transaction_info(
 
 // Set the finalized bit in the database if the transaction is rooted.
 // Remove the TransactionInfo from the database if the transaction failed.
-// Return the number of confirmations on the transaction or None if finalized.
+// Return the number of confirmations on the transaction or None if either
+// finalized or discarded.
 pub fn update_finalized_transaction(
     db: &mut PickleDb,
     signature: &Signature,
     opt_transaction_status: Option<TransactionStatus>,
-    blockhash: &Hash,
-    recent_blockhashes: &[Hash],
+    last_valid_slot: Slot,
+    root_slot: Slot,
 ) -> Result<Option<usize>, Error> {
     if opt_transaction_status.is_none() {
-        if !recent_blockhashes.contains(blockhash) {
+        if root_slot > last_valid_slot {
             eprintln!(
-                "Signature not found {} and blockhash not found, likely expired",
+                "Signature not found {} and blockhash expired. Transaction either dropped or the validator purged the transaction status.",
                 signature
             );
+
             // Don't discard the transaction, because we are not certain the
             // blockhash is expired. Instead, return None to signal that
             // we don't need to wait for confirmations.
@@ -161,7 +167,7 @@ pub fn update_finalized_transaction(
         return Ok(None);
     }
 
-    // Transaction is rooted. Set finalized in the database.
+    // Transaction is rooted. Set the finalized date in the database.
     let mut transaction_info = db.get::<TransactionInfo>(&signature.to_string()).unwrap();
     transaction_info.finalized_date = Some(Utc::now());
     db.set(&signature.to_string(), &transaction_info)?;
@@ -230,12 +236,10 @@ mod tests {
         let mut db =
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
-        let blockhash = Hash::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
         assert!(matches!(
-            update_finalized_transaction(&mut db, &signature, None, &blockhash, &[blockhash])
-                .unwrap(),
+            update_finalized_transaction(&mut db, &signature, None, 0, 0).unwrap(),
             Some(0)
         ));
 
@@ -247,7 +251,7 @@ mod tests {
 
         // Same as before, but now with an expired blockhash
         assert_eq!(
-            update_finalized_transaction(&mut db, &signature, None, &blockhash, &[]).unwrap(),
+            update_finalized_transaction(&mut db, &signature, None, 0, 1).unwrap(),
             None
         );
 
@@ -264,7 +268,6 @@ mod tests {
         let mut db =
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
-        let blockhash = Hash::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
         let transaction_status = TransactionStatus {
@@ -274,14 +277,8 @@ mod tests {
             err: None,
         };
         assert_eq!(
-            update_finalized_transaction(
-                &mut db,
-                &signature,
-                Some(transaction_status),
-                &blockhash,
-                &[blockhash]
-            )
-            .unwrap(),
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
+                .unwrap(),
             Some(1)
         );
 
@@ -298,7 +295,6 @@ mod tests {
         let mut db =
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
-        let blockhash = Hash::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
         let status = Err(TransactionError::AccountNotFound);
@@ -309,14 +305,8 @@ mod tests {
             err: None,
         };
         assert_eq!(
-            update_finalized_transaction(
-                &mut db,
-                &signature,
-                Some(transaction_status),
-                &blockhash,
-                &[blockhash]
-            )
-            .unwrap(),
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
+                .unwrap(),
             None
         );
 
@@ -330,7 +320,6 @@ mod tests {
         let mut db =
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
-        let blockhash = Hash::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
         let transaction_status = TransactionStatus {
@@ -340,14 +329,8 @@ mod tests {
             err: None,
         };
         assert_eq!(
-            update_finalized_transaction(
-                &mut db,
-                &signature,
-                Some(transaction_status),
-                &blockhash,
-                &[blockhash]
-            )
-            .unwrap(),
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
+                .unwrap(),
             None
         );
 

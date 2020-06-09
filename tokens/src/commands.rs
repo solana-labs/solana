@@ -160,7 +160,7 @@ fn distribute_tokens<T: Client>(
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
         match client.send_message(message, &signers) {
-            Ok((transaction, _last_valid_slot)) => {
+            Ok((transaction, last_valid_slot)) => {
                 db::set_transaction_info(
                     db,
                     &allocation.recipient.parse().unwrap(),
@@ -168,6 +168,7 @@ fn distribute_tokens<T: Client>(
                     &transaction,
                     Some(&new_stake_account_address),
                     false,
+                    last_valid_slot,
                 )?;
             }
             Err(e) => {
@@ -332,20 +333,20 @@ fn update_finalized_transactions<T: Client>(
             if info.finalized_date.is_some() {
                 None
             } else {
-                Some(&info.transaction)
+                Some((&info.transaction, info.last_valid_slot))
             }
         })
         .collect();
     let unconfirmed_signatures: Vec<_> = unconfirmed_transactions
         .iter()
-        .map(|tx| tx.signatures[0])
+        .map(|(tx, _slot)| tx.signatures[0])
         .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
         .collect();
     let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
-    let recent_blockhashes = client.get_recent_blockhashes()?;
+    let root_slot = client.get_slot()?;
 
     let mut confirmations = None;
-    for (transaction, opt_transaction_status) in unconfirmed_transactions
+    for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
         .into_iter()
         .zip(transaction_statuses.into_iter())
     {
@@ -353,8 +354,8 @@ fn update_finalized_transactions<T: Client>(
             db,
             &transaction.signatures[0],
             opt_transaction_status,
-            &transaction.message.recent_blockhash,
-            &recent_blockhashes,
+            last_valid_slot,
+            root_slot,
         ) {
             Ok(Some(confs)) => {
                 confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
