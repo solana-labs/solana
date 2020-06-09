@@ -53,11 +53,14 @@ windows)
   ;;
 esac
 
+RELEASE_BASENAME="${RELEASE_BASENAME:=solana-release}"
+TARBALL_BASENAME="${TARBALL_BASENAME:="$RELEASE_BASENAME"}"
+
 echo --- Creating release tarball
 (
   set -x
-  rm -rf solana-release/
-  mkdir solana-release/
+  rm -rf "${RELEASE_BASENAME:?}"/
+  mkdir "${RELEASE_BASENAME}"/
 
   COMMIT="$(git rev-parse HEAD)"
 
@@ -65,18 +68,18 @@ echo --- Creating release tarball
     echo "channel: $CHANNEL_OR_TAG"
     echo "commit: $COMMIT"
     echo "target: $TARGET"
-  ) > solana-release/version.yml
+  ) > "${RELEASE_BASENAME}"/version.yml
 
   # Make CHANNEL available to include in the software version information
   export CHANNEL
 
   source ci/rust-version.sh stable
-  scripts/cargo-install-all.sh +"$rust_stable" solana-release
+  scripts/cargo-install-all.sh +"$rust_stable" "${RELEASE_BASENAME}"
 
-  tar cvf solana-release-$TARGET.tar solana-release
-  bzip2 solana-release-$TARGET.tar
-  cp solana-release/bin/solana-install-init solana-install-init-$TARGET
-  cp solana-release/version.yml solana-release-$TARGET.yml
+  tar cvf "${TARBALL_BASENAME}"-$TARGET.tar "${RELEASE_BASENAME}"
+  bzip2 "${TARBALL_BASENAME}"-$TARGET.tar
+  cp "${RELEASE_BASENAME}"/bin/solana-install-init solana-install-init-$TARGET
+  cp "${RELEASE_BASENAME}"/version.yml "${TARBALL_BASENAME}"-$TARGET.yml
 )
 
 # Metrics tarball is platform agnostic, only publish it from Linux
@@ -94,7 +97,7 @@ fi
 
 source ci/upload-ci-artifact.sh
 
-for file in solana-release-$TARGET.tar.bz2 solana-release-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_TARBALLS; do
+for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_TARBALLS; do
   if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
     upload-ci-artifact "$file"
     echo "Skipped $file due to DO_NOT_PUBLISH_TAR"
