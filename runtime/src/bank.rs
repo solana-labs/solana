@@ -1888,7 +1888,7 @@ impl Bank {
         generated_for_gapped_epochs: bool,
     ) -> Partition {
         let cycle_params = self.determine_collection_cycle_params(epoch);
-        let (_, _, is_in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
+        let (_, _, in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
         // risk of any mis-calculation instead of neligilbe faster computation per slot for the
@@ -1899,11 +1899,13 @@ impl Bank {
             Self::partition_index_from_slot_index(end_slot_index, cycle_params);
 
         // Adjust partition index for some edge cases
-        let is_across_epoch_boundary =
-            start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0;
-        if is_in_multi_epoch_cycle && is_across_epoch_boundary {
-            // When an epoch boundary is crossed, the caller gives us off-by-one indexes.
-            // Usually there should be no need for adjustment because cycles are aligned
+        let is_special_new_epoch = start_slot_index == 0 && end_slot_index != 1;
+        let in_middle_of_cycle = start_partition_index > 0;
+        if in_multi_epoch_cycle && is_special_new_epoch && in_middle_of_cycle {
+            // Adjust slot indexes so that the final partition ranges are continuous!
+            // This is neeed because the caller gives us off-by-one indexes when
+            // an epoch boundary is crossed.
+            // Usually there is no need for this adjustment because cycles are aligned
             // with epochs. But for multi-epoch cycles, adjust the indexes if it
             // happens in the middle of a cycle for both gapped and not-gapped cases:
             //
@@ -1915,7 +1917,7 @@ impl Bank {
             //                   | [0..1]    |  10..11      |  10..12
             //                   | [1..2]    |  11..12      |  11..12
             //                   | [2..9   *2|  12..19      |  12..19      <-+
-            // 5 (40..50)        |  0..0   *2|<20>..<20>  *3|<19>..<19> *3 <-+- gapped
+            // 5 (40..50)        |  0..0   *2|<20>..<20>    |<19>..<19> *3 <-+- gapped
             //                   |  0..4]    |<20>..24      |<19>..24      <-+
             //                   | [4..5]    |  24..25      |  24..25
             //                   | [5..6]    |  25..26      |  25..26
