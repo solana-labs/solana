@@ -30,6 +30,9 @@ else
 fi
 
 for lock_file in $files; do
+  if [[ -n $CI ]]; then
+    echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
+  fi
   (
     set -x
     cd "$(dirname "$lock_file")"
