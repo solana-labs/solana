@@ -31,7 +31,7 @@ fi
 
 for lock_file in $files; do
   if [[ -n $CI ]]; then
-    echo "--- cargo[$lock_file]: " "${shifted_args[@]}" "$@"
+    echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
   fi
   (
     set -x
