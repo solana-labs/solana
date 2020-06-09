@@ -1834,15 +1834,16 @@ impl Bank {
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
-                // generate and push gapped partitions because some slots are skipped
+                // Generate special partitions because there are skipped slots
+                // exactly at the epoch transition.
+
                 let parent_last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
 
                 // ... for parent epoch
-                partitions.push(self.partition_from_slot_indexes(
+                partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
                     parent_slot_index,
                     parent_last_slot_index,
                     parent_epoch,
-                    true,
                 ));
 
                 // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
@@ -1860,7 +1861,7 @@ impl Bank {
                 // (= bank hash) at each start of epochs
                 if should_enable {
                     // ... for current epoch
-                    partitions.push(self.partition_from_slot_indexes(0, 0, current_epoch, true));
+                    partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(0, 0, current_epoch));
                 }
             }
             parent_slot_index = 0;
@@ -1870,18 +1871,17 @@ impl Bank {
             parent_slot_index,
             current_slot_index,
             current_epoch,
-            false,
         ));
 
         partitions
     }
 
-    fn partition_from_slot_indexes(
+    fn do_partition_from_slot_indexes(
         &self,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         epoch: Epoch,
-        auto_generated: bool,
+        generated_for_gapped_epochs: bool,
     ) -> Partition {
         let cycle_params = self.determine_collection_cycle_params(epoch);
         let (_, _, is_in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
@@ -1894,37 +1894,61 @@ impl Bank {
         let mut end_partition_index =
             Self::partition_index_from_slot_index(end_slot_index, cycle_params);
 
+        // Adjust partition index for some edge cases
         let is_across_epoch_boundary =
             start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0;
         if is_in_multi_epoch_cycle && is_across_epoch_boundary {
             // When an epoch boundary is crossed, the caller gives us off-by-one indexes.
             // Usually there should be no need for adjustment because cycles are aligned
-            // with epochs. But for multi-epoch cycles, adjust the start index if it
-            // happens in the middle of a cycle for both gapped and non-gapped cases:
+            // with epochs. But for multi-epoch cycles, adjust the indexes if it
+            // happens in the middle of a cycle for both gapped and not-gapped cases:
             //
-            // epoch & slot range| *slot idx. | raw partition idx.| adj. partition idx.
-            // ------------------+------------+-------------------+-----------------------
-            // 3       20..30    | [7..8]     |    7.. 8          |    7.. 8
-            //                   | [8..9]     |    8.. 9          |    8.. 9
-            // 4       30..40    | [0..0]     | <10>..10          |  <9>..10 <-- not gapped
-            //                   | [0..1]     |   10..11          |   10..11
-            //                   | [1..2]     |   11..12          |   11..12
-            //                   | [2..9 gen=1|   12..19          |   12..19   <-+
-            // 5       40..50    |  0..0 gen=1| <20>..<20>  (noop)| <19>..<19> <-+- gapped
-            //                   |  0..4]     | <20>..24          | <19>..24   <-+
-            //                   | [4..5]     |   24..25          |   24..25
-            //                   | [5..6]     |   25..26          |   25..26
-            // *: The range of parent_bank.slot() and current_bank.slot() is firstly
-            //    split by the epoch boundaries and then the split ones are given to us.
-            //    The original ranges are denoted as [...]
+            // epoch (slot range)|slot idx.*1|raw part. idx.|adj. part. idx.|epoch boundary
+            // ------------------+-----------+--------------+---------------+----
+            // 3 (20..30)        | [7..8]    |   7.. 8      |   7.. 8
+            //                   | [8..9]    |   8.. 9      |   8.. 9
+            // 4 (30..40)        | [0..0]    |<10>..10      | <9>..10      <--- not gapped
+            //                   | [0..1]    |  10..11      |  10..12
+            //                   | [1..2]    |  11..12      |  11..12
+            //                   | [2..9   *2|  12..19      |  12..19      <-+
+            // 5 (40..50)        |  0..0   *2|<20>..<20>  *3|<19>..<19> *3 <-+- gapped
+            //                   |  0..4]    |<20>..24      |<19>..24      <-+
+            //                   | [4..5]    |  24..25      |  24..25
+            //                   | [5..6]    |  25..26      |  25..26
+            //
+            // NOTE: <..> means the adjusted slots
+            //
+            // *1: The range of parent_bank.slot() and current_bank.slot() is firstly
+            //     split by the epoch boundaries and then the split ones are given to us.
+            //     The original ranges are denoted as [...]
+            // *2: These are marked with generated_for_gapped_epochs = true.
+            // *3: This becomes no-op partition
             start_partition_index -= 1;
-            if auto_generated {
+            if generated_for_gapped_epochs {
                 assert_eq!(start_slot_index, end_slot_index);
                 end_partition_index -= 1;
             }
         }
 
         (start_partition_index, end_partition_index, partition_count)
+    }
+
+    fn partition_from_slot_indexes(
+        &self,
+        start_slot_index: SlotIndex,
+        end_slot_index: SlotIndex,
+        epoch: Epoch,
+    ) -> Partition {
+        self.do_partition_from_slot_indexes(start_slot_index, end_slot_index, epoch, false)
+    }
+
+    fn partition_from_slot_indexes_with_gapped_epochs(
+        &self,
+        start_slot_index: SlotIndex,
+        end_slot_index: SlotIndex,
+        epoch: Epoch,
+    ) -> Partition {
+        self.do_partition_from_slot_indexes(start_slot_index, end_slot_index, epoch, true)
     }
 
     fn determine_collection_cycle_params(&self, epoch: Epoch) -> RentCollectionCycleParams {
