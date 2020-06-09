@@ -250,7 +250,6 @@ pub struct ClusterInfo {
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
-    start_time: u64,
 }
 
 impl Default for ClusterInfo {
@@ -397,7 +396,6 @@ impl ClusterInfo {
         let id = contact_info.id;
         let me = Self {
             gossip: RwLock::new(CrdsGossip::default()),
-            start_time: timestamp(),
             keypair,
             entrypoint: RwLock::new(None),
             outbound_budget: RwLock::new(DataBudget {
@@ -432,7 +430,6 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
-            start_time: self.start_time,
         }
     }
 
@@ -1709,18 +1706,9 @@ impl ClusterInfo {
         let now = timestamp();
         let self_id = me.id();
 
-        //skip messages that are likely to be pushed
-        let min_filter_time = me.start_time + 10 * CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-        let push_timer = if min_filter_time < now {
-            // reason for / 3 is to allow push_self which has a /2 timeout to propagate
-            // first through push before responding with those values.
-            Some(now - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 3)
-        } else {
-            None
-        };
         let pull_responses = me
             .time_gossip_read_lock("generate_pull_responses", &me.stats.generate_pull_responses)
-            .generate_pull_responses(&caller_and_filters, push_timer);
+            .generate_pull_responses(&caller_and_filters);
 
         me.time_gossip_write_lock("process_pull_reqs", &me.stats.process_pull_requests)
             .process_pull_requests(caller_and_filters, now);
@@ -2086,16 +2074,6 @@ impl ClusterInfo {
                 (
                     "generate_pull_responses",
                     self.stats.generate_pull_responses.clear(),
-                    i64
-                ),
-                (
-                    "process_pull_response_fail",
-                    self.stats.process_pull_response_fail.clear(),
-                    i64
-                ),
-                (
-                    "process_pull_response_success",
-                    self.stats.process_pull_response_success.clear(),
                     i64
                 ),
                 ("process_prune", self.stats.process_prune.clear(), i64),
