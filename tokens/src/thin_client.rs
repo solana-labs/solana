@@ -3,6 +3,8 @@ use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
     account::Account,
     client::{AsyncClient, SyncClient},
+    clock::Slot,
+    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     message::Message,
@@ -26,7 +28,7 @@ pub trait Client {
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>>;
     fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64>;
-    fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)>;
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)>;
     fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 }
 
@@ -55,9 +57,11 @@ impl Client for RpcClient {
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
-    fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)> {
-        self.get_recent_blockhash()
-            .map_err(|e| TransportError::Custom(e.to_string()))
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+        let result = self
+            .get_recent_blockhash_with_commitment(CommitmentConfig::default())
+            .map_err(|e| TransportError::Custom(e.to_string()))?;
+        Ok(result.value)
     }
 
     fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
@@ -95,8 +99,8 @@ impl Client for BankClient {
         self.get_balance(pubkey)
     }
 
-    fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)> {
-        self.get_recent_blockhash()
+    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
     }
 
     fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
@@ -135,14 +139,19 @@ impl<C: Client> ThinClient<C> {
         self.client.get_signature_statuses1(signatures)
     }
 
-    pub fn send_message<S: Signers>(&self, message: Message, signers: &S) -> Result<Transaction> {
+    pub fn send_message<S: Signers>(
+        &self,
+        message: Message,
+        signers: &S,
+    ) -> Result<(Transaction, Slot)> {
         if self.dry_run {
-            return Ok(Transaction::new_unsigned(message));
+            return Ok((Transaction::new_unsigned(message), std::u64::MAX));
         }
-        let (blockhash, _fee_caluclator) = self.get_recent_blockhash()?;
+        let (blockhash, _fee_caluclator, last_valid_slot) = self.get_fees()?;
+
         let transaction = Transaction::new(signers, message, blockhash);
         self.send_transaction(transaction.clone())?;
-        Ok(transaction)
+        Ok((transaction, last_valid_slot))
     }
 
     pub fn transfer<S: Signer>(
@@ -150,15 +159,15 @@ impl<C: Client> ThinClient<C> {
         lamports: u64,
         sender_keypair: &S,
         to_pubkey: &Pubkey,
-    ) -> Result<Transaction> {
+    ) -> Result<(Transaction, u64)> {
         let create_instruction =
             system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
         let message = Message::new(&[create_instruction]);
         self.send_message(message, &[sender_keypair])
     }
 
-    pub fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
-        self.client.get_recent_blockhash1()
+    pub fn get_fees(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+        self.client.get_fees1()
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {

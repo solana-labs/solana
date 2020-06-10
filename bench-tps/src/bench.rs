@@ -55,7 +55,9 @@ type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
     loop {
         match client.get_recent_blockhash_with_commitment(CommitmentConfig::recent()) {
-            Ok((blockhash, fee_calculator)) => return (blockhash, fee_calculator),
+            Ok((blockhash, fee_calculator, _last_valid_slot)) => {
+                return (blockhash, fee_calculator)
+            }
             Err(err) => {
                 info!("Couldn't get recent blockhash: {:?}", err);
                 sleep(Duration::from_secs(1));
