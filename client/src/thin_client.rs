@@ -9,7 +9,7 @@ use log::*;
 use solana_sdk::{
     account::Account,
     client::{AsyncClient, Client, SyncClient},
-    clock::MAX_PROCESSING_AGE,
+    clock::{Slot, MAX_PROCESSING_AGE},
     commitment_config::CommitmentConfig,
     epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -390,13 +390,15 @@ impl SyncClient for ThinClient {
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
-        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
+        let (blockhash, fee_calculator, _last_valid_slot) =
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
+        Ok((blockhash, fee_calculator))
     }
 
     fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> TransportResult<(Hash, FeeCalculator)> {
+    ) -> TransportResult<(Hash, FeeCalculator, Slot)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
         let recent_blockhash =
@@ -404,7 +406,7 @@ impl SyncClient for ThinClient {
         match recent_blockhash {
             Ok(Response { value, .. }) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
-                Ok((value.0, value.1))
+                Ok((value.0, value.1, value.2))
             }
             Err(e) => {
                 self.optimizer.report(index, std::u64::MAX);

@@ -449,7 +449,7 @@ fn swapper<T>(
             }
             account_group = (account_group + 1) % account_groups as usize;
 
-            let (blockhash, _fee_calculator) = client
+            let (blockhash, _fee_calculator, _last_valid_slot) = client
                 .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                 .expect("Failed to get blockhash");
             let to_swap_txs: Vec<_> = to_swap
@@ -577,7 +577,7 @@ fn trader<T>(
         }
         account_group = (account_group + 1) % account_groups as usize;
 
-        let (blockhash, _fee_calculator) = client
+        let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .expect("Failed to get blockhash");
 
@@ -776,7 +776,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
                     to_fund_txs.len(),
                 );
 
-                let (blockhash, _fee_calculator) = client
+                let (blockhash, _fee_calculator, _last_valid_slot) = client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .expect("blockhash");
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -868,7 +868,7 @@ pub fn create_token_accounts<T: Client>(
 
             let mut retries = 0;
             while !to_create_txs.is_empty() {
-                let (blockhash, _fee_calculator) = client
+                let (blockhash, _fee_calculator, _last_valid_slot) = client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .expect("Failed to get blockhash");
                 to_create_txs
@@ -997,7 +997,7 @@ pub fn airdrop_lamports<T: Client>(
 
     let mut tries = 0;
     loop {
-        let (blockhash, _fee_calculator) = client
+        let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .expect("Failed to get blockhash");
         match request_airdrop_transaction(&faucet_addr, &id.pubkey(), amount_to_drop, blockhash) {

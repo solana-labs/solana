@@ -70,7 +70,7 @@ pub trait SyncClient {
     fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> Result<(Hash, FeeCalculator)>;
+    ) -> Result<(Hash, FeeCalculator, Slot)>;
 
     /// Get `Some(FeeCalculator)` associated with `blockhash` if it is still in
     /// the BlockhashQueue`, otherwise `None`

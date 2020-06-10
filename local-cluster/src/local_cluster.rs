@@ -365,7 +365,7 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let (blockhash, _fee_calculator) = client
+        let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap();
         let mut tx =

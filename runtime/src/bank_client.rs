@@ -134,8 +134,13 @@ impl SyncClient for BankClient {
     fn get_recent_blockhash_with_commitment(
         &self,
         _commitment_config: CommitmentConfig,
-    ) -> Result<(Hash, FeeCalculator)> {
-        Ok(self.bank.last_blockhash_with_fee_calculator())
+    ) -> Result<(Hash, FeeCalculator, u64)> {
+        let (blockhash, fee_calculator) = self.bank.last_blockhash_with_fee_calculator();
+        let last_valid_slot = self
+            .bank
+            .get_blockhash_last_valid_slot(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
+        Ok((blockhash, fee_calculator, last_valid_slot))
     }
 
     fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>> {
