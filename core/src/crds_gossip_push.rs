@@ -208,7 +208,7 @@ impl CrdsGossipPush {
             let mut max = 0;
             for (p, filter) in self.active_set.iter() {
                 if !filter.contains(&v.label().pubkey()) {
-                    max = max + 1;
+                    max += 1;
                     push_messages.entry(*p).or_default().push(v.clone());
                 }
                 if max == self.push_fanout {
