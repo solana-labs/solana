@@ -62,6 +62,9 @@ struct Config {
     /// will be fully destaked.  The grace period is intended to account for unexpected bugs that
     /// cause a validator to go down
     delinquent_grace_slot_distance: u64,
+
+    /// Don't ever unstake more than this percentage of the cluster at one time
+    max_poor_block_productor_percentage: usize,
 }
 
 fn get_config() -> Config {
@@ -224,6 +227,7 @@ fn get_config() -> Config {
         bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
+        max_poor_block_productor_percentage: 20,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -322,7 +326,9 @@ fn classify_block_producers(
         }
     }
 
+    info!("quality_block_producers: {}", quality_block_producers.len());
     trace!("quality_block_producers: {:?}", quality_block_producers);
+    info!("poor_block_producers: {}", poor_block_producers.len());
     trace!("poor_block_producers: {:?}", poor_block_producers);
     Ok((quality_block_producers, poor_block_producers))
 }
@@ -556,8 +562,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     info!("Epoch info: {:?}", epoch_info);
 
-    let (quality_block_producers, _poor_block_producers) =
+    let (quality_block_producers, poor_block_producers) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
+
+    if poor_block_producers.len()
+        > quality_block_producers.len() * config.max_poor_block_productor_percentage / 100
+    {
+        error!(
+            "Something is wrong.  More than {}% of validators classified as poor block producers",
+            config.max_poor_block_productor_percentage
+        );
+        process::exit(1);
+    }
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
