@@ -49,11 +49,7 @@ test('create and query nonce account', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        from.publicKey.toBase58(),
-        minimumAmount * 2,
-        {commitment: 'recent'},
-      ],
+      params: [from.publicKey.toBase58(), minimumAmount * 2],
     },
     {
       error: null,
@@ -168,11 +164,7 @@ test('create and query nonce account with seed', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        from.publicKey.toBase58(),
-        minimumAmount * 2,
-        {commitment: 'recent'},
-      ],
+      params: [from.publicKey.toBase58(), minimumAmount * 2],
     },
     {
       error: null,

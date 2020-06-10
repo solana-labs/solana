@@ -86,11 +86,7 @@ test('get program accounts', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        account0.publicKey.toBase58(),
-        LAMPORTS_PER_SOL,
-        {commitment: 'recent'},
-      ],
+      params: [account0.publicKey.toBase58(), LAMPORTS_PER_SOL],
     },
     {
       error: null,
@@ -102,11 +98,7 @@ test('get program accounts', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        account1.publicKey.toBase58(),
-        0.5 * LAMPORTS_PER_SOL,
-        {commitment: 'recent'},
-      ],
+      params: [account1.publicKey.toBase58(), 0.5 * LAMPORTS_PER_SOL],
     },
     {
       error: null,
@@ -929,7 +921,7 @@ test('get confirmed transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [newAddress.toBase58(), 1, {commitment: 'recent'}],
+      params: [newAddress.toBase58(), 1],
     },
     {
       error: null,
@@ -938,11 +930,7 @@ test('get confirmed transaction', async () => {
     },
   ]);
 
-  const recentSignature = await connection.requestAirdrop(
-    newAddress,
-    1,
-    'recent',
-  );
+  const recentSignature = await connection.requestAirdrop(newAddress, 1);
   mockRpc.push([
     url,
     {
@@ -1311,11 +1299,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        account.publicKey.toBase58(),
-        minimumAmount + 40,
-        {commitment: 'recent'},
-      ],
+      params: [account.publicKey.toBase58(), minimumAmount + 42],
     },
     {
       error: null,
@@ -1323,18 +1307,42 @@ test('request airdrop', async () => {
         '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
+
+  const signature = await connection.requestAirdrop(
+    account.publicKey,
+    minimumAmount + 42,
+  );
+
   mockRpc.push([
     url,
     {
-      method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), 2, {commitment: 'recent'}],
+      method: 'getSignatureStatuses',
+      params: [
+        [
+          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+      ],
     },
     {
       error: null,
-      result:
-        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: null,
+            status: {Ok: null},
+            err: null,
+          },
+        ],
+      },
     },
   ]);
+
+  await connection.confirmTransaction(signature, 0);
+
   mockRpc.push([
     url,
     {
@@ -1351,9 +1359,6 @@ test('request airdrop', async () => {
       },
     },
   ]);
-
-  await connection.requestAirdrop(account.publicKey, minimumAmount + 40);
-  await connection.requestAirdrop(account.publicKey, 2);
 
   const balance = await connection.getBalance(account.publicKey);
   expect(balance).toBe(minimumAmount + 42);
@@ -1390,109 +1395,6 @@ test('request airdrop', async () => {
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
 
-// expected to take around 20s
-test('request airdrop - max commitment', async () => {
-  const account = new Account();
-  const connection = new Connection(url, 'max');
-
-  mockRpc.push([
-    url,
-    {
-      method: 'getMinimumBalanceForRentExemption',
-      params: [0, {commitment: 'recent'}],
-    },
-    {
-      error: null,
-      result: 50,
-    },
-  ]);
-
-  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
-    0,
-    'recent',
-  );
-
-  mockRpc.push([
-    url,
-    {
-      method: 'requestAirdrop',
-      params: [
-        account.publicKey.toBase58(),
-        minimumAmount + 40,
-        {commitment: 'max'},
-      ],
-    },
-    {
-      error: null,
-      result:
-        '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    },
-  ]);
-  mockRpc.push([
-    url,
-    {
-      method: 'getBalance',
-      params: [account.publicKey.toBase58(), {commitment: 'max'}],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: minimumAmount + 40,
-      },
-    },
-  ]);
-
-  const signature = await connection.requestAirdrop(
-    account.publicKey,
-    minimumAmount + 40,
-  );
-  const balance = await connection.getBalance(account.publicKey);
-  expect(balance).toBe(minimumAmount + 40);
-
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: null,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
-
-  const {value} = await connection.getSignatureStatus(signature);
-  if (value === null) {
-    expect(value).not.toBeNull();
-    return;
-  }
-
-  // Signature should be finalized and therefore confirmations should be null
-  if (value.confirmations !== null) {
-    expect(value.confirmations).toBeNull();
-    return;
-  }
-});
-
 test('transaction failure', async () => {
   const account = new Account();
   const connection = new Connection(url, 'recent');
@@ -1518,11 +1420,7 @@ test('transaction failure', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        account.publicKey.toBase58(),
-        minimumAmount + 100010,
-        {commitment: 'recent'},
-      ],
+      params: [account.publicKey.toBase58(), minimumAmount + 100010],
     },
     {
       error: null,
@@ -1724,11 +1622,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        accountFrom.publicKey.toBase58(),
-        minimumAmount + 100010,
-        {commitment: 'recent'},
-      ],
+      params: [accountFrom.publicKey.toBase58(), minimumAmount + 100010],
     },
     {
       error: null,
@@ -1764,11 +1658,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        accountTo.publicKey.toBase58(),
-        minimumAmount + 21,
-        {commitment: 'recent'},
-      ],
+      params: [accountTo.publicKey.toBase58(), minimumAmount + 21],
     },
     {
       error: null,

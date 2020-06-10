@@ -36,11 +36,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        accountPayer.publicKey.toBase58(),
-        LAMPORTS_PER_SOL,
-        {commitment: 'recent'},
-      ],
+      params: [accountPayer.publicKey.toBase58(), LAMPORTS_PER_SOL],
     },
     {
       error: null,
@@ -54,11 +50,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        accountFrom.publicKey.toBase58(),
-        minimumAmount + 12,
-        {commitment: 'recent'},
-      ],
+      params: [accountFrom.publicKey.toBase58(), minimumAmount + 12],
     },
     {
       error: null,
@@ -72,11 +64,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [
-        accountTo.publicKey.toBase58(),
-        minimumAmount + 21,
-        {commitment: 'recent'},
-      ],
+      params: [accountTo.publicKey.toBase58(), minimumAmount + 21],
     },
     {
       error: null,

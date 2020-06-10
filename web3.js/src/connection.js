@@ -1703,10 +1703,11 @@ export class Connection {
   async requestAirdrop(
     to: PublicKey,
     amount: number,
-    commitment: ?Commitment,
   ): Promise<TransactionSignature> {
-    const args = this._argsWithCommitment([to.toBase58(), amount], commitment);
-    const unsafeRes = await this._rpcRequest('requestAirdrop', args);
+    const unsafeRes = await this._rpcRequest('requestAirdrop', [
+      to.toBase58(),
+      amount,
+    ]);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(

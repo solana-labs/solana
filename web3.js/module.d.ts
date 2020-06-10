@@ -281,7 +281,6 @@ declare module '@solana/web3.js' {
     requestAirdrop(
       to: PublicKey,
       amount: number,
-      commitment?: Commitment,
     ): Promise<TransactionSignature>;
     sendTransaction(
       transaction: Transaction,
