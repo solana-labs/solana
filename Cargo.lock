@@ -238,7 +238,7 @@ checksum = "94cb07b0da6a73955f8fb85d24c466778e70cda767a568229b104f0264089330"
 dependencies = [
  "byte-tools",
  "crypto-mac",
- "digest",
+ "digest 0.8.1",
  "opaque-debug",
 ]
 
@@ -263,6 +263,18 @@ dependencies = [
  "byte-tools",
  "byteorder",
  "generic-array 0.12.3",
+]
+
+[[package]]
+name = "block-buffer"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbcf92448676f82bb7a334c58bbce8b0d43580fb5362a9d608b18879d12a3d31"
+dependencies = [
+ "block-padding",
+ "byte-tools",
+ "byteorder",
+ "generic-array 0.14.1",
 ]
 
 [[package]]
@@ -729,7 +741,7 @@ checksum = "8b7dcd30ba50cdf88b55b033456138b7c0ac4afdc436d82e1b79f370f24cc66d"
 dependencies = [
  "byteorder",
  "clear_on_drop",
- "digest",
+ "digest 0.8.1",
  "rand_core 0.3.1",
  "subtle 2.2.2",
 ]
@@ -741,7 +753,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d85653f070353a16313d0046f173f70d1aadd5b42600a14de626f0dfb3473a5"
 dependencies = [
  "byteorder",
- "digest",
+ "digest 0.8.1",
  "rand_core 0.5.1",
  "subtle 2.2.2",
  "zeroize",
@@ -794,6 +806,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
 dependencies = [
  "generic-array 0.12.3",
+]
+
+[[package]]
+name = "digest"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
+dependencies = [
+ "generic-array 0.14.1",
 ]
 
 [[package]]
@@ -895,7 +916,7 @@ dependencies = [
  "curve25519-dalek 2.1.0",
  "rand 0.7.3",
  "serde",
- "sha2",
+ "sha2 0.8.2",
 ]
 
 [[package]]
@@ -1388,7 +1409,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dcb5e64cda4c23119ab41ba960d1e170a774c8e4b9d9e6a9bc18aabf5e59695"
 dependencies = [
  "crypto-mac",
- "digest",
+ "digest 0.8.1",
 ]
 
 [[package]]
@@ -1837,7 +1858,7 @@ dependencies = [
  "regex-syntax",
  "serde",
  "serde_derive",
- "sha2",
+ "sha2 0.8.2",
  "string_cache",
  "term 0.5.2",
  "unicode-xid 0.1.0",
@@ -2363,7 +2384,7 @@ dependencies = [
  "bytes 0.4.12",
  "rand 0.6.5",
  "sha-1",
- "sha2",
+ "sha2 0.8.2",
  "sha3",
  "unsigned-varint",
 ]
@@ -3458,8 +3479,8 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d94d0bede923b3cea61f3f1ff57ff8cdfd77b400fb8f9998949e0cf04163df"
 dependencies = [
- "block-buffer",
- "digest",
+ "block-buffer 0.7.3",
+ "digest 0.8.1",
  "fake-simd",
  "opaque-debug",
 ]
@@ -3476,8 +3497,20 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a256f46ea78a0c0d9ff00077504903ac881a1dafdc20da66545699e7776b3e69"
 dependencies = [
- "block-buffer",
- "digest",
+ "block-buffer 0.7.3",
+ "digest 0.8.1",
+ "fake-simd",
+ "opaque-debug",
+]
+
+[[package]]
+name = "sha2"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72377440080fd008550fe9b441e854e43318db116f90181eef92e9ae9aedab48"
+dependencies = [
+ "block-buffer 0.8.0",
+ "digest 0.9.0",
  "fake-simd",
  "opaque-debug",
 ]
@@ -3488,9 +3521,9 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd26bc0e7a2e3a7c959bc494caf58b72ee0c71d67704e9520f736ca7e4853ecf"
 dependencies = [
- "block-buffer",
+ "block-buffer 0.7.3",
  "byte-tools",
- "digest",
+ "digest 0.8.1",
  "keccak",
  "opaque-debug",
 ]
@@ -4186,7 +4219,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_bytes",
- "sha2",
+ "sha2 0.9.0",
  "solana-budget-program",
  "solana-genesis-programs",
  "solana-logger",
@@ -4561,7 +4594,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2",
+ "sha2 0.9.0",
  "solana-crate-features",
  "solana-logger",
  "solana-sdk-macro",
@@ -4918,7 +4951,7 @@ dependencies = [
  "byteorder",
  "bytes 0.4.12",
  "curve25519-dalek 1.2.3",
- "digest",
+ "digest 0.8.1",
  "ed25519-dalek",
  "hex 0.3.2",
  "hmac",
@@ -4928,7 +4961,7 @@ dependencies = [
  "proptest-derive",
  "rand 0.7.3",
  "serde",
- "sha2",
+ "sha2 0.8.2",
  "sha3",
  "solana_libra_canonical_serialization",
  "solana_libra_crypto-derive",
@@ -5182,7 +5215,7 @@ dependencies = [
  "bit-vec",
  "lazy_static",
  "proptest",
- "sha2",
+ "sha2 0.8.2",
  "solana_libra_canonical_serialization",
  "solana_libra_crypto",
  "solana_libra_failure_ext",
@@ -5578,7 +5611,7 @@ dependencies = [
  "pbkdf2",
  "rand 0.7.3",
  "rustc-hash",
- "sha2",
+ "sha2 0.8.2",
  "unicode-normalization",
 ]
 
