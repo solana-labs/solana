@@ -7,7 +7,7 @@ use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
 };
-use solana_rbpf::InstructionMeter;
+use solana_rbpf::vm::{EbpfVm, InstructionMeter};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -20,7 +20,9 @@ use solana_sdk::{
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{ComputeBudget, ComputeMeter, InvokeContext, Logger, ProcessInstruction},
+    entrypoint_native::{
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+    },
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -67,14 +69,15 @@ fn run_program(
     let path = create_bpf_path(name);
     let mut file = File::open(path).unwrap();
 
-    let mut program_account = Account::default();
-    file.read_to_end(&mut program_account.data).unwrap();
-
+    let mut data = vec![];
+    file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
+
+    let executable = EbpfVm::create_executable_from_elf(&data, None).unwrap();
     let (mut vm, heap_region) = create_vm(
         &loader_id,
-        &program_account.data,
+        executable.as_ref(),
         parameter_accounts,
         &mut invoke_context,
     )
@@ -630,6 +633,10 @@ impl InvokeContext for MockInvokeContext {
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.compute_meter.clone()))
+    }
+    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        None
     }
 }
 

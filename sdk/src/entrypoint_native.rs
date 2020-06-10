@@ -4,7 +4,7 @@ use crate::{
     account::Account, account::KeyedAccount, instruction::CompiledInstruction,
     instruction::InstructionError, message::Message, pubkey::Pubkey,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 // Prototype of a native program entry point
 ///
@@ -218,6 +218,11 @@ pub trait InvokeContext {
     fn get_compute_budget(&self) -> ComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+    /// Loaders may need to do work in order to execute a program.  Cache
+    /// the work that can be re-used across executions
+    fn add_executor(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
+    /// Get the completed loader work that can be re-used across executions
+    fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -264,4 +269,16 @@ pub trait Logger {
     fn log_enabled(&self) -> bool;
     /// Log a message
     fn log(&mut self, message: &str);
+}
+
+/// Program executor
+pub trait Executor: Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        program_id: &Pubkey,
+        keyed_accounts: &[KeyedAccount],
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+    ) -> Result<(), InstructionError>;
 }

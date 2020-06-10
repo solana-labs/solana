@@ -1,9 +1,10 @@
 use crate::{alloc, BPFError};
 use alloc::Alloc;
 use solana_rbpf::{
-    ebpf::{EbpfError, SyscallObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
+    ebpf::{ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
+    error::EbpfError,
     memory_region::{translate_addr, MemoryRegion},
-    EbpfVm,
+    vm::{EbpfVm, SyscallObject},
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
@@ -1282,7 +1283,7 @@ mod tests {
         assert_eq!(
             Err(EbpfError::AccessViolation(
                 "programs/bpf_loader/src/syscalls.rs".to_string(),
-                247,
+                248,
                 100,
                 32,
                 "  regions: \n0x64-0x73".to_string()

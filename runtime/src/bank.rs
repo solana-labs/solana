@@ -13,7 +13,7 @@ use crate::{
     builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
-    message_processor::MessageProcessor,
+    message_processor::{Executors, MessageProcessor},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -35,7 +35,9 @@ use solana_sdk::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
-    entrypoint_native::{ComputeBudget, ProcessInstruction, ProcessInstructionWithContext},
+    entrypoint_native::{
+        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
+    },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -44,6 +46,7 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
+    message::Message,
     native_loader,
     native_token::sol_to_lamports,
     nonce,
@@ -141,6 +144,12 @@ impl Builtin {
             entrypoint,
         }
     }
+}
+
+const CACHED_EXECUTOR_LIFETIME_EPOCHS: u64 = 5;
+struct CachedExecutor {
+    epoch: u64,
+    executor: Arc<dyn Executor>,
 }
 
 #[derive(Default)]
@@ -458,6 +467,9 @@ pub struct Bank {
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
+
+    /// Cached executors
+    cached_executors: Arc<RwLock<HashMap<Pubkey, CachedExecutor>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -577,6 +589,7 @@ impl Bank {
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
+            cached_executors: parent.cached_executors.clone(),
         };
 
         datapoint_info!(
@@ -604,6 +617,14 @@ impl Bank {
         new.update_fees();
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
+        }
+
+        // Remove old executors from the cache
+        {
+            let mut cached_executors = new.cached_executors.write().unwrap();
+            cached_executors.retain(|_, cached_executor| {
+                new.epoch - cached_executor.epoch <= CACHED_EXECUTOR_LIFETIME_EPOCHS
+            });
         }
 
         new
@@ -679,6 +700,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
+            cached_executors: Arc::new(RwLock::new(HashMap::default())),
         };
         bank.finish_init(genesis_config);
 
@@ -1809,6 +1831,53 @@ impl Bank {
             });
     }
 
+    /// Get any cached executors needed by the transaction
+    fn get_executors(
+        &self,
+        message: &Message,
+        loaders: &[Vec<(Pubkey, Account)>],
+    ) -> Rc<RefCell<Executors>> {
+        let mut num_executors = message.account_keys.len();
+        for instruction_loaders in loaders.iter() {
+            num_executors += instruction_loaders.len();
+        }
+        let mut executors: HashMap<Pubkey, Arc<dyn Executor>> =
+            HashMap::with_capacity(num_executors);
+        let cached_executors = self.cached_executors.read().unwrap();
+
+        for key in message.account_keys.iter() {
+            if let Some(cached_executor) = cached_executors.get(key) {
+                executors.insert(*key, cached_executor.executor.clone());
+            }
+        }
+        for instruction_loaders in loaders.iter() {
+            for (key, _) in instruction_loaders.iter() {
+                if let Some(cached_executor) = cached_executors.get(key) {
+                    executors.insert(*key, cached_executor.executor.clone());
+                }
+            }
+        }
+
+        Rc::new(RefCell::new(Executors {
+            executors,
+            is_dirty: false,
+        }))
+    }
+
+    /// Add executors back to the bank's cache if modified
+    fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
+        let executors = executors.borrow();
+        if executors.is_dirty {
+            let mut cached_executors = self.cached_executors.write().unwrap();
+            for (key, executor) in executors.executors.iter() {
+                cached_executors.entry(*key).or_insert(CachedExecutor {
+                    epoch: self.epoch,
+                    executor: (*executor).clone(),
+                });
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -1866,6 +1935,8 @@ impl Bank {
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
+                    let executors = self.get_executors(&tx.message, &loaders);
+
                     let (account_refcells, loader_refcells) =
                         Self::accounts_to_refcells(accounts, loaders);
 
@@ -1875,6 +1946,7 @@ impl Bank {
                         &account_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
+                        executors.clone(),
                     );
 
                     Self::refcells_to_accounts(
@@ -1883,6 +1955,8 @@ impl Bank {
                         account_refcells,
                         loader_refcells,
                     );
+
+                    self.update_executors(executors);
 
                     if let Err(TransactionError::InstructionError(_, _)) = &process_result {
                         error_counters.instruction_error += 1;
@@ -3484,6 +3558,7 @@ mod tests {
         account::KeyedAccount,
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        entrypoint_native::InvokeContext,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -8656,5 +8731,93 @@ mod tests {
         } else {
             info!("NOT-asserting overflowing capitalization for bank0");
         }
+    }
+
+    #[test]
+    fn test_bank_executor_cache() {
+        solana_logger::setup();
+
+        struct TestExecutor {}
+        impl Executor for TestExecutor {
+            fn execute(
+                &self,
+                _program_id: &Pubkey,
+                _keyed_accounts: &[KeyedAccount],
+                _instruction_data: &[u8],
+                _invoke_context: &mut dyn InvokeContext,
+            ) -> std::result::Result<(), InstructionError> {
+                Ok(())
+            }
+        }
+
+        let (genesis_config, _) = create_genesis_config(1);
+        let bank = Bank::new(&genesis_config);
+
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key1, key2],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+
+        let loaders = &[
+            vec![(key3, Account::default()), (key4, Account::default())],
+            vec![(key1, Account::default())],
+        ];
+
+        // don't do any work if not dirty
+        let mut executors = Executors::default();
+        executors.insert(key1, executor.clone());
+        executors.insert(key2, executor.clone());
+        executors.insert(key3, executor.clone());
+        executors.insert(key4, executor.clone());
+        let executors = Rc::new(RefCell::new(executors));
+        executors.borrow_mut().is_dirty = false;
+        bank.update_executors(executors.clone());
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 0);
+
+        // do work
+        let mut executors = Executors::default();
+        executors.insert(key1, executor.clone());
+        executors.insert(key2, executor.clone());
+        executors.insert(key3, executor.clone());
+        executors.insert(key4, executor.clone());
+        let executors = Rc::new(RefCell::new(executors));
+        bank.update_executors(executors);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 4);
+        assert!(executors.borrow().executors.contains_key(&key1));
+        assert!(executors.borrow().executors.contains_key(&key2));
+        assert!(executors.borrow().executors.contains_key(&key3));
+        assert!(executors.borrow().executors.contains_key(&key4));
+
+        // Check inheritance
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::new_rand(), 1);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 4);
+        assert!(executors.borrow().executors.contains_key(&key1));
+        assert!(executors.borrow().executors.contains_key(&key2));
+        assert!(executors.borrow().executors.contains_key(&key3));
+        assert!(executors.borrow().executors.contains_key(&key4));
+
+        // Expire cache
+        let bank = Bank::new_from_parent(
+            &Arc::new(bank),
+            &Pubkey::new_rand(),
+            DEFAULT_SLOTS_PER_EPOCH * CACHED_EXECUTOR_LIFETIME_EPOCHS + 1,
+        );
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 0);
     }
 }
