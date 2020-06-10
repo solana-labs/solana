@@ -173,14 +173,6 @@ impl CrdsGossipPush {
     /// pruned the source addresses.
     pub fn new_push_messages(&mut self, crds: &Crds, now: u64) -> HashMap<Pubkey, Vec<CrdsValue>> {
         let max = self.active_set.len();
-        let mut nodes: Vec<_> = (0..max).collect();
-        nodes.shuffle(&mut rand::thread_rng());
-        let peers: Vec<Pubkey> = nodes
-            .into_iter()
-            .filter_map(|n| self.active_set.get_index(n))
-            .take(self.push_fanout)
-            .map(|n| *n.0)
-            .collect();
         let mut total_bytes: usize = 0;
         let mut values = vec![];
         let mut push_messages: HashMap<Pubkey, Vec<CrdsValue>> = HashMap::new();
@@ -204,10 +196,14 @@ impl CrdsGossipPush {
             values.push(value.clone());
         }
         for v in values {
-            for p in peers.iter() {
-                let filter = self.active_set.get_mut(p);
-                if filter.is_some() && !filter.unwrap().contains(&v.label().pubkey()) {
+            let mut max = 0;
+            for (p, filter) in self.active_set.iter() {
+                if !filter.unwrap().contains(&v.label().pubkey()) {
+                    max = max + 1;
                     push_messages.entry(*p).or_default().push(v.clone());
+                }
+                if max == self.num_fanout {
+                    break;
                 }
             }
             self.push_messages.remove(&v.label());
