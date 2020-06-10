@@ -5,7 +5,7 @@ use solana_core::cluster_info;
 use solana_core::contact_info::ContactInfo;
 use solana_core::crds_gossip::*;
 use solana_core::crds_gossip_error::CrdsGossipError;
-use solana_core::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+use solana_core::crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
 use solana_core::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
 use solana_core::crds_value::CrdsValueLabel;
 use solana_core::crds_value::{CrdsData, CrdsValue};
@@ -447,14 +447,14 @@ fn network_run_pull(
                 bytes += serialized_size(&rsp).unwrap() as usize;
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
-                    node.lock()
-                        .unwrap()
-                        .mark_pull_request_creation_time(&from, now);
-                    overhead += node
-                        .lock()
-                        .unwrap()
-                        .process_pull_response(&from, &timeouts, rsp, now)
-                        .0;
+                    let mut node = node.lock().unwrap();
+                    node.mark_pull_request_creation_time(&from, now);
+                    let mut stats = ProcessPullStats::default();
+                    let (vers, vers_expired_timeout) =
+                        node.filter_pull_responses(&timeouts, rsp, now, &mut stats);
+                    node.process_pull_responses(&from, vers, vers_expired_timeout, now, &mut stats);
+                    overhead += stats.failed_insert;
+                    overhead += stats.failed_timeout;
                 }
                 (bytes, msgs, overhead)
             })
