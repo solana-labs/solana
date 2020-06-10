@@ -63,6 +63,7 @@ use std::{
     mem,
     ops::RangeInclusive,
     path::PathBuf,
+    ptr,
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
@@ -2508,6 +2509,9 @@ impl Bank {
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {
+        if ptr::eq(self, dbank) {
+            return;
+        }
         assert_eq!(self.slot, dbank.slot);
         assert_eq!(self.collector_id, dbank.collector_id);
         assert_eq!(self.epoch_schedule, dbank.epoch_schedule);
@@ -2523,21 +2527,29 @@ impl Bank {
             dbank.is_delta.load(Ordering::Relaxed)
         );
 
-        let st = self.stakes.read().unwrap();
-        let dst = dbank.stakes.read().unwrap();
-        assert_eq!(*st, *dst);
+        {
+            let bh = self.hash.read().unwrap();
+            let dbh = dbank.hash.read().unwrap();
+            assert_eq!(*bh, *dbh);
+        }
 
-        let bh = self.hash.read().unwrap();
-        let dbh = dbank.hash.read().unwrap();
-        assert_eq!(*bh, *dbh);
+        {
+            let st = self.stakes.read().unwrap();
+            let dst = dbank.stakes.read().unwrap();
+            assert_eq!(*st, *dst);
+        }
 
-        let bhq = self.blockhash_queue.read().unwrap();
-        let dbhq = dbank.blockhash_queue.read().unwrap();
-        assert_eq!(*bhq, *dbhq);
+        {
+            let bhq = self.blockhash_queue.read().unwrap();
+            let dbhq = dbank.blockhash_queue.read().unwrap();
+            assert_eq!(*bhq, *dbhq);
+        }
 
-        let sc = self.src.status_cache.read().unwrap();
-        let dsc = dbank.src.status_cache.read().unwrap();
-        assert_eq!(*sc, *dsc);
+        {
+            let sc = self.src.status_cache.read().unwrap();
+            let dsc = dbank.src.status_cache.read().unwrap();
+            assert_eq!(*sc, *dsc);
+        }
         assert_eq!(
             self.rc.accounts.bank_hash_at(self.slot),
             dbank.rc.accounts.bank_hash_at(dbank.slot)
