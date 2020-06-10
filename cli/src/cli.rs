@@ -400,6 +400,10 @@ pub enum CliCommand {
         vote_account_pubkey: Pubkey,
         new_identity_account: SignerIndex,
     },
+    VoteUpdateCommission {
+        vote_account_pubkey: Pubkey,
+        commission: u8,
+    },
     // Wallet Commands
     Address,
     Airdrop {
@@ -724,6 +728,9 @@ pub fn parse_command(
         }
         ("vote-update-validator", Some(matches)) => {
             parse_vote_update_validator(matches, default_signer_path, wallet_manager)
+        }
+        ("vote-update-commission", Some(matches)) => {
+            parse_vote_update_commission(matches, default_signer_path, wallet_manager)
         }
         ("vote-authorize-voter", Some(matches)) => parse_vote_authorize(
             matches,
@@ -2159,6 +2166,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &vote_account_pubkey,
             *new_identity_account,
         ),
+        CliCommand::VoteUpdateCommission {
+            vote_account_pubkey,
+            commission,
+        } => process_vote_update_commission(&rpc_client, config, &vote_account_pubkey, *commission),
 
         // Wallet Commands
 
