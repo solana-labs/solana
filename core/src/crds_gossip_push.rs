@@ -198,11 +198,11 @@ impl CrdsGossipPush {
         for v in values {
             let mut max = 0;
             for (p, filter) in self.active_set.iter() {
-                if !filter.unwrap().contains(&v.label().pubkey()) {
+                if !filter.contains(&v.label().pubkey()) {
                     max = max + 1;
                     push_messages.entry(*p).or_default().push(v.clone());
                 }
-                if max == self.num_fanout {
+                if max == self.push_fanout {
                     break;
                 }
             }
