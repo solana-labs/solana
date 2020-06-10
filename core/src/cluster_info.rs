@@ -16,7 +16,7 @@ use crate::{
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+    crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
         Version, Vote, MAX_WALLCLOCK,
@@ -213,11 +213,13 @@ struct GossipStats {
     new_push_requests: Counter,
     new_push_requests2: Counter,
     new_push_requests_num: Counter,
+    filter_pull_response: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
     process_pull_response_len: Counter,
     process_pull_response_timeout: Counter,
-    process_pull_response_fail: Counter,
+    process_pull_response_fail_insert: Counter,
+    process_pull_response_fail_timeout: Counter,
     process_pull_response_success: Counter,
     process_pull_requests: Counter,
     generate_pull_responses: Counter,
@@ -1398,8 +1400,13 @@ impl ClusterInfo {
     fn generate_new_gossip_requests(
         &self,
         stakes: &HashMap<Pubkey, u64>,
+        generate_pull_requests: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
-        let pulls: Vec<_> = self.new_pull_requests(stakes);
+        let pulls: Vec<_> = if generate_pull_requests {
+            self.new_pull_requests(stakes)
+        } else {
+            vec![]
+        };
         let pushes: Vec<_> = self.new_push_requests();
         vec![pulls, pushes].into_iter().flatten().collect()
     }
@@ -1410,8 +1417,9 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         sender: &PacketSender,
+        generate_pull_requests: bool,
     ) -> Result<()> {
-        let reqs = obj.generate_new_gossip_requests(&stakes);
+        let reqs = obj.generate_new_gossip_requests(&stakes, generate_pull_requests);
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
             sender.send(packets)?;
@@ -1496,6 +1504,7 @@ impl ClusterInfo {
 
                 let message = CrdsData::Version(Version::new(obj.id()));
                 obj.push_message(CrdsValue::new_signed(message, &obj.keypair));
+                let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
                     thread_mem_usage::datapoint("solana-gossip");
@@ -1512,7 +1521,8 @@ impl ClusterInfo {
                         None => HashMap::new(),
                     };
 
-                    let _ = Self::run_gossip(&obj, &recycler, &stakes, &sender);
+                    let _ =
+                        Self::run_gossip(&obj, &recycler, &stakes, &sender, generate_pull_requests);
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
@@ -1532,6 +1542,7 @@ impl ClusterInfo {
                         let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                         sleep(Duration::from_millis(time_left));
                     }
+                    generate_pull_requests = !generate_pull_requests;
                 }
             })
             .unwrap()
@@ -1550,6 +1561,7 @@ impl ClusterInfo {
         let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
         let timeouts = me.gossip.read().unwrap().make_timeouts(&stakes, epoch_ms);
+        let mut pull_responses = HashMap::new();
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
@@ -1597,7 +1609,8 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        Self::handle_pull_response(me, &from, data, &timeouts);
+                        let pull_entry = pull_responses.entry(from).or_insert_with(Vec::new);
+                        pull_entry.extend(data);
                         datapoint_debug!(
                             "solana-gossip-listen-memory",
                             ("pull_response", (allocated.get() - start) as i64, i64),
@@ -1659,6 +1672,11 @@ impl ClusterInfo {
                     }
                 })
         });
+
+        for (from, data) in pull_responses {
+            Self::handle_pull_response(me, &from, data, &timeouts);
+        }
+
         // process the collected pulls together
         let rsp = Self::handle_pull_requests(me, recycler, gossip_pull_data, stakes);
         if let Some(rsp) = rsp {
@@ -1827,9 +1845,21 @@ impl ClusterInfo {
         }
         let filtered_len = crds_values.len();
 
-        let (fail, timeout_count, success) = me
-            .time_gossip_write_lock("process_pull", &me.stats.process_pull_response)
-            .process_pull_response(from, timeouts, crds_values, timestamp());
+        let mut pull_stats = ProcessPullStats::default();
+        let (filtered_pulls, filtered_pulls_expired_timeout) = me
+            .time_gossip_read_lock("filter_pull_resp", &me.stats.filter_pull_response)
+            .filter_pull_responses(timeouts, crds_values, timestamp(), &mut pull_stats);
+
+        if !filtered_pulls.is_empty() || !filtered_pulls_expired_timeout.is_empty() {
+            me.time_gossip_write_lock("process_pull_resp", &me.stats.process_pull_response)
+                .process_pull_responses(
+                    from,
+                    filtered_pulls,
+                    filtered_pulls_expired_timeout,
+                    timestamp(),
+                    &mut pull_stats,
+                );
+        }
 
         me.stats
             .skip_pull_response_shred_version
@@ -1840,13 +1870,22 @@ impl ClusterInfo {
             .add_relaxed(filtered_len as u64);
         me.stats
             .process_pull_response_timeout
-            .add_relaxed(timeout_count as u64);
-        me.stats.process_pull_response_fail.add_relaxed(fail as u64);
+            .add_relaxed(pull_stats.timeout_count as u64);
+        me.stats
+            .process_pull_response_fail_insert
+            .add_relaxed(pull_stats.failed_insert as u64);
+        me.stats
+            .process_pull_response_fail_timeout
+            .add_relaxed(pull_stats.failed_timeout as u64);
         me.stats
             .process_pull_response_success
-            .add_relaxed(success as u64);
+            .add_relaxed(pull_stats.success as u64);
 
-        (fail, timeout_count, success)
+        (
+            pull_stats.failed_insert + pull_stats.failed_timeout,
+            pull_stats.timeout_count,
+            pull_stats.success,
+        )
     }
 
     fn filter_by_shred_version(
@@ -2044,8 +2083,23 @@ impl ClusterInfo {
                     i64
                 ),
                 (
+                    "filter_pull_resp",
+                    self.stats.filter_pull_response.clear(),
+                    i64
+                ),
+                (
                     "process_pull_resp_count",
                     self.stats.process_pull_response_count.clear(),
+                    i64
+                ),
+                (
+                    "pull_response_fail_insert",
+                    self.stats.process_pull_response_fail_insert.clear(),
+                    i64
+                ),
+                (
+                    "pull_response_fail_timeout",
+                    self.stats.process_pull_response_fail_timeout.clear(),
                     i64
                 ),
                 (
@@ -2456,6 +2510,7 @@ mod tests {
 
     #[test]
     fn test_handle_pull() {
+        solana_logger::setup();
         let node = Node::new_localhost();
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
 
@@ -2550,7 +2605,7 @@ mod tests {
             .write()
             .unwrap()
             .refresh_push_active_set(&HashMap::new());
-        let reqs = cluster_info.generate_new_gossip_requests(&HashMap::new());
+        let reqs = cluster_info.generate_new_gossip_requests(&HashMap::new(), true);
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
             let res = ContactInfo::is_valid_address(addr);
