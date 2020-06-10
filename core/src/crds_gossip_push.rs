@@ -5,7 +5,7 @@
 //!
 //! Main differences are:
 //! 1. There is no `max hop`.  Messages are signed with a local wallclock.  If they are outside of
-//!    the local nodes wallclock window they are drooped silently.
+//!    the local nodes wallclock window they are dropped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
 use crate::{
