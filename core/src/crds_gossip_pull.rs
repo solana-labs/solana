@@ -10,7 +10,7 @@
 //! of false positives.
 
 use crate::contact_info::ContactInfo;
-use crate::crds::Crds;
+use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
@@ -20,8 +20,8 @@ use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet};
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // The maximum age of a value received over pull responses
@@ -116,6 +116,14 @@ impl CrdsFilter {
         }
         self.filter.contains(item)
     }
+}
+
+#[derive(Default)]
+pub struct ProcessPullStats {
+    pub success: usize,
+    pub failed_insert: usize,
+    pub failed_timeout: usize,
+    pub timeout_count: usize,
 }
 
 #[derive(Clone)]
@@ -231,19 +239,22 @@ impl CrdsGossipPull {
         self.filter_crds_values(crds, requests)
     }
 
-    /// process a pull response
-    pub fn process_pull_response(
-        &mut self,
-        crds: &mut Crds,
-        from: &Pubkey,
+    // Checks if responses should be inserted and
+    // returns those responses converted to VersionedCrdsValue
+    // Separated in two vecs as:
+    //  .0 => responses that update the owner timestamp
+    //  .1 => responses that do not update the owner timestamp
+    pub fn filter_pull_responses(
+        &self,
+        crds: &Crds,
         timeouts: &HashMap<Pubkey, u64>,
-        response: Vec<CrdsValue>,
+        responses: Vec<CrdsValue>,
         now: u64,
-    ) -> (usize, usize, usize) {
-        let mut failed = 0;
-        let mut timeout_count = 0;
-        let mut success = 0;
-        for r in response {
+        stats: &mut ProcessPullStats,
+    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>) {
+        let mut versioned = vec![];
+        let mut versioned_expired_timestamp = vec![];
+        for r in responses {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
             if now
@@ -262,8 +273,8 @@ impl CrdsGossipPull {
                         if now > r.wallclock().checked_add(timeout).unwrap_or_else(|| 0)
                             || now + timeout < r.wallclock()
                         {
-                            timeout_count += 1;
-                            failed += 1;
+                            stats.timeout_count += 1;
+                            stats.failed_timeout += 1;
                             continue;
                         }
                     }
@@ -271,33 +282,62 @@ impl CrdsGossipPull {
                         // Before discarding this value, check if a ContactInfo for the owner
                         // exists in the table. If it doesn't, that implies that this value can be discarded
                         if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
-                            timeout_count += 1;
-                            failed += 1;
+                            stats.timeout_count += 1;
+                            stats.failed_timeout += 1;
                             continue;
                         } else {
                             // Silently insert this old value without bumping record timestamps
-                            failed += crds.insert(r, now).is_err() as usize;
+                            match crds.would_insert(r, now) {
+                                Some(resp) => versioned_expired_timestamp.push(resp),
+                                None => stats.failed_insert += 1,
+                            }
                             continue;
                         }
                     }
                 }
             }
-            let old = crds.insert(r, now);
+            match crds.would_insert(r, now) {
+                Some(resp) => versioned.push(resp),
+                None => stats.failed_insert += 1,
+            }
+        }
+        (versioned, versioned_expired_timestamp)
+    }
+
+    /// process a vec of pull responses
+    pub fn process_pull_responses(
+        &mut self,
+        crds: &mut Crds,
+        from: &Pubkey,
+        responses: Vec<VersionedCrdsValue>,
+        responses_expired_timeout: Vec<VersionedCrdsValue>,
+        now: u64,
+        stats: &mut ProcessPullStats,
+    ) {
+        let mut owners = HashSet::new();
+        for r in responses_expired_timeout {
+            stats.failed_insert += crds.insert_versioned(r).is_err() as usize;
+        }
+        for r in responses {
+            let owner = r.value.label().pubkey();
+            let old = crds.insert_versioned(r);
             if old.is_err() {
-                failed += 1;
+                stats.failed_insert += 1;
             } else {
-                success += 1;
+                stats.success += 1;
             }
             old.ok().map(|opt| {
-                crds.update_record_timestamp(&owner, now);
+                owners.insert(owner);
                 opt.map(|val| {
                     self.purged_values
                         .push_back((val.value_hash, val.local_timestamp))
                 })
             });
         }
-        crds.update_record_timestamp(from, now);
-        (failed, timeout_count, success)
+        owners.insert(*from);
+        for owner in owners {
+            crds.update_record_timestamp(&owner, now);
+        }
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
@@ -386,6 +426,34 @@ impl CrdsGossipPull {
             .take_while(|v| v.1 < min_ts)
             .count();
         self.purged_values.drain(..cnt);
+    }
+
+    /// For legacy tests
+    #[cfg(test)]
+    pub fn process_pull_response(
+        &mut self,
+        crds: &mut Crds,
+        from: &Pubkey,
+        timeouts: &HashMap<Pubkey, u64>,
+        response: Vec<CrdsValue>,
+        now: u64,
+    ) -> (usize, usize, usize) {
+        let mut stats = ProcessPullStats::default();
+        let (versioned, versioned_expired_timeout) =
+            self.filter_pull_responses(crds, timeouts, response, now, &mut stats);
+        self.process_pull_responses(
+            crds,
+            from,
+            versioned,
+            versioned_expired_timeout,
+            now,
+            &mut stats,
+        );
+        (
+            stats.failed_timeout + stats.failed_insert,
+            stats.timeout_count,
+            stats.success,
+        )
     }
 }
 #[cfg(test)]

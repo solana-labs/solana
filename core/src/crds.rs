@@ -93,6 +93,24 @@ impl Crds {
     pub fn new_versioned(&self, local_timestamp: u64, value: CrdsValue) -> VersionedCrdsValue {
         VersionedCrdsValue::new(local_timestamp, value)
     }
+    pub fn would_insert(
+        &self,
+        value: CrdsValue,
+        local_timestamp: u64,
+    ) -> Option<VersionedCrdsValue> {
+        let new_value = self.new_versioned(local_timestamp, value);
+        let label = new_value.value.label();
+        let would_insert = self
+            .table
+            .get(&label)
+            .map(|current| new_value > *current)
+            .unwrap_or(true);
+        if would_insert {
+            Some(new_value)
+        } else {
+            None
+        }
+    }
     /// insert the new value, returns the old value if insert succeeds
     pub fn insert_versioned(
         &mut self,
