@@ -42,7 +42,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard},
     time::Instant,
 };
 use tempfile::TempDir;
@@ -964,10 +964,21 @@ impl AccountsDB {
         F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
         B: Send + Default,
     {
-        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-            .storage
-            .read()
-            .unwrap()
+        self.scan_account_storage_inner(slot, scan_func, &self.storage.read().unwrap())
+    }
+
+    // The input storage must come from self.storage.read().unwrap()
+    fn scan_account_storage_inner<F, B>(
+        &self,
+        slot: Slot,
+        scan_func: F,
+        storage: &RwLockReadGuard<AccountStorage>,
+    ) -> Vec<B>
+    where
+        F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
+        B: Send + Default,
+    {
+        let storage_maps: Vec<Arc<AccountStorageEntry>> = storage
             .0
             .get(&slot)
             .unwrap_or(&HashMap::new())
@@ -1806,10 +1817,10 @@ impl AccountsDB {
     }
 
     pub fn generate_index(&self) {
+        let mut accounts_index = self.accounts_index.write().unwrap();
         let storage = self.storage.read().unwrap();
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
-        let mut accounts_index = self.accounts_index.write().unwrap();
 
         let mut last_log_update = Instant::now();
         for (index, slot) in slots.iter().enumerate() {
@@ -1820,7 +1831,7 @@ impl AccountsDB {
             }
 
             let accumulator: Vec<HashMap<Pubkey, Vec<(u64, AccountInfo)>>> = self
-                .scan_account_storage(
+                .scan_account_storage_inner(
                     *slot,
                     |stored_account: &StoredAccount,
                      store_id: AppendVecId,
@@ -1835,6 +1846,7 @@ impl AccountsDB {
                             .or_insert_with(Vec::new);
                         entry.push((stored_account.meta.write_version, account_info));
                     },
+                    &storage,
                 );
 
             let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
