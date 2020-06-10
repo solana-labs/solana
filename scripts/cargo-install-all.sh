@@ -109,12 +109,14 @@ done
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
+  $cargo $maybeRustVersion build $maybeReleaseFlag --bins
 )
 
 mkdir -p "$installDir/bin"
-for bin in "${BINS[@]}"; do
-  cp -fv "target/$buildVariant/$bin" "$installDir"/bin
+for bin in "target/$buildVariant/"*; do
+  if [[ "$bin" =~ /solana(-[^./]+)*$ ]]; then
+    cp -fv "$bin" "$installDir"/bin
+  fi
 done
 
 if [[ -d target/perf-libs ]]; then
