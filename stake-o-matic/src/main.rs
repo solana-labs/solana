@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exi
 use log::*;
 use solana_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
-    input_validators::{is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
+    input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
 };
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
@@ -36,6 +36,7 @@ use std::{
 
 mod validator_list;
 
+#[derive(Debug)]
 struct Config {
     json_rpc_url: String,
     cluster: String,
@@ -139,6 +140,22 @@ fn get_config() -> Config {
                 .validator(is_valid_percentage)
                 .help("Quality validators produce a block in at least this percentage of their leader slots over the previous epoch")
         )
+        .arg(
+            Arg::with_name("baseline_stake_amount")
+                .long("baseline-stake-amount")
+                .value_name("SOL")
+                .takes_value(true)
+                .default_value("5000")
+                .validator(is_amount)
+        )
+        .arg(
+            Arg::with_name("bonus_stake_amount")
+                .long("bonus-stake-amount")
+                .value_name("SOL")
+                .takes_value(true)
+                .default_value("50000")
+                .validator(is_amount)
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -153,6 +170,9 @@ fn get_config() -> Config {
     let cluster = value_t!(matches, "cluster", String).unwrap_or_else(|_| "unknown".into());
     let quality_block_producer_percentage =
         value_t_or_exit!(matches, "quality_block_producer_percentage", usize);
+    let baseline_stake_amount =
+        sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
+    let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -200,8 +220,8 @@ fn get_config() -> Config {
         authorized_staker,
         validator_list,
         dry_run,
-        baseline_stake_amount: sol_to_lamports(5000.),
-        bonus_stake_amount: sol_to_lamports(50_000.),
+        baseline_stake_amount,
+        bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
     };
