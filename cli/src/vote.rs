@@ -162,6 +162,35 @@ impl VoteSubCommands for App<'_, '_> {
                 )
         )
         .subcommand(
+            SubCommand::with_name("vote-update-commission")
+                .about("Update the vote account's commission")
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Vote account to update. "),
+                )
+                .arg(
+                    Arg::with_name("commission")
+                        .index(2)
+                        .value_name("PERCENTAGE")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_percentage)
+                        .help("The new commission")
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer")
+                        .index(3)
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Authorized withdrawer keypair"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("vote-account")
                 .about("Show the contents of a vote account")
                 .alias("show-vote-account")
@@ -304,6 +333,33 @@ pub fn parse_vote_update_validator(
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account: signer_info.index_of(new_identity_pubkey).unwrap(),
+        },
+        signers: signer_info.signers,
+    })
+}
+
+pub fn parse_vote_update_commission(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let vote_account_pubkey =
+        pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
+    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+    let commission = value_t_or_exit!(matches, "commission", u8);
+
+    let payer_provided = None;
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, authorized_withdrawer],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::VoteUpdateCommission {
+            vote_account_pubkey,
+            commission,
         },
         signers: signer_info.signers,
     })
@@ -506,6 +562,33 @@ pub fn process_vote_update_validator(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
         &new_identity_pubkey,
+    )];
+
+    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&config.signers, recent_blockhash)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.signers[0].pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    log_instruction_custom_error::<VoteError>(result, &config)
+}
+
+pub fn process_vote_update_commission(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    vote_account_pubkey: &Pubkey,
+    commission: u8,
+) -> ProcessResult {
+    let authorized_withdrawer = config.signers[1];
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![vote_instruction::update_commission(
+        vote_account_pubkey,
+        &authorized_withdrawer.pubkey(),
+        commission,
     )];
 
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
@@ -838,6 +921,27 @@ mod tests {
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
                     read_keypair_file(&identity_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let test_update_commission = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-update-commission",
+            &pubkey_string,
+            "42",
+            &keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_update_commission, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteUpdateCommission {
+                    vote_account_pubkey: pubkey,
+                    commission: 42,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
                 ],
             }
         );

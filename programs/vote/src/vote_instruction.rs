@@ -93,6 +93,13 @@ pub enum VoteInstruction {
     ///   2. [SIGNER] Withdraw authority
     UpdateValidatorIdentity,
 
+    /// Update the commission for the vote account
+    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to be updated
+    ///   1. [SIGNER] Withdraw authority
+    UpdateCommission(u8),
+
     /// A Vote instruction with recent votes
     ///
     /// # Account references
@@ -190,6 +197,23 @@ pub fn update_validator_identity(
     )
 }
 
+pub fn update_commission(
+    vote_pubkey: &Pubkey,
+    authorized_withdrawer_pubkey: &Pubkey,
+    commission: u8,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
+    ];
+
+    Instruction::new(
+        id(),
+        &VoteInstruction::UpdateCommission(commission),
+        account_metas,
+    )
+}
+
 pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
@@ -271,6 +295,9 @@ pub fn process_instruction(
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
         ),
+        VoteInstruction::UpdateCommission(commission) => {
+            vote_state::update_commission(me, commission, &signers)
+        }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
@@ -377,6 +404,14 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&update_commission(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                0,
             )),
             Err(InstructionError::InvalidAccountData),
         );
