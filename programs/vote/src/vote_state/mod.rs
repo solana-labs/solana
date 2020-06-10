@@ -597,6 +597,23 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
     vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
+/// Update the vote account's commission
+pub fn update_commission<S: std::hash::BuildHasher>(
+    vote_account: &KeyedAccount,
+    commission: u8,
+    signers: &HashSet<Pubkey, S>,
+) -> Result<(), InstructionError> {
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+
+    // current authorized withdrawer must say "yay"
+    verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
+
+    vote_state.commission = commission;
+
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+}
+
 fn verify_authorized_signer<S: std::hash::BuildHasher>(
     authorized: &Pubkey,
     signers: &HashSet<Pubkey, S>,
@@ -995,6 +1012,50 @@ mod tests {
             .unwrap()
             .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
+    }
+
+    #[test]
+    fn test_vote_update_commission() {
+        let (vote_pubkey, _authorized_voter, authorized_withdrawer, vote_account) =
+            create_test_account_with_authorized();
+
+        let authorized_withdrawer_account = RefCell::new(Account::default());
+
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(
+                &authorized_withdrawer,
+                false,
+                &authorized_withdrawer_account,
+            ),
+        ];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let res = update_commission(&keyed_accounts[0], 42, &signers);
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
+        ];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let res = update_commission(&keyed_accounts[0], 42, &signers);
+        assert_eq!(res, Ok(()));
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
+        assert_eq!(vote_state.commission, 42);
+
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
+        ];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let res = update_commission(&keyed_accounts[0], u8::MAX, &signers);
+        assert_eq!(res, Ok(()));
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
+        assert_eq!(vote_state.commission, u8::MAX);
     }
 
     #[test]
