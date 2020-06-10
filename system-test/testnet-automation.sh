@@ -120,19 +120,15 @@ function launch_testnet() {
   fi
 
   execution_step "Starting bootstrap node and ${NUMBER_OF_VALIDATOR_NODES} validator nodes"
-  if [[ -n $CHANNEL ]]; then
-    # shellcheck disable=SC2068
-    # shellcheck disable=SC2086
-    "${REPO_ROOT}"/net/net.sh start -t "$CHANNEL" \
-      -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode
-  else
-    # shellcheck disable=SC2068
-    # shellcheck disable=SC2086
-    "${REPO_ROOT}"/net/net.sh start -T solana-release*.tar.bz2 \
-      -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode
-  fi
+
+  declare -g version_args
+  get_net_launch_software_version_launch_args "$CHANNEL" "solana-release" version_args
+
+  # shellcheck disable=SC2068
+  # shellcheck disable=SC2086
+  "${REPO_ROOT}"/net/net.sh start $version_args \
+    -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
+    --gpu-mode $startGpuMode
 
   execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
   wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
@@ -286,11 +282,6 @@ done
 if [[ -n $missingParameters ]]; then
   echo "Error: For test type $TEST_TYPE, the following required parameters are missing: ${missingParameters[*]}"
   exit 1
-fi
-
-if [[ -z $CHANNEL ]]; then
-  execution_step "Downloading tar from build artifacts"
-  buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
