@@ -6,7 +6,7 @@
 use crate::{
     crds::{Crds, VersionedCrdsValue},
     crds_gossip_error::CrdsGossipError,
-    crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
+    crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
     crds_value::{CrdsValue, CrdsValueLabel},
 };
@@ -170,16 +170,34 @@ impl CrdsGossip {
         self.pull.generate_pull_responses(&self.crds, filters)
     }
 
-    /// process a pull response
-    pub fn process_pull_response(
-        &mut self,
-        from: &Pubkey,
+    pub fn filter_pull_responses(
+        &self,
         timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
-    ) -> (usize, usize, usize) {
+        process_pull_stats: &mut ProcessPullStats,
+    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>) {
         self.pull
-            .process_pull_response(&mut self.crds, from, timeouts, response, now)
+            .filter_pull_responses(&self.crds, timeouts, response, now, process_pull_stats)
+    }
+
+    /// process a pull response
+    pub fn process_pull_responses(
+        &mut self,
+        from: &Pubkey,
+        responses: Vec<VersionedCrdsValue>,
+        responses_expired_timeout: Vec<VersionedCrdsValue>,
+        now: u64,
+        process_pull_stats: &mut ProcessPullStats,
+    ) {
+        self.pull.process_pull_responses(
+            &mut self.crds,
+            from,
+            responses,
+            responses_expired_timeout,
+            now,
+            process_pull_stats,
+        )
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
