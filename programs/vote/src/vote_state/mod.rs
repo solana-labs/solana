@@ -613,6 +613,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     lamports: u64,
     to_account: &KeyedAccount,
+    rent: &Rent,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
@@ -625,6 +626,9 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     }
     vote_account.try_account_ref_mut()?.lamports -= lamports;
     to_account.try_account_ref_mut()?.lamports += lamports;
+    if vote_account.lamports() < Self::get_rent_exempt_reserve(rent) {
+        return Err(InstructionError::InsufficientFunds);
+    }
     Ok(())
 }
 

@@ -16,7 +16,7 @@ use solana_sdk::{
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
+    sysvar::{self, rent::Rent, clock::Clock, slot_hashes::SlotHashes, Sysvar},
 };
 use std::collections::HashSet;
 use thiserror::Error;
@@ -83,6 +83,7 @@ pub enum VoteInstruction {
     ///   0. [WRITE] Vote account to withdraw from
     ///   1. [WRITE] Recipient account
     ///   2. [SIGNER] Withdraw authority
+    ///   3. [] Rent sysvar
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node_pubkey)
@@ -231,6 +232,7 @@ pub fn withdraw(
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(*to_pubkey, false),
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
+        AccountMeta::new_readonly(sysvar::rent::id(), false),
     ];
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
@@ -283,7 +285,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = next_keyed_account(keyed_accounts)?;
-            vote_state::withdraw(me, lamports, to, &signers)
+            vote_state::withdraw(me, lamports, to, &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?, &signers)
         }
     }
 }
