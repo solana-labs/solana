@@ -2103,6 +2103,11 @@ impl ClusterInfo {
                     i64
                 ),
                 (
+                    "pull_response_success",
+                    self.stats.process_pull_response_success.clear(),
+                    i64
+                ),
+                (
                     "process_pull_resp_timeout",
                     self.stats.process_pull_response_timeout.clear(),
                     i64
