@@ -249,3 +249,16 @@ EOF
   --data "$payLoad" \
   "$SLACK_WEBHOOK_URL"
 }
+
+function get_net_launch_software_version_launch_args() {
+  declare channel="${1?}"
+  declare artifact_basename="${2?}"
+  declare return_varname="${3:?}"
+  if [[ -n $channel ]]; then
+    eval "$return_varname=-t\ \$channel"
+  else
+    execution_step "Downloading tar from build artifacts (${artifact_basename})"
+    buildkite-agent artifact download "${artifact_basename}*.tar.bz2" .
+    eval "$return_varname=-T\ \${artifact_basename}*.tar.bz2"
+  fi
+}
