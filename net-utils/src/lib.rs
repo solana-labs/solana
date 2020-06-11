@@ -2,6 +2,7 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::mpsc::channel;
@@ -9,7 +10,7 @@ use std::time::Duration;
 
 mod ip_echo_server;
 use ip_echo_server::IpEchoServerMessage;
-pub use ip_echo_server::{ip_echo_server, IpEchoServer};
+pub use ip_echo_server::{ip_echo_server, IpEchoServer, MAX_PORT_COUNT_PER_MESSAGE};
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
@@ -97,20 +98,15 @@ pub fn verify_reachable_ports(
     tcp_listeners: Vec<(u16, TcpListener)>,
     udp_sockets: &[&UdpSocket],
 ) -> bool {
-    let udp_ports: Vec<_> = udp_sockets
-        .iter()
-        .map(|udp_socket| udp_socket.local_addr().unwrap().port())
-        .collect();
-
     info!(
-        "Checking that tcp ports {:?} and udp ports {:?} are reachable from {:?}",
-        tcp_listeners, udp_ports, ip_echo_server_addr
+        "Checking that tcp ports {:?} from {:?}",
+        tcp_listeners, ip_echo_server_addr
     );
 
     let tcp_ports: Vec<_> = tcp_listeners.iter().map(|(port, _)| *port).collect();
     let _ = ip_echo_server_request(
         ip_echo_server_addr,
-        IpEchoServerMessage::new(&tcp_ports, &udp_ports),
+        IpEchoServerMessage::new(&tcp_ports, &[]),
     )
     .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
@@ -147,49 +143,89 @@ pub fn verify_reachable_ports(
         return ok;
     }
 
-    for udp_remaining_retry in (0_usize..5).rev() {
-        // Wait for a datagram to arrive at each UDP port
-        for udp_socket in udp_sockets {
-            let port = udp_socket.local_addr().unwrap().port();
-            let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
-            let (sender, receiver) = channel();
-            std::thread::spawn(move || {
-                let mut buf = [0; 1];
-                debug!("Waiting for incoming datagram on udp/{}", port);
-                match udp_socket.recv(&mut buf) {
-                    Ok(_) => sender
-                        .send(())
-                        .unwrap_or_else(|err| warn!("send failure: {}", err)),
-                    Err(err) => warn!("udp recv failure: {}", err),
-                }
-            });
-            match receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok(_) => {
-                    info!("udp/{} is reachable", port);
-                }
-                Err(err) => {
-                    error!(
-                        "Received no response at udp/{}, check your port configuration: {}",
-                        port, err
-                    );
-                    ok = false;
-                }
-            }
-        }
-        if ok {
-            break;
-        }
+    let mut udp_ports: HashMap<_, _> = HashMap::new();
+    udp_sockets.iter().for_each(|udp_socket| {
+        let port = udp_socket.local_addr().unwrap().port();
+        udp_ports
+            .entry(port)
+            .or_insert_with(Vec::new)
+            .push(udp_socket);
+    });
+    let udp_ports: Vec<_> = udp_ports.into_iter().collect();
 
-        if udp_remaining_retry > 0 {
-            // Might have lost a UDP packet, retry a couple times
-            ok = true;
-            let _ = ip_echo_server_request(
-                ip_echo_server_addr,
-                IpEchoServerMessage::new(&[], &udp_ports),
-            )
-            .map_err(|err| warn!("ip_echo_server request failed: {}", err));
-        } else {
-            error!("maximum retry count is reached....");
+    info!(
+        "Checking that udp ports {:?} are reachable from {:?}",
+        udp_ports.iter().map(|(port, _)| port).collect::<Vec<_>>(),
+        ip_echo_server_addr
+    );
+
+    ok = false;
+
+    for checked_ports_and_sockets in udp_ports.chunks(MAX_PORT_COUNT_PER_MESSAGE) {
+        for udp_remaining_retry in (0_usize..5).rev() {
+            let (checked_ports, checked_socket_iter) = (
+                checked_ports_and_sockets
+                    .iter()
+                    .map(|(port, _)| *port)
+                    .collect::<Vec<_>>(),
+                checked_ports_and_sockets
+                    .iter()
+                    .map(|(_, sockets)| sockets)
+                    .flatten(),
+            );
+
+            if udp_remaining_retry > 0 {
+                // Might have lost a UDP packet, retry a couple times
+                let _ = ip_echo_server_request(
+                    ip_echo_server_addr,
+                    IpEchoServerMessage::new(&[], &checked_ports),
+                )
+                .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+            } else {
+                error!("Maximum retry count is reached....");
+                return false;
+            }
+
+            let results: Vec<_> = checked_socket_iter
+                .map(|udp_socket| {
+                    let port = udp_socket.local_addr().unwrap().port();
+                    let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
+                    std::thread::spawn(move || {
+                        let mut buf = [0; 1];
+                        let original_read_timeout = udp_socket.read_timeout().unwrap();
+                        udp_socket
+                            .set_read_timeout(Some(Duration::from_secs(5)))
+                            .unwrap();
+                        let recv_result = udp_socket.recv(&mut buf).map(|_| port);
+                        debug!(
+                            "Waited for incoming datagram on udp/{}: {:?}",
+                            port, recv_result
+                        );
+                        udp_socket.set_read_timeout(original_read_timeout).unwrap();
+                        recv_result.ok()
+                    })
+                })
+                .collect();
+
+            let opened_ports: HashSet<_> = results
+                .into_iter()
+                .filter_map(|t| t.join().unwrap())
+                .collect();
+
+            if opened_ports.len() == checked_ports.len() {
+                info!(
+                    "checked ports: {:?}, opened ports: {:?}",
+                    checked_ports, opened_ports
+                );
+                ok = true;
+                break;
+            } else {
+                error!(
+                    "checked ports: {:?}, opened ports: {:?}",
+                    checked_ports, opened_ports
+                );
+                error!("There are some ports with no response!! Retrying...");
+            }
         }
     }
 
