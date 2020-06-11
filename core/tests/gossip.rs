@@ -268,13 +268,19 @@ pub fn cluster_info_scale() {
         }
     }*/
 
-    for num_votes in 1..10 {
+    for num_votes in 1..20 {
         nodes[0].0.push_vote(0, test_tx());
         let mut success = false;
         for s in 0..(30 * 5) {
             done = true;
             for (i, node) in nodes.iter().enumerate() {
-                warn!("s: {} {} node {} votes: {}", num_votes, s, i, node.0.get_votes(0).1.len());
+                warn!(
+                    "s: {} {} node {} votes: {}",
+                    num_votes,
+                    s,
+                    i,
+                    node.0.get_votes(0).1.len()
+                );
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 if node.0.get_votes(0).1.len() != num_votes {
                     done = false;
@@ -288,7 +294,10 @@ pub fn cluster_info_scale() {
             sleep(Duration::from_millis(200));
         }
         time.stop();
-        warn!("propagated vote {} in {} success: {}", num_votes, time, success);
+        warn!(
+            "propagated vote {} in {} success: {}",
+            num_votes, time, success
+        );
     }
 
     exit.store(true, Ordering::Relaxed);

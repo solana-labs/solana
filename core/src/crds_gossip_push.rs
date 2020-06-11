@@ -204,18 +204,21 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
-        for v in values {
-            let mut max = 0;
-            for (p, filter) in self.active_set.iter() {
-                if !filter.contains(&v.label().pubkey()) {
-                    max += 1;
-                    push_messages.entry(*p).or_default().push(v.clone());
-                }
-                if max == self.push_fanout {
-                    break;
+        if !self.active_set.is_empty() {
+            for v in values {
+                //use a consistant index for the same origin so
+                //the active set learns the MST for that origin
+                let start = v.label().pubkey().as_ref()[0] as usize;
+                for i in start..(start + self.push_fanout) {
+                    let ix = i % self.active_set.len();
+                    if let Some((p, filter)) = self.active_set.get_index(ix) {
+                        if !filter.contains(&v.label().pubkey()) {
+                            push_messages.entry(*p).or_default().push(v.clone());
+                        }
+                    }
+                    self.push_messages.remove(&v.label());
                 }
             }
-            self.push_messages.remove(&v.label());
         }
         push_messages
     }
