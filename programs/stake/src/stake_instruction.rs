@@ -33,6 +33,12 @@ pub enum StakeError {
 
     #[error("split amount is more than is staked")]
     InsufficientStake,
+
+    #[error("stake account with activated stake cannot be merged")]
+    MergeActivatedStake,
+
+    #[error("stake account merge failed due to different authority or lockups")]
+    MergeMismatch,
 }
 
 impl<E> DecodeError<E> for StakeError {
@@ -113,6 +119,17 @@ pub enum StakeInstruction {
     ///   0. [WRITE] Initialized stake account
     ///   1. [SIGNER] Lockup authority
     SetLockup(LockupArgs),
+
+    /// Merge two stake accounts. Both accounts must be deactivated and have identical lockup and
+    /// authority keys.
+    ///
+    /// # Account references
+    ///   0. [WRITE] Destination stake account for the merge
+    ///   1. [WRITE] Source stake account for to merge.  This account will be drained
+    ///   2. [] Clock sysvar
+    ///   3. [] Stake history sysvar that carries stake warmup/cooldown history
+    ///   4. [SIGNER] Stake authority
+    Merge,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -238,6 +255,26 @@ pub fn split_with_seed(
             split_stake_pubkey,
         ),
     ]
+}
+
+pub fn merge(
+    destination_stake_pubkey: &Pubkey,
+    source_stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+) -> Vec<Instruction> {
+    let account_metas = vec![
+        AccountMeta::new(*destination_stake_pubkey, false),
+        AccountMeta::new(*source_stake_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
+
+    vec![Instruction::new(
+        id(),
+        &StakeInstruction::Merge,
+        account_metas,
+    )]
 }
 
 pub fn create_account_and_delegate_stake(
@@ -399,6 +436,15 @@ pub fn process_instruction(
             let split_stake = &next_keyed_account(keyed_accounts)?;
             me.split(lamports, split_stake, &signers)
         }
+        StakeInstruction::Merge => {
+            let source_stake = &next_keyed_account(keyed_accounts)?;
+            me.merge(
+                source_stake,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &signers,
+            )
+        }
 
         StakeInstruction::Withdraw(lamports) => {
             let to = &next_keyed_account(keyed_accounts)?;
@@ -489,6 +535,12 @@ mod tests {
                     100,
                     &Pubkey::default()
                 )[1]
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(
+                &merge(&Pubkey::default(), &Pubkey::default(), &Pubkey::default(),)[0]
             ),
             Err(InstructionError::InvalidAccountData),
         );
