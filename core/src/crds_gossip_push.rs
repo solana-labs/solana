@@ -153,7 +153,7 @@ impl CrdsGossipPush {
         let value_hash = new_value.value_hash;
         if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
             received_set.insert(*from);
-            return Err(CrdsGossipError::PushMessageAlreadyReceived);
+            return Ok(Some(new_value));
         }
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
@@ -163,7 +163,7 @@ impl CrdsGossipPush {
         received_set.insert(*from);
         self.push_messages.insert(label, value_hash);
         self.received_cache.insert(value_hash, (now, received_set));
-        Ok(old.ok().and_then(|opt| opt))
+        Ok(None)
     }
 
     /// push pull responses
@@ -430,9 +430,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Ok(Some(_))
         );
     }
     #[test]
@@ -754,9 +754,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Ok(Some(_))
         );
 
         // purge the old pushed
