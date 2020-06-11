@@ -1115,7 +1115,7 @@ pub fn main() {
             &node.sockets.repair,
             &node.sockets.serve_repair,
         ];
-        udp_sockets.extend(node.sockets.tpu.iter().take(3));
+        udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
