@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1535,
-  "iteration": 1591462812079,
+  "id": 1547,
+  "iteration": 1591834899194,
   "links": [
     {
       "asDropdown": true,
@@ -46,6 +46,19 @@
   ],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 69,
+      "panels": [],
+      "title": "Summary",
+      "type": "row"
+    },
+    {
       "cacheTimeout": null,
       "colorBackground": false,
       "colorValue": false,
@@ -67,7 +80,7 @@
         "h": 2,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 1,
       "interval": null,
@@ -180,7 +193,7 @@
         "h": 2,
         "w": 2,
         "x": 12,
-        "y": 0
+        "y": 1
       },
       "id": 2,
       "interval": null,
@@ -281,7 +294,7 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 0
+        "y": 1
       },
       "id": 3,
       "legend": {
@@ -409,7 +422,7 @@
         "h": 2,
         "w": 4,
         "x": 0,
-        "y": 2
+        "y": 3
       },
       "id": 4,
       "interval": null,
@@ -521,7 +534,7 @@
         "h": 2,
         "w": 4,
         "x": 4,
-        "y": 2
+        "y": 3
       },
       "id": 5,
       "interval": null,
@@ -633,7 +646,7 @@
         "h": 2,
         "w": 3,
         "x": 8,
-        "y": 2
+        "y": 3
       },
       "id": 6,
       "interval": null,
@@ -745,7 +758,7 @@
         "h": 2,
         "w": 3,
         "x": 11,
-        "y": 2
+        "y": 3
       },
       "id": 7,
       "interval": null,
@@ -857,7 +870,7 @@
         "h": 2,
         "w": 3,
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "id": 8,
       "interval": null,
@@ -968,7 +981,7 @@
         "h": 2,
         "w": 3,
         "x": 3,
-        "y": 4
+        "y": 5
       },
       "id": 9,
       "interval": null,
@@ -1079,7 +1092,7 @@
         "h": 2,
         "w": 3,
         "x": 6,
-        "y": 4
+        "y": 5
       },
       "id": 10,
       "interval": null,
@@ -1190,7 +1203,7 @@
         "h": 2,
         "w": 2,
         "x": 9,
-        "y": 4
+        "y": 5
       },
       "id": 11,
       "interval": null,
@@ -1301,7 +1314,7 @@
         "h": 2,
         "w": 3,
         "x": 11,
-        "y": 4
+        "y": 5
       },
       "id": 12,
       "interval": null,
@@ -1402,7 +1415,7 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 5
+        "y": 6
       },
       "id": 13,
       "legend": {
@@ -1558,7 +1571,7 @@
         "h": 9,
         "w": 14,
         "x": 0,
-        "y": 6
+        "y": 7
       },
       "id": 14,
       "legend": {
@@ -1824,7 +1837,7 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 10
+        "y": 11
       },
       "id": 15,
       "legend": {
@@ -1936,7 +1949,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 16
       },
       "id": 16,
       "panels": [],
@@ -1954,7 +1967,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 16
+        "y": 17
       },
       "id": 17,
       "legend": {
@@ -2110,7 +2123,7 @@
         "h": 6,
         "w": 7,
         "x": 8,
-        "y": 16
+        "y": 17
       },
       "id": 18,
       "legend": {
@@ -2346,7 +2359,7 @@
         "h": 2,
         "w": 4,
         "x": 15,
-        "y": 16
+        "y": 17
       },
       "id": 19,
       "interval": null,
@@ -2457,7 +2470,7 @@
         "h": 2,
         "w": 3,
         "x": 19,
-        "y": 16
+        "y": 17
       },
       "id": 20,
       "interval": null,
@@ -2568,7 +2581,7 @@
         "h": 2,
         "w": 2,
         "x": 22,
-        "y": 16
+        "y": 17
       },
       "id": 21,
       "interval": null,
@@ -2668,7 +2681,7 @@
         "h": 4,
         "w": 5,
         "x": 15,
-        "y": 18
+        "y": 19
       },
       "id": 22,
       "legend": {
@@ -2786,7 +2799,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 18
+        "y": 19
       },
       "id": 23,
       "legend": {
@@ -2904,7 +2917,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 19
+        "y": 20
       },
       "id": 24,
       "legend": {
@@ -3057,7 +3070,7 @@
         "h": 6,
         "w": 15,
         "x": 0,
-        "y": 22
+        "y": 23
       },
       "id": 25,
       "links": [],
@@ -3145,7 +3158,7 @@
         "h": 6,
         "w": 9,
         "x": 15,
-        "y": 22
+        "y": 23
       },
       "id": 26,
       "legend": {
@@ -3626,7 +3639,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 28
+        "y": 29
       },
       "id": 27,
       "links": [],
@@ -3711,7 +3724,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 28
+        "y": 29
       },
       "id": 28,
       "links": [],
@@ -3796,7 +3809,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 28
+        "y": 29
       },
       "id": 29,
       "links": [],
@@ -3879,7 +3892,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 35
       },
       "id": 30,
       "panels": [],
@@ -3897,7 +3910,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 35
+        "y": 36
       },
       "id": 31,
       "legend": {
@@ -4136,7 +4149,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 35
+        "y": 36
       },
       "id": 32,
       "legend": {
@@ -4418,7 +4431,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 35
+        "y": 36
       },
       "id": 33,
       "legend": {
@@ -4629,7 +4642,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 41
+        "y": 42
       },
       "id": 34,
       "legend": {
@@ -4996,7 +5009,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 41
+        "y": 42
       },
       "id": 35,
       "legend": {
@@ -5168,7 +5181,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 41
+        "y": 42
       },
       "id": 36,
       "legend": {
@@ -5489,7 +5502,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 47
+        "y": 48
       },
       "id": 37,
       "legend": {
@@ -5919,7 +5932,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 47
+        "y": 48
       },
       "id": 38,
       "legend": {
@@ -6152,7 +6165,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 47
+        "y": 48
       },
       "id": 39,
       "legend": {
@@ -6478,7 +6491,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 53
+        "y": 54
       },
       "id": 40,
       "legend": {
@@ -6780,7 +6793,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 53
+        "y": 54
       },
       "id": 41,
       "legend": {
@@ -6933,7 +6946,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 53
+        "y": 54
       },
       "id": 42,
       "legend": {
@@ -7050,7 +7063,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 58
+        "y": 59
       },
       "id": 43,
       "legend": {
@@ -7209,7 +7222,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 58
+        "y": 59
       },
       "id": 44,
       "legend": {
@@ -7325,7 +7338,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 58
+        "y": 59
       },
       "id": 45,
       "legend": {
@@ -7443,9 +7456,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 64
+        "y": 65
       },
-      "id": 66,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7645,9 +7658,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 64
+        "y": 65
       },
-      "id": 67,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8069,9 +8082,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 71
       },
-      "id": 46,
+      "id": 48,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -8092,9 +8105,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 71
+        "y": 72
       },
-      "id": 47,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8252,9 +8265,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 71
+        "y": 72
       },
-      "id": 48,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8412,9 +8425,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 71
+        "y": 72
       },
-      "id": 49,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8597,9 +8610,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 77
       },
-      "id": 50,
+      "id": 52,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -8616,9 +8629,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 77
+        "y": 78
       },
-      "id": 51,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8849,9 +8862,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 77
+        "y": 78
       },
-      "id": 52,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9002,9 +9015,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 83
       },
-      "id": 53,
+      "id": 55,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -9020,9 +9033,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 84
       },
-      "id": 54,
+      "id": 56,
       "legend": {
         "avg": false,
         "current": false,
@@ -9222,9 +9235,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 84
       },
-      "id": 55,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9371,9 +9384,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 89
       },
-      "id": 56,
+      "id": 58,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -9389,9 +9402,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 89
+        "y": 90
       },
-      "id": 57,
+      "id": 59,
       "legend": {
         "avg": false,
         "current": false,
@@ -9581,9 +9594,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 89
+        "y": 90
       },
-      "id": 58,
+      "id": 60,
       "legend": {
         "avg": false,
         "current": false,
@@ -9849,9 +9862,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 89
+        "y": 90
       },
-      "id": 59,
+      "id": 61,
       "legend": {
         "avg": false,
         "current": false,
@@ -10043,9 +10056,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 95
+        "y": 96
       },
-      "id": 60,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -10234,9 +10247,408 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 101
+        "y": 102
       },
-      "id": 61,
+      "id": 71,
+      "panels": [],
+      "title": "RPC Send Transaction Service",
+      "type": "row"
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 103
+      },
+      "id": 72,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 3,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"len\" )  FROM \"$testnet\".\"autogen\".\"send_transaction_service-queue-size\" WHERE $timeFilter GROUP BY time(5s)\n\n\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Pending Transaction Queue Size",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 103
+      },
+      "id": 73,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 0,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 3,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"count\") as \"Transaction Retried\" FROM \"$testnet\".\"autogen\".\"send_transaction_service-retry\" WHERE $timeFilter GROUP BY time($__interval)\n\n\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"count\")  as \"Transaction Rooted\" FROM \"$testnet\".\"autogen\".\"send_transaction_service-rooted\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"count\")  as \"Transaction Expired\" FROM \"$testnet\".\"autogen\".\"send_transaction_service-expired\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"count\")  as \"Transaction Enqueued\" FROM \"$testnet\".\"autogen\".\"send_transaction_service-enqueue\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT COUNT(\"count\")  as \"Transaction Execution Failed\" FROM \"$testnet\".\"autogen\".\"send_transaction_service-failed\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Transaction Events",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": "0.1",
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 109
+      },
+      "id": 63,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -10252,9 +10664,9 @@
         "h": 5,
         "w": 7,
         "x": 0,
-        "y": 102
+        "y": 110
       },
-      "id": 62,
+      "id": 64,
       "legend": {
         "avg": false,
         "current": false,
@@ -10367,9 +10779,9 @@
         "h": 5,
         "w": 7,
         "x": 7,
-        "y": 102
+        "y": 110
       },
-      "id": 63,
+      "id": 65,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10592,9 +11004,9 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 102
+        "y": 110
       },
-      "id": 64,
+      "id": 66,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -10680,9 +11092,9 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 107
+        "y": 115
       },
-      "id": 65,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
