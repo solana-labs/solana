@@ -2538,10 +2538,6 @@ impl Bank {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
 
-    fn process_stale_slot(&self) -> usize {
-        self.rc.accounts.accounts_db.process_stale_slot()
-    }
-
     pub fn shrink_all_slots(&self) {
         self.rc.accounts.accounts_db.shrink_all_slots();
     }
@@ -2552,7 +2548,7 @@ impl Bank {
         budget_recovery_delta: usize,
     ) -> usize {
         if consumed_budget == 0 {
-            let shrunken_account_count = self.process_stale_slot();
+            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot();
             if shrunken_account_count > 0 {
                 datapoint_info!(
                     "stale_slot_shrink",
