@@ -21,6 +21,7 @@ pub enum AccountOperation {
     SplitDestination,
     SystemAccountEnroll,
     FailedToMaintainMinimumBalance,
+    MergeSource,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -169,6 +170,29 @@ fn process_transaction(
                                     }],
                                 };
                                 accounts.insert(split_stake_pubkey, split_account_info);
+                            }
+                        }
+                    }
+                    StakeInstruction::Merge => {
+                        // Merge invalidates the source account, but does not affect the
+                        // destination account
+                        let source_merge_account_index = instruction.accounts[1] as usize;
+
+                        let source_stake_pubkey =
+                            message.account_keys[source_merge_account_index].to_string();
+
+                        if let Some(mut source_account_info) =
+                            accounts.get_mut(&source_stake_pubkey)
+                        {
+                            if source_account_info.compliant_since.is_some() {
+                                source_account_info.compliant_since = None;
+                                source_account_info
+                                    .transactions
+                                    .push(AccountTransactionInfo {
+                                        op: AccountOperation::MergeSource,
+                                        slot,
+                                        signature: signature.clone(),
+                                    });
                             }
                         }
                     }
