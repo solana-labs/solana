@@ -53,6 +53,7 @@ pub struct CrdsGossipPush {
     pub num_dups: usize,
     pub num_total: usize,
     pub num_old: usize,
+    pub num_pushes: usize,
 }
 
 impl Default for CrdsGossipPush {
@@ -70,6 +71,7 @@ impl Default for CrdsGossipPush {
             num_dups: 0,
             num_total: 0,
             num_old: 0,
+            num_pushes: 0,
         }
     }
 }
@@ -223,6 +225,7 @@ impl CrdsGossipPush {
                     if let Some((p, filter)) = self.active_set.get_index(ix) {
                         if !filter.contains(&v.label().pubkey()) {
                             push_messages.entry(*p).or_default().push(v.clone());
+                            self.num_pushes += 1;
                         }
                     }
                     self.push_messages.remove(&v.label());

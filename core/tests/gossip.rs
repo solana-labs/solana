@@ -259,16 +259,8 @@ pub fn cluster_info_scale() {
     time.stop();
     warn!("found {} nodes in {} success: {}", num_nodes, time, success);
 
-    //let num_votes = MAX_VOTES as usize;
-    let num_votes = 1;
-    let mut time = Measure::start("votes");
-    /*for node in &nodes {
-        for i in 0..num_votes {
-            node.0.push_vote(i, test_tx());
-        }
-    }*/
-
     for num_votes in 1..1000 {
+        let mut time = Measure::start("votes");
         let tx = test_tx();
         warn!("tx.message.account_keys: {:?}", tx.message.account_keys);
         nodes[0].0.push_vote(0, tx.clone());
@@ -278,6 +270,7 @@ pub fn cluster_info_scale() {
             let mut num_dups = 0;
             let mut num_old = 0;
             let mut num_total = 0;
+            let mut num_pushes = 0;
             for (i, node) in nodes.iter().enumerate() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
@@ -290,6 +283,7 @@ pub fn cluster_info_scale() {
                 num_dups += node.0.gossip.read().unwrap().push.num_dups;
                 num_old += node.0.gossip.read().unwrap().push.num_old;
                 num_total += node.0.gossip.read().unwrap().push.num_total;
+                num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
                 if has_tx > 0 {
                     not_done += 1;
                 }
@@ -298,6 +292,7 @@ pub fn cluster_info_scale() {
             warn!("num_dups: {}", num_dups);
             warn!("num_old: {}", num_old);
             warn!("num_total: {}", num_total);
+            warn!("num_pushes: {}", num_pushes);
             success = not_done < (nodes.len() / 20);
             if success {
                 break;
@@ -309,6 +304,13 @@ pub fn cluster_info_scale() {
             "propagated vote {} in {} success: {}",
             num_votes, time, success
         );
+        sleep(Duration::from_millis(200));
+        for (i, node) in nodes.iter().enumerate() {
+            node.0.gossip.write().unwrap().push.num_dups = 0;
+            node.0.gossip.write().unwrap().push.num_old = 0;
+            node.0.gossip.write().unwrap().push.num_total = 0;
+            node.0.gossip.write().unwrap().push.num_pushes = 0;
+        }
     }
 
     exit.store(true, Ordering::Relaxed);
