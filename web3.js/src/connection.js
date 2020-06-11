@@ -19,6 +19,8 @@ import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
 
+export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
+
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 /**
@@ -975,7 +977,7 @@ export class Connection {
   _commitment: ?Commitment;
   _blockhashInfo: {
     recentBlockhash: Blockhash | null,
-    seconds: number,
+    lastFetch: Date,
     transactionSignatures: Array<string>,
   };
   _disableBlockhashCaching: boolean = false;
@@ -1011,7 +1013,7 @@ export class Connection {
     this._commitment = commitment;
     this._blockhashInfo = {
       recentBlockhash: null,
-      seconds: -1,
+      lastFetch: new Date(0),
       transactionSignatures: [],
     };
 
@@ -1731,10 +1733,10 @@ export class Connection {
     } else {
       for (;;) {
         // Attempt to use a recent blockhash for up to 30 seconds
-        const seconds = new Date().getSeconds();
         if (
           this._blockhashInfo.recentBlockhash != null &&
-          this._blockhashInfo.seconds < seconds + 30
+          Date.now() - this._blockhashInfo.lastFetch <
+            BLOCKHASH_CACHE_TIMEOUT_MS
         ) {
           transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
           transaction.sign(...signers);
@@ -1748,7 +1750,7 @@ export class Connection {
           if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
             this._blockhashInfo.transactionSignatures.push(signature);
             if (this._disableBlockhashCaching) {
-              this._blockhashInfo.seconds = -1;
+              this._blockhashInfo.lastFetch = new Date(0);
             }
             break;
           }
@@ -1763,7 +1765,7 @@ export class Connection {
           if (this._blockhashInfo.recentBlockhash != blockhash) {
             this._blockhashInfo = {
               recentBlockhash: blockhash,
-              seconds: new Date().getSeconds(),
+              lastFetch: new Date(),
               transactionSignatures: [],
             };
             break;

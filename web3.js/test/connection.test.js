@@ -14,12 +14,11 @@ import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {sleep} from '../src/util/sleep';
+import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
 import type {SignatureStatus, TransactionError} from '../src/connection';
 
-if (!mockRpcEnabled) {
-  // Testing max commitment level takes around 20s to complete
-  jest.setTimeout(30000);
-}
+// Testing blockhash cache takes around 30s to complete
+jest.setTimeout(40000);
 
 const errorMessage = 'Invalid';
 const errorResponse = {
@@ -46,7 +45,7 @@ const verifySignatureStatus = (
 
   const confirmations = status.confirmations;
   if (typeof confirmations === 'number') {
-    expect(confirmations).toBeGreaterThan(0);
+    expect(confirmations).toBeGreaterThanOrEqual(0);
   } else {
     expect(confirmations).toBeNull();
   }
@@ -1633,6 +1632,33 @@ test('transaction', async () => {
   mockRpc.push([
     url,
     {
+      method: 'getSignatureStatuses',
+      params: [
+        [
+          '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: 0,
+            status: {Ok: null},
+            err: null,
+          },
+        ],
+      },
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
       method: 'getBalance',
       params: [accountFrom.publicKey.toBase58(), {commitment: 'recent'}],
     },
@@ -1646,10 +1672,11 @@ test('transaction', async () => {
       },
     },
   ]);
-  await connection.requestAirdrop(
+  const airdropFromSig = await connection.requestAirdrop(
     accountFrom.publicKey,
     minimumAmount + 100010,
   );
+  await connection.confirmTransaction(airdropFromSig, 0);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(
     minimumAmount + 100010,
   );
@@ -1658,12 +1685,39 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey.toBase58(), minimumAmount + 21],
+      params: [accountTo.publicKey.toBase58(), minimumAmount],
     },
     {
       error: null,
       result:
         '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatuses',
+      params: [
+        [
+          '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: 0,
+            status: {Ok: null},
+            err: null,
+          },
+        ],
+      },
     },
   ]);
   mockRpc.push([
@@ -1678,14 +1732,16 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: minimumAmount + 21,
+        value: minimumAmount,
       },
     },
   ]);
-  await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
-  expect(await connection.getBalance(accountTo.publicKey)).toBe(
-    minimumAmount + 21,
+  const airdropToSig = await connection.requestAirdrop(
+    accountTo.publicKey,
+    minimumAmount,
   );
+  await connection.confirmTransaction(airdropToSig, 0);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(minimumAmount);
 
   mockGetRecentBlockhash('max');
   mockRpc.push([
@@ -1696,7 +1752,7 @@ test('transaction', async () => {
     {
       error: null,
       result:
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
 
@@ -1717,7 +1773,7 @@ test('transaction', async () => {
       method: 'getSignatureStatuses',
       params: [
         [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
       ],
     },
@@ -1730,7 +1786,7 @@ test('transaction', async () => {
         value: [
           {
             slot: 0,
-            confirmations: 1,
+            confirmations: 0,
             status: {Ok: null},
             err: null,
           },
@@ -1739,96 +1795,91 @@ test('transaction', async () => {
     },
   ]);
 
-  // Wait for one confirmation
-  const confirmResult = (await connection.confirmTransaction(signature, 1))
-    .value;
+  let confirmResult = (await connection.confirmTransaction(signature, 0)).value;
   verifySignatureStatus(confirmResult);
 
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
+      method: 'sendTransaction',
     },
     {
       error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 11,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
+      result:
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
 
-  const response = verifySignatureStatus(
-    (await connection.getSignatureStatus(signature)).value,
+  // Send again and ensure that new blockhash is used
+  const lastFetch = Date.now();
+  const transaction2 = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 10,
+  });
+  const signature2 = await connection.sendTransaction(
+    transaction2,
+    [accountFrom],
+    {skipPreflight: true},
+  );
+  expect(signature).not.toEqual(signature2);
+  expect(transaction.recentBlockhash).not.toEqual(transaction2.recentBlockhash);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+
+  // Send new transaction and ensure that same blockhash is used
+  const transaction3 = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 9,
+  });
+  await connection.sendTransaction(transaction3, [accountFrom], {
+    skipPreflight: true,
+  });
+  expect(transaction2.recentBlockhash).toEqual(transaction3.recentBlockhash);
+
+  // Sleep until blockhash cache times out
+  await sleep(
+    Math.max(0, 1000 + BLOCKHASH_CACHE_TIMEOUT_MS - (Date.now() - lastFetch)),
   );
 
-  const unprocessedSignature =
-    '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk';
+  mockGetRecentBlockhash('max');
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-          unprocessedSignature,
-        ],
-      ],
+      method: 'sendTransaction',
     },
     {
       error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 11,
-            status: {Ok: null},
-            err: null,
-          },
-          null,
-        ],
-      },
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
 
-  const responses = (
-    await connection.getSignatureStatuses([signature, unprocessedSignature])
-  ).value;
-  expect(responses.length).toEqual(2);
-  expect(responses[1]).toBeNull();
+  const transaction4 = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 13,
+  });
 
-  const firstResponse = verifySignatureStatus(responses[0]);
-  expect(firstResponse.slot).toBeGreaterThanOrEqual(response.slot);
-  expect(firstResponse.err).toEqual(response.err);
+  await connection.sendTransaction(transaction4, [accountFrom], {
+    skipPreflight: true,
+  });
 
-  const responseConfirmations = response.confirmations;
-  if (
-    typeof responseConfirmations === 'number' &&
-    typeof firstResponse.confirmations === 'number'
-  ) {
-    expect(firstResponse.confirmations).toBeGreaterThanOrEqual(
-      responseConfirmations,
-    );
-  } else {
-    expect(firstResponse.confirmations).toBeNull();
-  }
+  expect(transaction4.recentBlockhash).not.toEqual(
+    transaction3.recentBlockhash,
+  );
 
   mockRpc.push([
     url,
@@ -1864,12 +1915,12 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: minimumAmount + 31,
+        value: minimumAmount + 42,
       },
     },
   ]);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(
-    minimumAmount + 31,
+    minimumAmount + 42,
   );
 });
 
@@ -1883,7 +1934,11 @@ test('multi-instruction transaction', async () => {
   const accountTo = new Account();
   const connection = new Connection(url, 'recent');
 
-  await connection.requestAirdrop(accountFrom.publicKey, LAMPORTS_PER_SOL);
+  let signature = await connection.requestAirdrop(
+    accountFrom.publicKey,
+    LAMPORTS_PER_SOL,
+  );
+  await connection.confirmTransaction(signature, 0);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(
     LAMPORTS_PER_SOL,
   );
@@ -1893,7 +1948,11 @@ test('multi-instruction transaction', async () => {
     'recent',
   );
 
-  await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
+  signature = await connection.requestAirdrop(
+    accountTo.publicKey,
+    minimumAmount + 21,
+  );
+  await connection.confirmTransaction(signature, 0);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(
     minimumAmount + 21,
   );
@@ -1911,7 +1970,7 @@ test('multi-instruction transaction', async () => {
       lamports: 100,
     }),
   );
-  const signature = await connection.sendTransaction(
+  signature = await connection.sendTransaction(
     transaction,
     [accountFrom, accountTo],
     {skipPreflight: true},
