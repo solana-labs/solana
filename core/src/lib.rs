@@ -15,6 +15,7 @@ mod deprecated;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
+pub mod bank_weight_fork_choice;
 pub mod cluster_info;
 pub mod cluster_slots;
 pub mod consensus;
@@ -26,8 +27,10 @@ pub mod crds_gossip_push;
 pub mod crds_value;
 pub mod epoch_slots;
 pub mod fetch_stage;
+pub mod fork_choice;
 pub mod gen_keys;
 pub mod gossip_service;
+pub mod heaviest_subtree_fork_choice;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod non_circulating_supply;
