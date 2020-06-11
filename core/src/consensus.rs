@@ -813,7 +813,7 @@ pub mod test {
                 heaviest_fork_failures,
                 ..
             } = ReplayStage::select_vote_and_reset_forks(
-                &vote_bank.clone(),
+                &vote_bank,
                 &None,
                 &ancestors,
                 &descendants,
