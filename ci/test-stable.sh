@@ -13,15 +13,6 @@ annotate() {
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 
-# Skip if only the docs have been modified
-ci/affects-files.sh \
-  \!^docs/ \
-|| {
-  annotate --style info \
-    "Skipped $testName as only docs/ files were modified"
-  exit 0
-}
-
 source ci/rust-version.sh stable
 
 export RUST_BACKTRACE=1
