@@ -148,18 +148,25 @@ macro_rules! declare_loader(
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
-/// Cross-program invocation context passed to loaders
+/// Invocation context passed to loaders
 pub trait InvokeContext {
+    /// Push a program ID on to the invocation stack
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
+    /// Pop a program ID off of the invocation stack
     fn pop(&mut self);
+    /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError>;
+    /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
+    /// Check if logging is enabled
     fn log_enabled(&self) -> bool;
+    /// Log a message
     fn log(&mut self, message: &str);
 }
