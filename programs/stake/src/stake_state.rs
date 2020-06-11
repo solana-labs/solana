@@ -537,6 +537,13 @@ pub trait StakeAccount {
         split_stake: &KeyedAccount,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
+    fn merge(
+        &self,
+        source_stake: &KeyedAccount,
+        clock: &Clock,
+        stake_history: &StakeHistory,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError>;
     fn withdraw(
         &self,
         lamports: u64,
@@ -718,6 +725,51 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         } else {
             Err(InstructionError::InvalidAccountData)
         }
+    }
+
+    fn merge(
+        &self,
+        source_stake: &KeyedAccount,
+        clock: &Clock,
+        stake_history: &StakeHistory,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        let meta = match self.state()? {
+            StakeState::Stake(meta, stake) => {
+                // stake must be fully de-activated
+                if stake.stake(clock.epoch, Some(stake_history)) != 0 {
+                    return Err(StakeError::MergeActivatedStake.into());
+                }
+                meta
+            }
+            StakeState::Initialized(meta) => meta,
+            _ => return Err(InstructionError::InvalidAccountData),
+        };
+        // Authorized staker is allowed to split/merge accounts
+        meta.authorized.check(signers, StakeAuthorize::Staker)?;
+
+        let source_meta = match source_stake.state()? {
+            StakeState::Stake(meta, stake) => {
+                // stake must be fully de-activated
+                if stake.stake(clock.epoch, Some(stake_history)) != 0 {
+                    return Err(StakeError::MergeActivatedStake.into());
+                }
+                meta
+            }
+            StakeState::Initialized(meta) => meta,
+            _ => return Err(InstructionError::InvalidAccountData),
+        };
+
+        // Meta must match for both accounts
+        if meta != source_meta {
+            return Err(StakeError::MergeMismatch.into());
+        }
+
+        // Drain the source stake account
+        let lamports = source_stake.lamports()?;
+        source_stake.try_account_ref_mut()?.lamports -= lamports;
+        self.try_account_ref_mut()?.lamports += lamports;
+        Ok(())
     }
 
     fn withdraw(
@@ -2477,6 +2529,16 @@ mod tests {
                 ..Stake::default()
             }
         }
+        fn just_bootstrap_stake(stake: u64) -> Self {
+            Self {
+                delegation: Delegation {
+                    stake,
+                    activation_epoch: std::u64::MAX,
+                    ..Delegation::default()
+                },
+                ..Stake::default()
+            }
+        }
     }
 
     #[test]
@@ -2800,6 +2862,249 @@ mod tests {
 
             // reset
             stake_keyed_account.account.borrow_mut().lamports = stake_lamports;
+        }
+    }
+
+    #[test]
+    fn test_merge() {
+        let stake_pubkey = Pubkey::new_rand();
+        let source_stake_pubkey = Pubkey::new_rand();
+        let authorized_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let signers = vec![authorized_pubkey].into_iter().collect();
+
+        for state in &[
+            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+            StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_stake(stake_lamports),
+            ),
+        ] {
+            for source_state in &[
+                StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+                StakeState::Stake(
+                    Meta::auto(&authorized_pubkey),
+                    Stake::just_stake(stake_lamports),
+                ),
+            ] {
+                let stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("stake_account");
+                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+                let source_stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    source_state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("source_stake_account");
+                let source_stake_keyed_account =
+                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+
+                // Authorized staker signature required...
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &HashSet::new()
+                    ),
+                    Err(InstructionError::MissingRequiredSignature)
+                );
+
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &signers
+                    ),
+                    Ok(())
+                );
+
+                // check lamports
+                assert_eq!(
+                    stake_keyed_account.account.borrow().lamports,
+                    stake_lamports * 2
+                );
+                assert_eq!(source_stake_keyed_account.account.borrow().lamports, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_incorrect_authorized_staker() {
+        let stake_pubkey = Pubkey::new_rand();
+        let source_stake_pubkey = Pubkey::new_rand();
+        let authorized_pubkey = Pubkey::new_rand();
+        let wrong_authorized_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let signers = vec![authorized_pubkey].into_iter().collect();
+        let wrong_signers = vec![wrong_authorized_pubkey].into_iter().collect();
+
+        for state in &[
+            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+            StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_stake(stake_lamports),
+            ),
+        ] {
+            for source_state in &[
+                StakeState::Initialized(Meta::auto(&wrong_authorized_pubkey)),
+                StakeState::Stake(
+                    Meta::auto(&wrong_authorized_pubkey),
+                    Stake::just_stake(stake_lamports),
+                ),
+            ] {
+                let stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("stake_account");
+                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+                let source_stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    source_state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("source_stake_account");
+                let source_stake_keyed_account =
+                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &wrong_signers,
+                    ),
+                    Err(InstructionError::MissingRequiredSignature)
+                );
+
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &signers,
+                    ),
+                    Err(StakeError::MergeMismatch.into())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_invalid_account_data() {
+        let stake_pubkey = Pubkey::new_rand();
+        let source_stake_pubkey = Pubkey::new_rand();
+        let authorized_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let signers = vec![authorized_pubkey].into_iter().collect();
+
+        for state in &[
+            StakeState::Uninitialized,
+            StakeState::RewardsPool,
+            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+            StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_stake(stake_lamports),
+            ),
+        ] {
+            for source_state in &[StakeState::Uninitialized, StakeState::RewardsPool] {
+                let stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("stake_account");
+                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+                let source_stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    source_state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("source_stake_account");
+                let source_stake_keyed_account =
+                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &signers,
+                    ),
+                    Err(InstructionError::InvalidAccountData)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_active_stake() {
+        let stake_pubkey = Pubkey::new_rand();
+        let source_stake_pubkey = Pubkey::new_rand();
+        let authorized_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let signers = vec![authorized_pubkey].into_iter().collect();
+
+        for state in &[
+            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+            StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_bootstrap_stake(stake_lamports),
+            ),
+        ] {
+            for source_state in &[StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_bootstrap_stake(stake_lamports),
+            )] {
+                let stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("stake_account");
+                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+                let source_stake_account = Account::new_ref_data_with_space(
+                    stake_lamports,
+                    source_state,
+                    std::mem::size_of::<StakeState>(),
+                    &id(),
+                )
+                .expect("source_stake_account");
+                let source_stake_keyed_account =
+                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+
+                // Authorized staker signature required...
+                assert_eq!(
+                    stake_keyed_account.merge(
+                        &source_stake_keyed_account,
+                        &Clock::default(),
+                        &StakeHistory::default(),
+                        &signers,
+                    ),
+                    Err(StakeError::MergeActivatedStake.into())
+                );
+            }
         }
     }
 
