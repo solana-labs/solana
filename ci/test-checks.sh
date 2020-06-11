@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+#
+# cargo fmt, cargo clippy
+#
 set -e
 
 cd "$(dirname "$0")/.."
@@ -10,9 +13,6 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-# Look for failed mergify.io backports
-_ git show HEAD --check --oneline
-
 if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
   true
 else
@@ -22,6 +22,7 @@ else
   exit "$check_status"
 fi
 
+_ ci/order-crates-for-publishing.py
 _ cargo +"$rust_stable" fmt --all -- --check
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
@@ -30,10 +31,6 @@ _ cargo +"$rust_nightly" clippy -Zunstable-options --workspace --all-targets -- 
 
 _ cargo +"$rust_stable" audit --version
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
-_ ci/nits.sh
-_ ci/order-crates-for-publishing.py
-_ docs/build.sh
-_ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
