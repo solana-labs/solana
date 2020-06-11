@@ -53,6 +53,12 @@ export const CACHED_STATUSES: { [key: string]: TransactionStatusInfo } = {
     result: { err: null },
     timestamp: 15901874549,
     confirmations: "max"
+  },
+  "45pGoC4Rr3fJ1TKrsiRkhHRbdUeX7633XAGVec6XzVdpRbzQgHhe6ZC6Uq164MPWtiqMg7wCkC6Wy3jy2BqsDEKf": {
+    slot: 12972684,
+    result: { err: null },
+    timestamp: 1590432412,
+    confirmations: "max"
   }
 };
 
@@ -231,6 +237,38 @@ export const CACHED_DETAILS: { [key: string]: ConfirmedTransaction } = {
       [
         "5K4KuqTTRNtzfpxWiwnkePzGfsa3tBEmpMy7vQFR3KWFAZNVY9tvoSaz1Yt5dKxcgsZPio2EsASVDGbQB1HvirGD",
         "37tvpG1eAeEBizJPhJvmpC2BY8npwy6K1wrZdNwdRAfWSbkerY3ZwYAPMHbrzoq7tthvWC2qFU28niqLPxbukeXF"
+      ]
+    )
+  },
+
+  "45pGoC4Rr3fJ1TKrsiRkhHRbdUeX7633XAGVec6XzVdpRbzQgHhe6ZC6Uq164MPWtiqMg7wCkC6Wy3jy2BqsDEKf": {
+    meta: null,
+    slot: 12972684,
+    transaction: Transaction.populate(
+      new Message({
+        accountKeys: [
+          "6yKHERk8rsbmJxvMpPuwPs1ct3hRiP7xaJF2tvnGU6nK",
+          "3o6xgkJ9sTmDeQWyfj3sxwon18fXJB9PV5LDc8sfgR4a",
+          "1nc1nerator11111111111111111111111111111111",
+          "11111111111111111111111111111111"
+        ],
+        header: {
+          numReadonlySignedAccounts: 0,
+          numReadonlyUnsignedAccounts: 1,
+          numRequiredSignatures: 2
+        },
+        instructions: [
+          {
+            accounts: [1, 2],
+            data: "3Bxs4NNAyLXRbuZZ",
+            programIdIndex: 3
+          }
+        ],
+        recentBlockhash: "2xnatNUtSbeMRwi3k4vxPwXxeKFQYVuCNRg2rAgydWVP"
+      }),
+      [
+        "45pGoC4Rr3fJ1TKrsiRkhHRbdUeX7633XAGVec6XzVdpRbzQgHhe6ZC6Uq164MPWtiqMg7wCkC6Wy3jy2BqsDEKf",
+        "2E7CDMTssxTYkdetCKVWQv9X2KNDPiuZrT2Y7647PhFEXuAWWxmHJb3ryCmP29ocQ1SNc7VyJjjm4X3jE8xWDmGY"
       ]
     )
   }
