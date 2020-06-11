@@ -21,7 +21,7 @@ use solana_vote_program::{
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Bound::{Included, Unbounded},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 #[derive(PartialEq, Clone, Debug)]
@@ -79,6 +79,14 @@ impl StakeLockout {
     }
 }
 
+pub(crate) struct ComputedBankState {
+    pub stake_lockouts: HashMap<Slot, StakeLockout>,
+    pub total_staked: u64,
+    pub bank_weight: u128,
+    pub lockout_intervals: LockoutIntervals,
+    pub pubkey_votes: Vec<(Pubkey, Slot)>,
+}
+
 pub struct Tower {
     node_pubkey: Pubkey,
     threshold_depth: usize,
@@ -102,10 +110,14 @@ impl Default for Tower {
 }
 
 impl Tower {
-    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
+    pub fn new(
+        node_pubkey: &Pubkey,
+        vote_account_pubkey: &Pubkey,
+        root: Slot,
+        heaviest_bank: &Bank,
+    ) -> Self {
         let mut tower = Self::new_with_key(node_pubkey);
-
-        tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
+        tower.initialize_lockouts_from_bank_forks(vote_account_pubkey, root, heaviest_bank);
 
         tower
     }
@@ -126,27 +138,28 @@ impl Tower {
         }
     }
 
-    pub fn collect_vote_lockouts<F>(
-        &self,
+    pub(crate) fn collect_vote_lockouts<F>(
+        node_pubkey: &Pubkey,
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
         all_pubkeys: &mut PubkeyReferences,
-    ) -> (HashMap<Slot, StakeLockout>, u64, u128, LockoutIntervals)
+    ) -> ComputedBankState
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
-        let mut total_stake = 0;
-        let mut total_weight = 0;
+        let mut total_staked = 0;
+        let mut bank_weight = 0;
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = BTreeMap::new();
+        let mut pubkey_votes = vec![];
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
             }
-            trace!("{} {} with stake {}", self.node_pubkey, key, lamports);
+            trace!("{} {} with stake {}", node_pubkey, key, lamports);
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
                 datapoint_warn!(
@@ -169,7 +182,7 @@ impl Tower {
                     .push((vote.slot, key));
             }
 
-            if key == self.node_pubkey || vote_state.node_pubkey == self.node_pubkey {
+            if key == *node_pubkey || vote_state.node_pubkey == *node_pubkey {
                 debug!("vote state {:?}", vote_state);
                 debug!(
                     "observed slot {}",
@@ -188,10 +201,15 @@ impl Tower {
             }
             let start_root = vote_state.root_slot;
 
+            // Add the latest vote to update the `heaviest_subtree_fork_choice`
+            if let Some(latest_vote) = vote_state.votes.back() {
+                pubkey_votes.push((key, latest_vote.slot));
+            }
+
             vote_state.process_slot_vote_unchecked(bank_slot);
 
             for vote in &vote_state.votes {
-                total_weight += vote.lockout() as u128 * lamports as u128;
+                bank_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
@@ -202,7 +220,7 @@ impl Tower {
                         slot: root,
                     };
                     trace!("ROOT: {}", vote.slot);
-                    total_weight += vote.lockout() as u128 * lamports as u128;
+                    bank_weight += vote.lockout() as u128 * lamports as u128;
                     Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
                 }
             }
@@ -211,7 +229,7 @@ impl Tower {
                     confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                     slot: root,
                 };
-                total_weight += vote.lockout() as u128 * lamports as u128;
+                bank_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
@@ -232,9 +250,16 @@ impl Tower {
                 // Update all the parents of this last vote with the stake of this vote account
                 Self::update_ancestor_stakes(&mut stake_lockouts, vote.slot, lamports, ancestors);
             }
-            total_stake += lamports;
+            total_staked += lamports;
         }
-        (stake_lockouts, total_stake, total_weight, lockout_intervals)
+
+        ComputedBankState {
+            stake_lockouts,
+            total_staked,
+            bank_weight,
+            lockout_intervals,
+            pubkey_votes,
+        }
     }
 
     pub fn is_slot_confirmed(
@@ -509,7 +534,7 @@ impl Tower {
     }
 
     /// Update lockouts for all the ancestors
-    fn update_ancestor_lockouts(
+    pub(crate) fn update_ancestor_lockouts(
         stake_lockouts: &mut HashMap<Slot, StakeLockout>,
         vote: &Lockout,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
@@ -529,6 +554,28 @@ impl Tower {
         }
     }
 
+    pub(crate) fn find_heaviest_bank(
+        bank_forks: &RwLock<BankForks>,
+        node_pubkey: &Pubkey,
+    ) -> Option<Arc<Bank>> {
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let mut bank_weights: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .map(|b| {
+                (
+                    Self::bank_weight(node_pubkey, b, &ancestors),
+                    b.parents().len(),
+                    b.clone(),
+                )
+            })
+            .collect();
+        bank_weights.sort_by_key(|b| (b.0, b.1));
+        bank_weights.pop().map(|b| b.2)
+    }
+
     /// Update stake for all the ancestors.
     /// Note, stake is the same for all the ancestor.
     fn update_ancestor_stakes(
@@ -537,9 +584,8 @@ impl Tower {
         lamports: u64,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
     ) {
-        // If there's no ancestors, that means this slot must be from before the current root,
-        // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
-        // this slot
+        // If there's no ancestors, that means this slot must be from
+        // before the current root, so ignore this slot
         let vote_slot_ancestors = ancestors.get(&slot);
         if vote_slot_ancestors.is_none() {
             return;
@@ -552,8 +598,13 @@ impl Tower {
         }
     }
 
-    fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (_, _, bank_weight, _) = self.collect_vote_lockouts(
+    fn bank_weight(
+        node_pubkey: &Pubkey,
+        bank: &Bank,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+    ) -> u128 {
+        let ComputedBankState { bank_weight, .. } = Self::collect_vote_lockouts(
+            node_pubkey,
             bank.slot(),
             bank.vote_accounts().into_iter(),
             ancestors,
@@ -562,47 +613,28 @@ impl Tower {
         bank_weight
     }
 
-    fn find_heaviest_bank(&self, bank_forks: &BankForks) -> Option<Arc<Bank>> {
-        let ancestors = bank_forks.ancestors();
-        let mut bank_weights: Vec<_> = bank_forks
-            .frozen_banks()
-            .values()
-            .map(|b| {
-                (
-                    self.bank_weight(b, &ancestors),
-                    b.parents().len(),
-                    b.clone(),
-                )
-            })
-            .collect();
-        bank_weights.sort_by_key(|b| (b.0, b.1));
-        bank_weights.pop().map(|b| b.2)
-    }
-
     fn initialize_lockouts_from_bank_forks(
         &mut self,
-        bank_forks: &BankForks,
         vote_account_pubkey: &Pubkey,
+        root: Slot,
+        heaviest_bank: &Bank,
     ) {
-        if let Some(bank) = self.find_heaviest_bank(bank_forks) {
-            let root = bank_forks.root();
-            if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-                let mut vote_state = VoteState::deserialize(&vote_account.data)
-                    .expect("vote_account isn't a VoteState?");
-                vote_state.root_slot = Some(root);
-                vote_state.votes.retain(|v| v.slot > root);
-                trace!(
-                    "{} lockouts initialized to {:?}",
-                    self.node_pubkey,
-                    vote_state
-                );
-
-                assert_eq!(
-                    vote_state.node_pubkey, self.node_pubkey,
-                    "vote account's node_pubkey doesn't match",
-                );
-                self.lockouts = vote_state;
-            }
+        if let Some((_stake, vote_account)) = heaviest_bank.vote_accounts().get(vote_account_pubkey)
+        {
+            let mut vote_state = VoteState::deserialize(&vote_account.data)
+                .expect("vote_account isn't a VoteState?");
+            vote_state.root_slot = Some(root);
+            vote_state.votes.retain(|v| v.slot > root);
+            trace!(
+                "{} lockouts initialized to {:?}",
+                self.node_pubkey,
+                vote_state
+            );
+            assert_eq!(
+                vote_state.node_pubkey, self.node_pubkey,
+                "vote account's node_pubkey doesn't match",
+            );
+            self.lockouts = vote_state;
         }
     }
 
@@ -626,10 +658,13 @@ impl Tower {
 pub mod test {
     use super::*;
     use crate::{
+        bank_weight_fork_choice::BankWeightForkChoice,
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
+        fork_choice::SelectVoteAndResetForkResult,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         progress_map::ForkProgress,
-        replay_stage::{HeaviestForkFailures, ReplayStage, SelectVoteAndResetForkResult},
+        replay_stage::{HeaviestForkFailures, ReplayStage},
     };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
@@ -645,7 +680,7 @@ pub mod test {
         signature::{Keypair, Signer},
     };
     use solana_vote_program::{
-        vote_state::{Vote, VoteStateVersions},
+        vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
     };
     use std::{
@@ -662,18 +697,26 @@ pub mod test {
         pub vote_pubkeys: Vec<Pubkey>,
         pub bank_forks: RwLock<BankForks>,
         pub progress: ProgressMap,
+        pub heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
     }
 
     impl VoteSimulator {
         pub(crate) fn new(num_keypairs: usize) -> Self {
-            let (validator_keypairs, node_pubkeys, vote_pubkeys, bank_forks, progress) =
-                Self::init_state(num_keypairs);
+            let (
+                validator_keypairs,
+                node_pubkeys,
+                vote_pubkeys,
+                bank_forks,
+                progress,
+                heaviest_subtree_fork_choice,
+            ) = Self::init_state(num_keypairs);
             Self {
                 validator_keypairs,
                 node_pubkeys,
                 vote_pubkeys,
                 bank_forks: RwLock::new(bank_forks),
                 progress,
+                heaviest_subtree_fork_choice,
             }
         }
         pub(crate) fn fill_bank_forks(
@@ -716,6 +759,8 @@ pub mod test {
                     }
                 }
                 new_bank.freeze();
+                self.heaviest_subtree_fork_choice
+                    .add_new_leaf_slot(new_bank.slot(), Some(new_bank.parent_slot()));
                 self.bank_forks.write().unwrap().insert(new_bank);
                 walk.forward();
             }
@@ -750,6 +795,8 @@ pub mod test {
                 &ClusterSlots::default(),
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
+                &mut self.heaviest_subtree_fork_choice,
+                &mut BankWeightForkChoice::default(),
             );
 
             let vote_bank = self
@@ -766,7 +813,7 @@ pub mod test {
                 heaviest_fork_failures,
                 ..
             } = ReplayStage::select_vote_and_reset_forks(
-                &Some(vote_bank.clone()),
+                &vote_bank.clone(),
                 &None,
                 &ancestors,
                 &descendants,
@@ -795,6 +842,7 @@ pub mod test {
                 &None,
                 &mut PubkeyReferences::default(),
                 None,
+                &mut self.heaviest_subtree_fork_choice,
             )
         }
 
@@ -880,6 +928,7 @@ pub mod test {
             Vec<Pubkey>,
             BankForks,
             ProgressMap,
+            HeaviestSubtreeForkChoice,
         ) {
             let keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
                 let node_keypair = Keypair::new();
@@ -902,8 +951,16 @@ pub mod test {
                 .map(|keys| keys.vote_keypair.pubkey())
                 .collect();
 
-            let (bank_forks, progress) = initialize_state(&keypairs, 10_000);
-            (keypairs, node_pubkeys, vote_pubkeys, bank_forks, progress)
+            let (bank_forks, progress, heaviest_subtree_fork_choice) =
+                initialize_state(&keypairs, 10_000);
+            (
+                keypairs,
+                node_pubkeys,
+                vote_pubkeys,
+                bank_forks,
+                progress,
+                heaviest_subtree_fork_choice,
+            )
         }
     }
 
@@ -911,7 +968,7 @@ pub mod test {
     pub(crate) fn initialize_state(
         validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
         stake: u64,
-    ) -> (BankForks, ProgressMap) {
+    ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
         let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
             genesis_config,
@@ -931,7 +988,10 @@ pub mod test {
             0,
             ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
         );
-        (BankForks::new(0, bank0), progress)
+        let bank_forks = BankForks::new(0, bank0);
+        let heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
+        (bank_forks, progress, heaviest_subtree_fork_choice)
     }
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
@@ -1291,20 +1351,32 @@ pub mod test {
     #[test]
     fn test_collect_vote_lockouts_sums() {
         //two accounts voting for slot 0 with 1 token staked
-        let accounts = gen_stakes(&[(1, &[0]), (1, &[0])]);
-        let tower = Tower::new_for_tests(0, 0.67);
+        let mut accounts = gen_stakes(&[(1, &[0]), (1, &[0])]);
+        accounts.sort_by_key(|(pk, _)| *pk);
+        let account_latest_votes: Vec<(Pubkey, Slot)> =
+            accounts.iter().map(|(pubkey, _)| (*pubkey, 0)).collect();
+
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let (staked_lockouts, total_staked, bank_weight, _) = tower.collect_vote_lockouts(
+        let ComputedBankState {
+            stake_lockouts,
+            total_staked,
+            bank_weight,
+            mut pubkey_votes,
+            ..
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             1,
             accounts.into_iter(),
             &ancestors,
             &mut PubkeyReferences::default(),
         );
-        assert_eq!(staked_lockouts[&0].stake, 2);
-        assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
+        assert_eq!(stake_lockouts[&0].stake, 2);
+        assert_eq!(stake_lockouts[&0].lockout, 2 + 2 + 4 + 4);
         assert_eq!(total_staked, 2);
+        pubkey_votes.sort();
+        assert_eq!(pubkey_votes, account_latest_votes);
 
         // Each acccount has 1 vote in it. After simulating a vote in collect_vote_lockouts,
         // the account will have 2 votes, with lockout 2 + 4 = 6. So expected weight for
@@ -1316,7 +1388,12 @@ pub mod test {
     fn test_collect_vote_lockouts_root() {
         let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).collect();
         //two accounts voting for slots 0..MAX_LOCKOUT_HISTORY with 1 token staked
-        let accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
+        let mut accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
+        accounts.sort_by_key(|(pk, _)| *pk);
+        let account_latest_votes: Vec<(Pubkey, Slot)> = accounts
+            .iter()
+            .map(|(pubkey, _)| (*pubkey, (MAX_LOCKOUT_HISTORY - 1) as Slot))
+            .collect();
         let mut tower = Tower::new_for_tests(0, 0.67);
         let mut ancestors = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
@@ -1337,18 +1414,27 @@ pub mod test {
             + root_weight;
         let expected_bank_weight = 2 * vote_account_expected_weight;
         assert_eq!(tower.lockouts.root_slot, Some(0));
-        let (staked_lockouts, _total_staked, bank_weight, _) = tower.collect_vote_lockouts(
+        let ComputedBankState {
+            stake_lockouts,
+            bank_weight,
+            mut pubkey_votes,
+            ..
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
             &mut PubkeyReferences::default(),
         );
         for i in 0..MAX_LOCKOUT_HISTORY {
-            assert_eq!(staked_lockouts[&(i as u64)].stake, 2);
+            assert_eq!(stake_lockouts[&(i as u64)].stake, 2);
         }
+
         // should be the sum of all the weights for root
-        assert!(staked_lockouts[&0].lockout > (2 * (1 << MAX_LOCKOUT_HISTORY)));
+        assert!(stake_lockouts[&0].lockout > (2 * (1 << MAX_LOCKOUT_HISTORY)));
         assert_eq!(bank_weight, expected_bank_weight);
+        pubkey_votes.sort();
+        assert_eq!(pubkey_votes, account_latest_votes);
     }
 
     #[test]
@@ -1381,7 +1467,7 @@ pub mod test {
             );
             tower.record_vote(i, Hash::default());
         }
-        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2));
+        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2,));
     }
 
     #[test]
@@ -1609,48 +1695,7 @@ pub mod test {
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
-        assert!(tower.check_vote_stake_threshold(6, &stakes, 2));
-    }
-
-    #[test]
-    fn test_lockout_is_updated_for_entire_branch() {
-        let mut stake_lockouts = HashMap::new();
-        let vote = Lockout {
-            slot: 2,
-            confirmation_count: 1,
-        };
-        let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
-        let mut ancestors = HashMap::new();
-        ancestors.insert(2, set);
-        let set: HashSet<u64> = vec![0u64].into_iter().collect();
-        ancestors.insert(1, set);
-        Tower::update_ancestor_lockouts(&mut stake_lockouts, &vote, &ancestors);
-        assert_eq!(stake_lockouts[&0].lockout, 2);
-        assert_eq!(stake_lockouts[&1].lockout, 2);
-        assert_eq!(stake_lockouts[&2].lockout, 2);
-    }
-
-    #[test]
-    fn test_lockout_is_updated_for_slot_or_lower() {
-        let mut stake_lockouts = HashMap::new();
-        let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
-        let mut ancestors = HashMap::new();
-        ancestors.insert(2, set);
-        let set: HashSet<u64> = vec![0u64].into_iter().collect();
-        ancestors.insert(1, set);
-        let vote = Lockout {
-            slot: 2,
-            confirmation_count: 1,
-        };
-        Tower::update_ancestor_lockouts(&mut stake_lockouts, &vote, &ancestors);
-        let vote = Lockout {
-            slot: 1,
-            confirmation_count: 2,
-        };
-        Tower::update_ancestor_lockouts(&mut stake_lockouts, &vote, &ancestors);
-        assert_eq!(stake_lockouts[&0].lockout, 2 + 4);
-        assert_eq!(stake_lockouts[&1].lockout, 2 + 4);
-        assert_eq!(stake_lockouts[&2].lockout, 2);
+        assert!(tower.check_vote_stake_threshold(6, &stakes, 2,));
     }
 
     #[test]
@@ -1729,7 +1774,7 @@ pub mod test {
         let total_stake = 4;
         let threshold_size = 0.67;
         let threshold_stake = (f64::ceil(total_stake as f64 * threshold_size)) as u64;
-        let tower_votes: Vec<u64> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
+        let tower_votes: Vec<Slot> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
         let accounts = gen_stakes(&[
             (threshold_stake, &[(VOTE_THRESHOLD_DEPTH - 2) as u64]),
             (total_stake - threshold_stake, &tower_votes[..]),
@@ -1746,29 +1791,35 @@ pub mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+        let ComputedBankState {
+            stake_lockouts,
+            total_staked,
+            ..
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             vote_to_evaluate,
             accounts.clone().into_iter(),
             &ancestors,
             &mut PubkeyReferences::default(),
         );
-        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts, total_staked));
+        assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &stake_lockouts, total_staked,));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+        let ComputedBankState {
+            stake_lockouts,
+            total_staked,
+            ..
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
             vote_to_evaluate,
             accounts.into_iter(),
             &ancestors,
             &mut PubkeyReferences::default(),
         );
-        assert!(!tower.check_vote_stake_threshold(
-            vote_to_evaluate,
-            &staked_lockouts,
-            total_staked
-        ));
+        assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &stake_lockouts, total_staked,));
     }
 
     fn vote_and_check_recent(num_votes: usize) {

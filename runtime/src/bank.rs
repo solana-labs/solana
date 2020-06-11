@@ -2411,6 +2411,10 @@ impl Bank {
         self.epoch_stakes.get(&epoch)
     }
 
+    pub fn epoch_stakes_map(&self) -> &HashMap<Epoch, EpochStakes> {
+        &self.epoch_stakes
+    }
+
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
@@ -2448,11 +2452,11 @@ impl Bank {
     }
 
     /// Get the fixed stake of the given vote account for the current epoch
-    pub fn epoch_vote_account_stake(&self, voting_pubkey: &Pubkey) -> u64 {
+    pub fn epoch_vote_account_stake(&self, vote_account: &Pubkey) -> u64 {
         *self
             .epoch_vote_accounts(self.epoch())
             .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
-            .get(voting_pubkey)
+            .get(vote_account)
             .map(|(stake, _)| stake)
             .unwrap_or(&0)
     }
