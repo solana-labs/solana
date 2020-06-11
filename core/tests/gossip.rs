@@ -269,18 +269,26 @@ pub fn cluster_info_scale() {
     }*/
 
     for num_votes in 1..20 {
-        nodes[0].0.push_vote(0, test_tx());
+        let tx = test_tx();
+        nodes[0].0.push_vote(0, tx.clone());
         let mut success = false;
         for s in 0..(30 * 5) {
             let mut not_done = 0;
             for (i, node) in nodes.iter().enumerate() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
-                if node.0.get_votes(0).1.len() != num_votes {
+                let has_tx = node
+                    .0
+                    .get_votes(0)
+                    .1
+                    .iter()
+                    .filter(|v| v.message.account_keys == tx.message.account_keys)
+                    .count();
+                if has_tx > 0 {
                     not_done += 1;
                 }
             }
             warn!("not_done: {}/{}", not_done, nodes.len());
-            success = not_done == 0;
+            success = not_done < (nodes.len() / 20);
             if success {
                 break;
             }
