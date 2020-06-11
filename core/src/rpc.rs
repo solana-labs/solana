@@ -19,6 +19,7 @@ use solana_client::{
         DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
+    rpc_response::Response as RpcResponse,
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -50,9 +51,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-type RpcResponse<T> = Result<Response<T>>;
-
-fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
+fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
     let context = RpcResponseContext { slot: bank.slot() };
     Ok(Response { context, value })
 }
@@ -155,7 +154,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcAccount>> {
+    ) -> Result<RpcResponse<Option<RpcAccount>>> {
         let bank = &*self.bank(commitment)?;
         pubkey.and_then(|key| new_response(bank, bank.get_account(&key).map(RpcAccount::encode)))
     }
@@ -219,7 +218,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<u64> {
+    ) -> Result<RpcResponse<u64>> {
         let bank = &*self.bank(commitment)?;
         pubkey.and_then(|key| new_response(bank, bank.get_balance(&key)))
     }
@@ -227,7 +226,7 @@ impl JsonRpcRequestProcessor {
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
+    ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
         let bank = &*self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         new_response(
@@ -239,7 +238,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_fees(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcFees> {
+    fn get_fees(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcFees>> {
         let bank = &*self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         let last_valid_slot = bank
@@ -259,7 +258,7 @@ impl JsonRpcRequestProcessor {
         &self,
         blockhash: &Hash,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcFeeCalculator>> {
+    ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
         let bank = &*self.bank(commitment)?;
         let fee_calculator = bank.get_fee_calculator(blockhash);
         new_response(
@@ -268,7 +267,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
+    fn get_fee_rate_governor(&self) -> Result<RpcResponse<RpcFeeRateGovernor>> {
         let bank = &*self.bank(None)?;
         let fee_rate_governor = bank.get_fee_rate_governor();
         new_response(
@@ -283,7 +282,7 @@ impl JsonRpcRequestProcessor {
         &self,
         signature: Result<Signature>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<bool> {
+    ) -> Result<RpcResponse<bool>> {
         let bank = &*self.bank(commitment)?;
         match signature {
             Err(e) => Err(e),
@@ -339,7 +338,7 @@ impl JsonRpcRequestProcessor {
     fn get_largest_accounts(
         &self,
         config: Option<RpcLargestAccountsConfig>,
-    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+    ) -> Result<RpcResponse<Vec<RpcAccountBalance>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let (addresses, address_filter) = if let Some(filter) = config.filter {
@@ -365,7 +364,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
+    fn get_supply(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcSupply>> {
         let bank = self.bank(commitment)?;
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
         let total_supply = bank.capitalization();
@@ -586,7 +585,7 @@ impl JsonRpcRequestProcessor {
         &self,
         signatures: Vec<Signature>,
         config: Option<RpcSignatureStatusConfig>,
-    ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
+    ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
         let search_transaction_history = config
@@ -741,7 +740,7 @@ fn run_transaction_simulation(
     (executed[0].0.clone().map(|_| ()), log_collector.output())
 }
 
-#[rpc(server)]
+#[rpc]
 pub trait RpcSol {
     type Metadata;
 
@@ -752,7 +751,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<bool>;
+    ) -> Result<RpcResponse<bool>>;
 
     // DEPRECATED
     #[rpc(meta, name = "getSignatureStatus")]
@@ -778,7 +777,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcAccount>>;
+    ) -> Result<RpcResponse<Option<RpcAccount>>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -819,7 +818,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<u64>;
+    ) -> Result<RpcResponse<u64>>;
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
@@ -854,14 +853,14 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculator>;
+    ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
 
     #[rpc(meta, name = "getFees")]
     fn get_fees(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcFees>;
+    ) -> Result<RpcResponse<RpcFees>>;
 
     #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
     fn get_fee_calculator_for_blockhash(
@@ -869,10 +868,13 @@ pub trait RpcSol {
         meta: Self::Metadata,
         blockhash: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcFeeCalculator>>;
+    ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
 
     #[rpc(meta, name = "getFeeRateGovernor")]
-    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
+    fn get_fee_rate_governor(
+        &self,
+        meta: Self::Metadata,
+    ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
@@ -880,7 +882,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
-    ) -> RpcResponse<Vec<Option<TransactionStatus>>>;
+    ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
 
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
@@ -905,14 +907,14 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         config: Option<RpcLargestAccountsConfig>,
-    ) -> RpcResponse<Vec<RpcAccountBalance>>;
+    ) -> Result<RpcResponse<Vec<RpcAccountBalance>>>;
 
     #[rpc(meta, name = "getSupply")]
     fn get_supply(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcSupply>;
+    ) -> Result<RpcResponse<RpcSupply>>;
 
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
@@ -937,7 +939,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
-    ) -> RpcResponse<RpcSimulateTransactionResult>;
+    ) -> Result<RpcResponse<RpcSimulateTransactionResult>>;
 
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(
@@ -1017,7 +1019,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         id: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<bool> {
+    ) -> Result<RpcResponse<bool>> {
         debug!("confirm_transaction rpc request received: {:?}", id);
         let signature = verify_signature(&id);
         meta.confirm_transaction(signature, commitment)
@@ -1028,7 +1030,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcAccount>> {
+    ) -> Result<RpcResponse<Option<RpcAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
         meta.get_account_info(pubkey, commitment)
@@ -1089,7 +1091,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<u64> {
+    ) -> Result<RpcResponse<u64>> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
         meta.get_balance(pubkey, commitment)
@@ -1181,7 +1183,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
+    ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
         debug!("get_recent_blockhash rpc request received");
         meta.get_recent_blockhash(commitment)
     }
@@ -1190,7 +1192,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcFees> {
+    ) -> Result<RpcResponse<RpcFees>> {
         debug!("get_fees rpc request received");
         meta.get_fees(commitment)
     }
@@ -1200,14 +1202,17 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         blockhash: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<RpcFeeCalculator>> {
+    ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
         debug!("get_fee_calculator_for_blockhash rpc request received");
         let blockhash =
             Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
         meta.get_fee_calculator_for_blockhash(&blockhash, commitment)
     }
 
-    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
+    fn get_fee_rate_governor(
+        &self,
+        meta: Self::Metadata,
+    ) -> Result<RpcResponse<RpcFeeRateGovernor>> {
         debug!("get_fee_rate_governor rpc request received");
         meta.get_fee_rate_governor()
     }
@@ -1241,7 +1246,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
-    ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
+    ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
         if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
@@ -1281,7 +1286,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         config: Option<RpcLargestAccountsConfig>,
-    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+    ) -> Result<RpcResponse<Vec<RpcAccountBalance>>> {
         debug!("get_largest_accounts rpc request received");
         meta.get_largest_accounts(config)
     }
@@ -1290,7 +1295,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcSupply> {
+    ) -> Result<RpcResponse<RpcSupply>> {
         debug!("get_supply rpc request received");
         meta.get_supply(commitment)
     }
@@ -1392,7 +1397,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
-    ) -> RpcResponse<RpcSimulateTransactionResult> {
+    ) -> Result<RpcResponse<RpcSimulateTransactionResult>> {
         let (_, transaction) = deserialize_bs58_transaction(data)?;
         let config = config.unwrap_or_default();
 
@@ -1558,7 +1563,10 @@ pub mod tests {
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
-    use jsonrpc_core::{ErrorCode, MetaIoHandler, Output, Response, Value};
+    use jsonrpc_core::{
+        futures::future::Future, ErrorCode, MetaIoHandler, Output, Response, Value,
+    };
+    use jsonrpc_core_client::transports::local;
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         blockstore_processor::fill_blockstore_slot_with_ticks,
@@ -1818,6 +1826,20 @@ pub mod tests {
         let result = serde_json::from_str::<Value>(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_balance_via_client() {
+        let bob_pubkey = Pubkey::new_rand();
+        let handler = start_rpc_handler_with_tx(&bob_pubkey);
+        let fut = {
+            let (client, server) =
+                local::connect_with_metadata::<gen_client::Client, _, _>(&handler.io, handler.meta);
+            client
+                .get_balance(bob_pubkey.to_string(), None)
+                .join(server)
+        };
+        assert_eq!(20, fut.wait().unwrap().0.value);
     }
 
     #[test]
