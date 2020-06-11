@@ -122,11 +122,12 @@ impl CrdsGossipPush {
             }
         }
 
-        peers
+        let rv: Vec<_> = peers
             .iter()
             .filter(|p| !keep.contains(p))
             .cloned()
-            .collect()
+            .collect();
+        rv
     }
 
     /// process a push message to the network
@@ -153,7 +154,7 @@ impl CrdsGossipPush {
         let value_hash = new_value.value_hash;
         if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
             received_set.insert(*from);
-            return Err(CrdsGossipError::PushMessageAlreadyReceived);
+            return Ok(Some(new_value));
         }
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
@@ -163,7 +164,7 @@ impl CrdsGossipPush {
         received_set.insert(*from);
         self.push_messages.insert(label, value_hash);
         self.received_cache.insert(value_hash, (now, received_set));
-        Ok(old.ok().and_then(|opt| opt))
+        Ok(None)
     }
 
     /// push pull responses
@@ -204,15 +205,14 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
+        let mut nodes: Vec<_> = (0..self.active_set.len()).collect();
+        nodes.shuffle(&mut rand::thread_rng());
         for v in values {
-            let mut max = 0;
-            for (p, filter) in self.active_set.iter() {
-                if !filter.contains(&v.label().pubkey()) {
-                    max += 1;
-                    push_messages.entry(*p).or_default().push(v.clone());
-                }
-                if max == self.push_fanout {
-                    break;
+            for ix in nodes.iter().take(self.push_fanout) {
+                if let Some((p, filter)) = self.active_set.get_index(*ix) {
+                    if !filter.contains(&v.label().pubkey()) {
+                        push_messages.entry(*p).or_default().push(v.clone());
+                    }
                 }
             }
             self.push_messages.remove(&v.label());
@@ -430,9 +430,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Ok(Some(_))
         );
     }
     #[test]
@@ -754,9 +754,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Ok(Some(_))
         );
 
         // purge the old pushed
