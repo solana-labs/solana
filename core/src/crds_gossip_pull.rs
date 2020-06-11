@@ -134,6 +134,7 @@ pub struct CrdsGossipPull {
     purged_values: VecDeque<(Hash, u64)>,
     pub crds_timeout: u64,
     pub msg_timeout: u64,
+    pub num_pulls: usize,
 }
 
 impl Default for CrdsGossipPull {
@@ -143,6 +144,7 @@ impl Default for CrdsGossipPull {
             pull_request_time: HashMap::new(),
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
             msg_timeout: CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            num_pulls: 0,
         }
     }
 }
@@ -329,6 +331,7 @@ impl CrdsGossipPull {
                 stats.failed_insert += 1;
             } else {
                 stats.success += 1;
+                self.num_pulls += 1;
                 success.push((label, hash, wc));
             }
             old.ok().map(|opt| {
