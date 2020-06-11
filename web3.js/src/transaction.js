@@ -210,7 +210,7 @@ export class Transaction {
     let numReadonlySignedAccounts = 0;
     let numReadonlyUnsignedAccounts = 0;
 
-    const keys = this.signatures.map(({publicKey}) => publicKey.toString());
+    const accountKeys = this.signatures.map(({publicKey}) => publicKey.toString());
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {
@@ -233,8 +233,8 @@ export class Transaction {
 
     accountMetas.forEach(({pubkey, isSigner, isWritable}) => {
       const keyStr = pubkey.toString();
-      if (!keys.includes(keyStr)) {
-        keys.push(keyStr);
+      if (!accountKeys.includes(keyStr)) {
+        accountKeys.push(keyStr);
         if (isSigner) {
           this.signatures.push({
             signature: null,
@@ -250,8 +250,8 @@ export class Transaction {
     });
 
     programIds.forEach(programId => {
-      if (!keys.includes(programId)) {
-        keys.push(programId);
+      if (!accountKeys.includes(programId)) {
+        accountKeys.push(programId);
         numReadonlyUnsignedAccounts += 1;
       }
     });
@@ -260,9 +260,9 @@ export class Transaction {
       instruction => {
         const {data, programId} = instruction;
         return {
-          programIdIndex: keys.indexOf(programId.toString()),
+          programIdIndex: accountKeys.indexOf(programId.toString()),
           accounts: instruction.keys.map(keyObj =>
-            keys.indexOf(keyObj.pubkey.toString()),
+            accountKeys.indexOf(keyObj.pubkey.toString()),
           ),
           data: bs58.encode(data),
         };
@@ -280,7 +280,7 @@ export class Transaction {
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts,
       },
-      accountKeys: keys.map(k => new PublicKey(k)),
+      accountKeys,
       recentBlockhash,
       instructions,
     });
@@ -477,11 +477,11 @@ export class Transaction {
     const numReadonlyUnsignedAccounts = byteArray.shift();
 
     const accountCount = shortvec.decodeLength(byteArray);
-    let accounts = [];
+    let accountKeys = [];
     for (let i = 0; i < accountCount; i++) {
       const account = byteArray.slice(0, PUBKEY_LENGTH);
       byteArray = byteArray.slice(PUBKEY_LENGTH);
-      accounts.push(bs58.encode(Buffer.from(account)));
+      accountKeys.push(bs58.encode(Buffer.from(account)));
     }
 
     const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
@@ -502,54 +502,24 @@ export class Transaction {
       instructions.push(instruction);
     }
 
-    const message = {
+    const messageArgs = {
       header: {
         numRequiredSignatures,
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts,
       },
       recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
-      accountKeys: accounts.map(account => new PublicKey(account)),
+      accountKeys,
       instructions,
     };
 
-    return Transaction._populate(signatures, new Message(message));
+    return Transaction.populate(new Message(messageArgs), signatures);
   }
 
   /**
-   * Parse an RPC result into a Transaction object.
+   * Populate Transaction object from message and signatures
    */
-  static fromRpcResult(rpcResult: any): Transaction {
-    const signatures = rpcResult.signatures;
-    const accounts = rpcResult.message.accountKeys;
-    const instructions = rpcResult.message.instructions;
-    const recentBlockhash = rpcResult.message.recentBlockhash;
-    const numRequiredSignatures =
-      rpcResult.message.header.numRequiredSignatures;
-    const numReadonlySignedAccounts =
-      rpcResult.message.header.numReadonlySignedAccounts;
-    const numReadonlyUnsignedAccounts =
-      rpcResult.message.header.numReadonlyUnsignedAccounts;
-
-    const message = {
-      header: {
-        numRequiredSignatures,
-        numReadonlySignedAccounts,
-        numReadonlyUnsignedAccounts,
-      },
-      recentBlockhash,
-      accountKeys: accounts.map(account => new PublicKey(account)),
-      instructions,
-    };
-
-    return Transaction._populate(signatures, new Message(message));
-  }
-
-  /**
-   * Populate Transaction object
-   * @private
-   */
-  static _populate(signatures: Array<string>, message: Message): Transaction {
+  static populate(message: Message, signatures: Array<string>): Transaction {
     const transaction = new Transaction();
     transaction.recentBlockhash = message.recentBlockhash;
     signatures.forEach((signature, index) => {

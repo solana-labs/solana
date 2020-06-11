@@ -7,6 +7,7 @@ import {PublicKey} from '../src/publickey';
 import {Transaction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
+import {Message} from '../src/message';
 
 test('signPartial', () => {
   const account1 = new Account();
@@ -159,38 +160,37 @@ test('parse wire format and serialize', () => {
   expect(wireTransaction).toEqual(expectedTransaction.serialize());
 });
 
-test('transaction from rpc result', () => {
+test('populate transaction', () => {
   const recentBlockhash = new PublicKey(1).toString();
-  const rpcResult = {
-    message: {
-      accountKeys: [
-        new PublicKey(1).toString(),
-        new PublicKey(2).toString(),
-        new PublicKey(3).toString(),
-        new PublicKey(4).toString(),
-        new PublicKey(5).toString(),
-      ],
-      header: {
-        num_ReadonlySignedAccounts: 0,
-        numReadonlyUnsignedAccounts: 3,
-        numRequiredSignatures: 2,
-      },
-      instructions: [
-        {
-          accounts: [1, 2, 3],
-          data: bs58.encode(Buffer.alloc(5).fill(9)),
-          programIdIndex: 4,
-        },
-      ],
-      recentBlockhash,
-    },
-    signatures: [
-      bs58.encode(Buffer.alloc(64).fill(1)),
-      bs58.encode(Buffer.alloc(64).fill(2)),
+  const message = {
+    accountKeys: [
+      new PublicKey(1).toString(),
+      new PublicKey(2).toString(),
+      new PublicKey(3).toString(),
+      new PublicKey(4).toString(),
+      new PublicKey(5).toString(),
     ],
+    header: {
+      numReadonlySignedAccounts: 0,
+      numReadonlyUnsignedAccounts: 3,
+      numRequiredSignatures: 2,
+    },
+    instructions: [
+      {
+        accounts: [1, 2, 3],
+        data: bs58.encode(Buffer.alloc(5).fill(9)),
+        programIdIndex: 4,
+      },
+    ],
+    recentBlockhash,
   };
 
-  const transaction = Transaction.fromRpcResult(rpcResult);
+  const signatures = [
+    bs58.encode(Buffer.alloc(64).fill(1)),
+    bs58.encode(Buffer.alloc(64).fill(2)),
+  ];
+
+  const transaction = Transaction.populate(new Message(message), signatures);
   expect(transaction.instructions.length).toEqual(1);
   expect(transaction.signatures.length).toEqual(2);
   expect(transaction.recentBlockhash).toEqual(recentBlockhash);

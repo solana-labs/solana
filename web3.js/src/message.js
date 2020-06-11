@@ -42,13 +42,13 @@ export type CompiledInstruction = {
  *
  * @typedef {Object} MessageArgs
  * @property {MessageHeader} header The message header, identifying signed and read-only `accountKeys`
- * @property {PublicKey[]} accounts All the account keys used by this transaction
+ * @property {string[]} accounts All the account keys used by this transaction
  * @property {Blockhash} recentBlockhash The hash of a recent ledger block
  * @property {CompiledInstruction[]} instructions Instructions that will be executed in sequence and committed in one atomic transaction if all succeed.
  */
 type MessageArgs = {
   header: MessageHeader,
-  accountKeys: PublicKey[],
+  accountKeys: string[],
   recentBlockhash: Blockhash,
   instructions: CompiledInstruction[],
 };
@@ -64,7 +64,7 @@ export class Message {
 
   constructor(args: MessageArgs) {
     this.header = args.header;
-    this.accountKeys = args.accountKeys;
+    this.accountKeys = args.accountKeys.map(account => new PublicKey(account));
     this.recentBlockhash = args.recentBlockhash;
     this.instructions = args.instructions;
   }

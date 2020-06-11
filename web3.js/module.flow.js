@@ -433,7 +433,7 @@ declare module '@solana/web3.js' {
 
   declare export type MessageArgs = {
     header: MessageHeader,
-    accountKeys: PublicKey[],
+    accountKeys: string[],
     recentBlockhash: Blockhash,
     instructions: CompiledInstruction[],
   };
@@ -499,6 +499,7 @@ declare module '@solana/web3.js' {
 
     constructor(opts?: TransactionCtorFields): Transaction;
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
+    static populate(message: Message, signatures: Array<string>): Transaction;
     add(
       ...items: Array<
         Transaction | TransactionInstruction | TransactionInstructionCtorFields,

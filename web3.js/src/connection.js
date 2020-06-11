@@ -12,6 +12,7 @@ import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction} from './transaction';
+import {Message} from './message';
 import {sleep} from './util/sleep';
 import {toBuffer} from './util/to-buffer';
 import type {Blockhash} from './blockhash';
@@ -1580,27 +1581,26 @@ export class Connection {
    */
   async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
-    const result = GetConfirmedBlockRpcResult(unsafeRes);
-    if (result.error) {
+    const {result, error} = GetConfirmedBlockRpcResult(unsafeRes);
+    if (error) {
       throw new Error('failed to get confirmed block: ' + result.error.message);
     }
-    assert(typeof result.result !== 'undefined');
-    if (!result.result) {
+    assert(typeof result !== 'undefined');
+    if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
     }
     return {
-      blockhash: new PublicKey(result.result.blockhash).toString(),
-      previousBlockhash: new PublicKey(
-        result.result.previousBlockhash,
-      ).toString(),
-      parentSlot: result.result.parentSlot,
-      transactions: result.result.transactions.map(result => {
+      blockhash: new PublicKey(result.blockhash).toString(),
+      previousBlockhash: new PublicKey(result.previousBlockhash).toString(),
+      parentSlot: result.parentSlot,
+      transactions: result.transactions.map(result => {
+        const {message, signatures} = result.transaction;
         return {
-          transaction: Transaction.fromRpcResult(result.transaction),
+          transaction: Transaction.populate(new Message(message), signatures),
           meta: result.meta,
         };
       }),
-      rewards: result.result.rewards || [],
+      rewards: result.rewards || [],
     };
   }
 
@@ -1622,9 +1622,10 @@ export class Connection {
       return result;
     }
 
+    const {message, signatures} = result.transaction;
     return {
       slot: result.slot,
-      transaction: Transaction.fromRpcResult(result.transaction),
+      transaction: Transaction.populate(new Message(message), signatures),
       meta: result.meta,
     };
   }
