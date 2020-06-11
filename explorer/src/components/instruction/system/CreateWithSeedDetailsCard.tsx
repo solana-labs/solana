@@ -65,15 +65,6 @@ export function CreateWithSeedDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>New Address</td>
-        <td className="text-right">
-          <Copyable right text={newKey}>
-            <code>{newKey}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
         <td>Base Address</td>
         <td className="text-right">
           <Copyable right text={baseKey}>
