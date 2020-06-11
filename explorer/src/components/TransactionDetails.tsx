@@ -26,6 +26,7 @@ import LoadingCard from "./common/LoadingCard";
 import TableCardBody from "./common/TableCardBody";
 import { displayTimestamp } from "utils/date";
 import InfoTooltip from "components/InfoTooltip";
+import { isCached } from "providers/transactions/cached";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -221,6 +222,7 @@ function StatusCard({ signature }: Props) {
 function AccountsCard({ signature }: Props) {
   const details = useTransactionDetails(signature);
 
+  const { url } = useCluster();
   const fetchStatus = useFetchTransactionStatus();
   const fetchDetails = useFetchTransactionDetails();
   const refreshStatus = () => fetchStatus(signature);
@@ -251,6 +253,9 @@ function AccountsCard({ signature }: Props) {
 
   const { meta } = details.transaction;
   if (!meta) {
+    if (isCached(url, signature)) {
+      return null;
+    }
     return <ErrorCard retry={refreshDetails} text="Metadata Missing" />;
   }
 

@@ -16,6 +16,7 @@ import {
 } from "./details";
 import base58 from "bs58";
 import { useFetchAccountInfo } from "../accounts";
+import { CACHED_STATUSES, isCached } from "./cached";
 
 export enum FetchStatus {
   Fetching,
@@ -186,8 +187,7 @@ async function createTestTransaction(
     const connection = new Connection(url, "recent");
     const signature = await connection.requestAirdrop(
       testAccount.publicKey,
-      100000,
-      "recent"
+      100000
     );
     fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     fetchAccount(testAccount.publicKey);
@@ -206,7 +206,7 @@ async function createTestTransaction(
       connection,
       tx,
       [testAccount],
-      1
+      { confirmations: 1, skipPreflight: false }
     );
     fetchTransactionStatus(dispatch, signature, url, clusterStatus);
   } catch (error) {
@@ -230,34 +230,40 @@ export async function fetchTransactionStatus(
 
   let fetchStatus;
   let info: TransactionStatusInfo | undefined;
-  try {
-    const connection = new Connection(url);
-    const { value } = await connection.getSignatureStatus(signature, {
-      searchTransactionHistory: true
-    });
-
-    if (value !== null) {
-      let blockTime = await connection.getBlockTime(value.slot);
-      let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
-
-      let confirmations: Confirmations;
-      if (typeof value.confirmations === "number") {
-        confirmations = value.confirmations;
-      } else {
-        confirmations = "max";
-      }
-
-      info = {
-        slot: value.slot,
-        timestamp,
-        confirmations,
-        result: { err: value.err }
-      };
-    }
+  if (isCached(url, signature)) {
+    info = CACHED_STATUSES[signature];
     fetchStatus = FetchStatus.Fetched;
-  } catch (error) {
-    console.error("Failed to fetch transaction status", error);
-    fetchStatus = FetchStatus.FetchFailed;
+  } else {
+    try {
+      const connection = new Connection(url);
+      const { value } = await connection.getSignatureStatus(signature, {
+        searchTransactionHistory: true
+      });
+
+      if (value !== null) {
+        let blockTime = await connection.getBlockTime(value.slot);
+        let timestamp: Timestamp =
+          blockTime !== null ? blockTime : "unavailable";
+
+        let confirmations: Confirmations;
+        if (typeof value.confirmations === "number") {
+          confirmations = value.confirmations;
+        } else {
+          confirmations = "max";
+        }
+
+        info = {
+          slot: value.slot,
+          timestamp,
+          confirmations,
+          result: { err: value.err }
+        };
+      }
+      fetchStatus = FetchStatus.Fetched;
+    } catch (error) {
+      console.error("Failed to fetch transaction status", error);
+      fetchStatus = FetchStatus.FetchFailed;
+    }
   }
 
   dispatch({
