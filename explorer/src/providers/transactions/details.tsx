@@ -6,6 +6,7 @@ import {
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
 import { useTransactions, FetchStatus } from "./index";
+import { CACHED_DETAILS, isCached } from "./cached";
 
 export interface Details {
   fetchStatus: FetchStatus;
@@ -142,12 +143,19 @@ async function fetchDetails(
 
   let fetchStatus;
   let transaction = null;
-  try {
-    transaction = await new Connection(url).getConfirmedTransaction(signature);
+  if (isCached(url, signature)) {
+    transaction = CACHED_DETAILS[signature];
     fetchStatus = FetchStatus.Fetched;
-  } catch (error) {
-    console.error("Failed to fetch confirmed transaction", error);
-    fetchStatus = FetchStatus.FetchFailed;
+  } else {
+    try {
+      transaction = await new Connection(url).getConfirmedTransaction(
+        signature
+      );
+      fetchStatus = FetchStatus.Fetched;
+    } catch (error) {
+      console.error("Failed to fetch confirmed transaction", error);
+      fetchStatus = FetchStatus.FetchFailed;
+    }
   }
   dispatch({ type: ActionType.Update, fetchStatus, signature, transaction });
 }
