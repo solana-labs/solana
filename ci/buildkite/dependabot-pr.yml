@@ -1,6 +1,0 @@
-  - command: "ci/dependabot-pr.sh"
-    name: "dependabot"
-    timeout_in_minutes: 5
-    if: build.env("GITHUB_USER") == "dependabot-preview[bot]"
-
-  - wait

@@ -1,3 +1,0 @@
-  - command: "ci/shellcheck.sh"
-    name: "shellcheck"
-    timeout_in_minutes: 5

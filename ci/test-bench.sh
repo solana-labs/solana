@@ -2,25 +2,6 @@
 set -e
 cd "$(dirname "$0")/.."
 
-annotate() {
-  ${BUILDKITE:-false} && {
-    buildkite-agent annotate "$@"
-  }
-}
-
-ci/affects-files.sh \
-  .rs$ \
-  Cargo.lock$ \
-  Cargo.toml$ \
-  ^ci/rust-version.sh \
-  ^ci/test-bench.sh \
-|| {
-  annotate --style info --context test-bench \
-    "Bench skipped as no .rs files were modified"
-  exit 0
-}
-
-
 source ci/_
 source ci/upload-ci-artifact.sh
 

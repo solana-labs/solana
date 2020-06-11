@@ -8,19 +8,6 @@ annotate() {
   }
 }
 
-ci/affects-files.sh \
-  .rs$ \
-  Cargo.lock$ \
-  Cargo.toml$ \
-  ^ci/rust-version.sh \
-  ^ci/test-coverage.sh \
-  ^scripts/coverage.sh \
-|| {
-  annotate --style info --context test-coverage \
-    "Coverage skipped as no .rs files were modified"
-  exit 0
-}
-
 source ci/upload-ci-artifact.sh
 source scripts/ulimit-n.sh
 
