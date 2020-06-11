@@ -1,2 +1,3 @@
-  - command: "docs/build.sh"
+  - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_nightly_docker_image docs/build.sh"
+    name: "docs"
     timeout_in_minutes: 5
