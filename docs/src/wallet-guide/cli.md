@@ -59,7 +59,7 @@ some interface for signing transactions.
 A hardware wallet, such as the
 [Ledger hardware wallet](https://www.ledger.com/), offers a great blend of
 security and convenience for cryptocurrencies. It effectively automates the
-process of offline signing while retaining nearly all the convenience of an FS
-wallet.
+process of offline signing while retaining nearly all the convenience of a file
+system wallet.
 
 {% page-ref page="../hardware-wallet/README.md" %}
