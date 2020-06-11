@@ -26,11 +26,6 @@ viewed at any later time in the app by following these steps:
  - Go to Setting -> Wallets
  - Under the Options menu for a particular wallet tap "Show Recovery Phrase"
 
-If you use an insecure method of electronic backup,
-such as emailing yourself your seed phrase, if the email is intercepted or if
-anyone else has access to the same email account, they would be able to create
-your Trust Wallet keys on another device.
-
 {% page-ref page="trust-wallet.md" %}
 
 ## Ledger Live with Ledger Nano S
