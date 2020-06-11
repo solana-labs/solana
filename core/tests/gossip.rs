@@ -269,7 +269,7 @@ pub fn cluster_info_scale() {
             let mut not_done = 0;
             let mut num_dups = 0;
             let mut num_old = 0;
-            let mut num_total = 0;
+            let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
             let mut num_inserts = 0;
@@ -284,7 +284,7 @@ pub fn cluster_info_scale() {
                     .count();
                 num_dups += node.0.gossip.read().unwrap().push.num_dups;
                 num_old += node.0.gossip.read().unwrap().push.num_old;
-                num_total += node.0.gossip.read().unwrap().push.num_total;
+                num_push_total += node.0.gossip.read().unwrap().push.num_total;
                 num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
                 num_pulls += node.0.gossip.read().unwrap().pull.num_pulls;
                 num_inserts += node.0.gossip.read().unwrap().crds.num_inserts;
@@ -295,7 +295,7 @@ pub fn cluster_info_scale() {
             warn!("not_done: {}/{}", not_done, nodes.len());
             warn!("num_dups: {}", num_dups);
             warn!("num_old: {}", num_old);
-            warn!("num_total: {}", num_total);
+            warn!("num_push_total: {}", num_push_total);
             warn!("num_pushes: {}", num_pushes);
             warn!("num_pulls: {}", num_pulls);
             warn!("num_inserts: {}", num_inserts);
