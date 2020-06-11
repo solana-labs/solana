@@ -9,23 +9,10 @@
 
 set -e
 cd "$(dirname "$0")"/..
+source ci/_
 
-if [[ -n $BUILDKITE_TAG ]]; then
-  buildkite-agent annotate --style info --context release-tag \
-    "https://github.com/solana-labs/solana/releases/$BUILDKITE_TAG"
-  buildkite-agent pipeline upload ci/buildkite-release.yml
-else
-  if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
-    # Add helpful link back to the corresponding Github Pull Request
-    buildkite-agent annotate --style info --context pr-backlink \
-      "Github Pull Request: https://github.com/solana-labs/solana/$BUILDKITE_BRANCH"
-  fi
+_ ci/buildkite/pipeline.sh pipeline.yml
+echo +++ pipeline
+cat pipeline.yml
 
-  if [[ $BUILDKITE_MESSAGE =~ GitBook: ]]; then
-    buildkite-agent annotate --style info --context gitbook-ci-skip \
-      "GitBook commit detected, CI skipped"
-    exit
-  fi
-
-  buildkite-agent pipeline upload ci/buildkite.yml
-fi
+_ buildkite-agent pipeline upload pipeline.yml

@@ -1,0 +1,2 @@
+  - command: "docs/build.sh"
+    timeout_in_minutes: 5
