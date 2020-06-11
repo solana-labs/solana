@@ -929,10 +929,11 @@ impl AccountsDB {
 
     pub fn process_stale_slot(&self) -> usize {
         let mut measure = Measure::start("stale_slot_shrink-ms");
-        let mut count = 0;
-        if let Some(slot) = self.next_shrink_slot() {
-            count = self.shrink_stale_slot(slot);
-        }
+        let count = if let Some(slot) = self.next_shrink_slot() {
+            self.shrink_stale_slot(slot)
+        } else {
+            0
+        };
         measure.stop();
         inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);
 
