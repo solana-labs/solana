@@ -47,6 +47,7 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
     net::SocketAddr,
+    rc::Rc,
     str::FromStr,
     sync::{Arc, RwLock},
 };
@@ -730,14 +731,18 @@ fn run_transaction_simulation(
 
     let txs = &[transaction];
     let batch = bank.prepare_simulation_batch(txs);
-    let log_collector = LogCollector::default();
-    let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) =
+    let log_collector = Rc::new(LogCollector::default());
+    let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) = {
         bank.load_and_execute_transactions(
             &batch,
             solana_sdk::clock::MAX_PROCESSING_AGE,
-            Some(&log_collector),
-        );
-    (executed[0].0.clone().map(|_| ()), log_collector.output())
+            Some(log_collector.clone()),
+        )
+    };
+    (
+        executed[0].0.clone().map(|_| ()),
+        Rc::try_unwrap(log_collector).unwrap_or_default().into(),
+    )
 }
 
 #[rpc]
