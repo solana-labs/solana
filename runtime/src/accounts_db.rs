@@ -542,13 +542,11 @@ impl AccountsDB {
     }
 
     fn reset_uncleaned_roots(&self) {
-        let previous_roots = {
-            let mut accounts_index = self.accounts_index.write().unwrap();
-            accounts_index.reset_uncleaned_roots()
-        };
-
-        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-        candidates.extend(previous_roots);
+        let previous_roots = self.accounts_index.write().unwrap().reset_uncleaned_roots();
+        self.shrink_candidate_slots
+            .lock()
+            .unwrap()
+            .extend(previous_roots);
     }
 
     fn inc_store_counts(
