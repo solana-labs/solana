@@ -603,7 +603,7 @@ pub fn confirm_slot(
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
         }
-        timing.verify_elapsed += verifier.duration_ms();
+        timing.verify_elapsed += verifier.duration_us();
     }
 
     process_result?;
