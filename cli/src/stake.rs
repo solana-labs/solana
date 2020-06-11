@@ -267,6 +267,29 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
         )
         .subcommand(
+            SubCommand::with_name("merge-stake")
+                .about("Merges one stake account into another")
+                .arg(
+                    pubkey!(Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Stake account to merge into")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("source_stake_account_pubkey")
+                        .index(2)
+                        .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Source stake account for the merge.  If successful, this stake account will no longer exist after the merge")
+                )
+                .arg(stake_authority_arg())
+                .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
+        )
+        .subcommand(
             SubCommand::with_name("withdraw-stake")
                 .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
@@ -602,6 +625,47 @@ pub fn parse_split_stake(
             split_stake_account: signer_info.index_of(split_stake_account_pubkey).unwrap(),
             seed,
             lamports,
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+        },
+        signers: signer_info.signers,
+    })
+}
+
+pub fn parse_merge_stake(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
+
+    let source_stake_account_pubkey = pubkey_of(matches, "source_stake_account_pubkey").unwrap();
+
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let (stake_authority, stake_authority_pubkey) =
+        signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+    let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+    let mut bulk_signers = vec![stake_authority, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::MergeStake {
+            stake_account_pubkey,
+            source_stake_account_pubkey,
+            stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
+            sign_only,
+            blockhash_query,
+            nonce_account,
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -1166,6 +1230,99 @@ pub fn process_split_stake(
             &split_stake_account_address,
         )
     };
+
+    let nonce_authority = config.signers[nonce_authority];
+
+    let message = if let Some(nonce_account) = &nonce_account {
+        Message::new_with_nonce(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        )
+    } else {
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
+    };
+    let mut tx = Transaction::new_unsigned(message);
+
+    if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
+        return_signers(&tx, &config)
+    } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        log_instruction_custom_error::<StakeError>(result, &config)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_merge_stake(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    stake_account_pubkey: &Pubkey,
+    source_stake_account_pubkey: &Pubkey,
+    stake_authority: SignerIndex,
+    sign_only: bool,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<Pubkey>,
+    nonce_authority: SignerIndex,
+    fee_payer: SignerIndex,
+) -> ProcessResult {
+    let fee_payer = config.signers[fee_payer];
+
+    check_unique_pubkeys(
+        (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
+        (&stake_account_pubkey, "stake_account".to_string()),
+    )?;
+    check_unique_pubkeys(
+        (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
+        (
+            &source_stake_account_pubkey,
+            "source_stake_account".to_string(),
+        ),
+    )?;
+    check_unique_pubkeys(
+        (&stake_account_pubkey, "stake_account".to_string()),
+        (
+            &source_stake_account_pubkey,
+            "source_stake_account".to_string(),
+        ),
+    )?;
+
+    let stake_authority = config.signers[stake_authority];
+
+    if !sign_only {
+        for stake_account_address in &[stake_account_pubkey, source_stake_account_pubkey] {
+            if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
+                if stake_account.owner != solana_stake_program::id() {
+                    return Err(CliError::BadParameter(format!(
+                        "Account {} is not a stake account",
+                        stake_account_address
+                    ))
+                    .into());
+                }
+            }
+        }
+    }
+
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+
+    let ixs = stake_instruction::merge(
+        &stake_account_pubkey,
+        &source_stake_account_pubkey,
+        &stake_authority.pubkey(),
+    );
 
     let nonce_authority = config.signers[nonce_authority];
 
@@ -2940,6 +3097,35 @@ mod tests {
                         .unwrap()
                         .into(),
                 ],
+            }
+        );
+
+        // Test MergeStake SubCommand
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let stake_account_keypair = Keypair::new();
+        write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
+
+        let source_stake_account_pubkey = Pubkey::new_rand();
+        let test_merge_stake_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "merge-stake",
+            &keypair_file,
+            &source_stake_account_pubkey.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_merge_stake_account, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::MergeStake {
+                    stake_account_pubkey: stake_account_keypair.pubkey(),
+                    source_stake_account_pubkey,
+                    stake_authority: 0,
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::default(),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             }
         );
     }
