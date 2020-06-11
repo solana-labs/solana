@@ -327,6 +327,16 @@ pub enum CliCommand {
         lamports: u64,
         fee_payer: SignerIndex,
     },
+    MergeStake {
+        stake_account_pubkey: Pubkey,
+        source_stake_account_pubkey: Pubkey,
+        stake_authority: SignerIndex,
+        sign_only: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
+        fee_payer: SignerIndex,
+    },
     ShowStakeHistory {
         use_lamports_unit: bool,
     },
@@ -705,6 +715,9 @@ pub fn parse_command(
         }
         ("split-stake", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
+        }
+        ("merge-stake", Some(matches)) => {
+            parse_merge_stake(matches, default_signer_path, wallet_manager)
         }
         ("stake-authorize", Some(matches)) => {
             parse_stake_authorize(matches, default_signer_path, wallet_manager)
@@ -2005,6 +2018,27 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *split_stake_account,
             seed,
             *lamports,
+            *fee_payer,
+        ),
+        CliCommand::MergeStake {
+            stake_account_pubkey,
+            source_stake_account_pubkey,
+            stake_authority,
+            sign_only,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
+            fee_payer,
+        } => process_merge_stake(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &source_stake_account_pubkey,
+            *stake_authority,
+            *sign_only,
+            blockhash_query,
+            *nonce_account,
+            *nonce_authority,
             *fee_payer,
         ),
         CliCommand::ShowStakeAccount {
@@ -3485,10 +3519,10 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
         config.command = CliCommand::WithdrawStake {
-            stake_account_pubkey: stake_pubkey,
+            stake_account_pubkey,
             destination_account_pubkey: to_pubkey,
             lamports: 100,
             withdraw_authority: 0,
@@ -3503,9 +3537,9 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = Pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
-            stake_account_pubkey: stake_pubkey,
+            stake_account_pubkey,
             stake_authority: 0,
             sign_only: false,
             blockhash_query: BlockhashQuery::default(),
@@ -3516,10 +3550,10 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = Pubkey::new_rand();
         let split_stake_account = Keypair::new();
         config.command = CliCommand::SplitStake {
-            stake_account_pubkey: stake_pubkey,
+            stake_account_pubkey,
             stake_authority: 0,
             sign_only: false,
             blockhash_query: BlockhashQuery::default(),
@@ -3533,6 +3567,23 @@ mod tests {
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);
         assert!(result.is_ok());
+
+        let stake_account_pubkey = Pubkey::new_rand();
+        let source_stake_account_pubkey = Pubkey::new_rand();
+        let merge_stake_account = Keypair::new();
+        config.command = CliCommand::MergeStake {
+            stake_account_pubkey,
+            source_stake_account_pubkey,
+            stake_authority: 1,
+            sign_only: false,
+            blockhash_query: BlockhashQuery::default(),
+            nonce_account: None,
+            nonce_authority: 0,
+            fee_payer: 0,
+        };
+        config.signers = vec![&keypair, &merge_stake_account];
+        let result = process_command(&config);
+        assert!(dbg!(result).is_ok());
 
         config.command = CliCommand::GetSlot {
             commitment_config: CommitmentConfig::default(),
