@@ -275,6 +275,9 @@ pub fn cluster_info_scale() {
         let mut success = false;
         for s in 0..(30 * 5) {
             let mut not_done = 0;
+            let mut num_dups = 0;
+            let mut num_old = 0;
+            let mut num_total = 0;
             for (i, node) in nodes.iter().enumerate() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
@@ -284,11 +287,17 @@ pub fn cluster_info_scale() {
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();
+                num_dups += node.0.gossip.read().unwrap().push.num_dups;
+                num_old += node.0.gossip.read().unwrap().push.num_old;
+                num_total += node.0.gossip.read().unwrap().push.num_total;
                 if has_tx > 0 {
                     not_done += 1;
                 }
             }
             warn!("not_done: {}/{}", not_done, nodes.len());
+            warn!("num_dups: {}", num_dups);
+            warn!("num_old: {}", num_old);
+            warn!("num_total: {}", num_total);
             success = not_done < (nodes.len() / 20);
             if success {
                 break;

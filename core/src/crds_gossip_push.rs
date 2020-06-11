@@ -50,6 +50,9 @@ pub struct CrdsGossipPush {
     pub push_fanout: usize,
     pub msg_timeout: u64,
     pub prune_timeout: u64,
+    pub num_dups: usize,
+    pub num_total: usize,
+    pub num_old: usize,
 }
 
 impl Default for CrdsGossipPush {
@@ -64,6 +67,9 @@ impl Default for CrdsGossipPush {
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
             prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
+            num_dups: 0,
+            num_total: 0,
+            num_old: 0,
         }
     }
 }
@@ -137,6 +143,7 @@ impl CrdsGossipPush {
         value: CrdsValue,
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
+        self.num_total += 1;
         if now
             > value
                 .wallclock()
@@ -153,10 +160,12 @@ impl CrdsGossipPush {
         let value_hash = new_value.value_hash;
         if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
             received_set.insert(*from);
+            self.num_dups += 1;
             return Ok(Some(new_value));
         }
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
+            self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
         let mut received_set = HashSet::new();
