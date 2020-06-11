@@ -89,11 +89,6 @@ if [[ ! -f $vote_account ]]; then
   exit 1
 fi
 
-if [[ -f $stake_account ]]; then
-  echo "Error: $stake_account already exists"
-  exit 1
-fi
-
 if ((airdrops_enabled)); then
   if [[ -z $keypair ]]; then
     echo "--keypair argument must be provided"
@@ -106,7 +101,11 @@ if [[ -n $keypair ]]; then
   common_args+=(--keypair "$keypair")
 fi
 
-$solana_keygen new --no-passphrase -so "$stake_account"
+if ! [[ -f "$stake_account" ]]; then
+  $solana_keygen new --no-passphrase -so "$stake_account"
+else
+  echo "$stake_account already exists! Using it"
+fi
 
 set -x
 $solana_cli "${common_args[@]}" \
