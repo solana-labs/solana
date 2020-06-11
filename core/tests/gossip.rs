@@ -272,23 +272,16 @@ pub fn cluster_info_scale() {
         nodes[0].0.push_vote(0, test_tx());
         let mut success = false;
         for s in 0..(30 * 5) {
-            done = true;
+            let mut not_done = 0;
             for (i, node) in nodes.iter().enumerate() {
-                warn!(
-                    "s: {} {} node {} votes: {}",
-                    num_votes,
-                    s,
-                    i,
-                    node.0.get_votes(0).1.len()
-                );
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 if node.0.get_votes(0).1.len() != num_votes {
-                    done = false;
-                    break;
+                    not_done += 1;
                 }
             }
-            if done {
-                success = true;
+            warn!("not_done: {}/{}", not_done, nodes.len());
+            success = not_done == 0;
+            if success {
                 break;
             }
             sleep(Duration::from_millis(200));
