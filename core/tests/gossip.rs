@@ -268,8 +268,9 @@ pub fn cluster_info_scale() {
         }
     }*/
 
-    for num_votes in 1..20 {
+    for num_votes in 1..1000 {
         let tx = test_tx();
+        warn!("tx.message.account_keys: {:?}", tx.message.account_keys);
         nodes[0].0.push_vote(0, tx.clone());
         let mut success = false;
         for s in 0..(30 * 5) {

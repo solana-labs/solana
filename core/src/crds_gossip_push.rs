@@ -122,12 +122,11 @@ impl CrdsGossipPush {
             }
         }
 
-        let rv: Vec<_> = peers
+        peers
             .iter()
             .filter(|p| !keep.contains(p))
             .cloned()
-            .collect();
-        rv
+            .collect()
     }
 
     /// process a push message to the network
@@ -205,17 +204,21 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
-        let mut nodes: Vec<_> = (0..self.active_set.len()).collect();
-        nodes.shuffle(&mut rand::thread_rng());
-        for v in values {
-            for ix in nodes.iter().take(self.push_fanout) {
-                if let Some((p, filter)) = self.active_set.get_index(*ix) {
-                    if !filter.contains(&v.label().pubkey()) {
-                        push_messages.entry(*p).or_default().push(v.clone());
+        if !self.active_set.is_empty() {
+            for v in values {
+                //use a consistant index for the same origin so
+                //the active set learns the MST for that origin
+                let start = v.label().pubkey().as_ref()[0] as usize;
+                for i in start..(start + self.push_fanout) {
+                    let ix = i % self.active_set.len();
+                    if let Some((p, filter)) = self.active_set.get_index(ix) {
+                        if !filter.contains(&v.label().pubkey()) {
+                            push_messages.entry(*p).or_default().push(v.clone());
+                        }
                     }
+                    self.push_messages.remove(&v.label());
                 }
             }
-            self.push_messages.remove(&v.label());
         }
         push_messages
     }
