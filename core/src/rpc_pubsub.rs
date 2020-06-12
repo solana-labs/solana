@@ -355,7 +355,6 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        commitment::BlockCommitmentCache,
         rpc_subscriptions::{tests::robust_poll_or_panic, CacheSlotInfo},
     };
     use crossbeam_channel::unbounded;
@@ -365,6 +364,7 @@ mod tests {
     use solana_budget_program::{self, budget_instruction};
     use solana_ledger::{
         bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };

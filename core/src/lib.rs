@@ -10,7 +10,6 @@ pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod broadcast_stage;
 pub mod cluster_info_vote_listener;
-pub mod commitment;
 pub mod commitment_service;
 mod deprecated;
 pub mod shred_fetch_stage;

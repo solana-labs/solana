@@ -1,14 +1,9 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo,
-    commitment::{BlockCommitmentArray, BlockCommitmentCache},
-    contact_info::ContactInfo,
-    non_circulating_supply::calculate_non_circulating_supply,
-    rpc_error::RpcCustomError,
-    rpc_health::*,
-    send_transaction_service::SendTransactionService,
-    validator::ValidatorExit,
+    cluster_info::ClusterInfo, contact_info::ContactInfo,
+    non_circulating_supply::calculate_non_circulating_supply, rpc_error::RpcCustomError,
+    rpc_health::*, send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -24,7 +19,10 @@ use solana_client::{
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
-    bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
+    bank_forks::BankForks,
+    blockstore::Blockstore,
+    blockstore_db::BlockstoreError,
+    commitment::{BlockCommitmentArray, BlockCommitmentCache},
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank, log_collector::LogCollector};
@@ -1558,8 +1556,7 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
 pub mod tests {
     use super::*;
     use crate::{
-        commitment::BlockCommitment, contact_info::ContactInfo,
-        non_circulating_supply::non_circulating_accounts,
+        contact_info::ContactInfo, non_circulating_supply::non_circulating_accounts,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
@@ -1570,6 +1567,7 @@ pub mod tests {
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         blockstore_processor::fill_blockstore_slot_with_ticks,
+        commitment::BlockCommitment,
         entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,

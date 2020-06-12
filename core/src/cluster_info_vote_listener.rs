@@ -1,6 +1,5 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    commitment::VOTE_THRESHOLD_SIZE,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
@@ -14,7 +13,7 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
 use solana_runtime::{
@@ -600,8 +599,9 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commitment::BlockCommitmentCache;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_ledger::{
+        blockstore::Blockstore, commitment::BlockCommitmentCache, get_tmp_ledger_path,
+    };
     use solana_perf::packet;
     use solana_runtime::{
         bank::Bank,

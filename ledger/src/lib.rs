@@ -6,6 +6,7 @@ pub mod blockstore;
 pub mod blockstore_db;
 pub mod blockstore_meta;
 pub mod blockstore_processor;
+pub mod commitment;
 pub mod entry;
 pub mod erasure;
 pub mod genesis_utils;
