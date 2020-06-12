@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::commitment::{BlockCommitmentCache, CacheSlotInfo};
+use crate::commitment::BlockCommitmentCache;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -42,6 +42,14 @@ pub struct SlotInfo {
     pub slot: Slot,
     pub parent: Slot,
     pub root: Slot,
+}
+
+#[derive(Default)]
+pub struct CacheSlotInfo {
+    pub current_slot: Slot,
+    pub node_root: Slot,
+    pub largest_confirmed_root: Slot,
+    pub highest_confirmed_slot: Slot,
 }
 
 // A more human-friendly version of Vote, with the bank state signature base58 encoded.

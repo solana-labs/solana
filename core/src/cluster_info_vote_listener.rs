@@ -1,6 +1,6 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    consensus::VOTE_THRESHOLD_SIZE,
+    commitment::VOTE_THRESHOLD_SIZE,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
