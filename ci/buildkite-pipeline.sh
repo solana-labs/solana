@@ -205,7 +205,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite/ .md$ ^docs/ ^web3.js/ ^explorer/; then
+  if affects_other_than ^.buildkite ^.travis .md$ ^docs/ ^web3.js/ ^explorer/; then
     all_test_steps
   fi
 
