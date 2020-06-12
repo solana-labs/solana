@@ -2,7 +2,7 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::mpsc::channel;
@@ -157,7 +157,7 @@ fn do_verify_reachable_ports(
         return ok;
     }
 
-    let mut udp_ports: HashMap<_, _> = HashMap::new();
+    let mut udp_ports: BTreeMap<_, _> = BTreeMap::new();
     udp_sockets.iter().for_each(|udp_socket| {
         let port = udp_socket.local_addr().unwrap().port();
         udp_ports
@@ -173,7 +173,7 @@ fn do_verify_reachable_ports(
         ip_echo_server_addr
     );
 
-    for checked_ports_and_sockets in udp_ports.chunks(MAX_PORT_COUNT_PER_MESSAGE) {
+    'outer: for checked_ports_and_sockets in udp_ports.chunks(MAX_PORT_COUNT_PER_MESSAGE) {
         ok = false;
 
         for udp_remaining_retry in (0_usize..udp_retry_count).rev() {
@@ -188,16 +188,11 @@ fn do_verify_reachable_ports(
                     .flatten(),
             );
 
-            if udp_remaining_retry > 0 {
-                let _ = ip_echo_server_request(
-                    ip_echo_server_addr,
-                    IpEchoServerMessage::new(&[], &checked_ports),
-                )
-                .map_err(|err| warn!("ip_echo_server request failed: {}", err));
-            } else {
-                error!("Maximum retry count is reached....");
-                return false;
-            }
+            let _ = ip_echo_server_request(
+                ip_echo_server_addr,
+                IpEchoServerMessage::new(&[], &checked_ports),
+            )
+            .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
             // Spawn threads at once!
             let thread_handles: Vec<_> = checked_socket_iter
@@ -223,7 +218,7 @@ fn do_verify_reachable_ports(
             // Separate from the above by collect()-ing as an intermediately step to make the iterator
             // eager not lazy so that joining happens here at once after creating bunch of threads
             // at once.
-            let reachable_ports: HashSet<_> = thread_handles
+            let reachable_ports: BTreeSet<_> = thread_handles
                 .into_iter()
                 .filter_map(|t| t.join().unwrap())
                 .collect();
@@ -235,13 +230,16 @@ fn do_verify_reachable_ports(
                 );
                 ok = true;
                 break;
-            } else {
+            } else if udp_remaining_retry > 0 {
                 // Might have lost a UDP packet, retry a couple times
                 error!(
                     "checked udp ports: {:?}, reachable udp ports: {:?}",
                     checked_ports, reachable_ports
                 );
                 error!("There are some udp ports with no response!! Retrying...");
+            } else {
+                error!("Maximum retry count is reached....");
+                break 'outer;
             }
         }
     }
