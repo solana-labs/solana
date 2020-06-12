@@ -11,7 +11,7 @@ set -e
 cd "$(dirname "$0")"/..
 source ci/_
 
-_ ci/buildkite/pipeline.sh pipeline.yml
+_ ci/buildkite-pipeline.sh pipeline.yml
 echo +++ pipeline
 cat pipeline.yml
 

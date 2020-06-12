@@ -1,9 +1,0 @@
-  - trigger: "solana-secondary"
-    branches: "!pull/*"
-    async: true
-    build:
-      message: "${BUILDKITE_MESSAGE}"
-      commit: "${BUILDKITE_COMMIT}"
-      branch: "${BUILDKITE_BRANCH}"
-      env:
-        TRIGGERED_BUILDKITE_TAG: "${BUILDKITE_TAG}"

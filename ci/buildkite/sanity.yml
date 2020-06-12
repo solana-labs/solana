@@ -1,3 +1,0 @@
-  - command: "ci/test-sanity.sh"
-    name: "sanity"
-    timeout_in_minutes: 5

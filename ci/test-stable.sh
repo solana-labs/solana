@@ -41,24 +41,6 @@ test-stable)
   _ cargo +"$rust_stable" test --manifest-path bench-tps/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
   ;;
 test-stable-perf)
-  ci/affects-files.sh \
-    .rs$ \
-    Cargo.lock$ \
-    Cargo.toml$ \
-    ^ci/rust-version.sh \
-    ^ci/test-stable-perf.sh \
-    ^ci/test-stable.sh \
-    ^ci/test-local-cluster.sh \
-    ^core/build.rs \
-    ^fetch-perf-libs.sh \
-    ^programs/ \
-    ^sdk/ \
-  || {
-    annotate --style info \
-      "Skipped $testName as no relevant files were modified"
-    exit 0
-  }
-
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ cargo +"$rust_stable" test \
@@ -85,22 +67,22 @@ test-stable-perf)
   _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   ;;
 test-move)
-  ci/affects-files.sh \
-    Cargo.lock$ \
-    Cargo.toml$ \
-    ^ci/rust-version.sh \
-    ^ci/test-stable.sh \
-    ^ci/test-move.sh \
-    ^programs/move_loader \
-    ^programs/librapay \
-    ^logger/ \
-    ^runtime/ \
-    ^sdk/ \
-  || {
-    annotate --style info \
-      "Skipped $testName as no relevant files were modified"
-    exit 0
-  }
+  #ci/affects-files.sh \
+  #  Cargo.lock$ \
+  #  Cargo.toml$ \
+  #  ^ci/rust-version.sh \
+  #  ^ci/test-stable.sh \
+  #  ^ci/test-move.sh \
+  #  ^programs/move_loader \
+  #  ^programs/librapay \
+  #  ^logger/ \
+  #  ^runtime/ \
+  #  ^sdk/ \
+  #|| {
+  #  annotate --style info \
+  #    "Skipped $testName as no relevant files were modified"
+  #  exit 0
+  #}
   _ cargo +"$rust_stable" test --manifest-path programs/move_loader/Cargo.toml ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path programs/librapay/Cargo.toml ${V:+--verbose} -- --nocapture
   exit 0
