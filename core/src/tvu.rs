@@ -26,13 +26,14 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
+    entry_verify_service::EntryVerifyService,
     snapshot_package::SnapshotPackageSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{
     net::UdpSocket,
     sync::{
@@ -52,6 +53,7 @@ pub struct Tvu {
     accounts_background_service: AccountsBackgroundService,
     storage_stage: StorageStage,
     accounts_hash_verifier: AccountsHashVerifier,
+    entry_verify_service: EntryVerifyService,
 }
 
 pub struct Sockets {
@@ -186,6 +188,9 @@ impl Tvu {
             rewards_recorder_sender,
         };
 
+        let (slot_sender, slot_receiver) = channel();
+        let verified_results = Arc::new(RwLock::new(HashMap::new()));
+
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
             replay_stage_config,
             blockstore.clone(),
@@ -196,7 +201,12 @@ impl Tvu {
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
+            verified_results.clone(),
+            slot_sender,
         );
+
+        let entry_verify_service =
+            EntryVerifyService::new(slot_receiver, bank_forks.clone(), verified_results, &exit);
 
         let ledger_cleanup_service = tvu_config.max_ledger_slots.map(|max_ledger_slots| {
             LedgerCleanupService::new(
@@ -230,6 +240,7 @@ impl Tvu {
             accounts_background_service,
             storage_stage,
             accounts_hash_verifier,
+            entry_verify_service,
         }
     }
 
@@ -244,6 +255,7 @@ impl Tvu {
         self.accounts_background_service.join()?;
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
+        self.entry_verify_service.join()?;
         Ok(())
     }
 }

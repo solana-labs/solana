@@ -1,40 +1,37 @@
-use solana_ledger::entry::Entry;
+use crate::entry::Entry;
 use solana_sdk::clock::Slot;
+use solana_sdk::hash::Hash;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
-struct UnverifiedBlockInfo {
+pub struct UnverifiedBlockInfo {
     parent: Slot,
     // used as a correctness check
     children: Vec<Slot>,
-    entries: Vec<Entry>,
+    pub entries: Vec<Entry>,
     fork_weight: u128,
+    pub parent_hash: Hash,
 }
 
 #[derive(Default)]
-pub(crate) struct UnverifiedBlocks {
+pub struct UnverifiedBlocks {
     // Map of pending work
     // 1) Processes from smallest to largest ancestor for each fork
     // 2) Pops off earlier ancestors as they're verified and notifies
     // replay stage over channel
-    unverified_blocks: HashMap<Slot, UnverifiedBlockInfo>,
+    pub unverified_blocks: HashMap<Slot, UnverifiedBlockInfo>,
 
     // Map from fork weight to slot
     fork_weights: BTreeMap<u128, BTreeSet<Slot>>,
-
-    verification_results: HashMap<Slot, bool>,
 }
 
 impl UnverifiedBlocks {
-    pub fn is_verified(&self, slot: Slot) -> Option<bool> {
-        self.verification_results.get(&slot).cloned()
-    }
-
     pub fn add_unverified_block(
         &mut self,
         slot: Slot,
         parent: Slot,
         entries: Vec<Entry>,
         fork_weight: u128,
+        parent_hash: Hash,
     ) {
         // TODO: update weights
         self.unverified_blocks.insert(
@@ -44,6 +41,7 @@ impl UnverifiedBlocks {
                 entries,
                 children: vec![],
                 fork_weight,
+                parent_hash,
             },
         );
         if let Some(parent) = self.unverified_blocks.get_mut(&parent) {
@@ -51,7 +49,7 @@ impl UnverifiedBlocks {
         }
     }
 
-    fn get_unverified_ancestors(&self, slot: Slot) -> VecDeque<Slot> {
+    pub fn get_unverified_ancestors(&self, slot: Slot) -> VecDeque<Slot> {
         let mut current_slot = slot;
         let mut current_block = self.unverified_blocks.get(&slot);
         let mut unverified_ancestors = VecDeque::new();
@@ -67,7 +65,7 @@ impl UnverifiedBlocks {
     // Returns the heaviest leaf of any fork. Need to verify
     // from least to greatest all its ancestors which can be
     // retrieved through Self::get_unverified_ancestors().
-    fn next_heaviest_leaf(&self) -> Option<Slot> {
+    pub fn next_heaviest_leaf(&self) -> Option<Slot> {
         // Take heaviest bank, greatest slot, should be a leaf.
         let res = self
             .fork_weights
@@ -81,7 +79,7 @@ impl UnverifiedBlocks {
         if let Some(leaf) = res {
             let leaf_block = self.unverified_blocks.get(&leaf).expect(
                 "If exists in fork_weights, must
-        exisst in unverified blocks as both are in sync",
+        exist in unverified blocks as both are in sync",
             );
             {
                 assert!(leaf_block.children.is_empty());
@@ -91,7 +89,15 @@ impl UnverifiedBlocks {
         res
     }
 
-    fn set_root(&mut self, root: Slot) {
-        // Purge both `self.unverified_blocks` and `self.fork_weights`
+    pub fn set_root(&mut self, root: Slot) {
+        let mut slots_to_remove = Vec::new();
+        for (slot, _info) in self.unverified_blocks.iter() {
+            if *slot <= root {
+                slots_to_remove.push(*slot);
+            }
+        }
+        for slot in slots_to_remove {
+            self.unverified_blocks.remove(&slot);
+        }
     }
 }

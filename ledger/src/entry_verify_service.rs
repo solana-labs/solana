@@ -1,9 +1,9 @@
 use crate::bank_forks::BankForks;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
+use crate::unverified_blocks::UnverifiedBlocks;
 use solana_sdk::clock::Slot;
-use solana_sdk::hash::Hash;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::Arc;
@@ -16,9 +16,9 @@ pub struct EntryVerifyService {
 
 impl EntryVerifyService {
     pub fn new(
-        slot_receiver: Receiver<(Slot, Vec<Entry>, u64)>,
+        slot_receiver: Receiver<(Slot, Vec<Entry>, u128)>,
         bank_forks: Arc<RwLock<BankForks>>,
-        slots_verified: Arc<RwLock<HashMap<Slot, bool>>>,
+        slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
@@ -26,7 +26,7 @@ impl EntryVerifyService {
         let t_verify = Builder::new()
             .name("solana-entry-verify".to_string())
             .spawn(move || {
-                let mut slots_map = BTreeMap::new();
+                let mut unverified_blocks = UnverifiedBlocks::default();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -35,8 +35,8 @@ impl EntryVerifyService {
                     if let Err(e) = Self::verify_entries(
                         &slot_receiver,
                         &bank_forks,
-                        &slots_verified,
-                        &mut slots_map,
+                        &slot_verify_results,
+                        &mut unverified_blocks,
                     ) {
                         match e {
                             RecvTimeoutError::Disconnected => break,
@@ -50,32 +50,40 @@ impl EntryVerifyService {
     }
 
     fn verify_entries(
-        slot_receiver: &Receiver<(Slot, Vec<Entry>, u64)>,
+        slot_receiver: &Receiver<(Slot, Vec<Entry>, u128)>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        slots_verified: &Arc<RwLock<HashMap<Slot, bool>>>,
-        slots_map: &mut BTreeMap<u64, (Slot, Vec<Entry>)>,
+        slot_verify_results: &Arc<RwLock<HashMap<Slot, bool>>>,
+        unverified_blocks: &mut UnverifiedBlocks,
     ) -> Result<(), RecvTimeoutError> {
         let root_slot = bank_forks.read().unwrap().root();
-        let mut slots_to_remove = Vec::new();
-        for (weight, e) in slots_map.iter() {
-            if e.0 <= root_slot {
-                slots_to_remove.push(*weight);
+
+        unverified_blocks.set_root(root_slot);
+
+        while let Ok((slot, entries, weight)) = slot_receiver.try_recv() {
+            let parent = bank_forks
+                .read()
+                .unwrap()
+                .get(slot)
+                .unwrap()
+                .parent()
+                .unwrap();
+            let parent_slot = parent.slot();
+            let parent_hash = parent.hash();
+            unverified_blocks.add_unverified_block(slot, parent_slot, entries, weight, parent_hash);
+        }
+        if let Some(heaviest_leaf) = unverified_blocks.next_heaviest_leaf() {
+            let heaviest_ancestors = unverified_blocks.get_unverified_ancestors(heaviest_leaf);
+            if let Some(heaviest_slot) = heaviest_ancestors.iter().next() {
+                let block_info = unverified_blocks
+                    .unverified_blocks
+                    .get(heaviest_slot)
+                    .unwrap();
+                let verify_result = block_info.entries.verify(&block_info.parent_hash);
+                slot_verify_results
+                    .write()
+                    .unwrap()
+                    .insert(*heaviest_slot, verify_result);
             }
-        }
-        for weight in slots_to_remove {
-            slots_map.remove(&weight);
-        }
-        while let Ok(slots) = slot_receiver.try_recv() {
-            slots_map.insert(slots.2, (slots.0, slots.1));
-        }
-        if let Some((_weight, (slot, _entries))) = slots_map.iter().next() {
-            let mut heaviest_bank = bank_forks.read().unwrap().get(*slot).unwrap().clone();
-            while slots_map.contains_key(&heaviest_bank.slot()) {
-                heaviest_bank = heaviest_bank.parent().unwrap();
-            }
-            let (slot, entries) = slots_map.get(&heaviest_bank.slot()).unwrap();
-            let result = entries.verify(&Hash::default());
-            slots_verified.write().unwrap().insert(*slot, result);
         }
         Ok(())
     }

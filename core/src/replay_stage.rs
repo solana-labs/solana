@@ -12,14 +12,13 @@ use crate::{
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
-    unverified_blocks::UnverifiedBlocks,
 };
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
-    entry::VerifyRecyclers,
+    entry::{Entry, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
 };
@@ -120,6 +119,8 @@ impl ReplayStage {
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
+        slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
+        slot_sender: Sender<(Slot, Vec<Entry>, u128)>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -150,7 +151,6 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
-                let unverified_blocks = Arc::new(RwLock::new(UnverifiedBlocks::default()));
                 let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -301,8 +301,11 @@ impl ReplayStage {
                     let start = allocated.get();
 
                     // Vote on a fork
-                    if Self::verify_vote_and_reset_bank(&unverified_blocks, &vote_bank, &reset_bank)
-                    {
+                    if Self::verify_vote_and_reset_bank(
+                        &slot_verify_results,
+                        &vote_bank,
+                        &reset_bank,
+                    ) {
                         if let Some(ref vote_bank) = vote_bank {
                             if let Some(votable_leader) = leader_schedule_cache
                                 .slot_leader_at(vote_bank.slot(), Some(vote_bank))
@@ -458,19 +461,15 @@ impl ReplayStage {
     }
 
     fn verify_vote_and_reset_bank(
-        unverified_blocks: &RwLock<UnverifiedBlocks>,
+        slot_verify_results: &RwLock<HashMap<Slot, bool>>,
         vote_bank: &Option<Arc<Bank>>,
         reset_bank: &Option<Arc<Bank>>,
     ) -> bool {
         if let Some(vote_bank) = vote_bank {
             assert_eq!(vote_bank.slot(), reset_bank.as_ref().unwrap().slot());
             // Verify `vote_bank`'s ancestors and `vote_bank`
-            if let Some(res) = unverified_blocks
-                .read()
-                .unwrap()
-                .is_verified(vote_bank.slot())
-            {
-                res
+            if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
+                *res
             } else {
                 // TODO: Wait on channel for result of verification of
                 // `vote_bank`'s slot
@@ -478,12 +477,8 @@ impl ReplayStage {
             }
         } else if let Some(reset_bank) = reset_bank {
             // Verify `reset_bank`'s ancestors and `reset_bank`
-            if let Some(res) = unverified_blocks
-                .read()
-                .unwrap()
-                .is_verified(reset_bank.slot())
-            {
-                res
+            if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
+                *res
             } else {
                 // TODO: Wait on channel for result of verification of
                 // `reset_bank`'s slot
