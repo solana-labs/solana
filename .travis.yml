@@ -64,7 +64,7 @@ jobs:
 
     # explorer pull request
     - name: "explorer"
-      if: type = pull
+      if: type = pull_request AND branch = master
       language: node_js
       node_js:
         - "node"
@@ -79,7 +79,7 @@ jobs:
 
     # web3.js pull request
     - name: "web3.js"
-      if: type = pull
+      if: type = pull_request AND branch = master
       language: node_js
       node_js:
         - "lts/*"
