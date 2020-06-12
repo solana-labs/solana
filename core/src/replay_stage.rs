@@ -184,6 +184,7 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
+                let mut entries_map = HashMap::new();
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -217,6 +218,7 @@ impl ReplayStage {
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
+                        &mut entries_map,
                     );
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
@@ -245,6 +247,8 @@ impl ReplayStage {
                     );
                     for slot in newly_computed_slot_stats {
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
+                        let entries = entries_map.remove(&slot).unwrap();
+                        let _ = slot_sender.send((slot, entries, fork_stats.fork_weight));
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
                             &fork_stats.stake_lockouts,
@@ -678,6 +682,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
+        entries_map: &mut HashMap<Slot, Vec<Entry>>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
         let confirm_result = blockstore_processor::confirm_slot(
@@ -694,31 +699,36 @@ impl ReplayStage {
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
 
-        confirm_result.map_err(|err| {
-            // LedgerCleanupService should not be cleaning up anything
-            // that comes after the root, so we should not see any
-            // errors related to the slot being purged
-            let slot = bank.slot();
-            warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
-                datapoint_info!(
-                    "replay-stage-mark_dead_slot",
-                    ("error", format!("error: {:?}", err), String),
-                    ("slot", slot, i64)
-                );
-            } else {
-                datapoint_error!(
-                    "replay-stage-mark_dead_slot",
-                    ("error", format!("error: {:?}", err), String),
-                    ("slot", slot, i64)
-                );
+        match confirm_result {
+            Err(err) => {
+                // LedgerCleanupService should not be cleaning up anything
+                // that comes after the root, so we should not see any
+                // errors related to the slot being purged
+                let slot = bank.slot();
+                warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
+                if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
+                    datapoint_info!(
+                        "replay-stage-mark_dead_slot",
+                        ("error", format!("error: {:?}", err), String),
+                        ("slot", slot, i64)
+                    );
+                } else {
+                    datapoint_error!(
+                        "replay-stage-mark_dead_slot",
+                        ("error", format!("error: {:?}", err), String),
+                        ("slot", slot, i64)
+                    );
+                }
+                bank_progress.is_dead = true;
+                blockstore
+                    .set_dead_slot(slot)
+                    .expect("Failed to mark slot as dead in blockstore");
+                Err(err)?;
             }
-            bank_progress.is_dead = true;
-            blockstore
-                .set_dead_slot(slot)
-                .expect("Failed to mark slot as dead in blockstore");
-            err
-        })?;
+            Ok(entries) => {
+                entries_map.insert(bank.slot(), entries);
+            }
+        }
 
         Ok(tx_count)
     }
@@ -937,6 +947,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
+        entries_map: &mut HashMap<Slot, Vec<Entry>>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -983,6 +994,7 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender.clone(),
                     verify_recyclers,
+                    entries_map,
                 );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
@@ -1003,8 +1015,6 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
-                // TODO: compute weight and add to `unverified_blocks` through
-                // `add_unverified_block()`
                 bank.freeze();
             } else {
                 trace!(
@@ -2457,6 +2467,7 @@ pub(crate) mod tests {
                 &mut bank0_progress,
                 None,
                 &VerifyRecyclers::default(),
+                &mut HashMap::new(),
             );
 
             // Check that the erroring bank was marked as dead in the progress map
