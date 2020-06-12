@@ -208,13 +208,13 @@ fn do_verify_reachable_ports(
                         let mut buf = [0; 1];
                         let original_read_timeout = udp_socket.read_timeout().unwrap();
                         udp_socket.set_read_timeout(Some(timeout)).unwrap();
-                        let recv_result = udp_socket.recv(&mut buf).map(|_| port);
+                        let recv_result = udp_socket.recv(&mut buf);
                         debug!(
                             "Waited for incoming datagram on udp/{}: {:?}",
                             port, recv_result
                         );
                         udp_socket.set_read_timeout(original_read_timeout).unwrap();
-                        recv_result.ok()
+                        recv_result.map(|_| port).ok()
                     })
                 })
                 .collect();
