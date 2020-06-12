@@ -200,7 +200,8 @@ fn do_verify_reachable_ports(
                 return false;
             }
 
-            let results: Vec<_> = checked_socket_iter
+            // Spawn threads at once!
+            let thread_handles: Vec<_> = checked_socket_iter
                 .map(|udp_socket| {
                     let port = udp_socket.local_addr().unwrap().port();
                     let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
@@ -219,7 +220,11 @@ fn do_verify_reachable_ports(
                 })
                 .collect();
 
-            let reachable_ports: HashSet<_> = results
+            // Now join threads!
+            // Separate from the above by collect()-ing as an intermediately step to make the iterator
+            // eager not lazy so that joining happens here at once after creating bunch of threads
+            // at once.
+            let reachable_ports: HashSet<_> = thread_handles
                 .into_iter()
                 .filter_map(|t| t.join().unwrap())
                 .collect();
