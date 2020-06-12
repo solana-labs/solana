@@ -169,7 +169,7 @@ fn main() {
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let bank0 = Bank::new(&genesis_config);
-    let mut bank_forks = BankForks::new(0, bank0);
+    let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
 
     info!("threads: {} txs: {}", num_threads, total_num_transactions);

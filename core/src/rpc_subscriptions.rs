@@ -880,7 +880,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
@@ -974,7 +974,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
@@ -1062,7 +1062,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let mut bank_forks = BankForks::new(0, bank);
+        let mut bank_forks = BankForks::new(bank);
         let alice = Keypair::new();
 
         let past_bank_tx =
@@ -1218,7 +1218,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
@@ -1270,7 +1270,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
@@ -1368,7 +1368,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);

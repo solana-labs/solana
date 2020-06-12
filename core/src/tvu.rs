@@ -256,7 +256,7 @@ pub mod tests {
         let starting_balance = 10_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);
 
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_config));
+        let bank_forks = BankForks::new(Bank::new(&genesis_config));
 
         //start cluster_info1
         let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
