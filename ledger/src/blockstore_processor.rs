@@ -583,6 +583,10 @@ pub fn confirm_slot(
         })?;
     }
 
+    if !entries.verify_transaction_signatures() {
+        return Err(BlockError::InvalidTransactionSignature.into());
+    }
+
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
         let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());

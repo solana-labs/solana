@@ -323,16 +323,6 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let res = self.verify_transaction_signatures();
-        if !res {
-            return EntryVerificationState::CPU(VerificationData {
-                thread_h: None,
-                verification_status: EntryVerificationStatus::Failure,
-                duration_ms: timing::duration_as_ms(&start.elapsed()),
-                hashes: None,
-                tx_hashes: vec![],
-            });
-        }
 
         let api = perf_libs::api();
         if api.is_none() {

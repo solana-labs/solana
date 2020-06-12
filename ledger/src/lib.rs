@@ -7,6 +7,7 @@ pub mod blockstore_db;
 pub mod blockstore_meta;
 pub mod blockstore_processor;
 pub mod entry;
+pub mod entry_verify_service;
 pub mod erasure;
 pub mod genesis_utils;
 pub mod hardened_unpack;

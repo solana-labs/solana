@@ -645,7 +645,7 @@ impl ReplayStage {
             bank,
             &mut bank_progress.replay_stats,
             &mut bank_progress.replay_progress,
-            false,
+            true,
             transaction_status_sender,
             None,
             verify_recyclers,
