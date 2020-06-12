@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use crate::commitment::BlockCommitmentCache;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -10,9 +11,7 @@ use serde::Serialize;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
-use solana_ledger::{
-    bank_forks::BankForks, blockstore::Blockstore, commitment::BlockCommitmentCache,
-};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -836,12 +835,12 @@ impl RpcSubscriptions {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::commitment::BlockCommitment;
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
     use solana_ledger::{
         blockstore::Blockstore,
-        commitment::BlockCommitment,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };

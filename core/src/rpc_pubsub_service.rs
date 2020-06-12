@@ -72,10 +72,10 @@ impl PubSubService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commitment::BlockCommitmentCache;
     use solana_ledger::{
         bank_forks::BankForks,
         blockstore::Blockstore,
-        commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };

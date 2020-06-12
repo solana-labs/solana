@@ -3,6 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
+    commitment::VOTE_THRESHOLD_SIZE,
     result::Result,
     serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
 };
@@ -10,7 +11,6 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-    commitment::VOTE_THRESHOLD_SIZE,
     shred::Nonce,
 };
 use solana_runtime::bank::Bank;

@@ -1,5 +1,7 @@
-use crate::rpc_subscriptions::{CacheSlotInfo, RpcSubscriptions};
-use solana_ledger::commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE};
+use crate::{
+    commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE},
+    rpc_subscriptions::{CacheSlotInfo, RpcSubscriptions},
+};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;

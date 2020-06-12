@@ -1,7 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, rpc::*, rpc_health::*,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
     send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
@@ -13,7 +13,6 @@ use regex::Regex;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     blockstore::Blockstore,
-    commitment::BlockCommitmentCache,
     snapshot_utils,
 };
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};

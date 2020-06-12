@@ -6,6 +6,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
+    commitment::BlockCommitmentCache,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
     consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
@@ -23,7 +24,6 @@ use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
-    commitment::BlockCommitmentCache,
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::AccountsPackageSender,
@@ -1771,6 +1771,7 @@ impl ReplayStage {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
@@ -1781,7 +1782,6 @@ pub(crate) mod tests {
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
-        commitment::BlockCommitment,
         create_new_tmp_ledger,
         entry::{self, next_entry, Entry},
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},

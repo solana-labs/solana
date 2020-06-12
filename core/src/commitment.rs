@@ -1,4 +1,4 @@
-use crate::blockstore::Blockstore;
+use solana_ledger::blockstore::Blockstore;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
@@ -8,7 +8,7 @@ pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
 pub type BlockCommitmentArray = [u64; MAX_LOCKOUT_HISTORY + 1];
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockCommitment {
     pub commitment: BlockCommitmentArray,
 }
@@ -32,7 +32,8 @@ impl BlockCommitment {
         self.commitment[MAX_LOCKOUT_HISTORY]
     }
 
-    pub fn new(commitment: BlockCommitmentArray) -> Self {
+    #[cfg(test)]
+    pub(crate) fn new(commitment: BlockCommitmentArray) -> Self {
         Self { commitment }
     }
 }
@@ -163,6 +164,7 @@ impl BlockCommitmentCache {
             && (self.blockstore.is_root(slot) || self.bank.status_cache_ancestors().contains(&slot))
     }
 
+    #[cfg(test)]
     pub fn new_for_tests_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
@@ -177,6 +179,7 @@ impl BlockCommitmentCache {
         }
     }
 
+    #[cfg(test)]
     pub fn new_for_tests_with_blockstore_bank(
         blockstore: Arc<Blockstore>,
         bank: Arc<Bank>,
@@ -195,7 +198,7 @@ impl BlockCommitmentCache {
         }
     }
 
-    pub fn set_largest_confirmed_root(&mut self, root: Slot) {
+    pub(crate) fn set_largest_confirmed_root(&mut self, root: Slot) {
         self.largest_confirmed_root = root;
     }
 }
@@ -203,7 +206,7 @@ impl BlockCommitmentCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::get_tmp_ledger_path;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{genesis_config::GenesisConfig, pubkey::Pubkey};
 
     #[test]
