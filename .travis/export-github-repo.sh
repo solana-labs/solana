@@ -25,7 +25,7 @@ declare repo_name=$2
   exit 1
 }
 
-.travis/affects.sh "^$subdir/" || exit 0
+.travis/affects.sh "$subdir" || exit 0
 echo "Exporting $subdir"
 
 set -x

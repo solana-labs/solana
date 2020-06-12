@@ -20,8 +20,8 @@ jobs:
       git:
         depth: false
       script:
-        - .travis/export-github-repo.sh web3.js test-solana-web3.js
-        - .travis/export-github-repo.sh explorer test-explorer
+        - .travis/export-github-repo.sh web3.js/ test-solana-web3.js
+        - .travis/export-github-repo.sh explorer/ test-explorer
 
     - &release-artifacts
       if: type = push
@@ -70,7 +70,7 @@ jobs:
         - "node"
 
       before_install:
-        - .travis/affects.sh ^explorer/ || travis_terminate 0
+        - .travis/affects.sh explorer/ || travis_terminate 0
         - cd explorer
 
       script:
@@ -92,7 +92,7 @@ jobs:
           - ~/.npm
 
       before_install:
-        - .travis/affects.sh ^web3.js/ || travis_terminate 0
+        - .travis/affects.sh web3.js/ || travis_terminate 0
         - cd explorer
 
       script: echo todo
