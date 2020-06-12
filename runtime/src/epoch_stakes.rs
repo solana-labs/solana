@@ -50,6 +50,13 @@ impl EpochStakes {
         &self.epoch_authorized_voters
     }
 
+    pub fn vote_account_stake(&self, vote_account: &Pubkey) -> u64 {
+        Stakes::vote_accounts(&self.stakes)
+            .get(vote_account)
+            .map(|(stake, _)| *stake)
+            .unwrap_or(0)
+    }
+
     fn parse_epoch_vote_accounts(
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
         leader_schedule_epoch: Epoch,
