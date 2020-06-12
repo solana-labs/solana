@@ -93,10 +93,15 @@ pub fn get_public_ip_addr(ip_echo_server_addr: &SocketAddr) -> Result<IpAddr, St
 
 // Checks if any of the provided TCP/UDP ports are not reachable by the machine at
 // `ip_echo_server_addr`
-pub fn verify_reachable_ports(
+const DEFAULT_TIMEOUT_SECS: u64 = 5;
+const DEFAULT_RETRY_COUNT: usize = 5;
+
+fn do_verify_reachable_ports(
     ip_echo_server_addr: &SocketAddr,
     tcp_listeners: Vec<(u16, TcpListener)>,
     udp_sockets: &[&UdpSocket],
+    timeout: u64,
+    udp_retry_count: usize,
 ) -> bool {
     info!(
         "Checking that tcp ports {:?} from {:?}",
@@ -111,11 +116,13 @@ pub fn verify_reachable_ports(
     .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
     let mut ok = true;
+    let timeout = Duration::from_secs(timeout);
 
     // Wait for a connection to open on each TCP port
     for (port, tcp_listener) in tcp_listeners {
         let (sender, receiver) = channel();
-        std::thread::spawn(move || {
+        let listening_addr = tcp_listener.local_addr().unwrap();
+        let thread_handle = std::thread::spawn(move || {
             debug!("Waiting for incoming connection on tcp/{}", port);
             match tcp_listener.incoming().next() {
                 Some(_) => sender
@@ -124,7 +131,7 @@ pub fn verify_reachable_ports(
                 None => warn!("tcp incoming failed"),
             }
         });
-        match receiver.recv_timeout(Duration::from_secs(5)) {
+        match receiver.recv_timeout(timeout) {
             Ok(_) => {
                 info!("tcp/{} is reachable", port);
             }
@@ -133,9 +140,16 @@ pub fn verify_reachable_ports(
                     "Received no response at tcp/{}, check your port configuration: {}",
                     port, err
                 );
+                // Ugh, std rustc doesn't provide acceptng with timeout or restoring original
+                // nonblocking-status of sockets because of lack of getter, only the setter...
+                // So, to close the thread cleanly, just connect from here.
+                // ref: https://github.com/rust-lang/rust/issues/31615
+                TcpStream::connect_timeout(&listening_addr, timeout).unwrap();
                 ok = false;
             }
         }
+        // ensure to reap the thread
+        thread_handle.join().unwrap();
     }
 
     if !ok {
@@ -159,10 +173,10 @@ pub fn verify_reachable_ports(
         ip_echo_server_addr
     );
 
-    ok = false;
-
     for checked_ports_and_sockets in udp_ports.chunks(MAX_PORT_COUNT_PER_MESSAGE) {
-        for udp_remaining_retry in (0_usize..5).rev() {
+        ok = false;
+
+        for udp_remaining_retry in (0_usize..udp_retry_count).rev() {
             let (checked_ports, checked_socket_iter) = (
                 checked_ports_and_sockets
                     .iter()
@@ -193,9 +207,7 @@ pub fn verify_reachable_ports(
                     std::thread::spawn(move || {
                         let mut buf = [0; 1];
                         let original_read_timeout = udp_socket.read_timeout().unwrap();
-                        udp_socket
-                            .set_read_timeout(Some(Duration::from_secs(5)))
-                            .unwrap();
+                        udp_socket.set_read_timeout(Some(timeout)).unwrap();
                         let recv_result = udp_socket.recv(&mut buf).map(|_| port);
                         debug!(
                             "Waited for incoming datagram on udp/{}: {:?}",
@@ -207,29 +219,43 @@ pub fn verify_reachable_ports(
                 })
                 .collect();
 
-            let opened_ports: HashSet<_> = results
+            let reachable_ports: HashSet<_> = results
                 .into_iter()
                 .filter_map(|t| t.join().unwrap())
                 .collect();
 
-            if opened_ports.len() == checked_ports.len() {
+            if reachable_ports.len() == checked_ports.len() {
                 info!(
-                    "checked ports: {:?}, opened ports: {:?}",
-                    checked_ports, opened_ports
+                    "checked udp ports: {:?}, reachable udp ports: {:?}",
+                    checked_ports, reachable_ports
                 );
                 ok = true;
                 break;
             } else {
                 error!(
-                    "checked ports: {:?}, opened ports: {:?}",
-                    checked_ports, opened_ports
+                    "checked udp ports: {:?}, reachable udp ports: {:?}",
+                    checked_ports, reachable_ports
                 );
-                error!("There are some ports with no response!! Retrying...");
+                error!("There are some udp ports with no response!! Retrying...");
             }
         }
     }
 
     ok
+}
+
+pub fn verify_reachable_ports(
+    ip_echo_server_addr: &SocketAddr,
+    tcp_listeners: Vec<(u16, TcpListener)>,
+    udp_sockets: &[&UdpSocket],
+) -> bool {
+    do_verify_reachable_ports(
+        ip_echo_server_addr,
+        tcp_listeners,
+        udp_sockets,
+        DEFAULT_TIMEOUT_SECS,
+        DEFAULT_RETRY_COUNT,
+    )
 }
 
 pub fn parse_port_or_addr(optstr: Option<&str>, default_addr: SocketAddr) -> SocketAddr {
@@ -551,7 +577,25 @@ mod tests {
     }
 
     #[test]
-    fn test_get_public_ip_addr() {
+    fn test_get_public_ip_addr_none() {
+        solana_logger::setup();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let (_server_port, (server_udp_socket, server_tcp_listener)) =
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
+
+        let _runtime = ip_echo_server(server_tcp_listener);
+
+        let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
+        assert_eq!(
+            get_public_ip_addr(&server_ip_echo_addr),
+            parse_host("127.0.0.1"),
+        );
+
+        assert!(verify_reachable_ports(&server_ip_echo_addr, vec![], &[],));
+    }
+
+    #[test]
+    fn test_get_public_ip_addr_reachable() {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
@@ -571,6 +615,52 @@ mod tests {
             &ip_echo_server_addr,
             vec![(client_port, client_tcp_listener)],
             &[&client_udp_socket],
+        ));
+    }
+
+    #[test]
+    fn test_get_public_ip_addr_tcp_unreachable() {
+        solana_logger::setup();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let (_server_port, (server_udp_socket, _server_tcp_listener)) =
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
+
+        // make the socket unreachable by not running the ip echo server!
+
+        let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
+
+        let (correct_client_port, (_client_udp_socket, client_tcp_listener)) =
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
+
+        assert!(!do_verify_reachable_ports(
+            &server_ip_echo_addr,
+            vec![(correct_client_port, client_tcp_listener)],
+            &[],
+            2,
+            3,
+        ));
+    }
+
+    #[test]
+    fn test_get_public_ip_addr_udp_unreachable() {
+        solana_logger::setup();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let (_server_port, (server_udp_socket, _server_tcp_listener)) =
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
+
+        // make the socket unreachable by not running the ip echo server!
+
+        let server_ip_echo_addr = server_udp_socket.local_addr().unwrap();
+
+        let (_correct_client_port, (client_udp_socket, _client_tcp_listener)) =
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
+
+        assert!(!do_verify_reachable_ports(
+            &server_ip_echo_addr,
+            vec![],
+            &[&client_udp_socket],
+            2,
+            3,
         ));
     }
 }
