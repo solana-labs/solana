@@ -1304,8 +1304,7 @@ impl Bank {
 
     /// Converts Accounts into RefCell<Account>, this involves moving
     /// ownership by draining the source
-    #[allow(clippy::wrong_self_convention)]
-    fn into_refcells(
+    fn accounts_to_refcells(
         accounts: &mut TransactionAccounts,
         loaders: &mut TransactionLoaders,
     ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
@@ -1326,7 +1325,7 @@ impl Bank {
 
     /// Converts back from RefCell<Account> to Account, this involves moving
     /// ownership by draining the sources
-    fn from_refcells(
+    fn refcells_to_accounts(
         accounts: &mut TransactionAccounts,
         loaders: &mut TransactionLoaders,
         mut account_refcells: TransactionAccountRefCells,
@@ -1402,7 +1401,7 @@ impl Bank {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
                     let (account_refcells, loader_refcells) =
-                        Self::into_refcells(accounts, loaders);
+                        Self::accounts_to_refcells(accounts, loaders);
 
                     let process_result = self.message_processor.process_message(
                         tx.message(),
@@ -1412,7 +1411,12 @@ impl Bank {
                         log_collector,
                     );
 
-                    Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);
+                    Self::refcells_to_accounts(
+                        accounts,
+                        loaders,
+                        account_refcells,
+                        loader_refcells,
+                    );
 
                     if let Err(TransactionError::InstructionError(_, _)) = &process_result {
                         error_counters.instruction_error += 1;
