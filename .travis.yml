@@ -13,10 +13,13 @@ script:
   - source ci/env.sh
   - ci/publish-tarball.sh
 
+
 branches:
   only:
     - master
     - /^v\d+\.\d+/
+
+if: type = push
 
 notifications:
   slack:
