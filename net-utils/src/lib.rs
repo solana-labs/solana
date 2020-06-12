@@ -189,7 +189,6 @@ fn do_verify_reachable_ports(
             );
 
             if udp_remaining_retry > 0 {
-                // Might have lost a UDP packet, retry a couple times
                 let _ = ip_echo_server_request(
                     ip_echo_server_addr,
                     IpEchoServerMessage::new(&[], &checked_ports),
@@ -237,6 +236,7 @@ fn do_verify_reachable_ports(
                 ok = true;
                 break;
             } else {
+                // Might have lost a UDP packet, retry a couple times
                 error!(
                     "checked udp ports: {:?}, reachable udp ports: {:?}",
                     checked_ports, reachable_ports
