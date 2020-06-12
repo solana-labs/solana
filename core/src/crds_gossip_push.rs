@@ -229,8 +229,7 @@ impl CrdsGossipPush {
                 for i in start..(start + self.push_fanout) {
                     let ix = i % self.active_set.len();
                     if let Some((p, filter)) = self.active_set.get_index(ix) {
-                        //flood the network with votes
-                        if v.vote().is_some() || !filter.contains(&v.label().pubkey()) {
+                        if !filter.contains(&v.label().pubkey()) {
                             push_messages.entry(*p).or_default().push(v.clone());
                             self.num_pushes += 1;
                         }
@@ -408,7 +407,7 @@ mod test {
             .lookup_versioned(&label)
             .expect("versioned value should exist");
         let hash = versioned.value_hash;
-        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, &stakes);
         assert!(
             pruned.is_empty(),
             "should not prune if min threshold has not been reached"
@@ -419,7 +418,7 @@ mod test {
         stakes.insert(high_staked_peer, high_stake);
         let _ = push.process_push_message(&mut crds, &high_staked_peer, value, 0);
 
-        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, &stakes);
         assert!(
             pruned.len() < low_staked_set.len() + 1,
             "should not prune all peers"
