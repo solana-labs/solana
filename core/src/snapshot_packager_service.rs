@@ -83,7 +83,7 @@ mod tests {
         bank::BankSlotDelta,
         bank_forks::CompressionType,
         snapshot_package::AccountsPackage,
-        snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+        snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
     use std::{
@@ -174,6 +174,7 @@ mod tests {
             output_tar_path.clone(),
             Hash::default(),
             CompressionType::Bzip2,
+            SnapshotVersion::default(),
         );
 
         // Make tarball from packageable snapshot
