@@ -29,6 +29,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+    genesis_config::OperatingMode,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -55,7 +56,6 @@ use std::{
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
-pub const UNLOCK_SWITCH_VOTE_SLOT: Slot = 5_000_000;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -997,7 +997,7 @@ impl ReplayStage {
         let node_keypair = cluster_info.keypair.clone();
 
         // Send our last few votes along with the new one
-        let vote_ix = if bank.slot() > UNLOCK_SWITCH_VOTE_SLOT {
+        let vote_ix = if bank.slot() > Self::get_unlock_switch_vote_slot(bank.operating_mode()) {
             switch_fork_decision
                 .to_vote_instruction(
                     vote,
@@ -1801,6 +1801,14 @@ impl ReplayStage {
                     .send((bank.slot(), rewards.iter().copied().collect()))
                     .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
             }
+        }
+    }
+
+    pub fn get_unlock_switch_vote_slot(operating_mode: OperatingMode) -> Slot {
+        match operating_mode {
+            OperatingMode::Development => std::u64::MAX / 2,
+            OperatingMode::Stable => std::u64::MAX / 2,
+            OperatingMode::Preview => std::u64::MAX / 2,
         }
     }
 
