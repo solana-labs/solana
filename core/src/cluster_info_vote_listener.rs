@@ -948,7 +948,7 @@ mod tests {
             );
         let bank = Bank::new(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(0, bank);
+        let bank_forks = BankForks::new(bank);
         let bank = bank_forks.get(0).unwrap().clone();
         let vote_tracker = VoteTracker::new(&bank);
         let ledger_path = get_tmp_ledger_path!();
@@ -1058,7 +1058,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let vote_tracker = VoteTracker::new(&bank);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(0, bank);
+        let bank_forks = BankForks::new(bank);
         let bank = bank_forks.get(0).unwrap().clone();
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());

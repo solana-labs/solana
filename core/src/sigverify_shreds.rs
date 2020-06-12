@@ -127,7 +127,7 @@ pub mod tests {
         let bank =
             Bank::new(&create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let bf = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let verifier = ShredSigVerifier::new(bf, cache);
 
         let mut batch = vec![Packets::default()];

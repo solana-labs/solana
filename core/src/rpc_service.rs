@@ -374,7 +374,7 @@ mod tests {
             ip_addr,
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(
@@ -412,7 +412,7 @@ mod tests {
     fn create_bank_forks() -> Arc<RwLock<BankForks>> {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)))
+        Arc::new(RwLock::new(BankForks::new(bank)))
     }
 
     #[test]

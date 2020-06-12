@@ -420,7 +420,7 @@ mod tests {
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let rpc = RpcSolPubSubImpl {
@@ -471,7 +471,7 @@ mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
@@ -528,7 +528,7 @@ mod tests {
         let budget_program_id = solana_budget_program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
@@ -638,7 +638,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_config))));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
 
         let mut io = PubSubHandler::default();
         let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
@@ -680,7 +680,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(1, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
@@ -731,7 +731,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
@@ -807,7 +807,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
@@ -837,7 +837,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
@@ -884,7 +884,7 @@ mod tests {
             create_genesis_config_with_vote_accounts(10_000, &validator_voting_keypairs, 100);
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_config);
-        let bank_forks = BankForks::new(0, bank);
+        let bank_forks = BankForks::new(bank);
         let bank = bank_forks.get(0).unwrap().clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
@@ -943,7 +943,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         let session = create_session();
         let (subscriber, _id_receiver, _) = Subscriber::new_test("voteNotification");
