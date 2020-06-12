@@ -267,7 +267,6 @@ pub fn cluster_info_scale() {
         let mut success = false;
         for s in 0..(30 * 5) {
             let mut not_done = 0;
-            let mut num_dups = 0;
             let mut num_old = 0;
             let mut num_push_total = 0;
             let mut num_pushes = 0;
@@ -282,7 +281,6 @@ pub fn cluster_info_scale() {
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();
-                num_dups += node.0.gossip.read().unwrap().push.num_dups;
                 num_old += node.0.gossip.read().unwrap().push.num_old;
                 num_push_total += node.0.gossip.read().unwrap().push.num_total;
                 num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
@@ -293,7 +291,6 @@ pub fn cluster_info_scale() {
                 }
             }
             warn!("not_done: {}/{}", not_done, nodes.len());
-            warn!("num_dups: {}", num_dups);
             warn!("num_old: {}", num_old);
             warn!("num_push_total: {}", num_push_total);
             warn!("num_pushes: {}", num_pushes);
@@ -312,7 +309,6 @@ pub fn cluster_info_scale() {
         );
         sleep(Duration::from_millis(200));
         for (i, node) in nodes.iter().enumerate() {
-            node.0.gossip.write().unwrap().push.num_dups = 0;
             node.0.gossip.write().unwrap().push.num_old = 0;
             node.0.gossip.write().unwrap().push.num_total = 0;
             node.0.gossip.write().unwrap().push.num_pushes = 0;

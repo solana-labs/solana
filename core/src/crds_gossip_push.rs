@@ -35,6 +35,7 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
+pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: f64 = 2;
 
 #[derive(Clone)]
 pub struct CrdsGossipPush {
@@ -53,7 +54,6 @@ pub struct CrdsGossipPush {
     pub push_fanout: usize,
     pub msg_timeout: u64,
     pub prune_timeout: u64,
-    pub num_dups: usize,
     pub num_total: usize,
     pub num_old: usize,
     pub num_pushes: usize,
@@ -71,7 +71,6 @@ impl Default for CrdsGossipPush {
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
             prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
-            num_dups: 0,
             num_total: 0,
             num_old: 0,
             num_pushes: 0,
@@ -128,7 +127,7 @@ impl CrdsGossipPush {
             let (next_peer, next_stake) = staked_peers[next];
             keep.insert(next_peer);
             peer_stake_sum += next_stake;
-            if peer_stake_sum >= prune_stake_threshold {
+            if peer_stake_sum >= prune_stake_threshold && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES {
                 break;
             }
         }
@@ -175,10 +174,6 @@ impl CrdsGossipPush {
         if old.is_err() {
             self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
-        }
-        let old = old.unwrap();
-        if let Some(ref old) = old {
-            self.num_dups += (old.value_hash == value_hash) as usize;
         }
         Ok(old)
     }
