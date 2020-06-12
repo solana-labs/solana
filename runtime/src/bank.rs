@@ -2308,7 +2308,7 @@ impl Bank {
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
-        self.shrink_all_stale_slots();
+        self.shrink_all_slots();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -2572,12 +2572,26 @@ impl Bank {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
 
-    pub fn process_stale_slot(&self) {
-        self.rc.accounts.accounts_db.process_stale_slot();
+    pub fn shrink_all_slots(&self) {
+        self.rc.accounts.accounts_db.shrink_all_slots();
     }
 
-    pub fn shrink_all_stale_slots(&self) {
-        self.rc.accounts.accounts_db.shrink_all_stale_slots();
+    pub fn process_stale_slot_with_budget(
+        &self,
+        mut consumed_budget: usize,
+        budget_recovery_delta: usize,
+    ) -> usize {
+        if consumed_budget == 0 {
+            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot();
+            if shrunken_account_count > 0 {
+                datapoint_info!(
+                    "stale_slot_shrink",
+                    ("accounts", shrunken_account_count, i64)
+                );
+                consumed_budget += shrunken_account_count;
+            }
+        }
+        consumed_budget.saturating_sub(budget_recovery_delta)
     }
 }
 
@@ -7077,5 +7091,46 @@ mod tests {
         assert!(bank.process_transaction(&tx).is_ok());
         assert_eq!(1, bank.get_balance(&program1_pubkey));
         assert_eq!(42, bank.get_balance(&program2_pubkey));
+    }
+
+    #[test]
+    fn test_process_stale_slot_with_budget() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+
+        let bank = Arc::new(Bank::new(&genesis_config));
+        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+        assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
+        assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
+
+        assert_eq!(bank.process_stale_slot_with_budget(0, 100), 0);
+        assert_eq!(bank.process_stale_slot_with_budget(33, 100), 0);
+        assert_eq!(bank.process_stale_slot_with_budget(133, 100), 33);
+
+        bank.squash();
+
+        let some_lamports = 123;
+        let bank = Arc::new(new_from_parent(&bank));
+        bank.deposit(&pubkey1, some_lamports);
+        bank.deposit(&pubkey2, some_lamports);
+
+        let bank = Arc::new(new_from_parent(&bank));
+        bank.deposit(&pubkey1, some_lamports);
+        bank.squash();
+        bank.clean_accounts();
+        let force_to_return_alive_account = 0;
+        assert_eq!(
+            bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
+            22
+        );
+
+        let mut consumed_budgets = (0..3)
+            .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
+            .collect::<Vec<_>>();
+        consumed_budgets.sort();
+        assert_eq!(consumed_budgets, vec![0, 1, 8]);
     }
 }

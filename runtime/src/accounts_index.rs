@@ -19,6 +19,7 @@ pub struct AccountsIndex<T> {
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
+    pub previous_uncleaned_roots: HashSet<Slot>,
 }
 
 impl<'a, T: 'a + Clone> AccountsIndex<T> {
@@ -235,6 +236,13 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     pub fn clean_dead_slot(&mut self, slot: Slot) {
         self.roots.remove(&slot);
         self.uncleaned_roots.remove(&slot);
+        self.previous_uncleaned_roots.remove(&slot);
+    }
+
+    pub fn reset_uncleaned_roots(&mut self) -> HashSet<Slot> {
+        let empty = HashSet::new();
+        let new_previous = std::mem::replace(&mut self.uncleaned_roots, empty);
+        std::mem::replace(&mut self.previous_uncleaned_roots, new_previous)
     }
 }
 
@@ -359,10 +367,31 @@ mod tests {
     fn test_clean_and_unclean_slot() {
         let mut index = AccountsIndex::<bool>::default();
         assert_eq!(0, index.uncleaned_roots.len());
+        index.add_root(0);
         index.add_root(1);
-        assert_eq!(1, index.uncleaned_roots.len());
-        index.clean_dead_slot(1);
+        assert_eq!(2, index.uncleaned_roots.len());
+
+        assert_eq!(0, index.previous_uncleaned_roots.len());
+        index.reset_uncleaned_roots();
+        assert_eq!(2, index.roots.len());
         assert_eq!(0, index.uncleaned_roots.len());
+        assert_eq!(2, index.previous_uncleaned_roots.len());
+
+        index.add_root(2);
+        index.add_root(3);
+        assert_eq!(4, index.roots.len());
+        assert_eq!(2, index.uncleaned_roots.len());
+        assert_eq!(2, index.previous_uncleaned_roots.len());
+
+        index.clean_dead_slot(1);
+        assert_eq!(3, index.roots.len());
+        assert_eq!(2, index.uncleaned_roots.len());
+        assert_eq!(1, index.previous_uncleaned_roots.len());
+
+        index.clean_dead_slot(2);
+        assert_eq!(2, index.roots.len());
+        assert_eq!(1, index.uncleaned_roots.len());
+        assert_eq!(1, index.previous_uncleaned_roots.len());
     }
 
     #[test]
