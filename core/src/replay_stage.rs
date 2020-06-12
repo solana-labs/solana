@@ -1852,7 +1852,7 @@ pub(crate) mod tests {
             );
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
-            let mut bank_forks = BankForks::new(0, bank0);
+            let mut bank_forks = BankForks::new(bank0);
 
             // Insert a non-root bank so that the propagation logic will update this
             // bank
@@ -1961,7 +1961,7 @@ pub(crate) mod tests {
     fn test_handle_new_root() {
         let genesis_config = create_genesis_config(10_000).genesis_config;
         let bank0 = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
         let root = 3;
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
         let root_bank = Bank::new_from_parent(
@@ -1992,7 +1992,7 @@ pub(crate) mod tests {
     fn test_handle_new_root_ahead_of_largest_confirmed_root() {
         let genesis_config = create_genesis_config(10_000).genesis_config;
         let bank0 = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
         let confirmed_root = 1;
         let fork = 2;
         let bank1 = Bank::new_from_parent(
@@ -3360,10 +3360,9 @@ pub(crate) mod tests {
 
         // If the root is 3, this filters out slot 2 from the progress map,
         // which implies confirmation
-        let mut bank_forks = BankForks::new(
-            3,
-            Bank::new(&genesis_config::create_genesis_config(10000).0),
-        );
+        let bank0 = Bank::new(&genesis_config::create_genesis_config(10000).0);
+        let bank3 = Bank::new_from_parent(&Arc::new(bank0), &Pubkey::default(), 3);
+        let mut bank_forks = BankForks::new(bank3);
         let bank5 = Bank::new_from_parent(bank_forks.get(3).unwrap(), &Pubkey::default(), 5);
         bank_forks.insert(bank5);
 

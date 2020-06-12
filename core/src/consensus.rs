@@ -988,7 +988,7 @@ pub mod test {
             0,
             ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
         );
-        let bank_forks = BankForks::new(0, bank0);
+        let bank_forks = BankForks::new(bank0);
         let heaviest_subtree_fork_choice =
             HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
         (bank_forks, progress, heaviest_subtree_fork_choice)
