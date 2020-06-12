@@ -58,6 +58,7 @@ pub mod storage_stage;
 pub mod tpu;
 pub mod transaction_status_service;
 pub mod tvu;
+pub mod unverified_blocks;
 pub mod validator;
 pub mod verified_vote_packets;
 pub mod weighted_shuffle;

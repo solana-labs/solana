@@ -476,6 +476,7 @@ fn confirm_full_slot(
         &mut timing,
         progress,
         skip_verification,
+        false,
         None,
         opts.entry_callback.as_ref(),
         recyclers,
@@ -534,10 +535,11 @@ pub fn confirm_slot(
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
+    skip_poh_verify: bool,
     transaction_status_sender: Option<TransactionStatusSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
-) -> result::Result<(), BlockstoreProcessorError> {
+) -> result::Result<Vec<Entry>, BlockstoreProcessorError> {
     let slot = bank.slot();
 
     let (entries, num_shreds, slot_full) = {
@@ -566,8 +568,9 @@ pub fn confirm_slot(
     );
 
     if !skip_verification {
+        let start = Instant::now();
         let tick_hash_count = &mut progress.tick_hash_count;
-        verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
+        let res = verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
             warn!(
                 "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
                 err,
@@ -580,24 +583,27 @@ pub fn confirm_slot(
                 slot_full,
             );
             err
-        })?;
-    }
-
-    if !entries.verify_transaction_signatures() {
-        return Err(BlockError::InvalidTransactionSignature.into());
-    }
-
-    let verifier = if !skip_verification {
-        datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
-        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
-        if entry_state.status() == EntryVerificationStatus::Failure {
-            warn!("Ledger proof of history failed at slot: {}", slot);
-            return Err(BlockError::InvalidEntryHash.into());
+        });
+        if res.is_err() {
+            timing.verify_elapsed += start.elapsed().as_millis() as u64;
         }
-        Some(entry_state)
-    } else {
-        None
-    };
+        res?;
+
+        // Verify tx signatures
+        if !entries.verify_transaction_signatures() {
+            warn!("Ledger transaction verification failed at slot: {}", slot);
+            timing.verify_elapsed += start.elapsed().as_millis() as u64;
+            return Err(BlockError::InvalidTransactionSignature.into());
+        }
+
+        // Verify PoH
+        if !skip_poh_verify {
+            let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
+            assert_eq!(entry_state.status(), EntryVerificationStatus::Pending);
+        }
+
+        timing.verify_elapsed += start.elapsed().as_millis() as u64;
+    }
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let process_result = process_entries_with_callback(
@@ -611,19 +617,42 @@ pub fn confirm_slot(
     replay_elapsed.stop();
     timing.replay_elapsed += replay_elapsed.as_us();
 
-    if let Some(mut verifier) = verifier {
-        if !verifier.finish_verify(&entries) {
-            warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            return Err(BlockError::InvalidEntryHash.into());
-        }
-        timing.verify_elapsed += verifier.duration_ms();
-    }
-
     process_result?;
 
     progress.num_shreds += num_shreds;
     progress.num_entries += num_entries;
     progress.num_txs += num_txs;
+
+    Ok(entries)
+}
+
+pub fn verify_bank(
+    bank: &Arc<Bank>,
+    entries: &[Entry],
+    skip_verification: bool,
+    timing: &mut ConfirmationTiming,
+    progress: &mut ConfirmationProgress,
+    recyclers: &VerifyRecyclers,
+) -> result::Result<(), BlockstoreProcessorError> {
+    let start = Instant::now();
+    let verifier = if !skip_verification {
+        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
+        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
+        assert_eq!(entry_state.status(), EntryVerificationStatus::Pending);
+        Some(entry_state)
+    } else {
+        None
+    };
+
+    if let Some(mut verifier) = verifier {
+        if !verifier.finish_verify(&entries) {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            timing.verify_elapsed += start.elapsed().as_millis() as u64;
+            return Err(BlockError::InvalidEntryHash.into());
+        }
+    }
+
+    timing.verify_elapsed += start.elapsed().as_millis() as u64;
     if let Some(last_entry) = entries.last() {
         progress.last_entry = last_entry.hash;
     }
