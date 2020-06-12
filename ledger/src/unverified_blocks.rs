@@ -8,7 +8,6 @@ pub struct UnverifiedBlockInfo {
     // used as a correctness check
     children: Vec<Slot>,
     pub entries: Vec<Entry>,
-    fork_weight: u128,
     pub parent_hash: Hash,
 }
 
@@ -40,10 +39,12 @@ impl UnverifiedBlocks {
                 parent,
                 entries,
                 children: vec![],
-                fork_weight,
                 parent_hash,
             },
         );
+        let fork_weights = self.fork_weights.entry(fork_weight).or_insert_with(|| BTreeSet::new());
+        fork_weights.insert(slot);
+
         if let Some(parent) = self.unverified_blocks.get_mut(&parent) {
             parent.children.push(slot);
         }
@@ -96,8 +97,20 @@ impl UnverifiedBlocks {
                 slots_to_remove.push(*slot);
             }
         }
-        for slot in slots_to_remove {
-            self.unverified_blocks.remove(&slot);
+        for slot in &slots_to_remove {
+            self.unverified_blocks.remove(slot);
+        }
+        let mut weights_to_remove = Vec::new();
+        for (weight, slots) in &mut self.fork_weights {
+            for slot in &slots_to_remove {
+                slots.remove(slot);
+            }
+            if slots.is_empty() {
+                weights_to_remove.push(*weight);
+            }
+        }
+        for weight in weights_to_remove {
+            self.fork_weights.remove(&weight);
         }
     }
 }
