@@ -205,7 +205,7 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite/ .md$ ^docs/ ^web3.js/; then
+  if affects_other_than ^.buildkite/ .md$ ^docs/ ^web3.js/ ^explorer/; then
     all_test_steps
   fi
 
@@ -214,10 +214,7 @@ pull_or_push_steps() {
     command_step docs ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image docs/build.sh" 5
   fi
 
-  # web3.js/ changes:
-  if affects ^web3.js/; then
-    echo "# TODO: run solana-web3.js tests..." >> "$output_file"
-  fi
+  # web3.js and explorer changes run on Travis...
 }
 
 
