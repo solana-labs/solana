@@ -27,6 +27,7 @@ jobs:
       if: type = push
       name: "macOS release artifacts"
       os: osx
+      language: rust
       rust:
         - stable
       install:
