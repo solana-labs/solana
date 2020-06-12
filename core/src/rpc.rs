@@ -2908,7 +2908,7 @@ pub mod tests {
 
         let bank = Bank::new(&genesis_config);
         (
-            Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
+            Arc::new(RwLock::new(BankForks::new(bank))),
             mint_keypair,
             voting_keypair,
         )

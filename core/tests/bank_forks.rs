@@ -49,7 +49,7 @@ mod tests {
             &[],
         );
         bank0.freeze();
-        let mut bank_forks = BankForks::new(0, bank0);
+        let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = snapshot_interval_slots;
 
         let snapshot_config = SnapshotConfig {
