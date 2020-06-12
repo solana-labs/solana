@@ -78,15 +78,9 @@ impl CrdsGossip {
         let id = &self.id;
         let crds = &self.crds;
         let push = &mut self.push;
-        let versioned = labels
-            .into_iter()
-            .filter_map(|label| crds.lookup_versioned(&label));
-
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        for val in versioned {
-            let origin = val.value.pubkey();
-            let hash = val.value_hash;
-            let peers = push.prune_received_cache(id, &origin, hash, stakes);
+        for origin in labels.iter().map(|k| k.pubkey()) {
+            let peers = push.prune_received_cache(id, &origin, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }
