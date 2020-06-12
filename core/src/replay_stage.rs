@@ -12,6 +12,7 @@ use crate::{
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
+    unverified_blocks::UnverifiedBlocks,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -149,6 +150,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
+                let unverified_blocks = Arc::new(RwLock::new(UnverifiedBlocks::default()));
                 let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -299,103 +301,108 @@ impl ReplayStage {
                     let start = allocated.get();
 
                     // Vote on a fork
-                    if let Some(ref vote_bank) = vote_bank {
-                        if let Some(votable_leader) =
-                            leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
-                        {
-                            Self::log_leader_change(
-                                &my_pubkey,
-                                vote_bank.slot(),
-                                &mut current_leader,
-                                &votable_leader,
-                            );
-                        }
-
-                        Self::handle_votable_bank(
-                            &vote_bank,
-                            &bank_forks,
-                            &mut tower,
-                            &mut progress,
-                            &vote_account,
-                            &authorized_voter_keypairs,
-                            &cluster_info,
-                            &blockstore,
-                            &leader_schedule_cache,
-                            &root_bank_sender,
-                            &lockouts_sender,
-                            &accounts_hash_sender,
-                            &latest_root_senders,
-                            &mut all_pubkeys,
-                            &subscriptions,
-                            &block_commitment_cache,
-                        )?;
-                    };
-
-                    Self::report_memory(&allocated, "votable_bank", start);
-                    let start = allocated.get();
-
-                    // Reset onto a fork
-                    if let Some(reset_bank) = reset_bank {
-                        if last_reset != reset_bank.last_blockhash() {
-                            info!(
-                                "vote bank: {:?} reset bank: {:?}",
-                                vote_bank.as_ref().map(|b| b.slot()),
-                                reset_bank.slot(),
-                            );
-                            let fork_progress = progress
-                                .get(&reset_bank.slot())
-                                .expect("bank to reset to must exist in progress map");
-                            datapoint_info!(
-                                "blocks_produced",
-                                ("num_blocks_on_fork", fork_progress.num_blocks_on_fork, i64),
-                                (
-                                    "num_dropped_blocks_on_fork",
-                                    fork_progress.num_dropped_blocks_on_fork,
-                                    i64
-                                ),
-                            );
-                            Self::reset_poh_recorder(
-                                &my_pubkey,
-                                &blockstore,
-                                &reset_bank,
-                                &poh_recorder,
-                                &leader_schedule_cache,
-                            );
-                            last_reset = reset_bank.last_blockhash();
-                            tpu_has_bank = false;
-
-                            if !partition
-                                && vote_bank.as_ref().map(|b| b.slot()) != Some(reset_bank.slot())
+                    if Self::verify_vote_and_reset_bank(&unverified_blocks, &vote_bank, &reset_bank)
+                    {
+                        if let Some(ref vote_bank) = vote_bank {
+                            if let Some(votable_leader) = leader_schedule_cache
+                                .slot_leader_at(vote_bank.slot(), Some(vote_bank))
                             {
-                                warn!(
+                                Self::log_leader_change(
+                                    &my_pubkey,
+                                    vote_bank.slot(),
+                                    &mut current_leader,
+                                    &votable_leader,
+                                );
+                            }
+
+                            Self::handle_votable_bank(
+                                &vote_bank,
+                                &bank_forks,
+                                &mut tower,
+                                &mut progress,
+                                &vote_account,
+                                &authorized_voter_keypairs,
+                                &cluster_info,
+                                &blockstore,
+                                &leader_schedule_cache,
+                                &root_bank_sender,
+                                &lockouts_sender,
+                                &accounts_hash_sender,
+                                &latest_root_senders,
+                                &mut all_pubkeys,
+                                &subscriptions,
+                                &block_commitment_cache,
+                            )?;
+                        };
+
+                        Self::report_memory(&allocated, "votable_bank", start);
+                        let start = allocated.get();
+
+                        // Reset onto a fork
+                        if let Some(reset_bank) = reset_bank {
+                            if last_reset != reset_bank.last_blockhash() {
+                                info!(
+                                    "vote bank: {:?} reset bank: {:?}",
+                                    vote_bank.as_ref().map(|b| b.slot()),
+                                    reset_bank.slot(),
+                                );
+                                let fork_progress = progress
+                                    .get(&reset_bank.slot())
+                                    .expect("bank to reset to must exist in progress map");
+                                datapoint_info!(
+                                    "blocks_produced",
+                                    ("num_blocks_on_fork", fork_progress.num_blocks_on_fork, i64),
+                                    (
+                                        "num_dropped_blocks_on_fork",
+                                        fork_progress.num_dropped_blocks_on_fork,
+                                        i64
+                                    ),
+                                );
+                                Self::reset_poh_recorder(
+                                    &my_pubkey,
+                                    &blockstore,
+                                    &reset_bank,
+                                    &poh_recorder,
+                                    &leader_schedule_cache,
+                                );
+                                last_reset = reset_bank.last_blockhash();
+                                tpu_has_bank = false;
+
+                                if !partition
+                                    && vote_bank.as_ref().map(|b| b.slot())
+                                        != Some(reset_bank.slot())
+                                {
+                                    warn!(
                                     "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
                                     reset_bank.slot(),
                                     tower.last_vote()
                                 );
-                                inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                datapoint_info!(
-                                    "replay_stage-partition",
-                                    ("slot", reset_bank.slot() as i64, i64)
-                                );
-                                partition = true;
-                            } else if partition
-                                && vote_bank.as_ref().map(|b| b.slot()) == Some(reset_bank.slot())
-                            {
-                                warn!(
-                                    "PARTITION resolved fork: {} last vote: {:?}",
-                                    reset_bank.slot(),
-                                    tower.last_vote()
-                                );
-                                partition = false;
-                                inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    datapoint_info!(
+                                        "replay_stage-partition",
+                                        ("slot", reset_bank.slot() as i64, i64)
+                                    );
+                                    partition = true;
+                                } else if partition
+                                    && vote_bank.as_ref().map(|b| b.slot())
+                                        == Some(reset_bank.slot())
+                                {
+                                    warn!(
+                                        "PARTITION resolved fork: {} last vote: {:?}",
+                                        reset_bank.slot(),
+                                        tower.last_vote()
+                                    );
+                                    partition = false;
+                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                                }
                             }
+                            datapoint_debug!(
+                                "replay_stage-memory",
+                                ("reset_bank", (allocated.get() - start) as i64, i64),
+                            );
                         }
-                        datapoint_debug!(
-                            "replay_stage-memory",
-                            ("reset_bank", (allocated.get() - start) as i64, i64),
-                        );
+                        Self::report_memory(&allocated, "reset_bank", start);
                     }
-                    Self::report_memory(&allocated, "reset_bank", start);
 
                     let start = allocated.get();
                     if !tpu_has_bank {
@@ -448,6 +455,44 @@ impl ReplayStage {
             },
             root_bank_receiver,
         )
+    }
+
+    fn verify_vote_and_reset_bank(
+        unverified_blocks: &RwLock<UnverifiedBlocks>,
+        vote_bank: &Option<Arc<Bank>>,
+        reset_bank: &Option<Arc<Bank>>,
+    ) -> bool {
+        if let Some(vote_bank) = vote_bank {
+            assert_eq!(vote_bank.slot(), reset_bank.as_ref().unwrap().slot());
+            // Verify `vote_bank`'s ancestors and `vote_bank`
+            if let Some(res) = unverified_blocks
+                .read()
+                .unwrap()
+                .is_verified(vote_bank.slot())
+            {
+                res
+            } else {
+                // TODO: Wait on channel for result of verification of
+                // `vote_bank`'s slot
+                false
+            }
+        } else if let Some(reset_bank) = reset_bank {
+            // Verify `reset_bank`'s ancestors and `reset_bank`
+            if let Some(res) = unverified_blocks
+                .read()
+                .unwrap()
+                .is_verified(reset_bank.slot())
+            {
+                res
+            } else {
+                // TODO: Wait on channel for result of verification of
+                // `reset_bank`'s slot
+                false
+            }
+        } else {
+            // Both vote and reset bank are None, vacously true
+            true
+        }
     }
 
     fn report_memory(
@@ -646,6 +691,7 @@ impl ReplayStage {
             &mut bank_progress.replay_stats,
             &mut bank_progress.replay_progress,
             false,
+            true,
             transaction_status_sender,
             None,
             verify_recyclers,
@@ -962,6 +1008,8 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
+                // TODO: compute weight and add to `unverified_blocks` through
+                // `add_unverified_block()`
                 bank.freeze();
             } else {
                 trace!(

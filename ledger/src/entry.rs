@@ -263,8 +263,10 @@ pub trait EntrySlice {
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default())
-            .finish_verify(self)
+        self.verify_transaction_signatures()
+            && self
+                .start_verify(start_hash, VerifyRecyclers::default())
+                .finish_verify(self)
     }
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState {
         let now = Instant::now();
@@ -323,16 +325,6 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let res = self.verify_transaction_signatures();
-        if !res {
-            return EntryVerificationState::CPU(VerificationData {
-                thread_h: None,
-                verification_status: EntryVerificationStatus::Failure,
-                duration_ms: timing::duration_as_ms(&start.elapsed()),
-                hashes: None,
-                tx_hashes: vec![],
-            });
-        }
 
         let api = perf_libs::api();
         if api.is_none() {
