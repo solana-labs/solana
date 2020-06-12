@@ -5,10 +5,10 @@
 
 (
   set -x
-  git diff --name-only $TRAVIS_COMMIT_RANGE
+  git diff --name-only "$TRAVIS_COMMIT_RANGE"
 )
 
-for file in $(git diff --name-only $TRAVIS_COMMIT_RANGE); do
+for file in $(git diff --name-only "$TRAVIS_COMMIT_RANGE"); do
   if [[ $file =~ ^"$1" ]]; then
     exit 0
   fi
