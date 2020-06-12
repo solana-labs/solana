@@ -1,48 +1,18 @@
-//! @brief Solana Native program entry point
-
-use crate::{
-    account::Account, account::KeyedAccount, instruction::CompiledInstruction,
-    instruction::InstructionError, message::Message, pubkey::Pubkey,
-};
-use std::{cell::RefCell, rc::Rc};
-
-// Prototype of a native program entry point
-///
-/// program_id: Program ID of the currently executing program
-/// keyed_accounts: Accounts passed as part of the instruction
-/// instruction_data: Instruction data
-pub type ProgramEntrypoint = unsafe extern "C" fn(
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    instruction_data: &[u8],
-) -> Result<(), InstructionError>;
-
-// Prototype of a native loader entry point
-///
-/// program_id: Program ID of the currently executing program
-/// keyed_accounts: Accounts passed as part of the instruction
-/// instruction_data: Instruction data
-/// invoke_context: Invocation context
-pub type LoaderEntrypoint = unsafe extern "C" fn(
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    instruction_data: &[u8],
-    invoke_context: &dyn InvokeContext,
-) -> Result<(), InstructionError>;
+//! @brief Solana builtin helper macros
 
 #[rustversion::since(1.46.0)]
 #[macro_export]
-macro_rules! declare_name {
-    ($name:ident, $filename:ident, $id:path) => {
+macro_rules! declare_builtin_name {
+    ($name:ident, $id:path, $entrypoint:expr) => {
         #[macro_export]
         macro_rules! $name {
             () => {
                 // Subtle:
-                // The outer `declare_name!` macro may be expanded in another
+                // The outer `declare_builtin_name!` macro may be expanded in another
                 // crate, causing the macro `$name!` to be defined in that
                 // crate. We want to emit a call to `$crate::id()`, and have
                 // `$crate` be resolved in the crate where `$name!` gets defined,
-                // *not* in this crate (where `declare_name! is defined).
+                // *not* in this crate (where `declare_builtin_name! is defined).
                 //
                 // When a macro_rules! macro gets expanded, any $crate tokens
                 // in its output will be 'marked' with the crate they were expanded
@@ -54,8 +24,8 @@ macro_rules! declare_name {
                 // apply use the `Span` of `$name` when resolving `$crate::id`.
                 // This causes `$crate` to behave as though it was written
                 // at the same location as the `$name` value passed
-                // to `declare_name!` (e.g. the 'foo' in
-                // `declare_name(foo)`
+                // to `declare_builtin_name!` (e.g. the 'foo' in
+                // `declare_builtin_name(foo)`
                 //
                 // See the `respan!` macro for more details.
                 // This should use `crate::respan!` once
@@ -66,8 +36,9 @@ macro_rules! declare_name {
                 // `respan!` respans the path `$crate::id`, which we then call (hence the extra
                 // parens)
                 (
-                    stringify!($filename).to_string(),
+                    stringify!($name).to_string(),
                     ::solana_sdk::respan!($crate::$id, $name)(),
+                    $entrypoint,
                 )
             };
         }
@@ -76,22 +47,21 @@ macro_rules! declare_name {
 
 #[rustversion::not(since(1.46.0))]
 #[macro_export]
-macro_rules! declare_name {
-    ($name:ident, $filename:ident, $id:path) => {
+macro_rules! declare_builtin_name {
+    ($name:ident, $id:path, $entrypoint:expr) => {
         #[macro_export]
         macro_rules! $name {
             () => {
-                (stringify!($filename).to_string(), $crate::$id())
+                (stringify!($name).to_string(), $crate::$id(), $entrypoint)
             };
         }
     };
 }
 
-/// Convenience macro to declare a native program
+/// Convenience macro to declare a builtin
 ///
 /// bs58_string: bs58 string representation the program's id
 /// name: Name of the program
-/// filename: must match the library name in Cargo.toml
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
 /// id: Path to the program id access function, used if this macro is not
 ///     called in `src/lib`
@@ -106,7 +76,7 @@ macro_rules! declare_name {
 /// use solana_sdk::account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
-/// use solana_sdk::declare_program;
+/// use solana_sdk::declare_builtin
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
@@ -117,7 +87,7 @@ macro_rules! declare_name {
 ///   Ok(())
 /// }
 ///
-/// declare_program!(
+/// declare_builtin!(
 ///     "My11111111111111111111111111111111111111111",
 ///     solana_my_program,
 ///     my_process_instruction
@@ -148,7 +118,7 @@ macro_rules! declare_name {
 ///   Ok(())
 /// }
 ///
-/// declare_program!(
+/// declare_builtin!(
 ///     solana_sdk::system_program::ID,
 ///     solana_my_program,
 ///     my_process_instruction
@@ -159,52 +129,12 @@ macro_rules! declare_name {
 /// assert_eq!(id(), solana_sdk::system_program::ID);
 /// ```
 #[macro_export]
-macro_rules! declare_program(
-    ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
+macro_rules! declare_builtin {
+    ($bs58_string:expr, $name:ident, $entrypoint:expr) => {
+        $crate::declare_builtin!($bs58_string, $name, $entrypoint, id);
+    };
+    ($bs58_string:expr, $name:ident, $entrypoint:expr, $id:path) => {
         $crate::declare_id!($bs58_string);
-        $crate::declare_name!($name, $name, id);
-
-        #[no_mangle]
-        pub extern "C" fn $name(
-            program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &[$crate::account::KeyedAccount],
-            instruction_data: &[u8],
-        ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, instruction_data)
-        }
-    )
-);
-
-pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
-pub type ProcessInstructionWithContext =
-    fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
-
-/// Invocation context passed to loaders
-pub trait InvokeContext {
-    /// Push a program ID on to the invocation stack
-    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
-    /// Pop a program ID off of the invocation stack
-    fn pop(&mut self);
-    /// Verify and update PreAccount state based on program execution
-    fn verify_and_update(
-        &mut self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<Account>>],
-    ) -> Result<(), InstructionError>;
-    /// Get the program ID of the currently executing program
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
-    /// Get a list of built-in programs
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
-    /// Get this invocation's logger
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
-    /// Are cross program invocations supported
-    fn is_cross_program_supported(&self) -> bool;
-}
-
-/// Log messages
-pub trait Logger {
-    fn log_enabled(&self) -> bool;
-    /// Log a message
-    fn log(&mut self, message: &str);
+        $crate::declare_builtin_name!($name, $id, $entrypoint);
+    };
 }

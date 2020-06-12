@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
-    entrypoint_native::{InvokeContext, Logger, ProcessInstruction},
+    entrypoint_native::{InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
@@ -247,9 +247,6 @@ impl Logger for ThisLogger {
     }
 }
 
-pub type ProcessInstructionWithContext =
-    fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
-
 #[derive(Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
@@ -353,6 +350,17 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         if native_loader::check_id(&keyed_accounts[0].owner()?) {
             let root_id = keyed_accounts[0].unsigned_key();
+            for (id, process_instruction) in &self.loaders {
+                if id == root_id {
+                    // Call the program via a builtin loader
+                    return process_instruction(
+                        &root_id,
+                        &keyed_accounts[1..],
+                        instruction_data,
+                        invoke_context,
+                    );
+                }
+            }
             for (id, process_instruction) in &self.programs {
                 if id == root_id {
                     // Call the builtin program
@@ -367,9 +375,9 @@ impl MessageProcessor {
                 invoke_context,
             );
         } else {
-            let owner_id = keyed_accounts[0].owner()?;
+            let owner_id = &keyed_accounts[0].owner()?;
             for (id, process_instruction) in &self.loaders {
-                if *id == owner_id {
+                if id == owner_id {
                     // Call the program via a builtin loader
                     return process_instruction(
                         &owner_id,

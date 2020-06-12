@@ -1616,7 +1616,6 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
- "jemalloc-sys",
  "num-derive 0.3.0",
  "num-traits",
  "solana-runtime",

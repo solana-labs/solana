@@ -3378,7 +3378,6 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "byteorder",
- "jemalloc-sys",
  "num-derive 0.3.0",
  "num-traits",
  "rand 0.7.3",
@@ -3556,7 +3555,6 @@ dependencies = [
  "serial_test_derive",
  "solana-account-decoder",
  "solana-banks-server",
- "solana-bpf-loader-program",
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",

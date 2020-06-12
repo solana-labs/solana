@@ -323,11 +323,11 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let bank0 = Arc::new(Bank::new_with_paths(
-        &genesis_config,
-        account_paths,
-        &opts.frozen_accounts,
-    ));
+    let mut bank0 = Bank::new_with_paths(&genesis_config, account_paths, &opts.frozen_accounts);
+    let callback =
+        solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode);
+    callback(&mut bank0);
+    let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;

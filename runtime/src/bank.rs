@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtin_programs::{get_builtin_programs, get_epoch_activated_builtin_programs},
+    builtins::{get_builtins, get_epoch_activated_builtins},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
     message_processor::MessageProcessor,
@@ -35,7 +35,7 @@ use solana_sdk::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
-    entrypoint_native::ProcessInstruction,
+    entrypoint_native::{ProcessInstruction, ProcessInstructionWithContext},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -97,6 +97,26 @@ type RentCollectionCycleParams = (
 );
 
 type EpochCount = u64;
+
+#[derive(Copy, Clone)]
+pub enum Entrypoint {
+    Program(ProcessInstruction),
+    Loader(ProcessInstructionWithContext),
+}
+pub struct Builtin {
+    pub name: String,
+    pub id: Pubkey,
+    pub entrypoint: Entrypoint,
+}
+impl Builtin {
+    pub fn new(name: &str, id: Pubkey, entrypoint: Entrypoint) -> Self {
+        Self {
+            name: name.to_string(),
+            id,
+            entrypoint,
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct BankRc {
@@ -544,11 +564,9 @@ impl Bank {
                 entered_epoch_callback(&mut new)
             }
 
-            if let Some(builtin_programs) =
-                get_epoch_activated_builtin_programs(new.operating_mode(), new.epoch)
-            {
-                for program in builtin_programs.iter() {
-                    new.add_builtin_program(&program.name, program.id, program.process_instruction);
+            if let Some(builtins) = get_epoch_activated_builtins(new.operating_mode(), new.epoch) {
+                for program in builtins.iter() {
+                    new.add_builtin(&program.name, program.id, program.entrypoint);
                 }
             }
         }
@@ -2575,9 +2593,9 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtin_programs = get_builtin_programs(self.operating_mode(), self.epoch);
-        for program in builtin_programs.iter() {
-            self.add_builtin_program(&program.name, program.id, program.process_instruction);
+        let builtins = get_builtins();
+        for program in builtins.iter() {
+            self.add_builtin(&program.name, program.id, program.entrypoint);
         }
     }
 
@@ -3021,19 +3039,36 @@ impl Bank {
         !self.is_delta.load(Ordering::Relaxed)
     }
 
-    /// Add an instruction processor to intercept instructions before the dynamic loader.
     pub fn add_builtin_program(
         &mut self,
         name: &str,
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
+        self.add_builtin(name, program_id, Entrypoint::Program(process_instruction));
+    }
+
+    pub fn add_builtin_loader(
+        &mut self,
+        name: &str,
+        program_id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) {
+        self.add_builtin(
+            name,
+            program_id,
+            Entrypoint::Loader(process_instruction_with_context),
+        );
+    }
+
+    /// Add an instruction processor to intercept instructions before the dynamic loader.
+    pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
         match self.get_account(&program_id) {
             Some(account) => {
                 assert_eq!(
                     account.owner,
                     native_loader::id(),
-                    "Cannot overwrite non-native loader account"
+                    "Cannot overwrite non-native account"
                 );
             }
             None => {
@@ -3042,9 +3077,18 @@ impl Bank {
                 self.store_account(&program_id, &account);
             }
         }
-        self.message_processor
-            .add_program(program_id, process_instruction);
-        debug!("Added static program {} under {:?}", name, program_id);
+        match entrypoint {
+            Entrypoint::Program(process_instruction) => {
+                self.message_processor
+                    .add_program(program_id, process_instruction);
+                debug!("Added builtin program {} under {:?}", name, program_id);
+            }
+            Entrypoint::Loader(process_instruction_with_context) => {
+                self.message_processor
+                    .add_loader(program_id, process_instruction_with_context);
+                debug!("Added builtin loader {} under {:?}", name, program_id);
+            }
+        }
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {
