@@ -7,8 +7,7 @@ set -e
 
 basedir=$1
 if [[ -z "$basedir" ]]; then
-  echo "Usage: $0 [dir]"
-  exit 0
+  basedir=.
 fi
 
 if [[ ! -d "$basedir" ]]; then
