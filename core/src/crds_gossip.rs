@@ -107,7 +107,7 @@ impl CrdsGossip {
             return Err(CrdsGossipError::PruneMessageTimeout);
         }
         if self.id == *destination {
-            self.push.process_prune_msg(peer, origin);
+            self.push.process_prune_msg(&self.id, peer, origin);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)

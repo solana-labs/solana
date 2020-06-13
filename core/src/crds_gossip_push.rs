@@ -35,7 +35,7 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
-pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: f64 = 2;
+pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 2;
 
 #[derive(Clone)]
 pub struct CrdsGossipPush {
@@ -175,7 +175,7 @@ impl CrdsGossipPush {
             self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
-        Ok(old)
+        Ok(old.unwrap())
     }
 
     /// push pull responses
@@ -237,8 +237,11 @@ impl CrdsGossipPush {
     }
 
     /// add the `from` to the peer's filter of nodes
-    pub fn process_prune_msg(&mut self, peer: &Pubkey, origins: &[Pubkey]) {
+    pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
         for origin in origins {
+            if origin == self_pubkey {
+                continue;
+            }
             if let Some(p) = self.active_set.get_mut(peer) {
                 p.add(origin)
             }
@@ -708,6 +711,7 @@ mod test {
     #[test]
     fn test_process_prune() {
         let mut crds = Crds::default();
+        let self_id = Pubkey::new_rand();
         let mut push = CrdsGossipPush::default();
         let peer = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
@@ -725,7 +729,7 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg.clone(), 0),
             Ok(None)
         );
-        push.process_prune_msg(&peer.label().pubkey(), &[new_msg.label().pubkey()]);
+        push.process_prune_msg(&self_id, &peer.label().pubkey(), &[new_msg.label().pubkey()]);
         assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
