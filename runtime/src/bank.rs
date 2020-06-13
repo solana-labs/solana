@@ -1348,7 +1348,7 @@ impl Bank {
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-        log_collector: Option<&LogCollector>,
+        log_collector: Option<Rc<LogCollector>>,
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
@@ -1408,7 +1408,7 @@ impl Bank {
                         &loader_refcells,
                         &account_refcells,
                         &self.rent_collector,
-                        log_collector,
+                        log_collector.clone(),
                     );
 
                     Self::refcells_to_accounts(

@@ -6,7 +6,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
 use solana_sdk::{
     account::Account,
-    entrypoint_native::{InvokeContext, ProcessInstruction},
+    entrypoint_native::{InvokeContext, Logger, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -135,6 +135,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 #[derive(Debug, Default)]
 pub struct MockInvokeContext {
     key: Pubkey,
+    mock_logger: MockLogger,
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -155,8 +156,19 @@ impl InvokeContext for MockInvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &[]
     }
-    fn log_enabled(&self) -> bool {
-        false
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        Rc::new(RefCell::new(self.mock_logger.clone()))
     }
-    fn log(&mut self, _message: &str) {}
+}
+#[derive(Debug, Default, Clone)]
+pub struct MockLogger {
+    pub log: Rc<RefCell<Vec<String>>>,
+}
+impl Logger for MockLogger {
+    fn log_enabled(&self) -> bool {
+        true
+    }
+    fn log(&mut self, message: &str) {
+        self.log.borrow_mut().push(message.to_string());
+    }
 }

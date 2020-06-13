@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
-    entrypoint_native::{InvokeContext, ProcessInstruction},
+    entrypoint_native::{InvokeContext, Logger, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
@@ -154,23 +154,21 @@ impl PreAccount {
     }
 }
 
-#[derive(Default)]
-pub struct ThisInvokeContext<'a> {
-    pub program_ids: Vec<Pubkey>,
-    pub rent: Rent,
-    pub pre_accounts: Vec<PreAccount>,
-    pub programs: Vec<(Pubkey, ProcessInstruction)>,
-    pub log_collector: Option<&'a LogCollector>,
+pub struct ThisInvokeContext {
+    program_ids: Vec<Pubkey>,
+    rent: Rent,
+    pre_accounts: Vec<PreAccount>,
+    programs: Vec<(Pubkey, ProcessInstruction)>,
+    logger: Rc<RefCell<dyn Logger>>,
 }
-
-impl<'a> ThisInvokeContext<'a> {
+impl ThisInvokeContext {
     const MAX_INVOCATION_DEPTH: usize = 5;
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
-        log_collector: Option<&'a LogCollector>,
+        log_collector: Option<Rc<LogCollector>>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
@@ -179,12 +177,11 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             pre_accounts,
             programs,
-            log_collector,
+            logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
         }
     }
 }
-
-impl<'a> InvokeContext for ThisInvokeContext<'a> {
+impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
         if self.program_ids.len() >= Self::MAX_INVOCATION_DEPTH {
             return Err(InstructionError::CallDepth);
@@ -222,18 +219,23 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .last()
             .ok_or(InstructionError::GenericError)
     }
-
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &self.programs
     }
-
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        self.logger.clone()
+    }
+}
+pub struct ThisLogger {
+    log_collector: Option<Rc<LogCollector>>,
+}
+impl Logger for ThisLogger {
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
-
     fn log(&mut self, message: &str) {
         info!("{}", message);
-        if let Some(log_collector) = self.log_collector {
+        if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
         }
     }
@@ -502,14 +504,14 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
-        log_collector: Option<&LogCollector>,
+        log_collector: Option<Rc<LogCollector>>,
     ) -> Result<(), InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let mut invoke_context = ThisInvokeContext::new(
             instruction.program_id(&message.account_keys),
             rent_collector.rent,
             pre_accounts,
-            self.programs.clone(),
+            self.programs.clone(), // get rid of clone
             log_collector,
         );
         let keyed_accounts =
@@ -535,7 +537,7 @@ impl MessageProcessor {
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
-        log_collector: Option<&LogCollector>,
+        log_collector: Option<Rc<LogCollector>>,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             self.execute_instruction(
@@ -544,7 +546,7 @@ impl MessageProcessor {
                 &loaders[instruction_index],
                 accounts,
                 rent_collector,
-                log_collector,
+                log_collector.clone(),
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }

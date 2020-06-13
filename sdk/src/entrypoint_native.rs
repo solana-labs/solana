@@ -165,7 +165,12 @@ pub trait InvokeContext {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
-    /// Check if logging is enabled
+    /// Get this invocation's logger
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
+}
+
+/// Log messages
+pub trait Logger {
     fn log_enabled(&self) -> bool;
     /// Log a message
     fn log(&mut self, message: &str);

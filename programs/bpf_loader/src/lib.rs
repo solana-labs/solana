@@ -5,7 +5,6 @@ pub mod syscalls;
 
 use crate::{bpf_verifier::VerifierError, syscalls::SyscallError};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     ebpf::{EbpfError, UserDefinedError},
@@ -156,18 +155,33 @@ pub fn deserialize_parameters(
     Ok(())
 }
 
+macro_rules! log{
+    ($logger:ident, $message:expr) => {
+        if let Ok(mut logger) = $logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log($message);
+            }
+        }
+    };
+    ($logger:ident, $fmt:expr, $($arg:tt)*) => {
+        if let Ok(mut logger) = $logger.try_borrow_mut() {
+            logger.log(&format!($fmt, $($arg)*));
+        }
+    };
+}
+
 pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    solana_logger::setup_with_default("solana=info");
-
     debug_assert!(bpf_loader::check_id(program_id));
 
+    let logger = invoke_context.get_logger();
+
     if keyed_accounts.is_empty() {
-        warn!("No account keys");
+        log!(logger, "No account keys");
         return Err(InstructionError::NotEnoughAccountKeys);
     }
 
@@ -187,22 +201,32 @@ pub fn process_instruction(
                 match create_vm(&program_account.data, &parameter_accounts, invoke_context) {
                     Ok(info) => info,
                     Err(e) => {
-                        warn!("Failed to create BPF VM: {}", e);
+                        log!(logger, "Failed to create BPF VM: {}", e);
                         return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
                     }
                 };
 
-            info!("Call BPF program {}", program.unsigned_key());
+            log!(logger, "Call BPF program {}", program.unsigned_key());
             match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
-                        warn!("BPF program {} failed: {}", program.unsigned_key(), error);
+                        log!(
+                            logger,
+                            "BPF program {} failed: {}",
+                            program.unsigned_key(),
+                            error
+                        );
                         return Err(error);
                     }
                 }
                 Err(error) => {
-                    warn!("BPF program {} failed: {}", program.unsigned_key(), error);
+                    log!(
+                        logger,
+                        "BPF program {} failed: {}",
+                        program.unsigned_key(),
+                        error
+                    );
                     return match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
@@ -213,21 +237,25 @@ pub fn process_instruction(
             }
         }
         deserialize_parameters(parameter_accounts, &parameter_bytes)?;
-        info!("BPF program {} success", program.unsigned_key());
+        log!(logger, "BPF program {} success", program.unsigned_key());
     } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
                 let mut keyed_accounts_iter = keyed_accounts.iter();
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
                 if program.signer_key().is_none() {
-                    warn!("key[0] did not sign the transaction");
+                    log!(logger, "key[0] did not sign the transaction");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 let offset = offset as usize;
                 let len = bytes.len();
-                trace!("Write: offset={} length={}", offset, len);
                 if program.data_len()? < offset + len {
-                    warn!("Write overflow: {} < {}", program.data_len()?, offset + len);
+                    log!(
+                        logger,
+                        "Write overflow: {} < {}",
+                        program.data_len()?,
+                        offset + len
+                    );
                     return Err(InstructionError::AccountDataTooSmall);
                 }
                 program.try_account_ref_mut()?.data[offset..offset + len].copy_from_slice(&bytes);
@@ -237,17 +265,21 @@ pub fn process_instruction(
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
                 if program.signer_key().is_none() {
-                    warn!("key[0] did not sign the transaction");
+                    log!(logger, "key[0] did not sign the transaction");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
 
                 if let Err(e) = check_elf(&program.try_account_ref()?.data) {
-                    warn!("{}", e);
+                    log!(logger, "{}", e);
                     return Err(InstructionError::InvalidAccountData);
                 }
 
                 program.try_account_ref_mut()?.executable = true;
-                info!("Finalize: account {:?}", program.signer_key().unwrap());
+                log!(
+                    logger,
+                    "Finalized account {:?}",
+                    program.signer_key().unwrap()
+                );
             }
         }
     }
@@ -259,15 +291,18 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_sdk::{
-        account::Account, entrypoint_native::ProcessInstruction, instruction::CompiledInstruction,
-        message::Message, rent::Rent,
+        account::Account,
+        entrypoint_native::{Logger, ProcessInstruction},
+        instruction::CompiledInstruction,
+        message::Message,
+        rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
     #[derive(Debug, Default)]
     pub struct MockInvokeContext {
         key: Pubkey,
-        pub log: Vec<String>,
+        mock_logger: MockLogger,
     }
     impl InvokeContext for MockInvokeContext {
         fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -288,12 +323,20 @@ mod tests {
         fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
             &[]
         }
+        fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+            Rc::new(RefCell::new(self.mock_logger.clone()))
+        }
+    }
+    #[derive(Debug, Default, Clone)]
+    pub struct MockLogger {
+        pub log: Rc<RefCell<Vec<String>>>,
+    }
+    impl Logger for MockLogger {
         fn log_enabled(&self) -> bool {
             true
         }
         fn log(&mut self, message: &str) {
-            info!("[MockInvokeContext::log] {}", message);
-            self.log.push(message.to_string());
+            self.log.borrow_mut().push(message.to_string());
         }
     }
 
@@ -446,8 +489,6 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_invoke_main() {
-        solana_logger::setup();
-
         let program_id = Pubkey::new_rand();
         let program_key = Pubkey::new_rand();
 
@@ -560,7 +601,7 @@ mod tests {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
-        info!("mangle the whole file");
+        // Mangle the whole file
         fuzz(
             &elf,
             1_000_000_000,
