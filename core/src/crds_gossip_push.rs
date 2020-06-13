@@ -238,7 +238,7 @@ impl CrdsGossipPush {
             self.active_set.len()
         );
         for v in values {
-            //use a consistant index for the same origin so
+            //use a consistent index for the same origin so
             //the active set learns the MST for that origin
             let start = v.label().pubkey().as_ref()[0] as usize;
             let max = self.push_fanout.min(self.active_set.len());
