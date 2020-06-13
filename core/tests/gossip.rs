@@ -206,6 +206,7 @@ pub fn cluster_info_retransmit() {
 }
 
 #[test]
+#[ignore]
 pub fn cluster_info_scale() {
     use solana_measure::measure::Measure;
     use solana_perf::test_tx::test_tx;
