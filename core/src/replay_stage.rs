@@ -254,8 +254,8 @@ impl ReplayStage {
                     let mut unverified_slots = vec![];
                     for slot in newly_computed_slot_stats {
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
-                        let entries = entries_map.remove(&slot).unwrap();
                         if !slot_verify_results.read().unwrap().contains_key(&slot) {
+                            let entries = entries_map.remove(&slot).unwrap();
                             unverified_slots.push((slot, entries, fork_stats.fork_weight));
                         }
                         let confirmed_forks = Self::confirm_forks(

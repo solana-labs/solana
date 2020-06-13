@@ -62,9 +62,7 @@ impl EntryVerifyService {
         slot_verify_results: &Arc<RwLock<HashMap<Slot, bool>>>,
         unverified_blocks: &mut UnverifiedBlocks,
     ) -> Result<(), RecvTimeoutError> {
-        let root_slot = bank_forks.read().unwrap().root();
-
-        unverified_blocks.set_root(root_slot);
+        unverified_blocks.set_root(&bank_forks);
 
         while let Ok(slot_entries) = slot_receiver.try_recv() {
             for (slot, entries, weight) in slot_entries {
@@ -96,9 +94,10 @@ impl EntryVerifyService {
             let heaviest_ancestors = unverified_blocks.get_unverified_ancestors(heaviest_leaf);
             if let Some(heaviest_slot) = heaviest_ancestors.iter().next() {
                 let start = Instant::now();
+                // Pop entry so it's not reprocessed
                 let block_info = unverified_blocks
                     .unverified_blocks
-                    .get(heaviest_slot)
+                    .remove(heaviest_slot)
                     .unwrap();
                 let verify_result = block_info
                     .entries
