@@ -355,8 +355,8 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        commitment::{BlockCommitmentCache, CacheSlotInfo},
-        rpc_subscriptions::tests::robust_poll_or_panic,
+        commitment::BlockCommitmentCache,
+        rpc_subscriptions::{tests::robust_poll_or_panic, CacheSlotInfo},
     };
     use crossbeam_channel::unbounded;
     use jsonrpc_core::{futures::sync::mpsc, Response};

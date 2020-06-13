@@ -3,7 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
-    consensus::VOTE_THRESHOLD_SIZE,
+    commitment::VOTE_THRESHOLD_SIZE,
     result::Result,
     serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
 };

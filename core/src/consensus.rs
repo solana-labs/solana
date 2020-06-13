@@ -1,4 +1,5 @@
 use crate::{
+    commitment::VOTE_THRESHOLD_SIZE,
     progress_map::{LockoutIntervals, ProgressMap},
     pubkey_references::PubkeyReferences,
 };
@@ -58,7 +59,6 @@ impl SwitchForkDecision {
 }
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
-pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
 
 #[derive(Default, Debug, Clone)]
