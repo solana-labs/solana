@@ -428,7 +428,7 @@ mod test {
     }
 
     #[test]
-    fn test_process_push() {
+    fn test_process_push_one() {
         let mut crds = Crds::default();
         let mut push = CrdsGossipPush::default();
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -446,7 +446,7 @@ mod test {
         // push it again
         assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
-            Ok(Some(_))
+            Err(CrdsGossipError::PushMessageOldVersion)
         );
     }
     #[test]
