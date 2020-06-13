@@ -39,7 +39,11 @@ impl ReplaySlotStats {
                 self.fetch_fail_elapsed as i64,
                 i64
             ),
-            ("entry_verification_time", self.verify_elapsed as i64, i64),
+            (
+                "verify_transactions_time",
+                self.verify_transactions_elapsed as i64,
+                i64
+            ),
             ("replay_time", self.replay_elapsed as i64, i64),
             (
                 "replay_total_elapsed",

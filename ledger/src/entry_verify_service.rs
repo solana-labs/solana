@@ -1,14 +1,18 @@
-use crate::bank_forks::BankForks;
-use crate::entry::Entry;
-use crate::entry::EntrySlice;
-use crate::unverified_blocks::UnverifiedBlocks;
+use crate::{
+    bank_forks::BankForks,
+    entry::{Entry, EntrySlice, VerifyRecyclers},
+    unverified_blocks::UnverifiedBlocks,
+};
 use solana_sdk::clock::Slot;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::thread::{self, Builder, JoinHandle};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{Receiver, RecvTimeoutError, Sender},
+    sync::Arc,
+    sync::RwLock,
+    thread::{self, Builder, JoinHandle},
+    time::Instant,
+};
 
 pub type VerifySlotSender = Sender<Vec<(Slot, Vec<Entry>, u128)>>;
 pub type VerifySlotReceiver = Receiver<Vec<(Slot, Vec<Entry>, u128)>>;
@@ -91,11 +95,20 @@ impl EntryVerifyService {
         if let Some(heaviest_leaf) = unverified_blocks.next_heaviest_leaf() {
             let heaviest_ancestors = unverified_blocks.get_unverified_ancestors(heaviest_leaf);
             if let Some(heaviest_slot) = heaviest_ancestors.iter().next() {
+                let start = Instant::now();
                 let block_info = unverified_blocks
                     .unverified_blocks
                     .get(heaviest_slot)
                     .unwrap();
-                let verify_result = block_info.entries.verify(&block_info.parent_hash);
+                let verify_result = block_info
+                    .entries
+                    .start_verify(&block_info.parent_hash, VerifyRecyclers::default())
+                    .finish_verify(&block_info.entries);
+                datapoint_info!(
+                    "verify_poh_elapsed",
+                    ("slot", *heaviest_slot, i64),
+                    ("elapsed_micros", start.elapsed().as_micros(), i64)
+                );
                 slot_verify_results
                     .write()
                     .unwrap()

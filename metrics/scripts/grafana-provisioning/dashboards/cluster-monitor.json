@@ -4761,7 +4761,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"entry_verification_time\") AS \"entry_verification_time_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"verify_transactions_time\") AS \"verify_transactions_time_micros\" FROM \"$testnet\".\"autogen\".\"replay-slot-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",

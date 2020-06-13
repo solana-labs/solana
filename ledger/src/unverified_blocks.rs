@@ -45,7 +45,7 @@ impl UnverifiedBlocks {
         let fork_weights = self
             .fork_weights
             .entry(fork_weight)
-            .or_insert_with(BTreeSet::new());
+            .or_insert_with(BTreeSet::new);
         fork_weights.insert(slot);
 
         if let Some(parent) = self.unverified_blocks.get_mut(&parent) {

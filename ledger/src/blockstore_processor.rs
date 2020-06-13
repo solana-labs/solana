@@ -4,7 +4,7 @@ use crate::{
     blockstore::Blockstore,
     blockstore_db::BlockstoreError,
     blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
+    entry::{create_ticks, Entry, EntrySlice, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use crossbeam_channel::Sender;
@@ -494,7 +494,8 @@ fn confirm_full_slot(
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
-    pub verify_elapsed: u64,
+    pub verify_transactions_elapsed: u64,
+    pub blocking_vote_or_reset_verify_elapsed: u64,
     pub fetch_elapsed: u64,
     pub fetch_fail_elapsed: u64,
 }
@@ -504,7 +505,8 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
-            verify_elapsed: 0,
+            verify_transactions_elapsed: 0,
+            blocking_vote_or_reset_verify_elapsed: 0,
             fetch_elapsed: 0,
             fetch_fail_elapsed: 0,
         }
@@ -585,24 +587,23 @@ pub fn confirm_slot(
             err
         });
         if res.is_err() {
-            timing.verify_elapsed += start.elapsed().as_millis() as u64;
+            timing.verify_transactions_elapsed += start.elapsed().as_micros() as u64;
         }
         res?;
 
         // Verify tx signatures
         if !entries.verify_transaction_signatures() {
             warn!("Ledger transaction verification failed at slot: {}", slot);
-            timing.verify_elapsed += start.elapsed().as_millis() as u64;
+            timing.verify_transactions_elapsed += start.elapsed().as_micros() as u64;
             return Err(BlockError::InvalidTransactionSignature.into());
         }
 
-        // Verify PoH
-        if !skip_poh_verify {
-            let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
-            assert_eq!(entry_state.status(), EntryVerificationStatus::Pending);
-        }
+        timing.verify_transactions_elapsed += start.elapsed().as_micros() as u64;
 
-        timing.verify_elapsed += start.elapsed().as_millis() as u64;
+        // Verify PoH, time taken is not counted towards `verify_transactions_elapsed`
+        if !skip_poh_verify {
+            entries.start_verify(&progress.last_entry, recyclers.clone());
+        }
     }
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
@@ -629,30 +630,14 @@ pub fn confirm_slot(
 pub fn verify_bank(
     bank: &Arc<Bank>,
     entries: &[Entry],
-    skip_verification: bool,
-    timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    let start = Instant::now();
-    let verifier = if !skip_verification {
-        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
-        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
-        assert_eq!(entry_state.status(), EntryVerificationStatus::Pending);
-        Some(entry_state)
-    } else {
-        None
-    };
-
-    if let Some(mut verifier) = verifier {
-        if !verifier.finish_verify(&entries) {
-            warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            timing.verify_elapsed += start.elapsed().as_millis() as u64;
-            return Err(BlockError::InvalidEntryHash.into());
-        }
+    let mut verifier = entries.start_verify(&progress.last_entry, recyclers.clone());
+    if !verifier.finish_verify(&entries) {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(BlockError::InvalidEntryHash.into());
     }
-
-    timing.verify_elapsed += start.elapsed().as_millis() as u64;
     if let Some(last_entry) = entries.last() {
         progress.last_entry = last_entry.hash;
     }

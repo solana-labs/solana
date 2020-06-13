@@ -48,6 +48,7 @@ use std::{
         mpsc::{channel, Receiver, RecvTimeoutError, Sender},
         Arc, Mutex, RwLock,
     },
+    thread::sleep,
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -109,7 +110,7 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
@@ -318,6 +319,7 @@ impl ReplayStage {
                         &slot_verify_results,
                         &vote_bank,
                         &reset_bank,
+                        &mut progress,
                     ) {
                         if let Some(ref vote_bank) = vote_bank {
                             if let Some(votable_leader) = leader_schedule_cache
@@ -477,29 +479,57 @@ impl ReplayStage {
         slot_verify_results: &RwLock<HashMap<Slot, bool>>,
         vote_bank: &Option<Arc<Bank>>,
         reset_bank: &Option<Arc<Bank>>,
+        progress: &mut ProgressMap,
     ) -> bool {
-        if let Some(vote_bank) = vote_bank {
+        let start = Instant::now();
+        let (res, timing) = if let Some(vote_bank) = vote_bank {
             assert_eq!(vote_bank.slot(), reset_bank.as_ref().unwrap().slot());
+            let timing = &mut progress
+                .get_mut(&vote_bank.slot())
+                .expect("Frozen bank must exist in progress map")
+                .replay_stats;
             // Verify `vote_bank`'s ancestors and `vote_bank`
             if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
-                *res
+                (*res, Some(timing))
             } else {
-                // TODO: Wait on channel for result of verification of
-                // `vote_bank`'s slot
-                false
+                // Poll for result of verification of `vote_bank`'s slot
+                (
+                    Self::poll_verify_result(slot_verify_results, vote_bank.slot()),
+                    Some(timing),
+                )
             }
         } else if let Some(reset_bank) = reset_bank {
+            let timing = &mut progress
+                .get_mut(&reset_bank.slot())
+                .expect("Frozen bank must exist in progress map")
+                .replay_stats;
             // Verify `reset_bank`'s ancestors and `reset_bank`
             if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
-                *res
+                (*res, Some(timing))
             } else {
-                // TODO: Wait on channel for result of verification of
-                // `reset_bank`'s slot
-                false
+                // Poll for result of verification of `reset_bank`'s slot
+                (
+                    Self::poll_verify_result(slot_verify_results, reset_bank.slot()),
+                    Some(timing),
+                )
             }
         } else {
-            // Both vote and reset bank are None, vacously true
-            true
+            // Both vote and reset bank are None, vacuously true
+            (true, None)
+        };
+
+        if let Some(timing) = timing {
+            timing.blocking_vote_or_reset_verify_elapsed = start.elapsed().as_micros() as u64;
+        }
+        res
+    }
+
+    fn poll_verify_result(slot_verify_results: &RwLock<HashMap<Slot, bool>>, slot: Slot) -> bool {
+        loop {
+            if let Some(res) = slot_verify_results.read().unwrap().get(&slot) {
+                return *res;
+            }
+            sleep(Duration::from_millis(5));
         }
     }
 
@@ -732,7 +762,7 @@ impl ReplayStage {
                 blockstore
                     .set_dead_slot(slot)
                     .expect("Failed to mark slot as dead in blockstore");
-                Err(err)?;
+                return Err(err);
             }
             Ok(entries) => {
                 entries_map.insert(bank.slot(), entries);
@@ -1168,11 +1198,11 @@ impl ReplayStage {
         let newly_voted_pubkeys = slot_vote_tracker
             .as_ref()
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_default();
 
         let cluster_slot_pubkeys = cluster_slot_pubkeys
             .map(|v| v.read().unwrap().keys().cloned().collect())
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_default();
 
         Self::update_fork_propagated_threshold_from_votes(
             progress,
