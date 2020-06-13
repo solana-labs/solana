@@ -253,8 +253,19 @@ impl ReplayStage {
                     );
                     let mut unverified_slots = vec![];
                     for slot in newly_computed_slot_stats {
+                        let leader_id =
+                            *bank_forks.read().unwrap().get(slot).unwrap().collector_id();
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
-                        if !slot_verify_results.read().unwrap().contains_key(&slot) {
+                        if !slot_verify_results.read().unwrap().contains_key(&slot) &&
+                        // Our own banks do not need to be verfied. Furthermore,
+                        // they are safe to not send to the `EntryVerifyService`
+                        // (won't update the tree structure there)
+                        // because all banks prior to this bank must have been 
+                        // verified (we verify all prevoius blocks in 
+                        // `verify_vote_and_reset_bank` before resetting to a block 
+                        // for starting PoH).
+                        leader_id != my_pubkey
+                        {
                             let entries = entries_map.remove(&slot).unwrap();
                             unverified_slots.push((slot, entries, fork_stats.fork_weight));
                         }
@@ -316,6 +327,7 @@ impl ReplayStage {
 
                     // Vote on a fork
                     if Self::verify_vote_and_reset_bank(
+                        &my_pubkey,
                         &slot_verify_results,
                         &vote_bank,
                         &reset_bank,
@@ -476,6 +488,7 @@ impl ReplayStage {
     }
 
     fn verify_vote_and_reset_bank(
+        my_pubkey: &Pubkey,
         slot_verify_results: &RwLock<HashMap<Slot, bool>>,
         vote_bank: &Option<Arc<Bank>>,
         reset_bank: &Option<Arc<Bank>>,
@@ -488,30 +501,38 @@ impl ReplayStage {
                 .get_mut(&vote_bank.slot())
                 .expect("Frozen bank must exist in progress map")
                 .replay_stats;
-            // Verify `vote_bank`'s ancestors and `vote_bank`
-            if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
-                (*res, Some(timing))
+            if my_pubkey == vote_bank.collector_id() {
+                (true, Some(timing))
             } else {
-                // Poll for result of verification of `vote_bank`'s slot
-                (
-                    Self::poll_verify_result(slot_verify_results, vote_bank.slot()),
-                    Some(timing),
-                )
+                // Verify `vote_bank`'s ancestors and `vote_bank`
+                if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
+                    (*res, Some(timing))
+                } else {
+                    // Poll for result of verification of `vote_bank`'s slot
+                    (
+                        Self::poll_verify_result(slot_verify_results, vote_bank.slot()),
+                        Some(timing),
+                    )
+                }
             }
         } else if let Some(reset_bank) = reset_bank {
             let timing = &mut progress
                 .get_mut(&reset_bank.slot())
                 .expect("Frozen bank must exist in progress map")
                 .replay_stats;
-            // Verify `reset_bank`'s ancestors and `reset_bank`
-            if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
-                (*res, Some(timing))
+            if my_pubkey == reset_bank.collector_id() {
+                (true, Some(timing))
             } else {
-                // Poll for result of verification of `reset_bank`'s slot
-                (
-                    Self::poll_verify_result(slot_verify_results, reset_bank.slot()),
-                    Some(timing),
-                )
+                // Verify `reset_bank`'s ancestors and `reset_bank`
+                if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
+                    (*res, Some(timing))
+                } else {
+                    // Poll for result of verification of `reset_bank`'s slot
+                    (
+                        Self::poll_verify_result(slot_verify_results, reset_bank.slot()),
+                        Some(timing),
+                    )
+                }
             }
         } else {
             // Both vote and reset bank are None, vacuously true
@@ -765,7 +786,11 @@ impl ReplayStage {
                 return Err(err);
             }
             Ok(entries) => {
-                entries_map.insert(bank.slot(), entries);
+                if let Some(existing_entries) = entries_map.get_mut(&bank.slot()) {
+                    existing_entries.extend(entries)
+                } else {
+                    entries_map.insert(bank.slot(), entries);
+                }
             }
         }
 
