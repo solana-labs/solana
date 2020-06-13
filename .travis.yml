@@ -18,6 +18,8 @@ branches:
     - master
     - /^v\d+\.\d+/
 
+if: type IN (api, cron) OR tag IS present
+
 notifications:
   slack:
     on_success: change
