@@ -166,6 +166,7 @@ impl CrdsGossipPush {
         let label = value.label();
         let origin = label.pubkey();
         let new_value = crds.new_versioned(now, value);
+        let value_hash = new_value.value_hash;
         let received_set = self.received_cache.entry(origin).or_insert(HashMap::new());
         received_set.entry(*from).or_insert((false,0)).1 = now;
 
@@ -174,6 +175,7 @@ impl CrdsGossipPush {
             self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
+        self.push_messages.insert(label, value_hash);
         Ok(old.unwrap())
     }
 
@@ -196,6 +198,7 @@ impl CrdsGossipPush {
         let mut total_bytes: usize = 0;
         let mut values = vec![];
         let mut push_messages: HashMap<Pubkey, Vec<CrdsValue>> = HashMap::new();
+        trace!("new_push_messages {}", self.push_messages.len());
         for (label, hash) in &self.push_messages {
             let res = crds.lookup_versioned(label);
             if res.is_none() {
@@ -215,21 +218,22 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
-        if !self.active_set.is_empty() {
-            for v in values {
-                //use a consistant index for the same origin so
-                //the active set learns the MST for that origin
-                let start = v.label().pubkey().as_ref()[0] as usize;
-                for i in start..(start + self.push_fanout) {
-                    let ix = i % self.active_set.len();
-                    if let Some((p, filter)) = self.active_set.get_index(ix) {
-                        if !filter.contains(&v.label().pubkey()) {
-                            push_messages.entry(*p).or_default().push(v.clone());
-                            self.num_pushes += 1;
-                        }
+        trace!("new_push_messages {} {}", values.len(), self.active_set.len());
+        for v in values {
+            //use a consistant index for the same origin so
+            //the active set learns the MST for that origin
+            let start = v.label().pubkey().as_ref()[0] as usize;
+            let max = self.push_fanout.min(self.active_set.len());
+            for i in start..(start + max) {
+                let ix = i % self.active_set.len();
+                if let Some((p, filter)) = self.active_set.get_index(ix) {
+                    if !filter.contains(&v.label().pubkey()) {
+                        trace!("new_push_messages insert {} {:?}", *p, v);
+                        push_messages.entry(*p).or_default().push(v.clone());
+                        self.num_pushes += 1;
                     }
-                    self.push_messages.remove(&v.label());
                 }
+                self.push_messages.remove(&v.label());
             }
         }
         push_messages
