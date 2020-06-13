@@ -19,7 +19,7 @@ branches:
     - master
     - /^v\d+\.\d+/
 
-if: type = push
+if: type IN (api, cron) OR tag IS present
 
 notifications:
   slack:
