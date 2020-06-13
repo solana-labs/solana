@@ -2036,13 +2036,10 @@ impl ClusterInfo {
             }
         };
         let sender = response_sender.clone();
-        /*thread_pool.install(|| {
+        thread_pool.install(|| {
             requests.into_par_iter().for_each_with(sender, |s, reqs| {
                 Self::handle_packets(obj, &recycler, &stakes, reqs, s, epoch_ms)
             });
-        });*/
-        requests.into_iter().for_each(|reqs| {
-            Self::handle_packets(obj, &recycler, &stakes, reqs, &sender, epoch_ms)
         });
 
         Self::print_reset_stats(obj, last_print);

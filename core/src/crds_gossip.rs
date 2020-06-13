@@ -76,7 +76,6 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
         let id = &self.id;
-        let crds = &self.crds;
         let push = &mut self.push;
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
         for origin in labels.iter().map(|k| k.pubkey()) {

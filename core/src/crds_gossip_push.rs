@@ -166,7 +166,6 @@ impl CrdsGossipPush {
         let label = value.label();
         let origin = label.pubkey();
         let new_value = crds.new_versioned(now, value);
-        let value_hash = new_value.value_hash;
         let received_set = self.received_cache.entry(origin).or_insert(HashMap::new());
         received_set.entry(*from).or_insert((false,0)).1 = now;
 
@@ -392,7 +391,6 @@ mod test {
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &origin, 0,
         )));
-        let label = value.label();
         let low_staked_peers = (0..10).map(|_| Pubkey::new_rand());
         let mut low_staked_set = HashSet::new();
         low_staked_peers.for_each(|p| {
@@ -401,10 +399,6 @@ mod test {
             stakes.insert(p, 1);
         });
 
-        let versioned = crds
-            .lookup_versioned(&label)
-            .expect("versioned value should exist");
-        let hash = versioned.value_hash;
         let pruned = push.prune_received_cache(&self_id, &origin, &stakes);
         assert!(
             pruned.is_empty(),

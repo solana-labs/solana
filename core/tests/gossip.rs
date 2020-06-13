@@ -207,7 +207,6 @@ pub fn cluster_info_retransmit() {
 
 #[test]
 pub fn cluster_info_scale() {
-    use solana_core::crds_value::MAX_VOTES;
     use solana_measure::measure::Measure;
     use solana_perf::test_tx::test_tx;
     use solana_runtime::bank::Bank;
@@ -265,14 +264,14 @@ pub fn cluster_info_scale() {
         warn!("tx.message.account_keys: {:?}", tx.message.account_keys);
         nodes[0].0.push_vote(0, tx.clone());
         let mut success = false;
-        for s in 0..(30 * 5) {
+        for _ in 0..(30 * 5) {
             let mut not_done = 0;
             let mut num_old = 0;
             let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
             let mut num_inserts = 0;
-            for (i, node) in nodes.iter().enumerate() {
+            for node in nodes.iter() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
                     .0
@@ -308,7 +307,7 @@ pub fn cluster_info_scale() {
             num_votes, time, success
         );
         sleep(Duration::from_millis(200));
-        for (i, node) in nodes.iter().enumerate() {
+        for node in nodes.iter() {
             node.0.gossip.write().unwrap().push.num_old = 0;
             node.0.gossip.write().unwrap().push.num_total = 0;
             node.0.gossip.write().unwrap().push.num_pushes = 0;
