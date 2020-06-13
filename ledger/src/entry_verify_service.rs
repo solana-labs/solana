@@ -5,10 +5,13 @@ use crate::unverified_blocks::UnverifiedBlocks;
 use solana_sdk::clock::Slot;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
+
+pub type VerifySlotSender = Sender<Vec<(Slot, Vec<Entry>, u128)>>;
+pub type VerifySlotReceiver = Receiver<Vec<(Slot, Vec<Entry>, u128)>>;
 
 pub struct EntryVerifyService {
     t_verify: JoinHandle<()>,
@@ -16,7 +19,7 @@ pub struct EntryVerifyService {
 
 impl EntryVerifyService {
     pub fn new(
-        slot_receiver: Receiver<(Slot, Vec<Entry>, u128)>,
+        slot_receiver: VerifySlotReceiver,
         bank_forks: Arc<RwLock<BankForks>>,
         slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
         exit: &Arc<AtomicBool>,
@@ -50,7 +53,7 @@ impl EntryVerifyService {
     }
 
     fn verify_entries(
-        slot_receiver: &Receiver<(Slot, Vec<Entry>, u128)>,
+        slot_receiver: &VerifySlotReceiver,
         bank_forks: &Arc<RwLock<BankForks>>,
         slot_verify_results: &Arc<RwLock<HashMap<Slot, bool>>>,
         unverified_blocks: &mut UnverifiedBlocks,
@@ -59,17 +62,31 @@ impl EntryVerifyService {
 
         unverified_blocks.set_root(root_slot);
 
-        while let Ok((slot, entries, weight)) = slot_receiver.try_recv() {
-            let parent = bank_forks
-                .read()
-                .unwrap()
-                .get(slot)
-                .unwrap()
-                .parent()
-                .unwrap();
-            let parent_slot = parent.slot();
-            let parent_hash = parent.hash();
-            unverified_blocks.add_unverified_block(slot, parent_slot, entries, weight, parent_hash);
+        while let Ok(slot_entries) = slot_receiver.try_recv() {
+            for (slot, entries, weight) in slot_entries {
+                // If slot bank doesn't exist, then it must have been
+                // pruned by `set_root` and verification is no longer necessary
+                {
+                    // Hold the lock so that `set_root` doesn't get called
+                    // in the middle of this logic
+                    let w_bank_forks = bank_forks.write().unwrap();
+                    if let Some(bank) = w_bank_forks.get(slot) {
+                        let parent_bank = bank.parent().expect(
+                            "Unverified slot can't be the root, so
+                        parent must exist",
+                        );
+                        let parent_slot = parent_bank.slot();
+                        let parent_hash = parent_bank.hash();
+                        unverified_blocks.add_unverified_block(
+                            slot,
+                            parent_slot,
+                            entries,
+                            weight,
+                            parent_hash,
+                        );
+                    }
+                }
+            }
         }
         if let Some(heaviest_leaf) = unverified_blocks.next_heaviest_leaf() {
             let heaviest_ancestors = unverified_blocks.get_unverified_ancestors(heaviest_leaf);

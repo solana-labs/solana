@@ -19,6 +19,7 @@ use solana_ledger::{
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::{Entry, VerifyRecyclers},
+    entry_verify_service::VerifySlotSender,
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
 };
@@ -120,7 +121,7 @@ impl ReplayStage {
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
         slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
-        slot_sender: Sender<(Slot, Vec<Entry>, u128)>,
+        verify_slot_sender: VerifySlotSender,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -179,6 +180,10 @@ impl ReplayStage {
                             0,
                         ),
                     );
+                    slot_verify_results
+                        .write()
+                        .unwrap()
+                        .insert(bank.slot(), true);
                 }
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -245,10 +250,13 @@ impl ReplayStage {
                         &bank_forks,
                         &mut all_pubkeys,
                     );
+                    let mut unverified_slots = vec![];
                     for slot in newly_computed_slot_stats {
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
                         let entries = entries_map.remove(&slot).unwrap();
-                        let _ = slot_sender.send((slot, entries, fork_stats.fork_weight));
+                        if !slot_verify_results.read().unwrap().contains_key(&slot) {
+                            unverified_slots.push((slot, entries, fork_stats.fork_weight));
+                        }
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
                             &fork_stats.stake_lockouts,
@@ -266,6 +274,7 @@ impl ReplayStage {
                         }
                     }
 
+                    let _ = verify_slot_sender.send(unverified_slots);
                     let (heaviest_bank, heaviest_bank_on_same_fork) =
                         Self::select_forks(&frozen_banks, &tower, &progress, &ancestors);
 
