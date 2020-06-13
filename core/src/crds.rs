@@ -127,7 +127,7 @@ impl Crds {
             .unwrap_or(true);
         if do_insert {
             let old = self.table.insert(label, new_value);
-            self.num_inserts+=1;
+            self.num_inserts += 1;
             Ok(old)
         } else {
             trace!("INSERT FAILED data: {} new.wallclock: {}", label, wallclock,);

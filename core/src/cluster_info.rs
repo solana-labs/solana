@@ -738,7 +738,6 @@ impl ClusterInfo {
         let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.keypair);
         self.time_gossip_write_lock("push_vote_process_push", &self.stats.vote_process_push)
             .process_push_message(&self.id(), vec![entry], now);
-
     }
 
     pub fn send_vote(&self, vote: &Transaction) -> Result<()> {

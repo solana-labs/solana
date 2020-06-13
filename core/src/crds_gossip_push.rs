@@ -101,7 +101,11 @@ impl CrdsGossipPush {
         }
         let peers = cache.unwrap();
 
-        let peer_stake_total: u64 = peers.iter().filter(|v| !(v.1).0).map(|v| stakes.get(v.0).unwrap_or(&0)).sum();
+        let peer_stake_total: u64 = peers
+            .iter()
+            .filter(|v| !(v.1).0)
+            .map(|v| stakes.get(v.0).unwrap_or(&0))
+            .sum();
         let prune_stake_threshold = Self::prune_stake_threshold(*self_stake, *origin_stake);
         if peer_stake_total < prune_stake_threshold {
             return Vec::new();
@@ -127,7 +131,9 @@ impl CrdsGossipPush {
             let (next_peer, next_stake) = staked_peers[next];
             keep.insert(next_peer);
             peer_stake_sum += next_stake;
-            if peer_stake_sum >= prune_stake_threshold && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES {
+            if peer_stake_sum >= prune_stake_threshold
+                && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES
+            {
                 break;
             }
         }
@@ -138,7 +144,12 @@ impl CrdsGossipPush {
             .cloned()
             .collect();
         pruned_peers.iter().for_each(|p| {
-            self.received_cache.get_mut(origin).unwrap().get_mut(p).unwrap().0 = true;
+            self.received_cache
+                .get_mut(origin)
+                .unwrap()
+                .get_mut(p)
+                .unwrap()
+                .0 = true;
         });
         pruned_peers
     }
@@ -168,7 +179,7 @@ impl CrdsGossipPush {
         let new_value = crds.new_versioned(now, value);
         let value_hash = new_value.value_hash;
         let received_set = self.received_cache.entry(origin).or_insert(HashMap::new());
-        received_set.entry(*from).or_insert((false,0)).1 = now;
+        received_set.entry(*from).or_insert((false, 0)).1 = now;
 
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
@@ -218,7 +229,11 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
-        trace!("new_push_messages {} {}", values.len(), self.active_set.len());
+        trace!(
+            "new_push_messages {} {}",
+            values.len(),
+            self.active_set.len()
+        );
         for v in values {
             //use a consistant index for the same origin so
             //the active set learns the MST for that origin
@@ -368,10 +383,9 @@ impl CrdsGossipPush {
     pub fn purge_old_received_cache(&mut self, min_time: u64) {
         self.received_cache
             .iter_mut()
-            .for_each(|v| v.1.retain(|_,v| v.1 > min_time));
+            .for_each(|v| v.1.retain(|_, v| v.1 > min_time));
 
-        self.received_cache
-            .retain(|_,v| !v.is_empty());
+        self.received_cache.retain(|_, v| !v.is_empty());
     }
 }
 
@@ -727,7 +741,11 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg.clone(), 0),
             Ok(None)
         );
-        push.process_prune_msg(&self_id, &peer.label().pubkey(), &[new_msg.label().pubkey()]);
+        push.process_prune_msg(
+            &self_id,
+            &peer.label().pubkey(),
+            &[new_msg.label().pubkey()],
+        );
         assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
@@ -771,7 +789,7 @@ mod test {
         // push it again
         assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Ok(Some(_))
+            Err(CrdsGossipError::PushMessageOldVersion)
         );
 
         // purge the old pushed
