@@ -217,12 +217,11 @@ pub fn cluster_info_scale() {
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     let num_nodes: usize = std::env::var("NUM_NODES")
-        .unwrap_or("10".to_string())
+        .unwrap_or_else(|| "10".to_string())
         .parse()
         .expect("could not parse NUM_NODES as a number");
 
     let vote_keypairs: Vec<_> = (0..num_nodes)
-        .into_iter()
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect();
     let genesis_config_info = create_genesis_config_with_vote_accounts(10_000, &vote_keypairs, 100);
