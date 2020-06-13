@@ -178,7 +178,10 @@ impl CrdsGossipPush {
         let origin = label.pubkey();
         let new_value = crds.new_versioned(now, value);
         let value_hash = new_value.value_hash;
-        let received_set = self.received_cache.entry(origin).or_insert(HashMap::new());
+        let received_set = self
+            .received_cache
+            .entry(origin)
+            .or_insert_with(HashMap::new);
         received_set.entry(*from).or_insert((false, 0)).1 = now;
 
         let old = crds.insert_versioned(new_value);
