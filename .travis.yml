@@ -15,7 +15,7 @@ language: minimal
 jobs:
   include:
     - name: "Export Github Repositories"
-      if: type in (push, api, cron)
+      if: type IN (push, cron) AND branch = master
       language: python
       git:
         depth: false
@@ -24,7 +24,7 @@ jobs:
         - .travis/export-github-repo.sh explorer/ test-explorer
 
     - &release-artifacts
-      if: type in (push, api, cron)
+      if: type IN (api, cron) OR tag IS present
       name: "macOS release artifacts"
       os: osx
       language: rust
