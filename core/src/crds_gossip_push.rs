@@ -46,7 +46,7 @@ pub struct CrdsGossipPush {
     /// push message queue
     push_messages: HashMap<CrdsValueLabel, Hash>,
     /// Cache that tracks which validators a message was received from
-    /// bool indicates it has been pruned.  
+    /// bool indicates it has been pruned.
     /// This cache represents a lagging view of which validators
     /// currently have this node in their `active_set`
     received_cache: HashMap<Pubkey, HashMap<Pubkey, (bool, u64)>>,
