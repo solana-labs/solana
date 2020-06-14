@@ -5,9 +5,8 @@ cd "$(dirname "$0")/.."
 
 source ci/_
 
-echo --- prepare git show --check
-
 (
+  echo --- git show --check
   set -x
   # Look for failed mergify.io backports by searching leftover conflict markers
   # Also check for any trailing whitespaces!
@@ -16,9 +15,11 @@ echo --- prepare git show --check
   else
     base_branch=$BUILDKITE_BRANCH
   fi
-  _ git fetch origin "$base_branch"
-  _ git show "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
+  git fetch origin "$base_branch"
+  git show "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
 )
+
+echo
 
 _ ci/nits.sh
 _ ci/check-ssh-keys.sh
