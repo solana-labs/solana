@@ -1728,8 +1728,8 @@ impl ClusterInfo {
 
         let now = timestamp();
         const INTERVAL_MS: u64 = 100;
-        // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
-        const BYTES_PER_INTERVAL: usize = 5000;
+        // allow 30kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
+        const BYTES_PER_INTERVAL: usize = 3000;
         const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
 
         if now - w_outbound_budget.last_timestamp_ms > INTERVAL_MS {
@@ -2255,7 +2255,8 @@ impl ClusterInfo {
             .name("solana-listen".to_string())
             .spawn(move || {
                 let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
+                    .num_threads(get_thread_count() / 2)
+                    .thread_name(|ix| format!("gos_work_{}", ix))
                     .build()
                     .unwrap();
                 let mut last_print = Instant::now();
