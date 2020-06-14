@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 source ci/_
 
 (
-  echo --- prepare git show --check
+  echo --- git show --check
   set -x
   # Look for failed mergify.io backports by searching leftover conflict markers
   # Also check for any trailing whitespaces!
