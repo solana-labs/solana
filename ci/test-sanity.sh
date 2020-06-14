@@ -12,7 +12,7 @@ if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
 else
   base_branch=$BUILDKITE_BRANCH
 fi
-_ git show $(git merge-base HEAD "origin/$base_branch")..HEAD --check --oneline
+_ git show "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
 
 _ ci/nits.sh
 _ ci/check-ssh-keys.sh
