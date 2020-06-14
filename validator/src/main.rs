@@ -1080,9 +1080,6 @@ pub fn main() {
     }
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
-<<<<<<< HEAD
-        let udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
-=======
         let mut udp_sockets = vec![
             &node.sockets.gossip,
             &node.sockets.repair,
@@ -1094,7 +1091,6 @@ pub fn main() {
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
->>>>>>> a39df7ee5... Fix udp port check retry and check all udp ports (#10385)
 
         let mut tcp_listeners = vec![];
         if !private_rpc {
