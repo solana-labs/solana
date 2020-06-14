@@ -297,6 +297,38 @@ impl std::ops::DerefMut for ProgressMap {
 }
 
 impl ProgressMap {
+    pub fn add_new_progress_entry(
+        &mut self,
+        bank: &Bank,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) {
+        let parent_slot = bank.parent_slot();
+        let prev_leader_slot = self.get_bank_prev_leader_slot(&bank);
+        let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
+            let stats = self
+                .get(&parent_slot)
+                .expect("parent of bank must exist in progress map");
+            let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
+            let new_dropped_blocks = bank.slot() - parent_slot - 1;
+            let num_dropped_blocks_on_fork = stats.num_dropped_blocks_on_fork + new_dropped_blocks;
+            (num_blocks_on_fork, num_dropped_blocks_on_fork)
+        };
+        // Insert a progress entry even for slots this node is the leader for, so that
+        // 1) confirm_forks can report confirmation, 2) we can cache computations about
+        // this bank in `select_forks()`
+        self.entry(bank.slot()).or_insert_with(|| {
+            ForkProgress::new_from_bank(
+                &bank,
+                &my_pubkey,
+                vote_account,
+                prev_leader_slot,
+                num_blocks_on_fork,
+                num_dropped_blocks_on_fork,
+            )
+        });
+    }
+
     pub fn insert(&mut self, slot: Slot, fork_progress: ForkProgress) {
         self.progress_map.insert(slot, fork_progress);
     }

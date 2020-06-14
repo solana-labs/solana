@@ -210,6 +210,8 @@ impl ReplayStage {
                         rewards_recorder_sender.clone(),
                         &mut progress,
                         &mut all_pubkeys,
+                        &my_pubkey,
+                        &vote_account,
                     );
                     Self::report_memory(&allocated, "generate_new_bank_forks", start);
 
@@ -220,7 +222,6 @@ impl ReplayStage {
                         &blockstore,
                         &bank_forks,
                         &my_pubkey,
-                        &vote_account,
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
@@ -444,9 +445,6 @@ impl ReplayStage {
                             descendants.get(&candidate_slot).expect(
                                 "frozen bank must exist in BankForks and thus in descendants map",
                             ),
-                            &bank_forks,
-                            &my_pubkey,
-                            &vote_account,
                         );
                     }
 
@@ -454,12 +452,13 @@ impl ReplayStage {
                     if !tpu_has_bank {
                         Self::maybe_start_leader(
                             &my_pubkey,
+                            &vote_account,
                             &bank_forks,
                             &poh_recorder,
                             &leader_schedule_cache,
                             &subscriptions,
                             rewards_recorder_sender.clone(),
-                            &progress,
+                            &mut progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                         );
@@ -508,35 +507,12 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         failed_slot: Slot,
         descendants: &HashSet<Slot>,
-        bank_forks: &RwLock<BankForks>,
-        my_pubkey: &Pubkey,
-        vote_account: &Pubkey,
     ) {
         for slot in std::iter::once(&failed_slot).chain(descendants.iter()) {
-            // Slot in `descendants` may not exist in `progress`
-            // if the slot was added through `generate_bank_forks`, but
-            // still has no playable entries in Blockstore, so has not yet
-            // been added to the progress map by `replay_active_banks`.
-            let new_progress_entry = if !progress.contains_key(slot) {
-                let bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(*slot)
-                    .cloned()
-                    .expect("Exists in descendants so must exist in BankForks");
-                let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
-                Some(ForkProgress::new_from_bank(
-                    &bank,
-                    &my_pubkey,
-                    &vote_account,
-                    prev_leader_slot,
-                    0,
-                    0,
-                ))
-            } else {
-                None
-            };
-            let bank_progress = progress.entry(*slot).or_insert(new_progress_entry.unwrap());
+            let bank_progress = progress.get_mut(&slot).expect(
+                "Anything in BankForks must exist
+            in progress map, guaranteed by `generate_new_bank_forks()`",
+            );
             Self::mark_dead_slot(
                 *slot,
                 bank_progress,
@@ -682,14 +658,16 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
-        progress_map: &ProgressMap,
+        progress_map: &mut ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
     ) {
@@ -791,11 +769,39 @@ impl ReplayStage {
                 subscriptions,
             );
 
-            let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
+            let tpu_bank = Self::add_new_banks(
+                my_pubkey,
+                vote_account,
+                vec![tpu_bank].into_iter(),
+                bank_forks,
+                progress_map,
+            )
+            .pop()
+            .unwrap();
             poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
         }
+    }
+
+    fn add_new_banks<I>(
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+        banks: I,
+        bank_forks: &RwLock<BankForks>,
+        progress: &mut ProgressMap,
+    ) -> Vec<Arc<Bank>>
+    where
+        I: IntoIterator<Item = Bank>,
+    {
+        let mut w_bank_forks = bank_forks.write().unwrap();
+        banks
+            .into_iter()
+            .map(|bank| {
+                progress.add_new_progress_entry(&bank, my_pubkey, vote_account);
+                w_bank_forks.insert(bank)
+            })
+            .collect()
     }
 
     fn replay_blockstore_into_bank(
@@ -1078,7 +1084,6 @@ impl ReplayStage {
         blockstore: &Arc<Blockstore>,
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
-        vote_account: &Pubkey,
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
@@ -1097,31 +1102,14 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
-            let parent_slot = bank.parent_slot();
-            let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
-            let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
-                let stats = progress
-                    .get(&parent_slot)
-                    .expect("parent of active bank must exist in progress map");
-                let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
-                let new_dropped_blocks = bank.slot() - parent_slot - 1;
-                let num_dropped_blocks_on_fork =
-                    stats.num_dropped_blocks_on_fork + new_dropped_blocks;
-                (num_blocks_on_fork, num_dropped_blocks_on_fork)
-            };
+
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
-            let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new_from_bank(
-                    &bank,
-                    &my_pubkey,
-                    vote_account,
-                    prev_leader_slot,
-                    num_blocks_on_fork,
-                    num_dropped_blocks_on_fork,
-                )
-            });
+            let bank_progress = &mut progress.get_mut(&bank.slot()).expect(
+                "Must have been added to `progress` when new bank was created
+            in generate_new_bank_forks()",
+            );
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(
                     &bank,
@@ -1709,6 +1697,8 @@ impl ReplayStage {
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         progress: &mut ProgressMap,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
     ) {
         // Find the next slot that chains to the old slot
         let forks = bank_forks.read().unwrap();
@@ -1772,10 +1762,13 @@ impl ReplayStage {
         }
         drop(forks);
 
-        let mut forks = bank_forks.write().unwrap();
-        for (_, bank) in new_banks {
-            forks.insert(bank);
-        }
+        Self::add_new_banks(
+            my_pubkey,
+            vote_account,
+            new_banks.into_iter().map(|(_, bank)| bank),
+            bank_forks,
+            progress,
+        );
     }
 
     fn new_bank_from_parent_with_notify(
@@ -2233,6 +2226,8 @@ pub(crate) mod tests {
                 None,
                 &mut progress,
                 &mut HashSet::new(),
+                &Pubkey::default(),
+                &Pubkey::default(),
             );
             assert!(bank_forks
                 .read()
@@ -2257,6 +2252,8 @@ pub(crate) mod tests {
                 None,
                 &mut progress,
                 &mut HashSet::new(),
+                &Pubkey::default(),
+                &Pubkey::default(),
             );
             assert!(bank_forks
                 .read()
