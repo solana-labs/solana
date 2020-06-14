@@ -178,29 +178,17 @@ impl CrdsGossipPush {
         let origin = label.pubkey();
         let new_value = crds.new_versioned(now, value);
         let value_hash = new_value.value_hash;
-<<<<<<< HEAD
-        if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
-            received_set.insert(from.clone());
-            return Err(CrdsGossipError::PushMessageAlreadyReceived);
-        }
-=======
         let received_set = self
             .received_cache
             .entry(origin)
             .or_insert_with(HashMap::new);
         received_set.entry(*from).or_insert((false, 0)).1 = now;
 
->>>>>>> ba83e4ca5... Fix fannout gossip bench (#10509)
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
             self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
-<<<<<<< HEAD
-        let mut received_set = HashSet::new();
-        received_set.insert(from.clone());
-=======
->>>>>>> ba83e4ca5... Fix fannout gossip bench (#10509)
         self.push_messages.insert(label, value_hash);
         Ok(old.unwrap())
     }
@@ -473,15 +461,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-<<<<<<< HEAD
         assert_eq!(
-            push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
-=======
-        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
             Err(CrdsGossipError::PushMessageOldVersion)
->>>>>>> ba83e4ca5... Fix fannout gossip bench (#10509)
         );
     }
     #[test]
