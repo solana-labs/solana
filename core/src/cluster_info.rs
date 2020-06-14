@@ -254,6 +254,7 @@ pub struct ClusterInfo {
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
+    socket: UdpSocket,
 }
 
 impl Default for ClusterInfo {
@@ -409,6 +410,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             id,
             stats: GossipStats::default(),
+            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -434,6 +436,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
+            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
         }
     }
 
@@ -745,6 +748,13 @@ impl ClusterInfo {
         let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.keypair);
         self.time_gossip_write_lock("push_vote_process_push", &self.stats.vote_process_push)
             .process_push_message(&self.id(), vec![entry], now);
+    }
+
+    pub fn send_vote(&self, vote: &Transaction) -> Result<()> {
+        let tpu = self.my_contact_info().tpu;
+        let buf = serialize(vote)?;
+        self.socket.send_to(&buf, &tpu)?;
+        Ok(())
     }
 
     /// Get votes in the crds
