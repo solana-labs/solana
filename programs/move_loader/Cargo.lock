@@ -885,9 +885,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91780f809e750b0a89f5544be56617ff6b1227ee485bcb06ebe10cdf89bd3b71"
+checksum = "b9586eedd4ce6b3c498bc3b4dd92fc9f11166aa908a914071953768066c67909"
 dependencies = [
  "libc",
 ]
@@ -1598,18 +1598,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e75373ff9037d112bb19bc61333a06a159eaeb217660dcfbea7d88e1db823919"
+checksum = "12e3a6cdbfe94a5e4572812a0201f8c0ed98c1c452c7b8563ce2276988ef9c17"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b4b44893d3c370407a1d6a5cfde7c41ae0478e31c516c85f67eb3adc51be6d"
+checksum = "6a0ffd45cf79d88737d7cc85bfd5d2894bee1139b356e616fe85dc389c61aaf7"
 dependencies = [
  "proc-macro2 1.0.18",
  "quote 1.0.7",
@@ -1683,9 +1683,9 @@ checksum = "7e0456befd48169b9f13ef0f0ad46d492cf9d2dbb918bcf38e01eed4ce3ec5e4"
 
 [[package]]
 name = "proc-macro-nested"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0afe1bd463b9e9ed51d0e0f0b50b6b146aec855c56fd182bb242388710a9b6de"
+checksum = "eba180dafb9038b050a4c280019bbedf9f2467b61e5d892dcad585bb57aadc5a"
 
 [[package]]
 name = "proc-macro2"
@@ -2094,9 +2094,9 @@ checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
 
 [[package]]
 name = "remove_dir_all"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
+checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi 0.3.8",
 ]
@@ -2461,7 +2461,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -2484,7 +2484,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -2493,7 +2493,7 @@ dependencies = [
 
 [[package]]
 name = "solana-move-loader-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "indexmap",
@@ -2522,7 +2522,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.18",

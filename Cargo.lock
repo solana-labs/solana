@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "btc_spv_bin"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "hex 0.4.2",
@@ -424,7 +424,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4aedb84272dbe89af497cf81375129abda4fc0a9e7c5d317498c15cc30c0d27"
 dependencies = [
- "nom 5.1.1",
+ "nom 5.1.2",
 ]
 
 [[package]]
@@ -1369,9 +1369,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91780f809e750b0a89f5544be56617ff6b1227ee485bcb06ebe10cdf89bd3b71"
+checksum = "b9586eedd4ce6b3c498bc3b4dd92fc9f11166aa908a914071953768066c67909"
 dependencies = [
  "libc",
 ]
@@ -2199,9 +2199,9 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "5.1.1"
+version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b471253da97532da4b61552249c521e01e736071f71c1a4f7ebbfbf0a06aad6"
+checksum = "ffb4262d26ed83a1c0a33a38fe2bb15797329c85770da05e6b828ddb782627af"
 dependencies = [
  "memchr 2.3.3",
  "version_check 0.9.2",
@@ -2564,18 +2564,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e75373ff9037d112bb19bc61333a06a159eaeb217660dcfbea7d88e1db823919"
+checksum = "12e3a6cdbfe94a5e4572812a0201f8c0ed98c1c452c7b8563ce2276988ef9c17"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "0.4.20"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b4b44893d3c370407a1d6a5cfde7c41ae0478e31c516c85f67eb3adc51be6d"
+checksum = "6a0ffd45cf79d88737d7cc85bfd5d2894bee1139b356e616fe85dc389c61aaf7"
 dependencies = [
  "proc-macro2 1.0.18",
  "quote 1.0.7",
@@ -2693,9 +2693,9 @@ checksum = "7e0456befd48169b9f13ef0f0ad46d492cf9d2dbb918bcf38e01eed4ce3ec5e4"
 
 [[package]]
 name = "proc-macro-nested"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0afe1bd463b9e9ed51d0e0f0b50b6b146aec855c56fd182bb242388710a9b6de"
+checksum = "eba180dafb9038b050a4c280019bbedf9f2467b61e5d892dcad585bb57aadc5a"
 
 [[package]]
 name = "proc-macro2"
@@ -3124,9 +3124,9 @@ checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
 
 [[package]]
 name = "remove_dir_all"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
+checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi 0.3.8",
 ]
@@ -3661,7 +3661,7 @@ dependencies = [
 
 [[package]]
 name = "solana-accounts-bench"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "crossbeam-channel",
@@ -3676,7 +3676,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banking-bench"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "crossbeam-channel",
@@ -3697,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-exchange"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "itertools 0.9.0",
@@ -3725,7 +3725,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-streamer"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
@@ -3737,7 +3737,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-tps"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "clap",
@@ -3766,7 +3766,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "byteorder",
@@ -3784,7 +3784,7 @@ dependencies = [
 
 [[package]]
 name = "solana-btc-spv-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "hex 0.4.2",
@@ -3798,7 +3798,7 @@ dependencies = [
 
 [[package]]
 name = "solana-budget-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -3814,7 +3814,7 @@ dependencies = [
 
 [[package]]
 name = "solana-clap-utils"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "chrono",
  "clap",
@@ -3828,7 +3828,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "Inflector",
  "bincode",
@@ -3872,7 +3872,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "dirs 2.0.2",
  "lazy_static",
@@ -3884,7 +3884,7 @@ dependencies = [
 
 [[package]]
 name = "solana-client"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -3910,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "solana-config-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -3923,7 +3923,7 @@ dependencies = [
 
 [[package]]
 name = "solana-core"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "bs58 0.3.1",
@@ -3992,7 +3992,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -4015,7 +4015,7 @@ dependencies = [
 
 [[package]]
 name = "solana-dos"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "clap",
@@ -4034,7 +4034,7 @@ dependencies = [
 
 [[package]]
 name = "solana-download-utils"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bzip2",
  "console 0.10.3",
@@ -4048,7 +4048,7 @@ dependencies = [
 
 [[package]]
 name = "solana-exchange-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4065,7 +4065,7 @@ dependencies = [
 
 [[package]]
 name = "solana-failure-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "solana-runtime",
  "solana-sdk",
@@ -4073,7 +4073,7 @@ dependencies = [
 
 [[package]]
 name = "solana-faucet"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "byteorder",
@@ -4093,7 +4093,7 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "base64 0.12.1",
  "chrono",
@@ -4114,7 +4114,7 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis-programs"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "log 0.4.8",
  "solana-bpf-loader-program",
@@ -4127,7 +4127,7 @@ dependencies = [
 
 [[package]]
 name = "solana-gossip"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
@@ -4141,7 +4141,7 @@ dependencies = [
 
 [[package]]
 name = "solana-install"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "atty",
  "bincode",
@@ -4174,7 +4174,7 @@ dependencies = [
 
 [[package]]
 name = "solana-keygen"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bs58 0.3.1",
  "clap",
@@ -4190,7 +4190,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4239,7 +4239,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger-tool"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_cmd",
  "bs58 0.3.1",
@@ -4264,7 +4264,7 @@ dependencies = [
 
 [[package]]
 name = "solana-librapay"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4277,7 +4277,7 @@ dependencies = [
 
 [[package]]
 name = "solana-local-cluster"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "itertools 0.9.0",
@@ -4305,7 +4305,7 @@ dependencies = [
 
 [[package]]
 name = "solana-log-analyzer"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "byte-unit",
  "clap",
@@ -4318,7 +4318,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -4327,7 +4327,7 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "jemalloc-ctl",
  "jemallocator",
@@ -4338,7 +4338,7 @@ dependencies = [
 
 [[package]]
 name = "solana-merkle-tree"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "fast-math",
  "hex 0.4.2",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "solana-metrics"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "env_logger",
  "gethostname",
@@ -4362,7 +4362,7 @@ dependencies = [
 
 [[package]]
 name = "solana-move-loader-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "indexmap",
@@ -4391,7 +4391,7 @@ dependencies = [
 
 [[package]]
 name = "solana-net-shaper"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "rand 0.7.3",
@@ -4403,7 +4403,7 @@ dependencies = [
 
 [[package]]
 name = "solana-net-utils"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "bytes 0.4.12",
@@ -4423,7 +4423,7 @@ dependencies = [
 
 [[package]]
 name = "solana-noop-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "log 0.4.8",
  "solana-logger",
@@ -4432,7 +4432,7 @@ dependencies = [
 
 [[package]]
 name = "solana-notifier"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "log 0.4.8",
  "reqwest",
@@ -4441,7 +4441,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ownable"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "num-derive 0.3.0",
@@ -4453,7 +4453,7 @@ dependencies = [
 
 [[package]]
 name = "solana-perf"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "curve25519-dalek 2.1.0",
@@ -4474,7 +4474,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ramp-tps"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bzip2",
  "clap",
@@ -4496,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -4504,7 +4504,7 @@ dependencies = [
 
 [[package]]
 name = "solana-remote-wallet"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "base32",
  "console 0.10.3",
@@ -4522,7 +4522,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4558,7 +4558,7 @@ dependencies = [
 
 [[package]]
 name = "solana-scripts"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "csv",
  "serde",
@@ -4566,7 +4566,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4600,7 +4600,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.18",
@@ -4610,7 +4610,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-accounts"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
@@ -4624,7 +4624,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-monitor"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "console 0.10.3",
@@ -4649,7 +4649,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-o-matic"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "log 0.4.8",
@@ -4667,7 +4667,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4685,7 +4685,7 @@ dependencies = [
 
 [[package]]
 name = "solana-streamer"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "libc",
  "log 0.4.8",
@@ -4700,7 +4700,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sys-tuner"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "libc",
@@ -4716,7 +4716,7 @@ dependencies = [
 
 [[package]]
 name = "solana-tokens"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "chrono",
  "clap",
@@ -4742,7 +4742,7 @@ dependencies = [
 
 [[package]]
 name = "solana-transaction-status"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "bs58 0.3.1",
@@ -4753,7 +4753,7 @@ dependencies = [
 
 [[package]]
 name = "solana-upload-perf"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "serde_json",
  "solana-metrics",
@@ -4761,7 +4761,7 @@ dependencies = [
 
 [[package]]
 name = "solana-validator"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "chrono",
  "clap",
@@ -4790,7 +4790,7 @@ dependencies = [
 
 [[package]]
 name = "solana-version"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "serde",
  "serde_derive",
@@ -4799,7 +4799,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vest-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -4815,7 +4815,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote-program"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4830,7 +4830,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote-signer"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "jsonrpc-core",
@@ -4846,7 +4846,7 @@ dependencies = [
 
 [[package]]
 name = "solana-watchtower"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "clap",
  "humantime 2.0.1",
@@ -6421,18 +6421,18 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.5.2+zstd.1.4.5"
+version = "0.5.3+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644352b10ce7f333d6e0af85bd4f5322dc449416dc1211c6308e95bca8923db4"
+checksum = "01b32eaf771efa709e8308605bbf9319bf485dc1503179ec0469b611937c0cd8"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "2.0.4+zstd.1.4.5"
+version = "2.0.5+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7113c0c9aed2c55181f2d9f5b0a36e7d2c0183b11c058ab40b35987479efe4d7"
+checksum = "1cfb642e0d27f64729a639c52db457e0ae906e7bc6f5fe8f5c453230400f1055"
 dependencies = [
  "libc",
  "zstd-sys",
@@ -6440,9 +6440,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.4.16+zstd.1.4.5"
+version = "1.4.17+zstd.1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c442965efc45353be5a9b9969c9b0872fff6828c7e06d118dda2cb2d0bb11d5a"
+checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
  "glob",
