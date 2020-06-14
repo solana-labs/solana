@@ -76,17 +76,10 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
         let id = &self.id;
-        let crds = &self.crds;
         let push = &mut self.push;
-        let versioned = labels
-            .into_iter()
-            .filter_map(|label| crds.lookup_versioned(&label));
-
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
-        for val in versioned {
-            let origin = val.value.pubkey();
-            let hash = val.value_hash;
-            let peers = push.prune_received_cache(id, &origin, hash, stakes);
+        for origin in labels.iter().map(|k| k.pubkey()) {
+            let peers = push.prune_received_cache(id, &origin, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }
@@ -113,7 +106,7 @@ impl CrdsGossip {
             return Err(CrdsGossipError::PruneMessageTimeout);
         }
         if self.id == *destination {
-            self.push.process_prune_msg(peer, origin);
+            self.push.process_prune_msg(&self.id, peer, origin);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)
@@ -190,14 +183,15 @@ impl CrdsGossip {
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
     ) {
-        self.pull.process_pull_responses(
+        let success = self.pull.process_pull_responses(
             &mut self.crds,
             from,
             responses,
             responses_expired_timeout,
             now,
             process_pull_stats,
-        )
+        );
+        self.push.push_pull_responses(success, now);
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {

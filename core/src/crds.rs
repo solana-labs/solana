@@ -36,6 +36,7 @@ use std::collections::HashMap;
 pub struct Crds {
     /// Stores the map of labels and values
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
+    pub num_inserts: usize,
 }
 
 #[derive(PartialEq, Debug)]
@@ -84,6 +85,7 @@ impl Default for Crds {
     fn default() -> Self {
         Crds {
             table: IndexMap::new(),
+            num_inserts: 0,
         }
     }
 }
@@ -125,6 +127,7 @@ impl Crds {
             .unwrap_or(true);
         if do_insert {
             let old = self.table.insert(label, new_value);
+            self.num_inserts += 1;
             Ok(old)
         } else {
             trace!("INSERT FAILED data: {} new.wallclock: {}", label, wallclock,);

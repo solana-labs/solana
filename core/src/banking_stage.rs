@@ -51,7 +51,7 @@ type PacketsAndOffsets = (Packets, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
 
 /// Transaction forwarding
-pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 4;
+pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 1;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 4;

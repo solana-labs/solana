@@ -952,7 +952,6 @@ impl ReplayStage {
             progress.get_fork_stats(bank.slot()).unwrap().total_staked,
             lockouts_sender,
         );
-
         Self::push_vote(
             cluster_info,
             bank,
@@ -1044,6 +1043,7 @@ impl ReplayStage {
         let blockhash = bank.last_blockhash();
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
+        let _ = cluster_info.send_vote(&vote_tx);
         cluster_info.push_vote(tower_index, vote_tx);
     }
 
