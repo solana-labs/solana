@@ -1110,23 +1110,17 @@ pub fn main() {
     }
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
-        let udp_sockets = [
-            node.sockets.tpu.first(),
-            /*
-            Enable these ports when `IpEchoServerMessage` supports more than 4 UDP ports:
-                node.sockets.tpu_forwards.first(),
-                node.sockets.tvu.first(),
-                node.sockets.tvu_forwards.first(),
-                node.sockets.broadcast.first(),
-                node.sockets.retransmit_sockets.first(),
-            */
-            Some(&node.sockets.gossip),
-            Some(&node.sockets.repair),
-            Some(&node.sockets.serve_repair),
-        ]
-        .iter()
-        .filter_map(|x| *x)
-        .collect::<Vec<_>>();
+        let mut udp_sockets = vec![
+            &node.sockets.gossip,
+            &node.sockets.repair,
+            &node.sockets.serve_repair,
+        ];
+        udp_sockets.extend(node.sockets.tpu.iter());
+        udp_sockets.extend(node.sockets.tpu_forwards.iter());
+        udp_sockets.extend(node.sockets.tvu.iter());
+        udp_sockets.extend(node.sockets.tvu_forwards.iter());
+        udp_sockets.extend(node.sockets.broadcast.iter());
+        udp_sockets.extend(node.sockets.retransmit_sockets.iter());
 
         let mut tcp_listeners = vec![];
         if !private_rpc {
