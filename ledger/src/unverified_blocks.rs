@@ -74,8 +74,7 @@ impl UnverifiedBlocks {
     // retrieved through Self::get_unverified_ancestors().
     pub fn next_heaviest_leaf(&self) -> Option<Slot> {
         // Take heaviest bank, greatest slot, should be a leaf.
-        let res = self
-            .fork_weights
+        self.fork_weights
             .values()
             .rev()
             .next()
@@ -94,9 +93,7 @@ impl UnverifiedBlocks {
                     })
                     .expect("at least one heaviest fork must be a leaf")
             })
-            .cloned();
-
-        res
+            .cloned()
     }
 
     pub fn set_root(&mut self, bank_forks: &RwLock<BankForks>) {

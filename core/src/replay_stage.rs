@@ -260,9 +260,9 @@ impl ReplayStage {
                         // Our own banks do not need to be verfied. Furthermore,
                         // they are safe to not send to the `EntryVerifyService`
                         // (won't update the tree structure there)
-                        // because all banks prior to this bank must have been 
-                        // verified (we verify all prevoius blocks in 
-                        // `verify_vote_and_reset_bank` before resetting to a block 
+                        // because all banks prior to this bank must have been
+                        // verified (we verify all prevoius blocks in
+                        // `verify_vote_and_reset_bank` before resetting to a block
                         // for starting PoH).
                         leader_id != my_pubkey
                         {
