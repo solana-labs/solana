@@ -3,7 +3,7 @@ use crate::{
     bank_forks::CompressionType,
     hardened_unpack::{unpack_snapshot, UnpackError},
     serde_snapshot::{
-        bankrc_from_stream, bankrc_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
+        bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
     snapshot_package::AccountsPackage,
 };
@@ -23,7 +23,6 @@ use std::{
     path::{Path, PathBuf},
     process::ExitStatus,
     str::FromStr,
-    sync::Arc,
 };
 use tar::Archive;
 use tempfile::TempDir;
@@ -462,8 +461,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
             SnapshotVersion::V1_1_0 => SerdeStyle::OLDER,
             SnapshotVersion::V1_2_0 => SerdeStyle::NEWER,
         };
-        serialize_into(stream.by_ref(), bank)?;
-        bankrc_to_stream(serde_style, stream.by_ref(), &bank.rc, snapshot_storages)?;
+        bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
         Ok(())
     };
     let consumed_size =
@@ -723,38 +721,24 @@ where
 
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
-        let mut bank: Bank = bincode::options()
-            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-            .with_fixint_encoding()
-            .allow_trailing_bytes()
-            .deserialize_from(&mut stream)?;
-
-        info!("Rebuilding accounts...");
-
-        let mut bankrc = match snapshot_version_enum {
-            SnapshotVersion::V1_1_0 => bankrc_from_stream(
+        Ok(match snapshot_version_enum {
+            SnapshotVersion::V1_1_0 => bank_from_stream(
                 SerdeStyle::OLDER,
-                account_paths,
-                bank.slot(),
                 &mut stream,
                 &append_vecs_path,
+                account_paths,
+                genesis_config,
+                frozen_account_pubkeys,
             ),
-            SnapshotVersion::V1_2_0 => bankrc_from_stream(
+            SnapshotVersion::V1_2_0 => bank_from_stream(
                 SerdeStyle::NEWER,
-                account_paths,
-                bank.slot(),
                 &mut stream,
                 &append_vecs_path,
+                account_paths,
+                genesis_config,
+                frozen_account_pubkeys,
             ),
-        }?;
-        Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)
-            .unwrap()
-            .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
-
-        bank.rc = bankrc;
-        bank.operating_mode = Some(genesis_config.operating_mode);
-        bank.finish_init();
-        Ok(bank)
+        }?)
     })?;
 
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);

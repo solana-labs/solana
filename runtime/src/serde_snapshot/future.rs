@@ -1,4 +1,7 @@
+use super::common::{DeserializableBankFields, SerializableBankFields};
 use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
+
+type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -29,21 +32,23 @@ pub(super) struct Context {}
 impl<'a> TypeContext<'a> for Context {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
 
-    fn serialize_bank_rc_fields<S: serde::ser::Serializer>(
+    fn serialize_bank_fields<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_bank: &SerializableBankRc<'a, Self>,
+        serializable_bank: &SerializableBank<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized,
     {
-        let accounts_db_serialize = SerializableAccountsDB::<'a, Self> {
-            accounts_db: &*serializable_bank.bank_rc.accounts.accounts_db,
-            slot: serializable_bank.bank_rc.slot,
-            account_storage_entries: serializable_bank.snapshot_storages,
-            phantom: std::marker::PhantomData::default(),
-        };
-
-        accounts_db_serialize.serialize(serializer)
+        (
+            SerializableBankFields::from(serializable_bank.bank.get_ref_fields()),
+            SerializableAccountsDB::<'a, Self> {
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
+                slot: serializable_bank.bank.rc.slot,
+                account_storage_entries: serializable_bank.snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+        )
+            .serialize(serializer)
     }
 
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
@@ -93,12 +98,23 @@ impl<'a> TypeContext<'a> for Context {
         result
     }
 
-    fn deserialize_accounts_db_fields<R>(
+    fn deserialize_bank_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
+    ) -> Result<(BankFields, AccountsDbFields), Error>
     where
         R: Read,
     {
-        deserialize_from(&mut stream)
+        let bank_fields = deserialize_from::<_, DeserializableBankFields>(&mut stream)?.into();
+        let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
+        Ok((bank_fields, accounts_db_fields))
+    }
+
+    fn deserialize_accounts_db_fields<R>(
+        stream: &mut BufReader<R>,
+    ) -> Result<AccountsDbFields, Error>
+    where
+        R: Read,
+    {
+        deserialize_from(stream)
     }
 }

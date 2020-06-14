@@ -1782,7 +1782,7 @@ impl AccountsDB {
         hashes
     }
 
-    pub fn freeze_accounts(&mut self, ancestors: &Ancestors, account_pubkeys: &[Pubkey]) {
+    pub(crate) fn freeze_accounts(&mut self, ancestors: &Ancestors, account_pubkeys: &[Pubkey]) {
         for account_pubkey in account_pubkeys {
             if let Some((account, _slot)) = self.load_slow(ancestors, &account_pubkey) {
                 let frozen_account_info = FrozenAccountInfo {
@@ -1976,7 +1976,7 @@ impl AccountsDB {
         }
     }
 
-    pub fn print_accounts_stats(&self, label: &'static str) {
+    pub(crate) fn print_accounts_stats(&self, label: &'static str) {
         self.print_index(label);
         self.print_count_and_status(label);
     }

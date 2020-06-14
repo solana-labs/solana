@@ -1,6 +1,11 @@
+use super::common::{DeserializableBankFields, SerializableBankFields};
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 use solana_sdk::abi_example::IgnoreAsHelper;
 use {super::*, bincode::config::Options, solana_measure::measure::Measure, std::cell::RefCell};
+
+const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = MAX_STREAM_SIZE;
+
+type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -52,7 +57,7 @@ impl Into<AppendVec> for SerializableAppendVec {
     }
 }
 
-// Serialization of AppendVec  requires serialization of u64 to
+// Serialization of AppendVec requires serialization of u64 to
 // eight byte vector which is then itself serialized to the stream
 impl Serialize for SerializableAppendVec {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -67,7 +72,7 @@ impl Serialize for SerializableAppendVec {
     }
 }
 
-// Deserialization of AppendVec  requires deserialization
+// Deserialization of AppendVec requires deserialization
 // of eight byte vector from which u64 is then deserialized
 impl<'de> Deserialize<'de> for SerializableAppendVec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -103,23 +108,23 @@ pub(super) struct Context {}
 impl<'a> TypeContext<'a> for Context {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
 
-    fn serialize_bank_rc_fields<S: serde::ser::Serializer>(
+    fn serialize_bank_fields<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_bank: &SerializableBankRc<'a, Self>,
+        serializable_bank: &SerializableBank<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized,
     {
-        // as there is no deserialize_bank_rc_fields(), do not emit the u64
-        // size field here and have serialize_accounts_db_fields() emit two
-        // u64 size fields instead
-        SerializableAccountsDB::<'a, Self> {
-            accounts_db: &*serializable_bank.bank_rc.accounts.accounts_db,
-            slot: serializable_bank.bank_rc.slot,
-            account_storage_entries: serializable_bank.snapshot_storages,
-            phantom: std::marker::PhantomData::default(),
-        }
-        .serialize(serializer)
+        (
+            SerializableBankFields::from(serializable_bank.bank.get_ref_fields()),
+            SerializableAccountsDB::<'a, Self> {
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
+                slot: serializable_bank.bank.rc.slot,
+                account_storage_entries: serializable_bank.snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+        )
+            .serialize(serializer)
     }
 
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
@@ -161,6 +166,7 @@ impl<'a> TypeContext<'a> for Context {
                 .clone(),
         );
 
+        // as there is no deserialize_bank_rc_fields(), emit two u64 size fields here instead
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         let result = (
             &MAX_ACCOUNTS_DB_STREAM_SIZE,
@@ -179,9 +185,20 @@ impl<'a> TypeContext<'a> for Context {
         result
     }
 
+    fn deserialize_bank_fields<R>(
+        mut stream: &mut BufReader<R>,
+    ) -> Result<(BankFields, AccountsDbFields), Error>
+    where
+        R: Read,
+    {
+        let bank_fields = deserialize_from::<_, DeserializableBankFields>(&mut stream)?.into();
+        let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
+        Ok((bank_fields, accounts_db_fields))
+    }
+
     fn deserialize_accounts_db_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
+    ) -> Result<AccountsDbFields, Error>
     where
         R: Read,
     {
@@ -203,6 +220,6 @@ impl<'a> TypeContext<'a> for Context {
         // (3rd of 3 elements) read in (slot, bank hashes) pair
         let (slot, bank_hash_info): (Slot, BankHashInfo) = deserialize_from(&mut stream)?;
 
-        Ok(AccountDBFields(storage, version, slot, bank_hash_info))
+        Ok(AccountsDbFields(storage, version, slot, bank_hash_info))
     }
 }
