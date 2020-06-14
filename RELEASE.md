@@ -102,7 +102,7 @@ There are three release channels that map to branches as follows:
 
 ### Create the Release Tag on GitHub
 
-1. Go to [GitHub's Releases UI](https://github.com/solana-labs/solana/releases) for tagging a release.
+1. Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) for tagging a release.
 1. Click "Draft new release".  The release tag must exactly match the `version`
    field in `/Cargo.toml` prefixed by `v`.
    1.  If the Cargo.toml verion field is **0.12.3**, then the release tag must be **v0.12.3**
@@ -110,7 +110,10 @@ There are three release channels that map to branches as follows:
    1.  If you want to release v0.12.0, the target branch must be v0.12
 1. If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
    template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.  If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
-1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.  Go back into edit the release and click "Publish release" when ready.  *Ensure the release is marked "Pre release" until the Linux binary artifacts appear*
+1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.
+1. Ensure the release is marked **"This is a pre-release"**.  This flag will then need to be be removed once the the Linux binary artifacts appear later.
+1. Go back into edit the release and click "Publish release" when ready.
+
 
 ### Update release branch with the next patch version
 
@@ -126,6 +129,11 @@ There are three release channels that map to branches as follows:
     git commit -m 'Bump version to X.Y.Z+1'
     git push -u origin version_update
     ```
+
+### Prepare for the next release
+1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release nodes.  This allows people to incrementally add new release notes until it's time for the next release
+1.  Go to the [Github Milestones](https://github.com/solana-labs/solana/milestones).  Create a new milestone for the `X.Y.Z+1`, move over
+unresolved issues still in the `X.Y.Z` milestone, then close the `X.Y.Z` milestone.
 
 ### Verify release automation success
 1. Go to [Solana Releases](https://github.com/solana-labs/solana/releases) and click on the latest release that you just published.  Verify that all of the build artifacts are present.  This can take up to 60 minutes after creating the tag.
