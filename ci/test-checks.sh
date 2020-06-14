@@ -10,9 +10,6 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-# Look for failed mergify.io backports
-_ git show HEAD --check --oneline
-
 _ cargo +"$rust_stable" fmt --all -- --check
 
 # Clippy gets stuck for unknown reasons if sdk-c is included in the build, so check it separately.
@@ -23,10 +20,8 @@ _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnin
 
 _ cargo +"$rust_stable" audit --version
 _ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
-_ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ docs/build.sh
-_ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
