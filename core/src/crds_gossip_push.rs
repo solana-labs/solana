@@ -35,6 +35,7 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
+pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 2;
 
 #[derive(Clone)]
 pub struct CrdsGossipPush {
@@ -44,12 +45,18 @@ pub struct CrdsGossipPush {
     active_set: IndexMap<Pubkey, Bloom<Pubkey>>,
     /// push message queue
     push_messages: HashMap<CrdsValueLabel, Hash>,
-    /// cache that tracks which validators a message was received from
-    received_cache: HashMap<Hash, (u64, HashSet<Pubkey>)>,
+    /// Cache that tracks which validators a message was received from
+    /// bool indicates it has been pruned.  
+    /// This cache represents a lagging view of which validators
+    /// currently have this node in their `active_set`
+    received_cache: HashMap<Pubkey, HashMap<Pubkey, (bool, u64)>>,
     pub num_active: usize,
     pub push_fanout: usize,
     pub msg_timeout: u64,
     pub prune_timeout: u64,
+    pub num_total: usize,
+    pub num_old: usize,
+    pub num_pushes: usize,
 }
 
 impl Default for CrdsGossipPush {
@@ -64,6 +71,9 @@ impl Default for CrdsGossipPush {
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
             prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
+            num_total: 0,
+            num_old: 0,
+            num_pushes: 0,
         }
     }
 }
@@ -81,18 +91,21 @@ impl CrdsGossipPush {
         &mut self,
         self_pubkey: &Pubkey,
         origin: &Pubkey,
-        hash: Hash,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<Pubkey> {
         let origin_stake = stakes.get(origin).unwrap_or(&0);
         let self_stake = stakes.get(self_pubkey).unwrap_or(&0);
-        let cache = self.received_cache.get(&hash);
+        let cache = self.received_cache.get(origin);
         if cache.is_none() {
             return Vec::new();
         }
+        let peers = cache.unwrap();
 
-        let peers = &cache.unwrap().1;
-        let peer_stake_total: u64 = peers.iter().map(|p| stakes.get(p).unwrap_or(&0)).sum();
+        let peer_stake_total: u64 = peers
+            .iter()
+            .filter(|v| !(v.1).0)
+            .map(|v| stakes.get(v.0).unwrap_or(&0))
+            .sum();
         let prune_stake_threshold = Self::prune_stake_threshold(*self_stake, *origin_stake);
         if peer_stake_total < prune_stake_threshold {
             return Vec::new();
@@ -100,7 +113,8 @@ impl CrdsGossipPush {
 
         let staked_peers: Vec<(Pubkey, u64)> = peers
             .iter()
-            .filter_map(|p| stakes.get(p).map(|s| (*p, *s)))
+            .filter(|v| !(v.1).0)
+            .filter_map(|p| stakes.get(p.0).map(|s| (*p.0, *s)))
             .filter(|(_, s)| *s > 0)
             .collect();
 
@@ -117,16 +131,27 @@ impl CrdsGossipPush {
             let (next_peer, next_stake) = staked_peers[next];
             keep.insert(next_peer);
             peer_stake_sum += next_stake;
-            if peer_stake_sum >= prune_stake_threshold {
+            if peer_stake_sum >= prune_stake_threshold
+                && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES
+            {
                 break;
             }
         }
 
-        peers
-            .iter()
+        let pruned_peers: Vec<Pubkey> = peers
+            .keys()
             .filter(|p| !keep.contains(p))
             .cloned()
-            .collect()
+            .collect();
+        pruned_peers.iter().for_each(|p| {
+            self.received_cache
+                .get_mut(origin)
+                .unwrap()
+                .get_mut(p)
+                .unwrap()
+                .0 = true;
+        });
+        pruned_peers
     }
 
     /// process a push message to the network
@@ -137,6 +162,7 @@ impl CrdsGossipPush {
         value: CrdsValue,
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
+        self.num_total += 1;
         if now
             > value
                 .wallclock()
@@ -149,21 +175,32 @@ impl CrdsGossipPush {
             return Err(CrdsGossipError::PushMessageTimeout);
         }
         let label = value.label();
+        let origin = label.pubkey();
         let new_value = crds.new_versioned(now, value);
         let value_hash = new_value.value_hash;
-        if let Some((_, ref mut received_set)) = self.received_cache.get_mut(&value_hash) {
-            received_set.insert(*from);
-            return Err(CrdsGossipError::PushMessageAlreadyReceived);
-        }
+        let received_set = self
+            .received_cache
+            .entry(origin)
+            .or_insert_with(HashMap::new);
+        received_set.entry(*from).or_insert((false, 0)).1 = now;
+
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
+            self.num_old += 1;
             return Err(CrdsGossipError::PushMessageOldVersion);
         }
-        let mut received_set = HashSet::new();
-        received_set.insert(*from);
         self.push_messages.insert(label, value_hash);
-        self.received_cache.insert(value_hash, (now, received_set));
-        Ok(old.ok().and_then(|opt| opt))
+        Ok(old.unwrap())
+    }
+
+    /// push pull responses
+    pub fn push_pull_responses(&mut self, values: Vec<(CrdsValueLabel, Hash, u64)>, now: u64) {
+        for (label, value_hash, wc) in values {
+            if now > wc.checked_add(self.msg_timeout).unwrap_or_else(|| 0) {
+                continue;
+            }
+            self.push_messages.insert(label, value_hash);
+        }
     }
 
     /// New push message to broadcast to peers.
@@ -172,18 +209,10 @@ impl CrdsGossipPush {
     /// The list of push messages is created such that all the randomly selected peers have not
     /// pruned the source addresses.
     pub fn new_push_messages(&mut self, crds: &Crds, now: u64) -> HashMap<Pubkey, Vec<CrdsValue>> {
-        let max = self.active_set.len();
-        let mut nodes: Vec<_> = (0..max).collect();
-        nodes.shuffle(&mut rand::thread_rng());
-        let peers: Vec<Pubkey> = nodes
-            .into_iter()
-            .filter_map(|n| self.active_set.get_index(n))
-            .take(self.push_fanout)
-            .map(|n| *n.0)
-            .collect();
         let mut total_bytes: usize = 0;
         let mut values = vec![];
         let mut push_messages: HashMap<Pubkey, Vec<CrdsValue>> = HashMap::new();
+        trace!("new_push_messages {}", self.push_messages.len());
         for (label, hash) in &self.push_messages {
             let res = crds.lookup_versioned(label);
             if res.is_none() {
@@ -203,21 +232,37 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
+        trace!(
+            "new_push_messages {} {}",
+            values.len(),
+            self.active_set.len()
+        );
         for v in values {
-            for p in peers.iter() {
-                let filter = self.active_set.get_mut(p);
-                if filter.is_some() && !filter.unwrap().contains(&v.label().pubkey()) {
-                    push_messages.entry(*p).or_default().push(v.clone());
+            //use a consistent index for the same origin so
+            //the active set learns the MST for that origin
+            let start = v.label().pubkey().as_ref()[0] as usize;
+            let max = self.push_fanout.min(self.active_set.len());
+            for i in start..(start + max) {
+                let ix = i % self.active_set.len();
+                if let Some((p, filter)) = self.active_set.get_index(ix) {
+                    if !filter.contains(&v.label().pubkey()) {
+                        trace!("new_push_messages insert {} {:?}", *p, v);
+                        push_messages.entry(*p).or_default().push(v.clone());
+                        self.num_pushes += 1;
+                    }
                 }
+                self.push_messages.remove(&v.label());
             }
-            self.push_messages.remove(&v.label());
         }
         push_messages
     }
 
     /// add the `from` to the peer's filter of nodes
-    pub fn process_prune_msg(&mut self, peer: &Pubkey, origins: &[Pubkey]) {
+    pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
         for origin in origins {
+            if origin == self_pubkey {
+                continue;
+            }
             if let Some(p) = self.active_set.get_mut(peer) {
                 p.add(origin)
             }
@@ -339,15 +384,11 @@ impl CrdsGossipPush {
 
     /// purge received push message cache
     pub fn purge_old_received_cache(&mut self, min_time: u64) {
-        let old_msgs: Vec<Hash> = self
-            .received_cache
-            .iter()
-            .filter_map(|(k, (rcvd_time, _))| if *rcvd_time < min_time { Some(k) } else { None })
-            .cloned()
-            .collect();
-        for k in old_msgs {
-            self.received_cache.remove(&k);
-        }
+        self.received_cache
+            .iter_mut()
+            .for_each(|v| v.1.retain(|_, v| v.1 > min_time));
+
+        self.received_cache.retain(|_, v| !v.is_empty());
     }
 }
 
@@ -371,7 +412,6 @@ mod test {
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &origin, 0,
         )));
-        let label = value.label();
         let low_staked_peers = (0..10).map(|_| Pubkey::new_rand());
         let mut low_staked_set = HashSet::new();
         low_staked_peers.for_each(|p| {
@@ -380,11 +420,7 @@ mod test {
             stakes.insert(p, 1);
         });
 
-        let versioned = crds
-            .lookup_versioned(&label)
-            .expect("versioned value should exist");
-        let hash = versioned.value_hash;
-        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, &stakes);
         assert!(
             pruned.is_empty(),
             "should not prune if min threshold has not been reached"
@@ -395,7 +431,7 @@ mod test {
         stakes.insert(high_staked_peer, high_stake);
         let _ = push.process_push_message(&mut crds, &high_staked_peer, value, 0);
 
-        let pruned = push.prune_received_cache(&self_id, &origin, hash, &stakes);
+        let pruned = push.prune_received_cache(&self_id, &origin, &stakes);
         assert!(
             pruned.len() < low_staked_set.len() + 1,
             "should not prune all peers"
@@ -409,7 +445,7 @@ mod test {
     }
 
     #[test]
-    fn test_process_push() {
+    fn test_process_push_one() {
         let mut crds = Crds::default();
         let mut push = CrdsGossipPush::default();
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -425,9 +461,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value, 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Err(CrdsGossipError::PushMessageOldVersion)
         );
     }
     #[test]
@@ -690,6 +726,7 @@ mod test {
     #[test]
     fn test_process_prune() {
         let mut crds = Crds::default();
+        let self_id = Pubkey::new_rand();
         let mut push = CrdsGossipPush::default();
         let peer = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
@@ -707,7 +744,11 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), new_msg.clone(), 0),
             Ok(None)
         );
-        push.process_prune_msg(&peer.label().pubkey(), &[new_msg.label().pubkey()]);
+        push.process_prune_msg(
+            &self_id,
+            &peer.label().pubkey(),
+            &[new_msg.label().pubkey()],
+        );
         assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
@@ -749,9 +790,9 @@ mod test {
         assert_eq!(crds.lookup(&label), Some(&value));
 
         // push it again
-        assert_eq!(
+        assert_matches!(
             push.process_push_message(&mut crds, &Pubkey::default(), value.clone(), 0),
-            Err(CrdsGossipError::PushMessageAlreadyReceived)
+            Err(CrdsGossipError::PushMessageOldVersion)
         );
 
         // purge the old pushed
