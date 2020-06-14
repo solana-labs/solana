@@ -1831,7 +1831,7 @@ pub(crate) mod tests {
         account::Account,
         clock::NUM_CONSECUTIVE_LEADER_SLOTS,
         genesis_config,
-        hash::{hash, Hash},
+        hash::Hash,
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
         rent::Rent,
@@ -2398,29 +2398,23 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_dead_fork_entry_verification_failure() {
+    fn test_dead_fork_transaction_verification_failure() {
         let keypair2 = Keypair::new();
         let res = check_dead_fork(|genesis_keypair, bank| {
             let blockhash = bank.last_blockhash();
             let slot = bank.slot();
-            let bad_hash = hash(&[2; 30]);
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
-            let entry = entry::next_entry(
-                // Use wrong blockhash so that the entry causes an entry verification failure
-                &bad_hash,
-                hashes_per_tick.saturating_sub(1),
-                vec![system_transaction::transfer(
-                    &genesis_keypair,
-                    &keypair2.pubkey(),
-                    2,
-                    blockhash,
-                )],
-            );
+            let mut bad_tx =
+                system_transaction::transfer(&genesis_keypair, &keypair2.pubkey(), 2, blockhash);
+            // Make wrong signature so the entry causes a transaction verification failure
+            bad_tx.signatures[0] = Signature::new(&vec![1; 64]);
+            let entry =
+                entry::next_entry(&blockhash, hashes_per_tick.saturating_sub(1), vec![bad_tx]);
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
-            assert_eq!(block_error, BlockError::InvalidEntryHash);
+            assert_eq!(block_error, BlockError::InvalidTransactionSignature);
         } else {
             assert!(false);
         }
