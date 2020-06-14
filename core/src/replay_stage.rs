@@ -326,13 +326,15 @@ impl ReplayStage {
                     let start = allocated.get();
 
                     // Vote on a fork
-                    if Self::verify_vote_and_reset_bank(
+                    let (verify_poh_result, candidate_slot) = Self::verify_vote_and_reset_bank(
                         &my_pubkey,
                         &slot_verify_results,
                         &vote_bank,
                         &reset_bank,
                         &mut progress,
-                    ) {
+                    );
+
+                    if verify_poh_result {
                         if let Some(ref vote_bank) = vote_bank {
                             if let Some(votable_leader) = leader_schedule_cache
                                 .slot_leader_at(vote_bank.slot(), Some(vote_bank))
@@ -432,6 +434,20 @@ impl ReplayStage {
                             );
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
+                    } else {
+                        assert!(candidate_slot.is_some());
+                        let candidate_slot = candidate_slot.unwrap();
+                        Self::handle_block_failed_poh(
+                            &blockstore,
+                            &mut progress,
+                            candidate_slot,
+                            descendants.get(&candidate_slot).expect(
+                                "frozen bank must exist in BankForks and thus in descendants map",
+                            ),
+                            &bank_forks,
+                            &my_pubkey,
+                            &vote_account,
+                        );
                     }
 
                     let start = allocated.get();
@@ -487,31 +503,75 @@ impl ReplayStage {
         )
     }
 
+    fn handle_block_failed_poh(
+        blockstore: &Blockstore,
+        progress: &mut ProgressMap,
+        failed_slot: Slot,
+        descendants: &HashSet<Slot>,
+        bank_forks: &RwLock<BankForks>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) {
+        for slot in std::iter::once(&failed_slot).chain(descendants.iter()) {
+            // Slot in `descendants` may not exist in `progress`
+            // if the slot was added through `generate_bank_forks`, but
+            // still has no playable entries in Blockstore, so has not yet
+            // been added to the progress map by `replay_active_banks`.
+            let new_progress_entry = if !progress.contains_key(slot) {
+                let bank = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(*slot)
+                    .cloned()
+                    .expect("Exists in descendants so must exist in BankForks");
+                let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
+                Some(ForkProgress::new_from_bank(
+                    &bank,
+                    &my_pubkey,
+                    &vote_account,
+                    prev_leader_slot,
+                    0,
+                    0,
+                ))
+            } else {
+                None
+            };
+            let bank_progress = progress.entry(*slot).or_insert(new_progress_entry.unwrap());
+            Self::mark_dead_slot(
+                *slot,
+                bank_progress,
+                blockstore,
+                &BlockstoreProcessorError::InvalidBlock(BlockError::InvalidEntryHash),
+            );
+        }
+    }
+
     fn verify_vote_and_reset_bank(
         my_pubkey: &Pubkey,
         slot_verify_results: &RwLock<HashMap<Slot, bool>>,
         vote_bank: &Option<Arc<Bank>>,
         reset_bank: &Option<Arc<Bank>>,
         progress: &mut ProgressMap,
-    ) -> bool {
+    ) -> (bool, Option<Slot>) {
         let start = Instant::now();
-        let (res, timing) = if let Some(vote_bank) = vote_bank {
+        let (res, timing, slot) = if let Some(vote_bank) = vote_bank {
             assert_eq!(vote_bank.slot(), reset_bank.as_ref().unwrap().slot());
             let timing = &mut progress
                 .get_mut(&vote_bank.slot())
                 .expect("Frozen bank must exist in progress map")
                 .replay_stats;
             if my_pubkey == vote_bank.collector_id() {
-                (true, Some(timing))
+                (true, Some(timing), Some(vote_bank.slot()))
             } else {
                 // Verify `vote_bank`'s ancestors and `vote_bank`
                 if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
-                    (*res, Some(timing))
+                    (*res, Some(timing), Some(vote_bank.slot()))
                 } else {
                     // Poll for result of verification of `vote_bank`'s slot
                     (
                         Self::poll_verify_result(slot_verify_results, vote_bank.slot()),
                         Some(timing),
+                        Some(vote_bank.slot()),
                     )
                 }
             }
@@ -521,28 +581,30 @@ impl ReplayStage {
                 .expect("Frozen bank must exist in progress map")
                 .replay_stats;
             if my_pubkey == reset_bank.collector_id() {
-                (true, Some(timing))
+                (true, Some(timing), Some(reset_bank.slot()))
             } else {
                 // Verify `reset_bank`'s ancestors and `reset_bank`
                 if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
-                    (*res, Some(timing))
+                    (*res, Some(timing), Some(reset_bank.slot()))
                 } else {
                     // Poll for result of verification of `reset_bank`'s slot
                     (
                         Self::poll_verify_result(slot_verify_results, reset_bank.slot()),
                         Some(timing),
+                        Some(reset_bank.slot()),
                     )
                 }
             }
         } else {
             // Both vote and reset bank are None, vacuously true
-            (true, None)
+            (true, None, None)
         };
 
         if let Some(timing) = timing {
             timing.blocking_vote_or_reset_verify_elapsed = start.elapsed().as_micros() as u64;
         }
-        res
+
+        (res, slot)
     }
 
     fn poll_verify_result(slot_verify_results: &RwLock<HashMap<Slot, bool>>, slot: Slot) -> bool {
@@ -766,23 +828,7 @@ impl ReplayStage {
                 // errors related to the slot being purged
                 let slot = bank.slot();
                 warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-                if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
-                    datapoint_info!(
-                        "replay-stage-mark_dead_slot",
-                        ("error", format!("error: {:?}", err), String),
-                        ("slot", slot, i64)
-                    );
-                } else {
-                    datapoint_error!(
-                        "replay-stage-mark_dead_slot",
-                        ("error", format!("error: {:?}", err), String),
-                        ("slot", slot, i64)
-                    );
-                }
-                bank_progress.is_dead = true;
-                blockstore
-                    .set_dead_slot(slot)
-                    .expect("Failed to mark slot as dead in blockstore");
+                Self::mark_dead_slot(slot, bank_progress, blockstore, &err);
                 return Err(err);
             }
             Ok(entries) => {
@@ -795,6 +841,31 @@ impl ReplayStage {
         }
 
         Ok(tx_count)
+    }
+
+    fn mark_dead_slot(
+        slot: Slot,
+        bank_progress: &mut ForkProgress,
+        blockstore: &Blockstore,
+        err: &BlockstoreProcessorError,
+    ) {
+        if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
+            datapoint_info!(
+                "replay-stage-mark_dead_slot",
+                ("error", format!("error: {:?}", err), String),
+                ("slot", slot, i64)
+            );
+        } else {
+            datapoint_error!(
+                "replay-stage-mark_dead_slot",
+                ("error", format!("error: {:?}", err), String),
+                ("slot", slot, i64)
+            );
+        }
+        bank_progress.is_dead = true;
+        blockstore
+            .set_dead_slot(slot)
+            .expect("Failed to mark slot as dead in blockstore");
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1685,6 +1756,9 @@ impl ReplayStage {
                     subscriptions,
                 );
                 let empty: Vec<&Pubkey> = vec![];
+                // Count stake of leader of the newly discovered fork
+                // as having confirmed our latest leader block on this
+                // fork
                 Self::update_fork_propagated_threshold_from_votes(
                     progress,
                     empty,
