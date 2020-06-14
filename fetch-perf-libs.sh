@@ -6,7 +6,7 @@ VERSION=$PERF_LIBS_VERSION-1
 set -e
 cd "$(dirname "$0")"
 
-if [[ ! -f target/perf-libs/.$VERSION ]]; then
+if [[ $VERSION != "$(cat target/perf-libs/.version 2> /dev/null)" ]]; then
   if [[ $(uname) != Linux ]]; then
     echo Note: Performance libraries are only available for Linux
     exit 0
@@ -17,6 +17,7 @@ if [[ ! -f target/perf-libs/.$VERSION ]]; then
     exit 0
   fi
 
+  rm -rf target/perf-libs
   mkdir -p target/perf-libs
   (
     set -x
@@ -35,7 +36,7 @@ if [[ ! -f target/perf-libs/.$VERSION ]]; then
       mkdir -p ~/.cache
       mv solana-perf.tgz ~/.cache/solana-perf-$PERF_LIBS_VERSION.tgz
     fi
-    touch .$VERSION
+    echo "$VERSION" > .version
   )
 
   # Setup symlinks so the perf-libs/ can be found from all binaries run out of
