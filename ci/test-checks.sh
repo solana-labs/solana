@@ -10,20 +10,6 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-(
-  echo --- prepare git show --check
-  set -x
-  # Look for failed mergify.io backports by searching leftover conflict markers
-  # Also check for any trailing whitespaces!
-  if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
-    base_branch=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
-  else
-    base_branch=$BUILDKITE_BRANCH
-  fi
-  git fetch origin "$base_branch"
-  git show "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
-)
-
 _ cargo +"$rust_stable" fmt --all -- --check
 
 # Clippy gets stuck for unknown reasons if sdk-c is included in the build, so check it separately.
@@ -34,10 +20,8 @@ _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnin
 
 _ cargo +"$rust_stable" audit --version
 _ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
-_ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ docs/build.sh
-_ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
