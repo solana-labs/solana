@@ -217,7 +217,7 @@ pub fn cluster_info_scale() {
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     let num_nodes: usize = std::env::var("NUM_NODES")
-        .unwrap_or_else(|| "10".to_string())
+        .unwrap_or_else(|_| "10".to_string())
         .parse()
         .expect("could not parse NUM_NODES as a number");
 
