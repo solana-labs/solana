@@ -7,10 +7,12 @@ use tokio_codec::{BytesCodec, Decoder};
 
 pub type IpEchoServer = Runtime;
 
+pub const MAX_PORT_COUNT_PER_MESSAGE: usize = 4;
+
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct IpEchoServerMessage {
-    tcp_ports: [u16; 4], // Fixed size list of ports to avoid vec serde
-    udp_ports: [u16; 4], // Fixed size list of ports to avoid vec serde
+    tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
+    udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
 }
 
 impl IpEchoServerMessage {
