@@ -226,7 +226,7 @@ pub fn cluster_info_scale() {
         .collect();
     let genesis_config_info = create_genesis_config_with_vote_accounts(10_000, &vote_keypairs, 100);
     let bank0 = Bank::new(&genesis_config_info.genesis_config);
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
     let nodes: Vec<_> = vote_keypairs
         .into_iter()
