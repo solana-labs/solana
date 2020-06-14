@@ -5,6 +5,9 @@
 # Release tags use buildkite-release.yml instead
 
 steps:
+  - command: "ci/test-sanity.sh"
+    name: "sanity"
+    timeout_in_minutes: 5
   - command: "ci/dependabot-pr.sh"
     name: "dependabot"
     timeout_in_minutes: 5
