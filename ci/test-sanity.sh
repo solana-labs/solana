@@ -19,6 +19,8 @@ source ci/_
   git show "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
 )
 
+echo
+
 _ ci/nits.sh
 _ ci/check-ssh-keys.sh
 
