@@ -134,6 +134,7 @@ pub struct CrdsGossipPull {
     purged_values: VecDeque<(Hash, u64)>,
     pub crds_timeout: u64,
     pub msg_timeout: u64,
+    pub num_pulls: usize,
 }
 
 impl Default for CrdsGossipPull {
@@ -143,6 +144,7 @@ impl Default for CrdsGossipPull {
             pull_request_time: HashMap::new(),
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
             msg_timeout: CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            num_pulls: 0,
         }
     }
 }
@@ -313,18 +315,24 @@ impl CrdsGossipPull {
         responses_expired_timeout: Vec<VersionedCrdsValue>,
         now: u64,
         stats: &mut ProcessPullStats,
-    ) {
+    ) -> Vec<(CrdsValueLabel, Hash, u64)> {
+        let mut success = vec![];
         let mut owners = HashSet::new();
         for r in responses_expired_timeout {
             stats.failed_insert += crds.insert_versioned(r).is_err() as usize;
         }
         for r in responses {
             let owner = r.value.label().pubkey();
+            let label = r.value.label();
+            let wc = r.value.wallclock();
+            let hash = r.value_hash;
             let old = crds.insert_versioned(r);
             if old.is_err() {
                 stats.failed_insert += 1;
             } else {
                 stats.success += 1;
+                self.num_pulls += 1;
+                success.push((label, hash, wc));
             }
             old.ok().map(|opt| {
                 owners.insert(owner);
@@ -338,6 +346,7 @@ impl CrdsGossipPull {
         for owner in owners {
             crds.update_record_timestamp(&owner, now);
         }
+        success
     }
     // build a set of filters of the current crds table
     // num_filters - used to increase the likelyhood of a value in crds being added to some filter
