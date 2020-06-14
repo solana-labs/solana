@@ -25,7 +25,7 @@ impl Entry {
     pub fn new(blockhash: &Hash, fee_calculator: &FeeCalculator) -> Self {
         Self {
             blockhash: *blockhash,
-            fee_calculator: fee_calculator.clone(),
+            fee_calculator: *fee_calculator,
         }
     }
 }

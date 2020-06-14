@@ -945,10 +945,7 @@ impl Bank {
         let last_hash = blockhash_queue.last_hash();
         (
             last_hash,
-            blockhash_queue
-                .get_fee_calculator(&last_hash)
-                .unwrap()
-                .clone(),
+            *blockhash_queue.get_fee_calculator(&last_hash).unwrap(),
         )
     }
 

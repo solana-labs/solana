@@ -74,7 +74,7 @@ impl BlockhashQueue {
         self.ages.insert(
             *hash,
             HashAge {
-                fee_calculator: fee_calculator.clone(),
+                fee_calculator: *fee_calculator,
                 hash_height: 0,
                 timestamp: timestamp(),
             },
@@ -101,7 +101,7 @@ impl BlockhashQueue {
         self.ages.insert(
             *hash,
             HashAge {
-                fee_calculator: fee_calculator.clone(),
+                fee_calculator: *fee_calculator,
                 hash_height,
                 timestamp: timestamp(),
             },

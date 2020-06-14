@@ -14,7 +14,7 @@ impl Sysvar for Fees {}
 
 pub fn create_account(lamports: u64, fee_calculator: &FeeCalculator) -> Account {
     Fees {
-        fee_calculator: fee_calculator.clone(),
+        fee_calculator: *fee_calculator,
     }
     .create_account(lamports)
 }

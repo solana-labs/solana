@@ -28,10 +28,7 @@ impl RentCollector {
     }
 
     pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
-        Self {
-            epoch,
-            ..self.clone()
-        }
+        Self { epoch, ..*self }
     }
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
