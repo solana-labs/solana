@@ -183,7 +183,6 @@ pub enum CliCommand {
     Catchup {
         node_pubkey: Pubkey,
         node_json_rpc_url: Option<String>,
-        commitment_config: CommitmentConfig,
         follow: bool,
     },
     ClusterDate,
@@ -197,29 +196,13 @@ pub enum CliCommand {
     GetBlockTime {
         slot: Option<Slot>,
     },
-    GetEpochInfo {
-        commitment_config: CommitmentConfig,
-    },
+    GetEpoch,
+    GetEpochInfo,
     GetGenesisHash,
-    GetEpoch {
-        commitment_config: CommitmentConfig,
-    },
-    GetSlot {
-        commitment_config: CommitmentConfig,
-    },
+    GetSlot,
+    GetTransactionCount,
     LargestAccounts {
-        commitment_config: CommitmentConfig,
         filter: Option<RpcLargestAccountsFilter>,
-    },
-    Supply {
-        commitment_config: CommitmentConfig,
-        print_accounts: bool,
-    },
-    TotalSupply {
-        commitment_config: CommitmentConfig,
-    },
-    GetTransactionCount {
-        commitment_config: CommitmentConfig,
     },
     LeaderSchedule,
     LiveSlots,
@@ -228,7 +211,6 @@ pub enum CliCommand {
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
-        commitment_config: CommitmentConfig,
     },
     ShowBlockProduction {
         epoch: Option<Epoch>,
@@ -241,8 +223,11 @@ pub enum CliCommand {
     },
     ShowValidators {
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
+    Supply {
+        print_accounts: bool,
+    },
+    TotalSupply,
     TransactionHistory {
         address: Pubkey,
         end_slot: Option<Slot>,  // None == latest slot
@@ -1771,15 +1756,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
-            commitment_config,
             follow,
-        } => process_catchup(
-            &rpc_client,
-            node_pubkey,
-            node_json_rpc_url,
-            *commitment_config,
-            *follow,
-        ),
+        } => process_catchup(&rpc_client, config, node_pubkey, node_json_rpc_url, *follow),
         CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
@@ -1789,30 +1767,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client, config),
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
+        CliCommand::GetEpoch => process_get_epoch(&rpc_client, config),
+        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client, config),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
-        CliCommand::GetEpochInfo { commitment_config } => {
-            process_get_epoch_info(&rpc_client, config, *commitment_config)
+        CliCommand::GetSlot => process_get_slot(&rpc_client, config),
+        CliCommand::LargestAccounts { filter } => {
+            process_largest_accounts(&rpc_client, config, filter.clone())
         }
-        CliCommand::GetEpoch { commitment_config } => {
-            process_get_epoch(&rpc_client, *commitment_config)
-        }
-        CliCommand::GetSlot { commitment_config } => {
-            process_get_slot(&rpc_client, *commitment_config)
-        }
-        CliCommand::LargestAccounts {
-            commitment_config,
-            filter,
-        } => process_largest_accounts(&rpc_client, config, *commitment_config, filter.clone()),
-        CliCommand::Supply {
-            commitment_config,
-            print_accounts,
-        } => process_supply(&rpc_client, config, *commitment_config, *print_accounts),
-        CliCommand::TotalSupply { commitment_config } => {
-            process_total_supply(&rpc_client, *commitment_config)
-        }
-        CliCommand::GetTransactionCount { commitment_config } => {
-            process_get_transaction_count(&rpc_client, *commitment_config)
-        }
+        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client, config),
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
         CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
         CliCommand::Ping {
@@ -1820,16 +1782,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             interval,
             count,
             timeout,
-            commitment_config,
-        } => process_ping(
-            &rpc_client,
-            config,
-            *lamports,
-            interval,
-            count,
-            timeout,
-            *commitment_config,
-        ),
+        } => process_ping(&rpc_client, config, *lamports, interval, count, timeout),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
@@ -1843,10 +1796,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
         ),
-        CliCommand::ShowValidators {
-            use_lamports_unit,
-            commitment_config,
-        } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
+        CliCommand::ShowValidators { use_lamports_unit } => {
+            process_show_validators(&rpc_client, config, *use_lamports_unit)
+        }
+        CliCommand::Supply { print_accounts } => {
+            process_supply(&rpc_client, config, *print_accounts)
+        }
+        CliCommand::TotalSupply => process_total_supply(&rpc_client, config),
         CliCommand::TransactionHistory {
             address,
             end_slot,
@@ -3587,14 +3543,10 @@ mod tests {
         let result = process_command(&config);
         assert!(dbg!(result).is_ok());
 
-        config.command = CliCommand::GetSlot {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetSlot;
         assert_eq!(process_command(&config).unwrap(), "0");
 
-        config.command = CliCommand::GetTransactionCount {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
 
         config.signers = vec![&keypair];
@@ -3731,14 +3683,10 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetSlot {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetSlot;
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetTransactionCount {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::Pay(PayCommand {
