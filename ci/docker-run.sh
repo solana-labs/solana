@@ -61,7 +61,9 @@ if [[ -z "$SOLANA_DOCKER_RUN_NOSETUID" ]]; then
 fi
 
 if [[ -n $SOLANA_ALLOCATE_TTY ]]; then
-  ARGS+=(--tty)
+  # Colored output, progress bar and Ctrl-C:
+  # https://stackoverflow.com/a/41099052/10242004
+  ARGS+=(--interactive --tty)
 fi
 
 # Environment variables to propagate into the container

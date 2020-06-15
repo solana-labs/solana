@@ -11,7 +11,11 @@ annotate() {
 source ci/upload-ci-artifact.sh
 source scripts/ulimit-n.sh
 
-scripts/coverage.sh
+scripts/coverage.sh "$@"
+
+if [[ -z $CI ]]; then
+  exit
+fi
 
 report=coverage-"${CI_COMMIT:0:9}".tar.gz
 mv target/cov/report.tar.gz "$report"
