@@ -4,6 +4,28 @@
 #
 # https://doc.mergify.io/
 pull_request_rules:
+  - name: automatic merge on CI success
+    conditions:
+      - status-success=buildkite/solana
+      #- status-success=Travis CI - Pull Request
+      - status-success=ci-gate
+      - label=automerge
+    actions:
+      merge:
+        method: squash
+        strict: true
+  - name: remove automerge label on CI failure
+    conditions:
+      - status-failure=continuous-integration/travis-ci/pr
+      - label=automerge
+      - status-success=ci-gate
+      - "#status-failure!=0"
+    actions:
+      label:
+        remove:
+          - automerge
+      comment:
+        message: automerge label removed due to CI failure status
   - name: remove outdated reviews
     conditions:
       - base=master
