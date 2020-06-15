@@ -12,6 +12,7 @@
       * [Ledger Hardware Wallet](hardware-wallets/ledger.md)
     * [File System Wallet](file-system-wallet/README.md)
   * [Support / Troubleshooting](wallet-guide/support.md)
+* [Staking Guide](staking/staking.md)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana-cli-tools.md)
   * [Command Line Conventions](cli/conventions.md)
