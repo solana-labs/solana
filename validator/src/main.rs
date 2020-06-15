@@ -1080,7 +1080,17 @@ pub fn main() {
     }
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
-        let udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
+        let mut udp_sockets = vec![
+            &node.sockets.gossip,
+            &node.sockets.repair,
+            &node.sockets.serve_repair,
+        ];
+        udp_sockets.extend(node.sockets.tpu.iter());
+        udp_sockets.extend(node.sockets.tpu_forwards.iter());
+        udp_sockets.extend(node.sockets.tvu.iter());
+        udp_sockets.extend(node.sockets.tvu_forwards.iter());
+        udp_sockets.extend(node.sockets.broadcast.iter());
+        udp_sockets.extend(node.sockets.retransmit_sockets.iter());
 
         let mut tcp_listeners = vec![];
         if !private_rpc {
