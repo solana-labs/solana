@@ -20,35 +20,10 @@ notifications:
   email: false
 
 before_install:
-  - wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-  - sudo apt-add-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-10 main"
-  - sudo apt-get update
-  - sudo apt-get install -y clang-7 --allow-unauthenticated
-  - sudo apt-get install -y openssl --allow-unauthenticated
-  - sudo apt-get install -y libssl-dev --allow-unauthenticated
-  - sudo apt-get install -y libssl1.1 --allow-unauthenticated
-  - clang-7 --version
-  - curl https://sh.rustup.rs -sSf | sh -s -- -y
-  - PATH=$HOME/.cargo/bin:$PATH
-  - rustup --version
+  - source .travis/before_install.sh
 
 script:
-  - if [[ $TRAVIS_PULL_REQUEST != false ]]; then npx commitlint-travis; fi
-  - ls -l lib
-  - test -r lib/index.iife.js
-  - test -r lib/index.cjs.js
-  - test -r lib/index.esm.js
-  - npm run doc
-  - npm run defs
-  - npm run flow
-  - npm run lint
-  - npm run codecov
-  - make -C examples/bpf-c-noop/
-  - examples/bpf-rust-noop/do.sh build
-  - npm run localnet:update
-  - npm run localnet:up
-  - npm run test:live
-  - npm run localnet:down
+  - source .travis/script.sh
 
 before_deploy:
   - rm -rf deploy
