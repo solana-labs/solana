@@ -1,9 +1,29 @@
 # Validate your changes with:
 #
-#   $ curl -F 'data=@.mergify.yml' https://gh.mergify.io/validate
+#   $ curl -F 'data=@.mergify.yml' https://gh.mergify.io/validate/
 #
 # https://doc.mergify.io/
 pull_request_rules:
+  - name: automatic merge on CI success
+    conditions:
+      - status-success=buildkite/solana
+      #- status-success=Travis CI - Pull Request
+      - status-success=ci-gate
+      - label=automerge
+    actions:
+      merge:
+        method: squash
+        strict: true
+  - name: remove automerge label on CI failure
+    conditions:
+      - label=automerge
+      - "#status-failure!=0"
+    actions:
+      label:
+        remove:
+          - automerge
+      comment:
+        message: automerge label removed due to a CI failure
   - name: remove outdated reviews
     conditions:
       - base=master
