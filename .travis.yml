@@ -101,7 +101,8 @@ jobs:
       before_install:
         - .travis/affects.sh web3.js/ || travis_terminate 0
         - cd web3.js/
+        - source .travis/before_install.sh
 
       script:
         - ../.travis/commitlint.sh
-        - echo todo
+        - source .travis/script.sh
