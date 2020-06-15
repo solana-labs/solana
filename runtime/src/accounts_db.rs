@@ -762,7 +762,7 @@ impl AccountsDB {
         dead_slots_w: Option<RwLockWriteGuard<'a, HashSet<Slot>>>,
     ) {
         let empty = HashSet::new();
-        let mut dead_slots_w = dead_slots_w.unwrap_or(self.dead_slots.write().unwrap());
+        let mut dead_slots_w = dead_slots_w.unwrap_or_else(|| self.dead_slots.write().unwrap());
         let dead_slots = std::mem::replace(&mut *dead_slots_w, empty);
         drop(dead_slots_w);
 
