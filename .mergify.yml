@@ -16,16 +16,14 @@ pull_request_rules:
         strict: true
   - name: remove automerge label on CI failure
     conditions:
-      - status-failure=continuous-integration/travis-ci/pr
       - label=automerge
-      - status-success=ci-gate
       - "#status-failure!=0"
     actions:
       label:
         remove:
           - automerge
       comment:
-        message: automerge label removed due to CI failure status
+        message: automerge label removed due to a CI failure
   - name: remove outdated reviews
     conditions:
       - base=master
