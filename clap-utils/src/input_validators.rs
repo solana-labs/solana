@@ -6,50 +6,86 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, Signature},
 };
+use std::fmt::Display;
 use std::str::FromStr;
 
+fn is_parsable_generic<U, T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+    U: FromStr,
+    U::Err: Display,
+{
+    string
+        .as_ref()
+        .parse::<U>()
+        .map(|_| ())
+        .map_err(|err| format!("error parsing '{}': {}", string, err))
+}
+
+// Return an error if string cannot be parsed as type T.
+// Takes a String to avoid second type parameter when used as a clap validator
+pub fn is_parsable<T>(string: String) -> Result<(), String>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    is_parsable_generic::<T, String>(string)
+}
+
 // Return an error if a pubkey cannot be parsed.
-pub fn is_pubkey(string: String) -> Result<(), String> {
-    match string.parse::<Pubkey>() {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{}", err)),
-    }
+pub fn is_pubkey<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_parsable_generic::<Pubkey, _>(string)
 }
 
 // Return an error if a hash cannot be parsed.
-pub fn is_hash(string: String) -> Result<(), String> {
-    match string.parse::<Hash>() {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{}", err)),
-    }
+pub fn is_hash<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_parsable_generic::<Hash, _>(string)
 }
 
 // Return an error if a keypair file cannot be parsed.
-pub fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair_file(&string)
+pub fn is_keypair<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    read_keypair_file(string.as_ref())
         .map(|_| ())
         .map_err(|err| format!("{}", err))
 }
 
 // Return an error if a keypair file cannot be parsed
-pub fn is_keypair_or_ask_keyword(string: String) -> Result<(), String> {
-    if string.as_str() == ASK_KEYWORD {
+pub fn is_keypair_or_ask_keyword<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    if string.as_ref() == ASK_KEYWORD {
         return Ok(());
     }
-    read_keypair_file(&string)
+    read_keypair_file(string.as_ref())
         .map(|_| ())
         .map_err(|err| format!("{}", err))
 }
 
 // Return an error if string cannot be parsed as pubkey string or keypair file location
-pub fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
-    is_pubkey(string.clone()).or_else(|_| is_keypair(string))
+pub fn is_pubkey_or_keypair<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_pubkey(string.as_ref()).or_else(|_| is_keypair(string))
 }
 
 // Return an error if string cannot be parsed as a pubkey string, or a valid Signer that can
 // produce a pubkey()
-pub fn is_valid_pubkey(string: String) -> Result<(), String> {
-    match parse_keypair_path(&string) {
+pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    match parse_keypair_path(string.as_ref()) {
         KeypairUrl::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
@@ -63,13 +99,19 @@ pub fn is_valid_pubkey(string: String) -> Result<(), String> {
 // when paired with an offline `--signer` argument to provide a Presigner (pubkey + signature).
 // Clap validators can't check multiple fields at once, so the verification that a `--signer` is
 // also provided and correct happens in parsing, not in validation.
-pub fn is_valid_signer(string: String) -> Result<(), String> {
+pub fn is_valid_signer<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
     is_valid_pubkey(string)
 }
 
 // Return an error if string cannot be parsed as pubkey=signature string
-pub fn is_pubkey_sig(string: String) -> Result<(), String> {
-    let mut signer = string.split('=');
+pub fn is_pubkey_sig<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let mut signer = string.as_ref().split('=');
     match Pubkey::from_str(
         signer
             .next()
@@ -90,8 +132,11 @@ pub fn is_pubkey_sig(string: String) -> Result<(), String> {
 }
 
 // Return an error if a url cannot be parsed.
-pub fn is_url(string: String) -> Result<(), String> {
-    match url::Url::parse(&string) {
+pub fn is_url<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    match url::Url::parse(string.as_ref()) {
         Ok(url) => {
             if url.has_host() {
                 Ok(())
@@ -103,20 +148,26 @@ pub fn is_url(string: String) -> Result<(), String> {
     }
 }
 
-pub fn is_slot(slot: String) -> Result<(), String> {
-    slot.parse::<Slot>()
-        .map(|_| ())
-        .map_err(|e| format!("{}", e))
+pub fn is_slot<T>(slot: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_parsable_generic::<Slot, _>(slot)
 }
 
-pub fn is_port(port: String) -> Result<(), String> {
-    port.parse::<u16>()
-        .map(|_| ())
-        .map_err(|e| format!("{}", e))
+pub fn is_port<T>(port: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_parsable_generic::<u16, _>(port)
 }
 
-pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
+pub fn is_valid_percentage<T>(percentage: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
     percentage
+        .as_ref()
         .parse::<u8>()
         .map_err(|e| {
             format!(
@@ -136,8 +187,11 @@ pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
         })
 }
 
-pub fn is_amount(amount: String) -> Result<(), String> {
-    if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
+pub fn is_amount<T>(amount: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    if amount.as_ref().parse::<u64>().is_ok() || amount.as_ref().parse::<f64>().is_ok() {
         Ok(())
     } else {
         Err(format!(
@@ -147,8 +201,14 @@ pub fn is_amount(amount: String) -> Result<(), String> {
     }
 }
 
-pub fn is_amount_or_all(amount: String) -> Result<(), String> {
-    if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() || amount == "ALL" {
+pub fn is_amount_or_all<T>(amount: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    if amount.as_ref().parse::<u64>().is_ok()
+        || amount.as_ref().parse::<f64>().is_ok()
+        || amount.as_ref() == "ALL"
+    {
         Ok(())
     } else {
         Err(format!(
@@ -158,14 +218,20 @@ pub fn is_amount_or_all(amount: String) -> Result<(), String> {
     }
 }
 
-pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
-    DateTime::parse_from_rfc3339(&value)
+pub fn is_rfc3339_datetime<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    DateTime::parse_from_rfc3339(value.as_ref())
         .map(|_| ())
         .map_err(|e| format!("{}", e))
 }
 
-pub fn is_derivation(value: String) -> Result<(), String> {
-    let value = value.replace("'", "");
+pub fn is_derivation<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref().replace("'", "");
     let mut parts = value.split('/');
     let account = parts.next().unwrap();
     account
@@ -197,14 +263,14 @@ mod tests {
 
     #[test]
     fn test_is_derivation() {
-        assert_eq!(is_derivation("2".to_string()), Ok(()));
-        assert_eq!(is_derivation("0".to_string()), Ok(()));
-        assert_eq!(is_derivation("65537".to_string()), Ok(()));
-        assert_eq!(is_derivation("0/2".to_string()), Ok(()));
-        assert_eq!(is_derivation("0'/2'".to_string()), Ok(()));
-        assert!(is_derivation("a".to_string()).is_err());
-        assert!(is_derivation("4294967296".to_string()).is_err());
-        assert!(is_derivation("a/b".to_string()).is_err());
-        assert!(is_derivation("0/4294967296".to_string()).is_err());
+        assert_eq!(is_derivation("2"), Ok(()));
+        assert_eq!(is_derivation("0"), Ok(()));
+        assert_eq!(is_derivation("65537"), Ok(()));
+        assert_eq!(is_derivation("0/2"), Ok(()));
+        assert_eq!(is_derivation("0'/2'"), Ok(()));
+        assert!(is_derivation("a").is_err());
+        assert!(is_derivation("4294967296").is_err());
+        assert!(is_derivation("a/b").is_err());
+        assert!(is_derivation("0/4294967296").is_err());
     }
 }
