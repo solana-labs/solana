@@ -2569,7 +2569,7 @@ impl Bank {
     }
 
     pub fn process_dead_slots(&self) {
-        self.rc.accounts.accounts_db.process_dead_slots();
+        self.rc.accounts.accounts_db.process_dead_slots(None);
     }
 
     pub fn shrink_all_slots(&self) {

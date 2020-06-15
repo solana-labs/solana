@@ -42,7 +42,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock, RwLockReadGuard},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::Instant,
 };
 use tempfile::TempDir;
@@ -744,13 +744,25 @@ impl AccountsDB {
             dead_slots_w.len()
         };
         if dead_slots_len > 5000 {
-            self.process_dead_slots();
+            self.process_dead_slots(None);
         }
     }
 
-    pub fn process_dead_slots(&self) {
-        let empty = HashSet::new();
+    fn handle_reclaims_locked(&self, reclaims: SlotSlice<AccountInfo>) {
+        let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
+        let dead_slots = self.remove_dead_accounts(reclaims);
+        dead_accounts.stop();
         let mut dead_slots_w = self.dead_slots.write().unwrap();
+        dead_slots_w.extend(dead_slots);
+        self.process_dead_slots(Some(dead_slots_w));
+    }
+
+    pub fn process_dead_slots<'a>(
+        &'a self,
+        dead_slots_w: Option<RwLockWriteGuard<'a, HashSet<Slot>>>,
+    ) {
+        let empty = HashSet::new();
+        let mut dead_slots_w = dead_slots_w.unwrap_or(self.dead_slots.write().unwrap());
         let dead_slots = std::mem::replace(&mut *dead_slots_w, empty);
         drop(dead_slots_w);
 
@@ -1192,13 +1204,9 @@ impl AccountsDB {
             }
         }
 
-        self.handle_reclaims(&reclaims);
-
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.process_dead_slots();
-
-        // Sanity check storage entries are removed from the index
+        self.handle_reclaims_locked(&reclaims);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -2521,7 +2529,7 @@ pub mod tests {
         //slot is gone
         print_accounts("pre-clean", &accounts);
         accounts.clean_accounts();
-        accounts.process_dead_slots();
+        accounts.process_dead_slots(None);
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
 
         //new value is there
@@ -2959,7 +2967,7 @@ pub mod tests {
         let hash = accounts.update_accounts_hash(current_slot, &ancestors);
 
         accounts.clean_accounts();
-        accounts.process_dead_slots();
+        accounts.process_dead_slots(None);
 
         assert_eq!(
             accounts.update_accounts_hash(current_slot, &ancestors),
@@ -3761,7 +3769,7 @@ pub mod tests {
         current_slot += 1;
         assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
-        accounts.process_dead_slots();
+        accounts.process_dead_slots(None);
         assert_eq!(
             3, /* == 4 - 2 + 1 */
             accounts.ref_count_for_pubkey(&pubkey1)
