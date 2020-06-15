@@ -16,5 +16,5 @@ for file in $(git diff --name-only "$TRAVIS_COMMIT_RANGE"); do
     done
 done
 
-echo "No modifications to $@"
+echo "No modifications to $*"
 exit 1
