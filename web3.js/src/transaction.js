@@ -210,7 +210,9 @@ export class Transaction {
     let numReadonlySignedAccounts = 0;
     let numReadonlyUnsignedAccounts = 0;
 
-    const accountKeys = this.signatures.map(({publicKey}) => publicKey.toString());
+    const accountKeys = this.signatures.map(({publicKey}) =>
+      publicKey.toString(),
+    );
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {

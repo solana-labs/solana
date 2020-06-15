@@ -6,6 +6,13 @@ import type {ConfirmOptions} from '../connection';
 
 /**
  * Send and confirm a raw transaction
+ *
+ * If `confirmations` count is not specified, wait for transaction to be finalized.
+ *
+ * @param {Connection} connection
+ * @param {Buffer} rawTransaction
+ * @param {ConfirmOptions} [options]
+ * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmRawTransaction(
   connection: Connection,

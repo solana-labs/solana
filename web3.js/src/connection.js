@@ -10,7 +10,7 @@ import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
-import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
+import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
 import {Message} from './message';
 import {sleep} from './util/sleep';
@@ -1285,19 +1285,14 @@ export class Connection {
     signature: TransactionSignature,
     confirmations: ?number,
   ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
-    const NUM_STATUS_RETRIES = 10;
+    const start = Date.now();
+    const WAIT_TIMEOUT_MS = 60 * 1000;
 
-    const MS_PER_SECOND = 1000;
-    const MS_PER_SLOT =
-      (DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND) * MS_PER_SECOND;
-
-    let statusRetries = NUM_STATUS_RETRIES;
     let statusResponse = await this.getSignatureStatus(signature);
     for (;;) {
       const status = statusResponse.value;
       if (status) {
         // Received a status, if not an error wait for confirmation
-        statusRetries = NUM_STATUS_RETRIES;
         if (
           status.err ||
           status.confirmations === null ||
@@ -1306,12 +1301,12 @@ export class Connection {
         ) {
           break;
         }
-      } else if (--statusRetries <= 0) {
+      } else if (Date.now() - start >= WAIT_TIMEOUT_MS) {
         break;
       }
 
-      // Sleep for approximately half a slot
-      await sleep(MS_PER_SLOT / 2);
+      // Sleep for approximately one slot
+      await sleep(MS_PER_SLOT);
       statusResponse = await this.getSignatureStatus(signature);
     }
 
@@ -1780,7 +1775,7 @@ export class Connection {
           }
 
           // Sleep for approximately half a slot
-          await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+          await sleep(MS_PER_SLOT / 2);
 
           ++attempts;
         }
