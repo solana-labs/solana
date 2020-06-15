@@ -16,8 +16,9 @@ use solana_clap_utils::{
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    account::Account, commitment_config::CommitmentConfig, message::Message, pubkey::Pubkey,
-    system_instruction::SystemError, transaction::Transaction,
+    account::Account, commitment_config::CommitmentConfig, message::Message,
+    native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
+    transaction::Transaction,
 };
 use solana_vote_program::{
     vote_instruction::{self, withdraw, VoteError},
@@ -232,8 +233,8 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_amount)
-                        .help("The amount to withdraw, in SOL"),
+                        .validator(is_amount_or_all)
+                        .help("The amount to withdraw, in SOL; accepts keyword ALL"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -392,7 +393,8 @@ pub fn parse_withdraw_from_vote_account(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let withdraw_amount = SpendAmount::new_from_matches(matches, "amount");
+
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
@@ -409,7 +411,7 @@ pub fn parse_withdraw_from_vote_account(
             vote_account_pubkey,
             destination_account_pubkey,
             withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
-            lamports,
+            withdraw_amount,
         },
         signers: signer_info.signers,
     })
@@ -683,11 +685,27 @@ pub fn process_withdraw_from_vote_account(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     withdraw_authority: SignerIndex,
-    lamports: u64,
+    withdraw_amount: SpendAmount,
     destination_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let withdraw_authority = config.signers[withdraw_authority];
+
+    let current_balance = rpc_client.get_balance(&vote_account_pubkey)?;
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
+
+    let lamports = match withdraw_amount {
+        SpendAmount::All => current_balance.saturating_sub(minimum_balance),
+        SpendAmount::Some(withdraw_amount) => {
+            if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
+                return Err(CliError::BadParameter(format!(
+                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
+                ))
+                .into());
+            }
+            withdraw_amount
+        }
+    };
 
     let ix = withdraw(
         vote_account_pubkey,
@@ -966,7 +984,33 @@ mod tests {
                     vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 0,
-                    lamports: 42_000_000_000
+                    withdraw_amount: SpendAmount::Some(42_000_000_000),
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test WithdrawFromVoteAccount subcommand
+        let test_withdraw_from_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-from-vote-account",
+            &keypair_file,
+            &pubkey_string,
+            "ALL",
+        ]);
+        assert_eq!(
+            parse_command(
+                &test_withdraw_from_vote_account,
+                &default_keypair_file,
+                &mut None
+            )
+            .unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawFromVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 0,
+                    withdraw_amount: SpendAmount::All,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -997,7 +1041,7 @@ mod tests {
                     vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 1,
-                    lamports: 42_000_000_000
+                    withdraw_amount: SpendAmount::Some(42_000_000_000),
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

@@ -399,7 +399,7 @@ pub enum CliCommand {
         vote_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
         withdraw_authority: SignerIndex,
-        lamports: u64,
+        withdraw_amount: SpendAmount,
     },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
@@ -2170,14 +2170,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
             withdraw_authority,
-            lamports,
+            withdraw_amount,
             destination_account_pubkey,
         } => process_withdraw_from_vote_account(
             &rpc_client,
             config,
             vote_account_pubkey,
             *withdraw_authority,
-            *lamports,
+            *withdraw_amount,
             destination_account_pubkey,
         ),
         CliCommand::VoteAuthorize {
