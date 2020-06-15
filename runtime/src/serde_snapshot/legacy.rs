@@ -173,36 +173,25 @@ impl<'a> TypeContext<'a> for Context {
 
     fn deserialize_accounts_db_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
     where
         R: Read,
     {
         // read and discard two u64 byte vector lengths
         let serialized_len = MAX_ACCOUNTS_DB_STREAM_SIZE;
-        let serialized_len = min(
-            serialized_len,
-            deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?,
-        );
-        let serialized_len = min(
-            serialized_len,
-            deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?,
-        );
+        let serialized_len = min(serialized_len, deserialize_from(&mut stream)?);
+        let serialized_len = min(serialized_len, deserialize_from(&mut stream)?);
 
         // (1st of 3 elements) read in map of slots to account storage entries
         let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::config()
             .limit(serialized_len)
-            .deserialize_from(&mut stream)
-            .map_err(accountsdb_to_io_error)?;
+            .deserialize_from(&mut stream)?;
 
         // (2nd of 3 elements) read in write version
-        let version: u64 = deserialize_from(&mut stream)
-            .map_err(|e| format!("write version deserialize error: {}", e.to_string()))
-            .map_err(accountsdb_to_io_error)?;
+        let version: u64 = deserialize_from(&mut stream)?;
 
         // (3rd of 3 elements) read in (slot, bank hashes) pair
-        let (slot, bank_hash_info): (Slot, BankHashInfo) = deserialize_from(&mut stream)
-            .map_err(|e| format!("bank hashes deserialize error: {}", e.to_string()))
-            .map_err(accountsdb_to_io_error)?;
+        let (slot, bank_hash_info): (Slot, BankHashInfo) = deserialize_from(&mut stream)?;
 
         Ok(AccountDBFields(storage, version, slot, bank_hash_info))
     }

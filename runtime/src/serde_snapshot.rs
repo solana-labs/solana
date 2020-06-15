@@ -7,7 +7,7 @@ use {
         append_vec::AppendVec,
         bank::BankRc,
     },
-    bincode::{deserialize_from, serialize_into},
+    bincode::{deserialize_from, serialize_into, Error},
     fs_extra::dir::CopyOptions,
     log::{info, warn},
     rand::{thread_rng, Rng},
@@ -20,9 +20,7 @@ use {
         cmp::min,
         collections::HashMap,
         fmt::{Formatter, Result as FormatResult},
-        io::{
-            BufReader, BufWriter, Cursor, Error as IoError, ErrorKind as IoErrorKind, Read, Write,
-        },
+        io::{BufReader, BufWriter, Cursor, Read, Write},
         path::{Path, PathBuf},
         result::Result,
         sync::{atomic::Ordering, Arc},
@@ -79,23 +77,11 @@ pub trait TypeContext<'a> {
 
     fn deserialize_accounts_db_fields<R>(
         stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
     where
         R: Read;
 
     // we might define fn (de)serialize_bank(...) -> Result<Bank,...> for versionized bank serialization in the future
-}
-
-fn bankrc_to_io_error<T: ToString>(error: T) -> IoError {
-    let msg = error.to_string();
-    warn!("BankRc error: {:?}", msg);
-    IoError::new(IoErrorKind::Other, msg)
-}
-
-fn accountsdb_to_io_error<T: ToString>(error: T) -> IoError {
-    let msg = error.to_string();
-    warn!("AccountsDB error: {:?}", msg);
-    IoError::new(IoErrorKind::Other, msg)
 }
 
 pub fn bankrc_from_stream<R, P>(
@@ -104,7 +90,7 @@ pub fn bankrc_from_stream<R, P>(
     slot: Slot,
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
-) -> std::result::Result<BankRc, IoError>
+) -> std::result::Result<BankRc, Error>
 where
     R: Read,
     P: AsRef<Path>,
@@ -125,6 +111,10 @@ where
         SerdeStyle::NEWER => INTO!(TypeContextFuture),
         SerdeStyle::OLDER => INTO!(TypeContextLegacy),
     }
+    .map_err(|err| {
+        warn!("bankrc_from_stream error: {:?}", err);
+        err
+    })
 }
 
 pub fn bankrc_to_stream<W>(
@@ -132,7 +122,7 @@ pub fn bankrc_to_stream<W>(
     stream: &mut BufWriter<W>,
     bank_rc: &BankRc,
     snapshot_storages: &[SnapshotStorage],
-) -> Result<(), IoError>
+) -> Result<(), Error>
 where
     W: Write,
 {
@@ -146,13 +136,16 @@ where
                     phantom: std::marker::PhantomData::default(),
                 },
             )
-            .map_err(bankrc_to_io_error)
         };
     }
     match serde_style {
         SerdeStyle::NEWER => INTO!(TypeContextFuture),
         SerdeStyle::OLDER => INTO!(TypeContextLegacy),
     }
+    .map_err(|err| {
+        warn!("bankrc_to_stream error: {:?}", err);
+        err
+    })
 }
 
 pub struct SerializableBankRc<'a, C> {
@@ -190,7 +183,7 @@ fn context_accountsdb_from_fields<'a, C, P>(
     account_db_fields: AccountDBFields<C::SerializableAccountStorageEntry>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-) -> Result<AccountsDB, IoError>
+) -> Result<AccountsDB, Error>
 where
     C: TypeContext<'a>,
     P: AsRef<Path>,
@@ -244,21 +237,16 @@ where
                 if std::fs::rename(append_vec_abs_path.clone(), target).is_err() {
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    let e = fs_extra::move_items(
+                    if let Err(e) = fs_extra::move_items(
                         &vec![&append_vec_abs_path],
                         &local_dir,
                         &copy_options,
-                    )
-                    .map_err(|e| {
-                        format!(
-                            "unable to move {:?} to {:?}: {}",
+                    ) {
+                        warn!(
+                            "context_accounts_db_from_fields error: unable to move {:?} to {:?}: {:?}",
                             append_vec_abs_path, local_dir, e
-                        )
-                    })
-                    .map_err(accountsdb_to_io_error);
-                    if e.is_err() {
-                        info!("{:?}", e);
-                        continue;
+                        );
+			continue;
                     }
                 };
 
@@ -266,13 +254,12 @@ where
                 let local_path = local_dir.join(append_vec_relative_path);
                 let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
                 u_storage_entry
-                    .set_file(local_path)
-                    .map_err(accountsdb_to_io_error)?;
+                    .set_file(local_path)?;
                 new_slot_storage.insert(id, Arc::new(u_storage_entry));
             }
             Ok((slot, new_slot_storage))
         })
-        .collect::<Result<HashMap<Slot, _>, IoError>>()?;
+        .collect::<Result<HashMap<Slot, _>, Error>>()?;
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized

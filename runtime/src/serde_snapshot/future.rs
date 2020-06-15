@@ -92,10 +92,10 @@ impl<'a> TypeContext<'a> for Context {
 
     fn deserialize_accounts_db_fields<R>(
         mut stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, IoError>
+    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
     where
         R: Read,
     {
-        deserialize_from(&mut stream).map_err(accountsdb_to_io_error)
+        deserialize_from(&mut stream)
     }
 }
