@@ -512,6 +512,7 @@ pub struct CliConfig<'a> {
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
     pub output_format: OutputFormat,
+    pub commitment: CommitmentConfig,
 }
 
 impl CliConfig<'_> {
@@ -605,6 +606,7 @@ impl Default for CliConfig<'_> {
             rpc_client: None,
             verbose: false,
             output_format: OutputFormat::Display,
+            commitment: CommitmentConfig::default(),
         }
     }
 }

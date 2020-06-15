@@ -2,7 +2,8 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+    commitment::COMMITMENT_ARG, input_parsers::commitment_of, input_validators::is_url,
+    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
@@ -136,6 +137,12 @@ pub fn parse_args<'a>(
         })
         .unwrap_or(OutputFormat::Display);
 
+    let commitment = matches
+        .subcommand_name()
+        .and_then(|name| matches.subcommand_matches(name))
+        .and_then(|sub_matches| commitment_of(sub_matches, COMMITMENT_ARG.long))
+        .unwrap_or_default();
+
     Ok((
         CliConfig {
             command,
@@ -146,6 +153,7 @@ pub fn parse_args<'a>(
             rpc_client: None,
             verbose: matches.is_present("verbose"),
             output_format,
+            commitment,
         },
         signers,
     ))
