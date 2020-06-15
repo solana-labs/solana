@@ -28,14 +28,17 @@ echo --- build environment
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
+# Exclude --benches as it's not available in rust stable yet
+if _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" check --locked --tests --bins --examples; then
   true
 else
   check_status=$?
-  echo "Some Cargo.lock is outdated; please update them as well"
+  echo "Some Cargo.lock might be outdated; update them (or just be a compilation error?)"
   echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh [check|update] ..."
   exit "$check_status"
 fi
+# Ensure nightly and --benches
+_ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets
 
 _ ci/order-crates-for-publishing.py
 _ cargo +"$rust_stable" fmt --all -- --check
