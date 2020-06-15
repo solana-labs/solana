@@ -1705,10 +1705,6 @@ fn process_transfer(
         }
 
         tx.try_sign(&config.signers, recent_blockhash)?;
-        if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
-        }
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
