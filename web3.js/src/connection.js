@@ -38,22 +38,22 @@ type Context = {
  * Options for sending transactions
  *
  * @typedef {Object} SendOptions
- * @property {boolean} skipPreflight disable transaction verification step
+ * @property {boolean | undefined} skipPreflight disable transaction verification step
  */
 export type SendOptions = {
-  skipPreflight: boolean,
+  skipPreflight: ?boolean,
 };
 
 /**
  * Options for confirming transactions
  *
  * @typedef {Object} ConfirmOptions
- * @property {boolean} skipPreflight disable transaction verification step
- * @property {number} confirmations desired number of cluster confirmations
+ * @property {boolean | undefined} skipPreflight disable transaction verification step
+ * @property {number | undefined} confirmations desired number of cluster confirmations
  */
 export type ConfirmOptions = {
-  confirmations: number,
-  skipPreflight: boolean,
+  skipPreflight: ?boolean,
+  confirmations: ?number,
 };
 
 /**
