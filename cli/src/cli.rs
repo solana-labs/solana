@@ -378,7 +378,6 @@ pub enum CliCommand {
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
     WithdrawFromVoteAccount {
         vote_account_pubkey: Pubkey,
@@ -2117,13 +2116,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
-            commitment_config,
         } => process_show_vote_account(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *use_lamports_unit,
-            *commitment_config,
         ),
         CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,

@@ -8,11 +8,7 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    commitment::{commitment_arg, COMMITMENT_ARG},
-    input_parsers::*,
-    input_validators::*,
-};
+use solana_clap_utils::{commitment::commitment_arg, input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -373,12 +369,10 @@ pub fn parse_vote_get_account_command(
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
-            commitment_config,
         },
         signers: vec![],
     })
@@ -639,10 +633,9 @@ pub fn process_show_vote_account(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
-    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let (vote_account, vote_state) =
-        get_vote_account(rpc_client, vote_account_pubkey, commitment_config)?;
+        get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
