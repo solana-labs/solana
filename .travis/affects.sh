@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Check if files in the commit range match a regex
+# Check if files in the commit range match one or more prefixes
 #
 
 (
@@ -9,10 +9,12 @@
 )
 
 for file in $(git diff --name-only "$TRAVIS_COMMIT_RANGE"); do
-  if [[ $file =~ ^"$1" ]]; then
-    exit 0
-  fi
+  for prefix in "$@"; do
+    if [[ $file =~ ^"$prefix" ]]; then
+      exit 0
+    fi
+    done
 done
 
-echo "No modifications to $1"
+echo "No modifications to $@"
 exit 1

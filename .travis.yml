@@ -77,7 +77,7 @@ jobs:
           - ~/.npm
 
       before_install:
-        - .travis/affects.sh explorer/ || travis_terminate 0
+        - .travis/affects.sh explorer/ .travis || travis_terminate 0
         - cd explorer
 
       script:
@@ -99,7 +99,7 @@ jobs:
           - ~/.npm
 
       before_install:
-        - .travis/affects.sh web3.js/ || travis_terminate 0
+        - .travis/affects.sh web3.js/ .travis || travis_terminate 0
         - cd web3.js/
         - source .travis/before_install.sh
 
