@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-watchtower"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.1.18"
+version = "1.1.19"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,15 +14,15 @@ log = "0.4.8"
 humantime = "2.0.0"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0"
-solana-clap-utils = { path = "../clap-utils", version = "1.1.18" }
-solana-cli = { path = "../cli", version = "1.1.18" }
-solana-cli-config = { path = "../cli-config", version = "1.1.18" }
-solana-client = { path = "../client", version = "1.1.18" }
-solana-logger = { path = "../logger", version = "1.1.18" }
-solana-metrics = { path = "../metrics", version = "1.1.18" }
-solana-sdk = { path = "../sdk", version = "1.1.18" }
-solana-transaction-status = { path = "../transaction-status", version = "1.1.18" }
-solana-vote-program = { path = "../programs/vote", version = "1.1.18" }
+solana-clap-utils = { path = "../clap-utils", version = "1.1.19" }
+solana-cli = { path = "../cli", version = "1.1.19" }
+solana-cli-config = { path = "../cli-config", version = "1.1.19" }
+solana-client = { path = "../client", version = "1.1.19" }
+solana-logger = { path = "../logger", version = "1.1.19" }
+solana-metrics = { path = "../metrics", version = "1.1.19" }
+solana-sdk = { path = "../sdk", version = "1.1.19" }
+solana-transaction-status = { path = "../transaction-status", version = "1.1.19" }
+solana-vote-program = { path = "../programs/vote", version = "1.1.19" }
 
 [[bin]]
 name = "solana-watchtower"
