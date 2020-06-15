@@ -2,7 +2,9 @@
 
 ## What is Staking?
 Some high level info about PoS networks and staking.
+
 https://lunie.io/guides/what-is-staking/
+https://academy.binance.com/blockchain/what-is-staking
 
 ## Why should I stake my SOL tokens?
  - Help secure the network
@@ -58,14 +60,3 @@ friendlier user interface for people who are not familiar with using command
 line tools, please stay tuned for more information!
 
 [Staking commands using the Solana Command Line Tools](../cli/delegate-stake.md)
-
-## Stake Account Information/Structure
-#### Addresses do not have a private key
-#### Understanding Account Authorities (Staking, Withdrawing)
-#### Stake accounts are all-or-nothing delegations, but you can have multiple stake accounts
-#### Delegating warmup/cooldown
-#### Lockups
-
-## Viewing Stake Accounts
-#### Explorer
-#### Command Line
