@@ -76,21 +76,20 @@ There are three release channels that map to branches as follows:
     git push -u origin <branchname>
     ```
 
-### Update master branch with the next version
+Alternatively use the Github UI.
+
+### Update master branch to the next release minor version
 
 1. After the new branch has been created and pushed, update the Cargo.toml files on **master** to the next semantic version (e.g. 0.9.0 -> 0.10.0) with:
      ```
-     scripts/increment-cargo-version.sh minor
+     $ scripts/increment-cargo-version.sh minor
+     $ ./scripts/cargo-for-all-lock-files.sh update
      ```
-1. Rebuild to get an updated version of `Cargo.lock`:
-    ```
-    cargo build
-    ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the `master` branch with something like:
     ```
     git co -b version_update
     git ls-files -m | xargs git add
-    git commit -m 'Update Cargo.toml versions from X.Y to X.Y+1'
+    git commit -m 'Bump version to X.Y+1.0'
     git push -u origin version_update
     ```
 1. Confirm that your freshly cut release branch is shown as `BETA_CHANNEL` and the previous release branch as `STABLE_CHANNEL`:
@@ -162,18 +161,4 @@ After the release automation completes, to add the new release to the list of re
 
 
 ### Update software on devnet.solana.com/testnet.solama.com/mainnet-beta.solana.com
-
-#### devnet.solana.com
-...
-
-##### Alert the community
-Notify Discord users on #validator-support that a new release for
-devnet.solana.com is available
-
-#### testnet.solana.com
-...
-
-
-#### mainnet-beta.solana.com
-...
-
+See the documentation at https://github.com/solana-labs/cluster-ops/
