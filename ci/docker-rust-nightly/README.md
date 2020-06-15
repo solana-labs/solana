@@ -7,7 +7,7 @@ organization.
 ## Moving to a newer nightly
 
 NOTE: Follow instructions in docker-rust/README.md before this when updating the stable
-rustc version as well.
+rust version as well.
 
 We pin the version of nightly (see the `ARG nightly=xyz` line in `Dockerfile`)
 to avoid the build breaking at unexpected times, as occasionally nightly will
