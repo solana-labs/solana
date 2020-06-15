@@ -1420,6 +1420,7 @@ fn process_deploy(
     rpc_client
         .send_and_confirm_transaction_with_spinner_and_config(
             &finalize_tx,
+            config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
             },
