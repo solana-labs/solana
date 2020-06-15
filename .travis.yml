@@ -22,7 +22,7 @@ jobs:
       git:
         depth: false
       script:
-        - .travis/export-github-repo.sh web3.js/ test-solana-web3.js
+        - .travis/export-github-repo.sh web3.js/ solana-web3.js
         - .travis/export-github-repo.sh explorer/ explorer
 
     - &release-artifacts
