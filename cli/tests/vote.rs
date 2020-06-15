@@ -1,5 +1,9 @@
-use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
-use solana_cli::test_utils::check_balance;
+use solana_cli::{
+    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    offline::{blockhash_query::BlockhashQuery, *},
+    spend_utils::SpendAmount,
+    test_utils::check_balance,
+};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
@@ -64,6 +68,23 @@ fn test_vote_authorize_and_withdraw() {
         .max(1);
     check_balance(expected_balance, &rpc_client, &vote_account_pubkey);
 
+    // Transfer in some more SOL
+    config.signers = vec![&default_signer];
+    config.command = CliCommand::Transfer {
+        amount: SpendAmount::Some(1_000),
+        to: vote_account_pubkey,
+        from: 0,
+        sign_only: false,
+        no_wait: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+    let expected_balance = expected_balance + 1_000;
+    check_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+
     // Authorize vote account withdrawal to another signer
     let withdraw_authority = Keypair::new();
     config.signers = vec![&default_signer];
@@ -86,7 +107,7 @@ fn test_vote_authorize_and_withdraw() {
     config.command = CliCommand::WithdrawFromVoteAccount {
         vote_account_pubkey,
         withdraw_authority: 1,
-        lamports: 100,
+        withdraw_amount: SpendAmount::Some(100),
         destination_account_pubkey: destination_account,
     };
     process_command(&config).unwrap();
