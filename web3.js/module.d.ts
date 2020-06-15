@@ -42,12 +42,12 @@ declare module '@solana/web3.js' {
   };
 
   export type SendOptions = {
-    skipPreflight: boolean;
+    skipPreflight?: boolean;
   };
 
   export type ConfirmOptions = {
-    confirmations: number;
-    skipPreflight: boolean;
+    confirmations?: number;
+    skipPreflight?: boolean;
   };
 
   export type RpcResponseAndContext<T> = {
