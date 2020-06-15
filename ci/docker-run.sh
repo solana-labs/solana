@@ -60,6 +60,10 @@ if [[ -z "$SOLANA_DOCKER_RUN_NOSETUID" ]]; then
   ARGS+=(--user "$(id -u):$(id -g)")
 fi
 
+if [[ -n $SOLANA_ALLOCATE_TTY ]]; then
+  ARGS+=(--tty)
+fi
+
 # Environment variables to propagate into the container
 ARGS+=(
   --env BUILDKITE
