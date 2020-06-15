@@ -40,10 +40,12 @@ pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64)
 
 /// From slots per year to slot duration
 pub fn slot_duration_from_slots_per_year(slots_per_year: f64) -> Duration {
-    // Regarding division by zero potential below: for some reason, if Rust stores an `inf` f64 and
-    // then converts it to a u64 on use, it always returns 0, as opposed to std::u64::MAX or any
-    // other huge value
-    let slot_in_ns = (SECONDS_PER_YEAR * 1_000_000_000.0) / slots_per_year;
+    // Recently, rust changed from infinity as usize being zero to 2^64-1; ensure it's zero here
+    let slot_in_ns = if slots_per_year != 0.0 {
+        (SECONDS_PER_YEAR * 1_000_000_000.0) / slots_per_year
+    } else {
+        0.0
+    };
     Duration::from_nanos(slot_in_ns as u64)
 }
 
