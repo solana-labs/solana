@@ -29,7 +29,7 @@ perform_action() {
     case "$1" in
     build)
         "$sdkDir"/rust/build.sh "$PWD"
-        
+
         so_path="$targetDir/$profile"
         so_name="solana_bpf_rust_noop"
         if [ -f "$so_path/${so_name}.so" ]; then
