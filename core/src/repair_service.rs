@@ -371,7 +371,7 @@ impl RepairService {
         root_bank: &Bank,
         blockstore: &Blockstore,
         serve_repair: &ServeRepair,
-        duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
+        _duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
     ) {
         for slot in new_duplicate_slots {
             warn!(
@@ -392,7 +392,7 @@ impl RepairService {
 
             // Signal ReplayStage to clear its progress map so that a different
             // version of this slot can be replayed
-            let _ = duplicate_slots_reset_sender.send(*slot);
+            //let _ = duplicate_slots_reset_sender.send(*slot);
 
             // Mark this slot as special repair, try to download from single
             // validator to avoid corruption
@@ -1010,7 +1010,7 @@ mod test {
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let keypairs = ValidatorVoteKeypairs::new_rand();
-        let (reset_sender, reset_receiver) = unbounded();
+        let (reset_sender, _reset_receiver) = unbounded();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -1065,7 +1065,7 @@ mod test {
             .is_some());
 
         // A signal should be sent to clear ReplayStage
-        assert!(reset_receiver.try_recv().is_ok());
+        //assert!(reset_receiver.try_recv().is_ok());
     }
 
     #[test]
