@@ -497,6 +497,7 @@ pub struct CliConfig<'a> {
     pub verbose: bool,
     pub output_format: OutputFormat,
     pub commitment: CommitmentConfig,
+    pub send_transaction_config: RpcSendTransactionConfig,
 }
 
 impl CliConfig<'_> {
@@ -573,6 +574,15 @@ impl CliConfig<'_> {
             ))
         }
     }
+
+    pub fn recent_for_tests() -> Self {
+        let mut config = Self::default();
+        config.commitment = CommitmentConfig::recent();
+        config.send_transaction_config = RpcSendTransactionConfig {
+            skip_preflight: true,
+        };
+        config
+    }
 }
 
 impl Default for CliConfig<'_> {
@@ -591,6 +601,7 @@ impl Default for CliConfig<'_> {
             verbose: false,
             output_format: OutputFormat::Display,
             commitment: CommitmentConfig::default(),
+            send_transaction_config: RpcSendTransactionConfig::default(),
         }
     }
 }

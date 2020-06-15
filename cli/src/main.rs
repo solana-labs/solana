@@ -11,6 +11,7 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
+use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{error, sync::Arc};
 
@@ -154,6 +155,7 @@ pub fn parse_args<'a>(
             verbose: matches.is_present("verbose"),
             output_format,
             commitment,
+            send_transaction_config: RpcSendTransactionConfig::default(),
         },
         signers,
     ))
