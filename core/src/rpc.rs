@@ -156,10 +156,12 @@ impl JsonRpcRequestProcessor {
     }
 
     // Useful for unit testing
-    pub fn new_from_bank(bank: Bank) -> Self {
+    pub fn new_from_bank(bank: &Arc<Bank>) -> Self {
         let genesis_hash = bank.hash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            bank.slot(),
+        )));
         let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info = Arc::new(ClusterInfo::default());
@@ -170,7 +172,7 @@ impl JsonRpcRequestProcessor {
                 HashMap::new(),
                 0,
                 0,
-                working_bank,
+                bank.clone(),
                 blockstore.clone(),
                 0,
                 0,
@@ -1815,10 +1817,10 @@ pub mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = Pubkey::new_rand();
         let genesis = create_genesis_config(100);
-        let bank = Bank::new(&genesis.genesis_config);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
-        let request_processor = JsonRpcRequestProcessor::new_from_bank(bank);
+        let request_processor = JsonRpcRequestProcessor::new_from_bank(&bank);
         assert_eq!(request_processor.get_transaction_count(None).unwrap(), 1);
     }
 
@@ -1826,8 +1828,8 @@ pub mod tests {
     fn test_rpc_get_balance() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Bank::new(&genesis.genesis_config);
-        let meta = JsonRpcRequestProcessor::new_from_bank(bank);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
 
         let mut io = MetaIoHandler::default();
         io.extend_with(RpcSolImpl.to_delegate());
@@ -1854,8 +1856,8 @@ pub mod tests {
     fn test_rpc_get_balance_via_client() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Bank::new(&genesis.genesis_config);
-        let meta = JsonRpcRequestProcessor::new_from_bank(bank);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
 
         let mut io = MetaIoHandler::default();
         io.extend_with(RpcSolImpl.to_delegate());
@@ -1922,7 +1924,7 @@ pub mod tests {
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Pubkey::new_rand();
         let genesis = create_genesis_config(10);
-        let bank = Bank::new(&genesis.genesis_config);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
         // Add 4 transactions
         bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
@@ -1933,7 +1935,7 @@ pub mod tests {
         bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
 
-        let meta = JsonRpcRequestProcessor::new_from_bank(bank);
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
 
         let mut io = MetaIoHandler::default();
         io.extend_with(RpcSolImpl.to_delegate());
