@@ -535,7 +535,7 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        self.handle_reclaims(&reclaims);
+        self.handle_reclaims_maybe_cleanup(&reclaims);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
@@ -726,7 +726,7 @@ impl AccountsDB {
             }
         }
 
-        self.handle_reclaims(&reclaims);
+        self.handle_reclaims_maybe_cleanup(&reclaims);
         reclaims_time.stop();
         debug!(
             "clean_accounts: {} {} {} {}",
@@ -734,7 +734,7 @@ impl AccountsDB {
         );
     }
 
-    fn handle_reclaims(&self, reclaims: SlotSlice<AccountInfo>) {
+    fn handle_reclaims_maybe_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
         let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
         let dead_slots = self.remove_dead_accounts(reclaims);
         dead_accounts.stop();
@@ -748,7 +748,9 @@ impl AccountsDB {
         }
     }
 
-    fn handle_reclaims_locked(&self, reclaims: SlotSlice<AccountInfo>) {
+    // Atomicallly process reclaims and new dead_slots in this thread, gauranteeing
+    // complete data removal for slots in reclaims.
+    fn handle_reclaims_ensure_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
         let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
         let dead_slots = self.remove_dead_accounts(reclaims);
         dead_accounts.stop();
@@ -899,7 +901,7 @@ impl AccountsDB {
             );
             let reclaims = self.update_index(slot, infos, &accounts);
 
-            self.handle_reclaims(&reclaims);
+            self.handle_reclaims_maybe_cleanup(&reclaims);
 
             let mut storage = self.storage.write().unwrap();
             if let Some(slot_storage) = storage.0.get_mut(&slot) {
@@ -1206,7 +1208,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims_locked(&reclaims);
+        self.handle_reclaims_ensure_cleanup(&reclaims);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -1818,7 +1820,7 @@ impl AccountsDB {
         update_index.stop();
         trace!("reclaim: {}", reclaims.len());
 
-        self.handle_reclaims(&reclaims);
+        self.handle_reclaims_maybe_cleanup(&reclaims);
     }
 
     pub fn add_root(&self, slot: Slot) {
