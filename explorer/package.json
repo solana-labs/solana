@@ -21,7 +21,7 @@
     "react": "^16.13.0",
     "react-app-rewired": "^2.1.6",
     "react-dom": "^16.13.0",
-    "react-router-dom": "^5.1.2",
+    "react-router-dom": "^5.2.0",
     "react-scripts": "3.4.1",
     "solana-sdk-wasm": "file:wasm/pkg",
     "typescript": "^3.9.5",
