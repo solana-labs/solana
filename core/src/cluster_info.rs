@@ -226,6 +226,8 @@ struct GossipStats {
     process_prune: Counter,
     process_push_message: Counter,
     prune_received_cache: Counter,
+    prune_message_count: Counter,
+    prune_message_len: Counter,
     purge: Counter,
     epoch_slots_lookup: Counter,
     epoch_slots_push: Counter,
@@ -1641,7 +1643,7 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        let rsp = Self::handle_push_message(self, recycler, &from, data, stakes);
+                        let rsp = self.handle_push_message(recycler, &from, data, stakes);
                         if let Some(rsp) = rsp {
                             let _ignore_disconnect = response_sender.send(rsp);
                         }
@@ -1653,11 +1655,10 @@ impl ClusterInfo {
                     Protocol::PruneMessage(from, data) => {
                         let start = allocated.get();
                         if data.verify() {
-                            inc_new_counter_debug!("cluster_info-prune_message", 1);
-                            inc_new_counter_debug!(
-                                "cluster_info-prune_message-size",
-                                data.prunes.len()
-                            );
+                            self.stats.prune_message_count.add_relaxed(1);
+                            self.stats
+                                .prune_message_len
+                                .add_relaxed(data.prunes.len() as u64);
                             match self
                                 .time_gossip_write_lock("process_prune", &self.stats.process_prune)
                                 .process_prune_msg(
@@ -2239,6 +2240,16 @@ impl ClusterInfo {
                 (
                     "new_pull_requests_count",
                     self.stats.new_pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "prune_message_count",
+                    self.stats.prune_message_count.clear(),
+                    i64
+                ),
+                (
+                    "prune_message_len",
+                    self.stats.prune_message_len.clear(),
                     i64
                 ),
             );
