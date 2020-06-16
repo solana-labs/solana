@@ -99,8 +99,6 @@ esac
 
 (
   export CARGO_TOOLCHAIN=+"$rust_stable"
-  # pre-build to avoid build-related timing race
-  cargo build --bins
   echo --- ci/localnet-sanity.sh
   ci/localnet-sanity.sh -x
 
