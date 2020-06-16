@@ -38,7 +38,8 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
   rustup_install() {
     declare toolchain=$1
-    if ! cargo +"$toolchain" -V; then
+    if ! cargo +"$toolchain" -V > /dev/null; then
+      echo "$0: Missing toolchain? Installing...: $toolchain" >&2
       rustup install "$toolchain"
       cargo +"$toolchain" -V
     fi
@@ -58,7 +59,7 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
      rustup_install "$rust_nightly"
     ;;
   *)
-    echo "Note: ignoring unknown argument: $1"
+    echo "$0: Note: ignoring unknown argument: $1" >&2
     ;;
   esac
 )
