@@ -281,7 +281,7 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
       "
@@ -350,7 +350,7 @@ startNode() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
       "
@@ -733,6 +733,7 @@ maybeNoSnapshot=""
 maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
+maybeWaitForSupermajority=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -842,6 +843,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --client-delay-start ]]; then
       clientDelayStart=$2
+      shift 2
+    elif [[ $1 == --wait-for-supermajority ]]; then
+      maybeWaitForSupermajority="$1 $2"
       shift 2
     else
       usage "Unknown long option: $1"
