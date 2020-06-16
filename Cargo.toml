@@ -31,6 +31,7 @@ members = [
     "metrics",
     "net-shaper",
     "notifier",
+    "poh-bench",
     "programs/bpf_loader",
     "programs/budget",
     "programs/btc_spv",
