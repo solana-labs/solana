@@ -237,7 +237,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94cb07b0da6a73955f8fb85d24c466778e70cda767a568229b104f0264089330"
 dependencies = [
  "byte-tools",
- "crypto-mac",
+ "crypto-mac 0.7.0",
  "digest",
  "opaque-debug",
 ]
@@ -687,6 +687,16 @@ checksum = "4434400df11d95d556bac068ddfedd482915eb18fe8bea89bc80b6e4b1c179e5"
 dependencies = [
  "generic-array 0.12.3",
  "subtle 1.0.0",
+]
+
+[[package]]
+name = "crypto-mac"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
+dependencies = [
+ "generic-array 0.14.1",
+ "subtle 2.2.2",
 ]
 
 [[package]]
@@ -1387,7 +1397,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dcb5e64cda4c23119ab41ba960d1e170a774c8e4b9d9e6a9bc18aabf5e59695"
 dependencies = [
- "crypto-mac",
+ "crypto-mac 0.7.0",
  "digest",
 ]
 
@@ -2469,7 +2479,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "006c038a43a45995a9670da19e67600114740e8511d4333bf97a56e66a7542d9"
 dependencies = [
  "byteorder",
- "crypto-mac",
+ "crypto-mac 0.7.0",
+]
+
+[[package]]
+name = "pbkdf2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "216eaa586a190f0a738f2f918511eecfa90f13295abec0e457cdebcceda80cbd"
+dependencies = [
+ "crypto-mac 0.8.0",
 ]
 
 [[package]]
@@ -4551,7 +4570,7 @@ dependencies = [
  "memmap",
  "num-derive 0.3.0",
  "num-traits",
- "pbkdf2",
+ "pbkdf2 0.4.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version",
@@ -5573,7 +5592,7 @@ dependencies = [
  "failure",
  "hmac",
  "once_cell",
- "pbkdf2",
+ "pbkdf2 0.3.0",
  "rand 0.7.3",
  "rustc-hash",
  "sha2",
