@@ -870,7 +870,7 @@ impl RpcClient {
             ));
             let mut status_retries = 15;
             let (signature, status) = loop {
-                let signature = self.send_transaction_with_config(transaction, config.clone())?;
+                let signature = self.send_transaction_with_config(transaction, config)?;
 
                 // Get recent commitment in order to count confirmations for successful transactions
                 let status = self
