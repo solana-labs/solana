@@ -4,7 +4,7 @@ experience for most people who are new or experienced with using crypto wallets.
 
 ## Trust Wallet
 [Trust Wallet](https://trustwallet.com/) is an app for iOS and Android.  This is
-currently the easiest and fastest way to get set up with a new wallet to send 
+currently the easiest and fastest way to get set up with a new wallet to send
 and receive SOL tokens on the Solana network.
 The app is free and getting your wallet set up only takes a few minutes.
 

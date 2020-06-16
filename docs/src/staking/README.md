@@ -60,3 +60,7 @@ friendlier user interface for people who are not familiar with using command
 line tools, please stay tuned for more information!
 
 [Staking commands using the Solana Command Line Tools](../cli/delegate-stake.md)
+
+## Stake Account Details
+For more information about the operations and permissions associated with a
+stake account, please see [Stake Accounts](stake-accounts.md)
