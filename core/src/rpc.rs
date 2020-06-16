@@ -25,6 +25,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
+    get_tmp_ledger_path,
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank, log_collector::LogCollector};
@@ -49,7 +50,7 @@ use std::{
     net::SocketAddr,
     rc::Rc,
     str::FromStr,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 
 fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
@@ -148,6 +149,40 @@ impl JsonRpcRequestProcessor {
             cluster_info,
             genesis_hash,
             send_transaction_service,
+        }
+    }
+
+    // Useful for unit testing
+    fn new_from_bank(bank: Bank) -> Self {
+        let genesis_hash = bank.hash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
+        let exit = Arc::new(AtomicBool::new(false));
+        let cluster_info = Arc::new(ClusterInfo::default());
+        let validator_exit = Arc::new(RwLock::new(None));
+        Self {
+            config: JsonRpcConfig::default(),
+            bank_forks: bank_forks.clone(),
+            block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
+                HashMap::new(),
+                0,
+                0,
+                working_bank,
+                blockstore.clone(),
+                0,
+                0,
+            ))),
+            blockstore,
+            validator_exit,
+            health: Arc::new(RpcHealth::new(cluster_info.clone(), None, 0, exit.clone())),
+            cluster_info: cluster_info.clone(),
+            genesis_hash,
+            send_transaction_service: Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         }
     }
 
@@ -1577,7 +1612,6 @@ pub mod tests {
         blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
     };
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
@@ -1835,16 +1869,24 @@ pub mod tests {
 
     #[test]
     fn test_rpc_get_balance_via_client() {
-        let bob_pubkey = Pubkey::new_rand();
-        let handler = start_rpc_handler_with_tx(&bob_pubkey);
+        let genesis_info = create_genesis_config(20);
+        let mint_pubkey = genesis_info.mint_keypair.pubkey();
+        let bank = Bank::new(&genesis_info.genesis_config);
+        assert_eq!(bank.get_balance(&mint_pubkey), 20);
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(RpcSolImpl.to_delegate());
+
+        let meta = JsonRpcRequestProcessor::new_from_bank(bank);
         let fut = {
             let (client, server) =
-                local::connect_with_metadata::<gen_client::Client, _, _>(&handler.io, handler.meta);
+                local::connect_with_metadata::<gen_client::Client, _, _>(&io, meta);
             client
-                .get_balance(bob_pubkey.to_string(), None)
+                .get_balance(mint_pubkey.to_string(), None)
                 .join(server)
         };
-        assert_eq!(20, fut.wait().unwrap().0.value);
+        let (response, _) = fut.wait().unwrap();
+        assert_eq!(response.value, 20);
     }
 
     #[test]
