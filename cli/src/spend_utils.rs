@@ -1,12 +1,13 @@
 use crate::{
-    checks::{calculate_fee, check_account_for_balance},
+    checks::{calculate_fee, check_account_for_balance_with_commitment},
     cli::CliError,
 };
 use clap::ArgMatches;
 use solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    fee_calculator::FeeCalculator, message::Message, native_token::lamports_to_sol, pubkey::Pubkey,
+    commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, message::Message,
+    native_token::lamports_to_sol, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -49,6 +50,7 @@ pub fn resolve_spend_tx_and_check_account_balance<F>(
     fee_calculator: &FeeCalculator,
     from_pubkey: &Pubkey,
     build_message: F,
+    commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
 where
     F: Fn(u64) -> Message,
@@ -61,6 +63,7 @@ where
         from_pubkey,
         from_pubkey,
         build_message,
+        commitment,
     )
 }
 
@@ -72,6 +75,7 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
+    commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
 where
     F: Fn(u64) -> Message,
@@ -87,7 +91,9 @@ where
         );
         Ok((message, spend))
     } else {
-        let from_balance = rpc_client.get_balance(&from_pubkey)?;
+        let from_balance = rpc_client
+            .get_balance_with_commitment(&from_pubkey, commitment)?
+            .value;
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
             amount,
             fee_calculator,
@@ -107,7 +113,8 @@ where
             if from_balance < spend {
                 return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(spend)));
             }
-            if !check_account_for_balance(rpc_client, fee_pubkey, fee)? {
+            if !check_account_for_balance_with_commitment(rpc_client, fee_pubkey, fee, commitment)?
+            {
                 return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
             }
         }
