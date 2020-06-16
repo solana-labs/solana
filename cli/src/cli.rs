@@ -1363,7 +1363,9 @@ fn process_deploy(
 
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let ix = system_instruction::create_account(
         &config.signers[0].pubkey(),
@@ -1409,9 +1411,10 @@ fn process_deploy(
     )?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &create_account_tx,
         config.commitment,
+        config.send_transaction_config,
     );
     log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
         CliError::DynamicProgramError("Program account allocation failed".to_string())
