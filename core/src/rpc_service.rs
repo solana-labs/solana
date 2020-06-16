@@ -347,7 +347,7 @@ mod tests {
     use super::*;
     use crate::{
         crds_value::{CrdsData, CrdsValue, SnapshotHash},
-        rpc::tests::create_validator_exit,
+        rpc::create_validator_exit,
     };
     use solana_ledger::{
         bank_forks::CompressionType,
