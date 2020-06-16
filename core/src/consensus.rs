@@ -4,8 +4,7 @@ use crate::{
     pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
-use solana_ledger::bank_forks::BankForks;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
@@ -666,9 +665,9 @@ pub mod test {
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
-    use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
+        bank_forks::BankForks,
         genesis_utils::{
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
         },

@@ -784,8 +784,8 @@ pub fn verify_snapshot_archive<P, Q, R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::{deserialize_from, serialize_into};
     use assert_matches::assert_matches;
+    use bincode::{deserialize_from, serialize_into};
     use std::mem::size_of;
 
     #[test]

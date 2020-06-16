@@ -1,7 +1,6 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use bv::BitVec;
-use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
 use solana_ledger::shred::{
     CODING_SHRED, DATA_SHRED, OFFSET_OF_SHRED_INDEX, OFFSET_OF_SHRED_SLOT, OFFSET_OF_SHRED_TYPE,
@@ -10,6 +9,7 @@ use solana_ledger::shred::{
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::{limited_deserialize, Packet, PacketsRecycler};
 use solana_perf::recycler::Recycler;
+use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::Slot;
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::collections::HashMap;

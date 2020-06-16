@@ -8,14 +8,11 @@ mod tests {
     use solana_core::cluster_info::ClusterInfo;
     use solana_core::contact_info::ContactInfo;
     use solana_core::snapshot_packager_service::SnapshotPackagerService;
-    use solana_ledger::bank_forks::CompressionType;
-    use solana_ledger::{
-        bank_forks::{BankForks, SnapshotConfig},
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        snapshot_utils,
-    };
     use solana_runtime::{
         bank::{Bank, BankSlotDelta},
+        bank_forks::{BankForks, CompressionType, SnapshotConfig},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        snapshot_utils,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{

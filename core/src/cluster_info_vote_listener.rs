@@ -14,11 +14,11 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
-use solana_ledger::bank_forks::BankForks;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
 use solana_runtime::{
     bank::Bank,
+    bank_forks::BankForks,
     epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
 };
 use solana_sdk::{

@@ -3,8 +3,7 @@ use crate::{
     fork_choice::ForkChoice,
     progress_map::{ForkStats, ProgressMap},
 };
-use solana_ledger::bank_forks::BankForks;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing;
 use std::time::Instant;
 use std::{

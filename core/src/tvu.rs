@@ -22,11 +22,10 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::{
-    bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
-    snapshot_package::AccountsPackageSender,
 };
+use solana_runtime::{bank_forks::BankForks, snapshot_package::AccountsPackageSender};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},

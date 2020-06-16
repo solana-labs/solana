@@ -11,7 +11,6 @@ use crate::{
 };
 use crossbeam_channel::Receiver;
 use solana_ledger::{
-    bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
     staking_utils,
@@ -19,6 +18,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::Packets;
+use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::{Epoch, Slot};
 use solana_sdk::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;

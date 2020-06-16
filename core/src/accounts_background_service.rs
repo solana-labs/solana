@@ -2,7 +2,7 @@
 //
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
-use solana_ledger::bank_forks::BankForks;
+use solana_runtime::bank_forks::BankForks;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, RwLock,

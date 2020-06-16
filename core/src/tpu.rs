@@ -13,9 +13,8 @@ use crate::{
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::{
-    bank_forks::BankForks, blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-};
+use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_runtime::bank_forks::BankForks;
 use std::{
     net::UdpSocket,
     sync::{

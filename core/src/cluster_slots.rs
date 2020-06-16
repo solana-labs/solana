@@ -2,8 +2,7 @@ use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
     pubkey_references::LockedPubkeyReferences, serve_repair::RepairType,
 };
-use solana_ledger::bank_forks::BankForks;
-use solana_runtime::epoch_stakes::NodeIdToVoteAccounts;
+use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     collections::{HashMap, HashSet},

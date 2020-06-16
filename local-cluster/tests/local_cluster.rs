@@ -8,15 +8,17 @@ use solana_core::{
     gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
-use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
-    bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
-    leader_schedule::LeaderSchedule, snapshot_utils,
+    blockstore::Blockstore, leader_schedule::FixedSchedule, leader_schedule::LeaderSchedule,
 };
 use solana_local_cluster::{
     cluster::Cluster,
     cluster_tests,
     local_cluster::{ClusterConfig, LocalCluster},
+};
+use solana_runtime::{
+    bank_forks::{CompressionType, SnapshotConfig},
+    snapshot_utils,
 };
 use solana_sdk::{
     client::{AsyncClient, SyncClient},

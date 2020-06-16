@@ -4,7 +4,7 @@ use crate::cluster_info;
 use crate::poh_recorder;
 use solana_ledger::block_error;
 use solana_ledger::blockstore;
-use solana_ledger::snapshot_utils;
+use solana_runtime::snapshot_utils;
 use solana_sdk::transaction;
 use std::any::Any;
 

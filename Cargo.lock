@@ -4009,7 +4009,7 @@ dependencies = [
  "indicatif",
  "log 0.4.8",
  "reqwest",
- "solana-ledger",
+ "solana-runtime",
  "solana-sdk",
  "tar",
 ]
@@ -4073,6 +4073,7 @@ dependencies = [
  "solana-genesis-programs",
  "solana-ledger",
  "solana-logger",
+ "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
  "solana-version",

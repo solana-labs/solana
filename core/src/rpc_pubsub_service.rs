@@ -74,12 +74,11 @@ mod tests {
     use super::*;
     use crate::commitment::BlockCommitmentCache;
     use solana_ledger::{
-        bank_forks::BankForks,
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_runtime::bank::Bank;
+    use solana_runtime::{bank::Bank, bank_forks::BankForks};
     use std::{
         net::{IpAddr, Ipv4Addr},
         sync::RwLock,

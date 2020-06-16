@@ -21,11 +21,11 @@ use solana_core::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
-use solana_ledger::{
+use solana_perf::recycler::enable_recycler_warming;
+use solana_runtime::{
     bank_forks::{CompressionType, SnapshotConfig},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
-use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,

@@ -37,7 +37,7 @@ use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
-use solana_ledger::{bank_forks::BankForks, staking_utils};
+use solana_ledger::staking_utils;
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
@@ -50,6 +50,7 @@ use solana_perf::packet::{
     PACKET_DATA_SIZE,
 };
 use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::bank_forks::BankForks;
 use solana_sdk::hash::Hash;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
