@@ -474,8 +474,6 @@ impl LocalCluster {
             );
         }
         info!("Checking for vote account registration of {}", node_pubkey);
-        // nightly clippy says to do something which is gated under #![feature(or_patterns)]
-        #[allow(clippy::unnested_or_patterns)]
         match (
             client.get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent()),
             client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::recent()),
