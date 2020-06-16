@@ -234,27 +234,18 @@ where
                     .as_ref()
                     .join(&append_vec_relative_path);
                 let target = local_dir.join(append_vec_abs_path.file_name().unwrap());
-                if std::fs::rename(append_vec_abs_path.clone(), target).is_err() {
+                std::fs::rename(append_vec_abs_path.clone(), target).or_else(|_| {
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    if let Err(e) = fs_extra::move_items(
-                        &vec![&append_vec_abs_path],
-                        &local_dir,
-                        &copy_options,
-                    ) {
-                        warn!(
-                            "context_accounts_db_from_fields error: unable to move {:?} to {:?}: {:?}",
-                            append_vec_abs_path, local_dir, e
-                        );
-			continue;
-                    }
-                };
+                    fs_extra::move_items(&vec![&append_vec_abs_path], &local_dir, &copy_options)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                        .and(Ok(()))
+                })?;
 
                 // Notify the AppendVec of the new file location
                 let local_path = local_dir.join(append_vec_relative_path);
                 let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
-                u_storage_entry
-                    .set_file(local_path)?;
+                u_storage_entry.set_file(local_path)?;
                 new_slot_storage.insert(id, Arc::new(u_storage_entry));
             }
             Ok((slot, new_slot_storage))
