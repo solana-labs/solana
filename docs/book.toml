@@ -8,3 +8,7 @@ create-missing = false
 
 [output.html]
 theme = "theme"
+
+[output.linkcheck]
+# Exclude some special links and `README.md` which cause false-positive errors
+exclude = [ 'http://192\.168\.1\.88', 'http://localhost', 'LATEST_SOLANA_RELEASE_VERSION', 'README\.md' ]
