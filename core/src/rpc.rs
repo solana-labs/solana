@@ -156,7 +156,7 @@ impl JsonRpcRequestProcessor {
     }
 
     // Useful for unit testing
-    fn new_from_bank(bank: Bank) -> Self {
+    pub fn new_from_bank(bank: Bank) -> Self {
         let genesis_hash = bank.hash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let working_bank = bank_forks.read().unwrap().working_bank();
