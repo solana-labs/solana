@@ -22,7 +22,7 @@ echo --- build environment
   cargo +"$rust_nightly" clippy --version --verbose
 
   # audit is done only with stable
-  cargo +"$rust_stable" audit --version --verbose
+  cargo +"$rust_stable" audit --version
 )
 
 export RUST_BACKTRACE=1
