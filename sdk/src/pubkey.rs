@@ -1,6 +1,6 @@
 use crate::{
+    decode_error::DecodeError,
     hash::{hash, hashv, Hasher},
-    program_utils::DecodeError,
 };
 use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(feature = "program"))]

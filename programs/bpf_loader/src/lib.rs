@@ -12,14 +12,14 @@ use solana_rbpf::{
     EbpfVm,
 };
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader,
+    decode_error::DecodeError,
     entrypoint::SUCCESS,
     entrypoint_native::InvokeContext,
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
-    program_utils::DecodeError,
-    program_utils::{is_executable, limited_deserialize, next_keyed_account},
+    program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
 use std::{io::prelude::*, mem};

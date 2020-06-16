@@ -216,3 +216,10 @@ pub fn create_is_signer_account_infos<'a>(
         })
         .collect()
 }
+
+/// Return the next AccountInfo or a NotEnoughAccountKeys error
+pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
+    iter: &mut I,
+) -> Result<I::Item, ProgramError> {
+    iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
+}

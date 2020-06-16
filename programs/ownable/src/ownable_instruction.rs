@@ -1,7 +1,7 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
+    decode_error::DecodeError,
     instruction::{AccountMeta, Instruction},
-    program_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
 };

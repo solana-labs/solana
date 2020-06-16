@@ -738,10 +738,9 @@ mod tests {
     use super::*;
     use crate::vote_state;
     use solana_sdk::{
-        account::{get_signers, Account},
+        account::{get_signers, next_keyed_account, Account},
         account_utils::StateMut,
         hash::hash,
-        program_utils::next_keyed_account,
     };
     use std::cell::RefCell;
 
