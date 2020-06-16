@@ -1755,7 +1755,7 @@ impl ReplayStage {
 
     pub fn get_unlock_heaviest_subtree_fork_choice(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
-            OperatingMode::Development => 5000,
+            OperatingMode::Development => 0,
             OperatingMode::Stable => std::u64::MAX / 2,
             // Epoch 63
             OperatingMode::Preview => 21_692_256,
