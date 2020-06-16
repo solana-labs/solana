@@ -201,33 +201,11 @@ where
     }
 }
 
-<<<<<<< HEAD
-pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
-    DateTime::parse_from_rfc3339(&value)
-=======
-pub fn is_amount_or_all<T>(amount: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
-    if amount.as_ref().parse::<u64>().is_ok()
-        || amount.as_ref().parse::<f64>().is_ok()
-        || amount.as_ref() == "ALL"
-    {
-        Ok(())
-    } else {
-        Err(format!(
-            "Unable to parse input amount as integer or float, provided: {}",
-            amount
-        ))
-    }
-}
-
 pub fn is_rfc3339_datetime<T>(value: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
     DateTime::parse_from_rfc3339(value.as_ref())
->>>>>>> daa2e6363... Add generic is_parsable() input validator.
         .map(|_| ())
         .map_err(|e| format!("{}", e))
 }
