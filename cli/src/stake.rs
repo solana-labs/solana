@@ -896,7 +896,7 @@ pub fn process_create_stake_account(
     };
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let (message, lamports) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -906,6 +906,7 @@ pub fn process_create_stake_account(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
+        config.commitment,
     )?;
 
     if !sign_only {
@@ -977,7 +978,7 @@ pub fn process_stake_authorize(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1027,7 +1028,7 @@ pub fn process_deactivate_stake_account(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let stake_authority = config.signers[stake_authority];
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
@@ -1084,7 +1085,7 @@ pub fn process_withdraw_stake(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
 
@@ -1211,7 +1212,7 @@ pub fn process_split_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = if let Some(seed) = split_stake_account_seed {
         stake_instruction::split_with_seed(
@@ -1316,7 +1317,7 @@ pub fn process_merge_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = stake_instruction::merge(
         &stake_account_pubkey,
@@ -1372,7 +1373,7 @@ pub fn process_stake_set_lockup(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
 
     let ixs = vec![stake_instruction::set_lockup(
@@ -1643,7 +1644,7 @@ pub fn process_delegate_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,

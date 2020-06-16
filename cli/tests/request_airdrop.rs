@@ -2,7 +2,7 @@ use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::signature::Keypair;
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
 use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
@@ -18,7 +18,7 @@ fn test_cli_request_airdrop() {
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let mut bob_config = CliConfig::default();
+    let mut bob_config = CliConfig::recent_for_tests();
     bob_config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     bob_config.command = CliCommand::Airdrop {
         faucet_host: None,
@@ -35,8 +35,9 @@ fn test_cli_request_airdrop() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let balance = rpc_client
-        .get_balance(&bob_config.signers[0].pubkey())
-        .unwrap();
+        .get_balance_with_commitment(&bob_config.signers[0].pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value;
     assert_eq!(balance, 50);
 
     server.close().unwrap();

@@ -900,6 +900,7 @@ pub fn process_ping(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;

@@ -17,12 +17,8 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    commitment::{commitment_arg_with_default, COMMITMENT_ARG},
-    input_parsers::*,
-    input_validators::*,
-    keypair::signer_from_path,
-    offline::SIGN_ONLY_ARG,
-    ArgConstant,
+    commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
+    keypair::signer_from_path, offline::SIGN_ONLY_ARG, ArgConstant,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -409,7 +405,6 @@ pub enum CliCommand {
     Balance {
         pubkey: Option<Pubkey>,
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
     Cancel(Pubkey),
     Confirm(Signature),
@@ -591,7 +586,6 @@ impl Default for CliConfig<'_> {
             command: CliCommand::Balance {
                 pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
-                commitment_config: CommitmentConfig::default(),
             },
             json_rpc_url: Self::default_json_rpc_url(),
             websocket_url: Self::default_websocket_url(),
@@ -807,7 +801,6 @@ pub fn parse_command(
         }
         ("balance", Some(matches)) => {
             let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
-            let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -822,7 +815,6 @@ pub fn parse_command(
                 command: CliCommand::Balance {
                     pubkey,
                     use_lamports_unit: matches.is_present("lamports"),
-                    commitment_config,
                 },
                 signers,
             })
@@ -1151,7 +1143,6 @@ fn process_balance(
     config: &CliConfig,
     pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
-    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let pubkey = if let Some(pubkey) = pubkey {
         *pubkey
@@ -1159,7 +1150,7 @@ fn process_balance(
         config.pubkey()?
     };
     let balance = rpc_client
-        .get_balance_with_commitment(&pubkey, commitment_config)?
+        .get_balance_with_commitment(&pubkey, config.commitment)?
         .value;
     Ok(build_balance_message(balance, use_lamports_unit, true))
 }
@@ -1409,15 +1400,19 @@ fn process_deploy(
     finalize_tx.try_sign(&signers, blockhash)?;
     messages.push(&finalize_tx.message);
 
-    check_account_for_multiple_fees(
+    check_account_for_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &messages,
+        config.commitment,
     )?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&create_account_tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(
+        &create_account_tx,
+        config.commitment,
+    );
     log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
         CliError::DynamicProgramError("Program account allocation failed".to_string())
     })?;
@@ -1467,7 +1462,7 @@ fn process_pay(
     )?;
 
     let (blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let cancelable = if cancelable {
         Some(config.signers[0].pubkey())
@@ -1493,6 +1488,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
 
@@ -1538,6 +1534,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
@@ -1584,6 +1581,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
@@ -1664,7 +1662,7 @@ fn process_transfer(
     let from = config.signers[from];
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1692,6 +1690,7 @@ fn process_transfer(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
+        config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
 
@@ -1700,7 +1699,8 @@ fn process_transfer(
         return_signers(&tx, &config)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
 
@@ -1708,7 +1708,11 @@ fn process_transfer(
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
-            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
+            rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            )
         };
         log_instruction_custom_error::<SystemError>(result, &config)
     }
@@ -1846,7 +1850,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         // Get the current nonce
         CliCommand::GetNonce(nonce_account_pubkey) => {
-            process_get_nonce(&rpc_client, &nonce_account_pubkey)
+            process_get_nonce(&rpc_client, config, &nonce_account_pubkey)
         }
         // Get a new nonce
         CliCommand::NewNonce {
@@ -2197,14 +2201,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
-            commitment_config,
-        } => process_balance(
-            &rpc_client,
-            config,
-            &pubkey,
-            *use_lamports_unit,
-            *commitment_config,
-        ),
+        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -2347,7 +2344,8 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, config.commitment);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -2876,7 +2874,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: false,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2893,7 +2890,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: true,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2908,7 +2904,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: None,
                     use_lamports_unit: true,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3405,14 +3400,12 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: true,
-            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
@@ -3659,7 +3652,6 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-            commitment_config: CommitmentConfig::default(),
         };
         assert!(process_command(&config).is_err());
 

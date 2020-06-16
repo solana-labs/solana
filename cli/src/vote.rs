@@ -493,6 +493,7 @@ pub fn process_create_vote_account(
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
+        config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
