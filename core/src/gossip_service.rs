@@ -71,7 +71,7 @@ pub fn discover_cluster(
     discover(
         Some(entrypoint),
         Some(num_nodes),
-        Some(180), // to be fixed...
+        Some(30),
         None,
         None,
         None,
