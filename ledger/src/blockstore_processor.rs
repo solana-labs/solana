@@ -484,7 +484,8 @@ fn confirm_full_slot(
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
-    pub verify_elapsed: u64,
+    pub poh_verify_elapsed: u64,
+    pub transaction_verify_elapsed: u64,
     pub fetch_elapsed: u64,
     pub fetch_fail_elapsed: u64,
 }
@@ -494,7 +495,8 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
-            verify_elapsed: 0,
+            poh_verify_elapsed: 0,
+            transaction_verify_elapsed: 0,
             fetch_elapsed: 0,
             fetch_fail_elapsed: 0,
         }
@@ -599,11 +601,13 @@ pub fn confirm_slot(
     timing.replay_elapsed += replay_elapsed.as_us();
 
     if let Some(mut verifier) = verifier {
-        if !verifier.finish_verify(&entries) {
+        let verified = verifier.finish_verify(&entries);
+        timing.poh_verify_elapsed += verifier.poh_duration_us();
+        timing.transaction_verify_elapsed += verifier.transaction_duration_us();
+        if !verified {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
         }
-        timing.verify_elapsed += verifier.duration_ms();
     }
 
     process_result?;
