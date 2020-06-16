@@ -1,6 +1,5 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
     cli_output::OutputFormat,
@@ -10,11 +9,13 @@ use solana_cli::{
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
+    test_utils::check_recent_balance,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -40,12 +41,12 @@ fn test_cli_timestamp_tx() {
     let default_signer0 = Keypair::new();
     let default_signer1 = Keypair::new();
 
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_payer.signers = vec![&default_signer0];
 
-    let mut config_witness = CliConfig::default();
+    let mut config_witness = CliConfig::recent_for_tests();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
     config_witness.signers = vec![&default_signer1];
 
@@ -62,7 +63,7 @@ fn test_cli_timestamp_tx() {
         &config_witness,
     )
     .unwrap();
-    check_balance(50, &rpc_client, &config_payer.signers[0].pubkey());
+    check_recent_balance(50, &rpc_client, &config_payer.signers[0].pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -92,17 +93,17 @@ fn test_cli_timestamp_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, &process_id); // contract balance
-    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(10, &rpc_client, &process_id); // contract balance
+    check_recent_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, &process_id); // contract balance
-    check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(0, &rpc_client, &process_id); // contract balance
+    check_recent_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -127,12 +128,12 @@ fn test_cli_witness_tx() {
     let default_signer0 = Keypair::new();
     let default_signer1 = Keypair::new();
 
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_payer.signers = vec![&default_signer0];
 
-    let mut config_witness = CliConfig::default();
+    let mut config_witness = CliConfig::recent_for_tests();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
     config_witness.signers = vec![&default_signer1];
 
@@ -174,17 +175,17 @@ fn test_cli_witness_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, &process_id); // contract balance
-    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(10, &rpc_client, &process_id); // contract balance
+    check_recent_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = CliCommand::Witness(bob_pubkey, process_id);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, &process_id); // contract balance
-    check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(0, &rpc_client, &process_id); // contract balance
+    check_recent_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -209,12 +210,12 @@ fn test_cli_cancel_tx() {
     let default_signer0 = Keypair::new();
     let default_signer1 = Keypair::new();
 
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_payer.signers = vec![&default_signer0];
 
-    let mut config_witness = CliConfig::default();
+    let mut config_witness = CliConfig::recent_for_tests();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
     config_witness.signers = vec![&default_signer1];
 
@@ -249,17 +250,17 @@ fn test_cli_cancel_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, &process_id); // contract balance
-    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(10, &rpc_client, &process_id); // contract balance
+    check_recent_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_payer.command = CliCommand::Cancel(process_id);
     process_command(&config_payer).unwrap();
 
-    check_balance(50, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, &process_id); // contract balance
-    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
+    check_recent_balance(50, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
+    check_recent_balance(0, &rpc_client, &process_id); // contract balance
+    check_recent_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -284,11 +285,11 @@ fn test_offline_pay_tx() {
     let default_signer = Keypair::new();
     let default_offline_signer = Keypair::new();
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_offline.signers = vec![&default_offline_signer];
-    let mut config_online = CliConfig::default();
+    let mut config_online = CliConfig::recent_for_tests();
     config_online.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_online.signers = vec![&default_signer];
@@ -314,8 +315,8 @@ fn test_offline_pay_tx() {
         &config_offline,
     )
     .unwrap();
-    check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
-    check_balance(50, &rpc_client, &config_online.signers[0].pubkey());
+    check_recent_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
+    check_recent_balance(50, &rpc_client, &config_online.signers[0].pubkey());
 
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::Pay(PayCommand {
@@ -328,9 +329,9 @@ fn test_offline_pay_tx() {
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
 
-    check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
-    check_balance(50, &rpc_client, &config_online.signers[0].pubkey());
-    check_balance(0, &rpc_client, &bob_pubkey);
+    check_recent_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
+    check_recent_balance(50, &rpc_client, &config_online.signers[0].pubkey());
+    check_recent_balance(0, &rpc_client, &bob_pubkey);
 
     let sign_only = parse_sign_only_reply_string(&sig_response);
     assert!(sign_only.has_all_signers());
@@ -347,9 +348,9 @@ fn test_offline_pay_tx() {
     });
     process_command(&config_online).unwrap();
 
-    check_balance(40, &rpc_client, &config_offline.signers[0].pubkey());
-    check_balance(50, &rpc_client, &online_pubkey);
-    check_balance(10, &rpc_client, &bob_pubkey);
+    check_recent_balance(40, &rpc_client, &config_offline.signers[0].pubkey());
+    check_recent_balance(50, &rpc_client, &online_pubkey);
+    check_recent_balance(10, &rpc_client, &bob_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -373,7 +374,7 @@ fn test_nonced_pay_tx() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let default_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -389,7 +390,7 @@ fn test_nonced_pay_tx() {
         &config,
     )
     .unwrap();
-    check_balance(
+    check_recent_balance(
         50 + minimum_nonce_balance,
         &rpc_client,
         &config.signers[0].pubkey(),
@@ -406,14 +407,18 @@ fn test_nonced_pay_tx() {
     config.signers.push(&nonce_account);
     process_command(&config).unwrap();
 
-    check_balance(50, &rpc_client, &config.signers[0].pubkey());
-    check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
+    check_recent_balance(50, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     let bob_pubkey = Pubkey::new_rand();
     config.signers = vec![&default_signer];
@@ -429,14 +434,18 @@ fn test_nonced_pay_tx() {
     });
     process_command(&config).expect("failed to process pay command");
 
-    check_balance(40, &rpc_client, &config.signers[0].pubkey());
-    check_balance(10, &rpc_client, &bob_pubkey);
+    check_recent_balance(40, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(10, &rpc_client, &bob_pubkey);
 
     // Verify that nonce has been used
-    let nonce_hash2 = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash2 = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
     assert_ne!(nonce_hash, nonce_hash2);
 
     server.close().unwrap();

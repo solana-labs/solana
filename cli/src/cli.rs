@@ -1497,12 +1497,20 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             if let Some(nonce_account) = &nonce_account {
-                let nonce_account = rpc_client.get_account(nonce_account)?;
+                let nonce_account = nonce::get_account_with_commitment(
+                    rpc_client,
+                    nonce_account,
+                    config.commitment,
+                )?;
                 check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
             }
 
             tx.try_sign(&config.signers, blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             log_instruction_custom_error::<SystemError>(result, &config)
         }
     } else if *witnesses == None {
@@ -1542,7 +1550,11 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
             Ok(json!({
                 "signature": signature,
@@ -1589,7 +1601,11 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
             Ok(json!({
                 "signature": signature,
@@ -1603,7 +1619,9 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let ix = budget_instruction::apply_signature(
         &config.signers[0].pubkey(),
         pubkey,
@@ -1618,7 +1636,11 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
@@ -1629,7 +1651,9 @@ fn process_time_elapsed(
     pubkey: &Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let ix = budget_instruction::apply_timestamp(&config.signers[0].pubkey(), pubkey, to, dt);
     let message = Message::new(&[ix]);
@@ -1641,7 +1665,11 @@ fn process_time_elapsed(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
@@ -1724,7 +1752,9 @@ fn process_witness(
     to: &Pubkey,
     pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+        .value;
 
     let ix = budget_instruction::apply_signature(&config.signers[0].pubkey(), pubkey, to);
     let message = Message::new(&[ix]);
@@ -1736,7 +1766,11 @@ fn process_witness(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
