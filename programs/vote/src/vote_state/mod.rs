@@ -32,10 +32,6 @@ pub const INITIAL_LOCKOUT: usize = 2;
 //  smaller numbers makes
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
-// Frequency of timestamp Votes. In v0.22.0, this is approximately 30min with cluster clock
-// defaults, intended to limit block time drift to < 1hr
-pub const TIMESTAMP_SLOT_INTERVAL: u64 = 4500;
-
 #[frozen_abi(digest = "69hYtmmcuqPbhpc64ZaNJDidaUcg66CW6wzPFiuYZ3To")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {

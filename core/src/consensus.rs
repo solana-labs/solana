@@ -13,9 +13,7 @@ use solana_sdk::{
 };
 use solana_vote_program::{
     vote_instruction,
-    vote_state::{
-        BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
-    },
+    vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -345,6 +343,22 @@ impl Tower {
         last_vote
     }
 
+    fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
+        if current_slot > self.last_timestamp.slot {
+            let mut timestamp = Utc::now().timestamp();
+            if timestamp <= self.last_timestamp.timestamp {
+                timestamp = self.last_timestamp.timestamp + 1;
+            }
+            self.last_timestamp = BlockTimestamp {
+                slot: current_slot,
+                timestamp,
+            };
+            Some(timestamp)
+        } else {
+            None
+        }
+    }
+
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
     }
@@ -648,21 +662,6 @@ impl Tower {
                 vote_account_pubkey,
                 heaviest_bank.slot()
             );
-        }
-    }
-
-    fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
-        if self.last_timestamp.slot == 0
-            || self.last_timestamp.slot < (current_slot - (current_slot % TIMESTAMP_SLOT_INTERVAL))
-        {
-            let timestamp = Utc::now().timestamp();
-            self.last_timestamp = BlockTimestamp {
-                slot: current_slot,
-                timestamp,
-            };
-            Some(timestamp)
-        } else {
-            None
         }
     }
 }
@@ -1829,17 +1828,20 @@ pub mod test {
     #[test]
     fn test_maybe_timestamp() {
         let mut tower = Tower::default();
-        assert!(tower.maybe_timestamp(TIMESTAMP_SLOT_INTERVAL).is_some());
+        assert!(tower.maybe_timestamp(0).is_none());
+        assert!(tower.maybe_timestamp(1).is_some());
+        assert_eq!(tower.maybe_timestamp(1), None); // Refuse to timestamp an older slot
+        assert!(tower.maybe_timestamp(100).is_some());
+
         let BlockTimestamp { slot, timestamp } = tower.last_timestamp;
-
-        assert_eq!(tower.maybe_timestamp(1), None);
-        assert_eq!(tower.maybe_timestamp(slot), None);
-        assert_eq!(tower.maybe_timestamp(slot + 1), None);
-
-        sleep(Duration::from_secs(1));
-        assert!(tower
-            .maybe_timestamp(slot + TIMESTAMP_SLOT_INTERVAL + 1)
-            .is_some());
+        assert!(tower.maybe_timestamp(slot + 1).is_some());
         assert!(tower.last_timestamp.timestamp > timestamp);
+
+        // Ensure that timestamp increases by 1 if two slots are timestamped at the
+        // same `Utc::now().timestamp()` value
+        tower.last_timestamp.timestamp += 1_000_000;
+        let future_timestamp = tower.last_timestamp.timestamp;
+        assert!(tower.maybe_timestamp(slot + 2).is_some());
+        assert_eq!(tower.last_timestamp.timestamp, future_timestamp + 1);
     }
 }
