@@ -472,19 +472,25 @@ pub fn process_create_vote_account(
         Message::new(&ixs)
     };
 
-    if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
-        let err_msg = if vote_account.owner == solana_vote_program::id() {
-            format!("Vote account {} already exists", vote_account_address)
-        } else {
-            format!(
-                "Account {} already exists and is not a vote account",
-                vote_account_address
-            )
-        };
-        return Err(CliError::BadParameter(err_msg).into());
+    if let Ok(response) =
+        rpc_client.get_account_with_commitment(&vote_account_address, config.commitment)
+    {
+        if let Some(vote_account) = response.value {
+            let err_msg = if vote_account.owner == solana_vote_program::id() {
+                format!("Vote account {} already exists", vote_account_address)
+            } else {
+                format!(
+                    "Account {} already exists and is not a vote account",
+                    vote_account_address
+                )
+            };
+            return Err(CliError::BadParameter(err_msg).into());
+        }
     }
 
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
@@ -497,7 +503,11 @@ pub fn process_create_vote_account(
     )?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -520,7 +530,9 @@ pub fn process_vote_authorize(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let ixs = vec![vote_instruction::authorize(
         vote_account_pubkey,   // vote account to update
         &authorized.pubkey(),  // current authorized
@@ -537,7 +549,11 @@ pub fn process_vote_authorize(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -554,7 +570,9 @@ pub fn process_vote_update_validator(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -570,7 +588,11 @@ pub fn process_vote_update_validator(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -581,7 +603,9 @@ pub fn process_vote_update_commission(
     commission: u8,
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[1];
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -597,7 +621,11 @@ pub fn process_vote_update_commission(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -682,10 +710,14 @@ pub fn process_withdraw_from_vote_account(
     withdraw_amount: SpendAmount,
     destination_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let withdraw_authority = config.signers[withdraw_authority];
 
-    let current_balance = rpc_client.get_balance(&vote_account_pubkey)?;
+    let current_balance = rpc_client
+        .get_balance_with_commitment(&vote_account_pubkey, config.commitment)?
+        .value;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
 
     let lamports = match withdraw_amount {
@@ -717,7 +749,11 @@ pub fn process_withdraw_from_vote_account(
         &fee_calculator,
         &transaction.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &transaction,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 

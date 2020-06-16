@@ -2,13 +2,14 @@ use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::SpendAmount,
-    test_utils::check_balance,
+    test_utils::check_recent_balance,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
+    commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -31,7 +32,7 @@ fn test_vote_authorize_and_withdraw() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let default_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -57,7 +58,9 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
-        .get_account(&vote_account_keypair.pubkey())
+        .get_account_with_commitment(&vote_account_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
         .unwrap();
     let vote_state: VoteStateVersions = vote_account.state().unwrap();
     let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;
@@ -66,7 +69,7 @@ fn test_vote_authorize_and_withdraw() {
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())
         .unwrap()
         .max(1);
-    check_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Transfer in some more SOL
     config.signers = vec![&default_signer];
@@ -83,7 +86,7 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
     let expected_balance = expected_balance + 1_000;
-    check_balance(expected_balance, &rpc_client, &vote_account_pubkey);
+    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Authorize vote account withdrawal to another signer
     let withdraw_authority = Keypair::new();
@@ -95,7 +98,9 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
-        .get_account(&vote_account_keypair.pubkey())
+        .get_account_with_commitment(&vote_account_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
         .unwrap();
     let vote_state: VoteStateVersions = vote_account.state().unwrap();
     let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;
@@ -111,8 +116,8 @@ fn test_vote_authorize_and_withdraw() {
         destination_account_pubkey: destination_account,
     };
     process_command(&config).unwrap();
-    check_balance(expected_balance - 100, &rpc_client, &vote_account_pubkey);
-    check_balance(100, &rpc_client, &destination_account);
+    check_recent_balance(expected_balance - 100, &rpc_client, &vote_account_pubkey);
+    check_recent_balance(100, &rpc_client, &destination_account);
 
     // Re-assign validator identity
     let new_identity_keypair = Keypair::new();
