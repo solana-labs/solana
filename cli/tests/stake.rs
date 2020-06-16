@@ -1,4 +1,3 @@
-use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
@@ -8,12 +7,14 @@ use solana_cli::{
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
+    test_utils::{check_ready, check_recent_balance},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
+    commitment_config::CommitmentConfig,
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
@@ -40,7 +41,7 @@ fn test_stake_delegation_force() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let default_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -136,7 +137,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let mut config_validator = CliConfig::default();
+    let mut config_validator = CliConfig::recent_for_tests();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_validator.signers = vec![&validator_keypair];
@@ -149,7 +150,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         &config_validator,
     )
     .unwrap();
-    check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_recent_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
 
     let stake_address = Pubkey::create_with_seed(
         &config_validator.signers[0].pubkey(),
@@ -181,7 +182,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_address,
         vote_account_pubkey: vote_pubkey,
         stake_authority: 0,
-        force: false,
+        force: true,
         sign_only: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -225,7 +226,7 @@ fn test_stake_delegation_and_deactivation() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let validator_keypair = Keypair::new();
 
-    let mut config_validator = CliConfig::default();
+    let mut config_validator = CliConfig::recent_for_tests();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config_validator.signers = vec![&validator_keypair];
@@ -240,7 +241,7 @@ fn test_stake_delegation_and_deactivation() {
         &config_validator,
     )
     .unwrap();
-    check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_recent_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
 
     // Create stake account
     config_validator.signers.push(&stake_keypair);
@@ -266,7 +267,7 @@ fn test_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_pubkey,
         stake_authority: 0,
-        force: false,
+        force: true,
         sign_only: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -309,19 +310,19 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config_validator = CliConfig::default();
+    let mut config_validator = CliConfig::recent_for_tests();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     let validator_keypair = Keypair::new();
     config_validator.signers = vec![&validator_keypair];
 
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url = String::default();
     config_offline.command = CliCommand::ClusterVersion;
     let offline_keypair = Keypair::new();
@@ -337,7 +338,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         &config_offline,
     )
     .unwrap();
-    check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_recent_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -347,7 +348,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         &config_validator,
     )
     .unwrap();
-    check_balance(100_000, &rpc_client, &config_offline.signers[0].pubkey());
+    check_recent_balance(100_000, &rpc_client, &config_offline.signers[0].pubkey());
 
     // Create stake account
     config_validator.signers.push(&stake_keypair);
@@ -373,7 +374,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_pubkey,
         stake_authority: 0,
-        force: false,
+        force: true,
         sign_only: true,
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
@@ -392,7 +393,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_pubkey,
         stake_authority: 0,
-        force: false,
+        force: true,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
@@ -453,7 +454,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.signers = vec![&config_keypair];
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
@@ -501,10 +502,14 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Delegate stake
     config.signers = vec![&config_keypair];
@@ -512,7 +517,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_pubkey,
         stake_authority: 0,
-        force: false,
+        force: true,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
@@ -525,10 +530,14 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Deactivate stake
     config.command = CliCommand::DeactivateStake {
@@ -567,7 +576,7 @@ fn test_stake_authorize() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let default_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -581,7 +590,7 @@ fn test_stake_authorize() {
     .unwrap();
 
     let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     config_offline.signers = vec![&offline_keypair];
     config_offline.json_rpc_url = String::default();
     let offline_authority_pubkey = config_offline.signers[0].pubkey();
@@ -632,7 +641,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -659,7 +672,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let (current_staker, current_withdrawer) = match stake_state {
         StakeState::Initialized(meta) => (meta.authorized.staker, meta.authorized.withdrawer),
@@ -681,7 +698,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -692,7 +713,10 @@ fn test_stake_authorize() {
     // Offline assignment of new nonced stake authority
     let nonced_authority = Keypair::new();
     let nonced_authority_pubkey = nonced_authority.pubkey();
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+        .unwrap()
+        .value;
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
@@ -718,7 +742,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -741,10 +769,14 @@ fn test_stake_authorize() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Nonced assignment of new online stake authority
     let online_authority = Keypair::new();
@@ -779,7 +811,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -787,10 +823,14 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
-    let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let new_nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
 
     server.close().unwrap();
@@ -821,18 +861,18 @@ fn test_stake_authorize_with_fee_payer() {
     let default_signer = Keypair::new();
     let default_pubkey = default_signer.pubkey();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
     let payer_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.signers = vec![&payer_keypair];
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     let payer_pubkey = config_payer.signers[0].pubkey();
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     let offline_signer = Keypair::new();
     config_offline.signers = vec![&offline_signer];
     config_offline.json_rpc_url = String::new();
@@ -843,15 +883,17 @@ fn test_stake_authorize_with_fee_payer() {
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &default_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(100_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &payer_pubkey);
+    check_recent_balance(100_000, &rpc_client, &payer_pubkey);
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &offline_pubkey);
+    check_recent_balance(100_000, &rpc_client, &offline_pubkey);
+
+    check_ready(&rpc_client);
 
     // Create stake account, identity is authority
     let stake_keypair = Keypair::new();
@@ -873,7 +915,7 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config` balance should be 50,000 - 1 stake account sig - 1 fee sig
-    check_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_recent_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
 
     // Assign authority with separate fee payer
     config.signers = vec![&default_signer, &payer_keypair];
@@ -888,13 +930,16 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
-    check_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_recent_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
     // `config_payer` however has paid `config`'s authority sig
     // and `config_payer`'s fee sig
-    check_balance(100_000 - SIG_FEE - SIG_FEE, &rpc_client, &payer_pubkey);
+    check_recent_balance(100_000 - SIG_FEE - SIG_FEE, &rpc_client, &payer_pubkey);
 
     // Assign authority with offline fee payer
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+        .unwrap()
+        .value;
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
@@ -921,10 +966,10 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
-    check_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
+    check_recent_balance(50_000 - SIG_FEE - SIG_FEE, &rpc_client, &default_pubkey);
     // `config_offline` however has paid 1 sig due to being both authority
     // and fee payer
-    check_balance(100_000 - SIG_FEE, &rpc_client, &offline_pubkey);
+    check_recent_balance(100_000 - SIG_FEE, &rpc_client, &offline_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -953,11 +998,11 @@ fn test_stake_split() {
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url = String::default();
     config_offline.signers = vec![&offline_signer];
     let offline_pubkey = config_offline.signers[0].pubkey();
@@ -973,11 +1018,11 @@ fn test_stake_split() {
         &config,
     )
     .unwrap();
-    check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &offline_pubkey);
+    check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
@@ -1001,7 +1046,7 @@ fn test_stake_split() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance(
+    check_recent_balance(
         10 * minimum_stake_balance,
         &rpc_client,
         &stake_account_pubkey,
@@ -1020,17 +1065,21 @@ fn test_stake_split() {
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
-    check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
+    check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Nonced offline split
     let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
-    check_balance(0, &rpc_client, &split_account.pubkey());
+    check_recent_balance(0, &rpc_client, &split_account.pubkey());
     config_offline.signers.push(&split_account);
     config_offline.command = CliCommand::SplitStake {
         stake_account_pubkey,
@@ -1066,12 +1115,12 @@ fn test_stake_split() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(
+    check_recent_balance(
         8 * minimum_stake_balance,
         &rpc_client,
         &stake_account_pubkey,
     );
-    check_balance(
+    check_recent_balance(
         2 * minimum_stake_balance,
         &rpc_client,
         &split_account.pubkey(),
@@ -1104,11 +1153,11 @@ fn test_stake_set_lockup() {
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     config_offline.json_rpc_url = String::default();
     config_offline.signers = vec![&offline_signer];
     let offline_pubkey = config_offline.signers[0].pubkey();
@@ -1124,11 +1173,11 @@ fn test_stake_set_lockup() {
         &config,
     )
     .unwrap();
-    check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &offline_pubkey);
+    check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
@@ -1157,7 +1206,7 @@ fn test_stake_set_lockup() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance(
+    check_recent_balance(
         10 * minimum_stake_balance,
         &rpc_client,
         &stake_account_pubkey,
@@ -1181,7 +1230,11 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1232,7 +1285,11 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1277,13 +1334,17 @@ fn test_stake_set_lockup() {
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
-    check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
+    check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Nonced offline set lockup
     let lockup = LockupArgs {
@@ -1321,7 +1382,11 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account = rpc_client
+        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1355,12 +1420,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     let default_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     config.signers = vec![&default_signer];
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_offline = CliConfig::default();
+    let mut config_offline = CliConfig::recent_for_tests();
     let offline_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     config_offline.signers = vec![&offline_signer];
     let offline_pubkey = config_offline.signers[0].pubkey();
@@ -1377,11 +1442,11 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         &config,
     )
     .unwrap();
-    check_balance(200_000, &rpc_client, &config.signers[0].pubkey());
+    check_recent_balance(200_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config)
         .unwrap();
-    check_balance(100_000, &rpc_client, &offline_pubkey);
+    check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create nonce account
     let minimum_nonce_balance = rpc_client
@@ -1399,10 +1464,14 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Create stake account offline
     let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap();
@@ -1447,13 +1516,17 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance(50_000, &rpc_client, &stake_pubkey);
+    check_recent_balance(50_000, &rpc_client, &stake_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Offline, nonced stake-withdraw
     let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
@@ -1491,13 +1564,17 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(42, &rpc_client, &recipient_pubkey);
+    check_recent_balance(42, &rpc_client, &recipient_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Create another stake account. This time with seed
     let seed = "seedy";
@@ -1541,7 +1618,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
     let seed_address =
         Pubkey::create_with_seed(&stake_pubkey, seed, &solana_stake_program::id()).unwrap();
-    check_balance(50_000, &rpc_client, &seed_address);
+    check_recent_balance(50_000, &rpc_client, &seed_address);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
