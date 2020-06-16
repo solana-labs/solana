@@ -128,7 +128,7 @@ impl RepairService {
         Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();
-        let mut duplicate_slot_repair_statuses = HashMap::new();
+        let duplicate_slot_repair_statuses = HashMap::new();
         Self::initialize_epoch_slots(
             blockstore,
             &cluster_info,
@@ -146,7 +146,7 @@ impl RepairService {
                 Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                 Self::update_completed_slots(&repair_info.completed_slots_receiver, &cluster_info);
                 cluster_slots.update(new_root, &cluster_info, &repair_info.bank_forks);
-                let new_duplicate_slots = Self::find_new_duplicate_slots(
+                /*let new_duplicate_slots = Self::find_new_duplicate_slots(
                     &duplicate_slot_repair_statuses,
                     blockstore,
                     cluster_slots,
@@ -168,7 +168,7 @@ impl RepairService {
                     &serve_repair,
                     &mut repair_stats,
                     &repair_socket,
-                );
+                );*/
                 Self::generate_repairs(
                     blockstore,
                     root_bank.slot(),
@@ -274,6 +274,7 @@ impl RepairService {
         Ok(repairs)
     }
 
+    #[allow(dead_code)]
     fn generate_duplicate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -298,6 +299,7 @@ impl RepairService {
         }
     }
 
+    #[allow(dead_code)]
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -334,6 +336,7 @@ impl RepairService {
         })
     }
 
+    #[allow(dead_code)]
     fn serialize_and_send_request(
         repair_type: &RepairType,
         repair_socket: &UdpSocket,
@@ -347,6 +350,7 @@ impl RepairService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn update_duplicate_slot_repair_addr(
         slot: Slot,
         status: &mut DuplicateSlotRepairStatus,
@@ -364,6 +368,7 @@ impl RepairService {
         }
     }
 
+    #[allow(dead_code)]
     fn process_new_duplicate_slots(
         new_duplicate_slots: &[Slot],
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
@@ -407,6 +412,7 @@ impl RepairService {
         }
     }
 
+    #[allow(dead_code)]
     fn find_new_duplicate_slots(
         duplicate_slot_repair_statuses: &HashMap<Slot, DuplicateSlotRepairStatus>,
         blockstore: &Blockstore,
