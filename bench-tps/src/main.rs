@@ -115,7 +115,7 @@ fn main() {
         // Sort keypairs so that do_bench_tps() uses the same subset of accounts for each run.
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
-        keypairs.sort_by(|x, y| x.pubkey().to_string().cmp(&y.pubkey().to_string()));
+        keypairs.sort_by_key(|x| x.pubkey().to_string());
         (keypairs, None)
     } else {
         generate_and_fund_keypairs(
