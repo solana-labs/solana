@@ -209,8 +209,8 @@ pull_or_push_steps() {
     all_test_steps
   fi
 
-  # doc/ changes:
-  if affects ^docs/; then
+  # doc/ and dockerized mdbook version changes:
+  if affects ^docs/ ^ci/docker-rust-nightly/Dockerfile; then
     command_step docs ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image docs/build.sh" 5
   fi
 
