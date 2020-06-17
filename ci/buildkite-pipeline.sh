@@ -42,7 +42,8 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  for pattern in "$@"; do
+  # Assume everyting needs to be tested when any Dockerfile changes
+  for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
         if [[ ! $file =~ ${pattern:1} ]]; then
@@ -210,8 +211,8 @@ pull_or_push_steps() {
     all_test_steps
   fi
 
-  # doc/ and dockerized mdbook version changes:
-  if affects ^docs/ ^ci/docker-rust-nightly/Dockerfile; then
+  # doc/ changes:
+  if affects ^docs/; then
     command_step docs ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image docs/build.sh" 5
   fi
 
