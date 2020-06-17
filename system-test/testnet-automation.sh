@@ -124,11 +124,16 @@ function launch_testnet() {
   declare -g version_args
   get_net_launch_software_version_launch_args "$CHANNEL" "solana-release" version_args
 
+  declare maybeWarpSlot
+  if [[ -n "$WARP_SLOT" ]]; then
+    maybeWarpSlot="--warp-slot $WARP_SLOT"
+  fi
+
   # shellcheck disable=SC2068
   # shellcheck disable=SC2086
   "${REPO_ROOT}"/net/net.sh start $version_args \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-    --gpu-mode $startGpuMode
+    --gpu-mode $startGpuMode $maybeWarpSlot
 
   execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
   wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
