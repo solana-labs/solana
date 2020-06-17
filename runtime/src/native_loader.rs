@@ -6,10 +6,10 @@ use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{next_keyed_account, KeyedAccount},
+    decode_error::DecodeError,
     entrypoint_native::{InvokeContext, LoaderEntrypoint, ProgramEntrypoint},
     instruction::InstructionError,
-    program_utils::{next_keyed_account, DecodeError},
     pubkey::Pubkey,
 };
 use std::{collections::HashMap, env, path::PathBuf, str, sync::RwLock};

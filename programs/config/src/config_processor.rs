@@ -3,9 +3,9 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::{next_keyed_account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::program_utils::{limited_deserialize, next_keyed_account};
+use solana_sdk::program_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
