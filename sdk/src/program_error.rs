@@ -1,4 +1,4 @@
-use crate::{instruction::InstructionError, program_utils::DecodeError};
+use crate::{decode_error::DecodeError, instruction::InstructionError};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
 use thiserror::Error;

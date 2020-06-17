@@ -1,7 +1,11 @@
 use crate::{
+<<<<<<< HEAD
     instruction::{AccountMeta, Instruction, WithSigner},
+=======
+    decode_error::DecodeError,
+    instruction::{AccountMeta, Instruction},
+>>>>>>> dac7dc2f1... Move types to more appropriate files (#10638)
     nonce,
-    program_utils::DecodeError,
     pubkey::Pubkey,
     system_program,
     sysvar::{recent_blockhashes, rent},

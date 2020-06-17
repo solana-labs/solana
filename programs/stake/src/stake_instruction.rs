@@ -6,10 +6,16 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{get_signers, KeyedAccount},
+    account::{get_signers, next_keyed_account, KeyedAccount},
     clock::{Epoch, UnixTimestamp},
+<<<<<<< HEAD
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
+=======
+    decode_error::DecodeError,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    program_utils::limited_deserialize,
+>>>>>>> dac7dc2f1... Move types to more appropriate files (#10638)
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},

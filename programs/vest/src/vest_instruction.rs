@@ -4,8 +4,8 @@ use chrono::prelude::{Date, DateTime, Utc};
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
+    decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError},
-    program_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
 };

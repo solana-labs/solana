@@ -3,9 +3,9 @@
 use crate::ownable_instruction::OwnableError;
 use bincode::serialize_into;
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{next_keyed_account, KeyedAccount},
     instruction::InstructionError,
-    program_utils::{limited_deserialize, next_keyed_account},
+    program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
 
