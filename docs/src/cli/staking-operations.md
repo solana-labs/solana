@@ -1,7 +1,8 @@
 # Staking Operations
 This page describes the workflow and commands needed to create and manage stake
 accounts, and to delegate your stake accounts to a validator using the Solana
-command-line tools.
+command-line tools.  The [stake accounts](../staking/stake-accounts.md)
+document provides an overview of stake account features and concepts.
 
 ## Create a Stake Account
 To delegate stake, you will need to transfer some tokens into a stake account.
