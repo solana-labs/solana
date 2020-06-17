@@ -25,6 +25,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
+    get_tmp_ledger_path,
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank, log_collector::LogCollector};
@@ -49,7 +50,10 @@ use std::{
     net::SocketAddr,
     rc::Rc,
     str::FromStr,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
 };
 
 fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
@@ -148,6 +152,41 @@ impl JsonRpcRequestProcessor {
             cluster_info,
             genesis_hash,
             send_transaction_service,
+        }
+    }
+
+    // Useful for unit testing
+    pub fn new_from_bank(bank: &Arc<Bank>) -> Self {
+        let genesis_hash = bank.hash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            bank.slot(),
+        )));
+        let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
+        let exit = Arc::new(AtomicBool::new(false));
+        let cluster_info = Arc::new(ClusterInfo::default());
+        Self {
+            config: JsonRpcConfig::default(),
+            bank_forks: bank_forks.clone(),
+            block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
+                HashMap::new(),
+                0,
+                0,
+                bank.clone(),
+                blockstore.clone(),
+                0,
+                0,
+            ))),
+            blockstore,
+            validator_exit: create_validator_exit(&exit),
+            health: Arc::new(RpcHealth::new(cluster_info.clone(), None, 0, exit.clone())),
+            cluster_info: cluster_info.clone(),
+            genesis_hash,
+            send_transaction_service: Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
         }
     }
 
@@ -1559,6 +1598,13 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
         .map(|transaction| (wire_transaction, transaction))
 }
 
+pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+    let mut validator_exit = ValidatorExit::default();
+    let exit_ = exit.clone();
+    validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+    Arc::new(RwLock::new(Some(validator_exit)))
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -1577,7 +1623,6 @@ pub mod tests {
         blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
     };
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
@@ -1595,11 +1640,7 @@ pub mod tests {
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
-    use std::{
-        collections::HashMap,
-        sync::atomic::{AtomicBool, Ordering},
-        thread,
-    };
+    use std::collections::HashMap;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
@@ -1775,49 +1816,27 @@ pub mod tests {
     #[test]
     fn test_rpc_request_processor_new() {
         let bob_pubkey = Pubkey::new_rand();
-        let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
-        let (bank_forks, alice, _) = new_bank_forks();
-        let bank = bank_forks.read().unwrap().working_bank();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
-        let request_processor = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
-            bank_forks.clone(),
-            block_commitment_cache,
-            blockstore,
-            validator_exit,
-            RpcHealth::stub(),
-            Arc::new(ClusterInfo::default()),
-            Hash::default(),
-            Arc::new(SendTransactionService::new(
-                &cluster_info,
-                &bank_forks,
-                &exit,
-            )),
-        );
-        thread::spawn(move || {
-            let blockhash = bank.confirmed_last_blockhash().0;
-            let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
-            bank.process_transaction(&tx).expect("process transaction");
-        })
-        .join()
-        .unwrap();
+        let genesis = create_genesis_config(100);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        let request_processor = JsonRpcRequestProcessor::new_from_bank(&bank);
         assert_eq!(request_processor.get_transaction_count(None).unwrap(), 1);
     }
 
     #[test]
     fn test_rpc_get_balance() {
-        let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let genesis = create_genesis_config(20);
+        let mint_pubkey = genesis.mint_keypair.pubkey();
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(RpcSolImpl.to_delegate());
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
-            bob_pubkey
+            mint_pubkey
         );
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
@@ -1835,16 +1854,23 @@ pub mod tests {
 
     #[test]
     fn test_rpc_get_balance_via_client() {
-        let bob_pubkey = Pubkey::new_rand();
-        let handler = start_rpc_handler_with_tx(&bob_pubkey);
+        let genesis = create_genesis_config(20);
+        let mint_pubkey = genesis.mint_keypair.pubkey();
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(RpcSolImpl.to_delegate());
+
         let fut = {
             let (client, server) =
-                local::connect_with_metadata::<gen_client::Client, _, _>(&handler.io, handler.meta);
+                local::connect_with_metadata::<gen_client::Client, _, _>(&io, meta);
             client
-                .get_balance(bob_pubkey.to_string(), None)
+                .get_balance(mint_pubkey.to_string(), None)
                 .join(server)
         };
-        assert_eq!(20, fut.wait().unwrap().0.value);
+        let (response, _) = fut.wait().unwrap();
+        assert_eq!(response.value, 20);
     }
 
     #[test]
@@ -1897,7 +1923,22 @@ pub mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let genesis = create_genesis_config(10);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        // Add 4 transactions
+        bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(2, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(3, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+        bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
+            .unwrap();
+
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(RpcSolImpl.to_delegate());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}"#;
         let res = io.handle_request_sync(&req, meta);
@@ -2915,15 +2956,6 @@ pub mod tests {
             mint_keypair,
             voting_keypair,
         )
-    }
-
-    pub(crate) fn create_validator_exit(
-        exit: &Arc<AtomicBool>,
-    ) -> Arc<RwLock<Option<ValidatorExit>>> {
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        Arc::new(RwLock::new(Some(validator_exit)))
     }
 
     #[test]
