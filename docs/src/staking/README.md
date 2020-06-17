@@ -12,7 +12,7 @@ proportional to how many tokens they have staked.
 *Note: Network rewards for stakers and validators are not presently enabled.
 It is the decision of the Solana Foundation if/when to enable such rewards.*
 
-Staking helps secure the Solana network. The more tokens that are staked makes
+Staking helps secure the Solana network. More staked tokens make
 the network less susceptible to censorship and certain kinds of attacks.
 
 ## How do I stake my SOL tokens?

@@ -5,7 +5,7 @@ This page describes the details and permissions associated with a stake account.
 Each stake account has a unique address which can be used to look up the account
 information in the command line or in any network explorer tools.  However,
 unlike a wallet address in which the holder of the address's keypair controls
-the wallet, the keypair associated with a stake account address does not have
+the wallet, the keypair associated with a stake account address does not necessarily have
 any control over the account.  In fact, a keypair or private key may not even
 exist for a stake account's address.
 
@@ -58,8 +58,8 @@ with token balances of your choosing.
 The same stake and withdraw authorities can be assigned to multiple
 stake accounts.
 
-Two stake accounts that are not delegated and that have the same stake and
-withdraw authority can be merged into a single resulting stake account.
+Two stake accounts that are not delegated and that have the same authorities
+and lockup can be merged into a single resulting stake account.
 
 #### Delegation Warmup and Cooldown
 When a stake account is delegated, or a delegation is deactivated, the operation
@@ -74,15 +74,15 @@ deactivated in a single epoch, to prevent large sudden changes in stake across
 the network as a whole.
 
 #### Lockups
-Stake accounts can have a lockup which prevents the withdraw authority on that
-account from withdrawing the tokens before a particular date or epoch has been
+Stake accounts can have a lockup which prevents the tokens they hold from being
+withdrawn before a particular date or epoch has been
 reached.  While locked up, the stake account can still be delegated, un-delegated,
 or split, and its stake and withdraw authorities can be changed as normal.  Only
 withdrawal into a wallet address is not allowed.
 
 A lockup can only be added when a stake account is first created, but it can be
 modified later, by the *lockup authority* or *custodian*, the address of which
-is set when the account is created.
+is also set when the account is created.
 
 #### Destroying a Stake Account
 Like other types of accounts on the Solana network, a stake account that has a
