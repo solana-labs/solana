@@ -172,7 +172,11 @@ impl Validator {
 
         info!("entrypoint: {:?}", entrypoint_info_option);
 
-        info!("Initializing sigverify, this could take a while...");
+        if solana_perf::perf_libs::api().is_some() {
+            info!("Initializing sigverify, this could take a while...");
+        } else {
+            info!("Initializing sigverify...");
+        }
         sigverify::init();
         info!("Done.");
 

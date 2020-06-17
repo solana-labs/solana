@@ -1053,6 +1053,8 @@ pub fn main() {
         enable_recycler_warming();
     }
 
+    solana_ledger::entry::init_poh();
+
     let entrypoint_addr = matches.value_of("entrypoint").map(|entrypoint| {
         solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);

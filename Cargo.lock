@@ -4198,6 +4198,8 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "dir-diff",
+ "dlopen",
+ "dlopen_derive",
  "ed25519-dalek",
  "flate2",
  "fs_extra",
