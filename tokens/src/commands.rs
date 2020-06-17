@@ -96,7 +96,7 @@ fn distribute_tokens(
     client: &ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
-    args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
+    args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     for allocation in allocations {
         let new_stake_account_keypair = Keypair::new();
@@ -208,7 +208,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
 
 pub fn process_distribute_tokens(
     client: &ThinClient,
-    args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
+    args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
@@ -435,7 +435,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         .unwrap()
         .to_string();
 
-    let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
+    let args = DistributeTokensArgs {
         sender_keypair: Box::new(sender_keypair),
         fee_payer: Box::new(fee_payer),
         dry_run: false,
@@ -531,13 +531,13 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         .unwrap()
         .to_string();
 
-    let stake_args: StakeArgs<Pubkey, Box<dyn Signer>> = StakeArgs {
+    let stake_args = StakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         sol_for_fees: 1.0,
     };
-    let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
+    let args = DistributeTokensArgs {
         fee_payer: Box::new(fee_payer),
         dry_run: false,
         input_csv,
