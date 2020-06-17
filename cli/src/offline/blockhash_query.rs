@@ -1,4 +1,5 @@
 use super::*;
+use solana_sdk::commitment_config::CommitmentConfig;
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
@@ -10,14 +11,17 @@ impl Source {
     pub fn get_blockhash_and_fee_calculator(
         &self,
         rpc_client: &RpcClient,
+        commitment: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
         match self {
             Self::Cluster => {
-                let res = rpc_client.get_recent_blockhash()?;
-                Ok(res)
+                let res = rpc_client
+                    .get_recent_blockhash_with_commitment(commitment)?
+                    .value;
+                Ok((res.0, res.1))
             }
             Self::NonceAccount(ref pubkey) => {
-                let data = nonce::get_account(rpc_client, pubkey)
+                let data = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .and_then(|ref a| nonce::data_from_account(a))?;
                 Ok((data.blockhash, data.fee_calculator))
             }
@@ -28,14 +32,17 @@ impl Source {
         &self,
         rpc_client: &RpcClient,
         blockhash: &Hash,
+        commitment: CommitmentConfig,
     ) -> Result<Option<FeeCalculator>, Box<dyn std::error::Error>> {
         match self {
             Self::Cluster => {
-                let res = rpc_client.get_fee_calculator_for_blockhash(blockhash)?;
+                let res = rpc_client
+                    .get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)?
+                    .value;
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
-                let res = nonce::get_account(rpc_client, pubkey)?;
+                let res = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)?;
                 let res = nonce::data_from_account(&res)?;
                 Ok(Some(res)
                     .filter(|d| d.blockhash == *blockhash)
@@ -75,16 +82,19 @@ impl BlockhashQuery {
     pub fn get_blockhash_and_fee_calculator(
         &self,
         rpc_client: &RpcClient,
+        commitment: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
         match self {
             BlockhashQuery::None(hash) => Ok((*hash, FeeCalculator::default())),
             BlockhashQuery::FeeCalculator(source, hash) => {
                 let fee_calculator = source
-                    .get_fee_calculator(rpc_client, hash)?
+                    .get_fee_calculator(rpc_client, hash, commitment)?
                     .ok_or(format!("Hash has expired {:?}", hash))?;
                 Ok((*hash, fee_calculator))
             }
-            BlockhashQuery::All(source) => source.get_blockhash_and_fee_calculator(rpc_client),
+            BlockhashQuery::All(source) => {
+                source.get_blockhash_and_fee_calculator(rpc_client, commitment)
+            }
         }
     }
 }
@@ -287,7 +297,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::default()
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (rpc_blockhash, rpc_fee_calc.clone()),
         );
@@ -303,7 +313,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::FeeCalculator(Source::Cluster, test_blockhash)
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (test_blockhash, rpc_fee_calc),
         );
@@ -315,13 +325,13 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::None(test_blockhash)
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (test_blockhash, FeeCalculator::default()),
         );
         let rpc_client = RpcClient::new_mock("fails".to_string());
         assert!(BlockhashQuery::default()
-            .get_blockhash_and_fee_calculator(&rpc_client)
+            .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
             .is_err());
 
         let nonce_blockhash = Hash::new(&[2u8; 32]);
@@ -350,7 +360,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::All(Source::NonceAccount(nonce_pubkey))
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (nonce_blockhash, nonce_fee_calc.clone()),
         );
@@ -359,7 +369,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::FeeCalculator(Source::NonceAccount(nonce_pubkey), nonce_blockhash)
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (nonce_blockhash, nonce_fee_calc),
         );
@@ -368,7 +378,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert!(
             BlockhashQuery::FeeCalculator(Source::NonceAccount(nonce_pubkey), test_blockhash)
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .is_err()
         );
         let mut mocks = HashMap::new();
@@ -376,14 +386,14 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::None(nonce_blockhash)
-                .get_blockhash_and_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
             (nonce_blockhash, FeeCalculator::default()),
         );
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
         assert!(BlockhashQuery::All(Source::NonceAccount(nonce_pubkey))
-            .get_blockhash_and_fee_calculator(&rpc_client)
+            .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
             .is_err());
     }
 }

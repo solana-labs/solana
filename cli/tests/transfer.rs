@@ -1,4 +1,3 @@
-use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
@@ -8,11 +7,13 @@ use solana_cli::{
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
+    test_utils::{check_ready, check_recent_balance},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, NullSigner, Signer},
@@ -42,7 +43,7 @@ fn test_transfer() {
     let default_signer = Keypair::new();
     let default_offline_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -51,8 +52,10 @@ fn test_transfer() {
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config)
         .unwrap();
-    check_balance(50_000, &rpc_client, &sender_pubkey);
-    check_balance(0, &rpc_client, &recipient_pubkey);
+    check_recent_balance(50_000, &rpc_client, &sender_pubkey);
+    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+
+    check_ready(&rpc_client);
 
     // Plain ole transfer
     config.command = CliCommand::Transfer {
@@ -67,8 +70,8 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(49_989, &rpc_client, &sender_pubkey);
-    check_balance(10, &rpc_client, &recipient_pubkey);
+    check_recent_balance(49_989, &rpc_client, &sender_pubkey);
+    check_recent_balance(10, &rpc_client, &recipient_pubkey);
 
     // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
     config.command = CliCommand::Transfer {
@@ -83,10 +86,10 @@ fn test_transfer() {
         fee_payer: 0,
     };
     assert!(process_command(&config).is_err());
-    check_balance(49_989, &rpc_client, &sender_pubkey);
-    check_balance(10, &rpc_client, &recipient_pubkey);
+    check_recent_balance(49_989, &rpc_client, &sender_pubkey);
+    check_recent_balance(10, &rpc_client, &recipient_pubkey);
 
-    let mut offline = CliConfig::default();
+    let mut offline = CliConfig::recent_for_tests();
     offline.json_rpc_url = String::default();
     offline.signers = vec![&default_offline_signer];
     // Verify we cannot contact the cluster
@@ -95,10 +98,13 @@ fn test_transfer() {
 
     let offline_pubkey = offline.signers[0].pubkey();
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 50, &config).unwrap();
-    check_balance(50, &rpc_client, &offline_pubkey);
+    check_recent_balance(50, &rpc_client, &offline_pubkey);
 
     // Offline transfer
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+        .unwrap()
+        .value;
     offline.command = CliCommand::Transfer {
         amount: SpendAmount::Some(10),
         to: recipient_pubkey,
@@ -128,8 +134,8 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(39, &rpc_client, &offline_pubkey);
-    check_balance(20, &rpc_client, &recipient_pubkey);
+    check_recent_balance(39, &rpc_client, &offline_pubkey);
+    check_recent_balance(20, &rpc_client, &recipient_pubkey);
 
     // Create nonce account
     let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
@@ -144,13 +150,17 @@ fn test_transfer() {
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
-    check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_recent_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Nonced transfer
     config.signers = vec![&default_signer];
@@ -169,12 +179,16 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
-    check_balance(30, &rpc_client, &recipient_pubkey);
-    let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    check_recent_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_recent_balance(30, &rpc_client, &recipient_pubkey);
+    let new_nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
 
     // Assign nonce authority to offline
@@ -185,13 +199,17 @@ fn test_transfer() {
         new_authority: offline_pubkey,
     };
     process_command(&config).unwrap();
-    check_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_recent_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash = nonce::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce::data_from_account(a))
+    .unwrap()
+    .blockhash;
 
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];
@@ -226,8 +244,8 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(28, &rpc_client, &offline_pubkey);
-    check_balance(40, &rpc_client, &recipient_pubkey);
+    check_recent_balance(28, &rpc_client, &offline_pubkey);
+    check_recent_balance(40, &rpc_client, &recipient_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -255,7 +273,7 @@ fn test_transfer_multisession_signing() {
     let offline_from_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     let offline_fee_payer_signer = keypair_from_seed(&[3u8; 32]).unwrap();
     let from_null_signer = NullSigner::new(&offline_from_signer.pubkey());
-    let config = CliConfig::default();
+    let config = CliConfig::recent_for_tests();
 
     // Setup accounts
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -275,14 +293,19 @@ fn test_transfer_multisession_signing() {
         &config,
     )
     .unwrap();
-    check_balance(43, &rpc_client, &offline_from_signer.pubkey());
-    check_balance(3, &rpc_client, &offline_fee_payer_signer.pubkey());
-    check_balance(0, &rpc_client, &to_pubkey);
+    check_recent_balance(43, &rpc_client, &offline_from_signer.pubkey());
+    check_recent_balance(3, &rpc_client, &offline_fee_payer_signer.pubkey());
+    check_recent_balance(0, &rpc_client, &to_pubkey);
 
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    check_ready(&rpc_client);
+
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+        .unwrap()
+        .value;
 
     // Offline fee-payer signs first
-    let mut fee_payer_config = CliConfig::default();
+    let mut fee_payer_config = CliConfig::recent_for_tests();
     fee_payer_config.json_rpc_url = String::default();
     fee_payer_config.signers = vec![&offline_fee_payer_signer, &from_null_signer];
     // Verify we cannot contact the cluster
@@ -308,7 +331,7 @@ fn test_transfer_multisession_signing() {
         .unwrap();
 
     // Now the offline fund source
-    let mut from_config = CliConfig::default();
+    let mut from_config = CliConfig::recent_for_tests();
     from_config.json_rpc_url = String::default();
     from_config.signers = vec![&fee_payer_presigner, &offline_from_signer];
     // Verify we cannot contact the cluster
@@ -334,7 +357,7 @@ fn test_transfer_multisession_signing() {
         .unwrap();
 
     // Finally submit to the cluster
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&fee_payer_presigner, &from_presigner];
     config.command = CliCommand::Transfer {
@@ -350,9 +373,9 @@ fn test_transfer_multisession_signing() {
     };
     process_command(&config).unwrap();
 
-    check_balance(1, &rpc_client, &offline_from_signer.pubkey());
-    check_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
-    check_balance(42, &rpc_client, &to_pubkey);
+    check_recent_balance(1, &rpc_client, &offline_from_signer.pubkey());
+    check_recent_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
+    check_recent_balance(42, &rpc_client, &to_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -380,7 +403,7 @@ fn test_transfer_all() {
 
     let default_signer = Keypair::new();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&default_signer];
 
@@ -389,8 +412,10 @@ fn test_transfer_all() {
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config)
         .unwrap();
-    check_balance(50_000, &rpc_client, &sender_pubkey);
-    check_balance(0, &rpc_client, &recipient_pubkey);
+    check_recent_balance(50_000, &rpc_client, &sender_pubkey);
+    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+
+    check_ready(&rpc_client);
 
     // Plain ole transfer
     config.command = CliCommand::Transfer {
@@ -405,8 +430,8 @@ fn test_transfer_all() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance(0, &rpc_client, &sender_pubkey);
-    check_balance(49_999, &rpc_client, &recipient_pubkey);
+    check_recent_balance(0, &rpc_client, &sender_pubkey);
+    check_recent_balance(49_999, &rpc_client, &recipient_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

@@ -17,12 +17,8 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    commitment::{commitment_arg_with_default, COMMITMENT_ARG},
-    input_parsers::*,
-    input_validators::*,
-    keypair::signer_from_path,
-    offline::SIGN_ONLY_ARG,
-    ArgConstant,
+    commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
+    keypair::signer_from_path, offline::SIGN_ONLY_ARG, ArgConstant,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -183,7 +179,6 @@ pub enum CliCommand {
     Catchup {
         node_pubkey: Pubkey,
         node_json_rpc_url: Option<String>,
-        commitment_config: CommitmentConfig,
         follow: bool,
     },
     ClusterDate,
@@ -197,29 +192,13 @@ pub enum CliCommand {
     GetBlockTime {
         slot: Option<Slot>,
     },
-    GetEpochInfo {
-        commitment_config: CommitmentConfig,
-    },
+    GetEpoch,
+    GetEpochInfo,
     GetGenesisHash,
-    GetEpoch {
-        commitment_config: CommitmentConfig,
-    },
-    GetSlot {
-        commitment_config: CommitmentConfig,
-    },
+    GetSlot,
+    GetTransactionCount,
     LargestAccounts {
-        commitment_config: CommitmentConfig,
         filter: Option<RpcLargestAccountsFilter>,
-    },
-    Supply {
-        commitment_config: CommitmentConfig,
-        print_accounts: bool,
-    },
-    TotalSupply {
-        commitment_config: CommitmentConfig,
-    },
-    GetTransactionCount {
-        commitment_config: CommitmentConfig,
     },
     LeaderSchedule,
     LiveSlots,
@@ -228,7 +207,6 @@ pub enum CliCommand {
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
-        commitment_config: CommitmentConfig,
     },
     ShowBlockProduction {
         epoch: Option<Epoch>,
@@ -241,8 +219,11 @@ pub enum CliCommand {
     },
     ShowValidators {
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
+    Supply {
+        print_accounts: bool,
+    },
+    TotalSupply,
     TransactionHistory {
         address: Pubkey,
         end_slot: Option<Slot>,  // None == latest slot
@@ -393,7 +374,6 @@ pub enum CliCommand {
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
     WithdrawFromVoteAccount {
         vote_account_pubkey: Pubkey,
@@ -425,7 +405,6 @@ pub enum CliCommand {
     Balance {
         pubkey: Option<Pubkey>,
         use_lamports_unit: bool,
-        commitment_config: CommitmentConfig,
     },
     Cancel(Pubkey),
     Confirm(Signature),
@@ -512,6 +491,8 @@ pub struct CliConfig<'a> {
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
     pub output_format: OutputFormat,
+    pub commitment: CommitmentConfig,
+    pub send_transaction_config: RpcSendTransactionConfig,
 }
 
 impl CliConfig<'_> {
@@ -588,6 +569,15 @@ impl CliConfig<'_> {
             ))
         }
     }
+
+    pub fn recent_for_tests() -> Self {
+        let mut config = Self::default();
+        config.commitment = CommitmentConfig::recent();
+        config.send_transaction_config = RpcSendTransactionConfig {
+            skip_preflight: true,
+        };
+        config
+    }
 }
 
 impl Default for CliConfig<'_> {
@@ -596,7 +586,6 @@ impl Default for CliConfig<'_> {
             command: CliCommand::Balance {
                 pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
-                commitment_config: CommitmentConfig::default(),
             },
             json_rpc_url: Self::default_json_rpc_url(),
             websocket_url: Self::default_websocket_url(),
@@ -605,6 +594,8 @@ impl Default for CliConfig<'_> {
             rpc_client: None,
             verbose: false,
             output_format: OutputFormat::Display,
+            commitment: CommitmentConfig::default(),
+            send_transaction_config: RpcSendTransactionConfig::default(),
         }
     }
 }
@@ -810,7 +801,6 @@ pub fn parse_command(
         }
         ("balance", Some(matches)) => {
             let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
-            let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -825,7 +815,6 @@ pub fn parse_command(
                 command: CliCommand::Balance {
                     pubkey,
                     use_lamports_unit: matches.is_present("lamports"),
-                    commitment_config,
                 },
                 signers,
             })
@@ -1154,7 +1143,6 @@ fn process_balance(
     config: &CliConfig,
     pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
-    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let pubkey = if let Some(pubkey) = pubkey {
         *pubkey
@@ -1162,7 +1150,7 @@ fn process_balance(
         config.pubkey()?
     };
     let balance = rpc_client
-        .get_balance_with_commitment(&pubkey, commitment_config)?
+        .get_balance_with_commitment(&pubkey, config.commitment)?
         .value;
     Ok(build_balance_message(balance, use_lamports_unit, true))
 }
@@ -1375,7 +1363,9 @@ fn process_deploy(
 
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let ix = system_instruction::create_account(
         &config.signers[0].pubkey(),
@@ -1412,15 +1402,20 @@ fn process_deploy(
     finalize_tx.try_sign(&signers, blockhash)?;
     messages.push(&finalize_tx.message);
 
-    check_account_for_multiple_fees(
+    check_account_for_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &messages,
+        config.commitment,
     )?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&create_account_tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &create_account_tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
         CliError::DynamicProgramError("Program account allocation failed".to_string())
     })?;
@@ -1434,6 +1429,7 @@ fn process_deploy(
     rpc_client
         .send_and_confirm_transaction_with_spinner_and_config(
             &finalize_tx,
+            config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
             },
@@ -1469,7 +1465,7 @@ fn process_pay(
     )?;
 
     let (blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let cancelable = if cancelable {
         Some(config.signers[0].pubkey())
@@ -1495,6 +1491,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
 
@@ -1503,12 +1500,20 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             if let Some(nonce_account) = &nonce_account {
-                let nonce_account = rpc_client.get_account(nonce_account)?;
+                let nonce_account = nonce::get_account_with_commitment(
+                    rpc_client,
+                    nonce_account,
+                    config.commitment,
+                )?;
                 check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
             }
 
             tx.try_sign(&config.signers, blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             log_instruction_custom_error::<SystemError>(result, &config)
         }
     } else if *witnesses == None {
@@ -1540,6 +1545,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
@@ -1547,7 +1553,11 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
             Ok(json!({
                 "signature": signature,
@@ -1586,6 +1596,7 @@ fn process_pay(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
@@ -1593,7 +1604,11 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
-            let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            );
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
             Ok(json!({
                 "signature": signature,
@@ -1607,7 +1622,9 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let ix = budget_instruction::apply_signature(
         &config.signers[0].pubkey(),
         pubkey,
@@ -1616,13 +1633,18 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
@@ -1633,19 +1655,26 @@ fn process_time_elapsed(
     pubkey: &Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let ix = budget_instruction::apply_timestamp(&config.signers[0].pubkey(), pubkey, to, dt);
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
@@ -1666,7 +1695,7 @@ fn process_transfer(
     let from = config.signers[from];
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1694,6 +1723,7 @@ fn process_transfer(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
+        config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
 
@@ -1702,19 +1732,20 @@ fn process_transfer(
         return_signers(&tx, &config)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
 
         tx.try_sign(&config.signers, recent_blockhash)?;
-        if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
-        }
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
-            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
+            rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            )
         };
         log_instruction_custom_error::<SystemError>(result, &config)
     }
@@ -1726,19 +1757,26 @@ fn process_witness(
     to: &Pubkey,
     pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+        .value;
 
     let ix = budget_instruction::apply_signature(&config.signers[0].pubkey(), pubkey, to);
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
@@ -1769,15 +1807,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
-            commitment_config,
             follow,
-        } => process_catchup(
-            &rpc_client,
-            node_pubkey,
-            node_json_rpc_url,
-            *commitment_config,
-            *follow,
-        ),
+        } => process_catchup(&rpc_client, config, node_pubkey, node_json_rpc_url, *follow),
         CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
@@ -1787,30 +1818,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client, config),
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
+        CliCommand::GetEpoch => process_get_epoch(&rpc_client, config),
+        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client, config),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
-        CliCommand::GetEpochInfo { commitment_config } => {
-            process_get_epoch_info(&rpc_client, config, *commitment_config)
+        CliCommand::GetSlot => process_get_slot(&rpc_client, config),
+        CliCommand::LargestAccounts { filter } => {
+            process_largest_accounts(&rpc_client, config, filter.clone())
         }
-        CliCommand::GetEpoch { commitment_config } => {
-            process_get_epoch(&rpc_client, *commitment_config)
-        }
-        CliCommand::GetSlot { commitment_config } => {
-            process_get_slot(&rpc_client, *commitment_config)
-        }
-        CliCommand::LargestAccounts {
-            commitment_config,
-            filter,
-        } => process_largest_accounts(&rpc_client, config, *commitment_config, filter.clone()),
-        CliCommand::Supply {
-            commitment_config,
-            print_accounts,
-        } => process_supply(&rpc_client, config, *commitment_config, *print_accounts),
-        CliCommand::TotalSupply { commitment_config } => {
-            process_total_supply(&rpc_client, *commitment_config)
-        }
-        CliCommand::GetTransactionCount { commitment_config } => {
-            process_get_transaction_count(&rpc_client, *commitment_config)
-        }
+        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client, config),
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
         CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
         CliCommand::Ping {
@@ -1818,16 +1833,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             interval,
             count,
             timeout,
-            commitment_config,
-        } => process_ping(
-            &rpc_client,
-            config,
-            *lamports,
-            interval,
-            count,
-            timeout,
-            *commitment_config,
-        ),
+        } => process_ping(&rpc_client, config, *lamports, interval, count, timeout),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
@@ -1841,10 +1847,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
         ),
-        CliCommand::ShowValidators {
-            use_lamports_unit,
-            commitment_config,
-        } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
+        CliCommand::ShowValidators { use_lamports_unit } => {
+            process_show_validators(&rpc_client, config, *use_lamports_unit)
+        }
+        CliCommand::Supply { print_accounts } => {
+            process_supply(&rpc_client, config, *print_accounts)
+        }
+        CliCommand::TotalSupply => process_total_supply(&rpc_client, config),
         CliCommand::TransactionHistory {
             address,
             end_slot,
@@ -1881,7 +1890,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         // Get the current nonce
         CliCommand::GetNonce(nonce_account_pubkey) => {
-            process_get_nonce(&rpc_client, &nonce_account_pubkey)
+            process_get_nonce(&rpc_client, config, &nonce_account_pubkey)
         }
         // Get a new nonce
         CliCommand::NewNonce {
@@ -2159,13 +2168,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
-            commitment_config,
         } => process_show_vote_account(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *use_lamports_unit,
-            *commitment_config,
         ),
         CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
@@ -2234,14 +2241,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
-            commitment_config,
-        } => process_balance(
-            &rpc_client,
-            config,
-            &pubkey,
-            *use_lamports_unit,
-            *commitment_config,
-        ),
+        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -2384,7 +2384,8 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, config.commitment);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -2913,7 +2914,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: false,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2930,7 +2930,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: true,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2945,7 +2944,6 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: None,
                     use_lamports_unit: true,
-                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3442,14 +3440,12 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: true,
-            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
@@ -3585,14 +3581,10 @@ mod tests {
         let result = process_command(&config);
         assert!(dbg!(result).is_ok());
 
-        config.command = CliCommand::GetSlot {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetSlot;
         assert_eq!(process_command(&config).unwrap(), "0");
 
-        config.command = CliCommand::GetTransactionCount {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
 
         config.signers = vec![&keypair];
@@ -3700,7 +3692,6 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-            commitment_config: CommitmentConfig::default(),
         };
         assert!(process_command(&config).is_err());
 
@@ -3729,14 +3720,10 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetSlot {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetSlot;
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetTransactionCount {
-            commitment_config: CommitmentConfig::default(),
-        };
+        config.command = CliCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::Pay(PayCommand {

@@ -1,4 +1,3 @@
-use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
@@ -8,12 +7,14 @@ use solana_cli::{
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
+    test_utils::{check_ready, check_recent_balance},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::contact_info::ContactInfo;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     hash::Hash,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
@@ -83,7 +84,7 @@ fn full_battery_tests(
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_payer = CliConfig::default();
+    let mut config_payer = CliConfig::recent_for_tests();
     config_payer.json_rpc_url = json_rpc_url.clone();
     let payer = Keypair::new();
     config_payer.signers = vec![&payer];
@@ -96,9 +97,9 @@ fn full_battery_tests(
         &config_payer,
     )
     .unwrap();
-    check_balance(2000, &rpc_client, &config_payer.signers[0].pubkey());
+    check_recent_balance(2000, &rpc_client, &config_payer.signers[0].pubkey());
 
-    let mut config_nonce = CliConfig::default();
+    let mut config_nonce = CliConfig::recent_for_tests();
     config_nonce.json_rpc_url = json_rpc_url;
     let nonce_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     config_nonce.signers = vec![&nonce_keypair];
@@ -131,8 +132,8 @@ fn full_battery_tests(
     };
 
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
-    check_balance(1000, &rpc_client, &nonce_account);
+    check_recent_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
+    check_recent_balance(1000, &rpc_client, &nonce_account);
 
     // Get nonce
     config_payer.signers.pop();
@@ -181,9 +182,9 @@ fn full_battery_tests(
         lamports: 100,
     };
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
-    check_balance(900, &rpc_client, &nonce_account);
-    check_balance(100, &rpc_client, &payee_pubkey);
+    check_recent_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
+    check_recent_balance(900, &rpc_client, &nonce_account);
+    check_recent_balance(100, &rpc_client, &payee_pubkey);
 
     // Show nonce account
     config_payer.command = CliCommand::ShowNonceAccount {
@@ -224,9 +225,9 @@ fn full_battery_tests(
         lamports: 100,
     };
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
-    check_balance(800, &rpc_client, &nonce_account);
-    check_balance(200, &rpc_client, &payee_pubkey);
+    check_recent_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
+    check_recent_balance(800, &rpc_client, &nonce_account);
+    check_recent_balance(200, &rpc_client, &payee_pubkey);
 }
 
 #[test]
@@ -250,7 +251,7 @@ fn test_create_account_with_seed() {
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     let online_nonce_creator_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     let to_address = Pubkey::new(&[3u8; 32]);
-    let config = CliConfig::default();
+    let config = CliConfig::recent_for_tests();
 
     // Setup accounts
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -270,9 +271,11 @@ fn test_create_account_with_seed() {
         &config,
     )
     .unwrap();
-    check_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
-    check_balance(4242, &rpc_client, &online_nonce_creator_signer.pubkey());
-    check_balance(0, &rpc_client, &to_address);
+    check_recent_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_recent_balance(4242, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_recent_balance(0, &rpc_client, &to_address);
+
+    check_ready(&rpc_client);
 
     // Create nonce account
     let creator_pubkey = online_nonce_creator_signer.pubkey();
@@ -280,9 +283,9 @@ fn test_create_account_with_seed() {
     let seed = authority_pubkey.to_string()[0..32].to_string();
     let nonce_address =
         Pubkey::create_with_seed(&creator_pubkey, &seed, &system_program::id()).unwrap();
-    check_balance(0, &rpc_client, &nonce_address);
+    check_recent_balance(0, &rpc_client, &nonce_address);
 
-    let mut creator_config = CliConfig::default();
+    let mut creator_config = CliConfig::recent_for_tests();
     creator_config.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     creator_config.signers = vec![&online_nonce_creator_signer];
@@ -293,19 +296,20 @@ fn test_create_account_with_seed() {
         amount: SpendAmount::Some(241),
     };
     process_command(&creator_config).unwrap();
-    check_balance(241, &rpc_client, &nonce_address);
-    check_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
-    check_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
-    check_balance(0, &rpc_client, &to_address);
+    check_recent_balance(241, &rpc_client, &nonce_address);
+    check_recent_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_recent_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_recent_balance(0, &rpc_client, &to_address);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_address)
-        .and_then(|ref a| nonce::data_from_account(a))
-        .unwrap()
-        .blockhash;
+    let nonce_hash =
+        nonce::get_account_with_commitment(&rpc_client, &nonce_address, CommitmentConfig::recent())
+            .and_then(|ref a| nonce::data_from_account(a))
+            .unwrap()
+            .blockhash;
 
     // Test by creating transfer TX with nonce, fully offline
-    let mut authority_config = CliConfig::default();
+    let mut authority_config = CliConfig::recent_for_tests();
     authority_config.json_rpc_url = String::default();
     authority_config.signers = vec![&offline_nonce_authority_signer];
     // Verify we cannot contact the cluster
@@ -329,7 +333,7 @@ fn test_create_account_with_seed() {
     assert_eq!(sign_only.blockhash, nonce_hash);
 
     // And submit it
-    let mut submit_config = CliConfig::default();
+    let mut submit_config = CliConfig::recent_for_tests();
     submit_config.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     submit_config.signers = vec![&authority_presigner];
@@ -348,10 +352,10 @@ fn test_create_account_with_seed() {
         fee_payer: 0,
     };
     process_command(&submit_config).unwrap();
-    check_balance(241, &rpc_client, &nonce_address);
-    check_balance(31, &rpc_client, &offline_nonce_authority_signer.pubkey());
-    check_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
-    check_balance(10, &rpc_client, &to_address);
+    check_recent_balance(241, &rpc_client, &nonce_address);
+    check_recent_balance(31, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_recent_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_recent_balance(10, &rpc_client, &to_address);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

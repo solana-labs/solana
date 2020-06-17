@@ -1,12 +1,12 @@
 use crate::{
-    checks::{check_account_for_fee, check_unique_pubkeys},
+    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
         fee_payer_arg, generate_unique_signers, log_instruction_custom_error, nonce_authority_arg,
         return_signers, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
         SignerIndex, FEE_PAYER_ARG,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
-    nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
+    nonce::{self, check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
@@ -896,7 +896,7 @@ pub fn process_create_stake_account(
     };
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let (message, lamports) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -906,6 +906,7 @@ pub fn process_create_stake_account(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
+        config.commitment,
     )?;
 
     if !sign_only {
@@ -933,7 +934,8 @@ pub fn process_create_stake_account(
         }
 
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
     }
@@ -944,7 +946,11 @@ pub fn process_create_stake_account(
         return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
@@ -977,7 +983,7 @@ pub fn process_stake_authorize(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1000,16 +1006,22 @@ pub fn process_stake_authorize(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1027,7 +1039,7 @@ pub fn process_deactivate_stake_account(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let stake_authority = config.signers[stake_authority];
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
@@ -1054,16 +1066,22 @@ pub fn process_deactivate_stake_account(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1084,7 +1102,7 @@ pub fn process_withdraw_stake(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
 
@@ -1117,16 +1135,22 @@ pub fn process_withdraw_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
@@ -1211,7 +1235,7 @@ pub fn process_split_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = if let Some(seed) = split_stake_account_seed {
         stake_instruction::split_with_seed(
@@ -1251,16 +1275,22 @@ pub fn process_split_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1316,7 +1346,7 @@ pub fn process_merge_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = stake_instruction::merge(
         &stake_account_pubkey,
@@ -1344,16 +1374,22 @@ pub fn process_merge_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1372,7 +1408,7 @@ pub fn process_stake_set_lockup(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
 
     let ixs = vec![stake_instruction::set_lockup(
@@ -1401,16 +1437,22 @@ pub fn process_stake_set_lockup(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1598,14 +1640,23 @@ pub fn process_delegate_stake(
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
         // voted at the tip of the ledger
-        let vote_account_data = rpc_client
-            .get_account_data(vote_account_pubkey)
+        let vote_account = rpc_client
+            .get_account_with_commitment(vote_account_pubkey, config.commitment)
             .map_err(|_| {
                 CliError::RpcRequestError(format!(
                     "Vote account not found: {}",
                     vote_account_pubkey
                 ))
             })?;
+        let vote_account_data = if let Some(account) = vote_account.value {
+            account.data
+        } else {
+            return Err(CliError::RpcRequestError(format!(
+                "Vote account not found: {}",
+                vote_account_pubkey
+            ))
+            .into());
+        };
 
         let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
             CliError::RpcRequestError(
@@ -1643,7 +1694,7 @@ pub fn process_delegate_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,
@@ -1671,16 +1722,22 @@ pub fn process_delegate_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
+            let nonce_account =
+                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_account_for_fee_with_commitment(
             rpc_client,
             &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
+            config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }

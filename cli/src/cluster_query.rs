@@ -7,10 +7,7 @@ use crate::{
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use solana_clap_utils::{
-    commitment::{commitment_arg, COMMITMENT_ARG},
-    input_parsers::*,
-    input_validators::*,
-    keypair::signer_from_path,
+    commitment::commitment_arg, input_parsers::*, input_validators::*, keypair::signer_from_path,
 };
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
@@ -296,13 +293,11 @@ pub fn parse_catchup(
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     let follow = matches.is_present("follow");
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
-            commitment_config,
             follow,
         },
         signers: vec![],
@@ -322,14 +317,12 @@ pub fn parse_cluster_ping(
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
             interval,
             count,
             timeout,
-            commitment_config,
         },
         signers: vec![signer_from_path(
             matches,
@@ -348,32 +341,28 @@ pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
     })
 }
 
-pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+pub fn parse_get_epoch(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
-        command: CliCommand::GetEpochInfo { commitment_config },
+        command: CliCommand::GetEpoch,
         signers: vec![],
     })
 }
 
-pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+pub fn parse_get_epoch_info(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
-        command: CliCommand::GetSlot { commitment_config },
+        command: CliCommand::GetEpochInfo,
         signers: vec![],
     })
 }
 
-pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+pub fn parse_get_slot(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
-        command: CliCommand::GetEpoch { commitment_config },
+        command: CliCommand::GetSlot,
         signers: vec![],
     })
 }
 
 pub fn parse_largest_accounts(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     let filter = if matches.is_present("circulating") {
         Some(RpcLargestAccountsFilter::Circulating)
     } else if matches.is_present("non_circulating") {
@@ -382,38 +371,29 @@ pub fn parse_largest_accounts(matches: &ArgMatches<'_>) -> Result<CliCommandInfo
         None
     };
     Ok(CliCommandInfo {
-        command: CliCommand::LargestAccounts {
-            commitment_config,
-            filter,
-        },
+        command: CliCommand::LargestAccounts { filter },
         signers: vec![],
     })
 }
 
 pub fn parse_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     let print_accounts = matches.is_present("print_accounts");
     Ok(CliCommandInfo {
-        command: CliCommand::Supply {
-            commitment_config,
-            print_accounts,
-        },
+        command: CliCommand::Supply { print_accounts },
         signers: vec![],
     })
 }
 
-pub fn parse_total_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+pub fn parse_total_supply(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
-        command: CliCommand::TotalSupply { commitment_config },
+        command: CliCommand::TotalSupply,
         signers: vec![],
     })
 }
 
-pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+pub fn parse_get_transaction_count(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
-        command: CliCommand::GetTransactionCount { commitment_config },
+        command: CliCommand::GetTransactionCount,
         signers: vec![],
     })
 }
@@ -437,13 +417,9 @@ pub fn parse_show_stakes(
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
 
     Ok(CliCommandInfo {
-        command: CliCommand::ShowValidators {
-            use_lamports_unit,
-            commitment_config,
-        },
+        command: CliCommand::ShowValidators { use_lamports_unit },
         signers: vec![],
     })
 }
@@ -468,9 +444,9 @@ pub fn parse_transaction_history(
 
 pub fn process_catchup(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     node_pubkey: &Pubkey,
     node_json_rpc_url: &Option<String>,
-    commitment_config: CommitmentConfig,
     follow: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
@@ -519,8 +495,8 @@ pub fn process_catchup(
     let mut previous_rpc_slot = std::u64::MAX;
     let mut previous_slot_distance = 0;
     loop {
-        let rpc_slot = rpc_client.get_slot_with_commitment(commitment_config)?;
-        let node_slot = node_client.get_slot_with_commitment(commitment_config)?;
+        let rpc_slot = rpc_client.get_slot_with_commitment(config.commitment)?;
+        let node_slot = node_client.get_slot_with_commitment(config.commitment)?;
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
@@ -653,13 +629,14 @@ pub fn process_get_block_time(
     Ok(config.output_format.formatted_string(&block_time))
 }
 
-pub fn process_get_epoch_info(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    commitment_config: CommitmentConfig,
-) -> ProcessResult {
+pub fn process_get_epoch(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(config.commitment)?;
+    Ok(epoch_info.epoch.to_string())
+}
+
+pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let epoch_info: CliEpochInfo = rpc_client
-        .get_epoch_info_with_commitment(commitment_config)?
+        .get_epoch_info_with_commitment(config.commitment)?
         .into();
     Ok(config.output_format.formatted_string(&epoch_info))
 }
@@ -669,20 +646,9 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
     Ok(genesis_hash.to_string())
 }
 
-pub fn process_get_slot(
-    rpc_client: &RpcClient,
-    commitment_config: CommitmentConfig,
-) -> ProcessResult {
-    let slot = rpc_client.get_slot_with_commitment(commitment_config)?;
+pub fn process_get_slot(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let slot = rpc_client.get_slot_with_commitment(config.commitment)?;
     Ok(slot.to_string())
-}
-
-pub fn process_get_epoch(
-    rpc_client: &RpcClient,
-    commitment_config: CommitmentConfig,
-) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config)?;
-    Ok(epoch_info.epoch.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -849,12 +815,11 @@ pub fn process_show_block_production(
 pub fn process_largest_accounts(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    commitment_config: CommitmentConfig,
     filter: Option<RpcLargestAccountsFilter>,
 ) -> ProcessResult {
     let accounts = rpc_client
         .get_largest_accounts_with_config(RpcLargestAccountsConfig {
-            commitment: Some(commitment_config),
+            commitment: Some(config.commitment),
             filter,
         })?
         .value;
@@ -865,28 +830,21 @@ pub fn process_largest_accounts(
 pub fn process_supply(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    commitment_config: CommitmentConfig,
     print_accounts: bool,
 ) -> ProcessResult {
-    let supply_response = rpc_client.supply_with_commitment(commitment_config)?;
+    let supply_response = rpc_client.supply_with_commitment(config.commitment)?;
     let mut supply: CliSupply = supply_response.value.into();
     supply.print_accounts = print_accounts;
     Ok(config.output_format.formatted_string(&supply))
 }
 
-pub fn process_total_supply(
-    rpc_client: &RpcClient,
-    commitment_config: CommitmentConfig,
-) -> ProcessResult {
-    let total_supply = rpc_client.total_supply_with_commitment(commitment_config)?;
+pub fn process_total_supply(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let total_supply = rpc_client.total_supply_with_commitment(config.commitment)?;
     Ok(format!("{} SOL", lamports_to_sol(total_supply)))
 }
 
-pub fn process_get_transaction_count(
-    rpc_client: &RpcClient,
-    commitment_config: CommitmentConfig,
-) -> ProcessResult {
-    let transaction_count = rpc_client.get_transaction_count_with_commitment(commitment_config)?;
+pub fn process_get_transaction_count(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let transaction_count = rpc_client.get_transaction_count_with_commitment(config.commitment)?;
     Ok(transaction_count.to_string())
 }
 
@@ -897,7 +855,6 @@ pub fn process_ping(
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
-    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
@@ -943,6 +900,7 @@ pub fn process_ping(
             &fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
+            config.commitment,
         )?;
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;
@@ -952,7 +910,7 @@ pub fn process_ping(
                 let transaction_sent = Instant::now();
                 loop {
                     let signature_status = rpc_client
-                        .get_signature_status_with_commitment(&signature, commitment_config)?;
+                        .get_signature_status_with_commitment(&signature, config.commitment)?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
                         match transaction_status {
@@ -1235,10 +1193,9 @@ pub fn process_show_validators(
     rpc_client: &RpcClient,
     config: &CliConfig,
     use_lamports_unit: bool,
-    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config)?;
-    let vote_accounts = rpc_client.get_vote_accounts_with_commitment(commitment_config)?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(config.commitment)?;
+    let vote_accounts = rpc_client.get_vote_accounts_with_commitment(config.commitment)?;
     let total_active_stake = vote_accounts
         .current
         .iter()
@@ -1379,15 +1336,24 @@ mod tests {
             }
         );
 
+        let test_get_epoch = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "epoch"]);
+        assert_eq!(
+            parse_command(&test_get_epoch, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetEpoch,
+                signers: vec![],
+            }
+        );
+
         let test_get_epoch_info = test_commands
             .clone()
             .get_matches_from(vec!["test", "epoch-info"]);
         assert_eq!(
             parse_command(&test_get_epoch_info, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetEpochInfo {
-                    commitment_config: CommitmentConfig::recent(),
-                },
+                command: CliCommand::GetEpochInfo,
                 signers: vec![],
             }
         );
@@ -1407,22 +1373,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_get_slot, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetSlot {
-                    commitment_config: CommitmentConfig::recent(),
-                },
-                signers: vec![],
-            }
-        );
-
-        let test_get_epoch = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "epoch"]);
-        assert_eq!(
-            parse_command(&test_get_epoch, &default_keypair_file, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::GetEpoch {
-                    commitment_config: CommitmentConfig::recent(),
-                },
+                command: CliCommand::GetSlot,
                 signers: vec![],
             }
         );
@@ -1433,9 +1384,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_total_supply, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::TotalSupply {
-                    commitment_config: CommitmentConfig::recent(),
-                },
+                command: CliCommand::TotalSupply,
                 signers: vec![],
             }
         );
@@ -1446,9 +1395,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_transaction_count, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetTransactionCount {
-                    commitment_config: CommitmentConfig::recent(),
-                },
+                command: CliCommand::GetTransactionCount,
                 signers: vec![],
             }
         );
@@ -1473,7 +1420,6 @@ mod tests {
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
-                    commitment_config: CommitmentConfig::max(),
                 },
                 signers: vec![default_keypair.into()],
             }

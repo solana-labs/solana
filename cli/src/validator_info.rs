@@ -372,6 +372,7 @@ pub fn process_set_validator_info(
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
+        config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&signers, recent_blockhash)?;

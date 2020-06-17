@@ -5,6 +5,7 @@ use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     bpf_loader,
+    commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -47,7 +48,7 @@ fn test_cli_deploy_program() {
         .get_minimum_balance_for_rent_exemption(program_data.len())
         .unwrap();
 
-    let mut config = CliConfig::default();
+    let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.command = CliCommand::Airdrop {
@@ -74,7 +75,11 @@ fn test_cli_deploy_program() {
         .as_str()
         .unwrap();
     let program_id = Pubkey::from_str(&program_id_str).unwrap();
-    let account0 = rpc_client.get_account(&program_id).unwrap();
+    let account0 = rpc_client
+        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
     assert_eq!(account0.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account0.owner, bpf_loader::id());
     assert_eq!(account0.executable, true);
@@ -94,7 +99,9 @@ fn test_cli_deploy_program() {
     };
     process_command(&config).unwrap();
     let account1 = rpc_client
-        .get_account(&custom_address_keypair.pubkey())
+        .get_account_with_commitment(&custom_address_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
         .unwrap();
     assert_eq!(account1.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account1.owner, bpf_loader::id());

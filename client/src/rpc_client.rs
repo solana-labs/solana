@@ -17,7 +17,7 @@ use solana_sdk::{
         Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
         MAX_HASH_AGE_IN_SECONDS,
     },
-    commitment_config::CommitmentConfig,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -831,6 +831,19 @@ impl RpcClient {
     ) -> ClientResult<Signature> {
         self.send_and_confirm_transaction_with_spinner_and_config(
             transaction,
+            CommitmentConfig::default(),
+            RpcSendTransactionConfig::default(),
+        )
+    }
+
+    pub fn send_and_confirm_transaction_with_spinner_and_commitment(
+        &self,
+        transaction: &Transaction,
+        commitment: CommitmentConfig,
+    ) -> ClientResult<Signature> {
+        self.send_and_confirm_transaction_with_spinner_and_config(
+            transaction,
+            commitment,
             RpcSendTransactionConfig::default(),
         )
     }
@@ -838,8 +851,13 @@ impl RpcClient {
     pub fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         transaction: &Transaction,
+        commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
+        let desired_confirmations = match commitment.commitment {
+            CommitmentLevel::Max | CommitmentLevel::Root => MAX_LOCKOUT_HISTORY + 1,
+            _ => 1,
+        };
         let mut confirmations = 0;
 
         let progress_bar = new_spinner_progress_bar();
@@ -848,13 +866,11 @@ impl RpcClient {
         let signature = loop {
             progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transaction {}",
-                confirmations,
-                MAX_LOCKOUT_HISTORY + 1,
-                transaction.signatures[0],
+                confirmations, desired_confirmations, transaction.signatures[0],
             ));
             let mut status_retries = 15;
             let (signature, status) = loop {
-                let signature = self.send_transaction_with_config(transaction, config.clone())?;
+                let signature = self.send_transaction_with_config(transaction, config)?;
 
                 // Get recent commitment in order to count confirmations for successful transactions
                 let status = self
@@ -904,17 +920,30 @@ impl RpcClient {
         };
         let now = Instant::now();
         loop {
-            // Return when default (max) commitment is reached
-            // Failed transactions have already been eliminated, `is_some` check is sufficient
-            if self.get_signature_status(&signature)?.is_some() {
-                progress_bar.set_message("Transaction confirmed");
-                progress_bar.finish_and_clear();
-                return Ok(signature);
+            match commitment.commitment {
+                CommitmentLevel::Max | CommitmentLevel::Root =>
+                // Return when default (max) commitment is reached
+                // Failed transactions have already been eliminated, `is_some` check is sufficient
+                {
+                    if self.get_signature_status(&signature)?.is_some() {
+                        progress_bar.set_message("Transaction confirmed");
+                        progress_bar.finish_and_clear();
+                        return Ok(signature);
+                    }
+                }
+                _ => {
+                    // Return when one confirmation has been reached
+                    if confirmations >= desired_confirmations {
+                        progress_bar.set_message("Transaction reached commitment");
+                        progress_bar.finish_and_clear();
+                        return Ok(signature);
+                    }
+                }
             }
             progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transaction {}",
                 confirmations + 1,
-                MAX_LOCKOUT_HISTORY + 1,
+                desired_confirmations,
                 signature,
             ));
             sleep(Duration::from_millis(500));

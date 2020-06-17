@@ -1,5 +1,5 @@
 use crate::{
-    checks::{check_account_for_fee, check_unique_pubkeys},
+    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
         generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
         CliConfig, CliError, ProcessResult, SignerIndex,
@@ -16,6 +16,7 @@ use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    commitment_config::CommitmentConfig,
     hash::Hash,
     message::Message,
     nonce::{
@@ -223,9 +224,22 @@ pub fn get_account(
     rpc_client: &RpcClient,
     nonce_pubkey: &Pubkey,
 ) -> Result<Account, CliNonceError> {
+    get_account_with_commitment(rpc_client, nonce_pubkey, CommitmentConfig::default())
+}
+
+pub fn get_account_with_commitment(
+    rpc_client: &RpcClient,
+    nonce_pubkey: &Pubkey,
+    commitment: CommitmentConfig,
+) -> Result<Account, CliNonceError> {
     rpc_client
-        .get_account(nonce_pubkey)
+        .get_account_with_commitment(nonce_pubkey, commitment)
         .map_err(|e| CliNonceError::Client(format!("{}", e)))
+        .and_then(|result| {
+            result.value.ok_or_else(|| {
+                CliNonceError::Client(format!("AccountNotFound: pubkey={}", nonce_pubkey))
+            })
+        })
         .and_then(|a| match account_identity_ok(&a) {
             Ok(()) => Ok(a),
             Err(e) => Err(e),
@@ -433,7 +447,9 @@ pub fn process_authorize_nonce_account(
     nonce_authority: SignerIndex,
     new_authority: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = authorize_nonce_account(nonce_account, &nonce_authority.pubkey(), new_authority);
@@ -441,13 +457,18 @@ pub fn process_authorize_nonce_account(
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
 
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 
@@ -494,7 +515,9 @@ pub fn process_create_nonce_account(
         Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()))
     };
 
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let (message, lamports) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
@@ -503,9 +526,12 @@ pub fn process_create_nonce_account(
         &fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
+        config.commitment,
     )?;
 
-    if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
+    if let Ok(nonce_account) =
+        get_account_with_commitment(rpc_client, &nonce_account_address, config.commitment)
+    {
         let err_msg = if state_from_account(&nonce_account).is_ok() {
             format!("Nonce account {} already exists", nonce_account_address)
         } else {
@@ -528,12 +554,22 @@ pub fn process_create_nonce_account(
 
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
-pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
-    match get_account(rpc_client, nonce_account_pubkey).and_then(|ref a| state_from_account(a))? {
+pub fn process_get_nonce(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    nonce_account_pubkey: &Pubkey,
+) -> ProcessResult {
+    match get_account_with_commitment(rpc_client, nonce_account_pubkey, config.commitment)
+        .and_then(|ref a| state_from_account(a))?
+    {
         State::Uninitialized => Ok("Nonce account is uninitialized".to_string()),
         State::Initialized(ref data) => Ok(format!("{:?}", data.blockhash)),
     }
@@ -550,7 +586,9 @@ pub fn process_new_nonce(
         (&nonce_account, "nonce_account_pubkey".to_string()),
     )?;
 
-    if rpc_client.get_account(&nonce_account).is_err() {
+    let nonce_account_check =
+        rpc_client.get_account_with_commitment(&nonce_account, config.commitment);
+    if nonce_account_check.is_err() || nonce_account_check.unwrap().value.is_none() {
         return Err(CliError::BadParameter(
             "Unable to create new nonce, no nonce account found".to_string(),
         )
@@ -559,17 +597,24 @@ pub fn process_new_nonce(
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = advance_nonce_account(&nonce_account, &nonce_authority.pubkey());
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
     let message = Message::new_with_payer(&[ix], Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -579,7 +624,8 @@ pub fn process_show_nonce_account(
     nonce_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let nonce_account = get_account(rpc_client, nonce_account_pubkey)?;
+    let nonce_account =
+        get_account_with_commitment(rpc_client, nonce_account_pubkey, config.commitment)?;
     let print_account = |data: Option<&nonce::state::Data>| {
         let mut nonce_account = CliNonceAccount {
             balance: nonce_account.lamports,
@@ -610,7 +656,9 @@ pub fn process_withdraw_from_nonce_account(
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = withdraw_nonce_account(
@@ -622,13 +670,18 @@ pub fn process_withdraw_from_nonce_account(
     let message = Message::new_with_payer(&[ix], Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 

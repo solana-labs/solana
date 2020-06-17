@@ -1,10 +1,13 @@
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{clock::DEFAULT_MS_PER_SLOT, commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::{thread::sleep, time::Duration};
 
-pub fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
+pub fn check_recent_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
-        let balance = client.get_balance(pubkey).unwrap();
+        let balance = client
+            .get_balance_with_commitment(pubkey, CommitmentConfig::recent())
+            .unwrap()
+            .value;
         if balance == expected_balance {
             return;
         }
@@ -13,4 +16,14 @@ pub fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey)
         }
         sleep(Duration::from_millis(500));
     });
+}
+
+pub fn check_ready(rpc_client: &RpcClient) {
+    while rpc_client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .unwrap()
+        < 5
+    {
+        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+    }
 }
