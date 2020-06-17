@@ -25,7 +25,8 @@ annotate() {
 }
 
 # Checks if a CI pull request affects one or more path patterns.  Each
-# argument is checked in series.
+# pattern argument is checked in series. If one of them found to be affected,
+# return immediately as such.
 #
 # Bash regular expressions are permitted in the pattern:
 #     affects .rs$    -- any file or directory ending in .rs
