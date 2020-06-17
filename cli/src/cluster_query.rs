@@ -36,7 +36,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     net::SocketAddr,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1139,10 +1139,10 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
     }
 
     let s: Vec<_> = cluster_nodes
-        .iter()
+        .into_iter()
         .map(|node| {
             format!(
-                "{:15} | {:44} | {:6} | {:5} | {:5}",
+                "{:15} | {:44} | {:6} | {:5} | {:5} | {}",
                 node.gossip
                     .map(|addr| addr.ip().to_string())
                     .unwrap_or_else(|| "none".to_string()),
@@ -1150,15 +1150,16 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
                 format_port(node.gossip),
                 format_port(node.tpu),
                 format_port(node.rpc),
+                node.version.unwrap_or_else(|| "unknown".to_string()),
             )
         })
         .collect();
 
     Ok(format!(
         "IP Address      | Node identifier                              \
-         | Gossip | TPU   | RPC\n\
+         | Gossip | TPU   | RPC   | Version\n\
          ----------------+----------------------------------------------+\
-         --------+-------+-------\n\
+         --------+-------+-------+----------------\n\
          {}\n\
          Nodes: {}",
         s.join("\n"),
@@ -1234,8 +1235,25 @@ pub fn process_show_validators(
     use_lamports_unit: bool,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
+<<<<<<< HEAD
     let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config)?;
     let vote_accounts = rpc_client.get_vote_accounts_with_commitment(commitment_config)?;
+=======
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(config.commitment)?;
+    let vote_accounts = rpc_client.get_vote_accounts_with_commitment(config.commitment)?;
+
+    let mut node_version = HashMap::new();
+    let unknown_version = "unknown".to_string();
+    for contact_info in rpc_client.get_cluster_nodes()? {
+        node_version.insert(
+            contact_info.pubkey,
+            contact_info
+                .version
+                .unwrap_or_else(|| unknown_version.clone()),
+        );
+    }
+
+>>>>>>> c151e783c... cli: Add version information to `solana gossip` and `solana validators` (#10652)
     let total_active_stake = vote_accounts
         .current
         .iter()
@@ -1254,14 +1272,44 @@ pub fn process_show_validators(
     current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
     let current_validators: Vec<CliValidator> = current
         .iter()
-        .map(|vote_account| CliValidator::new(vote_account, epoch_info.epoch))
+        .map(|vote_account| {
+            CliValidator::new(
+                vote_account,
+                epoch_info.epoch,
+                node_version
+                    .get(&vote_account.node_pubkey)
+                    .unwrap_or(&unknown_version)
+                    .clone(),
+            )
+        })
         .collect();
     let mut delinquent = vote_accounts.delinquent;
     delinquent.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
     let delinquent_validators: Vec<CliValidator> = delinquent
         .iter()
-        .map(|vote_account| CliValidator::new(vote_account, epoch_info.epoch))
+        .map(|vote_account| {
+            CliValidator::new(
+                vote_account,
+                epoch_info.epoch,
+                node_version
+                    .get(&vote_account.node_pubkey)
+                    .unwrap_or(&unknown_version)
+                    .clone(),
+            )
+        })
         .collect();
+
+    let mut stake_by_version: BTreeMap<_, (usize, u64)> = BTreeMap::new();
+    for validator in current_validators
+        .iter()
+        .chain(delinquent_validators.iter())
+    {
+        let mut entry = stake_by_version
+            .entry(validator.version.clone())
+            .or_default();
+        entry.0 += 1;
+        entry.1 += validator.activated_stake;
+    }
 
     let cli_validators = CliValidators {
         total_active_stake,
@@ -1269,6 +1317,7 @@ pub fn process_show_validators(
         total_deliquent_stake,
         current_validators,
         delinquent_validators,
+        stake_by_version,
         use_lamports_unit,
     };
     Ok(config.output_format.formatted_string(&cli_validators))
