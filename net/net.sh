@@ -99,6 +99,7 @@ Operate a configured testnet
    --operating-mode development|softlaunch
                                       - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
                                         or "softlaunch" mode with some features disabled at epoch 0 (default: development)
+   --warp-slot WARP_SLOT              - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -284,6 +285,7 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$maybeWarpSlot\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -353,6 +355,7 @@ startNode() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$maybeWarpSlot\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -744,6 +747,7 @@ netemConfigFile=""
 netemCommand="add"
 clientDelayStart=0
 netLogDir=
+maybeWarpSlot=
 
 command=$1
 [[ -n $command ]] || usage
@@ -846,6 +850,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --wait-for-supermajority ]]; then
       maybeWaitForSupermajority="$1 $2"
+      shift 2
+    elif [[ $1 == --warp-slot ]]; then
+      maybeWarpSlot="$1 $2"
       shift 2
     else
       usage "Unknown long option: $1"
