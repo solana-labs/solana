@@ -57,7 +57,7 @@ fn context_accountsdb_from_stream<'a, C, R, P>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-) -> Result<AccountsDB, IoError>
+) -> Result<AccountsDB, Error>
 where
     C: TypeContext<'a>,
     R: Read,
@@ -77,7 +77,7 @@ fn accountsdb_from_stream<R, P>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-) -> Result<AccountsDB, IoError>
+) -> Result<AccountsDB, Error>
 where
     R: Read,
     P: AsRef<Path>,
@@ -103,7 +103,7 @@ fn accountsdb_to_stream<W>(
     accounts_db: &AccountsDB,
     slot: Slot,
     account_storage_entries: &[SnapshotStorage],
-) -> Result<(), IoError>
+) -> Result<(), Error>
 where
     W: Write,
 {
@@ -116,8 +116,7 @@ where
                 account_storage_entries,
                 phantom: std::marker::PhantomData::default(),
             },
-        )
-        .map_err(bankrc_to_io_error),
+        ),
         SerdeStyle::OLDER => serialize_into(
             stream,
             &SerializableAccountsDB::<TypeContextLegacy> {
@@ -126,8 +125,7 @@ where
                 account_storage_entries,
                 phantom: std::marker::PhantomData::default(),
             },
-        )
-        .map_err(bankrc_to_io_error),
+        ),
     }
 }
 

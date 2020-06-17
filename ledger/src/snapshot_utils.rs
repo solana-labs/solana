@@ -88,7 +88,7 @@ pub enum SnapshotError {
     IO(#[from] std::io::Error),
 
     #[error("serialization error")]
-    Serialize(#[from] Box<bincode::ErrorKind>),
+    Serialize(#[from] bincode::Error),
 
     #[error("file system error")]
     FsExtra(#[from] fs_extra::error::Error),
