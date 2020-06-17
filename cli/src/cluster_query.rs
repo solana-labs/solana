@@ -1094,10 +1094,10 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
     }
 
     let s: Vec<_> = cluster_nodes
-        .iter()
+        .into_iter()
         .map(|node| {
             format!(
-                "{:15} | {:44} | {:6} | {:5} | {:5}",
+                "{:15} | {:44} | {:6} | {:5} | {:5} | {}",
                 node.gossip
                     .map(|addr| addr.ip().to_string())
                     .unwrap_or_else(|| "none".to_string()),
@@ -1105,15 +1105,16 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
                 format_port(node.gossip),
                 format_port(node.tpu),
                 format_port(node.rpc),
+                node.version.unwrap_or_else(||"-".to_string()),
             )
         })
         .collect();
 
     Ok(format!(
         "IP Address      | Node identifier                              \
-         | Gossip | TPU   | RPC\n\
+         | Gossip | TPU   | RPC   | Version\n\
          ----------------+----------------------------------------------+\
-         --------+-------+-------\n\
+         --------+-------+-------+----------------\n\
          {}\n\
          Nodes: {}",
         s.join("\n"),
