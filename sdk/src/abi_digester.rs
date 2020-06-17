@@ -62,7 +62,7 @@ impl AbiDigester {
         }
     }
 
-    // must create separate instances because we can't pass the single instnace to
+    // must create separate instances because we can't pass the single instance to
     // `.serialize()` multiple times
     pub fn create_new(&self) -> Self {
         Self {

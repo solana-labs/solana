@@ -696,7 +696,7 @@ pub mod tests {
         account.set_data_len_unsafe(crafted_data_len);
         assert_eq!(account.meta.data_len, crafted_data_len);
 
-        // Reload accoutns and observe crafted_data_len
+        // Reload accounts and observe crafted_data_len
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
         assert_eq!(account.meta.data_len, crafted_data_len);
@@ -763,7 +763,7 @@ pub mod tests {
         {
             let executable_bool: &bool = &account.account_meta.executable;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
-            // assert_eq! thinks *exeutable_bool is equal to false but the if condition thinks it's not, contradictly.
+            // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert_eq!(*executable_bool, false);
             const FALSE: bool = false; // keep clippy happy
             if *executable_bool == FALSE {

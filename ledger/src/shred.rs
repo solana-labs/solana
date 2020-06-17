@@ -1584,7 +1584,7 @@ pub mod tests {
         });
 
         coding_shreds.iter().enumerate().for_each(|(i, s)| {
-            // There'll be half the number of coding shreds, as FEC rate is 0.5
+            // There will be half the number of coding shreds, as FEC rate is 0.5
             // So multiply i with 2
             let expected_fec_set_index =
                 start_index + ((i * 2 / max_per_block) * max_per_block) as u32;

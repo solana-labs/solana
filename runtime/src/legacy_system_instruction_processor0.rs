@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_create_with_zero_lamports() {
-        // create account with zero lamports tranferred
+        // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref(100, 1, &Pubkey::new_rand()); // not from system account

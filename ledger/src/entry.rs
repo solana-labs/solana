@@ -738,7 +738,7 @@ mod tests {
         let tx0 = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
         let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
 
-        // Verify entry with 2 transctions
+        // Verify entry with 2 transactions
         let mut e0 = vec![Entry::new(&zero, 0, vec![tx0, tx1])];
         assert!(e0.verify(&zero));
 

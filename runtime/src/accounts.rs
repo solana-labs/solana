@@ -60,7 +60,7 @@ pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
 
 pub enum AccountAddressFilter {
-    Exclude, // exclude all addresses matching the fiter
+    Exclude, // exclude all addresses matching the filter
     Include, // only include addresses matching the filter
 }
 

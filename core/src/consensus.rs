@@ -1245,7 +1245,7 @@ pub mod test {
         // The other two validators voted at slots 46, 47, which
         // will only both show up in slot 48, at which point
         // 2/5 > SWITCH_FORK_THRESHOLD of the stake has voted
-        // on another fork, so switching should suceed
+        // on another fork, so switching should succeed
         let votes_to_simulate = (46..=48).collect();
         let results = vote_simulator.create_and_vote_new_branch(
             45,
@@ -1377,9 +1377,8 @@ pub mod test {
         pubkey_votes.sort();
         assert_eq!(pubkey_votes, account_latest_votes);
 
-        // Each acccount has 1 vote in it. After simulating a vote in collect_vote_lockouts,
+        // Each account has 1 vote in it. After simulating a vote in collect_vote_lockouts,
         // the account will have 2 votes, with lockout 2 + 4 = 6. So expected weight for
-        // two acccounts is 2 * 6 = 12
         assert_eq!(bank_weight, 12)
     }
 

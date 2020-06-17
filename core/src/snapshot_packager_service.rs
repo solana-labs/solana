@@ -179,7 +179,7 @@ mod tests {
         // Make tarball from packageable snapshot
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
-        // before we compare, stick an empty status_cache in this dir so that the package comparision works
+        // before we compare, stick an empty status_cache in this dir so that the package comparison works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];

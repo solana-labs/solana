@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_snapshot_n() {
-        // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
+        // create banks up to slot 4 and create 1 new account in each bank. test that bank 4 snapshots
         // and restores correctly
         run_bank_forks_snapshot_n(
             4,
@@ -333,7 +333,7 @@ mod tests {
 
         // Check the archive we cached the state for earlier was generated correctly
 
-        // before we compare, stick an empty status_cache in this dir so that the package comparision works
+        // before we compare, stick an empty status_cache in this dir so that the package comparison works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_status_cache_snapshot_n() {
-        // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
+        // create banks up to slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
         // Makes sure that the last bank is restored correctly
