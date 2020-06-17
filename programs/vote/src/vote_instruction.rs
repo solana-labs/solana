@@ -13,13 +13,8 @@ use solana_sdk::{
     account::{get_signers, next_keyed_account, KeyedAccount},
     decode_error::DecodeError,
     hash::Hash,
-<<<<<<< HEAD
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
-    program_utils::{limited_deserialize, next_keyed_account, DecodeError},
-=======
-    instruction::{AccountMeta, Instruction, InstructionError},
     program_utils::limited_deserialize,
->>>>>>> dac7dc2f1... Move types to more appropriate files (#10638)
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
