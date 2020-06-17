@@ -215,11 +215,7 @@ impl ReplayStage {
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
-<<<<<<< HEAD
-=======
-                        &mut heaviest_subtree_fork_choice,
                         &subscriptions,
->>>>>>> 39984cdcc... Wait until bank is frozen before sending RPC notifications (#10654)
                     );
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
@@ -901,11 +897,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
-<<<<<<< HEAD
-=======
-        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         subscriptions: &Arc<RpcSubscriptions>,
->>>>>>> 39984cdcc... Wait until bank is frozen before sending RPC notifications (#10654)
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -973,12 +965,7 @@ impl ReplayStage {
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
                 bank.freeze();
-<<<<<<< HEAD
-=======
-                heaviest_subtree_fork_choice
-                    .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
                 subscriptions.notify_frozen(bank.slot());
->>>>>>> 39984cdcc... Wait until bank is frozen before sending RPC notifications (#10654)
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
