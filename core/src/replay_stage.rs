@@ -215,6 +215,7 @@ impl ReplayStage {
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
+                        &subscriptions,
                     );
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
@@ -896,6 +897,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -963,6 +965,7 @@ impl ReplayStage {
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
                 bank.freeze();
+                subscriptions.notify_frozen(bank.slot());
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
