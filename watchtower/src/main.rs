@@ -139,6 +139,9 @@ fn get_config() -> Config {
 }
 
 fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: ConfirmedBlock) {
+    let break_program_id = "BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC"
+        .parse::<Pubkey>()
+        .unwrap();
     let mut vote_transactions = 0;
 
     for rpc_transaction in &confirmed_block.transactions {
@@ -158,6 +161,9 @@ fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: Con
                             vote_transactions += 1;
                             notify = false;
                         }
+                    }
+                    if program_pubkey == break_program_id {
+                        notify = false;
                     }
                 }
 
