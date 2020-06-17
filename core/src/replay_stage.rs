@@ -277,6 +277,7 @@ impl ReplayStage {
                         transaction_status_sender.clone(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
+                        &subscriptions,
                     );
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
@@ -1103,6 +1104,7 @@ impl ReplayStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1172,6 +1174,7 @@ impl ReplayStage {
                 bank.freeze();
                 heaviest_subtree_fork_choice
                     .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
+                subscriptions.notify_frozen(bank.slot());
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
