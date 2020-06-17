@@ -20,7 +20,7 @@ impl ForkChoice for BankWeightForkChoice {
         bank: &Bank,
         _tower: &Tower,
         progress: &mut ProgressMap,
-        computed_bank_stats: &ComputedBankState,
+        computed_bank_state: &ComputedBankState,
     ) {
         let bank_slot = bank.slot();
         // Only time progress map should be missing a bank slot
@@ -36,14 +36,14 @@ impl ForkChoice for BankWeightForkChoice {
             .get_fork_stats_mut(bank_slot)
             .expect("All frozen banks must exist in the Progress map");
 
-        let ComputedBankState { bank_weight, .. } = computed_bank_stats;
+        let ComputedBankState { bank_weight, .. } = computed_bank_state;
         stats.weight = *bank_weight;
         stats.fork_weight = stats.weight + parent_weight;
     }
 
     // Returns:
     // 1) The heaviest overall bank
-    // 2) The heavest bank on the same fork as the last vote (doesn't require a
+    // 2) The heaviest bank on the same fork as the last vote (doesn't require a
     // switching proof to vote for)
     fn select_forks(
         &self,

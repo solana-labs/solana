@@ -409,9 +409,9 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         bank: &Bank,
         _tower: &Tower,
         _progress: &mut ProgressMap,
-        computed_bank_stats: &ComputedBankState,
+        computed_bank_state: &ComputedBankState,
     ) {
-        let ComputedBankState { pubkey_votes, .. } = computed_bank_stats;
+        let ComputedBankState { pubkey_votes, .. } = computed_bank_state;
 
         // Update `heaviest_subtree_fork_choice` to find the best fork to build on
         let best_overall_slot = self.add_votes(
@@ -428,8 +428,8 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
     }
 
     // Returns:
-    // 1) The heaviest overall bbank
-    // 2) The heavest bank on the same fork as the last vote (doesn't require a
+    // 1) The heaviest overall bank
+    // 2) The heaviest bank on the same fork as the last vote (doesn't require a
     // switching proof to vote for)
     fn select_forks(
         &self,
