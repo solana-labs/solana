@@ -10,11 +10,9 @@ any control over the account.  In fact, a keypair or private key may not even
 exist for a stake account's address.
 
 The only time a stake account's address has a keypair file is when [creating
-a stake account using the command line tools](../cli/delegate-stake.md#create-a-stake-account),
+a stake account using the command line tools](../cli/staking-operations.md#create-a-stake-account),
 a new keypair file is created first only to ensure that the stake account's
 address is new and unique.
-After the account is created at its address, the keypair file that was used to
-derive the address can be discarded.
 
 #### Understanding Account Authorities
 Each stake account has two signing authorities specified by their respective address,
@@ -25,6 +23,7 @@ The *stake authority* is used to sign transactions for the following operations:
  - Deactivating the stake delegation
  - Splitting the stake account, creating a new stake account with a portion of the
  funds in the first account
+ - Merging two undelegated stake accounts into one
  - Setting a new stake authority
 
 The *withdraw authority* signs transactions for the following:
@@ -41,6 +40,9 @@ The withdraw authority keypair holds more control over the account as it is
 needed to liquidate the tokens in the stake account, and can be used to reset
 the stake authority if the stake authority keypair becomes lost or compromised.
 
+Securing the withdraw authority against loss or theft is of utmost importance
+when managing a stake account.
+
 #### Multiple Delegations
 A stake account may only ever be delegated to one validator at a time. All of
 the tokens in the account are either delegated or un-delegated, or in the
@@ -53,7 +55,11 @@ address containing some tokens, or by creating a single large stake account
 and using the stake authority to split the account into multiple accounts
 with token balances of your choosing.
 
-Stake and withdraw authority addresses can be assigned to multiple stake accounts.
+The same stake and withdraw authorities can be assigned to multiple
+stake accounts.
+
+Two stake accounts that are not delegated and that have the same stake and
+withdraw authority can be merged into a single resulting stake account.
 
 #### Delegation Warmup and Cooldown
 When a stake account is delegated, or a delegation is deactivated, the operation
@@ -63,8 +69,9 @@ A delegation or deactivation takes several epochs to complete, with a fraction
 of the delegation becoming active or inactive at each epoch boundary after
 the transaction containing the instructions has been submitted to the cluster.
 
-There is also a limit on how much global stake can become delegated or
-dectivated in a single epoch, to prevent large sudden changes in global stake.
+There is also a limit on how much total stake can become delegated or
+deactivated in a single epoch, to prevent large sudden changes in stake across
+the network as a whole.
 
 #### Lockups
 Stake accounts can have a lockup which prevents the withdraw authority on that
