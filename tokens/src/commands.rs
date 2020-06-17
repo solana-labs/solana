@@ -92,8 +92,8 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     }
 }
 
-fn distribute_tokens<T: Client>(
-    client: &ThinClient<T>,
+fn distribute_tokens(
+    client: &ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
@@ -206,8 +206,8 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn process_distribute_tokens<T: Client>(
-    client: &ThinClient<T>,
+pub fn process_distribute_tokens(
+    client: &ThinClient,
     args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
@@ -290,8 +290,8 @@ pub fn process_distribute_tokens<T: Client>(
     Ok(opt_confirmations)
 }
 
-fn finalize_transactions<T: Client>(
-    client: &ThinClient<T>,
+fn finalize_transactions(
+    client: &ThinClient,
     db: &mut PickleDb,
     dry_run: bool,
 ) -> Result<Option<usize>, Error> {
@@ -322,8 +322,8 @@ fn finalize_transactions<T: Client>(
 
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
-fn update_finalized_transactions<T: Client>(
-    client: &ThinClient<T>,
+fn update_finalized_transactions(
+    client: &ThinClient,
     db: &mut PickleDb,
 ) -> Result<Option<usize>, Error> {
     let transaction_infos = db::read_transaction_infos(db);
@@ -368,10 +368,7 @@ fn update_finalized_transactions<T: Client>(
     Ok(confirmations)
 }
 
-pub fn process_balances<T: Client>(
-    client: &ThinClient<T>,
-    args: &BalancesArgs,
-) -> Result<(), csv::Error> {
+pub fn process_balances(client: &ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
     let allocations = merge_allocations(&allocations);
