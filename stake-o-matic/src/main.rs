@@ -565,15 +565,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let (quality_block_producers, poor_block_producers) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
 
-    if poor_block_producers.len()
-        > quality_block_producers.len() * config.max_poor_block_productor_percentage / 100
-    {
-        error!(
-            "Something is wrong.  More than {}% of validators classified as poor block producers",
-            config.max_poor_block_productor_percentage
-        );
-        process::exit(1);
-    }
+    let too_many_poor_block_producers = poor_block_producers.len()
+        > quality_block_producers.len() * config.max_poor_block_productor_percentage / 100;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -729,10 +722,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ));
             }
 
-            if quality_block_producers.contains(&node_pubkey) {
-                // Delegate bonus stake
-                if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
-                    delegate_stake_transactions.push((
+            if !too_many_poor_block_producers {
+                if quality_block_producers.contains(&node_pubkey) {
+                    // Delegate bonus stake
+                    if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
+                        delegate_stake_transactions.push((
                         Transaction::new_unsigned(
                         Message::new_with_payer(
                             &[stake_instruction::delegate_stake(
@@ -749,10 +743,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             lamports_to_sol(config.bonus_stake_amount),
                         ),
                     ));
-                }
-            } else {
-                // Deactivate bonus stake
-                delegate_stake_transactions.push((
+                    }
+                } else {
+                    // Deactivate bonus stake
+                    delegate_stake_transactions.push((
                     Transaction::new_unsigned(
                     Message::new_with_payer(
                         &[stake_instruction::deactivate_stake(
@@ -768,6 +762,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         lamports_to_sol(config.bonus_stake_amount),
                     ),
                 ));
+                }
             }
         } else {
             // Destake the validator if it has been delinquent for longer than the grace period
@@ -868,6 +863,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         delegate_stake_transactions,
         &config.authorized_staker,
     )?;
+
+    if too_many_poor_block_producers {
+        let message = format!(
+            "Note: Something is wrong, more than {}% of validators classified \
+                       as poor block producers in epoch {}.  Bonus stake frozen",
+            config.max_poor_block_productor_percentage, last_epoch,
+        );
+        warn!("{}", message);
+        if !config.dry_run {
+            notifier.send(&message);
+        }
+    }
 
     if !process_confirmations(
         confirmations,
