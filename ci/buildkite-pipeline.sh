@@ -25,7 +25,8 @@ annotate() {
 }
 
 # Checks if a CI pull request affects one or more path patterns.  Each
-# argument is checked in series.
+# pattern argument is checked in series. If one of them found to be affected,
+# return immediately as such.
 #
 # Bash regular expressions are permitted in the pattern:
 #     affects .rs$    -- any file or directory ending in .rs
@@ -41,7 +42,8 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  for pattern in "$@"; do
+  # Assume everyting needs to be tested when any Dockerfile changes
+  for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
         if [[ ! $file =~ ${pattern:1} ]]; then
