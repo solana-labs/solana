@@ -8,7 +8,9 @@ use solana_client::rpc_response::{
     Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
 };
 #[cfg(test)]
-use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
+use solana_ledger::blockstore::Blockstore;
+#[cfg(test)]
+use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{
     clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
 };
@@ -364,12 +366,12 @@ mod tests {
     use serial_test_derive::serial;
     use solana_budget_program::{self, budget_instruction};
     use solana_ledger::{
-        bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
     use solana_runtime::{
         bank::Bank,
+        bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
     };
     use solana_sdk::{

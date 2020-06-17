@@ -11,8 +11,8 @@ use serde::Serialize;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
-use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
-use solana_runtime::bank::Bank;
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},

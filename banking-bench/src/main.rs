@@ -11,14 +11,13 @@ use solana_core::{
     poh_recorder::WorkingBankEntry,
 };
 use solana_ledger::{
-    bank_forks::BankForks,
     blockstore::Blockstore,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     get_tmp_ledger_path,
 };
 use solana_measure::measure::Measure;
 use solana_perf::packet::to_packets_chunked;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,

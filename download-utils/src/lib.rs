@@ -1,7 +1,7 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
-use solana_ledger::bank_forks::CompressionType;
+use solana_runtime::{bank_forks::CompressionType, snapshot_utils};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::fs::{self, File};
@@ -133,7 +133,7 @@ pub fn download_snapshot(
     desired_snapshot_hash: (Slot, Hash),
 ) -> Result<(), String> {
     // Remove all snapshot not matching the desired hash
-    let snapshot_packages = solana_ledger::snapshot_utils::get_snapshot_archives(ledger_path);
+    let snapshot_packages = snapshot_utils::get_snapshot_archives(ledger_path);
     let mut found_package = false;
     for (snapshot_package, (snapshot_slot, snapshot_hash, _compression)) in snapshot_packages.iter()
     {
@@ -154,7 +154,7 @@ pub fn download_snapshot(
             CompressionType::Gzip,
             CompressionType::Bzip2,
         ] {
-            let desired_snapshot_package = solana_ledger::snapshot_utils::get_snapshot_archive_path(
+            let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
                 ledger_path,
                 &desired_snapshot_hash,
                 compression,

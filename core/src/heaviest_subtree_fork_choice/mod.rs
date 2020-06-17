@@ -1,5 +1,5 @@
 #[cfg(test)]
-use solana_ledger::bank_forks::BankForks;
+use solana_runtime::bank_forks::BankForks;
 use solana_runtime::{bank::Bank, epoch_stakes::EpochStakes};
 use solana_sdk::{
     clock::{Epoch, Slot},

@@ -7,12 +7,11 @@ use solana_core::{
     rpc_subscriptions::RpcSubscriptions, validator::TestValidator,
 };
 use solana_ledger::{
-    bank_forks::BankForks,
     blockstore::Blockstore,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     get_tmp_ledger_path,
 };
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
     system_transaction,

@@ -7,9 +7,9 @@ use solana_clap_utils::{
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{
-    blockstore::create_new_ledger, blockstore_db::AccessType,
-    hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, poh::compute_hashes_per_tick,
+    blockstore::create_new_ledger, blockstore_db::AccessType, poh::compute_hashes_per_tick,
 };
+use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
     account::Account,
     clock,

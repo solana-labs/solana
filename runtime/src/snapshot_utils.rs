@@ -1,6 +1,12 @@
 use crate::bank_forks::CompressionType;
 use crate::hardened_unpack::{unpack_snapshot, UnpackError};
 use crate::snapshot_package::AccountsPackage;
+use crate::{
+    bank::{Bank, BankSlotDelta},
+    serde_snapshot::{
+        bankrc_from_stream, bankrc_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
+    },
+};
 use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
 use flate2::read::GzDecoder;
@@ -8,12 +14,6 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use regex::Regex;
 use solana_measure::measure::Measure;
-use solana_runtime::{
-    bank::{Bank, BankSlotDelta},
-    serde_snapshot::{
-        bankrc_from_stream, bankrc_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
-    },
-};
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
@@ -784,8 +784,8 @@ pub fn verify_snapshot_archive<P, Q, R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use bincode::{deserialize_from, serialize_into};
-    use matches::assert_matches;
     use std::mem::size_of;
 
     #[test]

@@ -237,7 +237,7 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use matches::assert_matches;
+    use assert_matches::assert_matches;
     use tar::{Builder, Header};
 
     #[test]

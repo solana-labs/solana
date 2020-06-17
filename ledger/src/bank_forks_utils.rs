@@ -1,14 +1,16 @@
 use crate::{
-    bank_forks::{BankForks, SnapshotConfig},
     blockstore::Blockstore,
     blockstore_processor::{
         self, BlockstoreProcessorError, BlockstoreProcessorResult, ProcessOptions,
     },
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
-    snapshot_utils,
 };
 use log::*;
+use solana_runtime::{
+    bank_forks::{BankForks, SnapshotConfig},
+    snapshot_utils,
+};
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result, sync::Arc};
 

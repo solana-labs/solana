@@ -1,5 +1,5 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_ledger::{snapshot_package::AccountsPackageReceiver, snapshot_utils};
+use solana_runtime::{snapshot_package::AccountsPackageReceiver, snapshot_utils};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
@@ -78,12 +78,13 @@ impl SnapshotPackagerService {
 mod tests {
     use super::*;
     use bincode::serialize_into;
-    use solana_ledger::bank_forks::CompressionType;
-    use solana_ledger::{
+    use solana_runtime::{
+        accounts_db::AccountStorageEntry,
+        bank::BankSlotDelta,
+        bank_forks::CompressionType,
         snapshot_package::AccountsPackage,
         snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
-    use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
     use solana_sdk::hash::Hash;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},

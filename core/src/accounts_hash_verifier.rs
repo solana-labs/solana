@@ -5,9 +5,8 @@
 // set and halt the node if a mismatch is detected.
 
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_ledger::{
-    snapshot_package::AccountsPackage, snapshot_package::AccountsPackageReceiver,
-    snapshot_package::AccountsPackageSender,
+use solana_runtime::snapshot_package::{
+    AccountsPackage, AccountsPackageReceiver, AccountsPackageSender,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -176,7 +175,7 @@ mod tests {
     use super::*;
     use crate::cluster_info::make_accounts_hashes_message;
     use crate::contact_info::ContactInfo;
-    use solana_ledger::bank_forks::CompressionType;
+    use solana_runtime::bank_forks::CompressionType;
     use solana_sdk::{
         hash::hash,
         signature::{Keypair, Signer},

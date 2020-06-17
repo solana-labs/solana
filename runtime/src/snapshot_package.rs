@@ -1,5 +1,5 @@
 use crate::bank_forks::CompressionType;
-use solana_runtime::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::{

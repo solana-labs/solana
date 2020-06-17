@@ -4,8 +4,7 @@ use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     progress_map::ProgressMap,
 };
-use solana_ledger::bank_forks::BankForks;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},

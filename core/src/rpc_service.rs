@@ -10,9 +10,9 @@ use jsonrpc_http_server::{
     RequestMiddlewareAction, ServerBuilder,
 };
 use regex::Regex;
-use solana_ledger::{
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
-    blockstore::Blockstore,
     snapshot_utils,
 };
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
@@ -350,11 +350,10 @@ mod tests {
         rpc::create_validator_exit,
     };
     use solana_ledger::{
-        bank_forks::CompressionType,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_runtime::bank::Bank;
+    use solana_runtime::{bank::Bank, bank_forks::CompressionType};
     use solana_sdk::signature::Signer;
     use std::net::{IpAddr, Ipv4Addr};
 

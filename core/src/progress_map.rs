@@ -3,11 +3,8 @@ use crate::{
     consensus::StakeLockout, pubkey_references::PubkeyReferences,
     replay_stage::SUPERMINORITY_THRESHOLD,
 };
-use solana_ledger::{
-    bank_forks::BankForks,
-    blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-};
-use solana_runtime::bank::Bank;
+use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

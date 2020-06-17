@@ -1,7 +1,6 @@
 use crate::cluster_info::ClusterInfo;
-use solana_ledger::bank_forks::BankForks;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{
     collections::HashMap,
