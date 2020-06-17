@@ -1,5 +1,5 @@
 use crate::{
-    checks::{check_account_for_fee, check_unique_pubkeys},
+    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
         generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
         CliConfig, CliError, ProcessResult, SignerIndex,
@@ -543,11 +543,12 @@ pub fn process_vote_authorize(
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
@@ -582,11 +583,12 @@ pub fn process_vote_update_validator(
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
@@ -615,11 +617,12 @@ pub fn process_vote_update_commission(
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
@@ -743,11 +746,12 @@ pub fn process_withdraw_from_vote_account(
     let message = Message::new_with_payer(&[ix], Some(&config.signers[0].pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     transaction.try_sign(&config.signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &transaction.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &transaction,

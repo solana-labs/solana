@@ -93,7 +93,7 @@ pub fn check_account_for_balance_with_commitment(
     let lamports = rpc_client
         .get_balance_with_commitment(account_pubkey, commitment)?
         .value;
-    if lamports >= balance {
+    if lamports != 0 && lamports >= balance {
         return Ok(true);
     }
     Ok(false)

@@ -1633,11 +1633,12 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
@@ -1662,11 +1663,12 @@ fn process_time_elapsed(
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
@@ -1763,11 +1765,12 @@ fn process_witness(
     let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
-    check_account_for_fee(
+    check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        config.commitment,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,
