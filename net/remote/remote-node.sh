@@ -26,6 +26,7 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
+maybeWarpSlot="${21}"
 set +x
 
 missing() {
@@ -228,6 +229,11 @@ EOF
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
       multinode-demo/setup.sh "${args[@]}"
+
+      if [[ -n "$maybeWarpSlot" ]]; then
+        # shellcheck disable=SC2086 # Do not want to quote $maybeWarSlot
+        solana-ledger-tool -l config/bootstrap-validator create-snapshot 0 config/bootstrap-validator $maybeWarpSlot
+      fi
 
       solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
     fi
