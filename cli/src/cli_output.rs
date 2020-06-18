@@ -255,6 +255,13 @@ pub struct CliValidators {
     pub total_deliquent_stake: u64,
     pub current_validators: Vec<CliValidator>,
     pub delinquent_validators: Vec<CliValidator>,
+    pub stake_by_version: BTreeMap<
+        String, /*version*/
+        (
+            usize, /*num validators*/
+            u64,   /*total_active_stake*/
+        ),
+    >,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
 }
@@ -278,7 +285,7 @@ impl fmt::Display for CliValidators {
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>10}  {}",
+                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10}  {:>10}  {:>17}  {}",
                 if delinquent {
                     WARNING.to_string()
                 } else {
@@ -290,6 +297,7 @@ impl fmt::Display for CliValidators {
                 non_zero_or_dash(validator.last_vote),
                 non_zero_or_dash(validator.root_slot),
                 validator.credits,
+                validator.version,
                 if validator.activated_stake > 0 {
                     format!(
                         "{} ({:.2}%)",
@@ -330,18 +338,32 @@ impl fmt::Display for CliValidators {
                 ),
             )?;
         }
+
+        writeln!(f)?;
+        writeln!(f, "{}", style("Active Stake By Version:").bold())?;
+        for (version, (num_validators, total_active_stake)) in self.stake_by_version.iter() {
+            writeln!(
+                f,
+                "{} x {} = {:0.2}%",
+                version,
+                num_validators,
+                100. * *total_active_stake as f64 / self.total_active_stake as f64
+            )?;
+        }
+
         writeln!(f)?;
         writeln!(
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:<44}  {}  {}  {}  {:>10}  {}",
+                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:>17}  {}",
                 "Identity Pubkey",
                 "Vote Account Pubkey",
                 "Commission",
                 "Last Vote",
                 "Root Block",
                 "Credits",
+                "Version",
                 "Active Stake",
             ))
             .bold()
@@ -378,10 +400,11 @@ pub struct CliValidator {
     pub root_slot: u64,
     pub credits: u64,
     pub activated_stake: u64,
+    pub version: String,
 }
 
 impl CliValidator {
-    pub fn new(vote_account: &RpcVoteAccountInfo, current_epoch: Epoch) -> Self {
+    pub fn new(vote_account: &RpcVoteAccountInfo, current_epoch: Epoch, version: String) -> Self {
         Self {
             identity_pubkey: vote_account.node_pubkey.to_string(),
             vote_account_pubkey: vote_account.vote_pubkey.to_string(),
@@ -400,6 +423,7 @@ impl CliValidator {
                 })
                 .unwrap_or(0),
             activated_stake: vote_account.activated_stake,
+            version,
         }
     }
 }
