@@ -1,5 +1,7 @@
 # |source| this file
 
+set -ex
+
 ls -l lib
 test -r lib/index.iife.js
 test -r lib/index.cjs.js
