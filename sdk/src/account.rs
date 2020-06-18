@@ -286,3 +286,16 @@ where
         .cloned()
         .collect::<A>()
 }
+
+/// Return the next KeyedAccount or a NotEnoughAccountKeys error
+pub fn next_keyed_account<'a, 'b, I: Iterator<Item = &'a KeyedAccount<'b>>>(
+    iter: &mut I,
+) -> Result<I::Item, InstructionError> {
+    iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+/// Return true if the first keyed_account is executable, used to determine if
+/// the loader should call a program's 'main'
+pub fn is_executable(keyed_accounts: &[KeyedAccount]) -> Result<bool, InstructionError> {
+    Ok(!keyed_accounts.is_empty() && keyed_accounts[0].executable()?)
+}

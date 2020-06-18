@@ -4,9 +4,9 @@ use chrono::prelude::{DateTime, Utc};
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
+    decode_error::DecodeError,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
-    program_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
 };
