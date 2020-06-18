@@ -539,17 +539,15 @@ impl ReplayStage {
             if my_pubkey == vote_bank.collector_id() {
                 (true, Some(timing), Some(vote_bank.slot()))
             } else {
-                // Verify `vote_bank`'s ancestors and `vote_bank`
-                if let Some(res) = slot_verify_results.read().unwrap().get(&vote_bank.slot()) {
-                    (*res, Some(timing), Some(vote_bank.slot()))
-                } else {
-                    // Poll for result of verification of `vote_bank`'s slot
-                    (
-                        Self::poll_verify_result(slot_verify_results, vote_bank.slot()),
-                        Some(timing),
-                        Some(vote_bank.slot()),
-                    )
-                }
+                // Poll for result of verification of `vote_bank`'s slot
+                let res = Self::poll_verify_result(slot_verify_results, vote_bank.slot());
+                info!(
+                    "{} poll verification slot {} result: {}",
+                    my_pubkey,
+                    vote_bank.slot(),
+                    res
+                );
+                (res, Some(timing), Some(vote_bank.slot()))
             }
         } else if let Some(reset_bank) = reset_bank {
             let timing = &mut progress
@@ -559,17 +557,15 @@ impl ReplayStage {
             if my_pubkey == reset_bank.collector_id() {
                 (true, Some(timing), Some(reset_bank.slot()))
             } else {
-                // Verify `reset_bank`'s ancestors and `reset_bank`
-                if let Some(res) = slot_verify_results.read().unwrap().get(&reset_bank.slot()) {
-                    (*res, Some(timing), Some(reset_bank.slot()))
-                } else {
-                    // Poll for result of verification of `reset_bank`'s slot
-                    (
-                        Self::poll_verify_result(slot_verify_results, reset_bank.slot()),
-                        Some(timing),
-                        Some(reset_bank.slot()),
-                    )
-                }
+                // Poll for result of verification of `reset_bank`'s slot
+                let res = Self::poll_verify_result(slot_verify_results, reset_bank.slot());
+                info!(
+                    "{} poll verification slot {} result: {}",
+                    my_pubkey,
+                    reset_bank.slot(),
+                    res
+                );
+                (res, Some(timing), Some(reset_bank.slot()))
             }
         } else {
             // Both vote and reset bank are None, vacuously true
