@@ -1257,16 +1257,20 @@ pub fn process_show_validators(
         })
         .collect();
 
-    let mut stake_by_version: BTreeMap<_, (usize, u64)> = BTreeMap::new();
-    for validator in current_validators
-        .iter()
-        .chain(delinquent_validators.iter())
-    {
+    let mut stake_by_version: BTreeMap<_, CliValidatorsStakeByVersion> = BTreeMap::new();
+    for validator in current_validators.iter() {
         let mut entry = stake_by_version
             .entry(validator.version.clone())
             .or_default();
-        entry.0 += 1;
-        entry.1 += validator.activated_stake;
+        entry.current_validators += 1;
+        entry.current_active_stake += validator.activated_stake;
+    }
+    for validator in delinquent_validators.iter() {
+        let mut entry = stake_by_version
+            .entry(validator.version.clone())
+            .or_default();
+        entry.delinquent_validators += 1;
+        entry.delinquent_active_stake += validator.activated_stake;
     }
 
     let cli_validators = CliValidators {
