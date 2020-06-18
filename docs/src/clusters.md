@@ -82,7 +82,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint 35.203.170.30:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    --expected-shred-version 56096 \
+    --expected-shred-version 62235 \
     --limit-ledger-size
 ```
 
@@ -123,7 +123,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
-    --expected-shred-version 62235 \
+    --expected-shred-version 64864 \
     --limit-ledger-size
 ```
 
