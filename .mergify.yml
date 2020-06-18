@@ -4,16 +4,27 @@
 #
 # https://doc.mergify.io/
 pull_request_rules:
-  - name: automatic merge on CI success
+  - name: automatic merge (squash) on CI success
     conditions:
       - status-success=buildkite/solana
       #- status-success=Travis CI - Pull Request
       - status-success=ci-gate
       - label=automerge
+      - author≠@dont-squash-my-commits
     actions:
       merge:
         method: squash
-        strict: true
+  # Join the dont-squash-my-commits group if you won't like your commits squashed
+  - name: automatic merge (rebase) on CI success
+    conditions:
+      - status-success=buildkite/solana
+      #- status-success=Travis CI - Pull Request
+      - status-success=ci-gate
+      - label=automerge
+      - author=@dont-squash-my-commits
+    actions:
+      merge:
+        method: rebase
   - name: remove automerge label on CI failure
     conditions:
       - label=automerge
