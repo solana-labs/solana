@@ -347,7 +347,7 @@ impl<T: AbiExample> AbiExample for std::sync::RwLock<T> {
     }
 }
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 impl<
         T: std::cmp::Eq + std::hash::Hash + AbiExample,
@@ -376,6 +376,13 @@ impl<T: AbiExample> AbiExample for Vec<T> {
     fn example() -> Self {
         info!("AbiExample for (Vec<T>): {}", type_name::<Self>());
         vec![T::example()]
+    }
+}
+
+impl<T: AbiExample> AbiExample for VecDeque<T> {
+    fn example() -> Self {
+        info!("AbiExample for (Vec<T>): {}", type_name::<Self>());
+        VecDeque::from(vec![T::example()])
     }
 }
 
