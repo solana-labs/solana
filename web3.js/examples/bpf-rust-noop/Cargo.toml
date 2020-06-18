@@ -17,9 +17,6 @@ num-traits = "0.2"
 solana-sdk = { git = "https://github.com/solana-labs/solana", default-features = false }
 thiserror = "1.0"
 
-[dev_dependencies]
-solana-sdk-bpf-test = { path = "../../bpf-sdk/rust/test"}
-
 [features]
 program = ["solana-sdk/program"]
 default = ["program"]
