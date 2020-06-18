@@ -14,6 +14,3 @@ module.system.node.resolve_dirname=./src
 module.use_strict=true
 experimental.const_params=true
 include_warnings=true
-suppress_comment=\\(.\\|\n\\)*\\$FlowFixMe
-suppress_comment=\\(.\\|\n\\)*\\$FlowIssue
-suppress_comment=\\(.\\|\n\\)*\\$FlowIgnore
