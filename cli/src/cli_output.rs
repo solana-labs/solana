@@ -1,4 +1,7 @@
-use crate::{cli::build_balance_message, display::writeln_name_value};
+use crate::{
+    cli::build_balance_message,
+    display::{format_labeled_address, writeln_name_value},
+};
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
@@ -18,7 +21,11 @@ use solana_vote_program::{
     authorized_voters::AuthorizedVoters,
     vote_state::{BlockTimestamp, Lockout},
 };
-use std::{collections::BTreeMap, fmt, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+    time::Duration,
+};
 
 static WARNING: Emoji = Emoji("⚠️", "!");
 
@@ -404,10 +411,15 @@ pub struct CliValidator {
 }
 
 impl CliValidator {
-    pub fn new(vote_account: &RpcVoteAccountInfo, current_epoch: Epoch, version: String) -> Self {
+    pub fn new(
+        vote_account: &RpcVoteAccountInfo,
+        current_epoch: Epoch,
+        version: String,
+        address_labels: &HashMap<String, String>,
+    ) -> Self {
         Self {
-            identity_pubkey: vote_account.node_pubkey.to_string(),
-            vote_account_pubkey: vote_account.vote_pubkey.to_string(),
+            identity_pubkey: format_labeled_address(&vote_account.node_pubkey, address_labels),
+            vote_account_pubkey: format_labeled_address(&vote_account.vote_pubkey, address_labels),
             commission: vote_account.commission,
             last_vote: vote_account.last_vote,
             root_slot: vote_account.root_slot,
