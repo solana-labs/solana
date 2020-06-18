@@ -73,6 +73,7 @@ ARGS+=(
   --env BUILDKITE_JOB_ID
   --env CI
   --env CI_BRANCH
+  --env CI_BASE_BRANCH
   --env CI_TAG
   --env CI_BUILD_ID
   --env CI_COMMIT
