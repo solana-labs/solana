@@ -104,7 +104,7 @@ Alternatively use the Github UI.
 1. Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) for tagging a release.
 1. Click "Draft new release".  The release tag must exactly match the `version`
    field in `/Cargo.toml` prefixed by `v`.
-   1.  If the Cargo.toml verion field is **0.12.3**, then the release tag must be **v0.12.3**
+   1.  If the Cargo.toml version field is **0.12.3**, then the release tag must be **v0.12.3**
 1. Make sure the Target Branch field matches the branch you want to make a release on.
    1.  If you want to release v0.12.0, the target branch must be v0.12
 1. If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
