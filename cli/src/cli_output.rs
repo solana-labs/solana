@@ -254,6 +254,15 @@ fn slot_to_human_time(slot: Slot) -> String {
     .to_string()
 }
 
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CliValidatorsStakeByVersion {
+    pub current_validators: usize,
+    pub delinquent_validators: usize,
+    pub current_active_stake: u64,
+    pub delinquent_active_stake: u64,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliValidators {
@@ -262,13 +271,7 @@ pub struct CliValidators {
     pub total_deliquent_stake: u64,
     pub current_validators: Vec<CliValidator>,
     pub delinquent_validators: Vec<CliValidator>,
-    pub stake_by_version: BTreeMap<
-        String, /*version*/
-        (
-            usize, /*num validators*/
-            u64,   /*total_active_stake*/
-        ),
-    >,
+    pub stake_by_version: BTreeMap<String, CliValidatorsStakeByVersion>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
 }
@@ -347,14 +350,23 @@ impl fmt::Display for CliValidators {
         }
 
         writeln!(f)?;
-        writeln!(f, "{}", style("Active Stake By Version:").bold())?;
-        for (version, (num_validators, total_active_stake)) in self.stake_by_version.iter() {
+        writeln!(f, "{}", style("Stake By Version:").bold())?;
+        for (version, info) in self.stake_by_version.iter() {
             writeln!(
                 f,
-                "{} x {} = {:0.2}%",
+                "{:<16} - {:3} current validators ({:>5.2}%){}",
                 version,
-                num_validators,
-                100. * *total_active_stake as f64 / self.total_active_stake as f64
+                info.current_validators,
+                100. * info.current_active_stake as f64 / self.total_active_stake as f64,
+                if info.delinquent_validators > 0 {
+                    format!(
+                        ", {:3} delinquent validators ({:>5.2}%)",
+                        info.delinquent_validators,
+                        100. * info.delinquent_active_stake as f64 / self.total_active_stake as f64
+                    )
+                } else {
+                    "".to_string()
+                },
             )?;
         }
 
@@ -363,7 +375,7 @@ impl fmt::Display for CliValidators {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:>17}  {}",
+                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^17}  {}",
                 "Identity Pubkey",
                 "Vote Account Pubkey",
                 "Commission",
