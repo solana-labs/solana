@@ -41,12 +41,15 @@ impl ToTokens for Id {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let id = &self.0;
         tokens.extend(quote! {
+            /// The static program ID
             pub static ID: ::solana_sdk::pubkey::Pubkey = #id;
 
+            /// Confirms that a given pubkey is equivalent to the program ID
             pub fn check_id(id: &::solana_sdk::pubkey::Pubkey) -> bool {
                 id == &ID
             }
 
+            /// Returns the program ID
             pub fn id() -> ::solana_sdk::pubkey::Pubkey {
                 ID
             }
