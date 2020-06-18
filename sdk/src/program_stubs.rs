@@ -1,21 +1,30 @@
 //! @brief Stubs for syscalls when building tests for x86
 
+use std::io::{self, Write};
+
+fn print_line_to_stdout(message: &str) {
+    io::stdout()
+        .write_all(format!("{}\n", message).as_bytes())
+        .unwrap();
+    io::stdout().flush().unwrap();
+}
+
 #[no_mangle]
 /// # Safety
 pub unsafe fn sol_log_(message: *const u8, length: u64) {
     let slice = std::slice::from_raw_parts(message, length as usize);
     let string = std::str::from_utf8(&slice).unwrap();
-    std::println!("{}", string);
+    print_line_to_stdout(string);
 }
 
 #[no_mangle]
 pub fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
-    std::println!("{} {} {} {} {}", arg1, arg2, arg3, arg4, arg5);
+    print_line_to_stdout(&format!("{} {} {} {} {}", arg1, arg2, arg3, arg4, arg5));
 }
 
 #[no_mangle]
 pub fn sol_invoke_signed_rust() {
-    std::println!("sol_invoke_signed_rust()");
+    print_line_to_stdout("sol_invoke_signed_rust()");
 }
 
 #[macro_export]
