@@ -6,6 +6,7 @@ use solana_clap_utils::{
     input_parsers::pubkeys_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
+use solana_cli::display::{format_labeled_address, write_transaction};
 use solana_client::{
     client_error::Result as ClientResult, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus,
 };
@@ -18,6 +19,7 @@ use solana_sdk::{
 use solana_transaction_status::{ConfirmedBlock, TransactionEncoding};
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
+    collections::HashMap,
     error,
     str::FromStr,
     thread::sleep,
@@ -31,6 +33,7 @@ struct Config {
     no_duplicate_notifications: bool,
     monitor_active_stake: bool,
     notify_on_transactions: bool,
+    address_labels: HashMap<String, String>,
 }
 
 fn get_config() -> Config {
@@ -123,7 +126,7 @@ fn get_config() -> Config {
 
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let json_rpc_url =
-        value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url);
+        value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url.clone());
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_else(Vec::new)
         .into_iter()
@@ -141,6 +144,7 @@ fn get_config() -> Config {
         no_duplicate_notifications,
         monitor_active_stake,
         notify_on_transactions,
+        address_labels: config.address_labels,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -184,14 +188,7 @@ fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: Con
 
                 if notify {
                     let mut w = Vec::new();
-                    if solana_cli::display::write_transaction(
-                        &mut w,
-                        &transaction,
-                        &rpc_transaction.meta,
-                        "",
-                    )
-                    .is_ok()
-                    {
+                    if write_transaction(&mut w, &transaction, &rpc_transaction.meta, "").is_ok() {
                         if let Ok(s) = String::from_utf8(w) {
                             notifier.send(&format!("```Slot: {}\n{}```", slot, s));
                         }
@@ -385,18 +382,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 } else {
                     let mut errors = vec![];
                     for validator_identity in config.validator_identity_pubkeys.iter() {
+                        let formatted_validator_identity =
+                            format_labeled_address(&validator_identity, &config.address_labels);
                         if vote_accounts
                             .delinquent
                             .iter()
                             .any(|vai| vai.node_pubkey == *validator_identity)
                         {
-                            errors.push(format!("{} delinquent", validator_identity));
+                            errors.push(format!("{} delinquent", formatted_validator_identity));
                         } else if !vote_accounts
                             .current
                             .iter()
                             .any(|vai| vai.node_pubkey == *validator_identity)
                         {
-                            errors.push(format!("{} missing", validator_identity));
+                            errors.push(format!("{} missing", formatted_validator_identity));
                         }
 
                         rpc_client
@@ -408,12 +407,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                     // find some more SOL
                                     failures.push((
                                         "balance",
-                                        format!("{} has {} SOL", validator_identity, balance),
+                                        format!(
+                                            "{} has {} SOL",
+                                            formatted_validator_identity, balance
+                                        ),
                                     ));
                                 }
                             })
                             .unwrap_or_else(|err| {
-                                warn!("Failed to get balance of {}: {:?}", validator_identity, err);
+                                warn!(
+                                    "Failed to get balance of {}: {:?}",
+                                    formatted_validator_identity, err
+                                );
                             });
                     }
 

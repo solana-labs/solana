@@ -6,7 +6,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::RpcTransactionStatusMeta;
-use std::{fmt, io};
+use std::{collections::HashMap, fmt, io};
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
@@ -25,6 +25,19 @@ pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fm
         style(value)
     };
     writeln!(f, "{} {}", style(name).bold(), styled_value)
+}
+
+pub fn format_labeled_address(pubkey: &str, address_labels: &HashMap<String, String>) -> String {
+    let label = address_labels.get(pubkey);
+    match label {
+        Some(label) => format!(
+            "{:.31} ({:.4}..{})",
+            label,
+            pubkey,
+            pubkey.split_at(pubkey.len() - 4).1
+        ),
+        None => pubkey.to_string(),
+    }
 }
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -209,4 +222,33 @@ pub fn new_spinner_progress_bar() -> ProgressBar {
         .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
     progress_bar.enable_steady_tick(100);
     progress_bar
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use solana_sdk::pubkey::Pubkey;
+
+    #[test]
+    fn test_format_labeled_address() {
+        let pubkey = Pubkey::default().to_string();
+        let mut address_labels = HashMap::new();
+
+        assert_eq!(format_labeled_address(&pubkey, &address_labels), pubkey);
+
+        address_labels.insert(pubkey.to_string(), "Default Address".to_string());
+        assert_eq!(
+            &format_labeled_address(&pubkey, &address_labels),
+            "Default Address (1111..1111)"
+        );
+
+        address_labels.insert(
+            pubkey.to_string(),
+            "abcdefghijklmnopqrstuvwxyz1234567890".to_string(),
+        );
+        assert_eq!(
+            &format_labeled_address(&pubkey, &address_labels),
+            "abcdefghijklmnopqrstuvwxyz12345 (1111..1111)"
+        );
+    }
 }

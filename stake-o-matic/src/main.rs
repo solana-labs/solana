@@ -4,6 +4,7 @@ use solana_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
     input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
 };
+use solana_cli::display::format_labeled_address;
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::RpcVoteAccountInfo,
@@ -65,6 +66,8 @@ struct Config {
 
     /// Don't ever unstake more than this percentage of the cluster at one time
     max_poor_block_productor_percentage: usize,
+
+    address_labels: HashMap<String, String>,
 }
 
 fn get_config() -> Config {
@@ -208,7 +211,8 @@ fn get_config() -> Config {
                 })
                 .collect();
             (
-                value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url),
+                value_t!(matches, "json_rpc_url", String)
+                    .unwrap_or_else(|_| config.json_rpc_url.clone()),
                 validator_list,
             )
         }
@@ -228,6 +232,7 @@ fn get_config() -> Config {
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
         max_poor_block_productor_percentage: 20,
+        address_labels: config.address_labels,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -596,6 +601,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..
     } in &vote_account_info
     {
+        let formatted_node_pubkey = format_labeled_address(&node_pubkey, &config.address_labels);
         let node_pubkey = Pubkey::from_str(&node_pubkey).unwrap();
         let baseline_seed = &vote_pubkey.to_string()[..32];
         let bonus_seed = &format!("A{{{}", vote_pubkey)[..32];
@@ -632,7 +638,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         } else {
             info!(
                 "Need to create baseline stake account for validator {}",
-                node_pubkey
+                formatted_node_pubkey
             );
             source_stake_lamports_required += config.baseline_stake_amount;
             create_stake_transactions.push((
@@ -649,7 +655,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )),
                 format!(
                     "Creating baseline stake account for validator {} ({})",
-                    node_pubkey, baseline_stake_address
+                    formatted_node_pubkey, baseline_stake_address
                 ),
             ));
         }
@@ -670,7 +676,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         } else {
             info!(
                 "Need to create bonus stake account for validator {}",
-                node_pubkey
+                formatted_node_pubkey
             );
             source_stake_lamports_required += config.bonus_stake_amount;
             create_stake_transactions.push((
@@ -687,7 +693,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )),
                 format!(
                     "Creating bonus stake account for validator {} ({})",
-                    node_pubkey, bonus_stake_address
+                    formatted_node_pubkey, bonus_stake_address
                 ),
             ));
         }
@@ -716,7 +722,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     )),
                     format!(
                         "🥩 `{}` is current. Added ◎{} baseline stake",
-                        node_pubkey,
+                        formatted_node_pubkey,
                         lamports_to_sol(config.baseline_stake_amount),
                     ),
                 ));
@@ -738,7 +744,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         )),
                         format!(
                             "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
-                            node_pubkey,
+                            formatted_node_pubkey,
                             last_epoch,
                             lamports_to_sol(config.bonus_stake_amount),
                         ),
@@ -757,7 +763,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     )),
                     format!(
                         "💔 `{}` was a poor block producer during epoch {}. Removed ◎{} bonus stake",
-                        node_pubkey,
+                        formatted_node_pubkey,
                         last_epoch,
                         lamports_to_sol(config.bonus_stake_amount),
                     ),
@@ -782,7 +788,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     )),
                     format!(
                         "🏖️ `{}` is delinquent. Removed ◎{} baseline stake",
-                        node_pubkey,
+                        formatted_node_pubkey,
                         lamports_to_sol(config.baseline_stake_amount),
                     ),
                 ));
@@ -798,7 +804,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     )),
                     format!(
                         "🏖️ `{}` is delinquent. Removed ◎{} bonus stake",
-                        node_pubkey,
+                        formatted_node_pubkey,
                         lamports_to_sol(config.bonus_stake_amount),
                     ),
                 ));

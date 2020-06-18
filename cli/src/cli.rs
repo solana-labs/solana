@@ -56,6 +56,7 @@ use solana_stake_program::{
 use solana_transaction_status::{EncodedTransaction, TransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    collections::HashMap,
     error,
     fmt::Write as FmtWrite,
     fs::File,
@@ -493,6 +494,7 @@ pub struct CliConfig<'a> {
     pub output_format: OutputFormat,
     pub commitment: CommitmentConfig,
     pub send_transaction_config: RpcSendTransactionConfig,
+    pub address_labels: HashMap<String, String>,
 }
 
 impl CliConfig<'_> {
@@ -596,6 +598,7 @@ impl Default for CliConfig<'_> {
             output_format: OutputFormat::Display,
             commitment: CommitmentConfig::default(),
             send_transaction_config: RpcSendTransactionConfig::default(),
+            address_labels: HashMap::new(),
         }
     }
 }
@@ -1837,7 +1840,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
-        CliCommand::ShowGossip => process_show_gossip(&rpc_client),
+        CliCommand::ShowGossip => process_show_gossip(&rpc_client, config),
         CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,

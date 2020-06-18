@@ -4639,6 +4639,7 @@ dependencies = [
  "log 0.4.8",
  "serde_yaml",
  "solana-clap-utils",
+ "solana-cli",
  "solana-cli-config",
  "solana-client",
  "solana-logger",

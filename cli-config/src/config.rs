@@ -1,6 +1,6 @@
 // Wallet settings that can be configured for long-term use
 use serde_derive::{Deserialize, Serialize};
-use std::io;
+use std::{collections::HashMap, io, path::Path};
 use url::Url;
 
 lazy_static! {
@@ -17,6 +17,9 @@ pub struct Config {
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub keypair_path: String,
+
+    #[serde(default)]
+    pub address_labels: HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -32,10 +35,17 @@ impl Default for Config {
         // `Config::compute_websocket_url(&json_rpc_url)`
         let websocket_url = "".to_string();
 
+        let mut address_labels = HashMap::new();
+        address_labels.insert(
+            "11111111111111111111111111111111".to_string(),
+            "System Program".to_string(),
+        );
+
         Self {
             json_rpc_url,
             websocket_url,
             keypair_path,
+            address_labels,
         }
     }
 }
@@ -64,6 +74,24 @@ impl Config {
             ws_url.set_port(Some(port + 1)).expect("unable to set port");
         }
         ws_url.to_string()
+    }
+
+    pub fn import_address_labels<P>(&mut self, filename: P) -> Result<(), io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        let imports: HashMap<String, String> = crate::load_config_file(filename)?;
+        for (address, label) in imports.into_iter() {
+            self.address_labels.insert(address, label);
+        }
+        Ok(())
+    }
+
+    pub fn export_address_labels<P>(&self, filename: P) -> Result<(), io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        crate::save_config_file(&self.address_labels, filename)
     }
 }
 

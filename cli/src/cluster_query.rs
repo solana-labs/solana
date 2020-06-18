@@ -1,7 +1,7 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
-    display::{new_spinner_progress_bar, println_name_value},
+    display::{format_labeled_address, new_spinner_progress_bar, println_name_value},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -734,11 +734,12 @@ pub fn process_show_block_production(
     let leader_schedule = leader_schedule.unwrap();
 
     let mut leader_per_slot_index = Vec::new();
-    leader_per_slot_index.resize(total_slots, "?");
+    leader_per_slot_index.resize(total_slots, "?".to_string());
     for (pubkey, leader_slots) in leader_schedule.iter() {
+        let pubkey = format_labeled_address(pubkey, &config.address_labels);
         for slot_index in leader_slots.iter() {
             if *slot_index >= start_slot_index && *slot_index <= end_slot_index {
-                leader_per_slot_index[*slot_index - start_slot_index] = pubkey;
+                leader_per_slot_index[*slot_index - start_slot_index] = pubkey.clone();
             }
         }
     }
@@ -1085,7 +1086,7 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
+pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
 
     fn format_port(addr: Option<SocketAddr>) -> String {
@@ -1101,7 +1102,7 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
                 node.gossip
                     .map(|addr| addr.ip().to_string())
                     .unwrap_or_else(|| "none".to_string()),
-                node.pubkey,
+                format_labeled_address(&node.pubkey, &config.address_labels),
                 format_port(node.gossip),
                 format_port(node.tpu),
                 format_port(node.rpc),
@@ -1235,6 +1236,7 @@ pub fn process_show_validators(
                     .get(&vote_account.node_pubkey)
                     .unwrap_or(&unknown_version)
                     .clone(),
+                &config.address_labels,
             )
         })
         .collect();
@@ -1250,6 +1252,7 @@ pub fn process_show_validators(
                     .get(&vote_account.node_pubkey)
                     .unwrap_or(&unknown_version)
                     .clone(),
+                &config.address_labels,
             )
         })
         .collect();
