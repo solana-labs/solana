@@ -50,7 +50,6 @@ type Result<T> = std::result::Result<T, BankForksError>;
 
 pub struct BankForks {
     pub banks: HashMap<Slot, Arc<Bank>>,
-    working_bank: Arc<Bank>,
     root: Slot,
     pub snapshot_config: Option<SnapshotConfig>,
     last_snapshot_slot: Slot,
@@ -61,7 +60,7 @@ pub struct BankForks {
 
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
-    fn index(&self, bank_slot: Slot) -> &Arc<Bank> {
+    fn index(&self, bank_slot: Slot) -> &Self::Output {
         &self.banks[&bank_slot]
     }
 }
@@ -128,18 +127,11 @@ impl BankForks {
     }
 
     pub fn root_bank(&self) -> &Arc<Bank> {
-        self.banks.get(&self.root()).expect("Root bank must exist")
+        &self[self.root()]
     }
 
     pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
         let mut banks = HashMap::new();
-
-        // Set working bank to the highest available bank
-        let working_bank = initial_forks
-            .iter()
-            .max_by(|a, b| a.slot().cmp(&b.slot()))
-            .expect("working bank")
-            .clone();
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
@@ -157,7 +149,6 @@ impl BankForks {
         Self {
             root,
             banks,
-            working_bank,
             snapshot_config: None,
             last_snapshot_slot: root,
             accounts_hash_interval_slots: std::u64::MAX,
@@ -169,8 +160,6 @@ impl BankForks {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
-
-        self.working_bank = bank.clone();
         bank
     }
 
@@ -178,8 +167,12 @@ impl BankForks {
         self.banks.remove(&slot)
     }
 
+    pub fn highest_slot(&self) -> Slot {
+        self.banks.values().map(|bank| bank.slot()).max().unwrap()
+    }
+
     pub fn working_bank(&self) -> Arc<Bank> {
-        self.working_bank.clone()
+        self[self.highest_slot()].clone()
     }
 
     pub fn set_root(
