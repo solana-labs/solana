@@ -1,5 +1,13 @@
 ## Stake Account Structure
-This page describes the details and permissions associated with a stake account.
+A stake account on the Solana can be used to delegate tokens to validators on
+the network to potentially earn rewards for the owner of the stake account.
+Stake accounts are created and managed differently than a traditional wallet
+address, also known as a system account,
+which is only able to send and receive SOL from other accounts on the network.
+
+Stake accounts on Solana also work differently than those of other Proof-of-Stake
+blockchain networks that you may be familiar with.  This document describes the
+high-level structure and functions of a Solana stake account.
 
 #### Account Address
 Each stake account has a unique address which can be used to look up the account
@@ -71,7 +79,8 @@ the transaction containing the instructions has been submitted to the cluster.
 
 There is also a limit on how much total stake can become delegated or
 deactivated in a single epoch, to prevent large sudden changes in stake across
-the network as a whole.
+the network as a whole. Since warmup and cooldown are dependent on the behavior
+of other network participants, their exact duration is difficult to predict.
 
 #### Lockups
 Stake accounts can have a lockup which prevents the tokens they hold from being

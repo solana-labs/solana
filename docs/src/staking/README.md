@@ -1,19 +1,54 @@
 # Staking on Solana
 
-After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating *stake* to a validator. Stake is what we call tokens
-in a *stake account*. Solana weights validator votes by the amount of stake
-delegated to them, which gives those validators more influence in determining
-then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. Holders of
-staked tokens will [earn rewards](../implemented-proposals/staking-rewards.md)
-proportional to how many tokens they have staked.
+Staking your SOL tokens on Solana is the best way you can help secure the world's
+highest-performing blockchain network, and
+[earn rewards](../implemented-proposals/staking-rewards.md) for doing so!
 
-*Note: Network rewards for stakers and validators are not presently enabled.
+Solana is a Delegated Proof-of-Stake system (DPoS), which means that anyone who
+holds SOL tokens can choose to delegate some of their SOL to one or more
+validators, who process transactions and run the network.
+
+Delegating stake is a shared-risk shared-reward financial model that can provide
+steady returns to tokens held for a long period, similar to a traditional
+fixed-income investment.  This is achieved by aligning the financial incentives
+of the token-holders (delegators) and the validators to whom they delegate.
+
+The more stake a validator has delegated to them, the more often this validator
+is chosen to write new transactions to the ledger.  The more transactions
+the validator writes, the more rewards they and their delegators earn.
+Validators who configure their systems to be able to process more transactions
+at a time not only earn proportionally more rewards for doing so, they also
+keep the network running as fast and as smoothly as possible.
+
+Validators incur costs by running and maintaining their systems, and this is
+passed on to delegators in the form of a fee collected as a percentage of
+rewards earned.  This fee is known as a *commission*. As validators earn more
+rewards the more stake is delegated to them, they may compete with one another
+to offer the lowest commission for their services, in order to attract more
+delegated stake.
+
+There is a risk of loss of tokens when staking, through a process known as
+*slashing*.  Slashing is *NOT* presently implemented on Solana's Mainnet Beta
+network, but may be implemented in the future.  Slashing involves the automatic
+removal and destruction of a portion of a validator's delegated stake in
+response to intentional malicious behavior, such as creating invalid
+transactions or censoring certain types of transactions or network participants.
+If a validator is slashed, all token holders who have delegated stake to that
+validator will lose a portion of their delegation.  While this means an immediate
+loss for the token holder, it also is a loss of future rewards for the validator
+due to their reduced total delegation.
+
+Therefore, it is always in the validator's
+interest to not engage in such behavior, which further aligns both validators'
+and token holders' financial incentives, which in turn help keeps the network
+secure, robust and performing at its best.
+
+*Note: Network rewards for stakers and validators are not presently enabled on
+Mainnet Beta.
 It is the decision of the Solana Foundation if/when to enable such rewards.*
 
-Staking helps secure the Solana network. More staked tokens make
-the network less susceptible to censorship and certain kinds of attacks.
+*Note: Slashing is not implemented on Mainnet Beta at this time. It is the
+decision of the Solana Foundation if/when to enable slashing.*
 
 ## How do I stake my SOL tokens?
 In order to stake tokens on Solana, you first will need to transfer some SOL
@@ -35,11 +70,12 @@ line tools, please stay tuned for more information!
 #### Create a Stake Account
 A stake account is a different type of account from a wallet address
 that is used to simply send and receive SOL tokens to other addresses. If you
-have received SOL in a wallet address you control, you can move some of
-these tokens into a new stake account, which will have a different address
-than the wallet you used to create it.  Depending on which wallet you are using
-the steps to create a stake account may vary slightly.  Not all wallets support
-staking operations, see [Supported Wallets](#supported-wallets).
+have received SOL in a wallet address you control, you can use some of
+these tokens to create and fund a new stake account, which will have a different
+address than the wallet you used to create it.
+Depending on which wallet you are using the steps to create a stake account
+may vary slightly.  Not all wallets support stake accounts, see
+[Supported Wallets](#supported-wallets).
 
 If you have been transferred control of an existing stake account and wish to
 use it, you do not need to create a new stake account.
@@ -48,7 +84,8 @@ use it, you do not need to create a new stake account.
 After a stake account is created, you will likely want to delegate the account
 to a validator node.  Below are a few places where you can get information about
 the validators who are currently participating in running the network.
-The Solana team does not recommend any particular validator.
+The Solana Labs team and the Solana Foundation do not recommend any particular
+validator.
 
 On this Solana Forum thread, our validators introduce themselves, along with
 some description of their history and services:
