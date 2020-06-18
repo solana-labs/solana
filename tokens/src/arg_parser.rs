@@ -2,8 +2,13 @@ use crate::args::{
     Args, BalancesArgs, Command, DistributeTokensArgs, StakeArgs, TransactionLogArgs,
 };
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::input_validators::{is_valid_pubkey, is_valid_signer};
+use solana_clap_utils::{
+    input_validators::{is_valid_pubkey, is_valid_signer},
+    keypair::{pubkey_from_path, signer_from_path},
+};
 use solana_cli_config::CONFIG_FILE;
+use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
+use std::error::Error;
 use std::ffi::OsString;
 use std::process::exit;
 
@@ -225,36 +230,102 @@ fn create_db_path(campaign_name: Option<String>) -> String {
         .to_string()
 }
 
-fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String, String> {
-    DistributeTokensArgs {
+fn parse_distribute_tokens_args(
+    matches: &ArgMatches<'_>,
+) -> Result<DistributeTokensArgs, Box<dyn Error>> {
+    let mut wallet_manager = maybe_wallet_manager()?;
+    let signer_matches = ArgMatches::default(); // No default signer
+
+    let sender_keypair_str = value_t_or_exit!(matches, "sender_keypair", String);
+    let sender_keypair = signer_from_path(
+        &signer_matches,
+        &sender_keypair_str,
+        "sender",
+        &mut wallet_manager,
+    )?;
+
+    let fee_payer_str = value_t_or_exit!(matches, "fee_payer", String);
+    let fee_payer = signer_from_path(
+        &signer_matches,
+        &fee_payer_str,
+        "fee-payer",
+        &mut wallet_manager,
+    )?;
+
+    Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
         transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
-        sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        sender_keypair,
+        fee_payer,
         stake_args: None,
-    }
+    })
 }
 
-fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String, String> {
+fn parse_distribute_stake_args(
+    matches: &ArgMatches<'_>,
+) -> Result<DistributeTokensArgs, Box<dyn Error>> {
+    let mut wallet_manager = maybe_wallet_manager()?;
+    let signer_matches = ArgMatches::default(); // No default signer
+
+    let sender_keypair_str = value_t_or_exit!(matches, "sender_keypair", String);
+    let sender_keypair = signer_from_path(
+        &signer_matches,
+        &sender_keypair_str,
+        "sender",
+        &mut wallet_manager,
+    )?;
+
+    let fee_payer_str = value_t_or_exit!(matches, "fee_payer", String);
+    let fee_payer = signer_from_path(
+        &signer_matches,
+        &fee_payer_str,
+        "fee-payer",
+        &mut wallet_manager,
+    )?;
+
+    let stake_account_address_str = value_t_or_exit!(matches, "stake_account_address", String);
+    let stake_account_address = pubkey_from_path(
+        &signer_matches,
+        &stake_account_address_str,
+        "stake account address",
+        &mut wallet_manager,
+    )?;
+
+    let stake_authority_str = value_t_or_exit!(matches, "stake_authority", String);
+    let stake_authority = signer_from_path(
+        &signer_matches,
+        &stake_authority_str,
+        "stake authority",
+        &mut wallet_manager,
+    )?;
+
+    let withdraw_authority_str = value_t_or_exit!(matches, "withdraw_authority", String);
+    let withdraw_authority = signer_from_path(
+        &signer_matches,
+        &withdraw_authority_str,
+        "withdraw authority",
+        &mut wallet_manager,
+    )?;
+
     let stake_args = StakeArgs {
-        stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
+        stake_account_address,
         sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
-        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
-        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
+        stake_authority,
+        withdraw_authority,
     };
-    DistributeTokensArgs {
+    Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: false,
         transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
         dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
-        sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
-        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        sender_keypair,
+        fee_payer,
         stake_args: Some(stake_args),
-    }
+    })
 }
 
 fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
@@ -272,7 +343,7 @@ fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
     }
 }
 
-pub fn parse_args<I, T>(args: I) -> Args<String, String>
+pub fn parse_args<I, T>(args: I) -> Result<Args, Box<dyn Error>>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -283,10 +354,10 @@ where
 
     let command = match matches.subcommand() {
         ("distribute-tokens", Some(matches)) => {
-            Command::DistributeTokens(parse_distribute_tokens_args(matches))
+            Command::DistributeTokens(parse_distribute_tokens_args(matches)?)
         }
         ("distribute-stake", Some(matches)) => {
-            Command::DistributeTokens(parse_distribute_stake_args(matches))
+            Command::DistributeTokens(parse_distribute_stake_args(matches)?)
         }
         ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
         ("transaction-log", Some(matches)) => {
@@ -297,9 +368,10 @@ where
             exit(1);
         }
     };
-    Args {
+    let args = Args {
         config_file,
         url,
         command,
-    }
+    };
+    Ok(args)
 }
