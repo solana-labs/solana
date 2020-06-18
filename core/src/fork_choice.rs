@@ -21,12 +21,12 @@ pub(crate) trait ForkChoice {
         bank: &Bank,
         tower: &Tower,
         progress: &mut ProgressMap,
-        computed_bank_stats: &ComputedBankState,
+        computed_bank_state: &ComputedBankState,
     );
 
     // Returns:
-    // 1) The heaviest overall bbank
-    // 2) The heavest bank on the same fork as the last vote (doesn't require a
+    // 1) The heaviest overall bank
+    // 2) The heaviest bank on the same fork as the last vote (doesn't require a
     // switching proof to vote for)
     fn select_forks(
         &self,
