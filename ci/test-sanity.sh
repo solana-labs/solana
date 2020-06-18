@@ -10,13 +10,8 @@ source ci/_
   set -x
   # Look for failed mergify.io backports by searching leftover conflict markers
   # Also check for any trailing whitespaces!
-  if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
-    base_branch=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
-  else
-    base_branch=$BUILDKITE_BRANCH
-  fi
-  git fetch origin "$base_branch"
-  git diff "$(git merge-base HEAD "origin/$base_branch")..HEAD" --check --oneline
+  git fetch origin "$CI_BASE_BRANCH"
+  git diff "$(git merge-base HEAD "origin/$CI_BASE_BRANCH")..HEAD" --check --oneline
 )
 
 echo
