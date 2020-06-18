@@ -3,6 +3,8 @@
 Staking your SOL tokens on Solana is the best way you can help secure the world's
 highest-performing blockchain network, and
 [earn rewards](../implemented-proposals/staking-rewards.md) for doing so!
+Inflation and network rewards are *NOT* presently implemented on Solana's
+Mainnet Beta network, but may be enabled in the future.
 
 Solana is a Delegated Proof-of-Stake system (DPoS), which means that anyone who
 holds SOL tokens can choose to delegate some of their SOL to one or more
