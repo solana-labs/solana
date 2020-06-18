@@ -3,7 +3,7 @@ import {clusterApiUrl} from '../src/util/cluster';
 
 test('invalid', () => {
   expect(() => {
-    // $FlowIgnore
+    // $FlowExpectedError
     clusterApiUrl('abc123');
   }).toThrow();
 });
