@@ -4,7 +4,7 @@
 use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
 use solana_measure::thread_mem_usage;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
@@ -127,13 +127,28 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
 pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
-        .spawn(move || loop {
-            thread_mem_usage::datapoint(name);
-            if let Err(e) = recv_send(&sock, &r) {
-                match e {
-                    StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                    StreamerError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => info!("{} responder error: {:?}", name, e),
+        .spawn(move || {
+            let mut errors = 0;
+            let mut last_error = None;
+            let mut last_print = 0;
+            loop {
+                thread_mem_usage::datapoint(name);
+                if let Err(e) = recv_send(&sock, &r) {
+                    match e {
+                        StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        StreamerError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => {
+                            errors += 1;
+                            last_error = Some(e);
+                        }
+                    }
+                }
+                let now = timestamp();
+                if now - last_print > 1000 && errors != 0 {
+                    datapoint_info!(name, ("errors", errors, i64),);
+                    info!("{} last-error: {:?} count: {}", name, last_error, errors);
+                    last_print = now;
+                    errors = 0;
                 }
             }
         })
