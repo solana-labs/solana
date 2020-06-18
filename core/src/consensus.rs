@@ -70,7 +70,7 @@ pub(crate) struct ComputedBankState {
     pub pubkey_votes: Vec<(Pubkey, Slot)>,
 }
 
-#[frozen_abi(digest="2ZUeCLMVQxmHYbeqMH7M97ifVSKoVErGvRHzyxcQRjgU")]
+#[frozen_abi(digest = "2ZUeCLMVQxmHYbeqMH7M97ifVSKoVErGvRHzyxcQRjgU")]
 #[derive(Serialize, AbiExample)]
 pub struct Tower {
     node_pubkey: Pubkey,
