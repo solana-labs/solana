@@ -8,6 +8,7 @@ if [[ -n $CI ]]; then
   export CI=1
   if [[ -n $TRAVIS ]]; then
     export CI_BRANCH=$TRAVIS_BRANCH
+    export CI_BASE_BRANCH=$TRAVIS_BRANCH
     export CI_BUILD_ID=$TRAVIS_BUILD_ID
     export CI_COMMIT=$TRAVIS_COMMIT
     export CI_JOB_ID=$TRAVIS_JOB_ID
@@ -28,8 +29,10 @@ if [[ -n $CI ]]; then
     # to how solana-ci-gate is used to trigger PR builds rather than using the
     # standard Buildkite PR trigger.
     if [[ $CI_BRANCH =~ pull/* ]]; then
+      export CI_BASE_BRANCH=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
       export CI_PULL_REQUEST=true
     else
+      export CI_BASE_BRANCH=$BUILDKITE_BRANCH
       export CI_PULL_REQUEST=
     fi
     export CI_OS_NAME=linux

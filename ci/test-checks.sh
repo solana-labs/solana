@@ -6,17 +6,24 @@ cd "$(dirname "$0")/.."
 source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
+eval "$(ci/channel-info.sh)"
 
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
-  true
+
+# Only force up-to-date lock files on edge
+if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
+  if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
+    true
+  else
+    check_status=$?
+    echo "Some Cargo.lock is outdated; please update them as well"
+    echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh update ..."
+    exit "$check_status"
+  fi
 else
-  check_status=$?
-  echo "Some Cargo.lock is outdated; please update them as well"
-  echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh update ..."
-  exit "$check_status"
+  echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
 
 _ cargo +"$rust_stable" fmt --all -- --check
