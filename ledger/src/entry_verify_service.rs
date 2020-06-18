@@ -78,7 +78,7 @@ impl EntryVerifyService {
                         parent must exist",
                         );
                         let parent_slot = parent_bank.slot();
-                        let parent_hash = parent_bank.hash();
+                        let parent_hash = parent_bank.last_blockhash();
                         unverified_blocks.add_unverified_block(
                             slot,
                             parent_slot,
