@@ -114,14 +114,17 @@ impl Client for BankClient {
     }
 }
 
-pub struct ThinClient<C: Client> {
-    client: C,
+pub struct ThinClient<'a> {
+    client: Box<dyn Client + 'a>,
     dry_run: bool,
 }
 
-impl<C: Client> ThinClient<C> {
-    pub fn new(client: C, dry_run: bool) -> Self {
-        Self { client, dry_run }
+impl<'a> ThinClient<'a> {
+    pub fn new<C: Client + 'a>(client: C, dry_run: bool) -> Self {
+        Self {
+            client: Box::new(client),
+            dry_run,
+        }
     }
 
     pub fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {

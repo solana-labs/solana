@@ -92,11 +92,11 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     }
 }
 
-fn distribute_tokens<T: Client>(
-    client: &ThinClient<T>,
+fn distribute_tokens(
+    client: &ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
-    args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
+    args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     for allocation in allocations {
         let new_stake_account_keypair = Keypair::new();
@@ -206,9 +206,9 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn process_distribute_tokens<T: Client>(
-    client: &ThinClient<T>,
-    args: &DistributeTokensArgs<Pubkey, Box<dyn Signer>>,
+pub fn process_distribute_tokens(
+    client: &ThinClient,
+    args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
@@ -290,8 +290,8 @@ pub fn process_distribute_tokens<T: Client>(
     Ok(opt_confirmations)
 }
 
-fn finalize_transactions<T: Client>(
-    client: &ThinClient<T>,
+fn finalize_transactions(
+    client: &ThinClient,
     db: &mut PickleDb,
     dry_run: bool,
 ) -> Result<Option<usize>, Error> {
@@ -322,8 +322,8 @@ fn finalize_transactions<T: Client>(
 
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
-fn update_finalized_transactions<T: Client>(
-    client: &ThinClient<T>,
+fn update_finalized_transactions(
+    client: &ThinClient,
     db: &mut PickleDb,
 ) -> Result<Option<usize>, Error> {
     let transaction_infos = db::read_transaction_infos(db);
@@ -368,10 +368,7 @@ fn update_finalized_transactions<T: Client>(
     Ok(confirmations)
 }
 
-pub fn process_balances<T: Client>(
-    client: &ThinClient<T>,
-    args: &BalancesArgs,
-) -> Result<(), csv::Error> {
+pub fn process_balances(client: &ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
     let allocations = merge_allocations(&allocations);
@@ -438,7 +435,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         .unwrap()
         .to_string();
 
-    let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
+    let args = DistributeTokensArgs {
         sender_keypair: Box::new(sender_keypair),
         fee_payer: Box::new(fee_payer),
         dry_run: false,
@@ -534,13 +531,13 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         .unwrap()
         .to_string();
 
-    let stake_args: StakeArgs<Pubkey, Box<dyn Signer>> = StakeArgs {
+    let stake_args = StakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         sol_for_fees: 1.0,
     };
-    let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
+    let args = DistributeTokensArgs {
         fee_payer: Box::new(fee_payer),
         dry_run: false,
         input_csv,
