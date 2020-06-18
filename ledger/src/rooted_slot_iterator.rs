@@ -51,7 +51,7 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
             .map(|r| {
                 self.blockstore
                     .meta(r)
-                    .expect("Database failure, couldnt fetch SlotMeta")
+                    .expect("Database failure, couldn't fetch SlotMeta")
             })
             .unwrap_or(None);
 

@@ -81,7 +81,7 @@ impl MerkleTree {
         // this cause the total nodes number increased by tree height, we use this
         // condition as the max nodes consuming case.
         // n is current leaf nodes number
-        // asuming n-1 is a full balanced binary tree, n-1 tree nodes number will be
+        // assuming n-1 is a full balanced binary tree, n-1 tree nodes number will be
         // 2(n-1) - 1, n tree height is closed to log2(n) + 1
         // so the max nodes number is 2(n-1) - 1 + log2(n) + 1, finally we can use
         // 2n + log2(n+1) as a safe capacity value.

@@ -76,7 +76,7 @@ fn test_ledger_cleanup_service() {
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|_| slots += 1);
-        // with 3 nodes upto 3 slots can be in progress and not complete so max slots in blockstore should be upto 103
+        // with 3 nodes up to 3 slots can be in progress and not complete so max slots in blockstore should be up to 103
         assert!(slots <= 103, "got {}", slots);
     }
 }
@@ -363,7 +363,7 @@ fn test_kill_heaviest_partition() {
     // This test:
     // 1) Spins up four partitions, the heaviest being the first with more stake
     // 2) Schedules the other validators for sufficient slots in the schedule
-    // so that they will still be locked out of voting for the major partitoin
+    // so that they will still be locked out of voting for the major partition
     // when the partition resolves
     // 3) Kills the most staked partition. Validators are locked out, but should all
     // eventually choose the major partition

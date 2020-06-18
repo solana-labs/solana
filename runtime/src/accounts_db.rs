@@ -748,7 +748,7 @@ impl AccountsDB {
         }
     }
 
-    // Atomicallly process reclaims and new dead_slots in this thread, gauranteeing
+    // Atomically process reclaims and new dead_slots in this thread, guaranteeing
     // complete data removal for slots in reclaims.
     fn handle_reclaims_ensure_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
         let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
@@ -3683,7 +3683,7 @@ pub mod tests {
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
 
-        // create intermidiate updates to purged_pubkey1 so that
+        // create intermediate updates to purged_pubkey1 so that
         // generate_index must add slots as root last at once
         current_slot += 1;
         accounts.store(current_slot, &[(&pubkey, &account)]);

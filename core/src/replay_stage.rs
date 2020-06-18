@@ -1373,7 +1373,7 @@ impl ReplayStage {
         // 2) The best "selected" bank is on a different fork,
         //    switch_threshold fails
         // 3) The best "selected" bank is on a different fork,
-        //    switch_threshold succceeds
+        //    switch_threshold succeeds
         let mut failure_reasons = vec![];
         let selected_fork = {
             let switch_fork_decision = tower.check_switch_threshold(
@@ -1551,9 +1551,9 @@ impl ReplayStage {
 
         // Remove the vote/node pubkeys that we already know voted for this
         // slot. These vote accounts/validator identities are safe to drop
-        // because they don't to be ported back any further because earler
+        // because they don't to be ported back any further because earlier
         // parents must have:
-        // 1) Also recorded these pubkeyss already, or
+        // 1) Also recorded these pubkeys already, or
         // 2) Already reached the propagation threshold, in which case
         //    they no longer need to track the set of propagated validators
         newly_voted_pubkeys.retain(|vote_pubkey| {
@@ -1941,7 +1941,7 @@ pub(crate) mod tests {
                 .get(2 * NUM_CONSECUTIVE_LEADER_SLOTS)
                 .is_some());
 
-            // // There are 20 equally staked acccounts, of which 3 have built
+            // // There are 20 equally staked accounts, of which 3 have built
             // banks above or at bank 1. Because 3/20 < SUPERMINORITY_THRESHOLD,
             // we should see 3 validators in bank 1's propagated_validator set.
             let expected_leader_slots = vec![
@@ -3388,7 +3388,7 @@ pub(crate) mod tests {
         let mut parent_slot = 3;
 
         // Set up the progress map to show that the last leader slot of 4 is 3,
-        // which means 3 and 4 are consecutiive leader slots
+        // which means 3 and 4 are consecutive leader slots
         progress_map.insert(
             3,
             ForkProgress::new(
@@ -3519,7 +3519,7 @@ pub(crate) mod tests {
         );
 
         // Result should be equivalent to removing slot from BankForks
-        // and regeneratinig the `ancestor` `descendant` maps
+        // and regenerating the `ancestor` `descendant` maps
         for d in slot_2_descendants {
             bank_forks.write().unwrap().remove(d);
         }

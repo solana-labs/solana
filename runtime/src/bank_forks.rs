@@ -1,4 +1,4 @@
-//! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
+//! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
 use crate::snapshot_package::{AccountsPackageSendError, AccountsPackageSender};
 use crate::snapshot_utils::{self, SnapshotError};

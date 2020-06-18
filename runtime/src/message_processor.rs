@@ -861,7 +861,7 @@ mod tests {
                 .lamports(1, 2)
                 .verify(),
             Err(InstructionError::ExecutableLamportChange),
-            "owner should not be able to add lamports once makred executable"
+            "owner should not be able to add lamports once marked executable"
         );
         assert_eq!(
             Change::new(&owner, &owner)
@@ -1045,7 +1045,7 @@ mod tests {
                 .data(vec![0], vec![0, 0])
                 .verify(),
             Ok(()),
-            "system program should be able to change acount data size"
+            "system program should be able to change account data size"
         );
     }
 

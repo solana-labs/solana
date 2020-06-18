@@ -1482,7 +1482,7 @@ pub mod tests {
         let rooted_slots: Vec<_> = (0..=last_slot).collect();
         blockstore.set_roots(&rooted_slots).unwrap();
 
-        // Set a root on the next slot of the confrimed epoch
+        // Set a root on the next slot of the confirmed epoch
         blockstore.set_roots(&[last_slot + 1]).unwrap();
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail

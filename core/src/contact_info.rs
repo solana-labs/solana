@@ -203,7 +203,7 @@ impl ContactInfo {
     }
 
     /// port must not be 0
-    /// ip must be specified and not mulitcast
+    /// ip must be specified and not multicast
     /// loopback ip is only allowed in tests
     pub fn is_valid_address(addr: &SocketAddr) -> bool {
         (addr.port() != 0) && Self::is_valid_ip(addr.ip())

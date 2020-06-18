@@ -81,7 +81,7 @@ impl From<RemoteWalletError> for SignerError {
     }
 }
 
-/// Collection of conntected RemoteWallets
+/// Collection of connected RemoteWallets
 pub struct RemoteWalletManager {
     usb: Arc<Mutex<hidapi::HidApi>>,
     devices: RwLock<Vec<Device>>,

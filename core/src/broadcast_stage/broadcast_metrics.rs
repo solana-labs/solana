@@ -96,7 +96,7 @@ impl BroadcastStats for InsertShredsStats {
     }
 }
 
-// Tracks metrics of type `T` acrosss multiple threads
+// Tracks metrics of type `T` across multiple threads
 #[derive(Default)]
 pub(crate) struct BatchCounter<T: BroadcastStats + Default> {
     // The number of batches processed across all threads so far

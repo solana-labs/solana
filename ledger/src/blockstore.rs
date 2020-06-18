@@ -1176,7 +1176,7 @@ impl Blockstore {
                         buffer_offset += shred_len;
                         last_index = index;
                         // All shreds are of the same length.
-                        // Let's check if we have scope to accomodate another shred
+                        // Let's check if we have scope to accommodate another shred
                         // If not, let's break right away, as it'll save on 1 DB read
                         if buffer.len().saturating_sub(buffer_offset) < shred_len {
                             break;
@@ -2123,7 +2123,7 @@ impl Blockstore {
             .expect("fetch from DuplicateSlots column family failed")
     }
 
-    // `new_shred` is asssumed to have slot and index equal to the given slot and index.
+    // `new_shred` is assumed to have slot and index equal to the given slot and index.
     // Returns the existing shred if `new_shred` is not equal to the existing shred at the
     // given slot and index as this implies the leader generated two different shreds with
     // the same slot and index
@@ -2674,7 +2674,7 @@ pub fn create_new_ledger(
     }
 
     // ensure the genesis archive can be unpacked and it is under
-    // max_genesis_archive_unpacked_size, immedately after creating it above.
+    // max_genesis_archive_unpacked_size, immediately after creating it above.
     {
         let temp_dir = tempfile::TempDir::new().unwrap();
         // unpack into a temp dir, while completely discarding the unpacked files

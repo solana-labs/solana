@@ -1,5 +1,5 @@
 use log::*;
-/// Cluster independant integration tests
+/// Cluster independent integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.

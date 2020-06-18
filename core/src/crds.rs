@@ -156,7 +156,7 @@ impl Crds {
         }
     }
 
-    /// Update the timestamp's of all the labels that are assosciated with Pubkey
+    /// Update the timestamp's of all the labels that are associated with Pubkey
     pub fn update_record_timestamp(&mut self, pubkey: &Pubkey, now: u64) {
         for label in &CrdsValue::record_labels(pubkey) {
             self.update_label_timestamp(label, now);

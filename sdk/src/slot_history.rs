@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn slot_history_test1() {
         solana_logger::setup();
-        // should be divisable by 64 since the clear logic works on blocks
+        // should be divisible by 64 since the clear logic works on blocks
         assert_eq!(MAX_ENTRIES % 64, 0);
         let mut slot_history = SlotHistory::default();
         info!("add 2");

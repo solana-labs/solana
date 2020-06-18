@@ -415,7 +415,7 @@ mod test {
         assert!(stats.propagated_validators.contains(&vote_pubkey));
         assert_eq!(stats.propagated_validators_stake, 1);
 
-        // Addding another pubkey should succeed
+        // Adding another pubkey should succeed
         vote_pubkey = Pubkey::new_rand();
         stats.add_vote_pubkey(&vote_pubkey, &mut all_pubkeys, 2);
         assert!(stats.propagated_validators.contains(&vote_pubkey));
@@ -475,7 +475,7 @@ mod test {
             staked_vote_accounts as u64
         );
 
-        // Addding another pubkey with same vote accounts should succeed, but stake
+        // Adding another pubkey with same vote accounts should succeed, but stake
         // shouldn't increase
         node_pubkey = Pubkey::new_rand();
         stats.add_node_pubkey_internal(
@@ -494,7 +494,7 @@ mod test {
             3
         );
 
-        // Addding another pubkey with different vote accounts should succeed
+        // Adding another pubkey with different vote accounts should succeed
         // and increase stake
         node_pubkey = Pubkey::new_rand();
         let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand)
