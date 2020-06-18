@@ -95,7 +95,7 @@ fn init(name: &OsStr) {
     }
 }
 
-fn locate_perf_libs() -> Option<PathBuf> {
+pub fn locate_perf_libs() -> Option<PathBuf> {
     let exe = env::current_exe().expect("Unable to get executable path");
     let perf_libs = exe.parent().unwrap().join("perf-libs");
     if perf_libs.is_dir() {
@@ -140,19 +140,21 @@ fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
     None
 }
 
+pub fn append_to_ld_library_path(path: String) {
+    let ld_library_path =
+        path + ":" + &env::var("LD_LIBRARY_PATH").unwrap_or_else(|_| "".to_string());
+    info!("setting ld_library_path to: {:?}", ld_library_path);
+    env::set_var("LD_LIBRARY_PATH", ld_library_path);
+}
+
 pub fn init_cuda() {
     if let Some(perf_libs_path) = locate_perf_libs() {
         if let Some(cuda_home) = find_cuda_home(&perf_libs_path) {
             let cuda_lib64_dir = cuda_home.join("lib64");
             if cuda_lib64_dir.is_dir() {
-                let ld_library_path = cuda_lib64_dir.to_str().unwrap_or("").to_string()
-                    + ":"
-                    + &env::var("LD_LIBRARY_PATH").unwrap_or_else(|_| "".to_string());
-                info!("LD_LIBRARY_PATH set to {:?}", ld_library_path);
-
                 // Prefix LD_LIBRARY_PATH with $CUDA_HOME/lib64 directory
                 // to ensure the correct CUDA version is used
-                env::set_var("LD_LIBRARY_PATH", ld_library_path)
+                append_to_ld_library_path(cuda_lib64_dir.to_str().unwrap_or("").to_string())
             } else {
                 warn!("CUDA lib64 directory does not exist: {:?}", cuda_lib64_dir);
             }
