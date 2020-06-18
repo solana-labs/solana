@@ -19,11 +19,11 @@ pub fn sol_invoke_signed_rust() {
 }
 
 #[macro_export]
-macro_rules! stubs {
+macro_rules! program_stubs {
     () => {
         #[test]
         fn pull_in_externs() {
-            use $crate::*;
+            use solana_sdk::program_stubs::{sol_invoke_signed_rust, sol_log_, sol_log_64_};
             unsafe { sol_log_("sol_log_".as_ptr(), 8) };
             sol_log_64_(1, 2, 3, 4, 5);
             sol_invoke_signed_rust();

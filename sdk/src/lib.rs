@@ -74,6 +74,7 @@ pub mod entrypoint;
 pub mod log;
 pub mod program;
 pub mod program_error;
+pub mod program_stubs;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]

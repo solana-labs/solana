@@ -28,7 +28,7 @@ impl<'a> TestDep {
 mod test {
     use super::*;
     // Pulls in the stubs required for `info!()`
-    solana_sdk_bpf_test::stubs!();
+    solana_sdk::program_stubs!();
 
     #[test]
     fn test_dep() {

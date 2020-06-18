@@ -192,4 +192,4 @@ fn process_instruction(
     Ok(())
 }
 
-solana_sdk_bpf_test::stubs!();
+solana_sdk::program_stubs!();
