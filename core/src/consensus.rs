@@ -205,6 +205,7 @@ impl Tower {
 
             for vote in &vote_state.votes {
                 bank_weight += vote.lockout() as u128 * lamports as u128;
+                Self::populate_ancestor_stake_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
             if start_root != vote_state.root_slot {
@@ -215,6 +216,7 @@ impl Tower {
                     };
                     trace!("ROOT: {}", vote.slot);
                     bank_weight += vote.lockout() as u128 * lamports as u128;
+                    Self::populate_ancestor_stake_lockouts(&mut stake_lockouts, &vote, ancestors);
                 }
             }
             if let Some(root) = vote_state.root_slot {
@@ -223,6 +225,7 @@ impl Tower {
                     slot: root,
                 };
                 bank_weight += vote.lockout() as u128 * lamports as u128;
+                Self::populate_ancestor_stake_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
             // The last vote in the vote stack is a simulated vote on bank_slot, which
@@ -522,6 +525,26 @@ impl Tower {
             }
         } else {
             true
+        }
+    }
+
+    /// Update lockouts for all the ancestors
+    pub(crate) fn populate_ancestor_stake_lockouts(
+        stake_lockouts: &mut HashMap<Slot, StakeLockout>,
+        vote: &Lockout,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+    ) {
+        // If there's no ancestors, that means this slot must be from before the current root,
+        // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
+        // this slot
+        let vote_slot_ancestors = ancestors.get(&vote.slot);
+        if vote_slot_ancestors.is_none() {
+            return;
+        }
+        let mut slot_with_ancestors = vec![vote.slot];
+        slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
+        for slot in slot_with_ancestors {
+            stake_lockouts.insert(slot, StakeLockout::default());
         }
     }
 
