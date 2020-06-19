@@ -281,12 +281,26 @@ impl RemoteWalletInfo {
                             key_path.pop();
                         }
                         let mut parts = key_path.split('/');
-                        derivation_path.account = parts
-                            .next()
-                            .and_then(|account| account.replace("'", "").parse::<u32>().ok());
-                        derivation_path.change = parts
-                            .next()
-                            .and_then(|change| change.replace("'", "").parse::<u32>().ok());
+                        derivation_path.account = if let Some(account) = parts.next() {
+                            Some(account.replace("'", "").parse::<u32>().map_err(|_| {
+                                RemoteWalletError::InvalidDerivationPath(format!(
+                                    "account `{}` invalid",
+                                    account
+                                ))
+                            })?)
+                        } else {
+                            None
+                        };
+                        derivation_path.change = if let Some(change) = parts.next() {
+                            Some(change.replace("'", "").parse::<u32>().map_err(|_| {
+                                RemoteWalletError::InvalidDerivationPath(format!(
+                                    "change `{}` invalid",
+                                    change
+                                ))
+                            })?)
+                        } else {
+                            None
+                        };
                         if parts.next().is_some() {
                             return Err(RemoteWalletError::InvalidDerivationPath(format!(
                                 "key path `{}` too deep, only <account>/<change> supported",
