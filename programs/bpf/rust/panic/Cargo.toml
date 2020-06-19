@@ -14,9 +14,12 @@ edition = "2018"
 [dependencies]
 solana-sdk = { path = "../../../../sdk/", version = "1.2.5", default-features = false }
 
+<<<<<<< HEAD
 [dev_dependencies]
 solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.2.5" }
 
+=======
+>>>>>>> d77818c18... Pull program stubs into SDK (#10704)
 [features]
 program = ["solana-sdk/program"]
 default = ["program"]
