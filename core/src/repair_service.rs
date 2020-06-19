@@ -29,22 +29,39 @@ use std::{
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
+pub struct SlotRepairs {
+    highest_shred_index: u64,
+    // map from pubkey to total number of requests
+    pubkey_repairs: HashMap<Pubkey, u64>,
+}
+
+#[derive(Default, Debug)]
 pub struct RepairStatsGroup {
     pub count: u64,
     pub min: u64,
     pub max: u64,
+    pub slot_pubkeys: HashMap<Slot, SlotRepairs>,
 }
 
 impl RepairStatsGroup {
-    pub fn update(&mut self, slot: u64) {
+    pub fn update(&mut self, repair_peer_id: &Pubkey, slot: Slot, shred_index: u64) {
         self.count += 1;
+        let slot_repairs = self.slot_pubkeys.entry(slot).or_default();
+        // Increment total number of repairs of this type for this pubkey by 1
+        *slot_repairs
+            .pubkey_repairs
+            .entry(*repair_peer_id)
+            .or_default() += 1;
+        // Update the max requested shred index for this slot
+        slot_repairs.highest_shred_index =
+            std::cmp::max(slot_repairs.highest_shred_index, shred_index);
         self.min = std::cmp::min(self.min, slot);
         self.max = std::cmp::max(self.max, slot);
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RepairStats {
     pub shred: RepairStatsGroup,
     pub highest_shred: RepairStatsGroup,
@@ -81,7 +98,7 @@ impl Default for RepairSlotRange {
 #[derive(Default, Clone)]
 pub struct DuplicateSlotRepairStatus {
     start: u64,
-    repair_addr: Option<SocketAddr>,
+    repair_pubkey_and_addr: Option<(Pubkey, SocketAddr)>,
 }
 
 pub struct RepairService {
@@ -197,6 +214,7 @@ impl RepairService {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
                     + repair_stats.orphan.count;
+                info!("repair_stats: {:#?}", repair_stats);
                 if repair_total > 0 {
                     datapoint_info!(
                         "serve_repair-repair",
@@ -307,7 +325,7 @@ impl RepairService {
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
-            if let Some(repair_addr) = status.repair_addr {
+            if let Some((repair_pubkey, repair_addr)) = status.repair_pubkey_and_addr {
                 let repairs = Self::generate_duplicate_repairs_for_slot(&blockstore, *slot);
 
                 if let Some(repairs) = repairs {
@@ -315,12 +333,16 @@ impl RepairService {
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
+                            &repair_pubkey,
                             &repair_addr,
                             serve_repair,
                             repair_stats,
                             DEFAULT_NONCE,
                         ) {
-                            info!("repair req send_to({}) error {:?}", repair_addr, e);
+                            info!(
+                                "repair req send_to {} ({}) error {:?}",
+                                repair_pubkey, repair_addr, e
+                            );
                         }
                     }
                     true
@@ -336,12 +358,14 @@ impl RepairService {
     fn serialize_and_send_request(
         repair_type: &RepairType,
         repair_socket: &UdpSocket,
+        repair_pubkey: &Pubkey,
         to: &SocketAddr,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         nonce: Nonce,
     ) -> Result<()> {
-        let req = serve_repair.map_repair_request(&repair_type, repair_stats, nonce)?;
+        let req =
+            serve_repair.map_repair_request(&repair_type, repair_pubkey, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;
         Ok(())
     }
@@ -353,12 +377,12 @@ impl RepairService {
         serve_repair: &ServeRepair,
     ) {
         let now = timestamp();
-        if status.repair_addr.is_none()
+        if status.repair_pubkey_and_addr.is_none()
             || now.saturating_sub(status.start) >= MAX_DUPLICATE_WAIT_MS as u64
         {
-            let repair_addr =
+            let repair_pubkey_and_addr =
                 serve_repair.repair_request_duplicate_compute_best_peer(slot, cluster_slots);
-            status.repair_addr = repair_addr.ok();
+            status.repair_pubkey_and_addr = repair_pubkey_and_addr.ok();
             status.start = timestamp();
         }
     }
@@ -395,12 +419,12 @@ impl RepairService {
 
             // Mark this slot as special repair, try to download from single
             // validator to avoid corruption
-            let repair_addr = serve_repair
+            let repair_pubkey_and_addr = serve_repair
                 .repair_request_duplicate_compute_best_peer(*slot, cluster_slots)
                 .ok();
             let new_duplicate_slot_repair_status = DuplicateSlotRepairStatus {
                 start: timestamp(),
-                repair_addr,
+                repair_pubkey_and_addr,
             };
             duplicate_slot_repair_statuses.insert(*slot, new_duplicate_slot_repair_status);
         }
@@ -423,7 +447,7 @@ impl RepairService {
                     warn!(
                         "Repaired version of slot {} most recently (but maybe not entirely)
                         from {:?} has failed again",
-                        dead_slot, status.repair_addr
+                        dead_slot, status.repair_pubkey_and_addr
                     );
                 }
                 cluster_slots
@@ -873,7 +897,7 @@ mod test {
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
             start: std::u64::MAX,
-            repair_addr: None,
+            repair_pubkey_and_addr: None,
         };
 
         // Insert some shreds to create a SlotMeta,
@@ -898,7 +922,7 @@ mod test {
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
             .unwrap()
-            .repair_addr
+            .repair_pubkey_and_addr
             .is_none());
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
 
@@ -906,7 +930,8 @@ mod test {
         duplicate_slot_repair_statuses
             .get_mut(&dead_slot)
             .unwrap()
-            .repair_addr = Some(receive_socket.local_addr().unwrap());
+            .repair_pubkey_and_addr =
+            Some((Pubkey::default(), receive_socket.local_addr().unwrap()));
 
         // Slot is not yet full, should not get filtered from `duplicate_slot_repair_statuses`
         RepairService::generate_and_send_duplicate_repairs(
@@ -938,7 +963,10 @@ mod test {
 
     #[test]
     pub fn test_update_duplicate_slot_repair_addr() {
-        let dummy_addr = Some(UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap());
+        let dummy_addr = Some((
+            Pubkey::default(),
+            UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
+        ));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             Node::new_localhost().info,
         ));
@@ -956,7 +984,7 @@ mod test {
         // address
         let mut duplicate_status = DuplicateSlotRepairStatus {
             start: std::u64::MAX,
-            repair_addr: dummy_addr,
+            repair_pubkey_and_addr: dummy_addr,
         };
         RepairService::update_duplicate_slot_repair_addr(
             dead_slot,
@@ -964,12 +992,12 @@ mod test {
             &cluster_slots,
             &serve_repair,
         );
-        assert_eq!(duplicate_status.repair_addr, dummy_addr);
+        assert_eq!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
 
         // If the repair address is None, should try to update
         let mut duplicate_status = DuplicateSlotRepairStatus {
             start: std::u64::MAX,
-            repair_addr: None,
+            repair_pubkey_and_addr: None,
         };
         RepairService::update_duplicate_slot_repair_addr(
             dead_slot,
@@ -977,12 +1005,12 @@ mod test {
             &cluster_slots,
             &serve_repair,
         );
-        assert!(duplicate_status.repair_addr.is_some());
+        assert!(duplicate_status.repair_pubkey_and_addr.is_some());
 
-        // If sufficient time has passssed, should try to update
+        // If sufficient time has passed, should try to update
         let mut duplicate_status = DuplicateSlotRepairStatus {
             start: timestamp() - MAX_DUPLICATE_WAIT_MS as u64,
-            repair_addr: dummy_addr,
+            repair_pubkey_and_addr: dummy_addr,
         };
         RepairService::update_duplicate_slot_repair_addr(
             dead_slot,
@@ -990,7 +1018,7 @@ mod test {
             &cluster_slots,
             &serve_repair,
         );
-        assert_ne!(duplicate_status.repair_addr, dummy_addr);
+        assert_ne!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
     }
 
     #[test]
