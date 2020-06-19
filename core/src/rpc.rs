@@ -1634,7 +1634,7 @@ pub mod tests {
         system_transaction,
         transaction::{self, TransactionError},
     };
-    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
+    use solana_transaction_status::{EncodedTransaction, RpcMessage, TransactionWithStatusMeta};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
@@ -3209,7 +3209,11 @@ pub mod tests {
             if let EncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     let meta = meta.unwrap();
-                    assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
+                    let transaction_recent_blockhash = match transaction.message {
+                        RpcMessage::Parsed(message) => message.recent_blockhash,
+                        RpcMessage::Raw(message) => message.recent_blockhash,
+                    };
+                    assert_eq!(transaction_recent_blockhash, blockhash.to_string());
                     assert_eq!(meta.status, Ok(()));
                     assert_eq!(meta.err, None);
                 } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {
