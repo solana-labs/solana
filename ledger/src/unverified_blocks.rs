@@ -20,7 +20,7 @@ pub struct UnverifiedBlocks {
     // 1) Processes from smallest to largest ancestor for each fork
     // 2) Pops off earlier ancestors as they're verified and notifies
     // replay stage over channel
-    pub unverified_blocks: HashMap<Slot, UnverifiedBlockInfo>,
+    unverified_blocks: HashMap<Slot, UnverifiedBlockInfo>,
 
     // Map from fork weight to slot
     fork_weights: BTreeMap<u128, BTreeSet<Slot>>,
@@ -85,8 +85,8 @@ impl UnverifiedBlocks {
                         self.unverified_blocks
                             .get(&slot)
                             .expect(
-                                "If exists in fork_weights, must
-            exist in unverified blocks as both are in sync",
+                                "If exists in `fork_weights`, must
+            exist in `unverified blocks` as both are in sync",
                             )
                             .children
                             .is_empty()
@@ -94,6 +94,38 @@ impl UnverifiedBlocks {
                     .expect("at least one heaviest fork must be a leaf")
             })
             .cloned()
+    }
+
+    pub fn pop_heaviest_ancestor(&mut self) -> Option<(Slot, UnverifiedBlockInfo)> {
+        self.next_heaviest_leaf().and_then(|heaviest_leaf| {
+            self.get_unverified_ancestors(heaviest_leaf)
+                .iter()
+                .next()
+                .map(|heaviest_ancestor| {
+                    // Pop entry so it's not reprocessed
+                    let block_info = self.unverified_blocks.remove(heaviest_ancestor).unwrap();
+                    let weight_to_remove = {
+                        let slots_with_weight =
+                            self.fork_weights.get_mut(&block_info.fork_weight).expect(
+                                "If weight exists for an entry in `unverified_blocks`, must
+                    exist in `fork_weights` as both are in sync",
+                            );
+                        // Assertion must be true because if there exists a slot in
+                        //`unverified_blocks`, it must also exist in `fork_weights`
+                        // as both are in sync
+                        assert!(slots_with_weight.remove(heaviest_ancestor));
+                        if slots_with_weight.is_empty() {
+                            Some(block_info.fork_weight)
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(weight) = weight_to_remove {
+                        self.fork_weights.remove(&weight);
+                    }
+                    (*heaviest_ancestor, block_info)
+                })
+        })
     }
 
     pub fn set_root(&mut self, bank_forks: &RwLock<BankForks>) {

@@ -89,30 +89,33 @@ impl EntryVerifyService {
                 }
             }
         }
-        if let Some(heaviest_leaf) = unverified_blocks.next_heaviest_leaf() {
-            let heaviest_ancestors = unverified_blocks.get_unverified_ancestors(heaviest_leaf);
-            if let Some(heaviest_slot) = heaviest_ancestors.iter().next() {
-                // Pop entry so it's not reprocessed
-                let block_info = unverified_blocks
-                    .unverified_blocks
-                    .remove(heaviest_slot)
-                    .unwrap();
-                let mut verifier = block_info.entries.start_verify(
-                    &block_info.parent_hash,
-                    VerifyRecyclers::default(),
-                    VerifyOption::PohOnly,
-                );
-                let verify_result = verifier.finish_verify(&block_info.entries);
-                datapoint_info!(
-                    "verify_poh_elapsed",
-                    ("slot", *heaviest_slot, i64),
-                    ("elapsed", verifier.poh_duration_us(), i64)
-                );
-                slot_verify_results
-                    .write()
-                    .unwrap()
-                    .insert(*heaviest_slot, verify_result);
-            }
+
+        if let Some((heaviest_slot, heaviest_block_info)) =
+            unverified_blocks.pop_heaviest_ancestor()
+        {
+            let mut verifier = heaviest_block_info.entries.start_verify(
+                &heaviest_block_info.parent_hash,
+                VerifyRecyclers::default(),
+                VerifyOption::PohOnly,
+            );
+
+            let verify_result = verifier.finish_verify(&heaviest_block_info.entries);
+            datapoint_info!(
+                "verify_poh_elapsed",
+                ("slot", heaviest_slot, i64),
+                ("elapsed", verifier.poh_duration_us(), i64)
+            );
+            slot_verify_results
+                .write()
+                .unwrap()
+                .insert(heaviest_slot, verify_result);
+            info!(
+                "Verifying slot: {}, num_entries: {}, start_hash: {}, result: {}",
+                heaviest_slot,
+                heaviest_block_info.entries.len(),
+                heaviest_block_info.parent_hash,
+                verify_result,
+            );
         }
         Ok(())
     }
