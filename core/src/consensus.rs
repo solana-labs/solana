@@ -141,6 +141,42 @@ impl Tower {
         }
     }
 
+    pub fn new_from_bankforks(
+        bank_forks: &BankForks,
+        ledger_path: &Path,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> Self {
+        let (
+            root_bank,
+            _progress,
+            heaviest_subtree_fork_choice,
+            unlock_heaviest_subtree_fork_choice_slot,
+        ) = crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
+            &bank_forks,
+            &my_pubkey,
+            &vote_account,
+        );
+        let root = root_bank.slot();
+
+        let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
+            bank_forks
+                .get(heaviest_subtree_fork_choice.best_overall_slot())
+                .expect("The best overall slot must be one of `frozen_banks` which all exist in bank_forks")
+                .clone()
+        } else {
+            Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or(root_bank)
+        };
+
+        Self::new(
+            &my_pubkey,
+            &vote_account,
+            root,
+            &heaviest_bank,
+            &ledger_path,
+        )
+    }
+
     pub(crate) fn collect_vote_lockouts<F>(
         node_pubkey: &Pubkey,
         bank_slot: Slot,

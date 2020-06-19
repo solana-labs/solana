@@ -730,18 +730,11 @@ fn new_banks_from_ledger(
                 process::exit(1);
             }
             info!("Rebuilding tower from the latest vote account");
-            let root_bank = bank_forks.root_bank().clone();
-            let root = root_bank.slot();
-            // is this expected a vote account????
-            let heaviest_bank =
-                Tower::find_heaviest_bank(&bank_forks, &vote_account).unwrap_or(root_bank);
-
-            Tower::new(
+            Tower::new_from_bankforks(
+                &bank_forks,
+                &ledger_path,
                 &validator_identity,
                 &vote_account,
-                root,
-                &heaviest_bank,
-                &ledger_path,
             )
         }
     };

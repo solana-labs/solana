@@ -256,38 +256,16 @@ impl ReplayStage {
                 let mut all_pubkeys = PubkeyReferences::default();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
-                let mut progress = ProgressMap::default();
-                let mut frozen_banks: Vec<_> = bank_forks
-                    .read()
-                    .unwrap()
-                    .frozen_banks()
-                    .values()
-                    .cloned()
-                    .collect();
-
-                frozen_banks.sort_by_key(|bank| bank.slot());
-
-                // Initialize progress map with any root banks
-                for bank in &frozen_banks {
-                    let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
-                    progress.insert(
-                        bank.slot(),
-                        ForkProgress::new_from_bank(
-                            bank,
-                            &my_pubkey,
-                            &vote_account,
-                            prev_leader_slot,
-                            0,
-                            0,
-                        ),
-                    );
-                }
-                let root_bank = bank_forks.read().unwrap().root_bank().clone();
-                let root = root_bank.slot();
-                let unlock_heaviest_subtree_fork_choice_slot =
-                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
-                let mut heaviest_subtree_fork_choice =
-                    HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+                let (
+                    _root_bank,
+                    mut progress,
+                    mut heaviest_subtree_fork_choice,
+                    unlock_heaviest_subtree_fork_choice_slot,
+                ) = Self::initialize_progress_and_fork_choice(
+                    &bank_forks.read().unwrap(),
+                    &my_pubkey,
+                    &vote_account,
+                );
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -637,6 +615,46 @@ impl ReplayStage {
                 .get(&heaviest_slot)
                 .map(|ancestors| ancestors.contains(&last_voted_slot))
                 .unwrap_or(true)
+    }
+
+    pub(crate) fn initialize_progress_and_fork_choice(
+        bank_forks: &BankForks,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> (Arc<Bank>, ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+        let mut progress = ProgressMap::default();
+        let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
+
+        frozen_banks.sort_by_key(|bank| bank.slot());
+
+        // Initialize progress map with any root banks
+        for bank in &frozen_banks {
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+            progress.insert(
+                bank.slot(),
+                ForkProgress::new_from_bank(
+                    bank,
+                    &my_pubkey,
+                    &vote_account,
+                    prev_leader_slot,
+                    0,
+                    0,
+                ),
+            );
+        }
+        let root_bank = bank_forks.root_bank().clone();
+        let root = root_bank.slot();
+        let unlock_heaviest_subtree_fork_choice_slot =
+            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
+        let heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+
+        (
+            root_bank,
+            progress,
+            heaviest_subtree_fork_choice,
+            unlock_heaviest_subtree_fork_choice_slot,
+        )
     }
 
     fn report_memory(
