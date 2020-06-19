@@ -1,12 +1,25 @@
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate serde_derive;
 
+pub mod parse;
+
+use crate::parse::{parse, PARSABLE_PROGRAM_IDS};
+use serde_json::Value;
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
     message::MessageHeader,
     transaction::{Result, Transaction, TransactionError},
 };
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum RpcInstruction {
+    Compiled(RpcCompiledInstruction),
+    Parsed(Value),
+}
 
 /// A duplicate representation of a Message for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -116,7 +129,7 @@ pub struct RpcMessage {
     pub header: MessageHeader,
     pub account_keys: Vec<String>,
     pub recent_blockhash: String,
-    pub instructions: Vec<RpcCompiledInstruction>,
+    pub instructions: Vec<RpcInstruction>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -131,6 +144,7 @@ pub struct TransactionWithStatusMeta {
 pub enum TransactionEncoding {
     Binary,
     Json,
+    JsonParsed,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -142,38 +156,51 @@ pub enum EncodedTransaction {
 
 impl EncodedTransaction {
     pub fn encode(transaction: Transaction, encoding: TransactionEncoding) -> Self {
-        if encoding == TransactionEncoding::Json {
-            EncodedTransaction::Json(RpcTransaction {
-                signatures: transaction
-                    .signatures
-                    .iter()
-                    .map(|sig| sig.to_string())
-                    .collect(),
-                message: RpcMessage {
-                    header: transaction.message.header,
-                    account_keys: transaction
-                        .message
-                        .account_keys
-                        .iter()
-                        .map(|pubkey| pubkey.to_string())
-                        .collect(),
-                    recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                    instructions: transaction
-                        .message
-                        .instructions
-                        .iter()
-                        .map(|instruction| RpcCompiledInstruction {
-                            program_id_index: instruction.program_id_index,
-                            accounts: instruction.accounts.clone(),
-                            data: bs58::encode(instruction.data.clone()).into_string(),
-                        })
-                        .collect(),
-                },
-            })
-        } else {
-            EncodedTransaction::Binary(
+        match encoding {
+            TransactionEncoding::Binary => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
-            )
+            ),
+            _ => {
+                let account_keys = transaction.message.account_keys;
+                EncodedTransaction::Json(RpcTransaction {
+                    signatures: transaction
+                        .signatures
+                        .iter()
+                        .map(|sig| sig.to_string())
+                        .collect(),
+                    message: RpcMessage {
+                        header: transaction.message.header,
+                        account_keys: account_keys
+                            .iter()
+                            .map(|pubkey| pubkey.to_string())
+                            .collect(),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| {
+                                let program_id = instruction.program_id(&account_keys);
+                                if encoding == TransactionEncoding::Json
+                                    || !PARSABLE_PROGRAM_IDS.contains_key(program_id)
+                                {
+                                    RpcInstruction::Compiled(RpcCompiledInstruction {
+                                        program_id_index: instruction.program_id_index,
+                                        accounts: instruction.accounts.clone(),
+                                        data: bs58::encode(instruction.data.clone()).into_string(),
+                                    })
+                                } else {
+                                    let program_id = instruction.program_id(&account_keys);
+                                    let parsed = parse(program_id, instruction).unwrap_or(
+                                        Value::String("Unable to parse instruction".to_string()),
+                                    );
+                                    RpcInstruction::Parsed(parsed)
+                                }
+                            })
+                            .collect(),
+                    },
+                })
+            }
         }
     }
     pub fn decode(&self) -> Option<Transaction> {
