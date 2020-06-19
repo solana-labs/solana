@@ -1,12 +1,27 @@
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate serde_derive;
 
+pub mod parse_accounts;
+pub mod parse_instruction;
+
+use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
+use serde_json::Value;
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
+    instruction::CompiledInstruction,
     message::MessageHeader,
     transaction::{Result, Transaction, TransactionError},
 };
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum RpcInstruction {
+    Compiled(RpcCompiledInstruction),
+    Parsed(Value),
+}
 
 /// A duplicate representation of a Message for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -15,6 +30,16 @@ pub struct RpcCompiledInstruction {
     pub program_id_index: u8,
     pub accounts: Vec<u8>,
     pub data: String,
+}
+
+impl From<&CompiledInstruction> for RpcCompiledInstruction {
+    fn from(instruction: &CompiledInstruction) -> Self {
+        Self {
+            program_id_index: instruction.program_id_index,
+            accounts: instruction.accounts.clone(),
+            data: bs58::encode(instruction.data.clone()).into_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -109,14 +134,30 @@ pub struct RpcTransaction {
     pub message: RpcMessage,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum RpcMessage {
+    Parsed(RpcParsedMessage),
+    Raw(RpcRawMessage),
+}
+
 /// A duplicate representation of a Message for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcMessage {
+pub struct RpcRawMessage {
     pub header: MessageHeader,
     pub account_keys: Vec<String>,
     pub recent_blockhash: String,
     pub instructions: Vec<RpcCompiledInstruction>,
+}
+
+/// A duplicate representation of a Message for pretty JSON serialization
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcParsedMessage {
+    pub account_keys: Value,
+    pub recent_blockhash: String,
+    pub instructions: Vec<RpcInstruction>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -131,6 +172,7 @@ pub struct TransactionWithStatusMeta {
 pub enum TransactionEncoding {
     Binary,
     Json,
+    JsonParsed,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -142,38 +184,57 @@ pub enum EncodedTransaction {
 
 impl EncodedTransaction {
     pub fn encode(transaction: Transaction, encoding: TransactionEncoding) -> Self {
-        if encoding == TransactionEncoding::Json {
-            EncodedTransaction::Json(RpcTransaction {
-                signatures: transaction
-                    .signatures
-                    .iter()
-                    .map(|sig| sig.to_string())
-                    .collect(),
-                message: RpcMessage {
-                    header: transaction.message.header,
-                    account_keys: transaction
-                        .message
-                        .account_keys
-                        .iter()
-                        .map(|pubkey| pubkey.to_string())
-                        .collect(),
-                    recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                    instructions: transaction
-                        .message
-                        .instructions
-                        .iter()
-                        .map(|instruction| RpcCompiledInstruction {
-                            program_id_index: instruction.program_id_index,
-                            accounts: instruction.accounts.clone(),
-                            data: bs58::encode(instruction.data.clone()).into_string(),
-                        })
-                        .collect(),
-                },
-            })
-        } else {
-            EncodedTransaction::Binary(
+        match encoding {
+            TransactionEncoding::Binary => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
-            )
+            ),
+            _ => {
+                let message = if encoding == TransactionEncoding::Json {
+                    RpcMessage::Raw(RpcRawMessage {
+                        header: transaction.message.header,
+                        account_keys: transaction
+                            .message
+                            .account_keys
+                            .iter()
+                            .map(|pubkey| pubkey.to_string())
+                            .collect(),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| instruction.into())
+                            .collect(),
+                    })
+                } else {
+                    RpcMessage::Parsed(RpcParsedMessage {
+                        account_keys: parse_accounts(&transaction.message),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| {
+                                let program_id =
+                                    instruction.program_id(&transaction.message.account_keys);
+                                if let Some(parsed_instruction) = parse(program_id, instruction) {
+                                    RpcInstruction::Parsed(parsed_instruction)
+                                } else {
+                                    RpcInstruction::Compiled(instruction.into())
+                                }
+                            })
+                            .collect(),
+                    })
+                };
+                EncodedTransaction::Json(RpcTransaction {
+                    signatures: transaction
+                        .signatures
+                        .iter()
+                        .map(|sig| sig.to_string())
+                        .collect(),
+                    message,
+                })
+            }
         }
     }
     pub fn decode(&self) -> Option<Transaction> {
