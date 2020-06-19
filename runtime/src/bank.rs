@@ -636,7 +636,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
             sysvar::fees::create_account(
                 self.inherit_sysvar_account_balance(account),
-                &self.fee_calculator,
+                self.fee_calculator,
             )
         });
     }
@@ -893,7 +893,7 @@ impl Bank {
         self.blockhash_queue
             .write()
             .unwrap()
-            .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
+            .genesis_hash(&genesis_config.hash(), self.fee_calculator);
 
         self.hashes_per_tick = genesis_config.poh_config.hashes_per_tick;
         self.ticks_per_slot = genesis_config.ticks_per_slot;
@@ -945,13 +945,13 @@ impl Bank {
         let last_hash = blockhash_queue.last_hash();
         (
             last_hash,
-            *blockhash_queue.get_fee_calculator(&last_hash).unwrap(),
+            blockhash_queue.get_fee_calculator(&last_hash).unwrap(),
         )
     }
 
     pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
-        blockhash_queue.get_fee_calculator(hash).cloned()
+        blockhash_queue.get_fee_calculator(hash)
     }
 
     pub fn get_fee_rate_governor(&self) -> &FeeRateGovernor {
@@ -1037,7 +1037,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
-            w_blockhash_queue.register_hash(hash, &self.fee_calculator);
+            w_blockhash_queue.register_hash(hash, self.fee_calculator);
         }
     }
 
@@ -1477,9 +1477,7 @@ impl Bank {
                         (nonce_utils::fee_calculator_of(account), true)
                     }
                     _ => (
-                        hash_queue
-                            .get_fee_calculator(&tx.message().recent_blockhash)
-                            .cloned(),
+                        hash_queue.get_fee_calculator(&tx.message().recent_blockhash),
                         false,
                     ),
                 };

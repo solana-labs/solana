@@ -301,9 +301,7 @@ impl Accounts {
                         Some(HashAgeKind::DurableNonce(_, account)) => {
                             nonce_utils::fee_calculator_of(account)
                         }
-                        _ => hash_queue
-                            .get_fee_calculator(&tx.message().recent_blockhash)
-                            .cloned(),
+                        _ => hash_queue.get_fee_calculator(&tx.message().recent_blockhash),
                     };
                     let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee(tx.message())
@@ -798,12 +796,12 @@ mod tests {
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[(Pubkey, Account)],
-        fee_calculator: &FeeCalculator,
+        fee_calculator: FeeCalculator,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
+        hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
         let accounts = Accounts::new(Vec::new());
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
@@ -824,7 +822,7 @@ mod tests {
     fn load_accounts_with_fee(
         tx: Transaction,
         ka: &[(Pubkey, Account)],
-        fee_calculator: &FeeCalculator,
+        fee_calculator: FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let rent_collector = RentCollector::default();
@@ -837,7 +835,7 @@ mod tests {
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let fee_calculator = FeeCalculator::default();
-        load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
+        load_accounts_with_fee(tx, ka, fee_calculator, error_counters)
     }
 
     #[test]
@@ -957,7 +955,7 @@ mod tests {
         assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
         let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
+            load_accounts_with_fee(tx, &accounts, fee_calculator, &mut error_counters);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1042,7 +1040,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            &fee_calculator,
+            fee_calculator,
             &rent_collector,
             &mut error_counters,
         );
@@ -1056,7 +1054,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            &fee_calculator,
+            fee_calculator,
             &rent_collector,
             &mut error_counters,
         );
@@ -1069,7 +1067,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
-            &fee_calculator,
+            fee_calculator,
             &rent_collector,
             &mut error_counters,
         );

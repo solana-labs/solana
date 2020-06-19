@@ -22,16 +22,16 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(blockhash: &Hash, fee_calculator: &FeeCalculator) -> Self {
+    pub fn new(blockhash: &Hash, fee_calculator: FeeCalculator) -> Self {
         Self {
             blockhash: *blockhash,
-            fee_calculator: *fee_calculator,
+            fee_calculator,
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct IterItem<'a>(pub u64, pub &'a Hash, pub &'a FeeCalculator);
+pub struct IterItem<'a>(pub u64, pub &'a Hash, pub FeeCalculator);
 
 impl<'a> Eq for IterItem<'a> {}
 
@@ -154,7 +154,7 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
         .collect();
     let bhq: Vec<_> = blocks
         .iter()
-        .map(|(i, hash, fee_calc)| IterItem(*i, hash, fee_calc))
+        .map(|(i, hash, fee_calc)| IterItem(*i, hash, *fee_calc))
         .collect();
     RecentBlockhashes::from_iter(bhq.into_iter())
 }
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_size_of() {
-        let entry = Entry::new(&Hash::default(), &FeeCalculator::default());
+        let entry = Entry::new(&Hash::default(), FeeCalculator::default());
         assert_eq!(
             bincode::serialized_size(&RecentBlockhashes(vec![entry; MAX_ENTRIES])).unwrap()
                 as usize,
@@ -196,7 +196,7 @@ mod tests {
         let def_fees = FeeCalculator::default();
         let account = create_account_with_data(
             42,
-            vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES].into_iter(),
+            vec![IterItem(0u64, &def_hash, def_fees); MAX_ENTRIES].into_iter(),
         );
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
@@ -208,7 +208,7 @@ mod tests {
         let def_fees = FeeCalculator::default();
         let account = create_account_with_data(
             42,
-            vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES + 1].into_iter(),
+            vec![IterItem(0u64, &def_hash, def_fees); MAX_ENTRIES + 1].into_iter(),
         );
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
@@ -233,13 +233,13 @@ mod tests {
             42,
             unsorted_blocks
                 .iter()
-                .map(|(i, hash)| IterItem(*i, hash, &def_fees)),
+                .map(|(i, hash)| IterItem(*i, hash, def_fees)),
         );
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
 
         let mut unsorted_recent_blockhashes: Vec<_> = unsorted_blocks
             .iter()
-            .map(|(i, hash)| IterItem(*i, hash, &def_fees))
+            .map(|(i, hash)| IterItem(*i, hash, def_fees))
             .collect();
         unsorted_recent_blockhashes.sort();
         unsorted_recent_blockhashes.reverse();

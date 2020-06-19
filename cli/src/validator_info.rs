@@ -369,7 +369,7 @@ pub fn process_set_validator_info(
         rpc_client,
         false,
         SpendAmount::Some(lamports),
-        &fee_calculator,
+        fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,

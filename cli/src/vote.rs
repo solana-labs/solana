@@ -496,7 +496,7 @@ pub fn process_create_vote_account(
         rpc_client,
         false,
         amount,
-        &fee_calculator,
+        fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,
@@ -546,7 +546,7 @@ pub fn process_vote_authorize(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -586,7 +586,7 @@ pub fn process_vote_update_validator(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -620,7 +620,7 @@ pub fn process_vote_update_commission(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -749,7 +749,7 @@ pub fn process_withdraw_from_vote_account(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &transaction.message,
         config.commitment,
     )?;

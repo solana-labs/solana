@@ -12,11 +12,8 @@ pub struct Fees {
 
 impl Sysvar for Fees {}
 
-pub fn create_account(lamports: u64, fee_calculator: &FeeCalculator) -> Account {
-    Fees {
-        fee_calculator: *fee_calculator,
-    }
-    .create_account(lamports)
+pub fn create_account(lamports: u64, fee_calculator: FeeCalculator) -> Account {
+    Fees { fee_calculator }.create_account(lamports)
 }
 
 #[cfg(test)]
@@ -26,7 +23,7 @@ mod tests {
     #[test]
     fn test_fees_create_account() {
         let lamports = 42;
-        let account = create_account(lamports, &FeeCalculator::default());
+        let account = create_account(lamports, FeeCalculator::default());
         let fees = Fees::from_account(&account).unwrap();
         assert_eq!(fees.fee_calculator, FeeCalculator::default());
     }

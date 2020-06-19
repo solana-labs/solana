@@ -11,7 +11,7 @@ use solana_sdk::{
 pub fn check_account_for_fee(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     message: &Message,
 ) -> Result<(), CliError> {
     check_account_for_multiple_fees(rpc_client, account_pubkey, fee_calculator, &[message])
@@ -20,7 +20,7 @@ pub fn check_account_for_fee(
 pub fn check_account_for_fee_with_commitment(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     message: &Message,
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
@@ -36,7 +36,7 @@ pub fn check_account_for_fee_with_commitment(
 pub fn check_account_for_multiple_fees(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     messages: &[&Message],
 ) -> Result<(), CliError> {
     check_account_for_multiple_fees_with_commitment(
@@ -51,7 +51,7 @@ pub fn check_account_for_multiple_fees(
 pub fn check_account_for_multiple_fees_with_commitment(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     messages: &[&Message],
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
@@ -64,7 +64,7 @@ pub fn check_account_for_multiple_fees_with_commitment(
     Ok(())
 }
 
-pub fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
+pub fn calculate_fee(fee_calculator: FeeCalculator, messages: &[&Message]) -> u64 {
     messages
         .iter()
         .map(|message| fee_calculator.calculate_fee(message))
@@ -146,13 +146,13 @@ mod tests {
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
-        check_account_for_fee(&rpc_client, &pubkey, &fee_calculator, &message0)
+        check_account_for_fee(&rpc_client, &pubkey, fee_calculator, &message0)
             .expect("unexpected result");
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
-        assert!(check_account_for_fee(&rpc_client, &pubkey, &fee_calculator, &message1).is_err());
+        assert!(check_account_for_fee(&rpc_client, &pubkey, fee_calculator, &message1).is_err());
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
@@ -160,7 +160,7 @@ mod tests {
         assert!(check_account_for_multiple_fees(
             &rpc_client,
             &pubkey,
-            &fee_calculator,
+            fee_calculator,
             &[&message0, &message0]
         )
         .is_err());
@@ -178,7 +178,7 @@ mod tests {
         check_account_for_multiple_fees(
             &rpc_client,
             &pubkey,
-            &fee_calculator,
+            fee_calculator,
             &[&message0, &message0],
         )
         .expect("unexpected result");
@@ -215,24 +215,24 @@ mod tests {
     fn test_calculate_fee() {
         let fee_calculator = FeeCalculator::new(1);
         // No messages, no fee.
-        assert_eq!(calculate_fee(&fee_calculator, &[]), 0);
+        assert_eq!(calculate_fee(fee_calculator, &[]), 0);
 
         // No signatures, no fee.
         let message = Message::default();
-        assert_eq!(calculate_fee(&fee_calculator, &[&message, &message]), 0);
+        assert_eq!(calculate_fee(fee_calculator, &[&message, &message]), 0);
 
         // One message w/ one signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message0 = Message::new(&[ix0]);
-        assert_eq!(calculate_fee(&fee_calculator, &[&message0]), 1);
+        assert_eq!(calculate_fee(fee_calculator, &[&message0]), 1);
 
         // Two messages, additive fees.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
         let message1 = Message::new(&[ix0, ix1]);
-        assert_eq!(calculate_fee(&fee_calculator, &[&message0, &message1]), 3);
+        assert_eq!(calculate_fee(fee_calculator, &[&message0, &message1]), 3);
     }
 
     #[test]

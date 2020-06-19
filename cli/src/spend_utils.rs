@@ -47,7 +47,7 @@ pub fn resolve_spend_tx_and_check_account_balance<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     from_pubkey: &Pubkey,
     build_message: F,
     commitment: CommitmentConfig,
@@ -71,7 +71,7 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
@@ -124,7 +124,7 @@ where
 
 fn resolve_spend_message<F>(
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    fee_calculator: FeeCalculator,
     from_balance: u64,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,

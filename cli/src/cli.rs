@@ -1408,7 +1408,7 @@ fn process_deploy(
     check_account_for_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &messages,
         config.commitment,
     )?;
@@ -1491,7 +1491,7 @@ fn process_pay(
             rpc_client,
             sign_only,
             amount,
-            &fee_calculator,
+            fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,
@@ -1545,7 +1545,7 @@ fn process_pay(
             rpc_client,
             sign_only,
             amount,
-            &fee_calculator,
+            fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,
@@ -1596,7 +1596,7 @@ fn process_pay(
             rpc_client,
             sign_only,
             amount,
-            &fee_calculator,
+            fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,
@@ -1639,7 +1639,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -1669,7 +1669,7 @@ fn process_time_elapsed(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -1722,7 +1722,7 @@ fn process_transfer(
         rpc_client,
         sign_only,
         amount,
-        &fee_calculator,
+        fee_calculator,
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
@@ -1771,7 +1771,7 @@ fn process_witness(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;

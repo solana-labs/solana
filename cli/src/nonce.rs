@@ -460,7 +460,7 @@ pub fn process_authorize_nonce_account(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -523,7 +523,7 @@ pub fn process_create_nonce_account(
         rpc_client,
         false,
         amount,
-        &fee_calculator,
+        fee_calculator,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,
@@ -606,7 +606,7 @@ pub fn process_new_nonce(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;
@@ -673,7 +673,7 @@ pub fn process_withdraw_from_nonce_account(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        fee_calculator,
         &tx.message,
         config.commitment,
     )?;

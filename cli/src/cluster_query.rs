@@ -898,7 +898,7 @@ pub fn process_ping(
             rpc_client,
             false,
             SpendAmount::Some(lamports),
-            &fee_calculator,
+            fee_calculator,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,

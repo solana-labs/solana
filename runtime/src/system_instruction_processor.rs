@@ -342,7 +342,7 @@ mod tests {
         RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
             1,
             vec![
-                IterItem(0u64, &Hash::default(), &FeeCalculator::default());
+                IterItem(0u64, &Hash::default(), FeeCalculator::default());
                 sysvar::recent_blockhashes::MAX_ENTRIES
             ]
             .into_iter(),
@@ -1178,7 +1178,7 @@ mod tests {
                     IterItem(
                         0u64,
                         &hash(&serialize(&0).unwrap()),
-                        &FeeCalculator::default()
+                        FeeCalculator::default()
                     );
                     sysvar::recent_blockhashes::MAX_ENTRIES
                 ]
