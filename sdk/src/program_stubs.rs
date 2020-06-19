@@ -1,12 +1,14 @@
 //! @brief Stubs for syscalls when building tests for x86
 
-use std::io::{self, Write};
-
-fn print_line_to_stdout(message: &str) {
-    io::stdout()
-        .write_all(format!("{}\n", message).as_bytes())
-        .unwrap();
-    io::stdout().flush().unwrap();
+fn print_line_to_stdout(_message: &str) {
+    #[cfg(not(feature = "program"))]
+    {
+        use std::io::{self, Write};
+        io::stdout()
+            .write_all(format!("{}\n", _message).as_bytes())
+            .unwrap();
+        io::stdout().flush().unwrap();
+    }
 }
 
 #[no_mangle]
