@@ -3,7 +3,7 @@ use clap::{
     ArgMatches, SubCommand,
 };
 use serde_json::json;
-use solana_clap_utils::input_validators::is_slot;
+use solana_clap_utils::input_validators::{is_parsable, is_slot};
 use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
@@ -14,6 +14,7 @@ use solana_ledger::{
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
+    snapshot_utils::SnapshotVersion,
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -573,6 +574,7 @@ fn load_bank_forks(
             snapshot_package_output_path: ledger_path.clone(),
             snapshot_path,
             compression: CompressionType::Bzip2,
+            snapshot_version: SnapshotVersion::default(),
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -653,7 +655,13 @@ fn main() {
         .takes_value(true)
         .default_value(&default_genesis_archive_unpacked_size)
         .help("maximum total uncompressed size of unpacked genesis archive");
-
+    let snapshot_version_arg = Arg::with_name("snapshot_version")
+        .long("snapshot-version")
+        .value_name("SNAPSHOT_VERSION")
+        .validator(is_parsable::<SnapshotVersion>)
+        .takes_value(true)
+        .default_value(SnapshotVersion::default().into())
+        .help("Output snapshot version");
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -774,6 +782,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&snapshot_version_arg)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1048,7 +1057,15 @@ fn main() {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
             let warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
-
+            let snapshot_version =
+                arg_matches
+                    .value_of("snapshot_version")
+                    .map_or(SnapshotVersion::default(), |s| {
+                        s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
+                            eprintln!("Error: {}", e);
+                            exit(1)
+                        })
+                    });
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(snapshot_slot),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -1082,7 +1099,11 @@ fn main() {
                         bank
                     };
 
-                    println!("Creating a snapshot of slot {}", bank.slot());
+                    println!(
+                        "Creating a version {} snapshot of slot {}",
+                        snapshot_version,
+                        bank.slot(),
+                    );
                     assert!(bank.is_complete());
                     bank.squash();
                     bank.clean_accounts();
@@ -1094,7 +1115,7 @@ fn main() {
                     });
 
                     let storages: Vec<_> = bank.get_snapshot_storages();
-                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages)
+                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages, snapshot_version)
                         .and_then(|slot_snapshot_paths| {
                             snapshot_utils::package_snapshot(
                                 &bank,
@@ -1104,6 +1125,7 @@ fn main() {
                                 output_directory,
                                 storages,
                                 CompressionType::Bzip2,
+                                snapshot_version,
                             )
                         })
                         .and_then(|package| {
