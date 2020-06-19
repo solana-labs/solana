@@ -44,13 +44,10 @@ mod tests {
         bank_forks::{BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_utils,
-<<<<<<< HEAD
+        snapshot_utils::SnapshotVersion,
     };
     use solana_runtime::{
         bank::{Bank, BankSlotDelta},
-=======
-        snapshot_utils::SnapshotVersion,
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -215,14 +212,8 @@ mod tests {
         restore_from_snapshot(bank_forks, last_slot, &[accounts_dir.path().to_path_buf()]);
     }
 
-<<<<<<< HEAD
-    #[test]
-    fn test_bank_forks_snapshot_n() {
-        // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
-=======
     fn run_test_bank_forks_snapshot_n(snapshot_version: SnapshotVersion) {
-        // create banks up to slot 4 and create 1 new account in each bank. test that bank 4 snapshots
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
+        // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
         // and restores correctly
         run_bank_forks_snapshot_n(
             snapshot_version,
@@ -453,14 +444,8 @@ mod tests {
         }
     }
 
-<<<<<<< HEAD
-    #[test]
-    fn test_bank_forks_status_cache_snapshot_n() {
-        // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
-=======
     fn run_test_bank_forks_status_cache_snapshot_n(snapshot_version: SnapshotVersion) {
-        // create banks up to slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
+        // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
         // Makes sure that the last bank is restored correctly

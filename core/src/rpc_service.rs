@@ -353,14 +353,9 @@ mod tests {
         bank_forks::CompressionType,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
+        snapshot_utils::SnapshotVersion,
     };
-<<<<<<< HEAD
     use solana_runtime::bank::Bank;
-=======
-    use solana_runtime::{
-        bank::Bank, bank_forks::CompressionType, snapshot_utils::SnapshotVersion,
-    };
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
     use solana_sdk::signature::Signer;
     use std::net::{IpAddr, Ipv4Addr};
 

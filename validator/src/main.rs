@@ -23,14 +23,8 @@ use solana_core::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
-<<<<<<< HEAD
 use solana_ledger::{
-    bank_forks::{CompressionType, SnapshotConfig},
-=======
-use solana_perf::recycler::enable_recycler_warming;
-use solana_runtime::{
     bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_perf::recycler::enable_recycler_warming;

@@ -3,12 +3,8 @@ use clap::{
     ArgMatches, SubCommand,
 };
 use serde_json::json;
-<<<<<<< HEAD
-use solana_clap_utils::input_validators::is_slot;
-use solana_ledger::bank_forks::CompressionType;
-=======
 use solana_clap_utils::input_validators::{is_parsable, is_slot};
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
+use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,

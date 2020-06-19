@@ -1,10 +1,6 @@
 use crate::bank_forks::CompressionType;
-<<<<<<< HEAD:ledger/src/snapshot_package.rs
-use solana_runtime::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
-=======
 use crate::snapshot_utils::SnapshotVersion;
-use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
->>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536):runtime/src/snapshot_package.rs
+use solana_runtime::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::{
