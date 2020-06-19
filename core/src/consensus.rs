@@ -544,7 +544,7 @@ impl Tower {
         let mut slot_with_ancestors = vec![vote.slot];
         slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
         for slot in slot_with_ancestors {
-            stake_lockouts.insert(slot, StakeLockout::default());
+            stake_lockouts.entry(slot).or_default();
         }
     }
 
