@@ -1,4 +1,11 @@
 use super::*;
+use std::time::Instant;
+
+#[derive(Default)]
+pub struct PurgeStats {
+    delete_range: u64,
+    write_batch: u64,
+}
 
 impl Blockstore {
     /// Silently deletes all blockstore column families in the range [from_slot,to_slot]
@@ -15,9 +22,27 @@ impl Blockstore {
         // if there's no upper bound, split the purge request into batches of 1000 slots
         const PURGE_BATCH_SIZE: u64 = 1000;
         let mut batch_start = from_slot;
+        let mut purge_stats = PurgeStats::default();
+        let mut last_datapoint = Instant::now();
         while batch_start < to_slot {
             let batch_end = (batch_start + PURGE_BATCH_SIZE).min(to_slot);
-            match self.run_purge(batch_start, batch_end, purge_type) {
+
+            let purge_result =
+                self.run_purge_with_stats(batch_start, batch_end, purge_type, &mut purge_stats);
+
+            if last_datapoint.elapsed().as_millis() > 1000 {
+                datapoint_info!(
+                    "blockstore-purge",
+                    ("from_slot", batch_start as i64, i64),
+                    ("to_slot", to_slot as i64, i64),
+                    ("delete_range_us", purge_stats.delete_range as i64, i64),
+                    ("write_batch_us", purge_stats.write_batch as i64, i64)
+                );
+                last_datapoint = Instant::now();
+                purge_stats = PurgeStats::default();
+            }
+
+            match purge_result {
                 Ok(_all_columns_purged) => {
                     batch_start = batch_end;
 
@@ -76,12 +101,22 @@ impl Blockstore {
         }
     }
 
-    // Returns whether or not all columns successfully purged the slot range
     pub(crate) fn run_purge(
         &self,
         from_slot: Slot,
         to_slot: Slot,
         purge_type: PurgeType,
+    ) -> Result<bool> {
+        self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut PurgeStats::default())
+    }
+
+    // Returns whether or not all columns successfully purged the slot range
+    pub(crate) fn run_purge_with_stats(
+        &self,
+        from_slot: Slot,
+        to_slot: Slot,
+        purge_type: PurgeType,
+        purge_stats: &mut PurgeStats,
     ) -> Result<bool> {
         let mut write_batch = self
             .db
@@ -156,13 +191,8 @@ impl Blockstore {
             return Err(e);
         }
         write_timer.stop();
-        datapoint_info!(
-            "blockstore-purge",
-            ("from_slot", from_slot as i64, i64),
-            ("to_slot", to_slot as i64, i64),
-            ("delete_range_us", delete_range_timer.as_us() as i64, i64),
-            ("write_batch_us", write_timer.as_us() as i64, i64)
-        );
+        purge_stats.delete_range += delete_range_timer.as_us();
+        purge_stats.write_batch += write_timer.as_us();
         Ok(columns_purged)
     }
 
