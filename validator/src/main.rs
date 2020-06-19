@@ -6,7 +6,9 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::{keypair_of, keypairs_of, pubkey_of},
-    input_validators::{is_keypair_or_ask_keyword, is_pubkey, is_pubkey_or_keypair, is_slot},
+    input_validators::{
+        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+    },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_client::rpc_client::RpcClient;
@@ -21,8 +23,14 @@ use solana_core::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
+<<<<<<< HEAD
 use solana_ledger::{
     bank_forks::{CompressionType, SnapshotConfig},
+=======
+use solana_perf::recycler::enable_recycler_warming;
+use solana_runtime::{
+    bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
+>>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536)
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_perf::recycler::enable_recycler_warming;
@@ -700,6 +708,15 @@ pub fn main() {
                 .help("Number of slots between generating accounts hash."),
         )
         .arg(
+            Arg::with_name("snapshot_version")
+                .long("snapshot-version")
+                .value_name("SNAPSHOT_VERSION")
+		.validator(is_parsable::<SnapshotVersion>)
+		.takes_value(true)
+		.default_value(SnapshotVersion::default().into())
+		.help("Output snapshot version"),
+        )
+        .arg(
             Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
@@ -974,6 +991,15 @@ pub fn main() {
             _ => panic!("Compression type not recognized: {}", compression_str),
         }
     }
+    let snapshot_version =
+        matches
+            .value_of("snapshot_version")
+            .map_or(SnapshotVersion::default(), |s| {
+                s.parse::<SnapshotVersion>().unwrap_or_else(|err| {
+                    eprintln!("Error: {}", err);
+                    exit(1)
+                })
+            });
     validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
@@ -983,6 +1009,7 @@ pub fn main() {
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
         compression: snapshot_compression,
+        snapshot_version,
     });
 
     validator_config.accounts_hash_interval_slots =

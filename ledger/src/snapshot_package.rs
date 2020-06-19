@@ -1,5 +1,10 @@
 use crate::bank_forks::CompressionType;
+<<<<<<< HEAD:ledger/src/snapshot_package.rs
 use solana_runtime::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+=======
+use crate::snapshot_utils::SnapshotVersion;
+use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+>>>>>>> 6d81eede9... Add CLI options and runtime support for selection of output snapshot version. (#10536):runtime/src/snapshot_package.rs
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::{
@@ -22,6 +27,7 @@ pub struct AccountsPackage {
     pub tar_output_file: PathBuf,
     pub hash: Hash,
     pub compression: CompressionType,
+    pub snapshot_version: SnapshotVersion,
 }
 
 impl AccountsPackage {
@@ -34,6 +40,7 @@ impl AccountsPackage {
         tar_output_file: PathBuf,
         hash: Hash,
         compression: CompressionType,
+        snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
             root,
@@ -44,6 +51,7 @@ impl AccountsPackage {
             tar_output_file,
             hash,
             compression,
+            snapshot_version,
         }
     }
 }
