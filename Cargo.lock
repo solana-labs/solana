@@ -3296,6 +3296,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9bdc5e856e51e685846fb6c13a1f5e5432946c2c90501bdc76a1319f19e29da"
+dependencies = [
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "syn 1.0.27",
+]
+
+[[package]]
 name = "rusty-fork"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3824,7 +3835,11 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "rand 0.7.3",
+<<<<<<< HEAD
  "solana-logger",
+=======
+ "rustversion",
+>>>>>>> 05445c718... Fix hygiene issues in `declare_program!` and `declare_loader!`
  "solana-runtime",
  "solana-sdk 1.2.11",
  "solana_rbpf",
@@ -4667,6 +4682,11 @@ dependencies = [
  "pbkdf2",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
+<<<<<<< HEAD
+=======
+ "rustc_version",
+ "rustversion",
+>>>>>>> 05445c718... Fix hygiene issues in `declare_program!` and `declare_loader!`
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -4692,9 +4712,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da5f311e7735323eb0ad348c68170c2503a2c56cfa1a261646d8182b373fa670"
 dependencies = [
  "bs58 0.3.1",
+<<<<<<< HEAD
  "proc-macro2 1.0.18",
  "quote 1.0.7",
  "syn 1.0.33",
+=======
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "rustversion",
+ "syn 1.0.27",
+>>>>>>> 05445c718... Fix hygiene issues in `declare_program!` and `declare_loader!`
 ]
 
 [[package]]
