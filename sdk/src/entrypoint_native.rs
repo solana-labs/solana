@@ -30,6 +30,60 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError>;
 
+#[rustversion::since(1.46.0)]
+#[macro_export]
+macro_rules! declare_name {
+    ($name:ident) => {
+        #[macro_export]
+        macro_rules! $name {
+            () => {
+                // Subtle:
+                // The outer `declare_name!` macro may be expanded in another
+                // crate, causing the macro `$name!` to be defined in that
+                // crate. We want to emit a call to `$crate::id()`, and have
+                // `$crate` be resolved in the crate where `$name!` gets defined,
+                // *not* in this crate (where `declare_name! is defined).
+                //
+                // When a macro_rules! macro gets expanded, any $crate tokens
+                // in its output will be 'marked' with the crate they were expanded
+                // from. This includes nested macros like our macro `$name` - even
+                // though it looks like a separate macro, Rust considers it to be
+                // just another part of the output of `declare_program!`.
+                //
+                // We pass `$name` as the second argument to tell `respan!` to
+                // apply use the `Span` of `$name` when resolving `$crate::id`.
+                // This causes `$crate` to behave as though it was written
+                // at the same location as the `$name` value passed
+                // to `declare_name!` (e.g. the 'foo' in
+                // `declare_name(foo)`
+                //
+                // See the `respan!` macro for more details.
+                // FIXME: Use `crate::respan!` once https://github.com/rust-lang/rust/pull/72121
+                // is merged.
+                // `respan!` respans the path `$crate::id`, which we then call (hence the extra
+                // parens)
+                (
+                    stringify!($name).to_string(),
+                    ::solana_sdk::respan!($crate::id, $name)(),
+                )
+            };
+        }
+    };
+}
+
+#[rustversion::not(since(1.46.0))]
+#[macro_export]
+macro_rules! declare_name {
+    ($name:ident) => {
+        #[macro_export]
+        macro_rules! $name {
+            () => {
+                (stringify!($name).to_string(), $crate::id())
+            };
+        }
+    };
+}
+
 /// Convenience macro to declare a native program
 ///
 /// bs58_string: bs58 string representation the program's id
@@ -102,13 +156,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 macro_rules! declare_program(
     ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
         $crate::declare_id!($bs58_string);
-
-        #[macro_export]
-        macro_rules! $name {
-            () => {
-                (stringify!($name).to_string(), $crate::id())
-            };
-        }
+        $crate::declare_name!($name);
 
         #[no_mangle]
         pub extern "C" fn $name(
@@ -126,13 +174,9 @@ macro_rules! declare_program(
 macro_rules! declare_loader(
     ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
         $crate::declare_id!($bs58_string);
+        $crate::declare_name!($name);
 
-        #[macro_export]
-        macro_rules! $name {
-            () => {
-                (stringify!($name).to_string(), $crate::id())
-            };
-        }
+
 
         #[no_mangle]
         pub extern "C" fn $name(
