@@ -1125,6 +1125,12 @@ impl Blockstore {
             new_consumed,
             shred.reference_tick(),
         );
+        if slot_meta.is_full() {
+            info!(
+                "slot {} is full, last: {}",
+                slot_meta.slot, slot_meta.last_index
+            );
+        }
         data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(())

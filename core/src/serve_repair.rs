@@ -397,7 +397,13 @@ impl ServeRepair {
         let (repair_peers, weights) = cache.get(&slot).unwrap();
         let n = weighted_best(&weights, Pubkey::new_rand().to_bytes());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
-        let out = self.map_repair_request(&repair_request, repair_stats, DEFAULT_NONCE)?;
+        let repair_peer_id = repair_peers[n].id;
+        let out = self.map_repair_request(
+            &repair_request,
+            &repair_peer_id,
+            repair_stats,
+            DEFAULT_NONCE,
+        )?;
         Ok((addr, out))
     }
 
@@ -405,33 +411,38 @@ impl ServeRepair {
         &self,
         slot: Slot,
         cluster_slots: &ClusterSlots,
-    ) -> Result<SocketAddr> {
+    ) -> Result<(Pubkey, SocketAddr)> {
         let repair_peers: Vec<_> = self.cluster_info.repair_peers(slot);
         if repair_peers.is_empty() {
             return Err(ClusterInfoError::NoPeers.into());
         }
         let weights = cluster_slots.compute_weights_exclude_noncomplete(slot, &repair_peers);
         let n = weighted_best(&weights, Pubkey::new_rand().to_bytes());
-        Ok(repair_peers[n].serve_repair)
+        Ok((repair_peers[n].id, repair_peers[n].serve_repair))
     }
 
     pub fn map_repair_request(
         &self,
         repair_request: &RepairType,
+        repair_peer_id: &Pubkey,
         repair_stats: &mut RepairStats,
         nonce: Nonce,
     ) -> Result<Vec<u8>> {
         match repair_request {
             RepairType::Shred(slot, shred_index) => {
-                repair_stats.shred.update(*slot);
+                repair_stats
+                    .shred
+                    .update(repair_peer_id, *slot, *shred_index);
                 Ok(self.window_index_request_bytes(*slot, *shred_index, nonce)?)
             }
             RepairType::HighestShred(slot, shred_index) => {
-                repair_stats.highest_shred.update(*slot);
+                repair_stats
+                    .highest_shred
+                    .update(repair_peer_id, *slot, *shred_index);
                 Ok(self.window_highest_index_request_bytes(*slot, *shred_index, nonce)?)
             }
             RepairType::Orphan(slot) => {
-                repair_stats.orphan.update(*slot);
+                repair_stats.orphan.update(repair_peer_id, *slot, 0);
                 Ok(self.orphan_bytes(*slot, nonce)?)
             }
         }
