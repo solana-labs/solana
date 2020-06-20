@@ -340,6 +340,14 @@ mod tests {
         }
     }
 
+    #[rustversion::since(1.46.0)]
+    #[test]
+    fn test_bpf_loader_same_crate() {
+        // Ensure that we can invoke this macro from the same crate
+        // where it is defined.
+        solana_bpf_loader_program!();
+    }
+
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(10)")]
     fn test_bpf_loader_non_terminating_program() {

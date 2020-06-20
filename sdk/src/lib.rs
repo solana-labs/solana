@@ -67,6 +67,8 @@ pub mod timing;
 /// ```
 pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkeys;
+#[rustversion::since(1.46.0)]
+pub use solana_sdk_macro::respan;
 
 // On-chain program specific modules
 pub mod account_info;
