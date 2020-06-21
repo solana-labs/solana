@@ -312,7 +312,7 @@ mod tests {
             if slot == saved_slot as u64 {
                 let options = CopyOptions::new();
                 fs_extra::dir::copy(accounts_dir, &saved_accounts_dir, &options).unwrap();
-                let snapshot_paths = fs::read_dir(snapshot_path)
+                let last_snapshot_path = fs::read_dir(snapshot_path)
                     .unwrap()
                     .filter_map(|entry| {
                         let e = entry.unwrap();
@@ -327,7 +327,7 @@ mod tests {
                     .last()
                     .unwrap();
                 // only save off the snapshot of this slot, we don't need the others.
-                fs_extra::dir::copy(&snapshot_paths, &saved_snapshots_dir, &options).unwrap();
+                fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
                     snapshot_package_output_path,
@@ -340,13 +340,10 @@ mod tests {
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
         bank_forks.purge_old_snapshots();
-        assert_eq!(
-            snapshot_utils::get_snapshot_paths(&snapshots_dir)
-                .into_iter()
-                .map(|path| path.slot)
-                .eq(3..=MAX_CACHE_ENTRIES as u64 + 2),
-            true
-        );
+        assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
+            .into_iter()
+            .map(|path| path.slot)
+            .eq(3..=MAX_CACHE_ENTRIES as u64 + 2));
 
         // Create a SnapshotPackagerService to create tarballs from all the pending
         // SnapshotPackage's on the channel. By the time this service starts, we have already
@@ -434,10 +431,7 @@ mod tests {
                 .unwrap()
                 .src
                 .roots();
-            assert_eq!(
-                slots_to_snapshot.into_iter().eq(expected_slots_to_snapshot),
-                true
-            );
+            assert!(slots_to_snapshot.into_iter().eq(expected_slots_to_snapshot));
         }
     }
 
