@@ -614,6 +614,16 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
+    // Ignore SIGUSR1 to prevent long-running calls being killed by logrotate
+    // in warehouse deployments
+    #[cfg(unix)]
+    {
+        // `register()` is unsafe because the action is called in a signal handler
+        // with the usual caveats. So long as this action body stays empty, we'll
+        // be fine
+        unsafe { signal_hook::register(signal_hook::SIGUSR1, || {}) }.unwrap();
+    }
+
     const DEFAULT_ROOT_COUNT: &str = "1";
     solana_logger::setup_with_default("solana=info");
 
