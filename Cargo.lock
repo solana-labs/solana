@@ -4213,6 +4213,7 @@ dependencies = [
  "log 0.4.8",
  "serde_json",
  "serde_yaml",
+ "signal-hook",
  "solana-clap-utils",
  "solana-cli",
  "solana-ledger",
