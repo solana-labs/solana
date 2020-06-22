@@ -232,7 +232,12 @@ impl Tower {
             );
             if let Some(vote) = vote_state.nth_recent_vote(1) {
                 // Update all the parents of this last vote with the stake of this vote account
-                Self::update_ancestor_stakes(&mut voted_stakes, vote.slot, lamports, ancestors);
+                Self::update_ancestor_voted_stakes(
+                    &mut voted_stakes,
+                    vote.slot,
+                    lamports,
+                    ancestors,
+                );
             }
             total_stake += lamports;
         }
@@ -561,8 +566,8 @@ impl Tower {
 
     /// Update stake for all the ancestors.
     /// Note, stake is the same for all the ancestor.
-    fn update_ancestor_stakes(
-        voted_stakes: &mut HashMap<Slot, Stake>,
+    fn update_ancestor_voted_stakes(
+        voted_stakes: &mut VotedStakes,
         slot: Slot,
         lamports: u64,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
@@ -576,8 +581,8 @@ impl Tower {
         let mut slot_with_ancestors = vec![slot];
         slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
         for slot in slot_with_ancestors {
-            let stake = &mut voted_stakes.entry(slot).or_default();
-            **stake += lamports;
+            let current = voted_stakes.entry(slot).or_default();
+            *current += lamports;
         }
     }
 
@@ -1614,7 +1619,7 @@ pub mod test {
         account.lamports = 1;
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].iter().cloned().collect();
-        Tower::update_ancestor_stakes(&mut voted_stakes, 2, account.lamports, &ancestors);
+        Tower::update_ancestor_voted_stakes(&mut voted_stakes, 2, account.lamports, &ancestors);
         assert_eq!(voted_stakes[&0], 1);
         assert_eq!(voted_stakes[&1], 1);
         assert_eq!(voted_stakes[&2], 1);
