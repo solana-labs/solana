@@ -1235,7 +1235,6 @@ impl ReplayStage {
                     let ComputedBankState {
                         stake_lockouts,
                         total_staked,
-                        lockout_intervals,
                         ..
                     } = computed_bank_state;
                     let stats = progress
@@ -1243,7 +1242,6 @@ impl ReplayStage {
                         .expect("All frozen banks must exist in the Progress map");
                     stats.total_staked = total_staked;
                     stats.stake_lockouts = stake_lockouts;
-                    stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
                     stats.computed = true;
                     new_stats.push(bank_slot);

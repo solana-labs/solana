@@ -1,7 +1,5 @@
 use crate::{
-    commitment::VOTE_THRESHOLD_SIZE,
-    progress_map::{LockoutIntervals, ProgressMap},
-    pubkey_references::PubkeyReferences,
+    commitment::VOTE_THRESHOLD_SIZE, progress_map::ProgressMap, pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
@@ -82,7 +80,6 @@ pub(crate) struct ComputedBankState {
     pub stake_lockouts: HashMap<Slot, StakeLockout>,
     pub total_staked: u64,
     pub bank_weight: u128,
-    pub lockout_intervals: LockoutIntervals,
     pub pubkey_votes: Vec<(Pubkey, Slot)>,
 }
 
@@ -256,7 +253,6 @@ impl Tower {
             stake_lockouts,
             total_staked,
             bank_weight,
-            lockout_intervals,
             pubkey_votes,
         }
     }
