@@ -23,13 +23,12 @@ this array, representing all the possible number of confirmations from 1 to
 Building this `BlockCommitment` struct leverages the computations already being
 performed for building consensus. The `collect_vote_lockouts` function in
 `consensus.rs` builds a HashMap, where each entry is of the form `(b, s)`
-where `s` is a `StakeLockout` struct representing the amount of stake and
-lockout on a bank `b`.
+where `s` is the amount of stake on a bank `b`.
 
 This computation is performed on a votable candidate bank `b` as follows.
 
 ```text
-   let output: HashMap<b, StakeLockout> = HashMap::new();
+   let output: HashMap<b, Stake> = HashMap::new();
    for vote_account in b.vote_accounts {
        for v in vote_account.vote_stack {
            for a in ancestors(v) {
@@ -39,7 +38,7 @@ This computation is performed on a votable candidate bank `b` as follows.
    }
 ```
 
-where `f` is some accumulation function that modifies the `StakeLockout` entry
+where `f` is some accumulation function that modifies the `Stake` entry
 for slot `a` with some data derivable from vote `v` and `vote_account`
 (stake, lockout, etc.). Note here that the `ancestors` here only includes
 slots that are present in the current status cache. Signatures for banks earlier
@@ -63,7 +62,7 @@ votes > v as the number of confirmations will be lower).
 Now more specifically, we augment the above computation to:
 
 ```text
-   let output: HashMap<b, StakeLockout> = HashMap::new();
+   let output: HashMap<b, Stake> = HashMap::new();
    let fork_commitment_cache = ForkCommitmentCache::default();
    for vote_account in b.vote_accounts {
        // vote stack is sorted from oldest vote to newest vote
@@ -78,12 +77,12 @@ Now more specifically, we augment the above computation to:
 where `f'` is defined as:
 ```text
     fn f`(
-        stake_lockout: &mut StakeLockout,
+        stake: &mut Stake,
         some_ancestor: &mut BlockCommitment,
         vote_account: VoteAccount,
         v: Vote, total_stake: u64
     ){
-        f(stake_lockout, vote_account, v);
+        f(stake, vote_account, v);
         *some_ancestor.commitment[v.num_confirmations] += vote_account.stake;
     }
 ```

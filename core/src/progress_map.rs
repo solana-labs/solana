@@ -1,7 +1,6 @@
 use crate::{
-    cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
-    consensus::StakeLockout, pubkey_references::PubkeyReferences,
-    replay_stage::SUPERMINORITY_THRESHOLD,
+    cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys, consensus::Stake,
+    pubkey_references::PubkeyReferences, replay_stage::SUPERMINORITY_THRESHOLD,
 };
 use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
@@ -190,14 +189,14 @@ impl ForkProgress {
 pub(crate) struct ForkStats {
     pub(crate) weight: u128,
     pub(crate) fork_weight: u128,
-    pub(crate) total_staked: u64,
+    pub(crate) total_stake: Stake,
     pub(crate) block_height: u64,
     pub(crate) has_voted: bool,
     pub(crate) is_recent: bool,
     pub(crate) is_empty: bool,
     pub(crate) vote_threshold: bool,
     pub(crate) is_locked_out: bool,
-    pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
+    pub(crate) voted_stakes: HashMap<Slot, Stake>,
     pub(crate) confirmation_reported: bool,
     pub(crate) computed: bool,
     pub(crate) lockout_intervals: LockoutIntervals,

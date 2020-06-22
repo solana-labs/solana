@@ -19,15 +19,15 @@ use std::{
 pub struct CommitmentAggregationData {
     bank: Arc<Bank>,
     root: Slot,
-    total_staked: u64,
+    total_stake: u64,
 }
 
 impl CommitmentAggregationData {
-    pub fn new(bank: Arc<Bank>, root: Slot, total_staked: u64) -> Self {
+    pub fn new(bank: Arc<Bank>, root: Slot, total_stake: u64) -> Self {
         Self {
             bank,
             root,
-            total_staked,
+            total_stake,
         }
     }
 }
@@ -107,12 +107,12 @@ impl AggregateCommitmentService {
                 Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
             let largest_confirmed_root =
-                get_largest_confirmed_root(rooted_stake, aggregation_data.total_staked);
+                get_largest_confirmed_root(rooted_stake, aggregation_data.total_stake);
 
             let mut new_block_commitment = BlockCommitmentCache::new(
                 block_commitment,
                 largest_confirmed_root,
-                aggregation_data.total_staked,
+                aggregation_data.total_stake,
                 aggregation_data.bank,
                 block_commitment_cache.read().unwrap().blockstore.clone(),
                 aggregation_data.root,
