@@ -145,6 +145,7 @@ impl Tvu {
             tvu_config.shred_version,
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
+            vote_tracker.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();

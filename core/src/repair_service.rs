@@ -2,12 +2,16 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
     cluster_info::ClusterInfo,
+    cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::VOTE_THRESHOLD_SIZE,
     result::Result,
     serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use rand::distributions::{Distribution, WeightedIndex};
+use rand::{thread_rng, Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
     shred::Nonce,
@@ -96,6 +100,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
+        vote_tracker: Arc<VoteTracker>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -107,6 +112,7 @@ impl RepairService {
                     cluster_info,
                     repair_info,
                     &cluster_slots,
+                    vote_tracker,
                 )
             })
             .unwrap();
@@ -121,6 +127,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: &ClusterSlots,
+        vote_tracker: Arc<VoteTracker>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
@@ -173,6 +180,7 @@ impl RepairService {
                     root_bank.slot(),
                     MAX_REPAIR_LENGTH,
                     &duplicate_slot_repair_statuses,
+                    &vote_tracker,
                 )
             };
 
@@ -253,6 +261,7 @@ impl RepairService {
         root: Slot,
         max_repairs: usize,
         duplicate_slot_repair_statuses: &HashMap<Slot, DuplicateSlotRepairStatus>,
+        vote_tracker: &Arc<VoteTracker>,
     ) -> Result<Vec<RepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
@@ -262,9 +271,8 @@ impl RepairService {
             max_repairs,
             root,
             duplicate_slot_repair_statuses,
+            vote_tracker,
         );
-
-        // TODO: Incorporate gossip to determine priorities for repair?
 
         // Try to resolve orphans in blockstore
         let orphans = blockstore.orphans_iterator(root + 1).unwrap();
@@ -502,27 +510,64 @@ impl RepairService {
         max_repairs: usize,
         slot: Slot,
         duplicate_slot_repair_statuses: &HashMap<Slot, DuplicateSlotRepairStatus>,
+        vote_tracker: &Arc<VoteTracker>,
     ) {
+        let mut seed = [0u8; 32];
+        thread_rng().fill(&mut seed);
+        let rng = &mut ChaChaRng::from_seed(seed);
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
-            let slot = pending_slots.pop().unwrap();
-            if duplicate_slot_repair_statuses.contains_key(&slot) {
-                // These are repaired through a different path
-                continue;
+            pending_slots.retain(|slot| !duplicate_slot_repair_statuses.contains_key(slot));
+            let mut next_pending_slots = vec![];
+            let mut level_repairs = HashMap::new();
+            for slot in &pending_slots {
+                if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
+                    let new_repairs = Self::generate_repairs_for_slot(
+                        blockstore,
+                        *slot,
+                        &slot_meta,
+                        std::usize::MAX,
+                    );
+                    if !new_repairs.is_empty() {
+                        level_repairs.insert(*slot, new_repairs);
+                    }
+                    next_pending_slots.extend(slot_meta.next_slots);
+                }
             }
-            if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
-                let new_repairs = Self::generate_repairs_for_slot(
-                    blockstore,
-                    slot,
-                    &slot_meta,
-                    max_repairs - repairs.len(),
-                );
-                repairs.extend(new_repairs);
-                let next_slots = slot_meta.next_slots;
-                pending_slots.extend(next_slots);
-            } else {
-                break;
+
+            if !level_repairs.is_empty() {
+                let mut slots_to_repair: Vec<_> = level_repairs.keys().cloned().collect();
+                let mut weights: Vec<_> = {
+                    let r_vote_tracker = vote_tracker.slot_vote_trackers.read().unwrap();
+                    slots_to_repair
+                        .iter()
+                        .map(|slot| {
+                            if let Some(slot_vote_tracker) = r_vote_tracker.get(slot) {
+                                std::cmp::max(slot_vote_tracker.read().unwrap().total_stake, 1)
+                            } else {
+                                // should it be something else?
+                                1
+                            }
+                        })
+                        .collect()
+                };
+
+                let mut weighted_index = WeightedIndex::new(weights.clone()).unwrap();
+                while repairs.len() < max_repairs && !level_repairs.is_empty() {
+                    let index = weighted_index.sample(rng);
+                    let slot_repairs = level_repairs.get_mut(&slots_to_repair[index]).unwrap();
+                    repairs.push(slot_repairs.remove(0));
+                    if slot_repairs.is_empty() {
+                        level_repairs.remove(&slots_to_repair[index]);
+                        slots_to_repair.remove(index);
+                        weights.remove(index);
+                        if !weights.is_empty() {
+                            weighted_index = WeightedIndex::new(weights.clone()).unwrap();
+                        }
+                    }
+                }
             }
+            pending_slots = next_pending_slots;
         }
     }
 
@@ -609,8 +654,10 @@ mod test {
             let (shreds2, _) = make_slot_entries(5, 2, 1);
             shreds.extend(shreds2);
             blockstore.insert_shreds(shreds, None, false).unwrap();
+            let vote_tracker = Arc::new(VoteTracker::default());
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2, &HashMap::new()).unwrap(),
+                RepairService::generate_repairs(&blockstore, 0, 2, &HashMap::new(), &vote_tracker)
+                    .unwrap(),
                 vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
             );
         }
@@ -630,9 +677,11 @@ mod test {
             // any shreds for
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
+            let vote_tracker = Arc::new(VoteTracker::default());
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2, &HashMap::new()).unwrap(),
+                RepairService::generate_repairs(&blockstore, 0, 2, &HashMap::new(), &vote_tracker)
+                    .unwrap(),
                 vec![RepairType::HighestShred(0, 0)]
             );
         }
@@ -677,9 +726,16 @@ mod test {
                 })
                 .collect();
 
+            let vote_tracker = Arc::new(VoteTracker::default());
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX, &HashMap::new())
-                    .unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    0,
+                    std::usize::MAX,
+                    &HashMap::new(),
+                    &vote_tracker
+                )
+                .unwrap(),
                 expected
             );
 
@@ -688,7 +744,8 @@ mod test {
                     &blockstore,
                     0,
                     expected.len() - 2,
-                    &HashMap::new()
+                    &HashMap::new(),
+                    &vote_tracker,
                 )
                 .unwrap()[..],
                 expected[0..expected.len() - 2]
@@ -718,9 +775,16 @@ mod test {
             let expected: Vec<RepairType> =
                 vec![RepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
+            let vote_tracker = Arc::new(VoteTracker::default());
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX, &HashMap::new())
-                    .unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    0,
+                    std::usize::MAX,
+                    &HashMap::new(),
+                    &vote_tracker
+                )
+                .unwrap(),
                 expected
             );
         }
