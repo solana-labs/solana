@@ -110,7 +110,7 @@ fn process_instruction(
                 invoke_signed(
                     &invoked_instruction,
                     accounts,
-                    &[&["You pass butter"], &["Lil'", "Bits"]],
+                    &[&[b"You pass butter"], &[b"Lil'", b"Bits"]],
                 )?;
             }
 
