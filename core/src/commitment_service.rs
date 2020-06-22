@@ -24,7 +24,7 @@ pub struct CommitmentAggregationData {
 }
 
 impl CommitmentAggregationData {
-    pub fn new(bank: Arc<Bank>, root: Slot, total_stake: u64) -> Self {
+    pub fn new(bank: Arc<Bank>, root: Slot, total_stake: Stake) -> Self {
         Self {
             bank,
             root,
