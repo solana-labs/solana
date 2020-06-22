@@ -22,8 +22,6 @@ const DEPRECATE_VERSION_BEFORE: FirmwareVersion = FirmwareVersion {
     build: Vec::new(),
 };
 
-const HARDENED_BIT: u32 = 1 << 31;
-
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
 const APDU_PAYLOAD_HEADER_LEN: usize = 7;
@@ -475,12 +473,10 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
     };
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-    if let Some(account) = derivation_path.account {
-        let hardened_account = account | HARDENED_BIT;
-        concat_derivation.extend_from_slice(&hardened_account.to_be_bytes());
-        if let Some(change) = derivation_path.change {
-            let hardened_change = change | HARDENED_BIT;
-            concat_derivation.extend_from_slice(&hardened_change.to_be_bytes());
+    if let Some(account) = &derivation_path.account {
+        concat_derivation.extend_from_slice(&account.as_u32().to_be_bytes());
+        if let Some(change) = &derivation_path.change {
+            concat_derivation.extend_from_slice(&change.as_u32().to_be_bytes());
         }
     }
     concat_derivation
