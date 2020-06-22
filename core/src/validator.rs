@@ -715,14 +715,14 @@ fn new_banks_from_ledger(
         process::exit(1);
     });
 
-    let tower = match restored_tower {
-        Ok(mut tower) => {
-            // The tower root can be older if the validator booted from a newer snapshot, so
-            // tower lockouts may need adjustment
-            tower.adjust_lockouts_if_newer_root(bank_forks.root());
-            tower
-        }
-        Err(err) => {
+    let tower = restored_tower
+        .and_then(|tower| {
+            let root_bank = bank_forks.root_bank();
+            let slot_history = root_bank.get_slot_history();
+            // assert bank is frozen
+            tower.adjust_lockouts_if_newer_root(root_bank.slot(), &slot_history)
+        })
+        .unwrap_or_else(|err| {
             if config.require_tower
                 && empty_vote_account(&bank_forks.working_bank(), &vote_account) != Some(true)
             {
@@ -736,8 +736,7 @@ fn new_banks_from_ledger(
                 &validator_identity,
                 &vote_account,
             )
-        }
-    };
+        });
 
     info!(
         "Tower state: root slot={:?}, last vote slot={:?}",

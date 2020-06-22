@@ -12,6 +12,7 @@ use solana_sdk::{
     instruction::Instruction,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
+    slot_history::SlotHistory,
 };
 use solana_vote_program::{
     vote_instruction,
@@ -699,12 +700,45 @@ impl Tower {
         bank_weight
     }
 
-    pub fn adjust_lockouts_if_newer_root(&mut self, root_slot: Slot) {
-        let my_root_slot = self.lockouts.root_slot.unwrap_or(0);
-        if root_slot > my_root_slot {
-            self.lockouts.root_slot = Some(root_slot);
-            self.lockouts.votes.retain(|v| v.slot > root_slot);
+    // The tower root can be older if the validator booted from a newer snapshot, so
+    // tower lockouts may need adjustment
+    pub fn adjust_lockouts_if_newer_root(
+        mut self,
+        replayed_root_slot: Slot,
+        slot_history: &SlotHistory,
+    ) -> Result<Self> {
+        // should root_bank be used or any child (frozen?) banks?
+        //let my_root_slot = self.lockouts.root_slot.unwrap_or(0);
+        //if root_slot > my_root_slot {
+        //    self.lockouts.root_slot = Some(root_slot);
+        //    self.lockouts.votes.retain(|v| v.slot > root_slot);
+        //}
+        // return immediately if last_voted_slot is None, votes are empty...
+
+        error!("root bank slot: {}", replayed_root_slot);
+        error!("before votes: {:?}", self.lockouts.votes);
+        assert!(slot_history.check(replayed_root_slot) == solana_sdk::slot_history::Check::Found);
+        let last_voted_slot = self.last_voted_slot().unwrap();
+        if slot_history.check(last_voted_slot) == solana_sdk::slot_history::Check::TooOld {
+            return Err(TowerError::TooOld(
+                last_voted_slot,
+                slot_history.oldest(),
+            ));
         }
+
+        // check in reverse order
+        self.lockouts.votes.retain(|v| {
+            let check = slot_history.check(v.slot);
+            dbg!(&check);
+            check != solana_sdk::slot_history::Check::Found
+        });
+        self.lockouts.root_slot = Some(replayed_root_slot);
+        error!("after votes: {:?}", self.lockouts.votes);
+        // assert replayed_root_slot is in slot_history!!!
+        // also adjust self.last_vote!
+        // should call self.votes.pop_expired_votes()?
+        // if slots are out of history; abort
+        Ok(self)
     }
 
     fn initialize_lockouts_from_bank_forks(
@@ -802,6 +836,9 @@ pub enum TowerError {
 
     #[error("The tower does not match this validator: {0}")]
     WrongTower(String),
+
+    #[error("The tower is too old: last voted ({0}) << oldest slot history ({1})")]
+    TooOld(Slot, Slot),
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -866,7 +903,13 @@ pub mod test {
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
     };
-    use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer};
+    use solana_sdk::{
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signer,
+        slot_history::SlotHistory,
+    };
     use solana_vote_program::{
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
@@ -2131,4 +2174,115 @@ pub mod test {
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
+
+    impl Tower {
+        fn voted_slots(&self) -> Vec<Slot> {
+            self.lockouts
+                .votes
+                .iter()
+                .map(|lockout| lockout.slot)
+                .collect()
+        }
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+        tower.record_vote(3, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+
+        tower = tower
+            .adjust_lockouts_if_newer_root(1, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![2, 3]);
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load2() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+        tower.record_vote(3, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(4);
+
+        tower = tower
+            .adjust_lockouts_if_newer_root(4, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![2, 3]);
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load3() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+        slot_history.add(3);
+        slot_history.add(4);
+        slot_history.add(5);
+
+        tower = tower
+            .adjust_lockouts_if_newer_root(5, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load4() {
+        use solana_sdk::slot_history::MAX_ENTRIES;
+
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(MAX_ENTRIES);
+
+        let result = tower.adjust_lockouts_if_newer_root(MAX_ENTRIES, &slot_history);
+        //assert_matches!(result, Err(TowerError::TooOld(ref message)) if message.to_string() == *"too old tower stake");
+        //assert_eq!(format!("{:?}", result.unwrap()), "too old tower stake");
+        assert_matches!(result, Err(TowerError::TooOld(s1, s2)) if s1 == 0 && s2 == 1);
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load5() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+        tower.record_vote(3, Hash::default());
+        tower.record_vote(4, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+
+        tower = tower
+            .adjust_lockouts_if_newer_root(2, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![3, 4]);
+    }
+
+    // test empty
 }
