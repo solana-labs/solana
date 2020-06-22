@@ -3,8 +3,8 @@
 //!
 use crate::{
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::VoteTracker,
     cluster_info_vote_listener::VerifiedVoteReceiver,
+    cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     repair_response,
     repair_service::{RepairInfo, RepairService},

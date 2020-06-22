@@ -2,8 +2,8 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::VoteTracker,
     cluster_info_vote_listener::VerifiedVoteReceiver,
+    cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     repair_weighted_traversal::Contains,
     result::Result,
@@ -145,7 +145,7 @@ impl RepairService {
         repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
         vote_tracker: Arc<VoteTracker>,
-        verified_vote_receiver: VerifiedVoteReceiver,
+        _verified_vote_receiver: VerifiedVoteReceiver,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -158,7 +158,7 @@ impl RepairService {
                     repair_info,
                     &cluster_slots,
                     vote_tracker,
-                    verified_vote_receiver,
+                    _verified_vote_receiver,
                 )
             })
             .unwrap();
@@ -174,7 +174,7 @@ impl RepairService {
         repair_info: RepairInfo,
         cluster_slots: &ClusterSlots,
         vote_tracker: Arc<VoteTracker>,
-        verified_vote_receiver: VerifiedVoteReceiver,
+        _verified_vote_receiver: VerifiedVoteReceiver,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();

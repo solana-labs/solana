@@ -415,6 +415,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         last_root: Slot,
         subscriptions: &RpcSubscriptions,
+        verified_vote_sender: &VerifiedVoteSender,
     ) -> Result<()> {
         Self::get_and_process_votes(
             vote_txs_receiver,
@@ -422,6 +423,7 @@ impl ClusterInfoVoteListener {
             last_root,
             subscriptions,
             None,
+            verified_vote_sender,
         )
     }
 
@@ -824,12 +826,12 @@ mod tests {
 
         // Check that the received votes were pushed to other commponents
         // subscribing via a channel
-        let received_votes: Vec<_> = verified_vote_receiver.into_iter().collect();
+        let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
         assert_eq!(received_votes.len(), validator_voting_keypairs.len());
         for (voting_keypair, (received_pubkey, received_vote)) in
             validator_voting_keypairs.iter().zip(received_votes.iter())
         {
-            assert_eq!(voting_keypair.pubkey(), received_pubkey);
+            assert_eq!(voting_keypair.vote_keypair.pubkey(), *received_pubkey);
             assert_eq!(received_vote.slots, vote_slots);
         }
         for vote_slot in vote_slots {
@@ -852,14 +854,17 @@ mod tests {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         // Send some votes to process
-        let (votes_sender, votes_receiver) = unbounded();
+        let (votes_txs_sender, votes_txs_receiver) = unbounded();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
 
+        let mut expected_votes = vec![];
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
             let validator_votes: Vec<_> = keyset
                 .iter()
                 .map(|keypairs| {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
+                    expected_votes.push((vote_keypair.pubkey(), vec![i as Slot + 1]));
                     vote_transaction::new_vote_transaction(
                         vec![i as u64 + 1],
                         Hash::default(),
@@ -870,18 +875,34 @@ mod tests {
                     )
                 })
                 .collect();
-            votes_sender.send(validator_votes).unwrap();
+            votes_txs_sender.send(validator_votes).unwrap();
         }
 
-        // Check that all the votes were registered for each validator correctly
+        // Read and process votes from channel `votes_receiver`
         ClusterInfoVoteListener::get_and_process_votes(
-            &votes_receiver,
+            &votes_txs_receiver,
             &vote_tracker,
             0,
             &subscriptions,
             None,
+            &verified_vote_sender,
         )
         .unwrap();
+
+        // Check that the received votes were pushed to other commponents
+        // subscribing via a channel
+        let received_votes: Vec<_> = verified_vote_receiver
+            .try_iter()
+            .map(|(pubkey, vote)| (pubkey, vote.slots))
+            .collect();
+        assert_eq!(received_votes.len(), validator_voting_keypairs.len());
+        for (expected_pubkey_vote, received_pubkey_vote) in
+            expected_votes.iter().zip(received_votes.iter())
+        {
+            assert_eq!(expected_pubkey_vote, received_pubkey_vote);
+        }
+
+        // Check that all the votes were registered for each validator correctly
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(i as u64 + 1).unwrap();
             let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
@@ -994,7 +1015,15 @@ mod tests {
             &validator0_keypairs.vote_keypair,
         )];
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0, &subscriptions, None);
+        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
+        ClusterInfoVoteListener::process_votes(
+            &vote_tracker,
+            vote_tx,
+            0,
+            &subscriptions,
+            None,
+            &verified_vote_sender,
+        );
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
@@ -1045,7 +1074,14 @@ mod tests {
             })
             .collect();
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_txs, 0, &subscriptions, None);
+        ClusterInfoVoteListener::process_votes(
+            &vote_tracker,
+            vote_txs,
+            0,
+            &subscriptions,
+            None,
+            &verified_vote_sender,
+        );
 
         let ref_count = Arc::strong_count(
             &vote_tracker
