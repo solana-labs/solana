@@ -4,6 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
+    cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     repair_response,
     repair_service::{RepairInfo, RepairService},
@@ -302,6 +303,7 @@ impl WindowService {
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
         vote_tracker: Arc<VoteTracker>,
+        verified_vote_receiver: VerifiedVoteReceiver,
     ) -> WindowService
     where
         F: 'static
@@ -319,6 +321,7 @@ impl WindowService {
             repair_info,
             cluster_slots,
             vote_tracker,
+            verified_vote_receiver,
         );
 
         let (insert_sender, insert_receiver) = unbounded();

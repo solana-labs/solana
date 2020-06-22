@@ -3,6 +3,7 @@
 use crate::cluster_info_vote_listener::VoteTracker;
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     repair_service::DuplicateSlotsResetSender,
@@ -415,6 +416,7 @@ impl RetransmitStage {
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
         vote_tracker: Arc<VoteTracker>,
+        verified_vote_receiver: VerifiedVoteReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -460,6 +462,7 @@ impl RetransmitStage {
             },
             cluster_slots,
             vote_tracker,
+            verified_vote_receiver,
         );
 
         let thread_hdls = t_retransmit;

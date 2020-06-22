@@ -28,7 +28,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -40,10 +40,12 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
-pub type VerifiedVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
-pub type VerifiedVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
+pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vote)>;
+pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vote)>;
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -202,15 +204,17 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        sender: CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: CrossbeamSender<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
+        verified_vote_sender: VerifiedVoteSender,
     ) -> Self {
         let exit_ = exit.clone();
 
-        let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
+        let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
+            unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
         let listen_thread = Builder::new()
             .name("solana-cluster_info_vote_listener".to_string())
@@ -218,7 +222,7 @@ impl ClusterInfoVoteListener {
                 let _ = Self::recv_loop(
                     exit_,
                     &cluster_info,
-                    verified_vote_packets_sender,
+                    verified_vote_label_packets_sender,
                     verified_vote_transactions_sender,
                 );
             })
@@ -231,9 +235,9 @@ impl ClusterInfoVoteListener {
             .spawn(move || {
                 let _ = Self::bank_send_loop(
                     exit_,
-                    verified_vote_packets_receiver,
+                    verified_vote_label_packets_receiver,
                     poh_recorder,
-                    &sender,
+                    &verified_packets_sender,
                 );
             })
             .unwrap();
@@ -248,6 +252,7 @@ impl ClusterInfoVoteListener {
                     vote_tracker,
                     &bank_forks,
                     subscriptions,
+                    verified_vote_sender,
                 );
             })
             .unwrap();
@@ -267,7 +272,7 @@ impl ClusterInfoVoteListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        verified_vote_packets_sender: VerifiedVotePacketsSender,
+        verified_vote_label_packets_sender: VerifiedLabelVotePacketsSender,
         verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
     ) -> Result<()> {
         let mut last_ts = 0;
@@ -282,7 +287,7 @@ impl ClusterInfoVoteListener {
             if !votes.is_empty() {
                 let (vote_txs, packets) = Self::verify_votes(votes, labels);
                 verified_vote_transactions_sender.send(vote_txs)?;
-                verified_vote_packets_sender.send(packets)?;
+                verified_vote_label_packets_sender.send(packets)?;
             }
 
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
@@ -322,9 +327,9 @@ impl ClusterInfoVoteListener {
 
     fn bank_send_loop(
         exit: Arc<AtomicBool>,
-        verified_vote_packets_receiver: VerifiedVotePacketsReceiver,
+        verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -334,9 +339,10 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
-            if let Err(e) = verified_vote_packets
-                .get_and_process_vote_packets(&verified_vote_packets_receiver, &mut update_version)
-            {
+            if let Err(e) = verified_vote_packets.get_and_process_vote_packets(
+                &verified_vote_label_packets_receiver,
+                &mut update_version,
+            ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return Ok(());
@@ -353,7 +359,7 @@ impl ClusterInfoVoteListener {
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
                     let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    packets_sender.send(msgs)?;
+                    verified_packets_sender.send(msgs)?;
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
                         new_version,
@@ -371,6 +377,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
         subscriptions: Arc<RpcSubscriptions>,
+        verified_vote_sender: VerifiedVoteSender,
     ) -> Result<()> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -387,6 +394,7 @@ impl ClusterInfoVoteListener {
                 root_bank.slot(),
                 &subscriptions,
                 epoch_stakes,
+                &verified_vote_sender,
             ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -423,6 +431,7 @@ impl ClusterInfoVoteListener {
         last_root: Slot,
         subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
+        verified_vote_sender: &VerifiedVoteSender,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
@@ -435,6 +444,7 @@ impl ClusterInfoVoteListener {
             last_root,
             subscriptions,
             epoch_stakes,
+            verified_vote_sender,
         );
         Ok(())
     }
@@ -445,77 +455,84 @@ impl ClusterInfoVoteListener {
         root: Slot,
         subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
+        verified_vote_sender: &VerifiedVoteSender,
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
-            let all_slot_trackers = &vote_tracker.slot_vote_trackers;
-            for tx in vote_txs {
-                if let (Some(vote_pubkey), Some(vote_instruction)) = tx
-                    .message
-                    .instructions
-                    .first()
-                    .and_then(|first_instruction| {
-                        first_instruction.accounts.first().map(|offset| {
-                            (
-                                tx.message.account_keys.get(*offset as usize),
-                                limited_deserialize(&first_instruction.data).ok(),
-                            )
+            let valid_votes: Vec<(Pubkey, Vote)> = vote_txs
+                .into_iter()
+                .filter_map(|tx| {
+                    if let (Some(vote_pubkey), Some(vote_instruction)) = tx
+                        .message
+                        .instructions
+                        .first()
+                        .and_then(|first_instruction| {
+                            first_instruction.accounts.first().map(|offset| {
+                                (
+                                    tx.message.account_keys.get(*offset as usize),
+                                    limited_deserialize(&first_instruction.data).ok(),
+                                )
+                            })
                         })
-                    })
-                    .unwrap_or((None, None))
-                {
-                    let vote = {
-                        match vote_instruction {
-                            VoteInstruction::Vote(vote) => vote,
-                            _ => {
-                                continue;
+                        .unwrap_or((None, None))
+                    {
+                        let vote = {
+                            match vote_instruction {
+                                VoteInstruction::Vote(vote) => vote,
+                                _ => {
+                                    return None;
+                                }
                             }
+                        };
+
+                        if vote.slots.is_empty() {
+                            return None;
                         }
-                    };
 
-                    if vote.slots.is_empty() {
+                        let last_vote_slot = vote.slots.last().unwrap();
+
+                        // Determine the authorized voter based on the last vote slot. This will
+                        // drop votes from authorized voters trying to make votes for slots
+                        // earlier than the epoch for which they are authorized
+                        let actual_authorized_voter =
+                            vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
+
+                        if actual_authorized_voter.is_none() {
+                            None
+                        } else if !VoteTracker::vote_contains_authorized_voter(
+                            &tx,
+                            &actual_authorized_voter.unwrap(),
+                        ) {
+                            // Voting without the correct authorized pubkey, dump the vote
+                            None
+                        } else {
+                            let _ = verified_vote_sender.send((*vote_pubkey, vote.clone()));
+                            subscriptions.notify_vote(&vote);
+                            Some((*vote_pubkey, vote))
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            for (vote_pubkey, vote) in valid_votes {
+                let all_slot_trackers = &vote_tracker.slot_vote_trackers;
+                for &slot in vote.slots.iter() {
+                    if slot <= root {
                         continue;
                     }
 
-                    let last_vote_slot = vote.slots.last().unwrap();
-
-                    // Determine the authorized voter based on the last vote slot. This will
-                    // drop votes from authorized voters trying to make votes for slots
-                    // earlier than the epoch for which they are authorized
-                    let actual_authorized_voter =
-                        vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
-
-                    if actual_authorized_voter.is_none() {
-                        continue;
-                    }
-
-                    // Voting without the correct authorized pubkey, dump the vote
-                    if !VoteTracker::vote_contains_authorized_voter(
-                        &tx,
-                        &actual_authorized_voter.unwrap(),
-                    ) {
-                        continue;
-                    }
-
-                    for &slot in vote.slots.iter() {
-                        if slot <= root {
+                    // Don't insert if we already have marked down this pubkey
+                    // voting for this slot
+                    let maybe_slot_tracker = all_slot_trackers.read().unwrap().get(&slot).cloned();
+                    if let Some(slot_tracker) = maybe_slot_tracker {
+                        if slot_tracker.read().unwrap().voted.contains(&vote_pubkey) {
                             continue;
                         }
-
-                        // Don't insert if we already have marked down this pubkey
-                        // voting for this slot
-                        let maybe_slot_tracker =
-                            all_slot_trackers.read().unwrap().get(&slot).cloned();
-                        if let Some(slot_tracker) = maybe_slot_tracker {
-                            if slot_tracker.read().unwrap().voted.contains(vote_pubkey) {
-                                continue;
-                            }
-                        }
-                        let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
-                        diff.entry(slot).or_default().insert(unduplicated_pubkey);
                     }
-
-                    subscriptions.notify_vote(&vote);
+                    let unduplicated_pubkey = vote_tracker.keys.get_or_insert(&vote_pubkey);
+                    diff.entry(slot).or_default().insert(unduplicated_pubkey);
                 }
             }
         }
@@ -782,6 +799,7 @@ mod tests {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
 
         let vote_slots = vec![1, 2];
         validator_voting_keypairs.iter().for_each(|keypairs| {
@@ -805,8 +823,20 @@ mod tests {
             0,
             &subscriptions,
             None,
+            &verified_vote_sender,
         )
         .unwrap();
+
+        // Check that the received votes were pushed to other commponents
+        //  subscribing via a channel
+        let received_votes: Vec<_> = verified_vote_receiver.into_iter().collect();
+        assert_eq!(received_votes.len(), validator_voting_keypairs.len());
+        for (voting_keypair, (received_pubkey, received_vote)) in
+            validator_voting_keypairs.zip(received_votes)
+        {
+            assert_eq!(voting_keypair.pubkey(), received_pubkey);
+            assert_eq!(received_vote.slots, vote_slots);
+        }
         for vote_slot in vote_slots {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();

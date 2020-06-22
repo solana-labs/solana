@@ -1,5 +1,5 @@
 use crate::{
-    cluster_info_vote_listener::VerifiedVotePacketsReceiver, crds_value::CrdsValueLabel,
+    cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, crds_value::CrdsValueLabel,
     result::Result,
 };
 use solana_perf::packet::Packets;
@@ -18,7 +18,7 @@ impl Deref for VerifiedVotePackets {
 impl VerifiedVotePackets {
     pub fn get_and_process_vote_packets(
         &mut self,
-        vote_packets_receiver: &VerifiedVotePacketsReceiver,
+        vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         last_update_version: &mut u64,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);

@@ -5,7 +5,7 @@ use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
+    cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
     rpc_subscriptions::RpcSubscriptions,
@@ -51,6 +51,7 @@ impl Tpu {
         shred_version: u16,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
+        verified_vote_sender: VerifiedVoteSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -67,22 +68,23 @@ impl Tpu {
             SigVerifyStage::new(packet_receiver, verified_sender, verifier)
         };
 
-        let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             &exit,
             cluster_info.clone(),
-            verified_vote_sender,
+            verified_vote_packets_sender,
             &poh_recorder,
             vote_tracker,
             bank_forks,
             subscriptions.clone(),
+            verified_vote_sender,
         );
 
         let banking_stage = BankingStage::new(
             &cluster_info,
             poh_recorder,
             verified_receiver,
-            verified_vote_receiver,
+            verified_vote_packets_receiver,
             transaction_status_sender,
         );
 
