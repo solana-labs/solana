@@ -63,7 +63,7 @@ impl ForkChoice for BankWeightForkChoice {
             .filter(|b| b.slot() < tower.root().unwrap_or(0))
             .count();
 
-        let last_vote = tower.last_vote().slots.last().cloned();
+        let last_voted_slot = tower.last_voted_slot();
         let mut heaviest_bank_on_same_fork = None;
         let mut heaviest_same_fork_weight = 0;
         let stats: Vec<&ForkStats> = frozen_banks
@@ -76,18 +76,18 @@ impl ForkChoice for BankWeightForkChoice {
                     .get_fork_stats(bank.slot())
                     .expect("All frozen banks must exist in the Progress map");
 
-                if let Some(last_vote) = last_vote {
+                if let Some(last_voted_slot) = last_voted_slot {
                     if ancestors
                         .get(&bank.slot())
                         .expect("Entry in frozen banks must exist in ancestors")
-                        .contains(&last_vote)
+                        .contains(&last_voted_slot)
                     {
                         // Descendant of last vote cannot be locked out
                         assert!(!stats.is_locked_out);
 
                         // ancestors(slot) should not contain the slot itself,
                         // so we should never get the same bank as the last vote
-                        assert_ne!(bank.slot(), last_vote);
+                        assert_ne!(bank.slot(), last_voted_slot);
                         // highest weight, lowest slot first. frozen_banks is sorted
                         // from least slot to greatest slot, so if two banks have
                         // the same fork weight, the lower slot will be picked
