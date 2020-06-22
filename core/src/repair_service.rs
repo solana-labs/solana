@@ -755,6 +755,55 @@ mod test {
     }
 
     #[test]
+    pub fn test_repairs_distributed_across_slots() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let num_entries_per_slot = 100;
+
+            // Create some shreds
+            for i in 1..10 {
+                let (shreds, _) = make_slot_entries(i, 0, num_entries_per_slot as u64);
+
+                // Only insert the first shred
+                blockstore
+                    .insert_shreds(shreds[..1].to_vec(), None, false)
+                    .unwrap();
+            }
+
+            let vote_tracker = Arc::new(VoteTracker::default());
+            let repairs = RepairService::generate_repairs(
+                &blockstore,
+                0,
+                num_entries_per_slot,
+                &HashMap::new(),
+                &vote_tracker,
+            )
+            .unwrap();
+            let mut repairs_slots = HashMap::new();
+            for repair in repairs {
+                match repair {
+                    RepairType::Shred(slot, _shred_index) => {
+                        *repairs_slots.entry(slot).or_insert(0) += 1;
+                    }
+                    RepairType::HighestShred(slot, _shred_index) => {
+                        *repairs_slots.entry(slot).or_insert(0) += 1;
+                    }
+                    RepairType::Orphan(slot) => {
+                        *repairs_slots.entry(slot).or_insert(0) += 1;
+                    }
+                }
+            }
+            for i in 1..10 {
+                assert!(repairs_slots.contains_key(&i));
+            }
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
     pub fn test_generate_highest_repair() {
         let blockstore_path = get_tmp_ledger_path!();
         {
