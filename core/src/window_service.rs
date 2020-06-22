@@ -28,6 +28,7 @@ use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
 use std::{
+    collections::{BTreeSet, HashMap},
     net::{SocketAddr, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -129,22 +130,61 @@ where
 {
     let timer = Duration::from_millis(200);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
-    while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
-        shreds.extend(more_shreds);
-        repair_infos.extend(more_repair_infos);
+
+    let mut shreds_by_slot = HashMap::new();
+    let mut slots = BTreeSet::new();
+    loop {
+        while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
+            shreds.extend(more_shreds);
+            repair_infos.extend(more_repair_infos);
+        }
+
+        assert_eq!(shreds.len(), repair_infos.len());
+        let mut i = 0;
+        shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
+
+        repair_infos.clear();
+        if shreds.is_empty() {
+            break;
+        }
+
+        for shred in shreds.drain(..) {
+            let entry = shreds_by_slot.entry(shred.slot()).or_insert_with(Vec::new);
+            entry.push(shred);
+        }
+
+        for slot in shreds_by_slot.keys() {
+            slots.insert(*slot);
+        }
+
+        let last_root = blockstore.last_root();
+        shreds_by_slot.retain(|slot, _shreds| {
+            if *slot <= last_root {
+                slots.remove(slot);
+                false
+            } else {
+                true
+            }
+        });
+
+        // todo: figure out a better metric than lowest slot
+        if let Some(insert_slot) = slots.iter().next().cloned() {
+            slots.remove(&insert_slot);
+            let insert_shreds = shreds_by_slot.remove(&insert_slot).unwrap();
+
+            blockstore.insert_shreds_handle_duplicate(
+                insert_shreds,
+                Some(leader_schedule_cache),
+                false,
+                &handle_duplicate,
+                metrics,
+            )?;
+        }
+
+        if shreds_by_slot.is_empty() {
+            break;
+        }
     }
-
-    assert_eq!(shreds.len(), repair_infos.len());
-    let mut i = 0;
-    shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
-
-    blockstore.insert_shreds_handle_duplicate(
-        shreds,
-        Some(leader_schedule_cache),
-        false,
-        &handle_duplicate,
-        metrics,
-    )?;
     Ok(())
 }
 
