@@ -132,7 +132,10 @@ fn process_instruction(
             invoke_signed(
                 &invoked_instruction,
                 accounts,
-                &[&["Lil'", "Bits"], &["Gar Ma Nar Nar"]],
+                &[
+                    &[b"Lil'", b"Bits"],
+                    &[accounts[DERIVED_KEY2_INDEX].key.as_ref()],
+                ],
             )?;
         }
         TEST_VERIFY_NESTED_SIGNERS => {
