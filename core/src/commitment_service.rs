@@ -1,5 +1,6 @@
 use crate::{
     commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE},
+    consensus::Stake,
     rpc_subscriptions::{CacheSlotInfo, RpcSubscriptions},
 };
 use solana_measure::measure::Measure;
@@ -19,7 +20,7 @@ use std::{
 pub struct CommitmentAggregationData {
     bank: Arc<Bank>,
     root: Slot,
-    total_stake: u64,
+    total_stake: Stake,
 }
 
 impl CommitmentAggregationData {

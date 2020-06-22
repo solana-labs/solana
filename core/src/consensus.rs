@@ -492,7 +492,7 @@ impl Tower {
         &self,
         slot: Slot,
         voted_stakes: &VotedStakes,
-        total_stake: u64,
+        total_stake: Stake,
     ) -> bool {
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
