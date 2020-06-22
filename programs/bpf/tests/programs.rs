@@ -39,7 +39,6 @@ mod bpf {
 
     fn load_bpf_program(bank_client: &BankClient, payer_keypair: &Keypair, name: &str) -> Pubkey {
         let path = create_bpf_path(name);
-        println!("path {:?}", path);
         let mut file = File::open(path).unwrap();
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
@@ -353,11 +352,11 @@ mod bpf {
             bank.store_account(&from_keypair.pubkey(), &account);
 
             let derived_key1 =
-                Pubkey::create_program_address(&["You pass butter"], &invoke_program_id).unwrap();
+                Pubkey::create_program_address(&[b"You pass butter"], &invoke_program_id).unwrap();
             let derived_key2 =
-                Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
+                Pubkey::create_program_address(&[b"Lil'", b"Bits"], &invoked_program_id).unwrap();
             let derived_key3 =
-                Pubkey::create_program_address(&["Gar Ma Nar Nar"], &invoked_program_id).unwrap();
+                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id).unwrap();
 
             let account_metas = vec![
                 AccountMeta::new(mint_keypair.pubkey(), true),

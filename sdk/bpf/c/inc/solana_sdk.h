@@ -377,7 +377,7 @@ typedef struct {
  * Seed used to create a program address
  */
 typedef struct {
-  const char *addr; /** Seed string */
+  const uint8_t *addr; /** Seed string */
   uint64_t len; /** Length of the seed string */
 } SolSignerSeed;
 

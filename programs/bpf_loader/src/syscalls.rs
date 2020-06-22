@@ -468,15 +468,12 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
                 let seeds = untranslated_seeds
                     .iter()
                     .map(|untranslated_seed| {
-                        let seed_bytes = translate_slice!(
+                        translate_slice!(
                             u8,
                             untranslated_seed.as_ptr(),
                             untranslated_seed.len(),
                             ro_regions
-                        )?;
-                        from_utf8(seed_bytes).map_err(|err| {
-                            SyscallError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
-                        })
+                        )
                     })
                     .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
                 let signer = Pubkey::create_program_address(&seeds, program_id)
@@ -676,16 +673,11 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
                         signer_seeds.len,
                         ro_regions
                     )?;
-                    let seed_strs = seeds
+                    let seeds_bytes = seeds
                         .iter()
-                        .map(|seed| {
-                            let seed_bytes = translate_slice!(u8, seed.addr, seed.len, ro_regions)?;
-                            std::str::from_utf8(seed_bytes).map_err(|err| {
-                                SyscallError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
-                            })
-                        })
+                        .map(|seed| translate_slice!(u8, seed.addr, seed.len, ro_regions))
                         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-                    Pubkey::create_program_address(&seed_strs, program_id)
+                    Pubkey::create_program_address(&seeds_bytes, program_id)
                         .map_err(|err| SyscallError::BadSeeds(err).into())
                 })
                 .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?)
