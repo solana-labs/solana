@@ -459,80 +459,75 @@ impl ClusterInfoVoteListener {
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
-            let valid_votes: Vec<(Pubkey, Vote)> = vote_txs
-                .into_iter()
-                .filter_map(|tx| {
-                    if let (Some(vote_pubkey), Some(vote_instruction)) = tx
-                        .message
-                        .instructions
-                        .first()
-                        .and_then(|first_instruction| {
-                            first_instruction.accounts.first().map(|offset| {
-                                (
-                                    tx.message.account_keys.get(*offset as usize),
-                                    limited_deserialize(&first_instruction.data).ok(),
-                                )
-                            })
+            let all_slot_trackers = &vote_tracker.slot_vote_trackers;
+            for tx in vote_txs {
+                if let (Some(vote_pubkey), Some(vote_instruction)) = tx
+                    .message
+                    .instructions
+                    .first()
+                    .and_then(|first_instruction| {
+                        first_instruction.accounts.first().map(|offset| {
+                            (
+                                tx.message.account_keys.get(*offset as usize),
+                                limited_deserialize(&first_instruction.data).ok(),
+                            )
                         })
-                        .unwrap_or((None, None))
-                    {
-                        let vote = {
-                            match vote_instruction {
-                                VoteInstruction::Vote(vote) => vote,
-                                _ => {
-                                    return None;
-                                }
+                    })
+                    .unwrap_or((None, None))
+                {
+                    let vote = {
+                        match vote_instruction {
+                            VoteInstruction::Vote(vote) => vote,
+                            _ => {
+                                continue;
                             }
-                        };
-
-                        if vote.slots.is_empty() {
-                            return None;
                         }
+                    };
 
-                        let last_vote_slot = vote.slots.last().unwrap();
-
-                        // Determine the authorized voter based on the last vote slot. This will
-                        // drop votes from authorized voters trying to make votes for slots
-                        // earlier than the epoch for which they are authorized
-                        let actual_authorized_voter =
-                            vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
-
-                        if actual_authorized_voter.is_none() {
-                            None
-                        } else if !VoteTracker::vote_contains_authorized_voter(
-                            &tx,
-                            &actual_authorized_voter.unwrap(),
-                        ) {
-                            // Voting without the correct authorized pubkey, dump the vote
-                            None
-                        } else {
-                            let _ = verified_vote_sender.send((*vote_pubkey, vote.clone()));
-                            subscriptions.notify_vote(&vote);
-                            Some((*vote_pubkey, vote))
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            for (vote_pubkey, vote) in valid_votes {
-                let all_slot_trackers = &vote_tracker.slot_vote_trackers;
-                for &slot in vote.slots.iter() {
-                    if slot <= root {
+                    if vote.slots.is_empty() {
                         continue;
                     }
 
-                    // Don't insert if we already have marked down this pubkey
-                    // voting for this slot
-                    let maybe_slot_tracker = all_slot_trackers.read().unwrap().get(&slot).cloned();
-                    if let Some(slot_tracker) = maybe_slot_tracker {
-                        if slot_tracker.read().unwrap().voted.contains(&vote_pubkey) {
+                    let last_vote_slot = vote.slots.last().unwrap();
+
+                    // Determine the authorized voter based on the last vote slot. This will
+                    // drop votes from authorized voters trying to make votes for slots
+                    // earlier than the epoch for which they are authorized
+                    let actual_authorized_voter =
+                        vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
+
+                    if actual_authorized_voter.is_none() {
+                        continue;
+                    }
+
+                    // Voting without the correct authorized pubkey, dump the vote
+                    if !VoteTracker::vote_contains_authorized_voter(
+                        &tx,
+                        &actual_authorized_voter.unwrap(),
+                    ) {
+                        continue;
+                    }
+
+                    for &slot in vote.slots.iter() {
+                        if slot <= root {
                             continue;
                         }
+
+                        // Don't insert if we already have marked down this pubkey
+                        // voting for this slot
+                        let maybe_slot_tracker =
+                            all_slot_trackers.read().unwrap().get(&slot).cloned();
+                        if let Some(slot_tracker) = maybe_slot_tracker {
+                            if slot_tracker.read().unwrap().voted.contains(vote_pubkey) {
+                                continue;
+                            }
+                        }
+                        let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
+                        diff.entry(slot).or_default().insert(unduplicated_pubkey);
                     }
-                    let unduplicated_pubkey = vote_tracker.keys.get_or_insert(&vote_pubkey);
-                    diff.entry(slot).or_default().insert(unduplicated_pubkey);
+
+                    subscriptions.notify_vote(&vote);
+                    let _ = verified_vote_sender.send((*vote_pubkey, vote));
                 }
             }
         }
@@ -828,11 +823,11 @@ mod tests {
         .unwrap();
 
         // Check that the received votes were pushed to other commponents
-        //  subscribing via a channel
+        // subscribing via a channel
         let received_votes: Vec<_> = verified_vote_receiver.into_iter().collect();
         assert_eq!(received_votes.len(), validator_voting_keypairs.len());
         for (voting_keypair, (received_pubkey, received_vote)) in
-            validator_voting_keypairs.zip(received_votes)
+            validator_voting_keypairs.iter().zip(received_votes.iter())
         {
             assert_eq!(voting_keypair.pubkey(), received_pubkey);
             assert_eq!(received_vote.slots, vote_slots);
