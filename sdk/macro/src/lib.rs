@@ -8,11 +8,11 @@ use std::convert::TryFrom;
 use syn::{
     bracketed,
     parse::{Parse, ParseStream, Result},
-    parse_macro_input, parse_quote,
+    parse_macro_input,
     punctuated::Punctuated,
     token::{Bracket, Comma},
-    Attribute, Data, DataEnum, DeriveInput, Expr, Field, Fields, FieldsUnnamed, Ident, Lit,
-    LitByte, LitStr, Meta, MetaNameValue, NestedMeta, Token, Variant,
+    Attribute, Data, DataEnum, DeriveInput, Expr, Field, Fields, Ident, Lit, LitByte, LitStr, Meta,
+    MetaNameValue, NestedMeta, Token, Variant,
 };
 
 struct Id(proc_macro2::TokenStream);
@@ -209,6 +209,7 @@ pub fn program_instruction(input: TokenStream) -> TokenStream {
     const IDENT_SUFFIX: &str = "Verbose";
 
     let input = parse_macro_input!(input as DeriveInput);
+    let original_ident = input.ident.clone();
     let mut tokens = proc_macro2::TokenStream::new();
     if let Data::Enum(mut instruction_set) = input.data {
         // Strip ident suffix from enum ident to use as ident for new enum
@@ -223,7 +224,7 @@ pub fn program_instruction(input: TokenStream) -> TokenStream {
         }
         let ident = Ident::new(&ident_str, Span::call_site());
 
-        let inner_stream = handle_enum_variants(&mut instruction_set);
+        let (enum_stream, from_stream) = handle_enum_variants(&mut instruction_set, ident.clone());
 
         // Preserve other attributes, like `#[repr(C)]`
         for attr in input.attrs {
@@ -236,7 +237,15 @@ pub fn program_instruction(input: TokenStream) -> TokenStream {
         tokens.extend(quote! {
             #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
             pub enum #ident {
-                #inner_stream
+                #enum_stream
+            }
+
+            impl #original_ident {
+                pub fn from_instruction(instruction: #ident, accounts: Vec<u8>) -> Self {
+                    match instruction {
+                        #from_stream
+                    }
+                }
             }
         });
     } else {
@@ -249,11 +258,17 @@ pub fn program_instruction(input: TokenStream) -> TokenStream {
 }
 
 /// Parse verbose enum variants into variants for new enum and exhaustive documentation
-fn handle_enum_variants(enum_data: &mut DataEnum) -> proc_macro2::TokenStream {
-    let mut inner_stream = proc_macro2::TokenStream::new();
+fn handle_enum_variants(
+    enum_data: &mut DataEnum,
+    enum_ident: Ident,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let mut enum_stream = proc_macro2::TokenStream::new();
+    let mut from_stream = proc_macro2::TokenStream::new();
     for variant in enum_data.variants.iter_mut() {
         let mut new_attrs: Vec<Attribute> = vec![];
         let mut variant_docs: Vec<String> = vec![];
+
+        let variant_ident = variant.ident.clone();
 
         // Collect variant doc attributes for formatting
         // Preserve other variant-level attributes
@@ -271,39 +286,12 @@ fn handle_enum_variants(enum_data: &mut DataEnum) -> proc_macro2::TokenStream {
         }
         variant.attrs = new_attrs;
 
-        let (mut new_fields, mut account_references) = handle_variant_fields(variant);
+        let (new_fields, mut account_references) = handle_variant_fields(variant);
 
         // Convert variant fields to Unit or Unnamed, if account field removal results in 0 or 1
         // remaining fields respectively
         if new_fields.is_empty() {
             variant.fields = Fields::Unit;
-        } else if new_fields.len() == 1 {
-            // TODO: remove this clause if want to use all-named params
-            for field in new_fields.iter_mut() {
-                for attr in field.attrs.iter() {
-                    // Convert remaining field to Unnamed, grabbing any documentation on the field
-                    // to include in the variant documentation
-                    if let Meta::NameValue(attribute) = attr.parse_meta().unwrap() {
-                        let MetaNameValue {
-                            ref path, ref lit, ..
-                        } = attribute;
-                        if path.is_ident("doc") {
-                            if !variant_docs.is_empty() {
-                                variant_docs.push("".to_string());
-                            }
-                            if let Lit::Str(lit) = lit {
-                                variant_docs.push(lit.value());
-                            }
-                        }
-                    }
-                }
-                field.attrs = vec![];
-                field.ident = None;
-                field.colon_token = None;
-            }
-            let mut unnamed_fields: FieldsUnnamed = parse_quote!(());
-            unnamed_fields.unnamed = new_fields;
-            variant.fields = Fields::Unnamed(unnamed_fields);
         } else if let Fields::Named(fields_named) = &mut variant.fields {
             fields_named.named = new_fields;
         }
@@ -312,14 +300,16 @@ fn handle_enum_variants(enum_data: &mut DataEnum) -> proc_macro2::TokenStream {
         if !variant_docs.is_empty() {
             for doc in variant_docs {
                 let variant_doc = format!("{}<br/>", doc);
-                inner_stream.extend(quote! {
+                enum_stream.extend(quote! {
                     #[doc = #variant_doc]
                 });
             }
         }
-        // Add header to account-reference documentation
+
+        let mut from_inner_stream = proc_macro2::TokenStream::new();
         if !account_references.is_empty() {
-            inner_stream.extend(quote! {
+            // Add header to account-reference documentation
+            enum_stream.extend(quote! {
                 #[doc = "## Account references"]
             });
             account_references.sort_by(|a, b| a.index.cmp(&b.index));
@@ -347,17 +337,39 @@ fn handle_enum_variants(enum_data: &mut DataEnum) -> proc_macro2::TokenStream {
                     reference.index, account_meta, reference.desc
                 );
 
-                inner_stream.extend(quote! {
+                enum_stream.extend(quote! {
                     #[doc = #account_docs]
+                });
+
+                // Populate `from` impl for accounts
+                let account_ident = &reference.ident;
+                let account_index = reference.index;
+                from_inner_stream.extend(quote! {
+                    #account_ident: accounts[#account_index],
                 });
             }
         }
         // Convert documentation and variant to TokenStream
-        inner_stream.extend(quote! {
+        enum_stream.extend(quote! {
             #variant,
         });
+
+        // Build From stream
+        let mut field_stream = proc_macro2::TokenStream::new();
+        for field in variant.fields.iter() {
+            let field_ident = field.ident.as_ref().unwrap();
+            field_stream.extend(quote! {
+                #field_ident,
+            });
+        }
+        from_stream.extend(quote! {
+            #enum_ident::#variant_ident { #field_stream } => Self::#variant_ident {
+                #from_inner_stream
+                #field_stream
+            },
+        });
     }
-    inner_stream
+    (enum_stream, from_stream)
 }
 
 /// Collect account information from a variant for variant docs, and remove tagged account fields
@@ -440,10 +452,11 @@ fn handle_variant_fields(
                 );
             }
             account_references.push(AccountReference {
-                index: account_index.parse::<u8>().unwrap(),
+                index: account_index.parse::<usize>().unwrap(),
                 is_signer,
                 is_writable,
                 desc: account_desc,
+                ident: field.ident.as_ref().unwrap().clone(),
             });
         }
         field.attrs = vec![]; // This macro currently does not support external attributes on account fields
@@ -452,8 +465,9 @@ fn handle_variant_fields(
 }
 
 struct AccountReference {
-    index: u8,
+    index: usize,
     is_signer: bool,
     is_writable: bool,
     desc: String,
+    ident: Ident,
 }
