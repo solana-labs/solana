@@ -43,6 +43,7 @@ solana-stake-program = { path = "../programs/stake", version = "1.3.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.3.0" }
 tempfile = "3.1.0"
 thiserror = "1.0"
+trees = "0.2.1"
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
