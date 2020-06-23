@@ -42,6 +42,7 @@ pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+pub mod test_enum;
 pub mod timing;
 
 /// Convenience macro to declare a static public key and functions to interact with it
