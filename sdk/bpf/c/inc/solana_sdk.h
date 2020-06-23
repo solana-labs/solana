@@ -109,6 +109,8 @@ static_assert(sizeof(uint64_t) == 8);
 #define ERROR_NOT_ENOUGH_ACCOUNT_KEYS TO_BUILTIN(11)
 /** Note: Not applicable to program written in C */
 #define ERROR_ACCOUNT_BORROW_FAILED TO_BUILTIN(12)
+/** The length of the seed is too long for address generation */
+#define MAX_SEED_LENGTH_EXCEEDED TO_BUILTIN(13)
 
 /**
  * Boolean type
@@ -128,7 +130,6 @@ void sol_log_(const char *, uint64_t);
  */
 void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 #define sol_log_64 sol_log_64_
-
 
 /**
  * Size of Public key in bytes

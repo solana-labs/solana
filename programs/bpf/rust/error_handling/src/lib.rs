@@ -10,7 +10,7 @@ use solana_sdk::{
     entrypoint::ProgramResult,
     info,
     program_error::{PrintProgramError, ProgramError},
-    pubkey::Pubkey,
+    pubkey::{Pubkey, PubkeyError},
 };
 use thiserror::Error;
 
@@ -72,6 +72,10 @@ fn process_instruction(
             let data2 = accounts[0].try_borrow_mut_data()?;
             assert_eq!(*data, *data2);
             Ok(())
+        }
+        9 => {
+            info!("return pubkey error");
+            Err(PubkeyError::MaxSeedLengthExceeded.into())
         }
         _ => {
             info!("Unsupported");

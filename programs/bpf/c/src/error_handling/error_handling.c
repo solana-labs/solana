@@ -35,6 +35,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     case(6):
       sol_log("return unknown builtin");
       return TO_BUILTIN(50);
+    case(9):
+      sol_log("return pubkey error");
+      return MAX_SEED_LENGTH_EXCEEDED;
     default:
       sol_log("Unrecognized command");
       return ERROR_INVALID_INSTRUCTION_DATA;

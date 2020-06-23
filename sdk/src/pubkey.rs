@@ -15,7 +15,8 @@ pub const MAX_SEED_LEN: usize = 32;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum PubkeyError {
-    #[error("length of requested seed is too long")]
+    /// Length of the seed is too long for address generation
+    #[error("Length of the seed is too long for address generation")]
     MaxSeedLengthExceeded,
 }
 impl<T> DecodeError<T> for PubkeyError {
