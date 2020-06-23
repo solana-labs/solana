@@ -1,26 +1,24 @@
-//! Convenience macro to declare a static public key and functions to interact with it
-//!
-//! Input: a single literal base58 string representation of a program's id
-
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
+use proc_macro_error::*;
 use quote::{quote, ToTokens};
 use std::convert::TryFrom;
 use syn::{
     bracketed,
     parse::{Parse, ParseStream, Result},
-    parse_macro_input,
+    parse_macro_input, parse_quote,
     punctuated::Punctuated,
-    token::Bracket,
-    Expr, Ident, LitByte, LitStr, Token,
+    token::{Bracket, Comma},
+    Attribute, Data, DataEnum, DeriveInput, Expr, Field, Fields, FieldsUnnamed, Ident, Lit,
+    LitByte, LitStr, Meta, MetaNameValue, NestedMeta, Token, Variant,
 };
 
 struct Id(proc_macro2::TokenStream);
 impl Parse for Id {
     fn parse(input: ParseStream) -> Result<Self> {
-        let token_stream = if input.peek(syn::LitStr) {
+        let token_stream = if input.peek(LitStr) {
             let id_literal: LitStr = input.parse()?;
             parse_pubkey(&id_literal)?
         } else {
@@ -63,6 +61,9 @@ impl ToTokens for Id {
     }
 }
 
+/// Convenience macro to declare a static public key and functions to interact with it
+///
+/// Input: a single literal base58 string representation of a program's id
 #[proc_macro]
 pub fn declare_id(input: TokenStream) -> TokenStream {
     let id = parse_macro_input!(input as Id);
@@ -149,4 +150,310 @@ impl ToTokens for Pubkeys {
 pub fn pubkeys(input: TokenStream) -> TokenStream {
     let pubkeys = parse_macro_input!(input as Pubkeys);
     TokenStream::from(quote! {#pubkeys})
+}
+
+/// Convenience macro to build a program Instruction enum
+///
+/// Input: a verbose program-instruction enum. Output: a second enum with account fields
+/// converted to documentation and variants trimmed to the fields needed for transaction
+/// instructions, as well as `From` implementation between them.
+///
+/// Acccount fields should be tagged with the `account` attribute, including optional list items
+/// `signer` and/or `writable`. Account fields must also have an `index` name-value attribute, and
+/// may carry an optional `desc` name-value description attribute.
+///
+/// Example verbose enum:
+///
+/// ```
+/// #[repr(C)]
+/// #[derive(ProgramInstruction)]
+/// pub enum TestInstructionVerbose {
+/// #[doc = "Transfer lamports"]
+///     Transfer {
+///         #[account(signer, writable)]
+///         #[desc = "Funding account"]
+///         #[index = 0]
+///         funding_account: u8,
+///
+///         #[account(writable)]
+///         #[desc = "Recipient account"]
+///         #[index = 1]
+///         recipient_account: u8,
+///
+///         #[doc = "The `u64` parameter specifies the transfer amount"]
+///         lamports: u64,
+///     },
+/// }
+/// ```
+///
+/// Example new enum:
+///
+/// ```
+/// #[repr(C)]
+/// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+/// pub enum TestInstruction {
+///     /// Transfer lamports
+///     ///
+///     /// The `u64` parameter specifies the transfer amount
+///     ///
+///     /// ## Account references
+///     /// 0. `[signer, writable]` Funding account
+///     /// 1. `[writable]` Recipient account
+///     Transfer(u64),
+/// }
+/// ```
+
+#[proc_macro_error]
+#[proc_macro_derive(ProgramInstruction, attributes(account, desc, index))]
+pub fn program_instruction(input: TokenStream) -> TokenStream {
+    const IDENT_SUFFIX: &str = "Verbose";
+
+    let input = parse_macro_input!(input as DeriveInput);
+    let mut tokens = proc_macro2::TokenStream::new();
+    if let Data::Enum(mut instruction_set) = input.data {
+        // Strip ident suffix from enum ident to use as ident for new enum
+        let mut ident_str = input.ident.to_string();
+        if ident_str.ends_with(IDENT_SUFFIX) {
+            ident_str = ident_str.replace(IDENT_SUFFIX, "");
+        } else {
+            abort!(
+                input.ident.span(),
+                "ProgramInstruction enum names must end with Verbose"
+            );
+        }
+        let ident = Ident::new(&ident_str, Span::call_site());
+
+        let inner_stream = handle_enum_variants(&mut instruction_set);
+
+        // Preserve other attributes, like `#[repr(C)]`
+        for attr in input.attrs {
+            tokens.extend(quote! {
+                #attr
+            });
+        }
+
+        // Build new enum
+        tokens.extend(quote! {
+            #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+            pub enum #ident {
+                #inner_stream
+            }
+        });
+    } else {
+        abort!(
+            input.ident.span(),
+            "only enums are supported by ProgramInstruction"
+        );
+    }
+    TokenStream::from(quote! {#tokens})
+}
+
+/// Parse verbose enum variants into variants for new enum and exhaustive documentation
+fn handle_enum_variants(enum_data: &mut DataEnum) -> proc_macro2::TokenStream {
+    let mut inner_stream = proc_macro2::TokenStream::new();
+    for variant in enum_data.variants.iter_mut() {
+        let mut new_attrs: Vec<Attribute> = vec![];
+        let mut variant_docs: Vec<String> = vec![];
+
+        // Collect variant doc attributes for formatting
+        // Preserve other variant-level attributes
+        for attr in variant.attrs.iter() {
+            match attr.parse_meta().unwrap() {
+                Meta::NameValue(MetaNameValue {
+                    ref path, ref lit, ..
+                }) if path.is_ident("doc") => {
+                    if let Lit::Str(lit) = lit {
+                        variant_docs.push(lit.value());
+                    }
+                }
+                _ => new_attrs.push(attr.clone()),
+            }
+        }
+        variant.attrs = new_attrs;
+
+        let (mut new_fields, mut account_references) = handle_variant_fields(variant);
+
+        // Convert variant fields to Unit or Unnamed, if account field removal results in 0 or 1
+        // remaining fields respectively
+        if new_fields.is_empty() {
+            variant.fields = Fields::Unit;
+        } else if new_fields.len() == 1 {
+            // TODO: remove this clause if want to use all-named params
+            for field in new_fields.iter_mut() {
+                for attr in field.attrs.iter() {
+                    // Convert remaining field to Unnamed, grabbing any documentation on the field
+                    // to include in the variant documentation
+                    if let Meta::NameValue(attribute) = attr.parse_meta().unwrap() {
+                        let MetaNameValue {
+                            ref path, ref lit, ..
+                        } = attribute;
+                        if path.is_ident("doc") {
+                            if !variant_docs.is_empty() {
+                                variant_docs.push("".to_string());
+                            }
+                            if let Lit::Str(lit) = lit {
+                                variant_docs.push(lit.value());
+                            }
+                        }
+                    }
+                }
+                field.attrs = vec![];
+                field.ident = None;
+                field.colon_token = None;
+            }
+            let mut unnamed_fields: FieldsUnnamed = parse_quote!(());
+            unnamed_fields.unnamed = new_fields;
+            variant.fields = Fields::Unnamed(unnamed_fields);
+        } else if let Fields::Named(fields_named) = &mut variant.fields {
+            fields_named.named = new_fields;
+        }
+
+        // Append line-break tags to make pretty multiline documentation in markdown
+        if !variant_docs.is_empty() {
+            for doc in variant_docs {
+                let variant_doc = format!("{}<br/>", doc);
+                inner_stream.extend(quote! {
+                    #[doc = #variant_doc]
+                });
+            }
+        }
+        // Add header to account-reference documentation
+        if !account_references.is_empty() {
+            inner_stream.extend(quote! {
+                #[doc = "## Account references"]
+            });
+            account_references.sort_by(|a, b| a.index.cmp(&b.index));
+            for (i, reference) in account_references.iter().enumerate() {
+                if reference.index as usize != i {
+                    abort!(
+                        variant.ident.span(),
+                        "ensure account indexes do not skip values, variant {}",
+                        variant.ident
+                    );
+                }
+                //  Build pretty account documentation
+                let mut account_meta = String::new();
+                if reference.is_writable {
+                    account_meta.push_str("writable")
+                }
+                if reference.is_signer {
+                    if !account_meta.is_empty() {
+                        account_meta.push_str(", ");
+                    }
+                    account_meta.push_str("signer");
+                }
+                let account_docs = format!(
+                    "{}. `[{}]` {}",
+                    reference.index, account_meta, reference.desc
+                );
+
+                inner_stream.extend(quote! {
+                    #[doc = #account_docs]
+                });
+            }
+        }
+        // Convert documentation and variant to TokenStream
+        inner_stream.extend(quote! {
+            #variant,
+        });
+    }
+    inner_stream
+}
+
+/// Collect account information from a variant for variant docs, and remove tagged account fields
+/// from variant
+fn handle_variant_fields(
+    variant: &mut Variant,
+) -> (Punctuated<Field, Comma>, Vec<AccountReference>) {
+    let mut new_fields: Punctuated<Field, Comma> = Punctuated::new();
+    let mut account_references: Vec<AccountReference> = Vec::new();
+    for field in variant.fields.iter_mut() {
+        // Preserve fields not tagged as account
+        if field
+            .attrs
+            .iter()
+            .find(|&attr| match attr.parse_meta().unwrap() {
+                Meta::Path(path) => path.is_ident("account"),
+                Meta::List(list) => list.path.is_ident("account"),
+                Meta::NameValue(_) => false,
+            })
+            .is_none()
+        {
+            new_fields.push(field.clone());
+        } else {
+            // Collect account-related documentation for formatting
+            let mut account_index = String::new();
+            let mut account_desc = String::new();
+            let mut is_signer = false;
+            let mut is_writable = false;
+            for attr in field.attrs.iter() {
+                match attr.parse_meta().unwrap() {
+                    Meta::Path(_) => (),
+                    Meta::List(list) => {
+                        if list.path.is_ident("account") {
+                            for meta in list.nested {
+                                if let NestedMeta::Meta(Meta::Path(meta)) = meta {
+                                    if meta.is_ident("signer") {
+                                        is_signer = true;
+                                    } else if meta.is_ident("writable") {
+                                        is_writable = true;
+                                    } else {
+                                        let meta_ident = meta.get_ident().unwrap();
+                                        abort!(
+                                            meta_ident.span(),
+                                            "invalid account label provided {:?}; accepted values: signer, writable",
+                                            meta_ident.to_string()
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Meta::NameValue(attribute) => {
+                        let MetaNameValue {
+                            ref path, ref lit, ..
+                        } = attribute;
+                        if path.is_ident("desc") {
+                            account_desc = if let Lit::Str(lit) = lit {
+                                lit.value()
+                            } else {
+                                "".to_string()
+                            };
+                        }
+                        if path.is_ident("index") {
+                            account_index = if let Lit::Int(lit) = lit {
+                                lit.base10_digits().to_string()
+                            } else {
+                                "".to_string()
+                            };
+                        }
+                    }
+                }
+            }
+            // Populate account reference
+            if account_index.is_empty() {
+                let field_ident = field.ident.as_ref().unwrap();
+                abort!(
+                    field_ident.span(),
+                    "no account index, field {}",
+                    field_ident
+                );
+            }
+            account_references.push(AccountReference {
+                index: account_index.parse::<u8>().unwrap(),
+                is_signer,
+                is_writable,
+                desc: account_desc,
+            });
+        }
+        field.attrs = vec![]; // This macro currently does not support external attributes on account fields
+    }
+    (new_fields, account_references)
+}
+
+struct AccountReference {
+    index: u8,
+    is_signer: bool,
+    is_writable: bool,
+    desc: String,
 }
