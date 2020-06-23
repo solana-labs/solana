@@ -24,6 +24,7 @@ impl Blockstore {
         let mut batch_start = from_slot;
         let mut purge_stats = PurgeStats::default();
         let mut last_datapoint = Instant::now();
+        let mut datapoint_start = batch_start;
         while batch_start < to_slot {
             let batch_end = (batch_start + PURGE_BATCH_SIZE).min(to_slot);
 
@@ -33,13 +34,14 @@ impl Blockstore {
             if last_datapoint.elapsed().as_millis() > 1000 {
                 datapoint_info!(
                     "blockstore-purge",
-                    ("from_slot", batch_start as i64, i64),
-                    ("to_slot", to_slot as i64, i64),
+                    ("from_slot", datapoint_start as i64, i64),
+                    ("to_slot", batch_end as i64, i64),
                     ("delete_range_us", purge_stats.delete_range as i64, i64),
                     ("write_batch_us", purge_stats.write_batch as i64, i64)
                 );
                 last_datapoint = Instant::now();
                 purge_stats = PurgeStats::default();
+                datapoint_start = batch_end;
             }
 
             match purge_result {
