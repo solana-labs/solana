@@ -692,6 +692,26 @@ fn main() {
             .arg(&allow_dead_slots_arg)
         )
         .subcommand(
+            SubCommand::with_name("copy")
+            .about("Copy the ledger")
+            .arg(&starting_slot_arg)
+            .arg(
+                Arg::with_name("ending_slot")
+                    .long("ending-slot")
+                    .value_name("SLOT")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .help("Slot to stop copy"),
+            )
+            .arg(
+                Arg::with_name("target_db")
+                    .long("target-db")
+                    .value_name("PATH")
+                    .takes_value(true)
+                    .help("Target db"),
+            )
+        )
+        .subcommand(
             SubCommand::with_name("slot")
             .about("Print the contents of one or more slots")
             .arg(
@@ -922,6 +942,23 @@ fn main() {
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
             );
+        }
+        ("copy", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
+            let source = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let target = open_blockstore(&target_db, AccessType::PrimaryOnly);
+            for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
+                if slot > ending_slot {
+                    break;
+                }
+                if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
+                    if target.insert_shreds(shreds, None, true).is_err() {
+                        warn!("error inserting shreds for slot {}", slot);
+                    }
+                }
+            }
         }
         ("genesis", Some(arg_matches)) => {
             println!("{}", open_genesis_config_by(&ledger_path, arg_matches));
