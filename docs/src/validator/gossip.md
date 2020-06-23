@@ -82,7 +82,9 @@ Just like _pull message_, nodes are selected into the active set based on weight
 
 ## Notable differences from PlumTree
 
-The active push protocol described here is based on [Plum Tree](https://haslab.uminho.pt/jop/files/lpr07a.pdf). The main differences are:
+The active push protocol described here is based on
+[Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf).
+The main differences are:
 
 * Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
 * Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.
