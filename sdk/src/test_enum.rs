@@ -58,3 +58,48 @@ pub enum TestInstructionVerbose {
         pubkey: Pubkey,
     },
 }
+
+mod tests {
+
+    #[test]
+    fn test_from() {
+        use super::*;
+        let transfer = TestInstruction::Transfer { lamports: 42 };
+        let verbose_transfer = TestInstructionVerbose::from_instruction(transfer, vec![2, 3]);
+        assert_eq!(
+            verbose_transfer,
+            TestInstructionVerbose::Transfer {
+                funding_account: 2,
+                recipient_account: 3,
+                lamports: 42
+            }
+        );
+
+        let advance = TestInstruction::AdvanceNonceAccount;
+        let verbose_advance = TestInstructionVerbose::from_instruction(advance, vec![2, 3, 4]);
+        assert_eq!(
+            verbose_advance,
+            TestInstructionVerbose::AdvanceNonceAccount {
+                nonce_account: 2,
+                recent_blockhashes_sysvar: 3,
+                nonce_authority: 4,
+            }
+        );
+
+        let nonce_address = Pubkey::new_rand();
+        let initialize = TestInstruction::InitializeNonceAccount {
+            pubkey: nonce_address,
+        };
+        let verbose_initialize =
+            TestInstructionVerbose::from_instruction(initialize, vec![2, 3, 4]);
+        assert_eq!(
+            verbose_initialize,
+            TestInstructionVerbose::InitializeNonceAccount {
+                nonce_account: 2,
+                recent_blockhashes_sysvar: 3,
+                rent_sysvar: 4,
+                pubkey: nonce_address,
+            }
+        );
+    }
+}
