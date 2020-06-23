@@ -23,9 +23,10 @@ use crate::{
     tvu::{Sockets, Tvu, TvuConfig},
 };
 use crossbeam_channel::unbounded;
+use rand::{thread_rng, Rng};
 use solana_ledger::{
     bank_forks_utils,
-    blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
     blockstore_processor, create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -382,7 +383,14 @@ impl Validator {
                 (None, None)
             };
 
-        wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check);
+        wait_for_supermajority(
+            config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check,
+            &blockstore,
+            ledger_path,
+        );
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
@@ -628,15 +636,57 @@ fn new_banks_from_blockstore(
     )
 }
 
+fn backup_and_clear_blockstore(blockstore: &Arc<Blockstore>, ledger_path: &Path, start_slot: Slot) {
+    use std::time::Instant;
+    let folder_name = format!("backup_rocksdb_{}", thread_rng().gen_range(0, 99999));
+    let backup_blockstore = Blockstore::open(&ledger_path.join(folder_name));
+    if let Ok(slot_meta_iterator) = blockstore.slot_meta_iterator(start_slot) {
+        let mut last_print = Instant::now();
+        let mut copied = 0;
+        let mut end_slot = start_slot;
+        for (slot, _meta) in slot_meta_iterator {
+            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
+                if let Ok(ref backup_blockstore) = backup_blockstore {
+                    copied += shreds.len();
+                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                }
+                end_slot = slot;
+            }
+            if last_print.elapsed().as_millis() > 3000 {
+                info!(
+                    "Copying shreds from slot {} copied {} so far.",
+                    start_slot, copied
+                );
+                last_print = Instant::now();
+            }
+        }
+
+        info!("Purging slots {} to {}", start_slot, end_slot);
+        blockstore.purge_slots_with_delay(start_slot, end_slot, None, PurgeType::Exact);
+        info!("Purging done, compacting db..");
+        if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
+            warn!(
+                "Error from compacting storage from {} to {}: {:?}",
+                start_slot, end_slot, e
+            );
+        }
+        info!("done");
+    }
+}
+
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
+    blockstore: &Arc<Blockstore>,
+    ledger_path: &Path,
 ) {
     if config.wait_for_supermajority != Some(bank.slot()) {
         return;
     }
+
+    backup_and_clear_blockstore(blockstore, ledger_path, bank.slot() + 1);
 
     info!(
         "Waiting for 80% of activated stake at slot {} to be in gossip...",
@@ -902,6 +952,39 @@ mod tests {
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_backup_and_clear_blockstore() {
+        use std::time::Instant;
+        solana_logger::setup();
+        use solana_ledger::get_tmp_ledger_path;
+        use solana_ledger::{blockstore, entry};
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+
+            info!("creating shreds");
+            let mut last_print = Instant::now();
+            for i in 1..10 {
+                let entries = entry::create_ticks(1, 0, Hash::default());
+                let shreds = blockstore::entries_to_test_shreds(entries, i, i - 1, true, 1);
+                blockstore.insert_shreds(shreds, None, true).unwrap();
+                if last_print.elapsed().as_millis() > 5000 {
+                    info!("inserted {}", i);
+                    last_print = Instant::now();
+                }
+            }
+
+            backup_and_clear_blockstore(&blockstore, &blockstore_path, 5);
+
+            for i in 6..10 {
+                assert!(blockstore
+                    .get_data_shreds_for_slot(i, 0)
+                    .unwrap()
+                    .is_empty());
+            }
+        }
     }
 
     #[test]
