@@ -55,6 +55,7 @@ use std::{
     },
     time::Duration,
 };
+use trees::{Tree, TreeWalk};
 
 pub mod blockstore_purge;
 
@@ -301,6 +302,23 @@ impl Blockstore {
         blockstore.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blockstore, signal_receiver, completed_slots_receiver))
+    }
+
+    pub fn add_tree(&self, forks: Tree<Slot>, is_orphan: bool) {
+        let mut walk = TreeWalk::from(forks);
+        while let Some(visit) = walk.get() {
+            let slot = visit.node().data;
+            if self.meta(slot).unwrap().is_some() {
+                walk.forward();
+                continue;
+            }
+            let parent = walk.get_parent().map(|n| n.data);
+            if parent.is_some() || !is_orphan {
+                let (shreds, _) = make_slot_entries(slot, parent.unwrap_or(slot), 1);
+                self.insert_shreds(shreds, None, false).unwrap();
+            }
+            walk.forward();
+        }
     }
 
     pub fn set_no_compaction(&mut self, no_compaction: bool) {
