@@ -185,9 +185,9 @@ impl Tower {
             }
             let start_root = vote_state.root_slot;
 
-            // Add the latest vote to update the `heaviest_subtree_fork_choice`
-            if let Some(latest_vote) = vote_state.votes.back() {
-                pubkey_votes.push((key, latest_vote.slot));
+            // Add the last vote to update the `heaviest_subtree_fork_choice`
+            if let Some(last_voted_slot) = vote_state.last_voted_slot() {
+                pubkey_votes.push((key, last_voted_slot));
             }
 
             vote_state.process_slot_vote_unchecked(bank_slot);
@@ -265,45 +265,45 @@ impl Tower {
 
     fn new_vote(
         local_vote_state: &VoteState,
-        slot: u64,
+        slot: Slot,
         hash: Hash,
-        last_bank_slot: Option<Slot>,
+        last_voted_slot_in_bank: Option<Slot>,
     ) -> (Vote, usize) {
         let mut local_vote_state = local_vote_state.clone();
         let vote = Vote::new(vec![slot], hash);
         local_vote_state.process_vote_unchecked(&vote);
-        let slots = if let Some(last_bank_slot) = last_bank_slot {
+        let slots = if let Some(last_voted_slot_in_bank) = last_voted_slot_in_bank {
             local_vote_state
                 .votes
                 .iter()
                 .map(|v| v.slot)
-                .skip_while(|s| *s <= last_bank_slot)
+                .skip_while(|s| *s <= last_voted_slot_in_bank)
                 .collect()
         } else {
             local_vote_state.votes.iter().map(|v| v.slot).collect()
         };
         trace!(
             "new vote with {:?} {:?} {:?}",
-            last_bank_slot,
+            last_voted_slot_in_bank,
             slots,
             local_vote_state.votes
         );
         (Vote::new(slots, hash), local_vote_state.votes.len() - 1)
     }
 
-    fn last_bank_vote(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
+    fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let vote_account = bank.vote_accounts().get(vote_account_pubkey)?.1.clone();
         let bank_vote_state = VoteState::deserialize(&vote_account.data).ok()?;
-        bank_vote_state.votes.iter().map(|v| v.slot).last()
+        bank_vote_state.last_voted_slot()
     }
 
     pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> (Vote, usize) {
-        let last_vote = Self::last_bank_vote(bank, vote_account_pubkey);
-        Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), last_vote)
+        let voted_slot = Self::last_voted_slot_in_bank(bank, vote_account_pubkey);
+        Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), voted_slot)
     }
 
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
-        let slot = *vote.slots.last().unwrap_or(&0);
+        let slot = vote.last_voted_slot().unwrap_or(0);
         trace!("{} record_vote for {}", self.node_pubkey, slot);
         let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote_unchecked(&vote);
@@ -344,19 +344,19 @@ impl Tower {
         self.lockouts.root_slot
     }
 
-    // a slot is not recent if it's older than the newest vote we have
-    pub fn is_recent(&self, slot: u64) -> bool {
-        if let Some(last_vote) = self.lockouts.votes.back() {
-            if slot <= last_vote.slot {
+    // a slot is recent if it's newer than the last vote we have
+    pub fn is_recent(&self, slot: Slot) -> bool {
+        if let Some(last_voted_slot) = self.lockouts.last_voted_slot() {
+            if slot <= last_voted_slot {
                 return false;
             }
         }
         true
     }
 
-    pub fn has_voted(&self, slot: u64) -> bool {
+    pub fn has_voted(&self, slot: Slot) -> bool {
         for vote in &self.lockouts.votes {
-            if vote.slot == slot {
+            if slot == vote.slot {
                 return true;
             }
         }

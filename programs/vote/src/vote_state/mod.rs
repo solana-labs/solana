@@ -283,11 +283,10 @@ impl VoteState {
         let mut i = 0; // index into the vote's slots
         let mut j = slot_hashes.len(); // index into the slot_hashes
         while i < vote.slots.len() && j > 0 {
-            // find the most recent "new" slot in the vote
+            // find the last slot in the vote
             if self
-                .votes
-                .back()
-                .map_or(false, |old_vote| old_vote.slot >= vote.slots[i])
+                .last_voted_slot()
+                .map_or(false, |last_voted_slot| vote.slots[i] <= last_voted_slot)
             {
                 i += 1;
                 continue;
@@ -341,9 +340,8 @@ impl VoteState {
     pub fn process_slot(&mut self, slot: Slot, epoch: Epoch) {
         // Ignore votes for slots earlier than we already have votes for
         if self
-            .votes
-            .back()
-            .map_or(false, |old_vote| old_vote.slot >= slot)
+            .last_voted_slot()
+            .map_or(false, |last_voted_slot| slot <= last_voted_slot)
         {
             return;
         }
@@ -408,6 +406,14 @@ impl VoteState {
         } else {
             None
         }
+    }
+
+    pub fn last_lockout(&self) -> Option<&Lockout> {
+        self.votes.back()
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.last_lockout().map(|v| v.slot)
     }
 
     fn current_epoch(&self) -> Epoch {
@@ -513,7 +519,7 @@ impl VoteState {
 
     fn pop_expired_votes(&mut self, slot: Slot) {
         loop {
-            if self.votes.back().map_or(false, |v| v.is_expired(slot)) {
+            if self.last_lockout().map_or(false, |v| v.is_expired(slot)) {
                 self.votes.pop_back();
             } else {
                 break;
@@ -1279,7 +1285,8 @@ mod tests {
         // the root_slot should change to the
         // second vote
         let top_vote = vote_state.votes.front().unwrap().slot;
-        vote_state.process_slot_vote_unchecked(vote_state.votes.back().unwrap().expiration_slot());
+        vote_state
+            .process_slot_vote_unchecked(vote_state.last_lockout().unwrap().expiration_slot());
         assert_eq!(Some(top_vote), vote_state.root_slot);
 
         // Expire everything except the first vote
