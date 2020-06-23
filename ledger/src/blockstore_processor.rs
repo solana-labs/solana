@@ -325,7 +325,7 @@ pub fn process_blockstore_from_root(
         for hard_fork_slot in new_hard_forks.iter() {
             // Ensure the user isn't trying to add new hard forks for a slot that's earlier than the current
             // root slot.  Doing so won't cause any effect so emit an error
-            if *hard_fork_slot <= start_slot {
+            if *hard_fork_slot < start_slot {
                 error!(
                     "Unable to add new hard fork at {}, it must be greater than slot {}",
                     hard_fork_slot, start_slot
