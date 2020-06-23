@@ -1,3 +1,7 @@
+*Note before reading: All references to increases in values are in absolute
+terms with regards to balance of SOL.
+This document makes no suggestion as to the monetary value of SOL at any time.*
+
 # Staking on Solana
 
 Staking your SOL tokens on Solana is the best way you can help secure the world's
@@ -10,10 +14,10 @@ Solana is a Proof-of-Stake (PoS) network with delegations, which means that
 anyone who holds SOL tokens can choose to delegate some of their SOL to one or
 more validators, who process transactions and run the network.
 
-Delegating stake is a shared-risk shared-reward financial model that can provide
-steady returns to tokens held for a long period.  This is achieved by aligning
-the financial incentives of the token-holders (delegators) and the validators to
-whom they delegate.
+Delegating stake is a shared-risk shared-reward financial model that may provide
+returns to holders of tokens delegated for a long period.
+This is achieved by aligning the financial incentives of the token-holders
+(delegators) and the validators to whom they delegate.
 
 The more stake a validator has delegated to them, the more often this validator
 is chosen to write new transactions to the ledger.  The more transactions
@@ -48,6 +52,7 @@ secure, robust and performing at its best.
 Mainnet Beta.*
 
 *Note: Slashing is not implemented on Mainnet Beta at this time.*
+
 
 ## How do I stake my SOL tokens?
 In order to stake tokens on Solana, you first will need to transfer some SOL
