@@ -1867,7 +1867,7 @@ impl Blockstore {
                 for instruction in transaction.message.instructions {
                     let program_id = instruction.program_id(&transaction.message.account_keys);
                     if program_id == &solana_vote_program::id() {
-                        if let Ok(VoteInstruction::Vote(vote)) =
+                        if let Ok(VoteInstruction::Vote { vote }) =
                             limited_deserialize(&instruction.data)
                         {
                             if let Some(timestamp) = vote.timestamp {

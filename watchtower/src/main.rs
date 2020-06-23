@@ -174,7 +174,7 @@ fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: Con
                     let program_pubkey =
                         transaction.message.account_keys[instruction.program_id_index as usize];
                     if program_pubkey == solana_vote_program::id() {
-                        if let Ok(VoteInstruction::Vote(_)) =
+                        if let Ok(VoteInstruction::Vote { .. }) =
                             limited_deserialize::<VoteInstruction>(&instruction.data)
                         {
                             vote_transactions += 1;

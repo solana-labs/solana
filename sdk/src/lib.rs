@@ -68,6 +68,7 @@ pub mod timing;
 /// ```
 pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkeys;
+pub use solana_sdk_macro::ProgramInstruction;
 
 // On-chain program specific modules
 pub mod account_info;

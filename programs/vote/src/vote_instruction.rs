@@ -10,6 +10,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
+    ProgramInstruction,
     account::{get_signers, next_keyed_account, KeyedAccount},
     decode_error::DecodeError,
     hash::Hash,
@@ -50,65 +51,158 @@ impl<E> DecodeError<E> for VoteError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum VoteInstruction {
-    /// Initialize a vote account
-    ///
-    /// # Account references
-    ///   0. [WRITE] Uninitialized vote account
-    ///   1. [] Rent sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] New validator identity (node_pubkey)
-    InitializeAccount(VoteInit),
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, ProgramInstruction)]
+#[instruction_derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum VoteInstructionVerbose {
+    #[doc = "Initialize a vote account"]
+    InitializeAccount {
+        #[account(writable)]
+        #[desc = "Uninitialized vote account"]
+        #[index = 0]
+        vote_account: u8,
 
-    /// Authorize a key to send votes or issue a withdrawal
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
-    ///   1. [] Clock sysvar
-    ///   2. [SIGNER] Vote or withdraw authority
-    Authorize(Pubkey, VoteAuthorize),
+        #[account]
+        #[desc = "Rent sysvar"]
+        #[index = 1]
+        rent_sysvar: u8,
 
-    /// A Vote instruction with recent votes
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to vote with
-    ///   1. [] Slot hashes sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] Vote authority
-    Vote(Vote),
+        #[account]
+        #[desc = "Clock sysvar"]
+        #[index = 2]
+        clock_sysvar: u8,
 
-    /// Withdraw some amount of funds
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to withdraw from
-    ///   1. [WRITE] Recipient account
-    ///   2. [SIGNER] Withdraw authority
-    Withdraw(u64),
+        #[account(signer)]
+        #[desc = "New validator identity (node_pubkey)"]
+        #[index = 3]
+        new_validator_id: u8,
 
-    /// Update the vote account's validator identity (node_pubkey)
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to be updated with the given authority public key
-    ///   1. [SIGNER] New validator identity (node_pubkey)
-    ///   2. [SIGNER] Withdraw authority
-    UpdateValidatorIdentity,
+        vote_init: VoteInit
+    },
 
-    /// Update the commission for the vote account
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to be updated
-    ///   1. [SIGNER] Withdraw authority
-    UpdateCommission(u8),
+    #[doc = "Authorize a key to send votes or issue a withdrawal"]
+    Authorize {
+        #[account(writable)]
+        #[desc = "Vote account to be updated with the Pubkey for authorization"]
+        #[index = 0]
+        vote_account: u8,
 
-    /// A Vote instruction with recent votes
-    ///
-    /// # Account references
-    ///   0. [WRITE] Vote account to vote with
-    ///   1. [] Slot hashes sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] Vote authority
-    VoteSwitch(Vote, Hash),
+        #[account]
+        #[desc = "Clock sysvar"]
+        #[index = 1]
+        clock_sysvar: u8,
+
+        #[account(signer)]
+        #[desc = "Vote or withdraw authority"]
+        #[index = 2]
+        authority: u8,
+
+        voter_pubkey: Pubkey,
+        vote_authorize: VoteAuthorize,
+    },
+
+    #[doc = "A Vote instruction with recent votes"]
+    Vote {
+        #[account(writable)]
+        #[desc = "Vote account to vote with"]
+        #[index = 0]
+        vote_account: u8,
+
+        #[account]
+        #[desc = "Slot hashes sysvar"]
+        #[index = 1]
+        slot_hashes_sysvar: u8,
+
+        #[account]
+        #[desc = "Clock sysvar"]
+        #[index = 2]
+        clock_sysvar: u8,
+
+        #[account(signer)]
+        #[desc = "Vote authority"]
+        #[index = 3]
+        authority: u8,
+
+        vote: Vote,
+    },
+
+    #[doc = "Withdraw some amount of funds"]
+    Withdraw {
+        #[account(writable)]
+        #[desc = "Vote account to withdraw from"]
+        #[index = 0]
+        vote_account: u8,
+
+        #[account(writable)]
+        #[desc = "Recipient account"]
+        #[index = 1]
+        recipient_account: u8,
+
+        #[account(signer)]
+        #[desc = "Withdraw authority"]
+        #[index = 2]
+        authority: u8,
+
+        lamports: u64,
+    },
+
+    #[doc = "Update the vote account's validator identity (node_pubkey)"]
+    UpdateValidatorIdentity {
+        #[account(writable)]
+        #[desc = "Vote account to be updated with the given authority public key"]
+        #[index = 0]
+        vote_account: u8,
+
+        #[account(signer)]
+        #[desc = "New validator identity (node_pubkey)"]
+        #[index = 1]
+        recipient_account: u8,
+
+        #[account(signer)]
+        #[desc = "Withdraw authority"]
+        #[index = 2]
+        authority: u8,
+    },
+
+    #[doc = "Update the commission for the vote account"]
+    UpdateCommission {
+        #[account(writable)]
+        #[desc = "Vote account to be updated"]
+        #[index = 0]
+        vote_account: u8,
+
+        #[account(signer)]
+        #[desc = "Withdraw authority"]
+        #[index = 1]
+        authority: u8,
+
+        commission: u8
+    },
+
+    #[doc = "A Vote instruction with recent votes"]
+    VoteSwitch {
+        #[account(writable)]
+        #[desc = "Vote account to vote with"]
+        #[index = 0]
+        vote_account: u8,
+
+        #[account]
+        #[desc = "Slot hashes sysvar"]
+        #[index = 1]
+        slot_hashes_sysvar: u8,
+
+        #[account]
+        #[desc = "Clock sysvar"]
+        #[index = 2]
+        clock_sysvar: u8,
+
+        #[account(signer)]
+        #[desc = "Vote authority"]
+        #[index = 3]
+        authority: u8,
+
+        vote: Vote,
+        proof_hash: Hash,
+    },
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -121,7 +215,7 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
 
     Instruction::new(
         id(),
-        &VoteInstruction::InitializeAccount(*vote_init),
+        &VoteInstruction::InitializeAccount{ vote_init: *vote_init },
         account_metas,
     )
 }
@@ -175,7 +269,7 @@ pub fn authorize(
 
     Instruction::new(
         id(),
-        &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
+        &VoteInstruction::Authorize { voter_pubkey: *new_authorized_pubkey, vote_authorize },
         account_metas,
     )
 }
@@ -210,7 +304,7 @@ pub fn update_commission(
 
     Instruction::new(
         id(),
-        &VoteInstruction::UpdateCommission(commission),
+        &VoteInstruction::UpdateCommission { commission },
         account_metas,
     )
 }
@@ -223,7 +317,7 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
+    Instruction::new(id(), &VoteInstruction::Vote { vote }, account_metas)
 }
 
 pub fn vote_switch(
@@ -241,7 +335,7 @@ pub fn vote_switch(
 
     Instruction::new(
         id(),
-        &VoteInstruction::VoteSwitch(vote, proof_hash),
+        &VoteInstruction::VoteSwitch { vote, proof_hash },
         account_metas,
     )
 }
@@ -258,7 +352,7 @@ pub fn withdraw(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
+    Instruction::new(id(), &VoteInstruction::Withdraw { lamports }, account_metas)
 }
 
 pub fn process_instruction(
@@ -275,7 +369,7 @@ pub fn process_instruction(
     let me = &mut next_keyed_account(keyed_accounts)?;
 
     match limited_deserialize(data)? {
-        VoteInstruction::InitializeAccount(vote_init) => {
+        VoteInstruction::InitializeAccount { vote_init } => {
             sysvar::rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
             vote_state::initialize_account(
                 me,
@@ -284,7 +378,7 @@ pub fn process_instruction(
                 &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             )
         }
-        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
+        VoteInstruction::Authorize { voter_pubkey, vote_authorize } => vote_state::authorize(
             me,
             &voter_pubkey,
             vote_authorize,
@@ -296,10 +390,10 @@ pub fn process_instruction(
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
         ),
-        VoteInstruction::UpdateCommission(commission) => {
+        VoteInstruction::UpdateCommission { commission } => {
             vote_state::update_commission(me, commission, &signers)
         }
-        VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+        VoteInstruction::Vote { vote } | VoteInstruction::VoteSwitch { vote, ..} => {
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,
@@ -309,7 +403,7 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        VoteInstruction::Withdraw(lamports) => {
+        VoteInstruction::Withdraw { lamports } => {
             let to = next_keyed_account(keyed_accounts)?;
             vote_state::withdraw(me, lamports, to, &signers)
         }

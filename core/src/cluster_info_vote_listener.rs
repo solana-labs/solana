@@ -466,7 +466,7 @@ impl ClusterInfoVoteListener {
                 {
                     let vote = {
                         match vote_instruction {
-                            VoteInstruction::Vote(vote) => vote,
+                            VoteInstruction::Vote { vote } => vote,
                             _ => {
                                 continue;
                             }
