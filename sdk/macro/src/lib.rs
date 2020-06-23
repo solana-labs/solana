@@ -12,7 +12,7 @@ use syn::{
     punctuated::Punctuated,
     token::{Bracket, Comma},
     Attribute, Data, DataEnum, DeriveInput, Expr, Field, Fields, Ident, Lit, LitByte, LitStr, Meta,
-    MetaNameValue, NestedMeta, Token, Variant,
+    MetaList, MetaNameValue, NestedMeta, Token, Variant,
 };
 
 struct Id(proc_macro2::TokenStream);
@@ -158,6 +158,9 @@ pub fn pubkeys(input: TokenStream) -> TokenStream {
 /// converted to documentation and variants trimmed to the fields needed for transaction
 /// instructions, as well as `From` implementation between them.
 ///
+/// The Verbose enum can be tagged with the `instruction_derive` attribute to pass desired
+/// derivations to the resulting program Instruction enum.
+///
 /// Acccount fields should be tagged with the `account` attribute, including optional list items
 /// `signer` and/or `writable`. Account fields must also have an `index` name-value attribute, and
 /// may carry an optional `desc` name-value description attribute.
@@ -204,7 +207,10 @@ pub fn pubkeys(input: TokenStream) -> TokenStream {
 /// ```
 
 #[proc_macro_error]
-#[proc_macro_derive(ProgramInstruction, attributes(account, desc, index))]
+#[proc_macro_derive(
+    ProgramInstruction,
+    attributes(account, desc, index, instruction_derive)
+)]
 pub fn program_instruction(input: TokenStream) -> TokenStream {
     const IDENT_SUFFIX: &str = "Verbose";
 
@@ -226,16 +232,23 @@ pub fn program_instruction(input: TokenStream) -> TokenStream {
 
         let (enum_stream, from_stream) = handle_enum_variants(&mut instruction_set, ident.clone());
 
-        // Preserve other attributes, like `#[repr(C)]`
+        // Pass on specified derive attributes; preserve other attributes, like `#[repr(C)]`
         for attr in input.attrs {
-            tokens.extend(quote! {
-                #attr
-            });
+            if attr.path.is_ident("instruction_derive") {
+                if let Meta::List(MetaList { ref nested, .. }) = attr.parse_meta().unwrap() {
+                    tokens.extend(quote! {
+                        #[derive(#nested)]
+                    });
+                }
+            } else {
+                tokens.extend(quote! {
+                    #attr
+                });
+            }
         }
 
         // Build new enum
         tokens.extend(quote! {
-            #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
             pub enum #ident {
                 #enum_stream
             }
