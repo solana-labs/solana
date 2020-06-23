@@ -949,7 +949,13 @@ fn main() {
                     .help("After loading the snapshot slot warp the ledger to WARP_SLOT, \
                            which could be a slot in a galaxy far far away"),
             )
-
+            .arg(
+                Arg::with_name("rehash")
+                    .required(false)
+                    .long("rehash")
+                    .takes_value(false)
+                    .help("Re-calculate the bank hash and overwrite the original bank hash."),
+            )
         ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account contents after processing in the ledger")
@@ -1289,6 +1295,7 @@ fn main() {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
             let warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
+            let rehash = arg_matches.is_present("rehash");
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -1340,6 +1347,9 @@ fn main() {
                     bank.squash();
                     bank.clean_accounts();
                     bank.update_accounts_hash();
+                    if rehash {
+                        bank.rehash();
+                    }
 
                     let temp_dir = tempfile::tempdir_in(ledger_path).unwrap_or_else(|err| {
                         eprintln!("Unable to create temporary directory: {}", err);
