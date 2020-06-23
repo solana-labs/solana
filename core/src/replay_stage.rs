@@ -8,7 +8,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     commitment::BlockCommitmentCache,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-    consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
+    consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -321,8 +321,8 @@ impl ReplayStage {
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
-                            &fork_stats.stake_lockouts,
-                            fork_stats.total_staked,
+                            &fork_stats.voted_stakes,
+                            fork_stats.total_stake,
                             &progress,
                             &bank_forks,
                         );
@@ -948,7 +948,7 @@ impl ReplayStage {
         Self::update_commitment_cache(
             bank.clone(),
             bank_forks.read().unwrap().root(),
-            progress.get_fork_stats(bank.slot()).unwrap().total_staked,
+            progress.get_fork_stats(bank.slot()).unwrap().total_stake,
             lockouts_sender,
         );
         Self::push_vote(
@@ -1049,11 +1049,11 @@ impl ReplayStage {
     fn update_commitment_cache(
         bank: Arc<Bank>,
         root: Slot,
-        total_staked: u64,
+        total_stake: Stake,
         lockouts_sender: &Sender<CommitmentAggregationData>,
     ) {
         if let Err(e) =
-            lockouts_sender.send(CommitmentAggregationData::new(bank, root, total_staked))
+            lockouts_sender.send(CommitmentAggregationData::new(bank, root, total_stake))
         {
             trace!("lockouts_sender failed: {:?}", e);
         }
@@ -1233,16 +1233,16 @@ impl ReplayStage {
                         &computed_bank_state,
                     );
                     let ComputedBankState {
-                        stake_lockouts,
-                        total_staked,
+                        voted_stakes,
+                        total_stake,
                         lockout_intervals,
                         ..
                     } = computed_bank_state;
                     let stats = progress
                         .get_fork_stats_mut(bank_slot)
                         .expect("All frozen banks must exist in the Progress map");
-                    stats.total_staked = total_staked;
-                    stats.stake_lockouts = stake_lockouts;
+                    stats.total_stake = total_stake;
+                    stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
                     stats.computed = true;
@@ -1277,11 +1277,8 @@ impl ReplayStage {
                 .get_fork_stats_mut(bank_slot)
                 .expect("All frozen banks must exist in the Progress map");
 
-            stats.vote_threshold = tower.check_vote_stake_threshold(
-                bank_slot,
-                &stats.stake_lockouts,
-                stats.total_staked,
-            );
+            stats.vote_threshold =
+                tower.check_vote_stake_threshold(bank_slot, &stats.voted_stakes, stats.total_stake);
             stats.is_locked_out = tower.is_locked_out(bank_slot, &ancestors);
             stats.has_voted = tower.has_voted(bank_slot);
             stats.is_recent = tower.is_recent(bank_slot);
@@ -1590,8 +1587,8 @@ impl ReplayStage {
 
     fn confirm_forks(
         tower: &Tower,
-        stake_lockouts: &HashMap<u64, StakeLockout>,
-        total_staked: u64,
+        voted_stakes: &VotedStakes,
+        total_stake: Stake,
         progress: &ProgressMap,
         bank_forks: &RwLock<BankForks>,
     ) -> Vec<Slot> {
@@ -1605,8 +1602,7 @@ impl ReplayStage {
                     .expect("bank in progress must exist in BankForks")
                     .clone();
                 let duration = prog.replay_stats.started.elapsed().as_millis();
-                if bank.is_frozen() && tower.is_slot_confirmed(*slot, stake_lockouts, total_staked)
-                {
+                if bank.is_frozen() && tower.is_slot_confirmed(*slot, voted_stakes, total_stake) {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
                     datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
                     confirmed_forks.push(*slot);
@@ -1615,7 +1611,7 @@ impl ReplayStage {
                         "validator fork not confirmed {} {}ms {:?}",
                         *slot,
                         duration,
-                        stake_lockouts.get(slot)
+                        voted_stakes.get(slot)
                     );
                 }
             }
@@ -2595,8 +2591,8 @@ pub(crate) mod tests {
             let fork_progress = progress.get(&0).unwrap();
             let confirmed_forks = ReplayStage::confirm_forks(
                 &tower,
-                &fork_progress.fork_stats.stake_lockouts,
-                fork_progress.fork_stats.total_staked,
+                &fork_progress.fork_stats.voted_stakes,
+                fork_progress.fork_stats.total_stake,
                 &progress,
                 &bank_forks,
             );
@@ -2637,8 +2633,8 @@ pub(crate) mod tests {
             let fork_progress = progress.get(&1).unwrap();
             let confirmed_forks = ReplayStage::confirm_forks(
                 &tower,
-                &fork_progress.fork_stats.stake_lockouts,
-                fork_progress.fork_stats.total_staked,
+                &fork_progress.fork_stats.voted_stakes,
+                fork_progress.fork_stats.total_stake,
                 &progress,
                 &bank_forks,
             );
