@@ -729,7 +729,7 @@ impl Tower {
         // check in reverse order
         self.lockouts.votes.retain(|v| {
             let check = slot_history.check(v.slot);
-            dbg!(&check);
+            //d b g!(&check);
             check != solana_sdk::slot_history::Check::Found
         });
         self.lockouts.root_slot = Some(replayed_root_slot);
