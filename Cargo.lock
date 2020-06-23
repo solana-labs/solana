@@ -4199,6 +4199,7 @@ dependencies = [
  "solana-vote-program",
  "tempfile",
  "thiserror",
+ "trees",
 ]
 
 [[package]]
