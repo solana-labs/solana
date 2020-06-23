@@ -54,6 +54,10 @@ impl Vote {
             timestamp: None,
         }
     }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.slots.last().copied()
+    }
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]

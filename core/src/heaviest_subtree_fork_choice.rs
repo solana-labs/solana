@@ -439,8 +439,8 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         _ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>) {
-        let last_vote = tower.last_vote().slots.last().cloned();
-        let heaviest_slot_on_same_voted_fork = last_vote.map(|last_vote| {
+        let last_voted_slot = tower.last_voted_slot();
+        let heaviest_slot_on_same_voted_fork = last_voted_slot.map(|last_vote| {
             let heaviest_slot_on_same_voted_fork =
                 self.best_slot(last_vote).expect("last_vote is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
             if heaviest_slot_on_same_voted_fork == last_vote {

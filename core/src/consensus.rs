@@ -326,14 +326,17 @@ impl Tower {
         self.record_bank_vote(vote)
     }
 
-    pub fn last_vote(&self) -> Vote {
-        self.last_vote.clone()
+    pub fn last_vote(&self) -> &Vote {
+        &self.last_vote
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.last_vote().last_voted_slot()
     }
 
     pub fn last_vote_and_timestamp(&mut self) -> Vote {
-        let mut last_vote = self.last_vote();
-        let current_slot = last_vote.slots.iter().max().unwrap_or(&0);
-        last_vote.timestamp = self.maybe_timestamp(*current_slot);
+        let mut last_vote = self.last_vote.clone();
+        last_vote.timestamp = self.maybe_timestamp(last_vote.last_voted_slot().unwrap_or(0));
         last_vote
     }
 
@@ -397,14 +400,12 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
-        self.last_vote()
-            .slots
-            .last()
-            .map(|last_vote| {
-                let last_vote_ancestors = ancestors.get(&last_vote).unwrap();
+        self.last_voted_slot()
+            .map(|last_voted_slot| {
+                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap();
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
-                if switch_slot == *last_vote || switch_slot_ancestors.contains(last_vote) {
+                if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
                     // If the `switch_slot is a descendant of the last vote,
                     // no switching proof is necessary
                     return SwitchForkDecision::NoSwitch;
@@ -427,14 +428,14 @@ impl Tower {
                     // 3) Don't consider lockouts on any descendants of
                     //    `last_vote`
                     if !descendants.is_empty()
-                        || candidate_slot == last_vote
+                        || *candidate_slot == last_voted_slot
                         || ancestors
                             .get(&candidate_slot)
                             .expect(
                                 "empty descendants implies this is a child, not parent of root, so must
                                 exist in the ancestors map",
                             )
-                            .contains(last_vote)
+                            .contains(&last_voted_slot)
                     {
                         continue;
                     }
@@ -455,7 +456,7 @@ impl Tower {
                         .lockout_intervals;
                     // Find any locked out intervals in this bank with endpoint >= last_vote,
                     // implies they are locked out at last_vote
-                    for (_, value) in lockout_intervals.range((Included(last_vote), Unbounded)) {
+                    for (_, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
                         for (lockout_interval_start, vote_account_pubkey) in value {
                             // Only count lockouts on slots that are:
                             // 1) Not ancestors of `last_vote`
@@ -1747,7 +1748,7 @@ pub mod test {
         for i in 0..num_votes {
             tower.record_vote(i as u64, Hash::default());
         }
-        assert_eq!(expected, tower.last_vote())
+        assert_eq!(expected, tower.last_vote)
     }
 
     #[test]
