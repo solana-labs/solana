@@ -1,4 +1,4 @@
-# Staking Operations
+# Delegate Stake
 This page describes the workflow and commands needed to create and manage stake
 accounts, and to delegate your stake accounts to a validator using the Solana
 command-line tools.  The [stake accounts](../staking/stake-accounts.md)

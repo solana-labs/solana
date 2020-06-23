@@ -2,8 +2,9 @@
 A stake account on Solana can be used to delegate tokens to validators on
 the network to potentially earn rewards for the owner of the stake account.
 Stake accounts are created and managed differently than a traditional wallet
-address, also known as a system account,
-which is only able to send and receive SOL from other accounts on the network.
+address, known as a *system account*.  A system account is only able to send and
+receive SOL from other accounts on the network, whereas a stake account supports
+more complex operations needed to manage a delegation of tokens.
 
 Stake accounts on Solana also work differently than those of other Proof-of-Stake
 blockchain networks that you may be familiar with.  This document describes the
@@ -18,11 +19,17 @@ any control over the account.  In fact, a keypair or private key may not even
 exist for a stake account's address.
 
 The only time a stake account's address has a keypair file is when [creating
-a stake account using the command line tools](../cli/staking-operations.md#create-a-stake-account),
+a stake account using the command line tools](../cli/delegate-stake.md#create-a-stake-account),
 a new keypair file is created first only to ensure that the stake account's
 address is new and unique.
 
 #### Understanding Account Authorities
+Certain types of accounts may have one or more *signing authorities*
+associated with a given account. An account authority is used to sign certain
+transactions for the account it controls.  This is different from
+some other blockchain networks where the holder of the keypair associated with
+the account's address controls all of the account's activity.
+
 Each stake account has two signing authorities specified by their respective address,
 each of which is authorized to perform certain operations on the stake account.
 
@@ -52,8 +59,8 @@ Securing the withdraw authority against loss or theft is of utmost importance
 when managing a stake account.
 
 #### Multiple Delegations
-A stake account may only ever be delegated to one validator at a time. All of
-the tokens in the account are either delegated or un-delegated, or in the
+Each stake account may only be used to delegate to one validator at a time.
+All of the tokens in the account are either delegated or un-delegated, or in the
 process of becoming delegated or un-delegated.  To delegate a fraction of your
 tokens to a validator, or to delegate to multiple validators, you must create
 multiple stake accounts.
@@ -73,14 +80,17 @@ and lockup can be merged into a single resulting stake account.
 When a stake account is delegated, or a delegation is deactivated, the operation
 does not take effect immediately.
 
-A delegation or deactivation takes several epochs to complete, with a fraction
-of the delegation becoming active or inactive at each epoch boundary after
-the transaction containing the instructions has been submitted to the cluster.
+A delegation or deactivation takes several [epochs](../terminology.md#epoch)
+to complete, with a fraction of the delegation becoming active or inactive at
+each epoch boundary after the transaction containing the instructions has been
+submitted to the cluster.
 
 There is also a limit on how much total stake can become delegated or
 deactivated in a single epoch, to prevent large sudden changes in stake across
 the network as a whole. Since warmup and cooldown are dependent on the behavior
 of other network participants, their exact duration is difficult to predict.
+Details on the warmup and cooldown timing can be found
+[here](../cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
 
 #### Lockups
 Stake accounts can have a lockup which prevents the tokens they hold from being

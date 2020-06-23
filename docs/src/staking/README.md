@@ -6,14 +6,14 @@ highest-performing blockchain network, and
 Inflation and network rewards are *NOT* presently implemented on Solana's
 Mainnet Beta network, but may be enabled in the future.
 
-Solana is a Delegated Proof-of-Stake system (DPoS), which means that anyone who
-holds SOL tokens can choose to delegate some of their SOL to one or more
-validators, who process transactions and run the network.
+Solana is a Proof-of-Stake (PoS) network with delegations, which means that
+anyone who holds SOL tokens can choose to delegate some of their SOL to one or
+more validators, who process transactions and run the network.
 
 Delegating stake is a shared-risk shared-reward financial model that can provide
-steady returns to tokens held for a long period, similar to a traditional
-fixed-income investment.  This is achieved by aligning the financial incentives
-of the token-holders (delegators) and the validators to whom they delegate.
+steady returns to tokens held for a long period.  This is achieved by aligning
+the financial incentives of the token-holders (delegators) and the validators to
+whom they delegate.
 
 The more stake a validator has delegated to them, the more often this validator
 is chosen to write new transactions to the ledger.  The more transactions
@@ -30,7 +30,7 @@ to offer the lowest commission for their services, in order to attract more
 delegated stake.
 
 There is a risk of loss of tokens when staking, through a process known as
-*slashing*.  Slashing is *NOT* presently implemented on Solana's Mainnet Beta
+*slashing*.  Slashing is *NOT* presently enabled on Solana's Mainnet Beta
 network, but may be implemented in the future.  Slashing involves the automatic
 removal and destruction of a portion of a validator's delegated stake in
 response to intentional malicious behavior, such as creating invalid
@@ -40,17 +40,14 @@ validator will lose a portion of their delegation.  While this means an immediat
 loss for the token holder, it also is a loss of future rewards for the validator
 due to their reduced total delegation.
 
-Therefore, it is always in the validator's
-interest to not engage in such behavior, which further aligns both validators'
+It is the goal of the network rewards and slashing to align both validators'
 and token holders' financial incentives, which in turn help keeps the network
 secure, robust and performing at its best.
 
 *Note: Network rewards for stakers and validators are not presently enabled on
-Mainnet Beta.
-It is the decision of the Solana Foundation if/when to enable such rewards.*
+Mainnet Beta.*
 
-*Note: Slashing is not implemented on Mainnet Beta at this time. It is the
-decision of the Solana Foundation if/when to enable slashing.*
+*Note: Slashing is not implemented on Mainnet Beta at this time.*
 
 ## How do I stake my SOL tokens?
 In order to stake tokens on Solana, you first will need to transfer some SOL
@@ -63,11 +60,7 @@ description is below.
 Currently, staking operation are only supported by wallets that can interact
 with the Solana command line tools, including Ledger Nano S and paper wallet.
 
-We are working hard to integrate with additional wallets that will provide a
-friendlier user interface for people who are not familiar with using command
-line tools, please stay tuned for more information!
-
-[Staking commands using the Solana Command Line Tools](../cli/staking-operations.md)
+[Staking commands using the Solana Command Line Tools](../cli/delegate-stake.md)
 
 #### Create a Stake Account
 A stake account is a different type of account from a wallet address
@@ -79,18 +72,15 @@ Depending on which wallet you are using the steps to create a stake account
 may vary slightly.  Not all wallets support stake accounts, see
 [Supported Wallets](#supported-wallets).
 
-If you have been transferred control of an existing stake account and wish to
-use it, you do not need to create a new stake account.
-
 #### Select a Validator
-After a stake account is created, you will likely want to delegate the account
+After a stake account is created, you will likely want to delegate the SOL
 to a validator node.  Below are a few places where you can get information about
 the validators who are currently participating in running the network.
 The Solana Labs team and the Solana Foundation do not recommend any particular
 validator.
 
-On this Solana Forum thread, our validators introduce themselves, along with
-some description of their history and services:
+The Mainnet Beta validators introduce themselves and their services on this
+Solana Forum thread:
  - https://forums.solana.com/t/validator-information-thread
 
 The site solanabeach.io is built and maintained by one of our validators,
@@ -99,9 +89,7 @@ the network as a whole, as well as a list of each validator and some recent
 performance statistics about each one.
  - https://solanabeach.io
 
-Using the Solana command line tools, the following commands will display the
-complete validator list to the terminal, along with currently delegated stake
-and recent block production performance statistics, respectively.
+To view block production statistics, use the Solana command-line tools:
  - `solana validators`
  - `solana block-production`
 

@@ -16,4 +16,3 @@ redirects:
     wallet/cli-wallets/remote-wallet/ledger: ./hardware-wallets/ledger.md
     wallet/cli-wallets/file-system-wallet: ./file-system-wallet/README.md
     wallet/support: ./wallet-guide/support.md
-    cli/delegate-stake: ./cli/staking-operations.md

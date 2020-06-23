@@ -19,7 +19,7 @@
   * [Command Line Conventions](cli/conventions.md)
   * [Choose a Cluster](cli/choose-a-cluster.md)
   * [Send and Receive Tokens](cli/transfer-tokens.md)
-  * [Staking Operations](cli/staking-operations.md)
+  * [Delegate Stake](cli/delegate-stake.md)
   * [Manage Stake Accounts](cli/manage-stake-accounts.md)
   * [Offline Signing](offline-signing/README.md)
     * [Durable Transaction Nonces](offline-signing/durable-nonce.md)

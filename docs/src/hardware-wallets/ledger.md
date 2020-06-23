@@ -266,5 +266,5 @@ for ways to get help.
 
 
 Read more about [sending and receiving tokens](../cli/transfer-tokens.md) and
-[delegating stake](../cli/staking-operations.md). You can use your Ledger keypair URL
+[delegating stake](../cli/delegate-stake.md). You can use your Ledger keypair URL
 anywhere you see an option or argument that accepts a `<KEYPAIR>`.
