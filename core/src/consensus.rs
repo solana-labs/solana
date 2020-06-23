@@ -700,44 +700,77 @@ impl Tower {
         bank_weight
     }
 
-    // The tower root can be older if the validator booted from a newer snapshot, so
+    // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
     // tower lockouts may need adjustment
-    pub fn adjust_lockouts_if_newer_root(
+    pub fn adjust_lockouts_after_replay(
         mut self,
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
-        // should root_bank be used or any child (frozen?) banks?
-        //let my_root_slot = self.lockouts.root_slot.unwrap_or(0);
-        //if root_slot > my_root_slot {
-        //    self.lockouts.root_slot = Some(root_slot);
-        //    self.lockouts.votes.retain(|v| v.slot > root_slot);
-        //}
-        // return immediately if last_voted_slot is None, votes are empty...
+        assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
+        // reconcile_blockstore_roots_with_tower() should already have aligned these.
+        assert!(self.root().is_none() || self.root().unwrap() >= replayed_root_slot);
 
-        error!("root bank slot: {}", replayed_root_slot);
-        error!("before votes: {:?}", self.lockouts.votes);
-        assert!(slot_history.check(replayed_root_slot) == solana_sdk::slot_history::Check::Found);
+        use solana_sdk::slot_history::Check;
+
+        // return immediately if last_voted_slot is None, votes are empty...
+        if self.lockouts.votes.is_empty() {
+            assert_eq!(self.root(), None);
+            // assert self.last_vote, ???
+            return Ok(self);
+        }
+
         let last_voted_slot = self.last_voted_slot().unwrap();
-        if slot_history.check(last_voted_slot) == solana_sdk::slot_history::Check::TooOld {
+        if slot_history.check(last_voted_slot) == Check::TooOld {
             return Err(TowerError::TooOld(
                 last_voted_slot,
                 slot_history.oldest(),
             ));
         }
 
-        // check in reverse order
-        self.lockouts.votes.retain(|v| {
-            let check = slot_history.check(v.slot);
-            //d b g!(&check);
-            check != solana_sdk::slot_history::Check::Found
-        });
+        let mut is_diverged_descendants_in_reverse: Vec<_> =
+            Vec::with_capacity(self.lockouts.votes.len());
+        let mut still_in_future = true;
+        let mut past_outside_history = false;
+        let mut found = false;
+        for vote in self.lockouts.votes.iter().rev() {
+            let check = slot_history.check(vote.slot);
+
+            // this can't happen unless we're fed with bogus snapshot
+            if !found && check == Check::Found {
+                found = true;
+            } else if found && check == Check::NotFound {
+                return Err(TowerError::InconsistentWithSlotHistory(
+                    "diverged ancestor?".to_owned(),
+                ));
+            }
+
+            // really odd cases: bad ordered votes?
+            if still_in_future && check != Check::Future {
+                still_in_future = false;
+            } else if !still_in_future && check == Check::Future {
+                return Err(TowerError::InconsistentWithSlotHistory(
+                    "time warmped?".to_owned(),
+                ));
+            }
+            if !past_outside_history && check == Check::TooOld {
+                past_outside_history = true;
+            } else if past_outside_history && check != Check::TooOld {
+                return Err(TowerError::InconsistentWithSlotHistory(
+                    "not too old once after got too old?".to_owned(),
+                ));
+            }
+
+            is_diverged_descendants_in_reverse.push(!found);
+        }
+        let mut is_diverged_descendants_iter = is_diverged_descendants_in_reverse.into_iter().rev();
+        self.lockouts
+            .votes
+            .retain(move |_| is_diverged_descendants_iter.next().unwrap());
+
         self.lockouts.root_slot = Some(replayed_root_slot);
-        error!("after votes: {:?}", self.lockouts.votes);
-        // assert replayed_root_slot is in slot_history!!!
         // also adjust self.last_vote!
         // should call self.votes.pop_expired_votes()?
-        // if slots are out of history; abort
         Ok(self)
     }
 
@@ -837,8 +870,11 @@ pub enum TowerError {
     #[error("The tower does not match this validator: {0}")]
     WrongTower(String),
 
-    #[error("The tower is too old: last voted ({0}) << oldest slot history ({1})")]
+    #[error("The tower is too old: last voted slot in tower ({0}) < oldest slot in available history ({1})")]
     TooOld(Slot, Slot),
+
+    #[error("The tower is inconsistent with slot history: {0}")]
+    InconsistentWithSlotHistory(String),
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -2197,11 +2233,13 @@ pub mod test {
         slot_history.add(0);
         slot_history.add(1);
 
+        let replayed_root_slot = 1;
         tower = tower
-            .adjust_lockouts_if_newer_root(1, &slot_history)
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![2, 3]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
     #[test]
@@ -2217,11 +2255,13 @@ pub mod test {
         slot_history.add(1);
         slot_history.add(4);
 
+        let replayed_root_slot = 4;
         tower = tower
-            .adjust_lockouts_if_newer_root(4, &slot_history)
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![2, 3]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
     #[test]
@@ -2239,11 +2279,13 @@ pub mod test {
         slot_history.add(4);
         slot_history.add(5);
 
+        let replayed_root_slot = 5;
         tower = tower
-            .adjust_lockouts_if_newer_root(5, &slot_history)
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
     #[test]
@@ -2257,10 +2299,91 @@ pub mod test {
         slot_history.add(0);
         slot_history.add(MAX_ENTRIES);
 
-        let result = tower.adjust_lockouts_if_newer_root(MAX_ENTRIES, &slot_history);
-        //assert_matches!(result, Err(TowerError::TooOld(ref message)) if message.to_string() == *"too old tower stake");
-        //assert_eq!(format!("{:?}", result.unwrap()), "too old tower stake");
-        assert_matches!(result, Err(TowerError::TooOld(s1, s2)) if s1 == 0 && s2 == 1);
+        let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
+        assert_eq!(format!("{}", result.unwrap_err()), "The tower is too old: last voted slot in tower (0) < oldest slot in available history (1)");
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load40() {
+        use solana_sdk::slot_history::MAX_ENTRIES;
+
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+        slot_history.add(MAX_ENTRIES);
+
+        tower = tower
+            .adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history)
+            .unwrap();
+        assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
+        assert_eq!(tower.root(), Some(MAX_ENTRIES));
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load41() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.votes.push_back(Lockout::new(1));
+        tower.lockouts.votes.push_back(Lockout::new(0));
+        let vote = Vote::new(vec![0], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+
+        let result = tower.adjust_lockouts_after_replay(0, &slot_history);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is inconsistent with slot history: time warmped?"
+        );
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load42() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.votes.push_back(Lockout::new(1));
+        tower.lockouts.votes.push_back(Lockout::new(2));
+        let vote = Vote::new(vec![2], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(2);
+
+        let result = tower.adjust_lockouts_after_replay(2, &slot_history);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is inconsistent with slot history: diverged ancestor?"
+        );
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load43() {
+        use solana_sdk::slot_history::MAX_ENTRIES;
+
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower
+            .lockouts
+            .votes
+            .push_back(Lockout::new(MAX_ENTRIES - 1));
+        tower.lockouts.votes.push_back(Lockout::new(0));
+        tower.lockouts.votes.push_back(Lockout::new(1));
+        let vote = Vote::new(vec![1], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(MAX_ENTRIES);
+
+        let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is inconsistent with slot history: not too old once after got too old?"
+        );
     }
 
     #[test]
@@ -2277,12 +2400,48 @@ pub mod test {
         slot_history.add(1);
         slot_history.add(2);
 
+        let replayed_root_slot = 2;
         tower = tower
-            .adjust_lockouts_if_newer_root(2, &slot_history)
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![3, 4]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
-    // test empty
+    #[test]
+    fn test_expire_old_votes_on_load6() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(5, Hash::default());
+        tower.record_vote(6, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+
+        let replayed_root_slot = 2;
+        tower = tower
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![5, 6]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load7() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+
+        let replayed_root_slot = 0;
+        tower = tower
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
+        assert_eq!(tower.root(), None);
+    }
 }

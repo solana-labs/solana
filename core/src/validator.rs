@@ -720,7 +720,7 @@ fn new_banks_from_ledger(
             let root_bank = bank_forks.root_bank();
             let slot_history = root_bank.get_slot_history();
             // assert bank is frozen
-            tower.adjust_lockouts_if_newer_root(root_bank.slot(), &slot_history)
+            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
         .unwrap_or_else(|err| {
             if config.require_tower
