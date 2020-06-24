@@ -1,6 +1,7 @@
 # Trust Wallet
 Trust Wallet is an app for your smartphone or tablet and is the fastest and
-simplest way for most users to get started with a Solana wallet.
+simplest way for most users to get started with a Solana wallet to send and
+receive tokens.
 
 ## Install Trust Wallet
 
