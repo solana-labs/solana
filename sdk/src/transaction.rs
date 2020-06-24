@@ -9,7 +9,6 @@ use crate::{
     short_vec,
     signature::{Signature, SignerError},
     signers::Signers,
-    system_instruction,
 };
 use std::result;
 use thiserror::Error;
@@ -113,7 +112,7 @@ impl Transaction {
     }
 
     pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new(instructions, payer);
         Self::new_unsigned(message)
     }
 
@@ -123,29 +122,8 @@ impl Transaction {
         signing_keypairs: &T,
         recent_blockhash: Hash,
     ) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
-    }
-
-    pub fn new_signed_with_nonce<T: Signers>(
-        mut instructions: Vec<Instruction>,
-        payer: Option<&Pubkey>,
-        signing_keypairs: &T,
-        nonce_account_pubkey: &Pubkey,
-        nonce_authority_pubkey: &Pubkey,
-        nonce_hash: Hash,
-    ) -> Self {
-        let nonce_ix = system_instruction::advance_nonce_account(
-            &nonce_account_pubkey,
-            &nonce_authority_pubkey,
-        );
-        instructions.insert(0, nonce_ix);
-        Self::new_signed_with_payer(&instructions, payer, signing_keypairs, nonce_hash)
-    }
-
-    pub fn new_unsigned_instructions(instructions: &[Instruction]) -> Self {
-        let message = Message::new(instructions);
-        Self::new_unsigned(message)
     }
 
     pub fn new<T: Signers>(
@@ -156,15 +134,6 @@ impl Transaction {
         let mut tx = Self::new_unsigned(message);
         tx.sign(from_keypairs, recent_blockhash);
         tx
-    }
-
-    pub fn new_signed_instructions<T: Signers>(
-        from_keypairs: &T,
-        instructions: &[Instruction],
-        recent_blockhash: Hash,
-    ) -> Transaction {
-        let message = Message::new(instructions);
-        Self::new(from_keypairs, message, recent_blockhash)
     }
 
     /// Create a signed transaction
@@ -554,7 +523,7 @@ mod tests {
             AccountMeta::new(to, false),
         ];
         let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         Transaction::new(&[&keypair], message, Hash::default())
     }
 
@@ -585,7 +554,7 @@ mod tests {
         let expected_instruction_size = 1 + 1 + ix.accounts.len() + 1 + expected_data_size;
         assert_eq!(expected_instruction_size, 17);
 
-        let message = Message::new(&[ix]);
+        let message = Message::new(&[ix], Some(&alice_pubkey));
         assert_eq!(
             serialized_size(&message.instructions[0]).unwrap() as usize,
             expected_instruction_size,
@@ -641,19 +610,22 @@ mod tests {
     #[should_panic]
     fn test_transaction_missing_key() {
         let keypair = Keypair::new();
-        Transaction::new_unsigned_instructions(&[]).sign(&[&keypair], Hash::default());
+        let message = Message::new(&[], None);
+        Transaction::new_unsigned(message).sign(&[&keypair], Hash::default());
     }
 
     #[test]
     #[should_panic]
     fn test_partial_sign_mismatched_key() {
         let keypair = Keypair::new();
-        Transaction::new_unsigned_instructions(&[Instruction::new(
+        let fee_payer = Pubkey::new_rand();
+        let ix = Instruction::new(
             Pubkey::default(),
             &0,
-            vec![AccountMeta::new(Pubkey::new_rand(), true)],
-        )])
-        .partial_sign(&[&keypair], Hash::default());
+            vec![AccountMeta::new(fee_payer, true)],
+        );
+        let message = Message::new(&[ix], Some(&fee_payer));
+        Transaction::new_unsigned(message).partial_sign(&[&keypair], Hash::default());
     }
 
     #[test]
@@ -661,7 +633,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let mut tx = Transaction::new_unsigned_instructions(&[Instruction::new(
+        let ix = Instruction::new(
             Pubkey::default(),
             &0,
             vec![
@@ -669,7 +641,9 @@ mod tests {
                 AccountMeta::new(keypair1.pubkey(), true),
                 AccountMeta::new(keypair2.pubkey(), true),
             ],
-        )]);
+        );
+        let message = Message::new(&[ix], Some(&keypair0.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
 
         tx.partial_sign(&[&keypair0, &keypair2], Hash::default());
         assert!(!tx.is_signed());
@@ -690,8 +664,8 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        Transaction::new_unsigned_instructions(&[ix])
-            .sign(&Vec::<&Keypair>::new(), Hash::default());
+        let message = Message::new(&[ix], Some(&id0));
+        Transaction::new_unsigned(message).sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
     #[test]
@@ -701,7 +675,8 @@ mod tests {
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
-        Transaction::new_unsigned_instructions(&[ix]).sign(&[&keypair0], Hash::default());
+        let message = Message::new(&[ix], Some(&wrong_id));
+        Transaction::new_unsigned(message).sign(&[&keypair0], Hash::default());
     }
 
     #[test]
@@ -710,7 +685,8 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
+        let message = Message::new(&[ix], Some(&id0));
+        let mut tx = Transaction::new_unsigned(message);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(
             tx.message.instructions[0],
@@ -735,7 +711,8 @@ mod tests {
                 AccountMeta::new(id1, false),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
+        let message = Message::new(&[ix], Some(&id0));
+        let mut tx = Transaction::new_unsigned(message);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(
             tx.message.instructions[0],
@@ -760,7 +737,8 @@ mod tests {
                 AccountMeta::new(presigner_pubkey, true),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
+        let message = Message::new(&[ix], Some(&pubkey));
+        let mut tx = Transaction::new_unsigned(message);
 
         let presigner_sig = presigner_keypair.sign_message(&tx.message_data());
         let presigner = Presigner::new(&presigner_pubkey, &presigner_sig);
@@ -782,7 +760,8 @@ mod tests {
                 AccountMeta::new(presigner_pubkey, true),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
+        let message = Message::new(&[ix], Some(&another_pubkey));
+        let mut tx = Transaction::new_unsigned(message);
 
         let res = tx.try_sign(&signers, Hash::default());
         assert!(res.is_err());

@@ -93,6 +93,7 @@ mod tests {
         account_utils::State as AccountUtilsState,
         hash::Hash,
         instruction::InstructionError,
+        message::Message,
         nonce::{self, account::with_test_keyed_account, Account as NonceAccount, State},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -106,14 +107,12 @@ mod tests {
         let from_pubkey = from_keypair.pubkey();
         let nonce_keypair = Keypair::new();
         let nonce_pubkey = nonce_keypair.pubkey();
-        let tx = Transaction::new_signed_instructions(
-            &[&from_keypair, &nonce_keypair],
-            &[
-                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-                system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-            ],
-            Hash::default(),
-        );
+        let instructions = [
+            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+        ];
+        let message = Message::new(&instructions, Some(&nonce_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
         (from_pubkey, nonce_pubkey, tx)
     }
 
@@ -141,14 +140,12 @@ mod tests {
         let from_pubkey = from_keypair.pubkey();
         let nonce_keypair = Keypair::new();
         let nonce_pubkey = nonce_keypair.pubkey();
-        let tx = Transaction::new_signed_instructions(
-            &[&from_keypair, &nonce_keypair],
-            &[
-                system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-            ],
-            Hash::default(),
-        );
+        let instructions = [
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+        ];
+        let message = Message::new(&instructions, Some(&from_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 
@@ -158,19 +155,17 @@ mod tests {
         let from_pubkey = from_keypair.pubkey();
         let nonce_keypair = Keypair::new();
         let nonce_pubkey = nonce_keypair.pubkey();
-        let tx = Transaction::new_signed_instructions(
-            &[&from_keypair, &nonce_keypair],
-            &[
-                system_instruction::withdraw_nonce_account(
-                    &nonce_pubkey,
-                    &nonce_pubkey,
-                    &from_pubkey,
-                    42,
-                ),
-                system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-            ],
-            Hash::default(),
-        );
+        let instructions = [
+            system_instruction::withdraw_nonce_account(
+                &nonce_pubkey,
+                &nonce_pubkey,
+                &from_pubkey,
+                42,
+            ),
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+        ];
+        let message = Message::new(&instructions, Some(&nonce_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 

@@ -302,6 +302,16 @@ mod bpf {
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
             );
+<<<<<<< HEAD
+=======
+
+            let instruction = Instruction::new(program_id, &9u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
+            );
+>>>>>>> 1c498369b... Remove fee-payer guesswork from Message and Transaction (#10776)
         }
     }
 
@@ -357,10 +367,16 @@ mod bpf {
             let derived_key2 =
                 Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
             let derived_key3 =
+<<<<<<< HEAD
                 Pubkey::create_program_address(&["Gar Ma Nar Nar"], &invoked_program_id).unwrap();
+=======
+                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id)
+                    .unwrap();
+>>>>>>> 1c498369b... Remove fee-payer guesswork from Message and Transaction (#10776)
 
+            let mint_pubkey = mint_keypair.pubkey();
             let account_metas = vec![
-                AccountMeta::new(mint_keypair.pubkey(), true),
+                AccountMeta::new(mint_pubkey, true),
                 AccountMeta::new(argument_keypair.pubkey(), true),
                 AccountMeta::new_readonly(invoked_program_id, false),
                 AccountMeta::new(invoked_argument_keypair.pubkey(), true),
@@ -377,7 +393,7 @@ mod bpf {
 
             let instruction =
                 Instruction::new(invoke_program_id, &TEST_SUCCESS, account_metas.clone());
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert!(bank_client
                 .send_message(
                     &[
@@ -397,7 +413,7 @@ mod bpf {
                 &TEST_PRIVILEGE_ESCALATION_SIGNER,
                 account_metas.clone(),
             );
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
                     .send_message(
@@ -419,7 +435,7 @@ mod bpf {
                 &TEST_PRIVILEGE_ESCALATION_WRITABLE,
                 account_metas.clone(),
             );
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
                     .send_message(

@@ -14,6 +14,7 @@ use solana_metrics::datapoint_info;
 use solana_sdk::{
     client::{Client, SyncClient},
     commitment_config::CommitmentConfig,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     timing::{duration_as_ms, duration_as_s},
@@ -457,16 +458,14 @@ fn swapper<T>(
                 .map(|(signer, swap, profit)| {
                     let s: &Keypair = &signer;
                     let owner = &signer.pubkey();
-                    Transaction::new_signed_instructions(
-                        &[s],
-                        &[exchange_instruction::swap_request(
-                            owner,
-                            &swap.0.pubkey,
-                            &swap.1.pubkey,
-                            &profit,
-                        )],
-                        blockhash,
-                    )
+                    let instruction = exchange_instruction::swap_request(
+                        owner,
+                        &swap.0.pubkey,
+                        &swap.1.pubkey,
+                        &profit,
+                    );
+                    let message = Message::new(&[instruction], Some(&s.pubkey()));
+                    Transaction::new(&[s], message, blockhash)
                 })
                 .collect();
 
@@ -588,28 +587,26 @@ fn trader<T>(
                     let owner_pubkey = &owner.pubkey();
                     let trade_pubkey = &trade.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
-                    Transaction::new_signed_instructions(
-                        &[owner.as_ref(), trade],
-                        &[
-                            system_instruction::create_account(
-                                owner_pubkey,
-                                trade_pubkey,
-                                1,
-                                space,
-                                &id(),
-                            ),
-                            exchange_instruction::trade_request(
-                                owner_pubkey,
-                                trade_pubkey,
-                                *side,
-                                pair,
-                                tokens,
-                                price,
-                                src,
-                            ),
-                        ],
-                        blockhash,
-                    )
+                    let instructions = [
+                        system_instruction::create_account(
+                            owner_pubkey,
+                            trade_pubkey,
+                            1,
+                            space,
+                            &id(),
+                        ),
+                        exchange_instruction::trade_request(
+                            owner_pubkey,
+                            trade_pubkey,
+                            *side,
+                            pair,
+                            tokens,
+                            price,
+                            src,
+                        ),
+                    ];
+                    let message = Message::new(&instructions, Some(&owner_pubkey));
+                    Transaction::new(&[owner.as_ref(), trade], message, blockhash)
                 })
                 .collect();
 
@@ -747,13 +744,9 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
             let mut to_fund_txs: Vec<_> = chunk
                 .par_iter()
                 .map(|(k, m)| {
-                    (
-                        k.clone(),
-                        Transaction::new_unsigned_instructions(&system_instruction::transfer_many(
-                            &k.pubkey(),
-                            &m,
-                        )),
-                    )
+                    let instructions = system_instruction::transfer_many(&k.pubkey(), &m);
+                    let message = Message::new(&instructions, Some(&k.pubkey()));
+                    (k.clone(), Transaction::new_unsigned(message))
                 })
                 .collect();
 
@@ -848,9 +841,10 @@ pub fn create_token_accounts<T: Client>(
                     );
                     let request_ix =
                         exchange_instruction::account_request(owner_pubkey, &new_keypair.pubkey());
+                    let message = Message::new(&[create_ix, request_ix], Some(&owner_pubkey));
                     (
                         (from_keypair, new_keypair),
-                        Transaction::new_unsigned_instructions(&[create_ix, request_ix]),
+                        Transaction::new_unsigned(message),
                     )
                 })
                 .collect();

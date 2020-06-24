@@ -60,7 +60,7 @@ impl AsyncClient for BankClient {
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> Result<Signature> {
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
 
@@ -88,7 +88,7 @@ impl SyncClient for BankClient {
 
     /// Create and process a transaction from a single instruction.
     fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature> {
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         self.send_message(&[keypair], message)
     }
 
@@ -306,7 +306,7 @@ mod tests {
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));
 
-        let message = Message::new(&[transfer_instruction]);
+        let message = Message::new(&[transfer_instruction], Some(&john_pubkey));
         bank_client.send_message(&doe_keypairs, message).unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
     }

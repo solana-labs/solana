@@ -5,6 +5,7 @@ use solana_notifier::Notifier;
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::EpochSchedule,
+    message::Message,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -138,16 +139,18 @@ fn delegate_stake(
             }
         };
 
-        let transaction = Transaction::new_signed_instructions(
+        let instructions = stake_instruction::create_account_and_delegate_stake(
+            &faucet_keypair.pubkey(),
+            &stake_account_keypair.pubkey(),
+            &vote_account_pubkey,
+            &StakeAuthorized::auto(&faucet_keypair.pubkey()),
+            &Lockup::default(),
+            sol_to_lamports(sol_gift as f64),
+        );
+        let message = Message::new(&instructions, Some(&faucet_keypair.pubkey()));
+        let transaction = Transaction::new(
             &[faucet_keypair, &stake_account_keypair],
-            &stake_instruction::create_account_and_delegate_stake(
-                &faucet_keypair.pubkey(),
-                &stake_account_keypair.pubkey(),
-                &vote_account_pubkey,
-                &StakeAuthorized::auto(&faucet_keypair.pubkey()),
-                &Lockup::default(),
-                sol_to_lamports(sol_gift as f64),
-            ),
+            message,
             recent_blockhash,
         );
 

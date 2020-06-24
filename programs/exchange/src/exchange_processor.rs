@@ -604,7 +604,10 @@ mod test {
         );
 
         client
-            .send_message(&[owner, &new], Message::new(&[instruction]))
+            .send_message(
+                &[owner, &new],
+                Message::new(&[instruction], Some(&owner.pubkey())),
+            )
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         new.pubkey()
     }
