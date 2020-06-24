@@ -19,6 +19,7 @@ use solana_perf::test_tx::test_tx;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
@@ -116,9 +117,8 @@ fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
                 let to_key = Pubkey::new_rand();
                 instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
             }
-            let mut new = Transaction::new_unsigned_instructions(&instructions);
-            new.sign(&[&from_key], hash);
-            new
+            let message = Message::new(&instructions, Some(&from_key.pubkey()));
+            Transaction::new(&[&from_key], message, hash)
         })
         .collect()
 }

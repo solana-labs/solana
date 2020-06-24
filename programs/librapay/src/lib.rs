@@ -30,7 +30,10 @@ pub fn create_genesis<T: Client>(from: &Keypair, client: &T, amount: u64) -> Key
     );
 
     client
-        .send_message(&[&from, &genesis], Message::new(&[instruction], Some(&from.pubkey())))
+        .send_message(
+            &[&from, &genesis],
+            Message::new(&[instruction], Some(&from.pubkey())),
+        )
         .unwrap();
 
     let instruction = librapay_instruction::genesis(&genesis.pubkey(), amount);

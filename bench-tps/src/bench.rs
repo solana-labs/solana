@@ -14,6 +14,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction, system_transaction,
@@ -652,10 +653,9 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
             .par_iter()
             .map(|(k, t)| {
-                let tx = Transaction::new_unsigned_instructions(
-                    &system_instruction::transfer_many(&k.pubkey(), &t),
-                );
-                (*k, tx)
+                let instructions = system_instruction::transfer_many(&k.pubkey(), &t);
+                let message = Message::new(&instructions, Some(&k.pubkey()));
+                (*k, Transaction::new_unsigned(message))
             })
             .collect();
         make_txs.stop();
@@ -1023,11 +1023,9 @@ fn fund_move_keys<T: Client>(
         .iter()
         .map(|key| (key.pubkey(), total / NUM_FUNDING_KEYS as u64))
         .collect();
-    let tx = Transaction::new_signed_instructions(
-        &[funding_key],
-        &system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
-        blockhash,
-    );
+    let instructions = system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts);
+    let message = Message::new(&instructions, Some(&funding_key.pubkey()));
+    let tx = Transaction::new(&[funding_key], message, blockhash);
     client.send_message(&[funding_key], tx.message).unwrap();
     let mut balance = 0;
     for _ in 0..20 {

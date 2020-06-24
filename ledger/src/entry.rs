@@ -677,6 +677,7 @@ mod tests {
     use solana_budget_program::budget_instruction;
     use solana_sdk::{
         hash::{hash, Hash},
+        message::Message,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
@@ -687,19 +688,22 @@ mod tests {
         let budget_contract = Keypair::new();
         let budget_pubkey = budget_contract.pubkey();
         let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
-        Transaction::new_signed_instructions(&[keypair, &budget_contract], &ixs, hash)
+        let message = Message::new(&ixs, Some(&pubkey));
+        Transaction::new(&[keypair, &budget_contract], message, hash)
     }
 
     fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-        Transaction::new_signed_instructions(&[keypair], &[ix], hash)
+        let message = Message::new(&[ix], Some(&pubkey));
+        Transaction::new(&[keypair], message, hash)
     }
 
     fn create_sample_apply_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
-        Transaction::new_signed_instructions(&[keypair], &[ix], hash)
+        let message = Message::new(&[ix], Some(&pubkey));
+        Transaction::new(&[keypair], message, hash)
     }
 
     #[test]

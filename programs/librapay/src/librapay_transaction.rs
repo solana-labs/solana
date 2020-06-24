@@ -8,6 +8,7 @@ use solana_sdk::{
     client::Client,
     commitment_config::CommitmentConfig,
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
@@ -87,7 +88,8 @@ pub fn create_accounts(
 
     let mut from_signers = vec![from_keypair];
     from_signers.extend_from_slice(to_keypair);
-    Transaction::new_signed_instructions(&from_signers, &instructions, recent_blockhash)
+    let message = Message::new(&instructions, Some(&from_keypair.pubkey()));
+    Transaction::new(&from_signers, message, recent_blockhash)
 }
 
 pub fn create_account(
