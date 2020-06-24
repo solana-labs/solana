@@ -20,8 +20,8 @@ pub enum SystemInstruction {
 and a constructor:
 
 ```rust,ignore
-pub fn assign(pubkey: &Pubkey, owner: &Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*pubkey, true)];
+pub fn assign(assigned_account: &Pubkey, owner: &Pubkey) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*assigned_account, true)];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::Assign { owner: *owner },
@@ -46,11 +46,11 @@ use solana_sdk::{
     pubkey::Pubkey;
 };
 
-#[program(system_program::id())]
+#[instructions(system_program::id())]
 pub enum SystemInstruction {
     /// Assign account to a program
     #[accounts([
-        (pubkey, [WRITE, SIGNER], "Assigned account public key"),
+        (assigned_account, [WRITE, SIGNER], "Assigned account public key"),
     ])]
     Assign {
         /// Owner program account
@@ -75,10 +75,10 @@ pub enum SystemInstruction {
 
 /// Assign account to a program
 ///
-/// * `pubkey` - [WRITE, SIGNER] Assigned account public key
+/// * `assigned_account` - [WRITE, SIGNER] Assigned account public key
 /// * `owner` - Owner program account
-pub fn assign(pubkey: Pubkey, owner: Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(pubkey, true)];
+pub fn assign(assigned_account: Pubkey, owner: Pubkey) -> Instruction {
+    let account_metas = vec![AccountMeta::new(assigned_account, true)];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::Assign { owner },
@@ -100,3 +100,103 @@ Considerations:
 * How to denote optional accounts?
 * How to denote "varargs", all remaining accounts, and which should be signed
   or writable?
+
+## Next steps
+
+A mod attribute:
+
+```rust,ignore
+#[program]
+mod system {
+    /// Assign account to a program
+    #[accounts([
+        (assigned_account, [WRITE, SIGNER], "Assigned account public key"),
+    ])]
+    fn assign(
+        assigned_account: &KeyedAccount,
+        owner: &Pubkey,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        // no work to do, just return
+        if assigned_account.account.owner == *owner {
+            return Ok(());
+        }
+
+        if !address.is_signer(&signers) {
+            debug!("Assign: account must sign");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        // guard against sysvars being made
+        if sysvar::check_id(&owner) {
+            debug!("Assign: program id {} invalid", owner);
+            return Err(SystemError::InvalidProgramId.into());
+        }
+
+        assigned_account.account.owner = *owner;
+        Ok(())
+    }
+}
+```
+
+To generate the `process_instruction` implementation and the enum,
+complete with `accounts` attribute:
+
+```rust,ignore
+#[instructions(system_program::id())]
+pub enum SystemInstruction {
+    /// Assign account to a program
+    #[accounts([
+        (assigned_account, [WRITE, SIGNER], "Assigned account public key"),
+    ])]
+    Assign {
+        /// Owner program account
+        owner: Pubkey,
+    },
+}
+
+mod system {
+    /// Assign account to a program
+    fn assign(
+        assigned_account: &KeyedAccount,
+        owner: &Pubkey,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        // no work to do, just return
+        if assigned_account.account.owner == *owner {
+            return Ok(());
+        }
+
+        if !address.is_signer(&signers) {
+            debug!("Assign: account must sign");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        // guard against sysvars being made
+        if sysvar::check_id(&owner) {
+            debug!("Assign: program id {} invalid", owner);
+            return Err(SystemError::InvalidProgramId.into());
+        }
+
+        assigned_account.account.owner = *owner;
+        Ok(())
+    }
+}
+
+pub fn process_instruction(
+    _owner: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+) -> Result<(), InstructionError> {
+    let instruction = limited_deserialize(instruction_data)?;
+    let signers = get_signers(keyed_accounts);
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
+
+    match instruction {
+       SystemInstruction::Assign { owner } => {
+            let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            system::assign(&keyed_account, &owner, &signers)
+       }
+    }
+}
+```
