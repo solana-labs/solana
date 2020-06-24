@@ -3,7 +3,7 @@ import { useCluster, ClusterStatus, Cluster } from "../providers/cluster";
 
 function ClusterStatusButton({
   onClick,
-  expand
+  expand,
 }: {
   onClick: () => void;
   expand?: boolean;

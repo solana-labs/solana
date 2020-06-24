@@ -3,7 +3,7 @@ import {
   TransactionInstruction,
   SignatureResult,
   StakeInstruction,
-  StakeProgram
+  StakeProgram,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";

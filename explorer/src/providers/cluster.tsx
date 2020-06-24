@@ -6,21 +6,21 @@ import { useHistory, useLocation } from "react-router-dom";
 export enum ClusterStatus {
   Connected,
   Connecting,
-  Failure
+  Failure,
 }
 
 export enum Cluster {
   MainnetBeta,
   Testnet,
   Devnet,
-  Custom
+  Custom,
 }
 
 export const CLUSTERS = [
   Cluster.MainnetBeta,
   Cluster.Testnet,
   Cluster.Devnet,
-  Cluster.Custom
+  Cluster.Custom,
 ];
 
 export function clusterSlug(cluster: Cluster): string {
@@ -128,7 +128,7 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   const [state, dispatch] = React.useReducer(clusterReducer, {
     cluster: DEFAULT_CLUSTER,
     customUrl: "",
-    status: ClusterStatus.Connecting
+    status: ClusterStatus.Connecting,
   });
   const [showModal, setShowModal] = React.useState(false);
   const query = useQuery();
@@ -169,7 +169,7 @@ async function updateCluster(
   dispatch({
     status: ClusterStatus.Connecting,
     cluster,
-    customUrl
+    customUrl,
   });
 
   try {
@@ -179,7 +179,7 @@ async function updateCluster(
       status: ClusterStatus.Connected,
       cluster,
       customUrl,
-      firstAvailableBlock
+      firstAvailableBlock,
     });
   } catch (error) {
     console.error("Failed to update cluster", error);
@@ -206,7 +206,7 @@ export function useCluster() {
   return {
     ...context,
     url: clusterUrl(context.cluster, context.customUrl),
-    name: clusterName(context.cluster)
+    name: clusterName(context.cluster),
   };
 }
 

@@ -3,7 +3,7 @@ import {
   TransactionInstruction,
   SystemProgram,
   SignatureResult,
-  SystemInstruction
+  SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";

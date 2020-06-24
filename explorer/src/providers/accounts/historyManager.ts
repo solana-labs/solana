@@ -2,7 +2,7 @@ import {
   TransactionSignature,
   Connection,
   PublicKey,
-  SignatureStatus
+  SignatureStatus,
 } from "@solana/web3.js";
 
 const MAX_STATUS_BATCH_SIZE = 256;
@@ -101,7 +101,7 @@ export class HistoryManager {
         range.min = Math.max(nextRange.min - slotLookBack, fullRange.min);
         nextRange = {
           min: range.min,
-          max: nextRange.min - 1
+          max: nextRange.min - 1,
         };
       }
 
@@ -111,14 +111,14 @@ export class HistoryManager {
         const batch = signatures.splice(0, MAX_STATUS_BATCH_SIZE);
         const statuses = (
           await this.connection.getSignatureStatuses(batch, {
-            searchTransactionHistory: true
+            searchTransactionHistory: true,
           })
         ).value;
         statuses.forEach((status, index) => {
           if (status !== null) {
             transactions.push({
               signature: batch[index],
-              status
+              status,
             });
           }
         });

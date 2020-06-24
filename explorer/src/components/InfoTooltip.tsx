@@ -13,7 +13,7 @@ function Popover({
   state,
   bottom,
   right,
-  text
+  text,
 }: {
   state: State;
   bottom?: boolean;

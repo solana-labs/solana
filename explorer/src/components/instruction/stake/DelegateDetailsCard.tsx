@@ -3,7 +3,7 @@ import {
   TransactionInstruction,
   SignatureResult,
   StakeInstruction,
-  StakeProgram
+  StakeProgram,
 } from "@solana/web3.js";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";

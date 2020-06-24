@@ -9,7 +9,7 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 
 export function StakeAccountCards({
   account,
-  stakeAccount
+  stakeAccount,
 }: {
   account: Account;
   stakeAccount: StakeAccount;
@@ -40,7 +40,7 @@ function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
 
 function OverviewCard({
   account,
-  stakeAccount
+  stakeAccount,
 }: {
   account: Account;
   stakeAccount: StakeAccount;

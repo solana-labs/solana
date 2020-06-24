@@ -17,7 +17,7 @@ export function InstructionCard({
   result,
   index,
   ix,
-  defaultRaw
+  defaultRaw,
 }: InstructionProps) {
   const [resultClass] = ixResult(result, index);
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
@@ -36,7 +36,7 @@ export function InstructionCard({
           className={`btn btn-sm d-flex ${
             showRaw ? "btn-dark active" : "btn-white"
           }`}
-          onClick={() => setShowRaw(r => !r)}
+          onClick={() => setShowRaw((r) => !r)}
         >
           <span className="fe fe-code mr-1"></span>
           Raw

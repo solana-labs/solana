@@ -6,7 +6,7 @@ import { useCluster, ClusterStatus } from "./cluster";
 export enum Status {
   Idle,
   Disconnected,
-  Connecting
+  Connecting,
 }
 
 type RichLists = {
@@ -60,12 +60,12 @@ async function fetch(dispatch: Dispatch, url: string) {
       await Promise.all([
         connection.getLargestAccounts(),
         connection.getLargestAccounts({ filter: "circulating" }),
-        connection.getLargestAccounts({ filter: "nonCirculating" })
+        connection.getLargestAccounts({ filter: "nonCirculating" }),
       ])
-    ).map(response => response.value);
+    ).map((response) => response.value);
 
     // Update state if still connecting
-    dispatch(state => {
+    dispatch((state) => {
       if (state !== Status.Connecting) return state;
       return { total, circulating, nonCirculating };
     });

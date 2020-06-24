@@ -9,7 +9,7 @@ import {
   useFetchAccountInfo,
   useAccountInfo,
   useAccountHistory,
-  Account
+  Account,
 } from "providers/accounts";
 import { lamportsToSolString } from "utils";
 import Copyable from "./Copyable";
@@ -50,8 +50,8 @@ export default function AccountDetails({ address }: Props) {
     <input
       type="text"
       value={search}
-      onChange={e => setSearch(e.target.value)}
-      onKeyUp={e => e.key === "Enter" && updateAddress()}
+      onChange={(e) => setSearch(e.target.value)}
+      onKeyUp={(e) => e.key === "Enter" && updateAddress()}
       className="form-control form-control-prepended search text-monospace"
       placeholder="Search for address"
     />
@@ -252,9 +252,9 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
           <td>
             <Link
-              to={location => ({
+              to={(location) => ({
                 ...location,
-                pathname: "/tx/" + signature
+                pathname: "/tx/" + signature,
               })}
               className="btn btn-rounded-circle btn-white btn-sm"
             >

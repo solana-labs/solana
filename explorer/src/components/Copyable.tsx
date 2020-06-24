@@ -12,7 +12,7 @@ type State = "hide" | "copy" | "copied";
 function Popover({
   state,
   bottom,
-  right
+  right,
 }: {
   state: State;
   bottom?: boolean;

@@ -6,7 +6,7 @@ import { useCluster, ClusterStatus } from "./cluster";
 export enum Status {
   Idle,
   Disconnected,
-  Connecting
+  Connecting,
 }
 
 type State = Supply | Status | string;
@@ -45,7 +45,7 @@ async function fetch(dispatch: Dispatch, url: string) {
     const supply = (await connection.getSupply()).value;
 
     // Update state if still connecting
-    dispatch(state => {
+    dispatch((state) => {
       if (state !== Status.Connecting) return state;
       return supply;
     });

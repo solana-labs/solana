@@ -9,7 +9,7 @@ export { useAccountHistory } from "./history";
 export enum FetchStatus {
   Fetching,
   FetchFailed,
-  Fetched
+  Fetched,
 }
 
 export interface Details {
@@ -35,7 +35,7 @@ interface State {
 
 export enum ActionType {
   Update,
-  Fetch
+  Fetch,
 }
 
 interface Update {
@@ -67,8 +67,8 @@ function reducer(state: State, action: Action): State {
           [address]: {
             id: account.id,
             pubkey: account.pubkey,
-            status: FetchStatus.Fetching
-          }
+            status: FetchStatus.Fetching,
+          },
         };
         return { ...state, accounts };
       } else {
@@ -78,8 +78,8 @@ function reducer(state: State, action: Action): State {
           [address]: {
             id: idCounter,
             status: FetchStatus.Fetching,
-            pubkey: action.pubkey
-          }
+            pubkey: action.pubkey,
+          },
         };
         return { ...state, accounts, idCounter };
       }
@@ -93,8 +93,8 @@ function reducer(state: State, action: Action): State {
           ...state.accounts,
           [address]: {
             ...account,
-            ...action.data
-          }
+            ...action.data,
+          },
         };
         return { ...state, accounts };
       }
@@ -114,30 +114,30 @@ type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {
     idCounter: 0,
-    accounts: {}
+    accounts: {},
   });
 
   const { status, url } = useCluster();
 
   // Check account statuses on startup and whenever cluster updates
   React.useEffect(() => {
-    Object.keys(state.accounts).forEach(address => {
+    Object.keys(state.accounts).forEach((address) => {
       fetchAccountInfo(dispatch, new PublicKey(address), url, status);
     });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const query = useQuery();
-  const values = ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(key =>
+  const values = ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map((key) =>
     query.get(key)
   );
   React.useEffect(() => {
     values
       .filter((value): value is string => value !== null)
-      .flatMap(value => value.split(","))
+      .flatMap((value) => value.split(","))
       // Remove duplicates
       .filter((item, pos, self) => self.indexOf(item) === pos)
-      .filter(address => !state.accounts[address])
-      .forEach(address => {
+      .filter((address) => !state.accounts[address])
+      .forEach((address) => {
         try {
           fetchAccountInfo(dispatch, new PublicKey(address), url, status);
         } catch (err) {
@@ -164,7 +164,7 @@ async function fetchAccountInfo(
 ) {
   dispatch({
     type: ActionType.Fetch,
-    pubkey
+    pubkey,
   });
 
   // We will auto-refetch when status is no longer connecting
@@ -196,7 +196,7 @@ async function fetchAccountInfo(
         space: result.data.length,
         executable: result.executable,
         owner: result.owner,
-        data
+        data,
       };
     }
     fetchStatus = FetchStatus.Fetched;
@@ -217,7 +217,7 @@ export function useAccounts() {
     idCounter: context.idCounter,
     accounts: Object.values(context.accounts).sort((a, b) =>
       a.id <= b.id ? 1 : -1
-    )
+    ),
   };
 }
 
