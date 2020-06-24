@@ -92,22 +92,6 @@ case "$gpuMode" in
     ;;
 esac
 
-waitForNodeToInit() {
-  hostname=$(hostname)
-  echo "--- waiting for $hostname to boot up"
-  SECONDS=
-  while [[ ! -r $initCompleteFile ]]; do
-    if [[ $SECONDS -ge 600 ]]; then
-      echo "^^^ +++"
-      echo "Error: $initCompleteFile not found in $SECONDS seconds"
-      exit 1
-    fi
-    echo "Waiting for $initCompleteFile ($SECONDS) on $hostname..."
-    sleep 5
-  done
-  echo "$hostname booted up"
-}
-
 case $deployMethod in
 local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
@@ -258,7 +242,7 @@ cat >> ~/solana/on-reboot <<EOF
     disown
 EOF
     ~/solana/on-reboot
-    waitForNodeToInit
+    net/remote/remote-node-wait-init.sh 600
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
@@ -377,7 +361,7 @@ cat >> ~/solana/on-reboot <<EOF
     disown
 EOF
     ~/solana/on-reboot
-    waitForNodeToInit
+    net/remote/remote-node-wait-init.sh 600
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
       # Wait for the validator to catch up to the bootstrap validator before
