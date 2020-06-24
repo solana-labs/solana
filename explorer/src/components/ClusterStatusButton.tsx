@@ -21,7 +21,7 @@ function Button({ expand }: { expand?: boolean }) {
 
   const btnClasses = (variant: string) => {
     if (expand) {
-      return `btn b-white lift d-block btn-${variant}`;
+      return `btn lift d-block btn-${variant}`;
     } else {
       return `btn b-white lift btn-outline-${variant}`;
     }
