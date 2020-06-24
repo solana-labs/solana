@@ -7049,6 +7049,44 @@
             ]
           ],
           "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"num_recovered\") AS \"num_recovered\" FROM \"$testnet\".\"autogen\".\"recv-window-insert-shreds\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "thresholds": [],
