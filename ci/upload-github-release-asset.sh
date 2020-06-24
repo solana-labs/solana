@@ -42,6 +42,7 @@ echo "Github release id for $CI_TAG is $releaseId"
 for file in "$@"; do
   echo "--- Uploading $file to tag $CI_TAG of $CI_REPO_SLUG"
   curl \
+    --verbose \
     --data-binary @"$file" \
     -H "Authorization: token $GITHUB_TOKEN" \
     -H "Content-Type: application/octet-stream" \
