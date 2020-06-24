@@ -471,7 +471,7 @@ mod test {
             .send_transaction_with_config(
                 &Transaction::new(
                     &[&payer, &stake3_keypair],
-                    Message::new_with_payer(
+                    Message::new(
                         &[stake_instruction::withdraw(
                             &stake3_keypair.pubkey(),
                             &stake3_keypair.pubkey(),
@@ -525,7 +525,7 @@ mod test {
             .send_transaction_with_config(
                 &Transaction::new(
                     &[&payer, &stake5_keypair],
-                    Message::new_with_payer(
+                    Message::new(
                         &stake_instruction::split(
                             &stake4_keypair.pubkey(),
                             &payer.pubkey(),

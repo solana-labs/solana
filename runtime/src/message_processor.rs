@@ -606,7 +606,7 @@ mod tests {
                 AccountMeta::new(keys[not_owned_index], false),
                 AccountMeta::new(keys[owned_index], false),
             ];
-            let message = Message::new_with_payer(
+            let message = Message::new(
                 &[Instruction::new(program_ids[owned_index], &[0_u8], metas)],
                 None,
             );
@@ -1103,11 +1103,14 @@ mod tests {
             AccountMeta::new(from_pubkey, true),
             AccountMeta::new_readonly(to_pubkey, false),
         ];
-        let message = Message::new(&[Instruction::new(
-            mock_system_program_id,
-            &MockSystemInstruction::Correct,
-            account_metas.clone(),
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_system_program_id,
+                &MockSystemInstruction::Correct,
+                account_metas.clone(),
+            )],
+            Some(&from_pubkey),
+        );
 
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
@@ -1115,11 +1118,14 @@ mod tests {
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
 
-        let message = Message::new(&[Instruction::new(
-            mock_system_program_id,
-            &MockSystemInstruction::AttemptCredit { lamports: 50 },
-            account_metas.clone(),
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_system_program_id,
+                &MockSystemInstruction::AttemptCredit { lamports: 50 },
+                account_metas.clone(),
+            )],
+            Some(&from_pubkey),
+        );
 
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
@@ -1131,11 +1137,14 @@ mod tests {
             ))
         );
 
-        let message = Message::new(&[Instruction::new(
-            mock_system_program_id,
-            &MockSystemInstruction::AttemptDataChange { data: 50 },
-            account_metas,
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_system_program_id,
+                &MockSystemInstruction::AttemptDataChange { data: 50 },
+                account_metas,
+            )],
+            Some(&from_pubkey),
+        );
 
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
@@ -1229,11 +1238,14 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(&[Instruction::new(
-            mock_program_id,
-            &MockSystemInstruction::BorrowFail,
-            account_metas.clone(),
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_program_id,
+                &MockSystemInstruction::BorrowFail,
+                account_metas.clone(),
+            )],
+            Some(&from_pubkey),
+        );
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(
@@ -1245,24 +1257,30 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(&[Instruction::new(
-            mock_program_id,
-            &MockSystemInstruction::MultiBorrowMut,
-            account_metas.clone(),
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_program_id,
+                &MockSystemInstruction::MultiBorrowMut,
+                account_metas.clone(),
+            )],
+            Some(&from_pubkey),
+        );
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
-        let message = Message::new(&[Instruction::new(
-            mock_program_id,
-            &MockSystemInstruction::DoWork {
-                lamports: 10,
-                data: 42,
-            },
-            account_metas,
-        )]);
+        let message = Message::new(
+            &[Instruction::new(
+                mock_program_id,
+                &MockSystemInstruction::DoWork {
+                    lamports: 10,
+                    data: 42,
+                },
+                account_metas,
+            )],
+            Some(&from_pubkey),
+        );
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
         assert_eq!(result, Ok(()));
@@ -1349,7 +1367,7 @@ mod tests {
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new_with_payer(&[instruction], None);
+        let message = Message::new(&[instruction], None);
         assert_eq!(
             message_processor.process_cross_program_instruction(
                 &message,
@@ -1376,7 +1394,7 @@ mod tests {
 
         for case in cases {
             let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
-            let message = Message::new_with_payer(&[instruction], None);
+            let message = Message::new(&[instruction], None);
             assert_eq!(
                 message_processor.process_cross_program_instruction(
                     &message,

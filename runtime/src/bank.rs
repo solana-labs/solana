@@ -5452,7 +5452,7 @@ mod tests {
         let mut transfer_instruction =
             system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
         transfer_instruction.accounts[0].is_signer = false;
-        let message = Message::new_with_payer(&[transfer_instruction], None);
+        let message = Message::new(&[transfer_instruction], None);
         let tx = Transaction::new(&[&Keypair::new(); 0], message, bank.last_blockhash());
 
         assert_eq!(

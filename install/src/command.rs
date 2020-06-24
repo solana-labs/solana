@@ -243,7 +243,7 @@ fn store_update_manifest(
         update_manifest,
     );
 
-    let message = Message::new_with_payer(&[instruction], Some(&from_keypair.pubkey()));
+    let message = Message::new(&[instruction], Some(&from_keypair.pubkey()));
     let transaction = Transaction::new(&signers, message, recent_blockhash);
     rpc_client.send_and_confirm_transaction(&transaction)?;
     Ok(())

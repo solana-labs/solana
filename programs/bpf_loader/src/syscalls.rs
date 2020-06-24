@@ -774,7 +774,7 @@ fn call<'a>(
         ro_regions,
     )?;
     verify_instruction(syscall, &instruction, &signers)?;
-    let message = Message::new_with_payer(&[instruction], None);
+    let message = Message::new(&[instruction], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
     let (accounts, refs) = syscall.translate_accounts(

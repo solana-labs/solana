@@ -51,7 +51,7 @@ pub(crate) fn new_stake_account(
         &lockup,
         lamports,
     );
-    Message::new_with_payer(&instructions, Some(fee_payer_pubkey))
+    Message::new(&instructions, Some(fee_payer_pubkey))
 }
 
 fn authorize_stake_accounts_instructions(
@@ -96,7 +96,7 @@ fn rebase_stake_account(
         new_base_pubkey,
         &i.to_string(),
     );
-    let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+    let message = Message::new(&instructions, Some(&fee_payer_pubkey));
     Some(message)
 }
 
@@ -133,7 +133,7 @@ fn move_stake_account(
     );
 
     instructions.extend(authorize_instructions.into_iter());
-    let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+    let message = Message::new(&instructions, Some(&fee_payer_pubkey));
     Some(message)
 }
 
@@ -157,7 +157,7 @@ pub(crate) fn authorize_stake_accounts(
                 new_stake_authority_pubkey,
                 new_withdraw_authority_pubkey,
             );
-            Message::new_with_payer(&instructions, Some(&fee_payer_pubkey))
+            Message::new(&instructions, Some(&fee_payer_pubkey))
         })
         .collect::<Vec<_>>()
 }
@@ -217,7 +217,7 @@ pub(crate) fn lockup_stake_accounts(
                 return None;
             }
             let instruction = stake_instruction::set_lockup(address, &lockup, custodian_pubkey);
-            let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
+            let message = Message::new(&[instruction], Some(&fee_payer_pubkey));
             Some(message)
         })
         .collect()

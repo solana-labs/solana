@@ -171,7 +171,7 @@ impl<'a> ThinClient<'a> {
     ) -> Result<(Transaction, u64)> {
         let create_instruction =
             system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
-        let message = Message::new(&[create_instruction]);
+        let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
         self.send_message(message, &[sender_keypair])
     }
 

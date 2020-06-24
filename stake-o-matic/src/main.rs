@@ -642,7 +642,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             );
             source_stake_lamports_required += config.baseline_stake_amount;
             create_stake_transactions.push((
-                Transaction::new_unsigned(Message::new_with_payer(
+                Transaction::new_unsigned(Message::new(
                     &stake_instruction::split_with_seed(
                         &config.source_stake_address,
                         &config.authorized_staker.pubkey(),
@@ -680,7 +680,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             );
             source_stake_lamports_required += config.bonus_stake_amount;
             create_stake_transactions.push((
-                Transaction::new_unsigned(Message::new_with_payer(
+                Transaction::new_unsigned(Message::new(
                     &stake_instruction::split_with_seed(
                         &config.source_stake_address,
                         &config.authorized_staker.pubkey(),
@@ -712,7 +712,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // Delegate baseline stake
             if !stake_activated_in_current_epoch.contains(&baseline_stake_address) {
                 delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new_with_payer(
+                    Transaction::new_unsigned(Message::new(
                         &[stake_instruction::delegate_stake(
                             &baseline_stake_address,
                             &config.authorized_staker.pubkey(),
@@ -734,7 +734,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
                         delegate_stake_transactions.push((
                         Transaction::new_unsigned(
-                        Message::new_with_payer(
+                        Message::new(
                             &[stake_instruction::delegate_stake(
                                 &bonus_stake_address,
                                 &config.authorized_staker.pubkey(),
@@ -754,7 +754,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     // Deactivate bonus stake
                     delegate_stake_transactions.push((
                     Transaction::new_unsigned(
-                    Message::new_with_payer(
+                    Message::new(
                         &[stake_instruction::deactivate_stake(
                             &bonus_stake_address,
                             &config.authorized_staker.pubkey(),
@@ -779,7 +779,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             {
                 // Deactivate baseline stake
                 delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new_with_payer(
+                    Transaction::new_unsigned(Message::new(
                         &[stake_instruction::deactivate_stake(
                             &baseline_stake_address,
                             &config.authorized_staker.pubkey(),
@@ -795,7 +795,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
                 // Deactivate bonus stake
                 delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new_with_payer(
+                    Transaction::new_unsigned(Message::new(
                         &[stake_instruction::deactivate_stake(
                             &bonus_stake_address,
                             &config.authorized_staker.pubkey(),

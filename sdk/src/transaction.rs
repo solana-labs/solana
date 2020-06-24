@@ -113,6 +113,18 @@ impl Sanitize for Transaction {
     }
 }
 
+/// Return the pubkey of the first writable signer in the given set of instructions.
+fn find_writable_signer(instructions: &[Instruction]) -> Option<&Pubkey> {
+    for instruction in instructions {
+        for account in &instruction.accounts {
+            if account.is_signer && account.is_writable {
+                return Some(&account.pubkey);
+            }
+        }
+    }
+    None
+}
+
 impl Transaction {
     pub fn new_unsigned(message: Message) -> Self {
         Self {
@@ -122,7 +134,7 @@ impl Transaction {
     }
 
     pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new(instructions, payer);
         Self::new_unsigned(message)
     }
 
@@ -132,7 +144,7 @@ impl Transaction {
         signing_keypairs: &T,
         recent_blockhash: Hash,
     ) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
@@ -153,7 +165,8 @@ impl Transaction {
     }
 
     pub fn new_unsigned_instructions(instructions: &[Instruction]) -> Self {
-        let message = Message::new(instructions);
+        let payer = find_writable_signer(instructions).expect("no suitable key for fee-payer");
+        let message = Message::new(instructions, Some(&payer));
         Self::new_unsigned(message)
     }
 
@@ -172,7 +185,8 @@ impl Transaction {
         instructions: &[Instruction],
         recent_blockhash: Hash,
     ) -> Transaction {
-        let message = Message::new(instructions);
+        let payer = find_writable_signer(instructions).expect("no suitable key for fee-payer");
+        let message = Message::new(instructions, Some(&payer));
         Self::new(from_keypairs, message, recent_blockhash)
     }
 
@@ -563,7 +577,7 @@ mod tests {
             AccountMeta::new(to, false),
         ];
         let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         Transaction::new(&[&keypair], message, Hash::default())
     }
 
@@ -594,7 +608,7 @@ mod tests {
         let expected_instruction_size = 1 + 1 + ix.accounts.len() + 1 + expected_data_size;
         assert_eq!(expected_instruction_size, 17);
 
-        let message = Message::new(&[ix]);
+        let message = Message::new(&[ix], Some(&alice_pubkey));
         assert_eq!(
             serialized_size(&message.instructions[0]).unwrap() as usize,
             expected_instruction_size,

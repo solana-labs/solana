@@ -125,9 +125,10 @@ impl Faucet {
                     );
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
+                    let mint_pubkey = self.mint_keypair.pubkey();
                     let create_instruction =
-                        system_instruction::transfer(&self.mint_keypair.pubkey(), &to, lamports);
-                    let message = Message::new(&[create_instruction]);
+                        system_instruction::transfer(&mint_pubkey, &to, lamports);
+                    let message = Message::new(&[create_instruction], Some(&mint_pubkey));
                     Ok(Transaction::new(&[&self.mint_keypair], message, blockhash))
                 } else {
                     Err(Error::new(
@@ -413,7 +414,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let expected_instruction = system_instruction::transfer(&keypair.pubkey(), &to, lamports);
-        let message = Message::new(&[expected_instruction]);
+        let message = Message::new(&[expected_instruction], Some(&keypair.pubkey()));
         let expected_tx = Transaction::new(&[&keypair], message, blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();
         let mut expected_vec_with_length = vec![0; 2];

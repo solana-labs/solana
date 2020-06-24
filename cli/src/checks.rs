@@ -137,11 +137,11 @@ mod tests {
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
-        let message0 = Message::new(&[ix0]);
+        let message0 = Message::new(&[ix0], Some(&pubkey0));
 
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
-        let message1 = Message::new(&[ix0, ix1]);
+        let message1 = Message::new(&[ix0, ix1], Some(&pubkey0));
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
@@ -225,13 +225,13 @@ mod tests {
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
-        let message0 = Message::new(&[ix0]);
+        let message0 = Message::new(&[ix0], Some(&pubkey0));
         assert_eq!(calculate_fee(&fee_calculator, &[&message0]), 1);
 
         // Two messages, additive fees.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
-        let message1 = Message::new(&[ix0, ix1]);
+        let message1 = Message::new(&[ix0, ix1], Some(&pubkey0));
         assert_eq!(calculate_fee(&fee_calculator, &[&message0, &message1]), 3);
     }
 
