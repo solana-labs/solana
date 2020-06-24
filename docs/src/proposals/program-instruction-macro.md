@@ -12,138 +12,146 @@ decoding the account-key list into human-readable identifiers requires manual
 parsing. Our current Instruction enums have that account information, but only
 in variant docs.
 
+Similarly, we have instruction constructor functions that duplicate nearly all
+the information in the enum, but we can't generate that constructor from the
+enum definition because the list of account references is in code comments.
+
 Also, Instruction docs can vary between implementations, as there is no
 mechanism to ensure consistency.
 
 ## Proposed Solution
 
-Implement a procedural macro that parses an Instruction enum and generates a
-second, verbose enum that contains account details and implements a conversion
-method between the two enums.
-
-Parsing the account documentation as it is would be brittle; a better method
-would be to store account information in an  attribute for each Instruction
-variant, which could be checked for correctness on compile. The macro would
-parse this `accounts` attribute to generate the account fields on the new enum,
-as well as generate pretty, consistent documentation for the Instruction enum
-itself.
-
-The macro could also support a `verbose_derive` item-level attribute in order to
-enable custom configuration of derived traits for the verbose enum.
+Move the data from code comments to attributes, such that the constructors
+can be generated, and include all the documentation from the enum definition.
 
 Here is an example of an Instruction enum using the new accounts format:
 
-```text
-#[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ProgramInstruction)]
-#[verbose_derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+```rust,ignore
+#[instructions(test_program::id())]
 pub enum TestInstruction {
-    /// Consumes a stored nonce, replacing it with a successor
-    #[accounts(
-        nonce_account(is_signer = true, is_writable = true, desc = "Nonce account"),
-        recent_blockhashes_sysvar(desc = "RecentBlockhashes sysvar"),
-        nonce_authority(is_signer = true, desc = "Nonce authority"),
-    )]
-    AdvanceNonceAccount,
-
     /// Transfer lamports
     #[accounts(
-        funding_account(is_signer = true, is_writable = true, desc = "Funding account"),
-        recipient_account(is_writable = true, desc = "Recipient account"),
+        from_account(signer, writable, desc = "Funding account"),
+        to_account(writable, desc = "Recipient account"),
     )]
     Transfer {
         lamports: u64,
     },
 
-    /// Drive state of Uninitalized nonce account to Initialized, setting the nonce value
-    ///
-    /// No signatures are required to execute this instruction, enabling derived
-    /// nonce account addresses
+    /// Provide M of N required signatures
     #[accounts(
-        nonce_account(is_signer = true,is_writable = true, desc = "Nonce account"),
-        recent_blockhashes_sysvar(desc = "RecentBlockhashes sysvar"),
-        rent_sysvar(desc = "Rent sysvar"),
+        data_account(writable, desc = "Data account"),
+        signer(signer, multiple, desc = "Signer"),
     )]
-    InitializeNonceAccount {
-        /// Specifies the entity authorized to execute nonce instruction on the account
-        pubkey: Pubkey,
-    },
-}
+    Multisig,
 
-mod tests {
-
-    #[test]
-    fn test_from() {
-        use super::*;
-        let transfer = TestInstruction::Transfer { lamports: 42 };
-        let verbose_transfer = TestInstructionVerbose::from_instruction(transfer, vec![2, 3]);
-        assert_eq!(
-            verbose_transfer,
-            TestInstructionVerbose::Transfer {
-                funding_account: 2,
-                recipient_account: 3,
-                lamports: 42
-            }
-        );
-
-        let advance = TestInstruction::AdvanceNonceAccount;
-        let verbose_advance = TestInstructionVerbose::from_instruction(advance, vec![2, 3, 4]);
-        assert_eq!(
-            verbose_advance,
-            TestInstructionVerbose::AdvanceNonceAccount {
-                nonce_account: 2,
-                recent_blockhashes_sysvar: 3,
-                nonce_authority: 4,
-            }
-        );
-
-        let nonce_address = Pubkey::new_rand();
-        let initialize = TestInstruction::InitializeNonceAccount {
-            pubkey: nonce_address,
-        };
-        let verbose_initialize  =
-            TestInstructionVerbose::from_instruction(initialize, vec![2, 3, 4]);
-        assert_eq!(
-            verbose_initialize,
-            TestInstructionVerbose::InitializeNonceAccount {
-                nonce_account: 2,
-                recent_blockhashes_sysvar: 3,
-                rent_sysvar: 4,
-                pubkey: nonce_address,
-            }
-        );
-    }
+    /// Consumes a stored nonce, replacing it with a successor
+    #[accounts(
+        nonce_account(signer, writable, desc = "Nonce account"),
+        recent_blockhashes_sysvar(signer, writable, desc = "RecentBlockhashes sysvar"),
+        nonce_authority(signer, optional, desc = "Nonce authority"),
+    )]
+    AdvanceNonceAccount,
 }
 ```
 
-An example of the generated TestInstruction docs for AdvanceNonceAccount:
-```text
-    /// Consumes a stored nonce, replacing it with a successor
-    ///
-    /// * Accounts expected by this instruction:
-    ///   0. `[writable, signer]` Nonce account
-    ///   1. `[]` RecentBlockhashes sysvar
-    ///   2. `[signer]` Nonce authority
-    AdvanceNonceAccount,
+An example of the generated TestInstruction with docs:
+```rust,ignore
+    pub enum TestInstruction {
+      /// Transfer lamports
+      ///
+      /// * Accounts expected by this instruction:
+      ///   0. `[writable, signer]` Funding account
+      ///   1. `[writable]` Recipient account
+      Transfer {
+          lamports: u64,
+      },
+
+      /// Provide M of N required signatures
+      ///
+      /// * Accounts expected by this instruction:
+      ///   0. `[writable]` Data account
+      ///   * (Multiple) `[signer]` Signers
+      Multisig,
+
+      /// Consumes a stored nonce, replacing it with a successor
+      ///
+      /// * Accounts expected by this instruction:
+      ///   0. `[writable, signer]` Nonce account
+      ///   1. [] RecentBlockhashes sysvar
+      ///   2. (Optional) `[signer]` Nonce authority
+      AdvanceNonceAccount,
+  }
+```
+
+Generated constructors:
+```rust,ignore
+/// Transfer lamports
+///
+/// * `from_account` - `[writable, signer]` Funding account
+/// * `to_account` - `[writable]` Recipient account
+pub fn transfer(from_account: &Pubkey, to_account: &Pubkey, lamports: u64) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
+    ];
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::Transfer { lamports },
+        account_metas,
+    )
+}
+
+/// Provide M of N required signatures
+///
+/// * `data_account` - `[writable]` Data account
+/// * `signers` - (Multiple) `[signer]` Signers
+pub fn multisig(data_account: &Pubkey, signers: &[&Pubkey]) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*nonce_pubkey, false),
+    ];
+    for pubkey in signers.iter() {
+        account_metas.push(AccountMeta::new_readonly(*pubkey, true));
+    }
+
+    Instruction::new(
+        test_program::id(),
+        &TestInstruction::Multisig,
+        account_metas,
+    )
+}
+
+/// Consumes a stored nonce, replacing it with a successor
+///
+/// * nonce_account - `[writable, signer]` Nonce account
+/// * recent_blockhashes_sysvar - [] RecentBlockhashes sysvar
+/// * nonce_authority - (Optional) `[signer]` Nonce authority
+pub fn advance_nonce_account(
+    nonce_account: &Pubkey,
+    recent_blockhashes_sysvar: &Pubkey,
+    nonce_authority: Option<&Pubkey>,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*nonce_account, false),
+        AccountMeta::new_readonly(*recent_blockhashes_sysvar, false),
+    ];
+    if let Some(pubkey) = authorized_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*nonce_authority, true));
+    }
+    Instruction::new(
+        test_program::id(),
+        &TestInstruction::AdvanceNonceAccount,
+        account_metas,
+    )
+}
+
 ```
 
 Generated TestInstructionVerbose enum:
 
-```text
+```rust,ignore
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TestInstruction {
-    /// Consumes a stored nonce, replacing it with a successor
-    AdvanceNonceAccount {
-        /// Nonce account
-        nonce_account: u8
-
-        /// RecentBlockhashes sysvar
-        recent_blockhashes_sysvar: u8
-
-        /// Nonce authority
-        nonce_authority: u8
-    },
-
     /// Transfer lamports
     Transfer {
         /// Funding account
@@ -155,48 +163,36 @@ pub enum TestInstruction {
         lamports: u64,
     },
 
-    /// Drive state of Uninitialized nonce account to Initialized, setting the nonce value
-    ///
-    /// No signatures are required to execute this instruction, enabling derived
-    /// nonce account addresses
-    #[accounts(
-        nonce_account(is_signer = true,is_writable = true, desc = "Nonce account"),
-        recent_blockhashes_sysvar(desc = "RecentBlockhashes sysvar"),
-        rent_sysvar(desc = "Rent sysvar"),
-    )]
-    InitializeNonceAccount {
-        /// Nonce account
-        nonce_account: u8
-
-        /// RecentBlockhashes sysvar
-        recent_blockhashes_sysvar: u8
-
-        /// Rent sysvar
-        rent_sysvar: u8
-
-        /// Specifies the entity authorized to execute nonce instruction on the account
-        pubkey: Pubkey,
+    /// Provide M of N required signatures
+    Multisig {
+        data_account: u8,
+        signers: Vec<u8>,
     },
+
+    /// Consumes a stored nonce, replacing it with a successor
+    AdvanceNonceAccount {
+        nonce_account: u8,
+        recent_blockhashes_sysvar: u8,
+        nonce_authority: Option<u8>,
+    }
 }
 
 impl TestInstructionVerbose {
     pub fn from_instruction(instruction: TestInstruction, account_keys: Vec<u8>) -> Self {
         match instruction {
-            TestInstruction::AdvanceNonceAccount => TestInstructionVerbose::AdvanceNonceAccount {
-                nonce_account: account_keys[0],
-                recent_blockhashes_sysvar: account_keys[1],
-                nonce_authority: account_keys[2],
-            }
             TestInstruction::Transfer { lamports } => TestInstructionVerbose::Transfer {
                 funding_account: account_keys[0],
                 recipient_account: account_keys[1],
                 lamports,
             }
-            TestInstruction::InitializeNonceAccount => TestInstructionVerbose::InitializeNonceAccount {
+            TestInstruction::Multisig => TestInstructionVerbose::Multisig {
+                data_account: account_keys[0],
+                signers: account_keys[1..],
+            }
+            TestInstruction::AdvanceNonceAccount => TestInstructionVerbose::AdvanceNonceAccount {
                 nonce_account: account_keys[0],
                 recent_blockhashes_sysvar: account_keys[1],
-                rent_sysvar: account_keys[2],
-                pubkey,
+                nonce_authority: &account_keys.get(2),
             }
         }
     }
@@ -214,11 +210,15 @@ tuples. This seems worth doing anyway, adding more precision to the variants and
 enabling real documentation (so developers don't have to do
 [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
 This will cause a little churn in our current code base, but not a lot.
-2. **Variable account lists** - This approach only handles account lists of known
-length and composition; it doesn't offer a solution for variable account lists,
-like
-[spl-token](https://github.com/solana-labs/solana-program-library/blob/master/token/src/instruction.rs#L30).
-With the exception of that one TokenInstruction variant, all the other existing
-native and bpf Instruction variants support static accounts lists. So one
-possible solution would be to require all Instruction variants to do so, forcing
-TokenInstruction to implement a new variant, like `NewTokenWithMint`.
+2. **Variable account lists** - This approach offers a couple options for
+variable account lists. First, optional accounts may be added and tagged with
+the `optional` keyword. However, currently only one optional account is
+supported per instruction. Additional data will need to be added to the
+instruction to support multiples, enabling identification of which accounts are
+present when some but not all are included. Second, accounts that share the same
+features may be added as a set, tagged with the `multiple` keyword. Like
+optional accounts, only one multiple account set is supported per instruction
+(and optional and multiple may not coexist). More complex instructions that
+cannot be accommodated by `optional` or `multiple`, requiring logic to figure
+out account order/representation, should probably be made into separate
+instructions.
