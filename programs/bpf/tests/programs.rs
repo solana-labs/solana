@@ -308,7 +308,6 @@ mod bpf {
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
             );
-
         }
     }
 
@@ -364,10 +363,12 @@ mod bpf {
             let derived_key2 =
                 Pubkey::create_program_address(&[b"Lil'", b"Bits"], &invoked_program_id).unwrap();
             let derived_key3 =
-                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id).unwrap();
+                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id)
+                    .unwrap();
 
+            let mint_pubkey = mint_keypair.pubkey();
             let account_metas = vec![
-                AccountMeta::new(mint_keypair.pubkey(), true),
+                AccountMeta::new(mint_pubkey, true),
                 AccountMeta::new(argument_keypair.pubkey(), true),
                 AccountMeta::new_readonly(invoked_program_id, false),
                 AccountMeta::new(invoked_argument_keypair.pubkey(), true),
@@ -384,7 +385,7 @@ mod bpf {
 
             let instruction =
                 Instruction::new(invoke_program_id, &TEST_SUCCESS, account_metas.clone());
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert!(bank_client
                 .send_message(
                     &[
@@ -404,7 +405,7 @@ mod bpf {
                 &TEST_PRIVILEGE_ESCALATION_SIGNER,
                 account_metas.clone(),
             );
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
                     .send_message(
@@ -426,7 +427,7 @@ mod bpf {
                 &TEST_PRIVILEGE_ESCALATION_WRITABLE,
                 account_metas.clone(),
             );
-            let message = Message::new(&[instruction]);
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
                     .send_message(

@@ -11,6 +11,7 @@ use solana_sdk::{
     clock::MAX_RECENT_BLOCKHASHES,
     genesis_config::create_genesis_config,
     instruction::InstructionError,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
@@ -52,7 +53,8 @@ pub fn create_builtin_transactions(
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
-            Transaction::new_signed_instructions(&[&rando0], &[instruction], blockhash)
+            let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+            Transaction::new(&[&rando0], message, blockhash)
         })
         .collect()
 }
@@ -73,7 +75,8 @@ pub fn create_native_loader_transactions(
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
-            Transaction::new_signed_instructions(&[&rando0], &[instruction], blockhash)
+            let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+            Transaction::new(&[&rando0], message, blockhash)
         })
         .collect()
 }

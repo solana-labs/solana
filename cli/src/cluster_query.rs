@@ -892,7 +892,7 @@ pub fn process_ping(
 
         let build_message = |lamports| {
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
-            Message::new(&[ix])
+            Message::new(&[ix], Some(&config.signers[0].pubkey()))
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,

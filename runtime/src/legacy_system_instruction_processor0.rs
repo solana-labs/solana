@@ -906,7 +906,7 @@ mod tests {
             .transfer(50, &mint_keypair, &alice_pubkey)
             .unwrap();
 
-        let allocate_with_seed = Message::new_with_payer(
+        let allocate_with_seed = Message::new(
             &[system_instruction::allocate_with_seed(
                 &alice_with_seed,
                 &alice_pubkey,
@@ -959,7 +959,7 @@ mod tests {
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
         let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 0, len1, &program);
-        let message = Message::new(&[ix]);
+        let message = Message::new(&[ix], Some(&alice_pubkey));
         let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
         assert!(r.is_ok());
 
@@ -977,7 +977,7 @@ mod tests {
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
         let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, len2, &program);
-        let message = Message::new(&[ix]);
+        let message = Message::new(&[ix], Some(&alice_pubkey));
         let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
         assert!(r.is_ok());
     }
@@ -1016,7 +1016,7 @@ mod tests {
             .transfer(50, &mint_keypair, &alice_pubkey)
             .unwrap();
 
-        let assign_with_seed = Message::new_with_payer(
+        let assign_with_seed = Message::new(
             &[system_instruction::assign_with_seed(
                 &alice_with_seed,
                 &alice_pubkey,
