@@ -5,7 +5,7 @@ import { InstructionCard } from "./InstructionCard";
 export function UnknownDetailsCard({
   ix,
   index,
-  result
+  result,
 }: {
   ix: TransactionInstruction;
   index: number;

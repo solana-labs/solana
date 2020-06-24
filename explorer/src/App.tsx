@@ -24,7 +24,10 @@ function App() {
             <div className="row align-items-end">
               <div className="col">
                 <Link
-                  to={location => ({ ...pickCluster(location), pathname: "/" })}
+                  to={(location) => ({
+                    ...pickCluster(location),
+                    pathname: "/",
+                  })}
                 >
                   <img src={Logo} width="250" alt="Solana Explorer" />
                 </Link>
@@ -49,14 +52,14 @@ function App() {
           ></Route>
           <Route
             exact
-            path={TX_ALIASES.flatMap(tx => [tx, tx + "s"]).map(
-              tx => `/${tx}/:signature`
+            path={TX_ALIASES.flatMap((tx) => [tx, tx + "s"]).map(
+              (tx) => `/${tx}/:signature`
             )}
             render={({ match }) => (
               <TransactionDetails signature={match.params.signature} />
             )}
           />
-          <Route exact path={TX_ALIASES.map(tx => `/${tx}s`)}>
+          <Route exact path={TX_ALIASES.map((tx) => `/${tx}s`)}>
             <TabbedPage tab="Transactions">
               <TransactionsCard />
             </TabbedPage>
@@ -64,13 +67,16 @@ function App() {
           <Route
             exact
             path={ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(
-              account => `/${account}/:address`
+              (account) => `/${account}/:address`
             )}
             render={({ match }) => (
               <AccountDetails address={match.params.address} />
             )}
           />
-          <Route exact path={ACCOUNT_ALIASES_PLURAL.map(alias => "/" + alias)}>
+          <Route
+            exact
+            path={ACCOUNT_ALIASES_PLURAL.map((alias) => "/" + alias)}
+          >
             <TabbedPage tab="Accounts">
               <AccountsCard />
             </TabbedPage>

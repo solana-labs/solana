@@ -4,7 +4,7 @@ import {
   useTransactions,
   TransactionStatus,
   FetchStatus,
-  useFetchTransactionStatus
+  useFetchTransactionStatus,
 } from "../providers/transactions";
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
@@ -71,10 +71,10 @@ function TransactionsCard() {
                 <input
                   type="text"
                   onInput={() => setError("")}
-                  onKeyDown={e =>
+                  onKeyDown={(e) =>
                     e.keyCode === 13 && onNew(e.currentTarget.value)
                   }
-                  onSubmit={e => onNew(e.currentTarget.value)}
+                  onSubmit={(e) => onNew(e.currentTarget.value)}
                   ref={signatureInput}
                   className={`form-control text-signature text-monospace ${
                     error ? "is-invalid" : ""
@@ -87,7 +87,9 @@ function TransactionsCard() {
               <td>-</td>
               <td></td>
             </tr>
-            {transactions.map(transaction => renderTransactionRow(transaction))}
+            {transactions.map((transaction) =>
+              renderTransactionRow(transaction)
+            )}
           </tbody>
         </table>
       </div>
@@ -162,7 +164,7 @@ const renderTransactionRow = (transactionStatus: TransactionStatus) => {
       <td>{slotText}</td>
       <td>
         <Link
-          to={location => ({ ...location, pathname: "/tx/" + signature })}
+          to={(location) => ({ ...location, pathname: "/tx/" + signature })}
           className="btn btn-rounded-circle btn-white btn-sm"
         >
           <span className="fe fe-arrow-right"></span>

@@ -3,14 +3,14 @@ export function displayTimestamp(unixTimestamp: number): string {
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
-    day: "numeric"
+    day: "numeric",
   }).format(expireDate);
   const timeString = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "numeric",
     second: "numeric",
     hour12: false,
-    timeZoneName: "long"
+    timeZoneName: "long",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
 }

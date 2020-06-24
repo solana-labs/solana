@@ -2,7 +2,7 @@ import React from "react";
 import {
   SystemInstruction,
   TransactionInstruction,
-  SignatureResult
+  SignatureResult,
 } from "@solana/web3.js";
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";

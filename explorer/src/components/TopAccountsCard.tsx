@@ -77,7 +77,7 @@ export default function TopAccountsCard() {
             <div className="col-auto">
               <FilterDropdown
                 filter={filter}
-                toggle={() => setDropdown(show => !show)}
+                toggle={() => setDropdown((show) => !show)}
                 show={showDropdown}
               />
             </div>
@@ -127,9 +127,9 @@ const renderAccountRow = (
       <td>{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
       <td>
         <Link
-          to={location => ({
+          to={(location) => ({
             ...location,
-            pathname: "/account/" + base58AccountPubkey
+            pathname: "/account/" + base58AccountPubkey,
           })}
           className="btn btn-rounded-circle btn-white btn-sm"
         >
@@ -185,7 +185,7 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
     }
     return {
       ...location,
-      search: params.toString()
+      search: params.toString(),
     };
   };
 
@@ -202,11 +202,11 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
       <div
         className={`dropdown-menu-right dropdown-menu${show ? " show" : ""}`}
       >
-        {FILTERS.map(filterOption => {
+        {FILTERS.map((filterOption) => {
           return (
             <Link
               key={filterOption || "null"}
-              to={location => buildLocation(location, filterOption)}
+              to={(location) => buildLocation(location, filterOption)}
               className={`dropdown-item${
                 filterOption === filter ? " active" : ""
               }`}

@@ -4,7 +4,7 @@ import {
   useAccounts,
   Account,
   FetchStatus,
-  useFetchAccountInfo
+  useFetchAccountInfo,
 } from "../providers/accounts";
 import { assertUnreachable } from "../utils";
 import { displayAddress } from "../utils/tx";
@@ -68,10 +68,10 @@ function AccountsCard() {
                 <input
                   type="text"
                   onInput={() => setError("")}
-                  onKeyDown={e =>
+                  onKeyDown={(e) =>
                     e.keyCode === 13 && onNew(e.currentTarget.value)
                   }
-                  onSubmit={e => onNew(e.currentTarget.value)}
+                  onSubmit={(e) => onNew(e.currentTarget.value)}
                   ref={addressInput}
                   className={`form-control text-address text-monospace ${
                     error ? "is-invalid" : ""
@@ -85,7 +85,7 @@ function AccountsCard() {
               <td>-</td>
               <td></td>
             </tr>
-            {accounts.map(account => renderAccountRow(account))}
+            {accounts.map((account) => renderAccountRow(account))}
           </tbody>
         </table>
       </div>
@@ -172,9 +172,9 @@ const renderAccountRow = (account: Account) => {
       </td>
       <td>
         <Link
-          to={location => ({
+          to={(location) => ({
             ...location,
-            pathname: "/account/" + base58AccountPubkey
+            pathname: "/account/" + base58AccountPubkey,
           })}
           className="btn btn-rounded-circle btn-white btn-sm"
         >

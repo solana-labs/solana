@@ -52,7 +52,7 @@ export default function TabbedPage({ children, tab }: Props) {
 function NavLink({
   href,
   tab,
-  current
+  current,
 }: {
   href: string;
   tab: Tab;
@@ -65,7 +65,7 @@ function NavLink({
 
   return (
     <Link
-      to={location => ({ ...pickCluster(location), pathname: href })}
+      to={(location) => ({ ...pickCluster(location), pathname: href })}
       className={classes}
     >
       {tab}

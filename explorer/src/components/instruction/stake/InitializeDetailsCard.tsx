@@ -4,7 +4,7 @@ import {
   SignatureResult,
   StakeInstruction,
   StakeProgram,
-  SystemProgram
+  SystemProgram,
 } from "@solana/web3.js";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";

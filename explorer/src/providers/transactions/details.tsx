@@ -2,7 +2,7 @@ import React from "react";
 import {
   Connection,
   TransactionSignature,
-  ConfirmedTransaction
+  ConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
 import { useTransactions, FetchStatus } from "./index";
@@ -18,7 +18,7 @@ type State = { [signature: string]: Details };
 export enum ActionType {
   Update,
   Add,
-  Remove
+  Remove,
 }
 
 interface Update {
@@ -46,11 +46,11 @@ function reducer(state: State, action: Action): State {
     case ActionType.Add: {
       if (action.signatures.length === 0) return state;
       const details = { ...state };
-      action.signatures.forEach(signature => {
+      action.signatures.forEach((signature) => {
         if (!details[signature]) {
           details[signature] = {
             fetchStatus: FetchStatus.Fetching,
-            transaction: null
+            transaction: null,
           };
         }
       });
@@ -60,7 +60,7 @@ function reducer(state: State, action: Action): State {
     case ActionType.Remove: {
       if (action.signatures.length === 0) return state;
       const details = { ...state };
-      action.signatures.forEach(signature => {
+      action.signatures.forEach((signature) => {
         delete details[signature];
       });
       return details;
@@ -72,11 +72,11 @@ function reducer(state: State, action: Action): State {
         details = {
           ...details,
           fetchStatus: action.fetchStatus,
-          transaction: action.transaction
+          transaction: action.transaction,
         };
         return {
           ...state,
-          [action.signature]: details
+          [action.signature]: details,
         };
       }
       break;
@@ -109,13 +109,13 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
     });
 
     const removeList: string[] = [];
-    removeSignatures.forEach(s => removeList.push(s));
+    removeSignatures.forEach((s) => removeList.push(s));
     dispatch({ type: ActionType.Remove, signatures: removeList });
 
     const fetchList: string[] = [];
-    fetchSignatures.forEach(s => fetchList.push(s));
+    fetchSignatures.forEach((s) => fetchList.push(s));
     dispatch({ type: ActionType.Add, signatures: fetchList });
-    fetchSignatures.forEach(signature => {
+    fetchSignatures.forEach((signature) => {
       fetchDetails(dispatch, signature, url);
     });
   }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -138,7 +138,7 @@ async function fetchDetails(
     type: ActionType.Update,
     fetchStatus: FetchStatus.Fetching,
     transaction: null,
-    signature
+    signature,
   });
 
   let fetchStatus;

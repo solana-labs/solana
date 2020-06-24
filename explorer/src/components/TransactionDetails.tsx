@@ -3,7 +3,7 @@ import {
   useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
-  FetchStatus
+  FetchStatus,
 } from "../providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import { useCluster, useClusterModal } from "providers/cluster";
@@ -11,7 +11,7 @@ import {
   TransactionSignature,
   SystemProgram,
   StakeProgram,
-  SystemInstruction
+  SystemInstruction,
 } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
@@ -49,8 +49,8 @@ export default function TransactionDetails({ signature }: Props) {
     <input
       type="text"
       value={search}
-      onChange={e => setSearch(e.target.value)}
-      onKeyUp={e => e.key === "Enter" && updateSignature()}
+      onChange={(e) => setSearch(e.target.value)}
+      onKeyUp={(e) => e.key === "Enter" && updateSignature()}
       className="form-control form-control-prepended search text-monospace"
       placeholder="Search for signature"
     />
@@ -293,7 +293,7 @@ function AccountsCard({ signature }: Props) {
           {index < message.header.numRequiredSignatures && (
             <span className="badge badge-soft-dark mr-1">Signer</span>
           )}
-          {message.instructions.find(ix => ix.programIdIndex === index) && (
+          {message.instructions.find((ix) => ix.programIdIndex === index) && (
             <span className="badge badge-soft-dark mr-1">Program</span>
           )}
         </td>

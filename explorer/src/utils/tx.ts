@@ -6,7 +6,7 @@ import {
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SYSVAR_REWARDS_PUBKEY,
-  SYSVAR_STAKE_HISTORY_PUBKEY
+  SYSVAR_STAKE_HISTORY_PUBKEY,
 } from "@solana/web3.js";
 
 const PROGRAM_IDS = {
@@ -17,13 +17,13 @@ const PROGRAM_IDS = {
   Storage111111111111111111111111111111111111: "Storage",
   [SystemProgram.programId.toBase58()]: "System",
   Vest111111111111111111111111111111111111111: "Vest",
-  [VOTE_PROGRAM_ID.toBase58()]: "Vote"
+  [VOTE_PROGRAM_ID.toBase58()]: "Vote",
 };
 
 const LOADER_IDS = {
   MoveLdr111111111111111111111111111111111111: "Move Loader",
   NativeLoader1111111111111111111111111111111: "Native Loader",
-  [BpfLoader.programId.toBase58()]: "BPF Loader"
+  [BpfLoader.programId.toBase58()]: "BPF Loader",
 };
 
 const SYSVAR_IDS = {
@@ -36,7 +36,7 @@ const SYSVAR_IDS = {
   [SYSVAR_REWARDS_PUBKEY.toBase58()]: "SYSVAR_REWARDS",
   SysvarS1otHashes111111111111111111111111111: "SYSVAR_SLOT_HASHES",
   SysvarS1otHistory11111111111111111111111111: "SYSVAR_SLOT_HISTORY",
-  [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "SYSVAR_STAKE_HISTORY"
+  [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "SYSVAR_STAKE_HISTORY",
 };
 
 export function displayAddress(address: string): string {

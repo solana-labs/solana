@@ -4,7 +4,7 @@ export default function ErrorCard({
   retry,
   retryText,
   text,
-  subtext
+  subtext,
 }: {
   retry?: () => void;
   retryText?: string;

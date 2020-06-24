@@ -5,7 +5,7 @@ import { useCluster } from "../cluster";
 import {
   HistoryManager,
   HistoricalTransaction,
-  SlotRange
+  SlotRange,
 } from "./historyManager";
 
 interface AccountHistory {
@@ -19,7 +19,7 @@ type State = { [address: string]: AccountHistory };
 export enum ActionType {
   Update,
   Add,
-  Remove
+  Remove,
 }
 
 interface Update {
@@ -48,10 +48,10 @@ function reducer(state: State, action: Action): State {
     case ActionType.Add: {
       if (action.addresses.length === 0) return state;
       const details = { ...state };
-      action.addresses.forEach(address => {
+      action.addresses.forEach((address) => {
         if (!details[address]) {
           details[address] = {
-            status: FetchStatus.Fetching
+            status: FetchStatus.Fetching,
           };
         }
       });
@@ -61,7 +61,7 @@ function reducer(state: State, action: Action): State {
     case ActionType.Remove: {
       if (action.addresses.length === 0) return state;
       const details = { ...state };
-      action.addresses.forEach(address => {
+      action.addresses.forEach((address) => {
         delete details[address];
       });
       return details;
@@ -81,8 +81,8 @@ function reducer(state: State, action: Action): State {
           [address]: {
             status: action.status,
             fetched,
-            fetchedRange
-          }
+            fetchedRange,
+          },
         };
       }
       break;
@@ -121,16 +121,16 @@ export function HistoryProvider({ children }: HistoryProviderProps) {
     });
 
     const removeList: string[] = [];
-    removeAddresses.forEach(address => {
+    removeAddresses.forEach((address) => {
       manager.current.removeAccountHistory(address);
       removeList.push(address);
     });
     dispatch({ type: ActionType.Remove, addresses: removeList });
 
     const fetchList: string[] = [];
-    fetchAddresses.forEach(s => fetchList.push(s));
+    fetchAddresses.forEach((s) => fetchList.push(s));
     dispatch({ type: ActionType.Add, addresses: fetchList });
-    fetchAddresses.forEach(address => {
+    fetchAddresses.forEach((address) => {
       fetchAccountHistory(
         dispatch,
         new PublicKey(address),
@@ -160,7 +160,7 @@ async function fetchAccountHistory(
   dispatch({
     type: ActionType.Update,
     status: FetchStatus.Fetching,
-    pubkey
+    pubkey,
   });
 
   let status;

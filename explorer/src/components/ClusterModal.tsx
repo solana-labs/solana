@@ -11,7 +11,7 @@ import {
   CLUSTERS,
   Cluster,
   useClusterModal,
-  useUpdateCustomUrl
+  useUpdateCustomUrl,
 } from "../providers/cluster";
 import { assertUnreachable } from "../utils";
 import Overlay from "./Overlay";
@@ -28,7 +28,7 @@ function ClusterModal() {
       >
         <div className="modal-dialog modal-dialog-vertical">
           <div className="modal-content">
-            <div className="modal-body" onClick={e => e.stopPropagation()}>
+            <div className="modal-body" onClick={(e) => e.stopPropagation()}>
               <span className="c-pointer" onClick={onClose}>
                 &times;
               </span>
@@ -62,7 +62,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
     if (customUrl.length > 0) query.set("cluster", "custom");
     return {
       ...location,
-      search: query.toString()
+      search: query.toString(),
     };
   };
 
@@ -77,7 +77,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const inputTextClass = editing ? "" : "text-muted";
   return (
     <Link
-      to={location => clusterLocation(location)}
+      to={(location) => clusterLocation(location)}
       className="btn input-group input-group-merge p-0"
     >
       <input
@@ -88,7 +88,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
         )}`}
         onFocus={() => setEditing(true)}
         onBlur={() => setEditing(false)}
-        onInput={e => onUrlInput(e.currentTarget.value)}
+        onInput={(e) => onUrlInput(e.currentTarget.value)}
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
@@ -144,7 +144,7 @@ function ClusterToggle() {
           }
           return {
             ...location,
-            search: params.toString()
+            search: params.toString(),
           };
         };
 

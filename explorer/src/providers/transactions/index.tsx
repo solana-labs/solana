@@ -6,13 +6,13 @@ import {
   Account,
   SignatureResult,
   PublicKey,
-  sendAndConfirmTransaction
+  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { useQuery } from "../../utils/url";
 import { useCluster, Cluster, ClusterStatus } from "../cluster";
 import {
   DetailsProvider,
-  StateContext as DetailsStateContext
+  StateContext as DetailsStateContext,
 } from "./details";
 import base58 from "bs58";
 import { useFetchAccountInfo } from "../accounts";
@@ -21,7 +21,7 @@ import { CACHED_STATUSES, isCached } from "./cached";
 export enum FetchStatus {
   Fetching,
   FetchFailed,
-  Fetched
+  Fetched,
 }
 
 export type Confirmations = number | "max";
@@ -50,7 +50,7 @@ interface State {
 
 export enum ActionType {
   UpdateStatus,
-  FetchSignature
+  FetchSignature,
 }
 
 interface UpdateStatus {
@@ -79,8 +79,8 @@ function reducer(state: State, action: Action): State {
           [action.signature]: {
             ...transaction,
             fetchStatus: FetchStatus.Fetching,
-            info: undefined
-          }
+            info: undefined,
+          },
         };
         return { ...state, transactions };
       } else {
@@ -90,8 +90,8 @@ function reducer(state: State, action: Action): State {
           [action.signature]: {
             id: nextId,
             signature: action.signature,
-            fetchStatus: FetchStatus.Fetching
-          }
+            fetchStatus: FetchStatus.Fetching,
+          },
         };
         return { ...state, transactions, idCounter: nextId };
       }
@@ -105,8 +105,8 @@ function reducer(state: State, action: Action): State {
           [action.signature]: {
             ...transaction,
             fetchStatus: action.fetchStatus,
-            info: action.info
-          }
+            info: action.info,
+          },
         };
         return { ...state, transactions };
       }
@@ -125,7 +125,7 @@ type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {
     idCounter: 0,
-    transactions: {}
+    transactions: {},
   });
 
   const { cluster, status: clusterStatus, url } = useCluster();
@@ -135,7 +135,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
   // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
-    Object.keys(state.transactions).forEach(signature => {
+    Object.keys(state.transactions).forEach((signature) => {
       fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     });
 
@@ -146,18 +146,18 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   }, [testFlag, cluster, clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for transactions in the url params
-  const values = TX_ALIASES.flatMap(key => [
+  const values = TX_ALIASES.flatMap((key) => [
     query.get(key),
-    query.get(key + "s")
+    query.get(key + "s"),
   ]);
   React.useEffect(() => {
     values
       .filter((value): value is string => value !== null)
-      .flatMap(value => value.split(","))
+      .flatMap((value) => value.split(","))
       // Remove duplicates
       .filter((item, pos, self) => self.indexOf(item) === pos)
-      .filter(signature => !state.transactions[signature])
-      .forEach(signature => {
+      .filter((signature) => !state.transactions[signature])
+      .forEach((signature) => {
         fetchTransactionStatus(dispatch, signature, url, clusterStatus);
       });
   }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -200,7 +200,7 @@ async function createTestTransaction(
     const tx = SystemProgram.transfer({
       fromPubkey: testAccount.publicKey,
       toPubkey: testAccount.publicKey,
-      lamports: 1
+      lamports: 1,
     });
     const signature = await sendAndConfirmTransaction(
       connection,
@@ -222,7 +222,7 @@ export async function fetchTransactionStatus(
 ) {
   dispatch({
     type: ActionType.FetchSignature,
-    signature
+    signature,
   });
 
   // We will auto-refetch when status is no longer connecting
@@ -237,7 +237,7 @@ export async function fetchTransactionStatus(
     try {
       const connection = new Connection(url);
       const { value } = await connection.getSignatureStatus(signature, {
-        searchTransactionHistory: true
+        searchTransactionHistory: true,
       });
 
       if (value !== null) {
@@ -256,7 +256,7 @@ export async function fetchTransactionStatus(
           slot: value.slot,
           timestamp,
           confirmations,
-          result: { err: value.err }
+          result: { err: value.err },
         };
       }
       fetchStatus = FetchStatus.Fetched;
@@ -270,7 +270,7 @@ export async function fetchTransactionStatus(
     type: ActionType.UpdateStatus,
     signature,
     fetchStatus,
-    info
+    info,
   });
 }
 
@@ -285,7 +285,7 @@ export function useTransactions() {
     idCounter: context.idCounter,
     transactions: Object.values(context.transactions).sort((a, b) =>
       a.id <= b.id ? 1 : -1
-    )
+    ),
   };
 }
 
