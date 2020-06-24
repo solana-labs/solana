@@ -43,66 +43,106 @@ export class HistoryManager {
     this.accountHistory.delete(address);
   }
 
-  async fetchAccountHistory(pubkey: PublicKey, refresh: boolean) {
+  // Fetch a batch of confirmed signatures but decrease fetch count until
+  // the batch is small enough to be queried for statuses.
+  async fetchConfirmedSignatureBatch(
+    pubkey: PublicKey,
+    start: number,
+    fetchCount: number,
+    forward: boolean
+  ): Promise<{
+    batch: Array<TransactionSignature>;
+    batchRange: SlotRange;
+  }> {
+    const fullRange = await this.fullRange(false);
+    const nextRange = (): SlotRange => {
+      if (forward) {
+        return {
+          min: start,
+          max: Math.min(fullRange.max, start + fetchCount - 1),
+        };
+      } else {
+        return {
+          min: Math.max(fullRange.min, start - fetchCount + 1),
+          max: start,
+        };
+      }
+    };
+
+    let batch: TransactionSignature[] = [];
+    let batchRange = nextRange();
+    while (batchRange.max > batchRange.min) {
+      batch = await this.connection.getConfirmedSignaturesForAddress(
+        pubkey,
+        batchRange.min,
+        batchRange.max
+      );
+
+      // Fetched too many results, refetch with a smaller range (1/8)
+      if (batch.length > 4 * MAX_STATUS_BATCH_SIZE) {
+        fetchCount = Math.ceil(fetchCount / 8);
+        batchRange = nextRange();
+      } else {
+        batch = batch.reverse();
+        break;
+      }
+    }
+
+    return { batchRange, batch };
+  }
+
+  async fetchAccountHistory(pubkey: PublicKey, searchForward: boolean) {
     const address = pubkey.toBase58();
 
     if (this.accountLock.get(address) === true) return;
     this.accountLock.set(address, true);
 
     try {
-      let slotLookBack = 100;
-      const fullRange = await this.fullRange(refresh);
+      // Start with only 250 slots in case queried account is a vote account
+      let slotFetchCount = 250;
+      const fullRange = await this.fullRange(searchForward);
       const currentRange = this.accountRanges.get(address);
 
       // Determine query range based on already queried range
-      let range;
+      let startSlot: number;
       if (currentRange) {
-        if (refresh) {
-          const min = currentRange.max + 1;
-          const max = Math.min(min + slotLookBack - 1, fullRange.max);
-          if (max < min) return;
-          range = { min, max };
+        if (searchForward) {
+          startSlot = currentRange.max + 1;
         } else {
-          const max = currentRange.min - 1;
-          const min = Math.max(max - slotLookBack + 1, fullRange.min);
-          if (max < min) return;
-          range = { min, max };
+          startSlot = currentRange.min - 1;
         }
       } else {
-        const max = fullRange.max;
-        const min = Math.max(fullRange.min, max - slotLookBack + 1);
-        range = { min, max };
+        searchForward = false;
+        startSlot = fullRange.max;
       }
 
-      // Gradually fetch more history if nothing found
+      // Gradually fetch more history if not too many signatures were found
       let signatures: string[] = [];
-      let nextRange = { ...range };
+      let range: SlotRange = { min: startSlot, max: startSlot };
       for (var i = 0; i < 5; i++) {
-        signatures = (
-          await this.connection.getConfirmedSignaturesForAddress(
-            pubkey,
-            nextRange.min,
-            nextRange.max
-          )
-        ).reverse();
-        if (refresh) break;
-        if (signatures.length > 0) break;
-        if (range.min <= fullRange.min) break;
+        const { batch, batchRange } = await this.fetchConfirmedSignatureBatch(
+          pubkey,
+          startSlot,
+          slotFetchCount,
+          searchForward
+        );
 
-        switch (slotLookBack) {
-          case 100:
-            slotLookBack = 1000;
-            break;
-          case 1000:
-            slotLookBack = 10000;
-            break;
+        range.min = Math.min(range.min, batchRange.min);
+        range.max = Math.max(range.max, batchRange.max);
+
+        if (searchForward) {
+          signatures = batch.concat(signatures);
+          startSlot = batchRange.max + 1;
+        } else {
+          signatures = signatures.concat(batch);
+          startSlot = batchRange.min - 1;
         }
 
-        range.min = Math.max(nextRange.min - slotLookBack, fullRange.min);
-        nextRange = {
-          min: range.min,
-          max: nextRange.min - 1,
-        };
+        if (signatures.length > MAX_STATUS_BATCH_SIZE / 2) break;
+        if (range.min <= fullRange.min) break;
+
+        // Bump look-back not that we know the account is probably not a vote account
+        slotFetchCount = 10000;
       }
 
       // Fetch the statuses for all confirmed signatures
@@ -141,7 +181,7 @@ export class HistoryManager {
 
       // Append / prepend newly fetched statuses
       let newTransactions;
-      if (refresh) {
+      if (searchForward) {
         newTransactions = transactions.concat(currentTransactions);
       } else {
         newTransactions = currentTransactions.concat(transactions);
