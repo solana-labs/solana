@@ -741,7 +741,7 @@ fn new_banks_from_ledger(
     info!(
         "Tower state: root slot={:?}, last vote slot={:?}",
         tower.root(),
-        tower.last_lockout_vote_slot()
+        tower.last_voted_slot()
     );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());

@@ -417,14 +417,6 @@ impl Tower {
         self.lockouts.root_slot
     }
 
-    pub fn last_lockout_vote_slot(&self) -> Option<Slot> {
-        self.lockouts
-            .votes
-            .iter()
-            .max_by(|x, y| x.slot.cmp(&y.slot))
-            .map(|v| v.slot)
-    }
-
     // a slot is recent if it's newer than the last vote we have
     pub fn is_recent(&self, slot: Slot) -> bool {
         if let Some(last_voted_slot) = self.lockouts.last_voted_slot() {
@@ -709,7 +701,14 @@ impl Tower {
     ) -> Result<Self> {
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
-        assert!(self.root().is_none() || self.root().unwrap() >= replayed_root_slot);
+        assert!(
+            self.root().is_none() || self.root().unwrap() <= replayed_root_slot,
+            format!(
+                "tower root: {:?} >= replayed root slot: {}",
+                self.root().unwrap(),
+                replayed_root_slot
+            )
+        );
 
         use solana_sdk::slot_history::Check;
 
@@ -827,8 +826,10 @@ impl Tower {
             let mut file = File::create(&new_filename)?;
             let saveable_tower = SavedTower::new(self, node_keypair)?;
             bincode::serialize_into(&mut file, &saveable_tower)?;
+            file.sync_all().unwrap();
         }
         fs::rename(&new_filename, &filename)?;
+        File::open(&self.save_path).unwrap().sync_all().unwrap();
         Ok(())
     }
 
