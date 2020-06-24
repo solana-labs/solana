@@ -10,13 +10,21 @@ use solana_sdk::{
     epoch_schedule::{Epoch, EpochSchedule},
     pubkey::Pubkey,
 };
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 pub struct RepairWeight {
     // Map from root -> a subtree rooted at that `root`
     trees: HashMap<Slot, HeaviestSubtreeForkChoice>,
     // Maps each slot to the root of the tree that contains it
     slot_to_tree: HashMap<Slot, Slot>,
+    // Prevents spam attacks that send votes for long chains of
+    // unrooted slots, which would incur high cost of blockstore
+    // lookup/iteration to resolve ancestry.
+
+    // Must maintain invariant that any slot in `unrooted_slots`
+    // does not exist in `slot_to_tree` and any descendants of
+    // slots in the set `unrooted_slots` must also be in the set
+    unrooted_slots: BTreeSet<Slot>,
     root: Slot,
 }
 
@@ -30,6 +38,7 @@ impl RepairWeight {
             trees,
             slot_to_tree,
             root,
+            unrooted_slots: BTreeSet::new(),
         }
     }
 
@@ -44,29 +53,43 @@ impl RepairWeight {
     {
         let mut all_subtree_updates: HashMap<Slot, HashMap<Pubkey, Slot>> = HashMap::new();
         for (slot, pubkey_votes) in votes {
-            if slot < self.root {
+            if slot < self.root || self.unrooted_slots.contains(&slot) {
                 continue;
             }
             let mut tree_root = self.slot_to_tree.get(&slot).cloned();
-            let mut ancestors = VecDeque::new();
+            let mut new_ancestors = VecDeque::new();
             // If we don't know know  how this slot chains to any existing trees
             // in `self.trees`, then use `blockstore` to see if this chains
             // any existing trees in `self.trees`
             if tree_root.is_none() {
-                let (discovered_ancestors, existing_subtree) =
+                let (discovered_ancestors, existing_subtree_root) =
                     self.find_ancestor_subtree_of_slot(blockstore, slot);
-                ancestors = discovered_ancestors;
-                tree_root = existing_subtree;
+                new_ancestors = discovered_ancestors;
+                tree_root = existing_subtree_root;
             }
 
-            let tree_root = tree_root.unwrap_or_else(|| {
+            let should_create_new_subtree = tree_root.is_none();
+
+            let tree_root = tree_root.unwrap_or(
                 // If `tree_root` is still None, then there is no known
                 // subtree that contains `slot`. Thus, create a new
                 // subtree rooted at the earliest known ancestor of `slot`
-                let earliest_ancestor = *ancestors.front().unwrap_or(&slot);
-                self.insert_new_tree(earliest_ancestor);
-                earliest_ancestor
-            });
+                *new_ancestors.front().unwrap_or(&slot),
+            );
+
+            // If the discovered root of this tree is unrooted, mark all
+            // ancestors in `new_ancestors` and this slot as unrooted
+            if self.is_unrooted_slot(tree_root) {
+                for ancestor in new_ancestors.into_iter().chain(std::iter::once(slot)) {
+                    self.unrooted_slots.insert(ancestor);
+                }
+
+                continue;
+            }
+
+            if should_create_new_subtree {
+                self.insert_new_tree(tree_root);
+            }
 
             let tree = self
                 .trees
@@ -76,11 +99,11 @@ impl RepairWeight {
             // First element in `ancestors` must be either:
             // 1) Leaf of some existing subtree
             // 2) Root of new subtree that was just created above through `self.insert_new_tree`
-            ancestors.push_back(slot);
-            if ancestors.len() > 1 {
-                for i in 0..ancestors.len() - 1 {
-                    tree.add_new_leaf_slot(ancestors[i + 1], Some(ancestors[i]));
-                    self.slot_to_tree.insert(ancestors[i + 1], tree_root);
+            new_ancestors.push_back(slot);
+            if new_ancestors.len() > 1 {
+                for i in 0..new_ancestors.len() - 1 {
+                    tree.add_new_leaf_slot(new_ancestors[i + 1], Some(new_ancestors[i]));
+                    self.slot_to_tree.insert(new_ancestors[i + 1], tree_root);
                 }
             }
 
@@ -137,17 +160,49 @@ impl RepairWeight {
             return;
         }
         // Purge outdated trees from `self.trees`
-        let mut subtree_to_purge = self
+        let subtrees_to_purge: Vec<_> = self
             .trees
-            .remove(&self.root)
-            .unwrap_or_else(|| panic!("Tree rooted at slot {} must exist", self.root));
-        subtree_to_purge.set_root(new_root);
-        self.trees.insert(new_root, subtree_to_purge);
+            .keys()
+            .filter(|subtree_root| **subtree_root < new_root && **subtree_root != self.root)
+            .cloned()
+            .collect();
+        for subtree_root in subtrees_to_purge {
+            let subtree = self
+                .trees
+                .remove(&subtree_root)
+                .expect("Must exist, was found in `self.trees` above");
+            self.remove_tree_slots(
+                subtree.all_slots_stake_voted_subtree().iter().map(|x| &x.0),
+                new_root,
+            );
+        }
 
-        // Purge outdated trees from `self.trees`
-        // TODO: account for slots > root not on the same fork
-        self.trees.retain(|slot, _| *slot >= new_root);
+        let mut root_tree = self.trees.remove(&self.root).expect("root tree must exist");
 
+        // Find all descendants of `self.root` that are not reachable from `new_root`.
+        // These are exactly the unrooted slots, which can be purged and added to
+        // `self.unrooted_slots`.
+        let unrooted_slots = root_tree.subtree_diff(self.root, new_root);
+        self.remove_tree_slots(unrooted_slots.iter(), new_root);
+
+        if !root_tree.contains_slot(new_root) {
+            // If the current `root_tree` does not contain the new root, we can
+            // just make a new tree for the new root
+            self.insert_new_tree(new_root);
+        } else {
+            root_tree.set_root(new_root);
+            // Update `self.slot_to_tree` to reflect new root
+            self.rename_tree_root(&root_tree, new_root);
+
+            // Insert the tree for the new root
+            self.trees.insert(new_root, root_tree);
+        }
+
+        // Purge `self.unrooted_slots` of slots less than `new_root` as we know any
+        // unrooted votes for slots < `new_root` will now be rejected, so we won't
+        // need to check `self.unrooted_slots` to see if those slots are unrooted.
+        let mut new_unrooted_slots = self.unrooted_slots.split_off(&new_root);
+        std::mem::swap(&mut self.unrooted_slots, &mut new_unrooted_slots);
         self.root = new_root;
     }
 
@@ -204,15 +259,17 @@ impl RepairWeight {
             }
             // Ignore trees that were merged in a previous iteration
             if self.trees.contains_key(&heaviest_tree_root) {
-                let orphan_slot = self.update_orphan_ancestors(
+                let new_orphan_root = self.update_orphan_ancestors(
                     blockstore,
                     heaviest_tree_root,
                     epoch_stakes,
                     epoch_schedule,
                 );
-                if orphan_slot != self.root && !best_orphans.contains(&orphan_slot) {
-                    best_orphans.insert(orphan_slot);
-                    repairs.push(RepairType::Orphan(orphan_slot));
+                if let Some(new_orphan_root) = new_orphan_root {
+                    if new_orphan_root != self.root && !best_orphans.contains(&new_orphan_root) {
+                        best_orphans.insert(new_orphan_root);
+                        repairs.push(RepairType::Orphan(new_orphan_root));
+                    }
                 }
             }
         }
@@ -242,7 +299,7 @@ impl RepairWeight {
         mut orphan_tree_root: Slot,
         epoch_stakes: &HashMap<Epoch, EpochStakes>,
         epoch_schedule: &EpochSchedule,
-    ) -> Slot {
+    ) -> Option<Slot> {
         // Must only be called on existing orphan trees
         assert!(self.trees.contains_key(&orphan_tree_root));
 
@@ -288,17 +345,39 @@ impl RepairWeight {
                 // If there's no other subtree to merge with, then return
                 // the current known earliest ancestor of this branch
                 if let Some(earliest_ancestor) = new_ancestors.front() {
-                    let tree = self.update_and_remove_subtree(orphan_tree_root, *earliest_ancestor);
-                    assert!(self.trees.insert(*earliest_ancestor, tree).is_none());
+                    let orphan_tree = self
+                        .trees
+                        .remove(&orphan_tree_root)
+                        .expect("orphan tree must exist");
+                    self.rename_tree_root(&orphan_tree, *earliest_ancestor);
+                    assert!(self.trees.insert(*earliest_ancestor, orphan_tree).is_none());
                     orphan_tree_root = *earliest_ancestor;
                 }
                 break;
             }
         }
 
-        // Return the (potentially new in the case of some merges)
-        // root of this orphan subtree
-        orphan_tree_root
+        if self.is_unrooted_slot(orphan_tree_root) {
+            // If this orphan branch chained down to an unrooted
+            // slot, then purge the entire subtree as we know the
+            // entire subtree is unrooted
+            let orphan_tree = self
+                .trees
+                .remove(&orphan_tree_root)
+                .expect("Must exist, was found in `self.trees` above");
+            self.remove_tree_slots(
+                orphan_tree
+                    .all_slots_stake_voted_subtree()
+                    .iter()
+                    .map(|x| &x.0),
+                self.root,
+            );
+            None
+        } else {
+            // Return the (potentially new in the case of some merges)
+            // root of this orphan subtree
+            Some(orphan_tree_root)
+        }
     }
 
     fn insert_new_tree(&mut self, new_tree_root: Slot) {
@@ -318,16 +397,16 @@ impl RepairWeight {
         let ancestors = AncestorIterator::new(slot, blockstore);
         let mut ancestors_to_add = VecDeque::new();
         let mut tree_to_merge = None;
-
         // This means `heaviest_tree_root` has not been
         // chained back to slots currently being replayed
         // in BankForks. Try to see if blockstore has sufficient
         // information to link this slot back
         for a in ancestors {
             ancestors_to_add.push_front(a);
-            // TODO: If chains to before `root`, without incurring a merge,
-            // purge this branch
-
+            // If this tree chains to some unrooted fork, purge it
+            if self.is_unrooted_slot(a) {
+                break;
+            }
             // If an ancestor chains back to another subtree, then return
             let other_tree_root = self.slot_to_tree.get(&a).cloned();
             tree_to_merge = other_tree_root;
@@ -337,6 +416,10 @@ impl RepairWeight {
         }
 
         (ancestors_to_add, tree_to_merge)
+    }
+
+    fn is_unrooted_slot(&self, slot: Slot) -> bool {
+        slot < self.root || self.unrooted_slots.contains(&slot)
     }
 
     // Attaches `tree1` rooted at `root1` to `tree2` rooted at `root2`
@@ -350,24 +433,20 @@ impl RepairWeight {
         epoch_schedule: &EpochSchedule,
     ) {
         // Update self.slot_to_tree to reflect the merge
-        let tree1 = self.update_and_remove_subtree(root1, root2);
+        let tree1 = self.trees.remove(&root1).expect("tree to merge must exist");
+        self.rename_tree_root(&tree1, root2);
 
         // Merge trees
         let tree2 = self
             .trees
             .get_mut(&root2)
-            .expect("tree to be merged must exist");
+            .expect("tree to be merged into must exist");
 
         tree2.merge(tree1, merge_leaf, epoch_stakes, epoch_schedule);
     }
 
-    // Update all nodes in tree rooted at `root1` to point to `root2`,
-    // and remove old subtree at `slot1`
-    fn update_and_remove_subtree(&mut self, root1: Slot, root2: Slot) -> HeaviestSubtreeForkChoice {
-        let tree1 = self
-            .trees
-            .remove(&root1)
-            .expect("tree to remove must exist");
+    // Update all slots in the `tree1` to point to `root2`,
+    fn rename_tree_root(&mut self, tree1: &HeaviestSubtreeForkChoice, root2: Slot) {
         let all_slots = tree1.all_slots_stake_voted_subtree();
         for (slot, _) in all_slots {
             *self
@@ -375,7 +454,23 @@ impl RepairWeight {
                 .get_mut(&slot)
                 .expect("Nodes in tree must exist in `self.slot_to_tree`") = root2;
         }
-        tree1
+    }
+
+    // For all slots `s` in `tree1`
+    // 1) If `s` < min, purge `s` from `self.slot_to_tree`
+    // 2) Else add `s` to `self.unrooted_slots`
+    fn remove_tree_slots<'a, I>(&'a mut self, slots_to_remove: I, min: Slot)
+    where
+        I: Iterator<Item = &'a Slot>,
+    {
+        for slot in slots_to_remove {
+            self.slot_to_tree
+                .remove(slot)
+                .expect("Item in tree must exist in `slot_to_tree`");
+            if *slot >= min {
+                self.unrooted_slots.insert(*slot);
+            }
+        }
     }
 
     // Heavier, smaller slots come first
@@ -394,7 +489,7 @@ impl RepairWeight {
 mod test {
     use super::*;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use solana_runtime::bank_utils;
+    use solana_runtime::{bank::Bank, bank_utils};
     use trees::tr;
 
     #[test]
@@ -402,6 +497,31 @@ mod test {
         let mut slots = vec![(3, 30), (2, 30), (5, 31)];
         RepairWeight::sort_by_stake_weight_slot(&mut slots);
         assert_eq!(slots, vec![(5, 31), (2, 30), (3, 30)]);
+    }
+
+    #[test]
+    fn test_add_votes_invalid() {
+        let (blockstore, bank, mut repair_weight) = setup_orphan_repair_weight();
+        let root = 3;
+        repair_weight.set_root(root);
+
+        // Try to add a vote for slot < root and a slot that is unrooted
+        for old_slot in &[2, 4] {
+            if *old_slot > root {
+                assert!(repair_weight.unrooted_slots.contains(old_slot));
+            } else {
+                assert!(!repair_weight.unrooted_slots.contains(old_slot));
+            }
+            let votes = vec![(*old_slot, vec![Pubkey::default()])];
+            repair_weight.add_votes(
+                &blockstore,
+                votes.into_iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule(),
+            );
+            assert!(!repair_weight.trees.contains_key(old_slot));
+            assert!(!repair_weight.slot_to_tree.contains_key(old_slot));
+        }
     }
 
     #[test]
@@ -525,7 +645,7 @@ mod test {
         let votes = vec![(11, vote_pubkeys)];
 
         // Should not resolve orphans because `update_orphan_ancestors` has
-        // not been called, but should addd to the orphan branch
+        // not been called, but should add to the orphan branch
         repair_weight.add_votes(
             &blockstore,
             votes.into_iter(),
@@ -556,7 +676,7 @@ mod test {
             assert_eq!(*repair_weight.slot_to_tree.get(&slot).unwrap(), 0);
         }
         assert_eq!(repair_weight.trees.len(), 1);
-        assert!(repair_weight.trees.get(&0).is_some());
+        assert!(repair_weight.trees.contains_key(&0));
     }
 
     #[test]
@@ -580,9 +700,9 @@ mod test {
 
         assert_eq!(repair_weight.trees.len(), 3);
         // Roots of the orphan branches should exist
-        assert!(repair_weight.trees.get(&0).is_some());
-        assert!(repair_weight.trees.get(&8).is_some());
-        assert!(repair_weight.trees.get(&20).is_some());
+        assert!(repair_weight.trees.contains_key(&0));
+        assert!(repair_weight.trees.contains_key(&8));
+        assert!(repair_weight.trees.contains_key(&20));
 
         // Call `update_orphan_ancestors` to resolve orphan
         repair_weight.update_orphan_ancestors(
@@ -596,9 +716,9 @@ mod test {
         // resolved
         assert_eq!(repair_weight.trees.len(), 3);
         // Roots of the orphan branches should exist
-        assert!(repair_weight.trees.get(&0).is_some());
-        assert!(repair_weight.trees.get(&8).is_some());
-        assert!(repair_weight.trees.get(&20).is_some());
+        assert!(repair_weight.trees.contains_key(&0));
+        assert!(repair_weight.trees.contains_key(&8));
+        assert!(repair_weight.trees.contains_key(&20));
 
         // Resolve orphans in blockstore
         blockstore.add_tree(tr(6) / (tr(8)), true, true);
@@ -613,7 +733,7 @@ mod test {
 
         // Only the main fork should exist now
         assert_eq!(repair_weight.trees.len(), 1);
-        assert!(repair_weight.trees.get(&0).is_some());
+        assert!(repair_weight.trees.contains_key(&0));
     }
 
     #[test]
@@ -741,8 +861,8 @@ mod test {
         // Should only be one orphan in the `trees` map
         assert_eq!(repair_weight.trees.len(), 2);
         // Roots of the orphan branches should exist
-        assert!(repair_weight.trees.get(&0).is_some());
-        assert!(repair_weight.trees.get(&8).is_some());
+        assert!(repair_weight.trees.contains_key(&0));
+        assert!(repair_weight.trees.contains_key(&8));
 
         // Ask for 2 orphans. Even though there's only one
         // orphan in the `trees` map, we should search for
@@ -773,6 +893,281 @@ mod test {
         assert_eq!(repairs[0].slot(), 8);
         assert_eq!(repairs[1].slot(), 20);
         assert_eq!(repairs[2].slot(), 100);
+    }
+
+    #[test]
+    fn test_set_root() {
+        let (_, _, mut repair_weight) = setup_orphan_repair_weight();
+
+        // Set root at 1
+        repair_weight.set_root(1);
+        check_old_root_purged_verify_new_root(0, 1, &repair_weight);
+        assert!(repair_weight.unrooted_slots.is_empty());
+
+        // Other later slots in the fork should be updated to map to the
+        // the new root
+        assert_eq!(*repair_weight.slot_to_tree.get(&1).unwrap(), 1);
+        assert_eq!(*repair_weight.slot_to_tree.get(&2).unwrap(), 1);
+
+        // Trees tracked should be updated
+        assert_eq!(repair_weight.trees.get(&1).unwrap().root(), 1);
+
+        // Orphan slots should not be changed
+        for orphan in &[8, 20] {
+            assert_eq!(repair_weight.trees.get(orphan).unwrap().root(), *orphan);
+            assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
+        }
+    }
+
+    #[test]
+    fn test_set_missing_root() {
+        let (_, _, mut repair_weight) = setup_orphan_repair_weight();
+
+        // Make sure the slot to root has not been added to the set
+        let missing_root_slot = 5;
+        assert!(!repair_weight.slot_to_tree.contains_key(&missing_root_slot));
+
+        // Set root at 5
+        repair_weight.set_root(missing_root_slot);
+        check_old_root_purged_verify_new_root(0, missing_root_slot, &repair_weight);
+
+        // Should purge [0, 5) from tree
+        for slot in 0..5 {
+            assert!(!repair_weight.slot_to_tree.contains_key(&slot));
+        }
+
+        // Orphan slots should not be changed
+        for orphan in &[8, 20] {
+            assert_eq!(repair_weight.trees.get(orphan).unwrap().root(), *orphan);
+            assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
+        }
+    }
+
+    #[test]
+    fn test_set_root_check_unrooted_slots() {
+        let (blockstore, bank, mut repair_weight) = setup_orphan_repair_weight();
+
+        // Chain orphan 8 back to the main fork, but don't
+        // touch orphan 20
+        blockstore.add_tree(tr(4) / (tr(8)), true, true);
+
+        // Call `update_orphan_ancestors` to resolve orphan
+        repair_weight.update_orphan_ancestors(
+            &blockstore,
+            8,
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Set a root at 3
+        repair_weight.set_root(3);
+        check_old_root_purged_verify_new_root(0, 3, &repair_weight);
+
+        // Setting root at 3 should purge all descendants of slot `2`, and
+        // add any purged slots > 3 to the the `unrooted` set
+        let purged_slots = vec![0, 1, 2, 4, 8, 10];
+        let mut expected_unrooted_len = 0;
+        for purged_slot in &purged_slots {
+            assert!(!repair_weight.slot_to_tree.contains_key(&purged_slot));
+            assert!(!repair_weight.trees.contains_key(&purged_slot));
+            if *purged_slot > 3 {
+                assert!(repair_weight.unrooted_slots.contains(&purged_slot));
+                expected_unrooted_len += 1;
+            }
+        }
+
+        assert_eq!(repair_weight.unrooted_slots.len(), expected_unrooted_len);
+
+        // Orphan 20 should still exist
+        assert_eq!(repair_weight.trees.len(), 2);
+        assert_eq!(repair_weight.trees.get(&20).unwrap().root(), 20);
+        assert_eq!(*repair_weight.slot_to_tree.get(&20).unwrap(), 20);
+
+        // Now set root at a slot 30 that doesnt exist in `repair_weight`, but is
+        // higher than the remaining orphan
+        assert!(!repair_weight.slot_to_tree.contains_key(&30));
+        repair_weight.set_root(30);
+        check_old_root_purged_verify_new_root(3, 30, &repair_weight);
+        assert_eq!(repair_weight.trees.len(), 1);
+
+        // Orphan 20 should be purged. All other old slots in `unrooted_slots`
+        // should have been purged
+        assert!(repair_weight.unrooted_slots.is_empty());
+
+        // Trees tracked should be updated
+        assert_eq!(repair_weight.trees.len(), 1);
+    }
+
+    #[test]
+    fn test_add_votes_update_orphans_unrooted() {
+        let root = 3;
+        // Test chaining back to slots that were purged when the root 3 was set.
+        // Two cases:
+        // 1) Slot 2 < root should not be in the `unrooted_slots` set
+        // 2) Slot 4 > root should be in the `unrooted_slots` set
+        // Both cases should purge any branches that chain to them
+        for old_parent in &[2, 4] {
+            let (blockstore, bank, mut repair_weight) = setup_orphan_repair_weight();
+            // Set a root at 3
+            repair_weight.set_root(root);
+
+            // Check
+            if *old_parent > root {
+                assert!(repair_weight.unrooted_slots.contains(old_parent));
+            } else {
+                assert!(!repair_weight.unrooted_slots.contains(old_parent));
+            }
+
+            // Chain orphan 8 back to slot `old_parent`
+            blockstore.add_tree(tr(*old_parent) / (tr(8)), true, true);
+
+            // Chain orphan 20 back to orphan 8
+            blockstore.add_tree(tr(8) / (tr(20)), true, true);
+
+            // Call `update_orphan_ancestors` to resolve orphan
+            repair_weight.update_orphan_ancestors(
+                &blockstore,
+                20,
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule(),
+            );
+
+            // Should mark entire branch as unrooted and purge them
+            for purged_slot in &[*old_parent, 8, 20] {
+                assert!(!repair_weight.slot_to_tree.contains_key(purged_slot));
+                assert!(!repair_weight.slot_to_tree.contains_key(purged_slot));
+                if *purged_slot > root {
+                    assert!(repair_weight.unrooted_slots.contains(purged_slot));
+                    assert!(repair_weight.unrooted_slots.contains(purged_slot));
+                } else {
+                    assert!(!repair_weight.unrooted_slots.contains(purged_slot));
+                    assert!(!repair_weight.unrooted_slots.contains(purged_slot));
+                }
+            }
+
+            // Add a vote that chains back to `old_parent`, should be purged
+            let new_vote_slot = 100;
+            blockstore.add_tree(tr(*old_parent) / tr(new_vote_slot), true, true);
+            repair_weight.add_votes(
+                &blockstore,
+                vec![(new_vote_slot, vec![Pubkey::default()])].into_iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule(),
+            );
+
+            assert!(!repair_weight.slot_to_tree.contains_key(&new_vote_slot));
+            // Because new_vote_slot > root (otherwise vote isn't processsed)
+            assert!(repair_weight.unrooted_slots.contains(&new_vote_slot));
+        }
+    }
+
+    #[test]
+    fn test_find_ancestor_subtree_of_slot() {
+        let (blockstore, _, mut repair_weight) = setup_orphan_repair_weight();
+
+        // Ancestor of slot 4 is slot 2, with an existing subtree rooted at 0
+        // because there wass a vote for a descendant
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 4),
+            (vec![2].into_iter().collect::<VecDeque<_>>(), Some(0))
+        );
+
+        // Ancestors of 5 are [1, 3], with an existing subtree rooted at 0
+        // because there wass a vote for a descendant
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 5),
+            (vec![1, 3].into_iter().collect::<VecDeque<_>>(), Some(0))
+        );
+
+        // Ancestors of slot 23 are [20, 22], with an existing subtree of 20
+        // because there wass a vote for 20
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 23),
+            (vec![20, 22].into_iter().collect::<VecDeque<_>>(), Some(20))
+        );
+
+        // Add 22 to `unrooted_slots`, ancestor search should now
+        // terminate early and return no valid existing subtree
+        repair_weight.unrooted_slots.insert(22);
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 23),
+            (vec![22].into_iter().collect::<VecDeque<_>>(), None)
+        );
+
+        // Ancestors of slot 31 are [30], with no existing subtree
+        blockstore.add_tree(tr(30) / (tr(31)), true, true);
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 31),
+            (vec![30].into_iter().collect::<VecDeque<_>>(), None)
+        );
+
+        // Set a root at 5
+        repair_weight.set_root(5);
+
+        // Ancestor of slot 6 shouldn't include anything from before the root
+        // at slot 5
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 6),
+            (vec![5].into_iter().collect::<VecDeque<_>>(), Some(5))
+        );
+
+        // Chain orphan 8 back to slot 4 on a different fork, ancestor search
+        // should not return ancestors earlier than the root
+        blockstore.add_tree(tr(4) / (tr(8)), true, true);
+        assert_eq!(
+            repair_weight.find_ancestor_subtree_of_slot(&blockstore, 8),
+            (vec![4].into_iter().collect::<VecDeque<_>>(), None)
+        );
+    }
+
+    fn setup_orphan_repair_weight() -> (Blockstore, Bank, RepairWeight) {
+        let blockstore = setup_orphans();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+
+        // Add votes for the main fork and orphan forks
+        let votes = vec![
+            (4, vote_pubkeys.clone()),
+            (8, vote_pubkeys.clone()),
+            (10, vote_pubkeys.clone()),
+            (20, vote_pubkeys),
+        ];
+
+        let mut repair_weight = RepairWeight::new(0);
+        repair_weight.add_votes(
+            &blockstore,
+            votes.into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        assert!(repair_weight.slot_to_tree.contains_key(&0));
+
+        // Check orphans are present
+        for orphan in &[8, 20] {
+            assert_eq!(repair_weight.trees.get(orphan).unwrap().root(), *orphan);
+            assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
+        }
+        (blockstore, bank, repair_weight)
+    }
+
+    fn check_old_root_purged_verify_new_root(
+        old_root: Slot,
+        new_root: Slot,
+        repair_weight: &RepairWeight,
+    ) {
+        // Check old root is purged
+        assert!(!repair_weight.trees.contains_key(&old_root));
+        assert!(!repair_weight.slot_to_tree.contains_key(&old_root));
+        assert!(!repair_weight.unrooted_slots.contains(&old_root));
+
+        // Validate new root
+        assert_eq!(repair_weight.trees.get(&new_root).unwrap().root(), new_root);
+        assert_eq!(
+            *repair_weight.slot_to_tree.get(&new_root).unwrap(),
+            new_root
+        );
+        assert_eq!(repair_weight.root, new_root);
     }
 
     fn setup_orphans() -> Blockstore {
