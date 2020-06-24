@@ -4439,6 +4439,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-poh-bench"
+version = "1.3.0"
+dependencies = [
+ "clap",
+ "log 0.4.8",
+ "rand 0.7.3",
+ "rayon",
+ "solana-clap-utils",
+ "solana-ledger",
+ "solana-logger",
+ "solana-measure",
+ "solana-perf",
+ "solana-sdk 1.3.0",
+ "solana-version",
+]
+
+[[package]]
 name = "solana-ramp-tps"
 version = "1.3.0"
 dependencies = [

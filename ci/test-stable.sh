@@ -65,6 +65,7 @@ test-stable-perf)
 
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-move)
   #ci/affects-files.sh \
