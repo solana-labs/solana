@@ -302,16 +302,6 @@ mod bpf {
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
             );
-<<<<<<< HEAD
-=======
-
-            let instruction = Instruction::new(program_id, &9u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
-            assert_eq!(
-                result.unwrap_err().unwrap(),
-                TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
-            );
->>>>>>> 1c498369b... Remove fee-payer guesswork from Message and Transaction (#10776)
         }
     }
 
@@ -367,12 +357,7 @@ mod bpf {
             let derived_key2 =
                 Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
             let derived_key3 =
-<<<<<<< HEAD
                 Pubkey::create_program_address(&["Gar Ma Nar Nar"], &invoked_program_id).unwrap();
-=======
-                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id)
-                    .unwrap();
->>>>>>> 1c498369b... Remove fee-payer guesswork from Message and Transaction (#10776)
 
             let mint_pubkey = mint_keypair.pubkey();
             let account_metas = vec![
