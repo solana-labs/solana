@@ -40,6 +40,7 @@ pub mod progress_map;
 pub mod pubkey_references;
 pub mod repair_response;
 pub mod repair_service;
+pub mod repair_weighted_traversal;
 pub mod replay_stage;
 mod result;
 pub mod retransmit_stage;
