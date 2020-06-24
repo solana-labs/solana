@@ -7,7 +7,7 @@ This document makes no suggestion as to the monetary value of SOL at any time.*
 Staking your SOL tokens on Solana is the best way you can help secure the world's
 highest-performing blockchain network, and
 [earn rewards](../implemented-proposals/staking-rewards.md) for doing so!
-Inflation and network rewards are *NOT* presently implemented on Solana's
+Inflation and network rewards are *NOT* presently enabled on Solana's
 Mainnet Beta network, but may be enabled in the future.
 
 Solana is a Proof-of-Stake (PoS) network with delegations, which means that
@@ -35,7 +35,7 @@ delegated stake.
 
 There is a risk of loss of tokens when staking, through a process known as
 *slashing*.  Slashing is *NOT* presently enabled on Solana's Mainnet Beta
-network, but may be implemented in the future.  Slashing involves the automatic
+network, but may be enabled in the future.  Slashing involves the automatic
 removal and destruction of a portion of a validator's delegated stake in
 response to intentional malicious behavior, such as creating invalid
 transactions or censoring certain types of transactions or network participants.
@@ -51,7 +51,7 @@ secure, robust and performing at its best.
 *Note: Network rewards for stakers and validators are not presently enabled on
 Mainnet Beta.*
 
-*Note: Slashing is not implemented on Mainnet Beta at this time.*
+*Note: Slashing is not enabled on Mainnet Beta at this time.*
 
 
 ## How do I stake my SOL tokens?
