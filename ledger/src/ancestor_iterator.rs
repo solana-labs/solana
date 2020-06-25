@@ -25,7 +25,7 @@ impl<'a> Iterator for AncestorIterator<'a> {
     type Item = Slot;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current.clone();
+        let current = self.current;
         current.map(|slot| {
             if slot != 0 {
                 self.current = self.blockstore.meta(slot).unwrap().and_then(|slot_meta| {
@@ -101,9 +101,7 @@ mod tests {
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, fork_point, fork_hash);
 
         // Test correctness
-        assert!(AncestorIterator::new(0, &blockstore)
-            .collect::<Vec<Slot>>()
-            .is_empty());
+        assert!(AncestorIterator::new(0, &blockstore).next().is_none());
         assert_eq!(
             AncestorIterator::new(4, &blockstore).collect::<Vec<Slot>>(),
             vec![1, 0]
