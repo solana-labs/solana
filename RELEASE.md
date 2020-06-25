@@ -119,7 +119,7 @@ Alternatively use the Github UI.
 1. After the new release has been tagged, update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1) with:
      ```
      $ scripts/increment-cargo-version.sh patch
-     $ ./scripts/cargo-for-all-lock-files.sh update
+     $ ./scripts/cargo-for-all-lock-files.sh tree
      ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the **release branch** with something like:
     ```
