@@ -286,6 +286,7 @@ startBootstrapLeader() {
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
          \"$maybeWarpSlot\" \
+         \"$waitForNodeInit\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -356,6 +357,7 @@ startNode() {
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
          \"$maybeWarpSlot\" \
+         \"$waitForNodeInit\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -591,6 +593,19 @@ deploy() {
     fi
   done
 
+  if ! $waitForNodeInit; then
+    # Handle async init
+    declare startTime=$SECONDS
+    for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
+      declare timeWaited=$((SECONDS - startTime))
+      if [[ $timeWaited -gt 600 ]]; then
+        break
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "./solana/net/remote/remote-node-wait-init.sh $((600 - timeWaited))"
+    done
+  fi
+
   $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
   additionalNodeDeployTime=$SECONDS
 
@@ -748,6 +763,7 @@ netemCommand="add"
 clientDelayStart=0
 netLogDir=
 maybeWarpSlot=
+waitForNodeInit=true
 
 command=$1
 [[ -n $command ]] || usage
@@ -854,6 +870,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --warp-slot ]]; then
       maybeWarpSlot="$1 $2"
       shift 2
+    elif [[ $1 == --async-node-init ]]; then
+      waitForNodeInit=false
+      shift 1
     else
       usage "Unknown long option: $1"
     fi

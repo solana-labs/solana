@@ -27,6 +27,7 @@ extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
 maybeWarpSlot="${21}"
+waitForNodeInit="${22}"
 set +x
 
 missing() {
@@ -242,7 +243,11 @@ cat >> ~/solana/on-reboot <<EOF
     disown
 EOF
     ~/solana/on-reboot
-    net/remote/remote-node-wait-init.sh 600
+
+    if $waitForNodeInit; then
+      net/remote/remote-node-wait-init.sh 600
+    fi
+
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
@@ -361,7 +366,10 @@ cat >> ~/solana/on-reboot <<EOF
     disown
 EOF
     ~/solana/on-reboot
-    net/remote/remote-node-wait-init.sh 600
+
+    if $waitForNodeInit; then
+      net/remote/remote-node-wait-init.sh 600
+    fi
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
       # Wait for the validator to catch up to the bootstrap validator before
