@@ -116,7 +116,8 @@ There are three release channels that map to branches as follows:
 
 1. After the new release has been tagged, update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1) with:
      ```
-     scripts/increment-cargo-version.sh patch
+     $ scripts/increment-cargo-version.sh patch
+     $ ./scripts/cargo-for-all-lock-files.sh tree
      ```
 1. Rebuild to get an updated version of `Cargo.lock`:
     ```
