@@ -586,7 +586,7 @@ mod test {
         let owner = Keypair::new();
         let bank_client = BankClient::new(bank);
         bank_client
-            .transfer(42, &mint_keypair, &owner.pubkey())
+            .transfer_and_confirm(42, &mint_keypair, &owner.pubkey())
             .unwrap();
 
         (bank_client, owner)
@@ -604,7 +604,7 @@ mod test {
         );
 
         client
-            .send_message(
+            .send_and_confirm_message(
                 &[owner, &new],
                 Message::new(&[instruction], Some(&owner.pubkey())),
             )
@@ -616,7 +616,7 @@ mod test {
         let new = create_account(&client, &owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
-            .send_instruction(owner, instruction)
+            .send_and_confirm_instruction(owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         new
     }
@@ -630,7 +630,7 @@ mod test {
             tokens,
         );
         client
-            .send_instruction(owner, instruction)
+            .send_and_confirm_instruction(owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
     }
 
@@ -658,7 +658,7 @@ mod test {
             &src,
         );
         client
-            .send_instruction(owner, instruction)
+            .send_and_confirm_instruction(owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         (trade, src)
     }
@@ -691,7 +691,7 @@ mod test {
         let new = create_token_account(&client, &owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .expect_err(&format!("{}:{}", line!(), file!()));
     }
 
@@ -711,7 +711,7 @@ mod test {
             42,
         );
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new_account_data = client.get_account_data(&new).unwrap().unwrap();
@@ -798,7 +798,7 @@ mod test {
         let instruction =
             exchange_instruction::swap_request(&owner.pubkey(), &to_trade, &from_trade, &profit);
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let to_trade_account_data = client.get_account_data(&to_trade).unwrap().unwrap();
@@ -865,7 +865,7 @@ mod test {
         let instruction =
             exchange_instruction::swap_request(&owner.pubkey(), &to_trade, &from_trade, &profit);
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new = create_token_account(&client, &owner);
@@ -873,13 +873,13 @@ mod test {
         let instruction =
             exchange_instruction::transfer_request(&owner.pubkey(), &new, &to_trade, Token::B, 1);
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let instruction =
             exchange_instruction::transfer_request(&owner.pubkey(), &new, &from_trade, Token::A, 1);
         client
-            .send_instruction(&owner, instruction)
+            .send_and_confirm_instruction(&owner, instruction)
             .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new_account_data = client.get_account_data(&new).unwrap().unwrap();

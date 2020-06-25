@@ -259,7 +259,7 @@ mod tests {
         let message = Message::new(&instructions, Some(&alice_pubkey));
         assert_eq!(
             bank_client
-                .send_message(&[&alice_keypair, &budget_keypair], message)
+                .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
@@ -278,7 +278,7 @@ mod tests {
             budget_instruction::payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 100);
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 100);
     }
@@ -304,14 +304,14 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
-            .transfer(1, &alice_keypair, &mallory_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
         let instruction =
             budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
@@ -325,7 +325,7 @@ mod tests {
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
             bank_client
-                .send_message(&[&mallory_keypair], message)
+                .send_and_confirm_message(&[&mallory_keypair], message)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
@@ -354,14 +354,14 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
-            .transfer(1, &alice_keypair, &mallory_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
         let instruction =
             budget_instruction::apply_timestamp(&mallory_pubkey, &budget_pubkey, &bob_pubkey, dt);
@@ -375,7 +375,7 @@ mod tests {
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
             bank_client
-                .send_message(&[&mallory_keypair], message)
+                .send_and_confirm_message(&[&mallory_keypair], message)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
@@ -404,7 +404,7 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
@@ -421,7 +421,7 @@ mod tests {
             budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &mallory_pubkey, dt);
         assert_eq!(
             bank_client
-                .send_instruction(&alice_keypair, instruction)
+                .send_and_confirm_instruction(&alice_keypair, instruction)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(
@@ -445,7 +445,7 @@ mod tests {
         let instruction =
             budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &bob_pubkey, dt);
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
@@ -474,7 +474,7 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
@@ -490,14 +490,14 @@ mod tests {
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
-            .transfer(1, &alice_keypair, &mallory_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
 
         let instruction =
             budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
         bank_client
-            .send_instruction(&mallory_keypair, instruction)
+            .send_and_confirm_instruction(&mallory_keypair, instruction)
             .unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
@@ -508,7 +508,7 @@ mod tests {
         let instruction =
             budget_instruction::apply_signature(&alice_pubkey, &budget_pubkey, &alice_pubkey);
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
         assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
@@ -538,7 +538,7 @@ mod tests {
 
         // Give Bob some lamports so he can sign the witness transaction.
         bank_client
-            .transfer(1, &alice_keypair, &bob_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &bob_pubkey)
             .unwrap();
 
         let instructions = budget_instruction::when_account_data(
@@ -552,7 +552,7 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&alice_pubkey));
         bank_client
-            .send_message(&[&alice_keypair, &budget_keypair], message)
+            .send_and_confirm_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 41);
@@ -571,7 +571,9 @@ mod tests {
         // Anyone can sign the message, but presumably it's Bob, since he's the
         // one claiming the payout.
         let message = Message::new(&[instruction], Some(&bob_pubkey));
-        bank_client.send_message(&[&bob_keypair], message).unwrap();
+        bank_client
+            .send_and_confirm_message(&[&bob_keypair], message)
+            .unwrap();
 
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
