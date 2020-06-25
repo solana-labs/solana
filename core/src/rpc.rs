@@ -89,20 +89,23 @@ impl JsonRpcRequestProcessor {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
 
-        match commitment {
-            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Recent => {
+        let commitment_level = match commitment {
+            None => CommitmentLevel::Max,
+            Some(config) => config.commitment,
+        };
+
+        match commitment_level {
+            CommitmentLevel::Recent => {
                 let bank = r_bank_forks.working_bank();
                 debug!("RPC using working_bank: {:?}", bank.slot());
                 Ok(bank)
             }
-            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Root => {
+            CommitmentLevel::Root => {
                 let slot = r_bank_forks.root();
                 debug!("RPC using node root: {:?}", slot);
                 Ok(r_bank_forks.get(slot).cloned().unwrap())
             }
-            Some(commitment_config)
-                if commitment_config.commitment == CommitmentLevel::Single
-                    || commitment_config.commitment == CommitmentLevel::SingleGossip =>
+	    CommitmentLevel::Single | CommitmentLevel::SingleGossip =>
             {
                 let slot = self
                     .block_commitment_cache
@@ -112,7 +115,7 @@ impl JsonRpcRequestProcessor {
                 debug!("RPC using confirmed slot: {:?}", slot);
                 Ok(r_bank_forks.get(slot).cloned().unwrap())
             }
-            _ => {
+            CommitmentLevel::Max => {
                 let cluster_root = self
                     .block_commitment_cache
                     .read()
