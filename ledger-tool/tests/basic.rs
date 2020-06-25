@@ -43,7 +43,7 @@ fn nominal() {
     assert!(output.status.success());
 
     // Print everything
-    let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
+    let output = run_ledger_tool(&["-l", &ledger_path, "print", "-vvv"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), ticks + meta_lines + 1);
+    assert_eq!(count_newlines(&output.stdout), ticks + meta_lines);
 }
