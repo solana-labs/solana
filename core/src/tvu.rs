@@ -148,7 +148,6 @@ impl Tvu {
             tvu_config.shred_version,
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
-            vote_tracker.clone(),
             verified_vote_receiver,
         );
 

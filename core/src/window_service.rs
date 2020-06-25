@@ -4,7 +4,6 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     repair_response,
     repair_service::{RepairInfo, RepairService},
@@ -302,7 +301,6 @@ impl WindowService {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
-        vote_tracker: Arc<VoteTracker>,
         verified_vote_receiver: VerifiedVoteReceiver,
     ) -> WindowService
     where
@@ -320,7 +318,6 @@ impl WindowService {
             cluster_info.clone(),
             repair_info,
             cluster_slots,
-            vote_tracker,
             verified_vote_receiver,
         );
 

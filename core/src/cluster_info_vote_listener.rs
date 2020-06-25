@@ -51,7 +51,7 @@ pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vote)>;
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
     updates: Option<Vec<Arc<Pubkey>>>,
-    pub total_stake: u64,
+    total_stake: u64,
 }
 
 impl SlotVoteTracker {
@@ -64,7 +64,7 @@ impl SlotVoteTracker {
 #[derive(Default)]
 pub struct VoteTracker {
     // Map from a slot to a set of validators who have voted for that slot
-    pub slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
+    slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
     // Don't track votes from people who are not staked, acts as a spam filter
     epoch_authorized_voters: RwLock<HashMap<Epoch, Arc<EpochAuthorizedVoters>>>,
     leader_schedule_epoch: RwLock<Epoch>,
