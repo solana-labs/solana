@@ -402,7 +402,7 @@ mod tests {
             10_000,
             rpc_service
                 .request_processor
-                .get_balance(Ok(mint_keypair.pubkey()), None)
+                .get_balance(&mint_keypair.pubkey(), None)
                 .unwrap()
                 .value
         );
