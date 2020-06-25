@@ -607,6 +607,127 @@ mod test {
     }
 
     #[test]
+    fn test_set_root_and_add_votes() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(1, stake);
+
+        // Vote for slot 2
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 1)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 4);
+
+        // Set a root
+        heaviest_subtree_fork_choice.set_root(1);
+
+        // Vote again for slot 3 on a different fork than the last vote,
+        // verify this fork is now the best fork
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 3)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 6);
+        assert_eq!(heaviest_subtree_fork_choice.stake_voted_at(1).unwrap(), 0);
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_at(3).unwrap(),
+            stake
+        );
+        for slot in &[1, 3] {
+            assert_eq!(
+                heaviest_subtree_fork_choice
+                    .stake_voted_subtree(*slot)
+                    .unwrap(),
+                stake
+            );
+        }
+
+        // Set a root at last vote
+        heaviest_subtree_fork_choice.set_root(3);
+        // Check new leaf 7 is still propagated properly
+        heaviest_subtree_fork_choice.add_new_leaf_slot(7, Some(6));
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 7);
+    }
+
+    #[test]
+    fn test_set_root_and_add_outdated_votes() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(1, stake);
+
+        // Vote for slot 0
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 0)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Set root to 1, should purge 0 from the tree, but
+        // there's still an outstanding vote for slot 0 in `pubkey_votes`.
+        heaviest_subtree_fork_choice.set_root(1);
+
+        // Vote again for slot 3, verify everything is ok
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 3)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_at(3).unwrap(),
+            stake
+        );
+        for slot in &[1, 3] {
+            assert_eq!(
+                heaviest_subtree_fork_choice
+                    .stake_voted_subtree(*slot)
+                    .unwrap(),
+                stake
+            );
+        }
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 6);
+
+        // Set root again on different fork than the last vote
+        heaviest_subtree_fork_choice.set_root(2);
+        // Smaller vote than last vote 3 should be ignored
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 2)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(heaviest_subtree_fork_choice.stake_voted_at(2).unwrap(), 0);
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_subtree(2).unwrap(),
+            0
+        );
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 4);
+
+        // New larger vote than last vote 3 should be processed
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], 4)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        assert_eq!(heaviest_subtree_fork_choice.stake_voted_at(2).unwrap(), 0);
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_at(4).unwrap(),
+            stake
+        );
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_subtree(2).unwrap(),
+            stake
+        );
+        assert_eq!(
+            heaviest_subtree_fork_choice.stake_voted_subtree(4).unwrap(),
+            stake
+        );
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 4);
+    }
+
+    #[test]
     fn test_best_overall_slot() {
         let heaviest_subtree_fork_choice = setup_forks();
         // Best overall path is 0 -> 1 -> 2 -> 4, so best leaf
