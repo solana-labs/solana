@@ -49,13 +49,8 @@ pub fn create_builtin_transactions(
             // Seed the signer account
             let rando0 = Keypair::new();
             bank_client
-<<<<<<< HEAD
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
-                .expect(&format!("{}:{}", line!(), file!()));
-=======
                 .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
-                .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
->>>>>>> 7ade330b2... Rename Client methods to match proposed BanksClient (#10793)
+                .expect(&format!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
@@ -77,13 +72,8 @@ pub fn create_native_loader_transactions(
             // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
-<<<<<<< HEAD
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
-                .expect(&format!("{}:{}", line!(), file!()));
-=======
                 .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
-                .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
->>>>>>> 7ade330b2... Rename Client methods to match proposed BanksClient (#10793)
+                .expect(&format!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();

@@ -302,16 +302,6 @@ mod bpf {
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
             );
-<<<<<<< HEAD
-=======
-
-            let instruction = Instruction::new(program_id, &9u8, account_metas.clone());
-            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-            assert_eq!(
-                result.unwrap_err().unwrap(),
-                TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
-            );
->>>>>>> 7ade330b2... Rename Client methods to match proposed BanksClient (#10793)
         }
     }
 
