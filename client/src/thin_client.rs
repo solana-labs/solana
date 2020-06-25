@@ -373,7 +373,7 @@ impl SyncClient for ThinClient {
         keypair: &Keypair,
         instruction: Instruction,
     ) -> TransportResult<Signature> {
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         self.send_message(&[keypair], message)
     }
 
@@ -611,7 +611,7 @@ impl AsyncClient for ThinClient {
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> TransportResult<Signature> {
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
     fn async_transfer(

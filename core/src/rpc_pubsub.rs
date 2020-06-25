@@ -374,6 +374,7 @@ mod tests {
     };
     use solana_sdk::{
         hash::Hash,
+        message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_program, system_transaction,
@@ -569,11 +570,8 @@ mod tests {
             None,
             51,
         );
-        let tx = Transaction::new_signed_instructions(
-            &[&contract_funds, &contract_state],
-            &ixs,
-            blockhash,
-        );
+        let message = Message::new(&ixs, Some(&contract_funds.pubkey()));
+        let tx = Transaction::new(&[&contract_funds, &contract_state], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
@@ -615,7 +613,8 @@ mod tests {
             &contract_state.pubkey(),
             &bob_pubkey,
         );
-        let tx = Transaction::new_signed_instructions(&[&witness], &[ix], blockhash);
+        let message = Message::new(&[ix], Some(&witness.pubkey()));
+        let tx = Transaction::new(&[&witness], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 

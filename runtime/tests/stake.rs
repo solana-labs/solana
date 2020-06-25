@@ -53,7 +53,7 @@ fn fill_epoch_with_votes(
         let bank_client = BankClient::new_shared(&bank);
         let parent = bank.parent().unwrap();
 
-        let message = Message::new_with_payer(
+        let message = Message::new(
             &[vote_instruction::vote(
                 &vote_pubkey,
                 &vote_pubkey,
@@ -119,15 +119,18 @@ fn test_stake_create_and_split_single_signature() {
     let lamports = 1_000_000;
 
     // Create stake account with seed
-    let message = Message::new(&stake_instruction::create_account_with_seed(
-        &staker_pubkey, // from
-        &stake_address, // to
-        &staker_pubkey, // base
-        "stake",        // seed
-        &authorized,
-        &stake_state::Lockup::default(),
-        lamports,
-    ));
+    let message = Message::new(
+        &stake_instruction::create_account_with_seed(
+            &staker_pubkey, // from
+            &stake_address, // to
+            &staker_pubkey, // base
+            "stake",        // seed
+            &authorized,
+            &stake_state::Lockup::default(),
+            lamports,
+        ),
+        Some(&staker_pubkey),
+    );
 
     // only one signature required
     bank_client
@@ -139,7 +142,7 @@ fn test_stake_create_and_split_single_signature() {
         Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
             .unwrap();
     // Test split
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &stake_instruction::split_with_seed(
             &stake_address, // original
             &staker_pubkey, // authorized
@@ -183,15 +186,18 @@ fn test_stake_create_and_split_to_existing_system_account() {
     let lamports = 1_000_000;
 
     // Create stake account with seed
-    let message = Message::new(&stake_instruction::create_account_with_seed(
-        &staker_pubkey, // from
-        &stake_address, // to
-        &staker_pubkey, // base
-        "stake",        // seed
-        &authorized,
-        &stake_state::Lockup::default(),
-        lamports,
-    ));
+    let message = Message::new(
+        &stake_instruction::create_account_with_seed(
+            &staker_pubkey, // from
+            &stake_address, // to
+            &staker_pubkey, // base
+            "stake",        // seed
+            &authorized,
+            &stake_state::Lockup::default(),
+            lamports,
+        ),
+        Some(&staker_pubkey),
+    );
 
     bank_client
         .send_message(&[&staker_keypair], message)
@@ -212,7 +218,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     );
 
     // Verify the split fails because the account is already in use
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &stake_instruction::split_with_seed(
             &stake_address, // original
             &staker_pubkey, // authorized
@@ -256,31 +262,37 @@ fn test_stake_account_lifetime() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Create Vote Account
-    let message = Message::new(&vote_instruction::create_account(
-        &mint_pubkey,
-        &vote_pubkey,
-        &VoteInit {
-            node_pubkey: identity_pubkey,
-            authorized_voter: vote_pubkey,
-            authorized_withdrawer: vote_pubkey,
-            commission: 50,
-        },
-        10,
-    ));
+    let message = Message::new(
+        &vote_instruction::create_account(
+            &mint_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey: identity_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 50,
+            },
+            10,
+        ),
+        Some(&mint_pubkey),
+    );
     bank_client
         .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&stake_pubkey);
     // Create stake account and delegate to vote account
-    let message = Message::new(&stake_instruction::create_account_and_delegate_stake(
-        &mint_pubkey,
-        &stake_pubkey,
-        &vote_pubkey,
-        &authorized,
-        &stake_state::Lockup::default(),
-        1_000_000,
-    ));
+    let message = Message::new(
+        &stake_instruction::create_account_and_delegate_stake(
+            &mint_pubkey,
+            &stake_pubkey,
+            &vote_pubkey,
+            &authorized,
+            &stake_state::Lockup::default(),
+            1_000_000,
+        ),
+        Some(&mint_pubkey),
+    );
     bank_client
         .send_message(&[&mint_keypair, &stake_keypair], message)
         .expect("failed to create and delegate stake account");
@@ -295,7 +307,7 @@ fn test_stake_account_lifetime() {
     }
 
     // Test that we cannot withdraw anything until deactivation
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::withdraw(
             &stake_pubkey,
             &stake_pubkey,
@@ -359,7 +371,7 @@ fn test_stake_account_lifetime() {
 
     let bank_client = BankClient::new_shared(&bank);
     // Test split
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &stake_instruction::split(
             &stake_pubkey,
             &stake_pubkey,
@@ -376,7 +388,7 @@ fn test_stake_account_lifetime() {
         .is_ok());
 
     // Deactivate the split
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::deactivate_stake(
             &split_stake_pubkey,
             &stake_pubkey,
@@ -390,7 +402,7 @@ fn test_stake_account_lifetime() {
     let split_staked = get_staked(&bank, &split_stake_pubkey);
 
     // Test that we cannot withdraw above what's staked
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
@@ -412,7 +424,7 @@ fn test_stake_account_lifetime() {
     assert!(split_staked > 0);
 
     // withdrawal in cooldown
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
@@ -428,7 +440,7 @@ fn test_stake_account_lifetime() {
         .is_err());
 
     // but we can withdraw unstaked
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
@@ -453,7 +465,7 @@ fn test_stake_account_lifetime() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Test that we can withdraw everything else out of the split
-    let message = Message::new_with_payer(
+    let message = Message::new(
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
@@ -494,17 +506,20 @@ fn test_create_stake_account_from_seed() {
         Pubkey::create_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
 
     // Create Vote Account
-    let message = Message::new(&vote_instruction::create_account(
-        &mint_pubkey,
-        &vote_pubkey,
-        &VoteInit {
-            node_pubkey: identity_pubkey,
-            authorized_voter: vote_pubkey,
-            authorized_withdrawer: vote_pubkey,
-            commission: 50,
-        },
-        10,
-    ));
+    let message = Message::new(
+        &vote_instruction::create_account(
+            &mint_pubkey,
+            &vote_pubkey,
+            &VoteInit {
+                node_pubkey: identity_pubkey,
+                authorized_voter: vote_pubkey,
+                authorized_withdrawer: vote_pubkey,
+                commission: 50,
+            },
+            10,
+        ),
+        Some(&mint_pubkey),
+    );
     bank_client
         .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
@@ -522,6 +537,7 @@ fn test_create_stake_account_from_seed() {
             &stake_state::Lockup::default(),
             1_000_000,
         ),
+        Some(&mint_pubkey),
     );
     bank_client
         .send_message(&[&mint_keypair], message)

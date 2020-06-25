@@ -1579,6 +1579,7 @@ pub mod tests {
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
+        message::Message,
         rpc_port,
         signature::{Keypair, Signer},
         system_transaction,
@@ -1665,11 +1666,8 @@ pub mod tests {
             &leader_vote_keypair.pubkey(),
             vote,
         );
-        let vote_tx = Transaction::new_signed_instructions(
-            &[&leader_vote_keypair],
-            &[vote_ix],
-            Hash::default(),
-        );
+        let vote_msg = Message::new(&[vote_ix], Some(&leader_vote_keypair.pubkey()));
+        let vote_tx = Transaction::new(&[&leader_vote_keypair], vote_msg, Hash::default());
         let shreds = entries_to_test_shreds(
             vec![next_entry_mut(&mut Hash::default(), 0, vec![vote_tx])],
             1,
@@ -3387,9 +3385,10 @@ pub mod tests {
             bank.get_minimum_balance_for_rent_exemption(VoteState::size_of()),
         );
 
-        let transaction = Transaction::new_signed_instructions(
+        let message = Message::new(&instructions, Some(&alice.pubkey()));
+        let transaction = Transaction::new(
             &[&alice, &alice_vote_keypair],
-            &instructions,
+            message,
             bank.last_blockhash(),
         );
         bank.process_transaction(&transaction)

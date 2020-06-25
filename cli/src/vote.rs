@@ -475,7 +475,7 @@ pub fn process_create_vote_account(
                 lamports,
             )
         };
-        Message::new(&ixs)
+        Message::new(&ixs, Some(&config.signers[0].pubkey()))
     };
 
     if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
@@ -533,7 +533,7 @@ pub fn process_vote_authorize(
         vote_authorize,        // vote or withdraw
     )];
 
-    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
+    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -566,7 +566,7 @@ pub fn process_vote_update_validator(
         &new_identity_pubkey,
     )];
 
-    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
+    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -593,7 +593,7 @@ pub fn process_vote_update_commission(
         commission,
     )];
 
-    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
+    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -714,7 +714,7 @@ pub fn process_withdraw_from_vote_account(
         destination_account_pubkey,
     );
 
-    let message = Message::new_with_payer(&[ix], Some(&config.signers[0].pubkey()));
+    let message = Message::new(&[ix], Some(&config.signers[0].pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     transaction.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(

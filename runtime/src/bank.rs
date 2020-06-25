@@ -4257,11 +4257,8 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let instructions =
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
-        let tx = Transaction::new_signed_instructions(
-            &[&mint_keypair],
-            &instructions,
-            genesis_config.hash(),
-        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
         assert_eq!(
             bank.process_transaction(&tx).unwrap_err(),
             TransactionError::InstructionError(
@@ -4282,11 +4279,8 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let instructions =
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
-        let tx = Transaction::new_signed_instructions(
-            &[&mint_keypair],
-            &instructions,
-            genesis_config.hash(),
-        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
         bank.process_transaction(&tx).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
@@ -5436,7 +5430,7 @@ mod tests {
         let mut transfer_instruction =
             system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
         transfer_instruction.accounts[0].is_signer = false;
-        let message = Message::new_with_payer(&[transfer_instruction], None);
+        let message = Message::new(&[transfer_instruction], None);
         let tx = Transaction::new(&[&Keypair::new(); 0], message, bank.last_blockhash());
 
         assert_eq!(
@@ -5617,9 +5611,10 @@ mod tests {
             10,
         );
 
-        let transaction = Transaction::new_signed_instructions(
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(
             &[&mint_keypair, &vote_keypair],
-            &instructions,
+            message,
             bank.last_blockhash(),
         );
 
@@ -5674,9 +5669,10 @@ mod tests {
             10,
         ));
 
-        let transaction = Transaction::new_signed_instructions(
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(
             &[&mint_keypair, &vote_keypair, &stake_keypair],
-            &instructions,
+            message,
             bank.last_blockhash(),
         );
 
@@ -5873,9 +5869,10 @@ mod tests {
         );
         instructions[1].program_id = mock_vote_program_id();
 
-        let transaction = Transaction::new_signed_instructions(
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(
             &[&mint_keypair, &mock_account, &mock_validator_identity],
-            &instructions,
+            message,
             bank.last_blockhash(),
         );
 
@@ -5917,9 +5914,10 @@ mod tests {
             1,
         );
 
-        let transaction = Transaction::new_signed_instructions(
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(
             &[&mint_keypair, &mock_account, &mock_validator_identity],
-            &instructions,
+            message,
             bank.last_blockhash(),
         );
 
@@ -6107,9 +6105,10 @@ mod tests {
             &nonce_authority,
             nonce_lamports,
         ));
-        let setup_tx = Transaction::new_signed_instructions(
+        let message = Message::new(&setup_ixs, Some(&mint_keypair.pubkey()));
+        let setup_tx = Transaction::new(
             &[mint_keypair, &custodian_keypair, &nonce_keypair],
-            &setup_ixs,
+            message,
             bank.last_blockhash(),
         );
         bank.process_transaction(&setup_tx)?;
@@ -6270,14 +6269,9 @@ mod tests {
         let blockhash = bank.last_blockhash();
         bank.store_account(&nonce.pubkey(), &nonce_account);
 
-        let tx = Transaction::new_signed_instructions(
-            &[&nonce],
-            &[system_instruction::assign(
-                &nonce.pubkey(),
-                &Pubkey::new(&[9u8; 32]),
-            )],
-            blockhash,
-        );
+        let ix = system_instruction::assign(&nonce.pubkey(), &Pubkey::new(&[9u8; 32]));
+        let message = Message::new(&[ix], Some(&nonce.pubkey()));
+        let tx = Transaction::new(&[&nonce], message, blockhash);
 
         let expect = Err(TransactionError::InstructionError(
             0,
