@@ -60,6 +60,19 @@ fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
     Ok(Response { context, value })
 }
 
+pub fn is_confirmed_rooted(
+    block_commitment_cache: &BlockCommitmentCache,
+    blockstore: &Blockstore,
+    slot: Slot,
+) -> bool {
+    slot <= block_commitment_cache.largest_confirmed_root()
+        && (blockstore.is_root(slot)
+            || block_commitment_cache
+                .bank()
+                .status_cache_ancestors()
+                .contains(&slot))
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
@@ -669,7 +682,7 @@ impl JsonRpcRequestProcessor {
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && r_block_commitment_cache.is_confirmed_rooted(&self.blockstore, slot)
+            && is_confirmed_rooted(&r_block_commitment_cache, &self.blockstore, slot)
         {
             None
         } else {
@@ -3544,5 +3557,41 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_is_confirmed_rooted() {
+        let bank = Arc::new(Bank::default());
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        blockstore.set_roots(&[0, 1]).unwrap();
+        // Build BlockCommitmentCache with rooted slots
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_rooted_stake(50);
+        let mut cache1 = BlockCommitment::default();
+        cache1.increase_rooted_stake(40);
+        let mut cache2 = BlockCommitment::default();
+        cache2.increase_rooted_stake(20);
+
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache0);
+        block_commitment.entry(2).or_insert(cache1);
+        block_commitment.entry(3).or_insert(cache2);
+        let largest_confirmed_root = 1;
+        let block_commitment_cache =
+            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0, 0);
+
+        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 0));
+        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 1));
+        assert!(!is_confirmed_rooted(
+            &block_commitment_cache,
+            &blockstore,
+            2
+        ));
+        assert!(!is_confirmed_rooted(
+            &block_commitment_cache,
+            &blockstore,
+            3
+        ));
     }
 }

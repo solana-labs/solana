@@ -1,4 +1,3 @@
-use solana_ledger::blockstore::Blockstore;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
@@ -145,11 +144,6 @@ impl BlockCommitmentCache {
         })
     }
 
-    pub fn is_confirmed_rooted(&self, blockstore: &Blockstore, slot: Slot) -> bool {
-        slot <= self.largest_confirmed_root()
-            && (blockstore.is_root(slot) || self.bank.status_cache_ancestors().contains(&slot))
-    }
-
     #[cfg(test)]
     pub fn new_for_tests() -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
@@ -183,7 +177,6 @@ impl BlockCommitmentCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{genesis_config::GenesisConfig, pubkey::Pubkey};
 
     #[test]
@@ -222,34 +215,6 @@ mod tests {
         assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
         assert_eq!(block_commitment_cache.get_confirmation_count(2), Some(0),);
         assert_eq!(block_commitment_cache.get_confirmation_count(3), None,);
-    }
-
-    #[test]
-    fn test_is_confirmed_rooted() {
-        let bank = Arc::new(Bank::default());
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(&[0, 1]).unwrap();
-        // Build BlockCommitmentCache with rooted slots
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_rooted_stake(50);
-        let mut cache1 = BlockCommitment::default();
-        cache1.increase_rooted_stake(40);
-        let mut cache2 = BlockCommitment::default();
-        cache2.increase_rooted_stake(20);
-
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(1).or_insert(cache0);
-        block_commitment.entry(2).or_insert(cache1);
-        block_commitment.entry(3).or_insert(cache2);
-        let largest_confirmed_root = 1;
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0, 0);
-
-        assert!(block_commitment_cache.is_confirmed_rooted(&blockstore, 0));
-        assert!(block_commitment_cache.is_confirmed_rooted(&blockstore, 1));
-        assert!(!block_commitment_cache.is_confirmed_rooted(&blockstore, 2));
-        assert!(!block_commitment_cache.is_confirmed_rooted(&blockstore, 3));
     }
 
     #[test]
