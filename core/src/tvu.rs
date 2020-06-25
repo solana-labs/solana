@@ -277,9 +277,7 @@ pub mod tests {
             create_test_recorder(&bank, &blockstore, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(

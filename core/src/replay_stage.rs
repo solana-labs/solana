@@ -1879,9 +1879,7 @@ pub(crate) mod tests {
             let subscriptions = Arc::new(RpcSubscriptions::new(
                 &exit,
                 bank_forks.clone(),
-                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                    blockstore.clone(),
-                ))),
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
             ));
 
             // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
@@ -2303,9 +2301,6 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let genesis_config_info =
@@ -2326,9 +2321,7 @@ pub(crate) mod tests {
         )));
 
         let exit = Arc::new(AtomicBool::new(false));
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),

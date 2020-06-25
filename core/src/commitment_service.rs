@@ -115,7 +115,6 @@ impl AggregateCommitmentService {
                 largest_confirmed_root,
                 aggregation_data.total_stake,
                 aggregation_data.bank,
-                block_commitment_cache.read().unwrap().blockstore.clone(),
                 aggregation_data.root,
                 aggregation_data.root,
             );

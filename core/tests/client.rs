@@ -6,12 +6,11 @@ use solana_core::{
     commitment::BlockCommitmentCache, rpc_pubsub_service::PubSubService,
     rpc_subscriptions::RpcSubscriptions, validator::TestValidator,
 };
-use solana_ledger::{
-    blockstore::Blockstore,
+use solana_runtime::{
+    bank::Bank,
+    bank_forks::BankForks,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    get_tmp_ledger_path,
 };
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
     system_transaction,
@@ -91,17 +90,13 @@ fn test_slot_subscription() {
         rpc_port::DEFAULT_RPC_PUBSUB_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
-    let ledger_path = get_tmp_ledger_path!();
-    let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let subscriptions = Arc::new(RpcSubscriptions::new(
         &exit,
         bank_forks,
-        Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-            blockstore,
-        ))),
+        Arc::new(RwLock::new(BlockCommitmentCache::default())),
     ));
     let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));

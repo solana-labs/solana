@@ -174,7 +174,6 @@ impl JsonRpcRequestProcessor {
                 0,
                 0,
                 bank.clone(),
-                blockstore.clone(),
                 0,
                 0,
             ))),
@@ -670,7 +669,7 @@ impl JsonRpcRequestProcessor {
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && r_block_commitment_cache.is_confirmed_rooted(slot)
+            && r_block_commitment_cache.is_confirmed_rooted(&self.blockstore, slot)
         {
             None
         } else {
@@ -1688,7 +1687,6 @@ pub mod tests {
             0,
             10,
             bank.clone(),
-            blockstore.clone(),
             0,
             0,
         )));
@@ -2775,9 +2773,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -2813,9 +2809,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let bank_forks = new_bank_forks().0;
         let health = RpcHealth::stub();
 
@@ -2956,9 +2950,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let cluster_info = Arc::new(ClusterInfo::default());
         let bank_forks = new_bank_forks().0;
         let request_processor = JsonRpcRequestProcessor::new(
@@ -2986,9 +2978,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let bank_forks = new_bank_forks().0;
@@ -3076,7 +3066,6 @@ pub mod tests {
             0,
             42,
             bank_forks.read().unwrap().working_bank(),
-            blockstore.clone(),
             0,
             0,
         )));
