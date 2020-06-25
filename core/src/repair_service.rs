@@ -177,6 +177,7 @@ impl RepairService {
         let mut repair_timing = RepairTiming::default();
         let mut last_stats = Instant::now();
         let duplicate_slot_repair_statuses = HashMap::new();
+
         Self::initialize_epoch_slots(
             blockstore,
             &cluster_info,

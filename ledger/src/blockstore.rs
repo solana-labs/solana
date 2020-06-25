@@ -353,7 +353,8 @@ impl Blockstore {
         let mut walk = TreeWalk::from(forks);
         while let Some(visit) = walk.get() {
             let slot = visit.node().data;
-            if self.meta(slot).unwrap().is_some() {
+            if self.meta(slot).unwrap().is_some() && self.orphan(slot).unwrap().is_none() {
+                // If slot exists and is not an orphan, then skip it
                 walk.forward();
                 continue;
             }
