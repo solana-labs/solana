@@ -719,10 +719,7 @@ impl Tower {
 
         let last_voted_slot = self.last_voted_slot().unwrap();
         if slot_history.check(last_voted_slot) == Check::TooOld {
-            return Err(TowerError::TooOld(
-                last_voted_slot,
-                slot_history.oldest(),
-            ));
+            return Err(TowerError::TooOld(last_voted_slot, slot_history.oldest()));
         }
 
         let mut is_diverged_descendants_in_reverse: Vec<_> =
