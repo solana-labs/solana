@@ -350,7 +350,6 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        commitment::BlockCommitmentCache,
         rpc_subscriptions::{tests::robust_poll_or_panic, CacheSlotInfo},
     };
     use crossbeam_channel::unbounded;
@@ -361,6 +360,7 @@ mod tests {
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
             ValidatorVoteKeypairs,

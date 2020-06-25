@@ -8,7 +8,6 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
-    commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -25,7 +24,10 @@ use solana_ledger::{
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_runtime::{bank_forks::BankForks, snapshot_package::AccountsPackageSender};
+use solana_runtime::{
+    bank_forks::BankForks, commitment::BlockCommitmentCache,
+    snapshot_package::AccountsPackageSender,
+};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},

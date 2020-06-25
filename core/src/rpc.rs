@@ -1,14 +1,9 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo,
-    commitment::{BlockCommitmentArray, BlockCommitmentCache},
-    contact_info::ContactInfo,
-    non_circulating_supply::calculate_non_circulating_supply,
-    rpc_error::RpcCustomError,
-    rpc_health::*,
-    send_transaction_service::SendTransactionService,
-    validator::ValidatorExit,
+    cluster_info::ClusterInfo, contact_info::ContactInfo,
+    non_circulating_supply::calculate_non_circulating_supply, rpc_error::RpcCustomError,
+    rpc_health::*, send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -26,7 +21,11 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
-    accounts::AccountAddressFilter, bank::Bank, bank_forks::BankForks, log_collector::LogCollector,
+    accounts::AccountAddressFilter,
+    bank::Bank,
+    bank_forks::BankForks,
+    commitment::{BlockCommitmentArray, BlockCommitmentCache},
+    log_collector::LogCollector,
 };
 use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
@@ -1613,8 +1612,7 @@ pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option
 pub mod tests {
     use super::*;
     use crate::{
-        commitment::BlockCommitment, contact_info::ContactInfo,
-        non_circulating_supply::non_circulating_accounts,
+        contact_info::ContactInfo, non_circulating_supply::non_circulating_accounts,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
@@ -1628,6 +1626,7 @@ pub mod tests {
         entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
+    use solana_runtime::commitment::BlockCommitment;
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,

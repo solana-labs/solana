@@ -4,7 +4,6 @@ use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
-    commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -35,6 +34,7 @@ use solana_metrics::datapoint_info;
 use solana_runtime::{
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
+    commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_sdk::{

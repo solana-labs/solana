@@ -1,4 +1,4 @@
-use solana_runtime::bank::Bank;
+use crate::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{collections::HashMap, sync::Arc};
@@ -31,8 +31,7 @@ impl BlockCommitment {
         self.commitment[MAX_LOCKOUT_HISTORY]
     }
 
-    #[cfg(test)]
-    pub(crate) fn new(commitment: BlockCommitmentArray) -> Self {
+    pub fn new(commitment: BlockCommitmentArray) -> Self {
         Self { commitment }
     }
 }
@@ -144,7 +143,6 @@ impl BlockCommitmentCache {
         })
     }
 
-    #[cfg(test)]
     pub fn new_for_tests() -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
@@ -155,7 +153,6 @@ impl BlockCommitmentCache {
         }
     }
 
-    #[cfg(test)]
     pub fn new_for_tests_with_bank(bank: Arc<Bank>, root: Slot) -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
@@ -169,7 +166,7 @@ impl BlockCommitmentCache {
         }
     }
 
-    pub(crate) fn set_largest_confirmed_root(&mut self, root: Slot) {
+    pub fn set_largest_confirmed_root(&mut self, root: Slot) {
         self.largest_confirmed_root = root;
     }
 }

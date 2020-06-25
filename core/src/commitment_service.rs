@@ -1,11 +1,13 @@
 use crate::{
-    commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE},
     consensus::Stake,
     rpc_subscriptions::{CacheSlotInfo, RpcSubscriptions},
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
-use solana_runtime::bank::Bank;
+use solana_runtime::{
+    bank::Bank,
+    commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE},
+};
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::VoteState;
 use std::{
