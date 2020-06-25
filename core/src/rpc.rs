@@ -105,8 +105,7 @@ impl JsonRpcRequestProcessor {
                 debug!("RPC using node root: {:?}", slot);
                 Ok(r_bank_forks.get(slot).cloned().unwrap())
             }
-	    CommitmentLevel::Single | CommitmentLevel::SingleGossip =>
-            {
+            CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
                 let slot = self
                     .block_commitment_cache
                     .read()
