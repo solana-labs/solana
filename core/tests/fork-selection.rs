@@ -74,8 +74,7 @@
 
 extern crate rand;
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Default, Debug, Hash, Eq, PartialEq)]
 pub struct Fork {

@@ -20,18 +20,18 @@ use crate::{
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
+    leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{bank_forks::BankForks, snapshot_package::AccountsPackageSender};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::collections::HashSet;
 use std::{
+    collections::HashSet,
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
@@ -236,11 +236,15 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
-    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::{
+        banking_stage::create_test_recorder,
+        cluster_info::{ClusterInfo, Node},
+    };
     use serial_test_derive::serial;
-    use solana_ledger::create_new_tmp_ledger;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::{
+        create_new_tmp_ledger,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    };
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 

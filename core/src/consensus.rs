@@ -321,6 +321,7 @@ impl Tower {
         }
     }
 
+    #[cfg(test)]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         let vote = Vote::new(vec![slot], hash);
         self.record_bank_vote(vote)
@@ -624,6 +625,12 @@ impl Tower {
                 "vote account's node_pubkey doesn't match",
             );
             self.lockouts = vote_state;
+        } else {
+            info!(
+                "vote account({}) not found in heaviest bank (slot={})",
+                vote_account_pubkey,
+                heaviest_bank.slot()
+            );
         }
     }
 
