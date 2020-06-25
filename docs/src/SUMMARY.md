@@ -119,3 +119,4 @@
   * [Block Confirmation](proposals/block-confirmation.md)
   * [Rust Clients](proposals/rust-clients.md)
   * [Optimistic Confirmation](proposals/optimistic_confirmation.md)
+  * [Program Instruction Macro](proposals/program-instruction-macro.md)
