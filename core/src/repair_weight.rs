@@ -1,6 +1,6 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    repair_service::RepairStats,
+    repair_service::RepairTiming,
     repair_weighted_traversal::{self, Contains},
     serve_repair::RepairType,
 };
@@ -136,7 +136,7 @@ impl RepairWeight {
         max_new_orphans: usize,
         max_new_shreds: usize,
         ignore_slots: &dyn Contains<Slot>,
-        repair_stats: Option<&mut RepairStats>,
+        repair_timing: Option<&mut RepairTiming>,
     ) -> Vec<RepairType> {
         let mut repairs = vec![];
         let mut get_best_orphans_elapsed = Measure::start("get_best_orphans");
@@ -155,9 +155,9 @@ impl RepairWeight {
         self.get_best_shreds(blockstore, &mut repairs, max_new_shreds, ignore_slots);
         get_best_shreds_elapsed.stop();
 
-        if let Some(repair_stats) = repair_stats {
-            repair_stats.get_best_orphans_us += get_best_orphans_elapsed.as_us();
-            repair_stats.get_best_shreds_us += get_best_shreds_elapsed.as_us();
+        if let Some(repair_timing) = repair_timing {
+            repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
+            repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
         }
         repairs
     }
