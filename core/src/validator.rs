@@ -47,6 +47,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::timestamp,
 };
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -193,7 +194,6 @@ impl Validator {
             }
         }
 
-        info!("creating bank...");
         let (
             genesis_config,
             bank_forks,
@@ -205,11 +205,10 @@ impl Validator {
         ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let exit = Arc::new(AtomicBool::new(false));
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        info!("Starting validator from slot {}", bank.slot());
+        info!("Starting validator with working bank slot {}", bank.slot());
         {
             let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
             if !hard_forks.is_empty() {
@@ -217,16 +216,12 @@ impl Validator {
             }
         }
 
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
-
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
             &genesis_config.hash(),
             Some(&bank.hard_forks().read().unwrap()),
         );
+
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -238,6 +233,12 @@ impl Validator {
                 process::exit(1);
             }
         }
+
+        let mut validator_exit = ValidatorExit::default();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
         let blockstore = Arc::new(blockstore);
@@ -620,7 +621,7 @@ fn new_banks_from_blockstore(
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
-        std::process::exit(1);
+        process::exit(1);
     });
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
@@ -865,8 +866,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let my_id = cluster_info.id();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
-        let vote_state =
-            solana_vote_program::vote_state::VoteState::from(&vote_account).unwrap_or_default();
+        let vote_state = VoteState::from(&vote_account).unwrap_or_default();
         total_activated_stake += activated_stake;
 
         if *activated_stake == 0 {
