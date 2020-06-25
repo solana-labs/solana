@@ -159,7 +159,7 @@ fn distribute_tokens(
 
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
-        match client.send_message(message, &signers) {
+        match client.send_and_confirm_message(message, &signers) {
             Ok((transaction, last_valid_slot)) => {
                 db::set_transaction_info(
                     db,
@@ -510,7 +510,9 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     );
     let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
     let signers = [&sender_keypair, &stake_account_keypair];
-    thin_client.send_message(message, &signers).unwrap();
+    thin_client
+        .send_and_confirm_message(message, &signers)
+        .unwrap();
 
     let alice_pubkey = Pubkey::new_rand();
     let allocation = Allocation {

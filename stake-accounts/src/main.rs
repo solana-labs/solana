@@ -83,7 +83,7 @@ fn process_new_stake_account(
         &*args.funding_keypair,
         &*args.base_keypair,
     ]);
-    let signature = send_message(client, message, &signers, false)?;
+    let signature = send_and_confirm_message(client, message, &signers, false)?;
     Ok(signature)
 }
 
@@ -105,7 +105,7 @@ fn process_authorize_stake_accounts(
         &*args.stake_authority,
         &*args.withdraw_authority,
     ]);
-    send_messages(client, messages, &signers, false)?;
+    send_and_confirm_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
@@ -134,7 +134,7 @@ fn process_lockup_stake_accounts(
         return Ok(());
     }
     let signers = unique_signers(vec![&*args.fee_payer, &*args.custodian]);
-    send_messages(client, messages, &signers, args.no_wait)?;
+    send_and_confirm_messages(client, messages, &signers, args.no_wait)?;
     Ok(())
 }
 
@@ -161,7 +161,7 @@ fn process_rebase_stake_accounts(
         &*args.new_base_keypair,
         &*args.stake_authority,
     ]);
-    send_messages(client, messages, &signers, false)?;
+    send_and_confirm_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
@@ -194,11 +194,11 @@ fn process_move_stake_accounts(
         &*args.stake_authority,
         &*authorize_args.withdraw_authority,
     ]);
-    send_messages(client, messages, &signers, false)?;
+    send_and_confirm_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
-fn send_message<S: Signers>(
+fn send_and_confirm_message<S: Signers>(
     client: &RpcClient,
     message: Message,
     signers: &S,
@@ -217,7 +217,7 @@ fn send_message<S: Signers>(
     }
 }
 
-fn send_messages<S: Signers>(
+fn send_and_confirm_messages<S: Signers>(
     client: &RpcClient,
     messages: Vec<Message>,
     signers: &S,
@@ -225,7 +225,7 @@ fn send_messages<S: Signers>(
 ) -> Result<Vec<Signature>, ClientError> {
     let mut signatures = vec![];
     for message in messages {
-        let signature = send_message(client, message, signers, no_wait)?;
+        let signature = send_and_confirm_message(client, message, signers, no_wait)?;
         signatures.push(signature);
         println!("{}", signature);
     }

@@ -30,15 +30,28 @@ pub trait Client: SyncClient + AsyncClient {
 pub trait SyncClient {
     /// Create a transaction from the given message, and send it to the
     /// server, retrying as-needed.
-    fn send_message<T: Signers>(&self, keypairs: &T, message: Message) -> Result<Signature>;
+    fn send_and_confirm_message<T: Signers>(
+        &self,
+        keypairs: &T,
+        message: Message,
+    ) -> Result<Signature>;
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, retrying as-needed.
-    fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature>;
+    fn send_and_confirm_instruction(
+        &self,
+        keypair: &Keypair,
+        instruction: Instruction,
+    ) -> Result<Signature>;
 
     /// Transfer lamports from `keypair` to `pubkey`, retrying until the
     /// transfer completes or produces and error.
-    fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature>;
+    fn transfer_and_confirm(
+        &self,
+        lamports: u64,
+        keypair: &Keypair,
+        pubkey: &Pubkey,
+    ) -> Result<Signature>;
 
     /// Get an account or None if not found.
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>>;

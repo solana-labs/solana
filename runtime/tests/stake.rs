@@ -62,7 +62,7 @@ fn fill_epoch_with_votes(
             Some(&mint_pubkey),
         );
         assert!(bank_client
-            .send_message(&[mint_keypair, vote_keypair], message)
+            .send_and_confirm_message(&[mint_keypair, vote_keypair], message)
             .is_ok());
     }
     bank
@@ -134,7 +134,7 @@ fn test_stake_create_and_split_single_signature() {
 
     // only one signature required
     bank_client
-        .send_message(&[&staker_keypair], message)
+        .send_and_confirm_message(&[&staker_keypair], message)
         .expect("failed to create and delegate stake account");
 
     // split the stake
@@ -155,7 +155,7 @@ fn test_stake_create_and_split_single_signature() {
     );
 
     assert!(bank_client
-        .send_message(&[&staker_keypair], message)
+        .send_and_confirm_message(&[&staker_keypair], message)
         .is_ok());
 
     // w00t!
@@ -200,7 +200,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     );
 
     bank_client
-        .send_message(&[&staker_keypair], message)
+        .send_and_confirm_message(&[&staker_keypair], message)
         .expect("failed to create and delegate stake account");
 
     let split_stake_address =
@@ -210,7 +210,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     // First, put a system account where we want the new stake account
     let existing_lamports = 42;
     bank_client
-        .transfer(existing_lamports, &staker_keypair, &split_stake_address)
+        .transfer_and_confirm(existing_lamports, &staker_keypair, &split_stake_address)
         .unwrap();
     assert_eq!(
         bank_client.get_balance(&split_stake_address).unwrap(),
@@ -231,7 +231,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     );
     assert_eq!(
         bank_client
-            .send_message(&[&staker_keypair], message)
+            .send_and_confirm_message(&[&staker_keypair], message)
             .unwrap_err()
             .unwrap(),
         TransactionError::InstructionError(0, SystemError::AccountAlreadyInUse.into())
@@ -277,7 +277,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     bank_client
-        .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&stake_pubkey);
@@ -294,7 +294,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .expect("failed to create and delegate stake account");
 
     // Test that correct lamports are staked
@@ -318,7 +318,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
     // Test that lamports are still staked
@@ -381,7 +381,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(
+        .send_and_confirm_message(
             &[&mint_keypair, &stake_keypair, &split_stake_keypair],
             message
         )
@@ -396,7 +396,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
     let split_staked = get_staked(&bank, &split_stake_pubkey);
@@ -413,7 +413,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
     let mut bank = next_epoch(&bank);
@@ -436,7 +436,7 @@ fn test_stake_account_lifetime() {
     );
 
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
     // but we can withdraw unstaked
@@ -452,7 +452,7 @@ fn test_stake_account_lifetime() {
     );
     // assert we can withdraw unstaked tokens
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
     // finish cooldown
@@ -476,7 +476,7 @@ fn test_stake_account_lifetime() {
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &stake_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
     // verify all the math sums to zero
@@ -521,7 +521,7 @@ fn test_create_stake_account_from_seed() {
         Some(&mint_pubkey),
     );
     bank_client
-        .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&mint_pubkey);
@@ -540,7 +540,7 @@ fn test_create_stake_account_from_seed() {
         Some(&mint_pubkey),
     );
     bank_client
-        .send_message(&[&mint_keypair], message)
+        .send_and_confirm_message(&[&mint_keypair], message)
         .expect("failed to create and delegate stake account");
 
     // Test that correct lamports are staked

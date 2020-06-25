@@ -20,7 +20,7 @@ fn test_program_native_failure() {
     let bank_client = BankClient::new(bank);
     assert_eq!(
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap_err()
             .unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(0))

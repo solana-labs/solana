@@ -110,7 +110,7 @@ mod bpf {
                 AccountMeta::new(rent::id(), false),
             ];
             let instruction = Instruction::new(program_id, &1u8, account_metas);
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             if program.1 {
                 assert!(result.is_ok());
             } else {
@@ -162,42 +162,42 @@ mod bpf {
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &1u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
             assert!(result.is_ok());
             assert_eq!(data[0], 1);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &2u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
             assert!(result.is_ok());
             assert_eq!(data[0], 2);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &3u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
             assert!(result.is_ok());
             assert_eq!(data[0], 3);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let lamports = bank_client.get_balance(&pubkey).unwrap();
             assert!(result.is_ok());
             assert_eq!(lamports, 11);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &5u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let lamports = bank_client.get_balance(&pubkey).unwrap();
             assert!(result.is_ok());
             assert_eq!(lamports, 12);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &6u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let lamports = bank_client.get_balance(&pubkey).unwrap();
             assert!(result.is_ok());
             assert_eq!(lamports, 13);
@@ -235,32 +235,32 @@ mod bpf {
             let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
 
             let instruction = Instruction::new(program_id, &1u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert!(result.is_ok());
 
             let instruction = Instruction::new(program_id, &2u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
             );
 
             let instruction = Instruction::new(program_id, &3u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::Custom(0))
             );
 
             let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::Custom(42))
             );
 
             let instruction = Instruction::new(program_id, &5u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let result = result.unwrap_err().unwrap();
             if TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
                 != result
@@ -272,7 +272,7 @@ mod bpf {
             }
 
             let instruction = Instruction::new(program_id, &6u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let result = result.unwrap_err().unwrap();
             if TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
                 != result
@@ -284,7 +284,7 @@ mod bpf {
             }
 
             let instruction = Instruction::new(program_id, &7u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             let result = result.unwrap_err().unwrap();
             if TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
                 != result
@@ -296,14 +296,14 @@ mod bpf {
             }
 
             let instruction = Instruction::new(program_id, &8u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
             );
 
             let instruction = Instruction::new(program_id, &9u8, account_metas.clone());
-            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
@@ -387,7 +387,7 @@ mod bpf {
                 Instruction::new(invoke_program_id, &TEST_SUCCESS, account_metas.clone());
             let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert!(bank_client
-                .send_message(
+                .send_and_confirm_message(
                     &[
                         &mint_keypair,
                         &argument_keypair,
@@ -408,7 +408,7 @@ mod bpf {
             let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
-                    .send_message(
+                    .send_and_confirm_message(
                         &[
                             &mint_keypair,
                             &argument_keypair,
@@ -430,7 +430,7 @@ mod bpf {
             let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert_eq!(
                 bank_client
-                    .send_message(
+                    .send_and_confirm_message(
                         &[
                             &mint_keypair,
                             &argument_keypair,

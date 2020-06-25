@@ -906,7 +906,7 @@ mod tests {
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
-            .transfer(50, &mint_keypair, &alice_pubkey)
+            .transfer_and_confirm(50, &mint_keypair, &alice_pubkey)
             .unwrap();
 
         let allocate_with_seed = Message::new(
@@ -921,13 +921,13 @@ mod tests {
         );
 
         assert!(bank_client
-            .send_message(&[&alice_keypair], allocate_with_seed)
+            .send_and_confirm_message(&[&alice_keypair], allocate_with_seed)
             .is_ok());
 
         let allocate = system_instruction::allocate(&alice_pubkey, 2);
 
         assert!(bank_client
-            .send_instruction(&alice_keypair, allocate)
+            .send_and_confirm_instruction(&alice_keypair, allocate)
             .is_ok());
     }
 
@@ -955,7 +955,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let bank_client = BankClient::new_shared(&bank);
         bank_client
-            .transfer(mint_lamports, &mint_keypair, &alice_pubkey)
+            .transfer_and_confirm(mint_lamports, &mint_keypair, &alice_pubkey)
             .unwrap();
 
         // create zero-lamports account to be cleaned
@@ -963,14 +963,14 @@ mod tests {
         let bank_client = BankClient::new_shared(&bank);
         let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 0, len1, &program);
         let message = Message::new(&[ix], Some(&alice_keypair.pubkey()));
-        let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
+        let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
         assert!(r.is_ok());
 
         // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
         bank_client
-            .transfer(50, &alice_keypair, &Pubkey::new_rand())
+            .transfer_and_confirm(50, &alice_keypair, &Pubkey::new_rand())
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts() or not
@@ -981,7 +981,7 @@ mod tests {
         let bank_client = BankClient::new_shared(&bank);
         let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, len2, &program);
         let message = Message::new(&[ix], Some(&alice_pubkey));
-        let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
+        let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
         assert!(r.is_ok());
     }
 
@@ -1016,7 +1016,7 @@ mod tests {
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
-            .transfer(50, &mint_keypair, &alice_pubkey)
+            .transfer_and_confirm(50, &mint_keypair, &alice_pubkey)
             .unwrap();
 
         let assign_with_seed = Message::new(
@@ -1030,7 +1030,7 @@ mod tests {
         );
 
         assert!(bank_client
-            .send_message(&[&alice_keypair], assign_with_seed)
+            .send_and_confirm_message(&[&alice_keypair], assign_with_seed)
             .is_ok());
     }
 
@@ -1045,7 +1045,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
         bank_client
-            .transfer(50, &alice_keypair, &mallory_pubkey)
+            .transfer_and_confirm(50, &alice_keypair, &mallory_pubkey)
             .unwrap();
 
         // Erroneously sign transaction with recipient account key
@@ -1061,7 +1061,7 @@ mod tests {
         );
         assert_eq!(
             bank_client
-                .send_instruction(&mallory_keypair, malicious_instruction)
+                .send_and_confirm_instruction(&mallory_keypair, malicious_instruction)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
