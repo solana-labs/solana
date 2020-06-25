@@ -647,20 +647,18 @@ mod test {
 
         // Add a vote for the other branch at slot 3.
         let stake = 100;
-        let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(2, stake);
         let leaf6 = 6;
         // Leaf slot 9 stops being the `best_slot` at slot 1 because there
         // are now votes for the branch at slot 3
-        for pubkey in &vote_pubkeys[0..1] {
-            heaviest_subtree_fork_choice.add_votes(
-                &[(*pubkey, leaf6)],
-                bank.epoch_stakes_map(),
-                bank.epoch_schedule(),
-            );
-        }
+        heaviest_subtree_fork_choice.add_votes(
+            &[(vote_pubkeys[0], leaf6)],
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
 
-        // Because an slot 1 now sees the child branch at slot 3 has non-zero
-        // weight, adding smaller leaf slots in the other child branch at slot 2
+        // Because slot 1 now sees the child branch at slot 3 has non-zero
+        // weight, adding smaller leaf slot 8 in the other child branch at slot 2
         // should not propagate past slot 1
         heaviest_subtree_fork_choice.add_new_leaf_slot(8, Some(4));
         let ancestors = heaviest_subtree_fork_choice
@@ -674,27 +672,23 @@ mod test {
             );
         }
 
-        // Add a vote for slot 8
-        assert_eq!(heaviest_subtree_fork_choice.best_slot(6).unwrap(), 8);
+        // Add vote for slot 8, should now be the best slot (has same weight
+        // as fork containing slot 6, but slot 2 is smaller than slot 3).
         heaviest_subtree_fork_choice.add_votes(
-            &[(vote_pubkeys[2], 8)],
+            &[(vote_pubkeys[1], 8)],
             bank.epoch_stakes_map(),
             bank.epoch_schedule(),
         );
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 8);
 
-        // Because an slot 4 now sees the child leaf at slot 8 has non-zero
+        // Because slot 4 now sees the child leaf 8 has non-zero
         // weight, adding smaller leaf slots should not propagate past slot 4
         heaviest_subtree_fork_choice.add_new_leaf_slot(7, Some(4));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator(7)
             .collect::<Vec<_>>();
-        // best_slot remains unchanged
         for a in ancestors.into_iter().chain(std::iter::once(8)) {
-            let best_slot = if a > 1 { 8 } else { leaf6 };
-            assert_eq!(
-                heaviest_subtree_fork_choice.best_slot(a).unwrap(),
-                best_slot
-            );
+            assert_eq!(heaviest_subtree_fork_choice.best_slot(a).unwrap(), 8);
         }
 
         // All the leaves should think they are their own best choice
@@ -716,7 +710,7 @@ mod test {
                    |
                  slot 6
         */
-        let forks = tr(0) / (tr(4) / (tr(5)));
+        let forks = tr(0) / (tr(4) / (tr(6)));
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
         let stake = 100;
         let (bank, vote_pubkeys) = setup_bank_and_vote_pubkeys(1, stake);
@@ -725,9 +719,9 @@ mod test {
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 6);
 
         // Add a leaf slot 5. Even though 5 is less than the best leaf 6,
-        // it's not less than it's sibling sllot 4, so the best overall
+        // it's not less than it's sibling slot 4, so the best overall
         // leaf should remain unchanged
-        heaviest_subtree_fork_choice.add_new_leaf_slot(2, Some(0));
+        heaviest_subtree_fork_choice.add_new_leaf_slot(5, Some(0));
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 6);
 
         // Add a leaf slot 2 on a different fork than leaf 6. Slot 2 should
@@ -762,15 +756,15 @@ mod test {
         );
         // The best leaf when weights are equal should prioritize the lower leaf
         assert_eq!(heaviest_subtree_fork_choice.best_slot(1).unwrap(), 4);
-        assert_eq!(heaviest_subtree_fork_choice.best_slot(3).unwrap(), 6);
         assert_eq!(heaviest_subtree_fork_choice.best_slot(2).unwrap(), 4);
-        assert_eq!(heaviest_subtree_fork_choice.best_slot(1).unwrap(), 4);
+        assert_eq!(heaviest_subtree_fork_choice.best_slot(3).unwrap(), 6);
 
         // Update the weights that have voted *exactly* at each slot, the
         // branch containing slots {5, 6} has weight 11, so should be heavier
         // than the branch containing slots {2, 4}
         let mut total_stake = 0;
-        for slot in &[2, 4, 5, 6] {
+        let staked_voted_slots: HashSet<_> = vec![2, 4, 5, 6].into_iter().collect();
+        for slot in &staked_voted_slots {
             heaviest_subtree_fork_choice.set_stake_voted_at(*slot, *slot);
             total_stake += *slot;
         }
@@ -792,12 +786,22 @@ mod test {
         // should be the best choice
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 6);
 
-        // Verify `stake_voted_at` and `stake_voted_subtree`
-        for slot in &[0, 1] {
-            assert_eq!(
-                heaviest_subtree_fork_choice.stake_voted_at(*slot).unwrap(),
+        // Verify `stake_voted_at`
+        for slot in 0..=6 {
+            let expected_stake = if staked_voted_slots.contains(&slot) {
+                slot
+            } else {
                 0
+            };
+
+            assert_eq!(
+                heaviest_subtree_fork_choice.stake_voted_at(slot).unwrap(),
+                expected_stake
             );
+        }
+
+        // Verify `stake_voted_subtree` for common fork
+        for slot in &[0, 1] {
             // Subtree stake is sum of the `stake_voted_at` across
             // all slots in the subtree
             assert_eq!(
@@ -807,28 +811,26 @@ mod test {
                 total_stake
             );
         }
-        for slot in &[0, 2] {
-            assert_eq!(
-                heaviest_subtree_fork_choice.stake_voted_at(*slot).unwrap(),
-                *slot
-            );
+        // Verify `stake_voted_subtree` for fork 1
+        let mut total_expected_stake = 0;
+        for slot in &[4, 2] {
+            total_expected_stake += heaviest_subtree_fork_choice.stake_voted_at(*slot).unwrap();
             assert_eq!(
                 heaviest_subtree_fork_choice
                     .stake_voted_subtree(*slot)
                     .unwrap(),
-                6
+                total_expected_stake
             );
         }
-        for slot in &[3, 5, 6] {
-            assert_eq!(
-                heaviest_subtree_fork_choice.stake_voted_at(*slot).unwrap(),
-                *slot
-            );
+        // Verify `stake_voted_subtree` for fork 2
+        total_expected_stake = 0;
+        for slot in &[6, 5, 3] {
+            total_expected_stake += heaviest_subtree_fork_choice.stake_voted_at(*slot).unwrap();
             assert_eq!(
                 heaviest_subtree_fork_choice
                     .stake_voted_subtree(*slot)
                     .unwrap(),
-                11
+                total_expected_stake
             );
         }
     }
