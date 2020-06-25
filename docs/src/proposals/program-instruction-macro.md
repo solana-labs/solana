@@ -31,8 +31,8 @@ Here is an example of an Instruction enum using the new accounts format:
 pub enum TestInstruction {
     /// Transfer lamports
     #[accounts(
-        from_account(signer, writable, desc = "Funding account"),
-        to_account(writable, desc = "Recipient account"),
+        from_account(SIGNER, WRITABLE, desc = "Funding account"),
+        to_account(WRITABLE, desc = "Recipient account"),
     )]
     Transfer {
         lamports: u64,
@@ -40,16 +40,16 @@ pub enum TestInstruction {
 
     /// Provide M of N required signatures
     #[accounts(
-        data_account(writable, desc = "Data account"),
-        signer(signer, multiple, desc = "Signer"),
+        data_account(WRITABLE, desc = "Data account"),
+        signers(SIGNER, multiple, desc = "Signer"),
     )]
     Multisig,
 
     /// Consumes a stored nonce, replacing it with a successor
     #[accounts(
-        nonce_account(signer, writable, desc = "Nonce account"),
-        recent_blockhashes_sysvar(signer, writable, desc = "RecentBlockhashes sysvar"),
-        nonce_authority(signer, optional, desc = "Nonce authority"),
+        nonce_account(SIGNER, WRITABLE, desc = "Nonce account"),
+        recent_blockhashes_sysvar(SIGNER, WRITABLE, desc = "RecentBlockhashes sysvar"),
+        nonce_authority(SIGNER, optional, desc = "Nonce authority"),
     )]
     AdvanceNonceAccount,
 }
@@ -57,39 +57,39 @@ pub enum TestInstruction {
 
 An example of the generated TestInstruction with docs:
 ```rust,ignore
-    pub enum TestInstruction {
-      /// Transfer lamports
-      ///
-      /// * Accounts expected by this instruction:
-      ///   0. `[writable, signer]` Funding account
-      ///   1. `[writable]` Recipient account
-      Transfer {
-          lamports: u64,
-      },
+pub enum TestInstruction {
+    /// Transfer lamports
+    ///
+    /// * Accounts expected by this instruction:
+    ///   0. `[WRITABLE, SIGNER]` Funding account
+    ///   1. `[WRITABLE]` Recipient account
+    Transfer {
+        lamports: u64,
+    },
 
-      /// Provide M of N required signatures
-      ///
-      /// * Accounts expected by this instruction:
-      ///   0. `[writable]` Data account
-      ///   * (Multiple) `[signer]` Signers
-      Multisig,
+    /// Provide M of N required signatures
+    ///
+    /// * Accounts expected by this instruction:
+    ///   0. `[WRITABLE]` Data account
+    ///   * (Multiple) `[SIGNER]` Signers
+    Multisig,
 
-      /// Consumes a stored nonce, replacing it with a successor
-      ///
-      /// * Accounts expected by this instruction:
-      ///   0. `[writable, signer]` Nonce account
-      ///   1. [] RecentBlockhashes sysvar
-      ///   2. (Optional) `[signer]` Nonce authority
-      AdvanceNonceAccount,
-  }
+    /// Consumes a stored nonce, replacing it with a successor
+    ///
+    /// * Accounts expected by this instruction:
+    ///   0. `[WRITABLE, SIGNER]` Nonce account
+    ///   1. [] RecentBlockhashes sysvar
+    ///   2. (Optional) `[SIGNER]` Nonce authority
+    AdvanceNonceAccount,
+}
 ```
 
 Generated constructors:
 ```rust,ignore
 /// Transfer lamports
 ///
-/// * `from_account` - `[writable, signer]` Funding account
-/// * `to_account` - `[writable]` Recipient account
+/// * `from_account` - `[WRITABLE, SIGNER]` Funding account
+/// * `to_account` - `[WRITABLE]` Recipient account
 pub fn transfer(from_account: &Pubkey, to_account: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
@@ -104,8 +104,8 @@ pub fn transfer(from_account: &Pubkey, to_account: &Pubkey, lamports: u64) -> In
 
 /// Provide M of N required signatures
 ///
-/// * `data_account` - `[writable]` Data account
-/// * `signers` - (Multiple) `[signer]` Signers
+/// * `data_account` - `[WRITABLE]` Data account
+/// * `signers` - (Multiple) `[SIGNER]` Signers
 pub fn multisig(data_account: &Pubkey, signers: &[&Pubkey]) -> Instruction {
     let mut account_metas = vec![
         AccountMeta::new(*nonce_pubkey, false),
@@ -123,9 +123,9 @@ pub fn multisig(data_account: &Pubkey, signers: &[&Pubkey]) -> Instruction {
 
 /// Consumes a stored nonce, replacing it with a successor
 ///
-/// * nonce_account - `[writable, signer]` Nonce account
+/// * nonce_account - `[WRITABLE, SIGNER]` Nonce account
 /// * recent_blockhashes_sysvar - [] RecentBlockhashes sysvar
-/// * nonce_authority - (Optional) `[signer]` Nonce authority
+/// * nonce_authority - (Optional) `[SIGNER]` Nonce authority
 pub fn advance_nonce_account(
     nonce_account: &Pubkey,
     recent_blockhashes_sysvar: &Pubkey,
