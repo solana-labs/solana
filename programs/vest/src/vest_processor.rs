@@ -184,7 +184,7 @@ mod tests {
         instructions.push(date_instruction::store(&date_pubkey, date));
 
         let message = Message::new(&instructions, Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[payer_keypair, date_keypair], message)
+        bank_client.send_and_confirm_message(&[payer_keypair, date_keypair], message)
     }
 
     fn store_date(
@@ -196,7 +196,7 @@ mod tests {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[payer_keypair, date_keypair], message)
+        bank_client.send_and_confirm_message(&[payer_keypair, date_keypair], message)
     }
 
     fn create_vest_account(
@@ -219,7 +219,7 @@ mod tests {
             lamports,
         );
         let message = Message::new(&instructions, Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[payer_keypair, contract_keypair], message)
+        bank_client.send_and_confirm_message(&[payer_keypair, contract_keypair], message)
     }
 
     fn send_set_terminator(
@@ -230,7 +230,7 @@ mod tests {
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::set_terminator(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
-        bank_client.send_instruction(&old_keypair, instruction)
+        bank_client.send_and_confirm_instruction(&old_keypair, instruction)
     }
 
     fn send_set_payee(
@@ -241,7 +241,7 @@ mod tests {
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::set_payee(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
-        bank_client.send_instruction(&old_keypair, instruction)
+        bank_client.send_and_confirm_instruction(&old_keypair, instruction)
     }
 
     fn send_redeem_tokens(
@@ -254,7 +254,7 @@ mod tests {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[payer_keypair], message)
+        bank_client.send_and_confirm_message(&[payer_keypair], message)
     }
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
         let message = Message::new(&instructions, Some(&alice_keypair.pubkey()));
         assert_eq!(
             bank_client
-                .send_message(&[&alice_keypair, &contract_keypair], message)
+                .send_and_confirm_message(&[&alice_keypair, &contract_keypair], message)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
@@ -387,7 +387,7 @@ mod tests {
         // Transfer bob a token to pay the transaction fee.
         let mallory_keypair = Keypair::new();
         bank_client
-            .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
+            .transfer_and_confirm(1, &alice_keypair, &mallory_keypair.pubkey())
             .unwrap();
         send_set_payee(
             &bank_client,
@@ -397,9 +397,9 @@ mod tests {
         )
         .unwrap_err();
 
-        // Ensure bob can update which account he wants vested funds transfered to.
+        // Ensure bob can update which account he wants vested funds transferred to.
         bank_client
-            .transfer(1, &alice_keypair, &bob_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &bob_pubkey)
             .unwrap();
         send_set_payee(
             &bank_client,
@@ -458,7 +458,7 @@ mod tests {
         // Transfer bob a token to pay the transaction fee.
         let mallory_keypair = Keypair::new();
         bank_client
-            .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
+            .transfer_and_confirm(1, &alice_keypair, &mallory_keypair.pubkey())
             .unwrap();
         send_set_payee(
             &bank_client,
@@ -470,7 +470,7 @@ mod tests {
 
         // Ensure bob can update which account he wants vested funds transferred to.
         bank_client
-            .transfer(1, &alice_keypair, &bob_pubkey)
+            .transfer_and_confirm(1, &alice_keypair, &bob_pubkey)
             .unwrap();
         send_set_payee(
             &bank_client,
@@ -586,7 +586,7 @@ mod tests {
         let instruction =
             vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &alice_pubkey);
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
         assert_eq!(
@@ -630,7 +630,7 @@ mod tests {
         let instruction =
             vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &carol_pubkey);
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&carol_pubkey).unwrap(), 1);
@@ -675,7 +675,7 @@ mod tests {
         let instruction =
             vest_instruction::renege(&contract_pubkey, &alice_pubkey, &carol_pubkey, 1);
         bank_client
-            .send_instruction(&alice_keypair, instruction)
+            .send_and_confirm_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&carol_pubkey).unwrap(), 1);

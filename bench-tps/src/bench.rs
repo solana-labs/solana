@@ -970,7 +970,7 @@ fn fund_move_keys<T: Client>(
     let libra_funding_key = Keypair::new();
     let tx = librapay_transaction::create_account(funding_key, &libra_funding_key, 1, blockhash);
     client
-        .send_message(&[funding_key, &libra_funding_key], tx.message)
+        .send_and_confirm_message(&[funding_key, &libra_funding_key], tx.message)
         .unwrap();
 
     info!("minting to funding keypair");
@@ -983,7 +983,7 @@ fn fund_move_keys<T: Client>(
         blockhash,
     );
     client
-        .send_message(&[funding_key, libra_genesis_key], tx.message)
+        .send_and_confirm_message(&[funding_key, libra_genesis_key], tx.message)
         .unwrap();
 
     info!("creating {} move accounts...", keypairs.len());
@@ -1005,7 +1005,7 @@ fn fund_move_keys<T: Client>(
         let ser_size = bincode::serialized_size(&tx).unwrap();
         let mut keys = vec![funding_key];
         keys.extend(&keypairs);
-        client.send_message(&keys, tx.message).unwrap();
+        client.send_and_confirm_message(&keys, tx.message).unwrap();
 
         if i % 10 == 0 {
             info!(
@@ -1026,7 +1026,9 @@ fn fund_move_keys<T: Client>(
     let instructions = system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts);
     let message = Message::new(&instructions, Some(&funding_key.pubkey()));
     let tx = Transaction::new(&[funding_key], message, blockhash);
-    client.send_message(&[funding_key], tx.message).unwrap();
+    client
+        .send_and_confirm_message(&[funding_key], tx.message)
+        .unwrap();
     let mut balance = 0;
     for _ in 0..20 {
         if let Ok(balance_) = client
@@ -1049,7 +1051,7 @@ fn fund_move_keys<T: Client>(
     for (i, key) in libra_funding_keys.iter().enumerate() {
         let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
         client
-            .send_message(&[&funding_keys[i], &key], tx.message)
+            .send_and_confirm_message(&[&funding_keys[i], &key], tx.message)
             .unwrap();
 
         let tx = librapay_transaction::transfer(
@@ -1062,7 +1064,7 @@ fn fund_move_keys<T: Client>(
             blockhash,
         );
         client
-            .send_message(&[&funding_keys[i], &libra_funding_key], tx.message)
+            .send_and_confirm_message(&[&funding_keys[i], &libra_funding_key], tx.message)
             .unwrap();
 
         info!("funded libra funding key {}", i);

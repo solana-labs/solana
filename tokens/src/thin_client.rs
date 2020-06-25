@@ -148,7 +148,7 @@ impl<'a> ThinClient<'a> {
         self.client.get_signature_statuses1(signatures)
     }
 
-    pub fn send_message<S: Signers>(
+    pub fn send_and_confirm_message<S: Signers>(
         &self,
         message: Message,
         signers: &S,
@@ -172,7 +172,7 @@ impl<'a> ThinClient<'a> {
         let create_instruction =
             system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
         let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
-        self.send_message(message, &[sender_keypair])
+        self.send_and_confirm_message(message, &[sender_keypair])
     }
 
     pub fn get_fees(&self) -> Result<(Hash, FeeCalculator, Slot)> {

@@ -299,7 +299,7 @@ mod tests {
     ) -> Keypair {
         let fee_payer_keypair = Keypair::new();
         client
-            .transfer(lamports, &funding_keypair, &fee_payer_keypair.pubkey())
+            .transfer_and_confirm(lamports, &funding_keypair, &fee_payer_keypair.pubkey())
             .unwrap();
         fee_payer_keypair
     }
@@ -362,7 +362,9 @@ mod tests {
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
-        bank_client.send_message(&signers, message).unwrap();
+        bank_client
+            .send_and_confirm_message(&signers, message)
+            .unwrap();
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
         assert_eq!(account.lamports, lamports);
@@ -400,7 +402,9 @@ mod tests {
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
-        bank_client.send_message(&signers, message).unwrap();
+        bank_client
+            .send_and_confirm_message(&signers, message)
+            .unwrap();
 
         let new_stake_authority_pubkey = Pubkey::new_rand();
         let new_withdraw_authority_pubkey = Pubkey::new_rand();
@@ -420,7 +424,9 @@ mod tests {
             &withdraw_authority_keypair,
         ];
         for message in messages {
-            bank_client.send_message(&signers, message).unwrap();
+            bank_client
+                .send_and_confirm_message(&signers, message)
+                .unwrap();
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
@@ -456,7 +462,9 @@ mod tests {
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
-        bank_client.send_message(&signers, message).unwrap();
+        bank_client
+            .send_and_confirm_message(&signers, message)
+            .unwrap();
 
         let lockups = get_lockups(&bank_client, &base_pubkey, 1);
         let messages = lockup_stake_accounts(
@@ -472,7 +480,9 @@ mod tests {
 
         let signers = [&fee_payer_keypair, &custodian_keypair];
         for message in messages {
-            bank_client.send_message(&signers, message).unwrap();
+            bank_client
+                .send_and_confirm_message(&signers, message)
+                .unwrap();
         }
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
@@ -541,7 +551,9 @@ mod tests {
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
-        bank_client.send_message(&signers, message).unwrap();
+        bank_client
+            .send_and_confirm_message(&signers, message)
+            .unwrap();
 
         let new_base_keypair = Keypair::new();
         let new_base_pubkey = new_base_keypair.pubkey();
@@ -560,7 +572,9 @@ mod tests {
             &stake_authority_keypair,
         ];
         for message in messages {
-            bank_client.send_message(&signers, message).unwrap();
+            bank_client
+                .send_and_confirm_message(&signers, message)
+                .unwrap();
         }
 
         // Ensure the new accounts are duplicates of the previous ones.
@@ -600,7 +614,9 @@ mod tests {
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
-        bank_client.send_message(&signers, message).unwrap();
+        bank_client
+            .send_and_confirm_message(&signers, message)
+            .unwrap();
 
         let new_base_keypair = Keypair::new();
         let new_base_pubkey = new_base_keypair.pubkey();
@@ -625,7 +641,9 @@ mod tests {
             &withdraw_authority_keypair,
         ];
         for message in messages {
-            bank_client.send_message(&signers, message).unwrap();
+            bank_client
+                .send_and_confirm_message(&signers, message)
+                .unwrap();
         }
 
         // Ensure the new accounts have the new authorities.

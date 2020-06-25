@@ -9,7 +9,7 @@ let message = Message::new(vec![
     token_instruction::pay(&alice_pubkey),
     acme_instruction::launch_missiles(&bob_pubkey),
 ]);
-client.send_message(&[&alice_keypair, &bob_keypair], &message);
+client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
 However, the current implementation does not allow the `acme` program to conveniently invoke `token` instructions on the client's behalf:
@@ -18,7 +18,7 @@ However, the current implementation does not allow the `acme` program to conveni
 let message = Message::new(vec![
     acme_instruction::pay_and_launch_missiles(&alice_pubkey, &bob_pubkey),
 ]);
-client.send_message(&[&alice_keypair, &bob_keypair], &message);
+client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
 Currently, there is no way to create instruction `pay_and_launch_missiles` that executes `token_instruction::pay` from the `acme` program. A possible workaround is to extend the `acme` program with the implementation of the `token` program and create `token` accounts with `ACME_PROGRAM_ID`, which the `acme` program is permitted to modify. With that workaround, `acme` can modify token-like accounts created by the `acme` program, but not token accounts created by the `token` program.

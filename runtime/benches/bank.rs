@@ -48,7 +48,7 @@ pub fn create_builtin_transactions(
             // Seed the signer account
             let rando0 = Keypair::new();
             bank_client
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
@@ -70,7 +70,7 @@ pub fn create_native_loader_transactions(
             // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer_and_confirm(10_000, &mint_keypair, &rando0.pubkey())
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);

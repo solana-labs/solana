@@ -320,7 +320,7 @@ impl Client for ThinClient {
 }
 
 impl SyncClient for ThinClient {
-    fn send_message<T: Signers>(
+    fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
         message: Message,
@@ -331,16 +331,16 @@ impl SyncClient for ThinClient {
         Ok(signature)
     }
 
-    fn send_instruction(
+    fn send_and_confirm_instruction(
         &self,
         keypair: &Keypair,
         instruction: Instruction,
     ) -> TransportResult<Signature> {
         let message = Message::new(&[instruction], Some(&keypair.pubkey()));
-        self.send_message(&[keypair], message)
+        self.send_and_confirm_message(&[keypair], message)
     }
 
-    fn transfer(
+    fn transfer_and_confirm(
         &self,
         lamports: u64,
         keypair: &Keypair,
@@ -348,7 +348,7 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.send_instruction(keypair, transfer_instruction)
+        self.send_and_confirm_instruction(keypair, transfer_instruction)
     }
 
     fn get_account_data(&self, pubkey: &Pubkey) -> TransportResult<Option<Vec<u8>>> {
