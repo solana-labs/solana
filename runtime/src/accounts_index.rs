@@ -12,10 +12,11 @@ pub type Ancestors = HashMap<Slot, usize>;
 
 pub type RefCount = u64;
 type AccountMapEntry<T> = (AtomicU64, RwLock<SlotList<T>>);
+pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: BTreeMap<Pubkey, AccountMapEntry<T>>,
+    pub account_maps: AccountMap<Pubkey, AccountMapEntry<T>>,
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
