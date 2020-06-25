@@ -89,21 +89,23 @@ impl JsonRpcRequestProcessor {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
 
-        match commitment {
-            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Recent => {
+        let commitment_level = match commitment {
+            None => CommitmentLevel::Max,
+            Some(config) => config.commitment,
+        };
+
+        match commitment_level {
+            CommitmentLevel::Recent => {
                 let bank = r_bank_forks.working_bank();
                 debug!("RPC using working_bank: {:?}", bank.slot());
                 Ok(bank)
             }
-            Some(commitment_config) if commitment_config.commitment == CommitmentLevel::Root => {
+            CommitmentLevel::Root => {
                 let slot = r_bank_forks.root();
                 debug!("RPC using node root: {:?}", slot);
                 Ok(r_bank_forks.get(slot).cloned().unwrap())
             }
-            Some(commitment_config)
-                if commitment_config.commitment == CommitmentLevel::Single
-                    || commitment_config.commitment == CommitmentLevel::SingleGossip =>
-            {
+            CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
                 let slot = self
                     .block_commitment_cache
                     .read()
@@ -112,7 +114,7 @@ impl JsonRpcRequestProcessor {
                 debug!("RPC using confirmed slot: {:?}", slot);
                 Ok(r_bank_forks.get(slot).cloned().unwrap())
             }
-            _ => {
+            CommitmentLevel::Max => {
                 let cluster_root = self
                     .block_commitment_cache
                     .read()
@@ -191,11 +193,11 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_account_info(
         &self,
-        pubkey: Result<Pubkey>,
+        pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<RpcAccount>>> {
-        let bank = &*self.bank(commitment)?;
-        pubkey.and_then(|key| new_response(bank, bank.get_account(&key).map(RpcAccount::encode)))
+        let bank = self.bank(commitment)?;
+        new_response(&bank, bank.get_account(pubkey).map(RpcAccount::encode))
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -250,26 +252,27 @@ impl JsonRpcRequestProcessor {
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
-        Ok(*self.bank(Some(CommitmentConfig::root()))?.epoch_schedule())
+        let bank = self.bank(Some(CommitmentConfig::root()))?;
+        Ok(*bank.epoch_schedule())
     }
 
     pub fn get_balance(
         &self,
-        pubkey: Result<Pubkey>,
+        pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
-        let bank = &*self.bank(commitment)?;
-        pubkey.and_then(|key| new_response(bank, bank.get_balance(&key)))
+        let bank = self.bank(commitment)?;
+        new_response(&bank, bank.get_balance(pubkey))
     }
 
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
-        let bank = &*self.bank(commitment)?;
+        let bank = self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         new_response(
-            bank,
+            &bank,
             RpcBlockhashFeeCalculator {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
@@ -278,13 +281,13 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_fees(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcFees>> {
-        let bank = &*self.bank(commitment)?;
+        let bank = self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
             .expect("bank blockhash queue should contain blockhash");
         new_response(
-            bank,
+            &bank,
             RpcFees {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
@@ -298,19 +301,19 @@ impl JsonRpcRequestProcessor {
         blockhash: &Hash,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
-        let bank = &*self.bank(commitment)?;
+        let bank = self.bank(commitment)?;
         let fee_calculator = bank.get_fee_calculator(blockhash);
         new_response(
-            bank,
+            &bank,
             fee_calculator.map(|fee_calculator| RpcFeeCalculator { fee_calculator }),
         )
     }
 
     fn get_fee_rate_governor(&self) -> Result<RpcResponse<RpcFeeRateGovernor>> {
-        let bank = &*self.bank(None)?;
+        let bank = self.bank(None)?;
         let fee_rate_governor = bank.get_fee_rate_governor();
         new_response(
-            bank,
+            &bank,
             RpcFeeRateGovernor {
                 fee_rate_governor: fee_rate_governor.clone(),
             },
@@ -319,19 +322,14 @@ impl JsonRpcRequestProcessor {
 
     pub fn confirm_transaction(
         &self,
-        signature: Result<Signature>,
+        signature: &Signature,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<bool>> {
-        let bank = &*self.bank(commitment)?;
-        match signature {
-            Err(e) => Err(e),
-            Ok(sig) => {
-                let status = bank.get_signature_status(&sig);
-                match status {
-                    Some(status) => new_response(bank, status.is_ok()),
-                    None => new_response(bank, false),
-                }
-            }
+        let bank = self.bank(commitment)?;
+        let status = bank.get_signature_status(signature);
+        match status {
+            Some(status) => new_response(&bank, status.is_ok()),
+            None => new_response(&bank, false),
         }
     }
 
@@ -596,17 +594,15 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         commitment: Option<CommitmentConfig>,
     ) -> Option<RpcSignatureConfirmation> {
-        self.get_transaction_status(signature, &self.bank(commitment).ok()?)
-            .map(
-                |TransactionStatus {
-                     status,
-                     confirmations,
-                     ..
-                 }| RpcSignatureConfirmation {
-                    confirmations: confirmations.unwrap_or(MAX_LOCKOUT_HISTORY + 1),
-                    status,
-                },
-            )
+        let bank = self.bank(commitment).ok()?;
+        let transaction_status = self.get_transaction_status(signature, &bank)?;
+        let confirmations = transaction_status
+            .confirmations
+            .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
+        Some(RpcSignatureConfirmation {
+            confirmations,
+            status: transaction_status.status,
+        })
     }
 
     pub fn get_signature_status(
@@ -614,10 +610,9 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         commitment: Option<CommitmentConfig>,
     ) -> Option<transaction::Result<()>> {
-        self.bank(commitment)
-            .ok()?
-            .get_signature_status_slot(&signature)
-            .map(|(_, status)| status)
+        let bank = self.bank(commitment).ok()?;
+        let (_, status) = bank.get_signature_status_slot(&signature)?;
+        Some(status)
     }
 
     pub fn get_signature_statuses(
@@ -671,27 +666,25 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         bank: &Arc<Bank>,
     ) -> Option<TransactionStatus> {
-        bank.get_signature_status_slot(&signature)
-            .map(|(slot, status)| {
-                let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+        let (slot, status) = bank.get_signature_status_slot(&signature)?;
+        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
-                let confirmations = if r_block_commitment_cache.root() >= slot
-                    && r_block_commitment_cache.is_confirmed_rooted(slot)
-                {
-                    None
-                } else {
-                    r_block_commitment_cache
-                        .get_confirmation_count(slot)
-                        .or(Some(0))
-                };
-                let err = status.clone().err();
-                TransactionStatus {
-                    slot,
-                    status,
-                    confirmations,
-                    err,
-                }
-            })
+        let confirmations = if r_block_commitment_cache.root() >= slot
+            && r_block_commitment_cache.is_confirmed_rooted(slot)
+        {
+            None
+        } else {
+            r_block_commitment_cache
+                .get_confirmation_count(slot)
+                .or(Some(0))
+        };
+        let err = status.clone().err();
+        Some(TransactionStatus {
+            slot,
+            status,
+            confirmations,
+            err,
+        })
     }
 
     pub fn get_confirmed_transaction(
@@ -1064,8 +1057,8 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<bool>> {
         debug!("confirm_transaction rpc request received: {:?}", id);
-        let signature = verify_signature(&id);
-        meta.confirm_transaction(signature, commitment)
+        let signature = verify_signature(&id)?;
+        meta.confirm_transaction(&signature, commitment)
     }
 
     fn get_account_info(
@@ -1075,8 +1068,8 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<RpcAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
-        let pubkey = verify_pubkey(pubkey_str);
-        meta.get_account_info(pubkey, commitment)
+        let pubkey = verify_pubkey(pubkey_str)?;
+        meta.get_account_info(&pubkey, commitment)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -1136,8 +1129,8 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
-        let pubkey = verify_pubkey(pubkey_str);
-        meta.get_balance(pubkey, commitment)
+        let pubkey = verify_pubkey(pubkey_str)?;
+        meta.get_balance(&pubkey, commitment)
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
