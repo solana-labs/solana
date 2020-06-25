@@ -65,13 +65,17 @@ impl SlotHistory {
     pub fn check(&self, slot: Slot) -> Check {
         if slot >= self.next_slot {
             Check::Future
-        } else if self.next_slot - slot > MAX_ENTRIES {
+        } else if slot < self.oldest() {
             Check::TooOld
         } else if self.bits.get(slot % MAX_ENTRIES) {
             Check::Found
         } else {
             Check::NotFound
         }
+    }
+
+    pub fn oldest(&self) -> Slot {
+        self.next_slot.saturating_sub(MAX_ENTRIES)
     }
 }
 
@@ -182,5 +186,17 @@ mod tests {
         assert_eq!(slot_history.check(10), Check::Future);
         assert_eq!(slot_history.check(6), Check::Future);
         assert_eq!(slot_history.check(11), Check::Future);
+    }
+
+    #[test]
+    fn test_oldest() {
+        let mut slot_history = SlotHistory::default();
+        assert_eq!(slot_history.oldest(), 0);
+        slot_history.add(10);
+        assert_eq!(slot_history.oldest(), 0);
+        slot_history.add(MAX_ENTRIES - 1);
+        assert_eq!(slot_history.oldest(), 0);
+        slot_history.add(MAX_ENTRIES);
+        assert_eq!(slot_history.oldest(), 1);
     }
 }
