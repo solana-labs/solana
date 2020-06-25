@@ -48,7 +48,7 @@ pub enum TestInstruction {
     /// Consumes a stored nonce, replacing it with a successor
     #[accounts(
         nonce_account(SIGNER, WRITABLE, desc = "Nonce account"),
-        recent_blockhashes_sysvar(SIGNER, WRITABLE, desc = "RecentBlockhashes sysvar"),
+        recent_blockhashes_sysvar(desc = "RecentBlockhashes sysvar"),
         nonce_authority(SIGNER, optional, desc = "Nonce authority"),
     )]
     AdvanceNonceAccount,
@@ -78,7 +78,7 @@ pub enum TestInstruction {
     ///
     /// * Accounts expected by this instruction:
     ///   0. `[WRITABLE, SIGNER]` Nonce account
-    ///   1. [] RecentBlockhashes sysvar
+    ///   1. `[]` RecentBlockhashes sysvar
     ///   2. (Optional) `[SIGNER]` Nonce authority
     AdvanceNonceAccount,
 }
@@ -90,13 +90,13 @@ Generated constructors:
 ///
 /// * `from_account` - `[WRITABLE, SIGNER]` Funding account
 /// * `to_account` - `[WRITABLE]` Recipient account
-pub fn transfer(from_account: &Pubkey, to_account: &Pubkey, lamports: u64) -> Instruction {
+pub fn transfer(from_account: Pubkey, to_account: Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new(from_pubkey, true),
+        AccountMeta::new(to_pubkey, false),
     ];
     Instruction::new(
-        system_program::id(),
+        test_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
     )
@@ -106,12 +106,12 @@ pub fn transfer(from_account: &Pubkey, to_account: &Pubkey, lamports: u64) -> In
 ///
 /// * `data_account` - `[WRITABLE]` Data account
 /// * `signers` - (Multiple) `[SIGNER]` Signers
-pub fn multisig(data_account: &Pubkey, signers: &[&Pubkey]) -> Instruction {
+pub fn multisig(data_account: Pubkey, signers: &[Pubkey]) -> Instruction {
     let mut account_metas = vec![
-        AccountMeta::new(*nonce_pubkey, false),
+        AccountMeta::new(nonce_pubkey, false),
     ];
     for pubkey in signers.iter() {
-        account_metas.push(AccountMeta::new_readonly(*pubkey, true));
+        account_metas.push(AccountMeta::new_readonly(pubkey, true));
     }
 
     Instruction::new(
@@ -124,19 +124,19 @@ pub fn multisig(data_account: &Pubkey, signers: &[&Pubkey]) -> Instruction {
 /// Consumes a stored nonce, replacing it with a successor
 ///
 /// * nonce_account - `[WRITABLE, SIGNER]` Nonce account
-/// * recent_blockhashes_sysvar - [] RecentBlockhashes sysvar
+/// * recent_blockhashes_sysvar - `[]` RecentBlockhashes sysvar
 /// * nonce_authority - (Optional) `[SIGNER]` Nonce authority
 pub fn advance_nonce_account(
-    nonce_account: &Pubkey,
-    recent_blockhashes_sysvar: &Pubkey,
-    nonce_authority: Option<&Pubkey>,
+    nonce_account: Pubkey,
+    recent_blockhashes_sysvar: Pubkey,
+    nonce_authority: Option<Pubkey>,
 ) -> Instruction {
     let mut account_metas = vec![
-        AccountMeta::new(*nonce_account, false),
-        AccountMeta::new_readonly(*recent_blockhashes_sysvar, false),
+        AccountMeta::new(nonce_account, false),
+        AccountMeta::new_readonly(recent_blockhashes_sysvar, false),
     ];
     if let Some(pubkey) = authorized_pubkey {
-        account_metas.push(AccountMeta::new_readonly(*nonce_authority, true));
+        account_metas.push(AccountMeta::new_readonly*nonce_authority, true));
     }
     Instruction::new(
         test_program::id(),
