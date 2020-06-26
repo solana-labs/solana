@@ -7,8 +7,7 @@ use proc_macro_error::*;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream, Result},
-    parse_macro_input,
-    ExprCall, Fields, Ident, ItemEnum, Lit, Meta, NestedMeta,
+    parse_macro_input, parse_quote, ExprCall, Fields, Ident, ItemEnum, Lit, Meta, NestedMeta,
 };
 
 struct ProgramId(ExprCall);
@@ -98,6 +97,34 @@ struct AccountDetails {
     allows_multiple: bool,
 }
 
+impl AccountDetails {
+    fn format_doc(&self, index: usize) -> String {
+        let index = if self.allows_multiple {
+            "* ".to_string()
+        } else {
+            format!("{}. ", index)
+        };
+        let paren_tag = if self.is_optional {
+            "(Optional) "
+        } else if self.allows_multiple {
+            "(Multiple) "
+        } else {
+            ""
+        };
+        let mut account_meta = String::new();
+        if self.is_writable {
+            account_meta.push_str("WRITABLE")
+        }
+        if self.is_signer {
+            if !account_meta.is_empty() {
+                account_meta.push_str(", ");
+            }
+            account_meta.push_str("SIGNER");
+        }
+        format!("  {}{}`[{}]` {}", index, paren_tag, account_meta, self.desc)
+    }
+}
+
 struct VariantDetails {
     account_details: Vec<AccountDetails>,
 }
@@ -148,10 +175,141 @@ impl Parse for ProgramDetails {
     }
 }
 
+fn build_instruction_enum(program_details: &ProgramDetails) -> proc_macro2::TokenStream {
+    let mut instruction_enum = program_details.instruction_enum.clone();
+    for (variant, variant_details) in instruction_enum
+        .variants
+        .iter_mut()
+        .zip(program_details.variants.iter())
+    {
+        if !variant_details.account_details.is_empty() {
+            variant.attrs.push(parse_quote!(#[doc = "<br/>"]));
+            variant
+                .attrs
+                .push(parse_quote!(#[doc = "* Accounts expected by this instruction:"]));
+            for (i, account) in variant_details.account_details.iter().enumerate() {
+                let account_docs = account.format_doc(i);
+                variant.attrs.push(parse_quote! {
+                    #[doc = #account_docs]
+                });
+            }
+        }
+    }
+    quote! {#instruction_enum}
+}
+
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn instructions(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _program_id = parse_macro_input!(attr as ProgramId);
-    let _program_details = parse_macro_input!(item as ProgramDetails);
-    TokenStream::new()
+    let program_details = parse_macro_input!(item as ProgramDetails);
+
+    let instruction_enum = build_instruction_enum(&program_details);
+
+    TokenStream::from(quote! {
+        #instruction_enum
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proc_macro2::Span;
+    use syn::{punctuated::Punctuated, token::Comma};
+
+    #[test]
+    fn test_format_doc() {
+        let mut account_details = AccountDetails {
+            ident: Ident::new("test", Span::call_site()),
+            desc: "Description".to_string(),
+            is_signer: false,
+            is_writable: false,
+            is_optional: false,
+            allows_multiple: false,
+        };
+        assert_eq!(account_details.format_doc(1), "  1. `[]` Description");
+        assert_eq!(account_details.format_doc(2), "  2. `[]` Description");
+
+        account_details.is_signer = true;
+        assert_eq!(account_details.format_doc(2), "  2. `[SIGNER]` Description");
+
+        account_details.is_signer = false;
+        account_details.is_writable = true;
+        assert_eq!(
+            account_details.format_doc(2),
+            "  2. `[WRITABLE]` Description"
+        );
+
+        account_details.is_signer = true;
+        account_details.is_writable = true;
+        assert_eq!(
+            account_details.format_doc(2),
+            "  2. `[WRITABLE, SIGNER]` Description"
+        );
+
+        account_details.is_optional = true;
+        assert_eq!(
+            account_details.format_doc(2),
+            "  2. (Optional) `[WRITABLE, SIGNER]` Description"
+        );
+
+        account_details.is_optional = false;
+        account_details.allows_multiple = true;
+        assert_eq!(
+            account_details.format_doc(2),
+            "  * (Multiple) `[WRITABLE, SIGNER]` Description"
+        );
+    }
+
+    fn build_test_program_details() -> ProgramDetails {
+        let instruction_enum: ItemEnum = parse_quote! {
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum TestInstruction {
+                /// Test instruction
+                Test {
+                    /// Field doc
+                    lamports: u64
+                },
+                /// Multiple signers
+                Multiple,
+            }
+        };
+        let account_details0 = vec![
+            AccountDetails {
+                ident: Ident::new("test_account", Span::call_site()),
+                desc: "Description".to_string(),
+                is_signer: true,
+                is_writable: true,
+                is_optional: false,
+                allows_multiple: false,
+            },
+            AccountDetails {
+                ident: Ident::new("another", Span::call_site()),
+                desc: "Different".to_string(),
+                is_signer: false,
+                is_writable: false,
+                is_optional: true,
+                allows_multiple: false,
+            },
+        ];
+        let account_details1 = vec![AccountDetails {
+            ident: Ident::new("signers", Span::call_site()),
+            desc: "A signer".to_string(),
+            is_signer: true,
+            is_writable: false,
+            is_optional: false,
+            allows_multiple: true,
+        }];
+        ProgramDetails {
+            instruction_enum,
+            variants: vec![
+                VariantDetails {
+                    account_details: account_details0,
+                },
+                VariantDetails {
+                    account_details: account_details1,
+                },
+            ],
+        }
+    }
 }
