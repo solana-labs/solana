@@ -1,0 +1,5 @@
+error: missing accounts list
+ --> $DIR/accounts_list_missing.rs:9:7
+  |
+9 |     #[accounts]
+  |       ^^^^^^^^

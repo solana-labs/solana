@@ -1,0 +1,5 @@
+error: account cannot be optional and allow multiples
+  --> $DIR/account_optional_multiple.rs:10:32
+   |
+10 |         from_account(optional, multiple, desc = "Account"),
+   |                                ^^^^^^^^

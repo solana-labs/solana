@@ -1,0 +1,7 @@
+error: unrecognized accounts format
+  --> $DIR/accounts_list.rs:9:5
+   |
+9  | /     #[accounts(
+10 | |         (from_account, desc = "Account"),
+11 | |     )]
+   | |______^

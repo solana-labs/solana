@@ -1,0 +1,5 @@
+error: macro does not support unnamed variant fields
+  --> $DIR/unnamed_fields.rs:13:13
+   |
+13 |     Transfer(u64),
+   |             ^^^^^

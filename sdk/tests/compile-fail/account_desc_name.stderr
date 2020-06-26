@@ -1,0 +1,5 @@
+error: unrecognized account detail
+  --> $DIR/account_desc_name.rs:10:17
+   |
+10 |         account(doc = "Account")
+   |                 ^^^^^^^^^^^^^^^

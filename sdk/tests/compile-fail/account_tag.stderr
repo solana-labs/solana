@@ -1,0 +1,5 @@
+error: unrecognized account detail
+  --> $DIR/account_tag.rs:10:22
+   |
+10 |         from_account(writable, desc = "Account"),
+   |                      ^^^^^^^^
