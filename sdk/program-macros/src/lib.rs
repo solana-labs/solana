@@ -2,12 +2,18 @@
 
 extern crate proc_macro;
 
+use inflector::Inflector;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use proc_macro_error::*;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream, Result},
-    parse_macro_input, parse_quote, ExprCall, Fields, Ident, ItemEnum, Lit, Meta, NestedMeta,
+    parse_macro_input, parse_quote,
+    punctuated::Punctuated,
+    token::Comma,
+    ExprCall, Fields, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta, Path,
+    Type,
 };
 
 struct ProgramId(ExprCall);
@@ -123,6 +129,45 @@ impl AccountDetails {
         }
         format!("  {}{}`[{}]` {}", index, paren_tag, account_meta, self.desc)
     }
+
+    fn format_account_meta(&self) -> proc_macro2::TokenStream {
+        let account_meta_path: Path = if self.is_writable {
+            parse_quote!(::solana_sdk::instruction::AccountMeta::new)
+        } else {
+            parse_quote!(::solana_sdk::instruction::AccountMeta::new_readonly)
+        };
+        let ident = &self.ident;
+        let is_signer = &self.is_signer;
+        if self.is_optional {
+            quote! {
+                if let Some(#ident) = #ident {
+                    account_metas.push(#account_meta_path(#ident, #is_signer));
+                }
+            }
+        } else if self.allows_multiple {
+            quote! {
+                for pubkey in #ident.into_iter() {
+                    account_metas.push(#account_meta_path(pubkey, #is_signer));
+                }
+            }
+        } else {
+            quote! {
+                account_metas.push(#account_meta_path(#ident, #is_signer));
+            }
+        }
+    }
+
+    fn format_arg(&self) -> FnArg {
+        let account_ident = &self.ident;
+        let account_type: Type = if self.is_optional {
+            parse_quote!(Option<::solana_sdk::pubkey::Pubkey>)
+        } else if self.allows_multiple {
+            parse_quote!(Vec<::solana_sdk::pubkey::Pubkey>)
+        } else {
+            parse_quote!(::solana_sdk::pubkey::Pubkey)
+        };
+        parse_quote!(#account_ident: #account_type)
+    }
 }
 
 struct VariantDetails {
@@ -198,24 +243,83 @@ fn build_instruction_enum(program_details: &ProgramDetails) -> proc_macro2::Toke
     quote! {#instruction_enum}
 }
 
+fn build_helper_fns(
+    program_details: &ProgramDetails,
+    program_id: ProgramId,
+) -> proc_macro2::TokenStream {
+    let mut stream = proc_macro2::TokenStream::new();
+    let ident = &program_details.instruction_enum.ident;
+    for (variant, variant_details) in program_details
+        .instruction_enum
+        .variants
+        .iter()
+        .zip(program_details.variants.iter())
+    {
+        let fn_ident = Ident::new(
+            &variant.ident.to_string().to_snake_case(),
+            Span::call_site(),
+        );
+        let variant_ident = &variant.ident;
+        let mut fields: Punctuated<Ident, Comma> = Punctuated::new();
+        let mut args: Punctuated<FnArg, Comma> = Punctuated::new();
+
+        let mut accounts_stream = proc_macro2::TokenStream::new();
+        accounts_stream.extend(quote! {
+            let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+        });
+        for account in &variant_details.account_details {
+            let account_meta = account.format_account_meta();
+            accounts_stream.extend(quote! {
+                #account_meta
+            });
+
+            args.push(account.format_arg());
+        }
+
+        for field in variant.fields.iter() {
+            let ident = field.ident.as_ref().unwrap();
+            fields.push(ident.clone());
+
+            if let Type::Path(path) = &field.ty {
+                let arg: FnArg = parse_quote!(#ident: #path);
+                args.push(arg);
+            }
+        }
+
+        stream.extend(
+            quote!( pub fn #fn_ident( #args ) -> ::solana_sdk::instruction::Instruction {
+                    #accounts_stream
+                    ::solana_sdk::instruction::Instruction::new(
+                        #program_id,
+                        &#ident::#variant_ident{ #fields },
+                        account_metas,
+                    )
+                }
+            ),
+        );
+    }
+    stream
+}
+
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn instructions(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let _program_id = parse_macro_input!(attr as ProgramId);
+    let program_id = parse_macro_input!(attr as ProgramId);
     let program_details = parse_macro_input!(item as ProgramDetails);
 
     let instruction_enum = build_instruction_enum(&program_details);
+    let helper_fns = build_helper_fns(&program_details, program_id);
 
     TokenStream::from(quote! {
         #instruction_enum
+        #helper_fns
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use proc_macro2::Span;
-    use syn::{punctuated::Punctuated, token::Comma};
+    use syn::Stmt;
 
     #[test]
     fn test_format_doc() {
@@ -259,6 +363,80 @@ mod tests {
             account_details.format_doc(2),
             "  * (Multiple) `[WRITABLE, SIGNER]` Description"
         );
+    }
+
+    #[test]
+    fn test_format_account_meta() {
+        let mut account_details = AccountDetails {
+            ident: Ident::new("test", Span::call_site()),
+            desc: "Description".to_string(),
+            is_signer: false,
+            is_writable: false,
+            is_optional: false,
+            allows_multiple: false,
+        };
+        let account_meta = account_details.format_account_meta();
+        let account_meta: Stmt = parse_quote!(#account_meta);
+        let expected_account_meta: Stmt = parse_quote!(
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, false));
+        );
+        assert_eq!(account_meta, expected_account_meta);
+
+        account_details.is_signer = true;
+        let account_meta = account_details.format_account_meta();
+        let account_meta: Stmt = parse_quote!(#account_meta);
+        let expected_account_meta: Stmt = parse_quote!(
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, true));
+        );
+        assert_eq!(account_meta, expected_account_meta);
+
+        account_details.is_writable = true;
+        let account_meta = account_details.format_account_meta();
+        let account_meta: Stmt = parse_quote!(#account_meta);
+        let expected_account_meta: Stmt = parse_quote!(
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+        );
+        assert_eq!(account_meta, expected_account_meta);
+
+        account_details.is_optional = true;
+        let account_meta = account_details.format_account_meta();
+        let account_meta: Stmt = parse_quote!(#account_meta);
+        let expected_account_meta: Stmt = parse_quote!(if let Some(test) = test {
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+        });
+        assert_eq!(account_meta, expected_account_meta);
+
+        account_details.is_optional = false;
+        account_details.allows_multiple = true;
+        let account_meta = account_details.format_account_meta();
+        let account_meta: Stmt = parse_quote!(#account_meta);
+        let expected_account_meta: Stmt = parse_quote!(for pubkey in test.into_iter() {
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(pubkey, true));
+        });
+        assert_eq!(account_meta, expected_account_meta);
+    }
+
+    #[test]
+    fn test_format_arg() {
+        let mut account_details = AccountDetails {
+            ident: Ident::new("test", Span::call_site()),
+            desc: "Description".to_string(),
+            is_signer: false,
+            is_writable: false,
+            is_optional: false,
+            allows_multiple: false,
+        };
+        let expected_arg: FnArg = parse_quote!(test: ::solana_sdk::pubkey::Pubkey);
+        assert_eq!(account_details.format_arg(), expected_arg);
+
+        account_details.is_optional = true;
+        let expected_arg: FnArg = parse_quote!(test: Option<::solana_sdk::pubkey::Pubkey>);
+        assert_eq!(account_details.format_arg(), expected_arg);
+
+        account_details.is_optional = false;
+        account_details.allows_multiple = true;
+        let expected_arg: FnArg = parse_quote!(test: Vec<::solana_sdk::pubkey::Pubkey>);
+        assert_eq!(account_details.format_arg(), expected_arg);
     }
 
     fn build_test_program_details() -> ProgramDetails {
@@ -311,5 +489,84 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn test_build_instruction_enum() {
+        let program_details = build_test_program_details();
+        let documented_enum = build_instruction_enum(&program_details);
+        let documented_enum: ItemEnum = parse_quote!(#documented_enum);
+
+        let expected_enum: ItemEnum = parse_quote! {
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum TestInstruction {
+                /// Test instruction
+                #[doc = "<br/>"]
+                #[doc = "* Accounts expected by this instruction:"]
+                #[doc = "  0. `[WRITABLE, SIGNER]` Description"]
+                #[doc = "  1. (Optional) `[]` Different"]
+                Test {
+                    /// Field doc
+                    lamports: u64
+                },
+                /// Multiple signers
+                #[doc = "<br/>"]
+                #[doc = "* Accounts expected by this instruction:"]
+                #[doc = "  * (Multiple) `[SIGNER]` A signer"]
+                Multiple,
+            }
+        };
+        assert_eq!(documented_enum, expected_enum);
+    }
+
+    #[test]
+    fn test_build_helper_fns() {
+        let program_id: ExprCall = parse_quote! { program::id() };
+        let program_id = ProgramId(program_id);
+
+        let program_details = build_test_program_details();
+        let helper_fns = build_helper_fns(&program_details, program_id);
+        let helper_fns: Vec<Stmt> = parse_quote!(#helper_fns);
+
+        let expected_fns: Vec<Stmt> = parse_quote! {
+            pub fn test(
+                test_account: ::solana_sdk::pubkey::Pubkey,
+                another: ::solana_sdk::pubkey::Pubkey,
+                lamports: u64,
+            ) -> ::solana_sdk::instruction::Instruction {
+                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                account_metas.push(
+                    ::solana_sdk::instruction::AccountMeta::new(test_account, true)
+                );
+                if let Some(another) = another {
+                    account_metas.push(
+                        ::solana_sdk::instruction::AccountMeta::new_readonly(another, false)
+                    );
+                }
+                ::solana_sdk::instruction::Instruction::new(
+                    program::id(),
+                    &TestInstruction::Transfer{lamports,},
+                    account_metas,
+                )
+            }
+
+            pub fn multiple(
+                signers: Vec<::solana_sdk::pubkey::Pubkey>
+            ) -> ::solana_sdk::instruction::Instruction {
+                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                for pubkey in signers.into_iter() {
+                    account_metas.push(
+                        ::solana_sdk::instruction::AccountMeta::new_readonly(pubkey, true)
+                    );
+                }
+
+                ::solana_sdk::instruction::Instruction::new(
+                    program::id(),
+                    &TestInstruction::Multiple{},
+                    account_metas,
+                )
+            }
+        };
+        assert_eq!(helper_fns[1], expected_fns[1]);
     }
 }
