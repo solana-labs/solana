@@ -1,0 +1,21 @@
+[package]
+name = "solana-sdk-program-macros"
+version = "1.3.0"
+description = "Solana SDK Program Macros"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+proc-macro-error = "1.0.2"
+quote = "1.0"
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
