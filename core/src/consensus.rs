@@ -776,9 +776,9 @@ impl Tower {
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
-            assert_eq!(self.last_vote, Vote::default());
+            self.lockouts.root_slot = Some(replayed_root_slot);
+            assert!(self.last_vote != Vote::default());
         }
-        // also adjust self.last_vote!
         // should call self.votes.pop_expired_votes()?
         Ok(self)
     }
@@ -2448,7 +2448,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), None);
     }
 
     #[test]
@@ -2485,7 +2485,7 @@ pub mod test {
             .adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history)
             .unwrap();
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), Some(MAX_ENTRIES));
+        assert_eq!(tower.root(), None);
     }
 
     #[test]
