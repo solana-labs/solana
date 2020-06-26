@@ -129,11 +129,16 @@ function launch_testnet() {
     maybeWarpSlot="--warp-slot $WARP_SLOT"
   fi
 
+  declare maybeAsyncNodeInit
+  if [[ "$ASYNC_NODE_INIT" = "true" ]]; then
+    maybeAsyncNodeInit="--async-node-init"
+  fi
+
   # shellcheck disable=SC2068
   # shellcheck disable=SC2086
   "${REPO_ROOT}"/net/net.sh start $version_args \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-    --gpu-mode $startGpuMode $maybeWarpSlot
+    --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit
 
   execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
   wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
