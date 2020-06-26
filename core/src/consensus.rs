@@ -697,6 +697,7 @@ impl Tower {
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
+        error!("adjust_lockouts_after_replay....");
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
@@ -705,6 +706,14 @@ impl Tower {
                 "tower root: {:?} >= replayed root slot: {}",
                 self.root().unwrap(),
                 replayed_root_slot
+            )
+        );
+        assert!(
+            self.last_vote == Vote::default() && self.lockouts.votes.is_empty()
+                || self.last_vote != Vote::default() && !self.lockouts.votes.is_empty(),
+            format!(
+                "last vote: {:?} lockouts.votes: {:?}",
+                self.last_vote, self.lockouts.votes
             )
         );
 
@@ -722,7 +731,7 @@ impl Tower {
             return Err(TowerError::TooOld(last_voted_slot, slot_history.oldest()));
         }
 
-        let mut is_diverged_descendants_in_reverse: Vec<_> =
+        let mut diverged_descendant_flags_in_reverse: Vec<_> =
             Vec::with_capacity(self.lockouts.votes.len());
         let mut still_in_future = true;
         let mut past_outside_history = false;
@@ -755,14 +764,20 @@ impl Tower {
                 ));
             }
 
-            is_diverged_descendants_in_reverse.push(!found);
+            diverged_descendant_flags_in_reverse.push(!found);
         }
-        let mut is_diverged_descendants_iter = is_diverged_descendants_in_reverse.into_iter().rev();
+        let mut diverged_descendant_flags = diverged_descendant_flags_in_reverse.into_iter().rev();
         self.lockouts
             .votes
-            .retain(move |_| is_diverged_descendants_iter.next().unwrap());
+            .retain(move |_| diverged_descendant_flags.next().unwrap());
 
-        self.lockouts.root_slot = Some(replayed_root_slot);
+        if self.lockouts.votes.is_empty() {
+            error!("resetting root_slot and last_vote in tower!");
+            self.lockouts.root_slot = None;
+            self.last_vote = Vote::default();
+        } else {
+            assert_eq!(self.last_vote, Vote::default());
+        }
         // also adjust self.last_vote!
         // should call self.votes.pop_expired_votes()?
         Ok(self)

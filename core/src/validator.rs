@@ -729,7 +729,7 @@ fn new_banks_from_ledger(
                 error!("Tower restore failed: {:?}", err);
                 process::exit(1);
             }
-            info!("Rebuilding tower from the latest vote account");
+            error!("Rebuilding tower from the latest vote account: {}", err);
             Tower::new_from_bankforks(
                 &bank_forks,
                 &ledger_path,
