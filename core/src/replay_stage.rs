@@ -6,7 +6,6 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
-    commitment::BlockCommitmentCache,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
     consensus::{ComputedBankState, StakeLockout, SwitchForkDecision, Tower},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
@@ -30,7 +29,14 @@ use solana_ledger::{
 };
 use solana_measure::thread_mem_usage;
 use solana_metrics::inc_new_counter_info;
+<<<<<<< HEAD
 use solana_runtime::bank::Bank;
+=======
+use solana_runtime::{
+    bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
+    snapshot_package::AccountsPackageSender,
+};
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     genesis_config::OperatingMode,
@@ -1776,7 +1782,6 @@ impl ReplayStage {
 pub(crate) mod tests {
     use super::*;
     use crate::{
-        commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         progress_map::ValidatorStakeInfo,
@@ -1796,7 +1801,10 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
+    use solana_runtime::{
+        commitment::BlockCommitment,
+        genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+    };
     use solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS,
         genesis_config,
@@ -1885,9 +1893,7 @@ pub(crate) mod tests {
             let subscriptions = Arc::new(RpcSubscriptions::new(
                 &exit,
                 bank_forks.clone(),
-                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                    blockstore.clone(),
-                ))),
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
             ));
 
             // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
@@ -2309,9 +2315,6 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let genesis_config_info =
@@ -2332,9 +2335,7 @@ pub(crate) mod tests {
         )));
 
         let exit = Arc::new(AtomicBool::new(false));
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),

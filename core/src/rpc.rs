@@ -1,14 +1,9 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo,
-    commitment::{BlockCommitmentArray, BlockCommitmentCache},
-    contact_info::ContactInfo,
-    non_circulating_supply::calculate_non_circulating_supply,
-    rpc_error::RpcCustomError,
-    rpc_health::*,
-    send_transaction_service::SendTransactionService,
-    validator::ValidatorExit,
+    cluster_info::ClusterInfo, contact_info::ContactInfo,
+    non_circulating_supply::calculate_non_circulating_supply, rpc_error::RpcCustomError,
+    rpc_health::*, send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -23,8 +18,19 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
+<<<<<<< HEAD
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
+=======
+use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
+use solana_perf::packet::PACKET_DATA_SIZE;
+use solana_runtime::{
+    accounts::AccountAddressFilter,
+    bank::Bank,
+    bank_forks::BankForks,
+    commitment::{BlockCommitmentArray, BlockCommitmentCache},
+    log_collector::LogCollector,
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank, log_collector::LogCollector};
@@ -54,6 +60,19 @@ use std::{
 fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
     let context = RpcResponseContext { slot: bank.slot() };
     Ok(Response { context, value })
+}
+
+pub fn is_confirmed_rooted(
+    block_commitment_cache: &BlockCommitmentCache,
+    blockstore: &Blockstore,
+    slot: Slot,
+) -> bool {
+    slot <= block_commitment_cache.largest_confirmed_root()
+        && (blockstore.is_root(slot)
+            || block_commitment_cache
+                .bank()
+                .status_cache_ancestors()
+                .contains(&slot))
 }
 
 #[derive(Debug, Default, Clone)]
@@ -152,6 +171,43 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+<<<<<<< HEAD
+=======
+    // Useful for unit testing
+    pub fn new_from_bank(bank: &Arc<Bank>) -> Self {
+        let genesis_hash = bank.hash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
+            &[bank.clone()],
+            bank.slot(),
+        )));
+        let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
+        let exit = Arc::new(AtomicBool::new(false));
+        let cluster_info = Arc::new(ClusterInfo::default());
+        Self {
+            config: JsonRpcConfig::default(),
+            bank_forks: bank_forks.clone(),
+            block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
+                HashMap::new(),
+                0,
+                0,
+                bank.clone(),
+                0,
+                0,
+            ))),
+            blockstore,
+            validator_exit: create_validator_exit(&exit),
+            health: Arc::new(RpcHealth::new(cluster_info.clone(), None, 0, exit.clone())),
+            cluster_info: cluster_info.clone(),
+            genesis_hash,
+            send_transaction_service: Arc::new(SendTransactionService::new(
+                &cluster_info,
+                &bank_forks,
+                &exit,
+            )),
+        }
+    }
+
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
     pub fn get_account_info(
         &self,
         pubkey: &Pubkey,
@@ -631,7 +687,7 @@ impl JsonRpcRequestProcessor {
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && r_block_commitment_cache.is_confirmed_rooted(slot)
+            && is_confirmed_rooted(&r_block_commitment_cache, &self.blockstore, slot)
         {
             None
         } else {
@@ -1551,8 +1607,7 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
 pub mod tests {
     use super::*;
     use crate::{
-        commitment::BlockCommitment, contact_info::ContactInfo,
-        non_circulating_supply::non_circulating_accounts,
+        contact_info::ContactInfo, non_circulating_supply::non_circulating_accounts,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
@@ -1567,6 +1622,7 @@ pub mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
+    use solana_runtime::commitment::BlockCommitment;
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,
@@ -1643,7 +1699,6 @@ pub mod tests {
             0,
             10,
             bank.clone(),
-            blockstore.clone(),
             0,
             0,
         )));
@@ -2730,9 +2785,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -2768,9 +2821,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let bank_forks = new_bank_forks().0;
         let health = RpcHealth::stub();
 
@@ -2920,9 +2971,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let cluster_info = Arc::new(ClusterInfo::default());
         let bank_forks = new_bank_forks().0;
         let request_processor = JsonRpcRequestProcessor::new(
@@ -2950,9 +2999,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let bank_forks = new_bank_forks().0;
@@ -3040,7 +3087,6 @@ pub mod tests {
             0,
             42,
             bank_forks.read().unwrap().working_bank(),
-            blockstore.clone(),
             0,
             0,
         )));
@@ -3515,5 +3561,41 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_is_confirmed_rooted() {
+        let bank = Arc::new(Bank::default());
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        blockstore.set_roots(&[0, 1]).unwrap();
+        // Build BlockCommitmentCache with rooted slots
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_rooted_stake(50);
+        let mut cache1 = BlockCommitment::default();
+        cache1.increase_rooted_stake(40);
+        let mut cache2 = BlockCommitment::default();
+        cache2.increase_rooted_stake(20);
+
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(1).or_insert(cache0);
+        block_commitment.entry(2).or_insert(cache1);
+        block_commitment.entry(3).or_insert(cache2);
+        let largest_confirmed_root = 1;
+        let block_commitment_cache =
+            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0, 0);
+
+        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 0));
+        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 1));
+        assert!(!is_confirmed_rooted(
+            &block_commitment_cache,
+            &blockstore,
+            2
+        ));
+        assert!(!is_confirmed_rooted(
+            &block_commitment_cache,
+            &blockstore,
+            3
+        ));
     }
 }

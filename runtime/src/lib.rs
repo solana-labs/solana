@@ -7,6 +7,7 @@ pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
 pub mod builtin_programs;
+pub mod commitment;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 mod legacy_system_instruction_processor0;

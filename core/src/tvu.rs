@@ -8,7 +8,6 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
-    commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -27,6 +26,13 @@ use solana_ledger::{
     blockstore_processor::TransactionStatusSender,
     snapshot_package::AccountsPackageSender,
 };
+<<<<<<< HEAD
+=======
+use solana_runtime::{
+    bank_forks::BankForks, commitment::BlockCommitmentCache,
+    snapshot_package::AccountsPackageSender,
+};
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -274,9 +280,7 @@ pub mod tests {
             create_test_recorder(&bank, &blockstore, None);
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(

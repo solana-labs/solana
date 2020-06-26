@@ -4,7 +4,6 @@ use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
-    commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -34,7 +33,16 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
+<<<<<<< HEAD
 use solana_runtime::bank::Bank;
+=======
+use solana_runtime::{
+    bank::Bank,
+    bank_forks::{BankForks, SnapshotConfig},
+    commitment::BlockCommitmentCache,
+    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+};
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
@@ -239,9 +247,7 @@ impl Validator {
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
         let blockstore = Arc::new(blockstore);
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,

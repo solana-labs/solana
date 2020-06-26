@@ -1,6 +1,5 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    commitment::VOTE_THRESHOLD_SIZE,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
@@ -19,6 +18,11 @@ use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
 use solana_runtime::{
     bank::Bank,
+<<<<<<< HEAD
+=======
+    bank_forks::BankForks,
+    commitment::VOTE_THRESHOLD_SIZE,
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
     epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
 };
 use solana_sdk::{
@@ -600,11 +604,10 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commitment::BlockCommitmentCache;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_perf::packet;
     use solana_runtime::{
         bank::Bank,
+        commitment::BlockCommitmentCache,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     };
     use solana_sdk::hash::Hash;
@@ -951,14 +954,16 @@ mod tests {
         let bank_forks = BankForks::new(bank);
         let bank = bank_forks.get(0).unwrap().clone();
         let vote_tracker = VoteTracker::new(&bank);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(bank_forks)),
+<<<<<<< HEAD
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
                 blockstore.clone(),
             ))),
+=======
+            Arc::new(RwLock::new(BlockCommitmentCache::default())),
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
         ));
 
         // Send a vote to process, should add a reference to the pubkey for that voter
@@ -1066,14 +1071,16 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = BankForks::new(bank);
         let bank = bank_forks.get(0).unwrap().clone();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(bank_forks)),
+<<<<<<< HEAD
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
                 blockstore.clone(),
             ))),
+=======
+            Arc::new(RwLock::new(BlockCommitmentCache::default())),
+>>>>>>> 50b3fa83a... Move BankCommitmentCache to solana_runtime (#10816)
         ));
 
         // Integrity Checks
