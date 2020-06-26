@@ -10,13 +10,15 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::{Arc, RwLock},
+    time::Instant,
 };
 #[cfg(test)]
 use trees::{Tree, TreeWalk};
 
 pub type ForkWeight = u64;
+const MAX_ROOT_PRINT_SECONDS: u64 = 30;
 
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 enum UpdateLabel {
@@ -55,18 +57,22 @@ struct ForkInfo {
     children: Vec<Slot>,
 }
 
-#[derive(Default)]
 pub struct HeaviestSubtreeForkChoice {
     fork_infos: HashMap<Slot, ForkInfo>,
     latest_votes: HashMap<Pubkey, Slot>,
     root: Slot,
+    last_root_time: Instant,
 }
 
 impl HeaviestSubtreeForkChoice {
     pub(crate) fn new(root: Slot) -> Self {
         let mut heaviest_subtree_fork_choice = Self {
             root,
-            ..HeaviestSubtreeForkChoice::default()
+            // Doesn't implement default because `root` must
+            // exist in all the fields
+            fork_infos: HashMap::new(),
+            latest_votes: HashMap::new(),
+            last_root_time: Instant::now(),
         };
         heaviest_subtree_fork_choice.add_new_leaf_slot(root, None);
         heaviest_subtree_fork_choice
@@ -153,6 +159,7 @@ impl HeaviestSubtreeForkChoice {
     }
 
     pub fn set_root(&mut self, root: Slot) {
+        self.last_root_time = Instant::now();
         self.root = root;
         let mut pending_slots = vec![root];
         let mut new_fork_infos = HashMap::new();
@@ -176,6 +183,11 @@ impl HeaviestSubtreeForkChoice {
     }
 
     pub fn add_new_leaf_slot(&mut self, slot: Slot, parent: Option<Slot>) {
+        if self.last_root_time.elapsed().as_secs() > MAX_ROOT_PRINT_SECONDS {
+            self.print_state();
+            self.last_root_time = Instant::now();
+        }
+
         self.fork_infos
             .entry(slot)
             .and_modify(|slot_info| slot_info.parent = parent)
@@ -399,6 +411,17 @@ impl HeaviestSubtreeForkChoice {
             .get(&slot)
             .map(|fork_info| fork_info.parent)
             .unwrap_or(None)
+    }
+
+    fn print_state(&self) {
+        let best_slot = self.best_overall_slot();
+        let mut best_path: VecDeque<_> = self.ancestor_iterator(best_slot).collect();
+        best_path.push_front(best_slot);
+        info!(
+            "Latest known votes by vote pubkey: {:#?}, best path: {:?}",
+            self.latest_votes,
+            best_path.iter().rev().collect::<Vec<&Slot>>()
+        );
     }
 
     #[cfg(test)]
