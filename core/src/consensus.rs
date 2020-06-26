@@ -836,10 +836,10 @@ impl Tower {
             let mut file = File::create(&new_filename)?;
             let saveable_tower = SavedTower::new(self, node_keypair)?;
             bincode::serialize_into(&mut file, &saveable_tower)?;
-            file.sync_all().unwrap();
+            //file.sync_all().unwrap();
         }
         fs::rename(&new_filename, &filename)?;
-        File::open(&self.save_path).unwrap().sync_all().unwrap();
+        //File::open(&self.save_path).unwrap().sync_all().unwrap();
         Ok(())
     }
 
