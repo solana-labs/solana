@@ -1,6 +1,5 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::commitment::BlockCommitmentCache;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -11,8 +10,7 @@ use serde::Serialize;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
-use solana_ledger::blockstore::Blockstore;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
@@ -375,16 +373,11 @@ impl RpcSubscriptions {
         }
     }
 
-    pub fn default_with_blockstore_bank_forks(
-        blockstore: Arc<Blockstore>,
-        bank_forks: Arc<RwLock<BankForks>>,
-    ) -> Self {
+    pub fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         Self::new(
             &Arc::new(AtomicBool::new(false)),
             bank_forks,
-            Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                blockstore,
-            ))),
+            Arc::new(RwLock::new(BlockCommitmentCache::default())),
         )
     }
 
@@ -899,14 +892,12 @@ impl RpcSubscriptions {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::commitment::BlockCommitment;
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
-    use solana_ledger::{
-        blockstore::Blockstore,
+    use solana_runtime::{
+        commitment::BlockCommitment,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
     };
     use solana_sdk::{
         signature::{Keypair, Signer},
@@ -948,8 +939,6 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -965,13 +954,10 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore_bank(
-                    blockstore,
-                    bank_forks.read().unwrap().get(1).unwrap().clone(),
-                    1,
-                ),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_bank(
+                bank_forks.read().unwrap().get(1).unwrap().clone(),
+                1,
+            ))),
         );
         subscriptions.add_account_subscription(
             alice.pubkey(),
@@ -1042,8 +1028,6 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -1071,9 +1055,7 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         );
         subscriptions.add_program_subscription(
             solana_budget_program::id(),
@@ -1130,8 +1112,6 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let mut bank_forks = BankForks::new(bank);
@@ -1171,7 +1151,7 @@ pub(crate) mod tests {
         block_commitment.entry(0).or_insert(cache0);
         block_commitment.entry(1).or_insert(cache1);
         let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, 10, bank1, blockstore, 0, 0);
+            BlockCommitmentCache::new(block_commitment, 0, 10, bank1, 0, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
@@ -1286,17 +1266,13 @@ pub(crate) mod tests {
             Subscriber::new_test("slotNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         );
         subscriptions.add_slot_subscription(sub_id.clone(), subscriber);
 
@@ -1338,17 +1314,13 @@ pub(crate) mod tests {
             Subscriber::new_test("rootNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         );
         subscriptions.add_root_subscription(sub_id.clone(), subscriber);
 
@@ -1436,8 +1408,6 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -1456,13 +1426,10 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore_bank(
-                    blockstore,
-                    bank_forks.read().unwrap().get(1).unwrap().clone(),
-                    1,
-                ),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_bank(
+                bank_forks.read().unwrap().get(1).unwrap().clone(),
+                1,
+            ))),
         );
         let sub_id0 = SubscriptionId::Number(0 as u64);
         subscriptions.add_account_subscription(

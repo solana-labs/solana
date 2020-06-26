@@ -1,10 +1,9 @@
 use crate::{
-    commitment::VOTE_THRESHOLD_SIZE,
     progress_map::{LockoutIntervals, ProgressMap},
     pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},

@@ -8,6 +8,7 @@ pub mod bank_forks;
 mod blockhash_queue;
 pub mod bloom;
 pub mod builtin_programs;
+pub mod commitment;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod hardened_unpack;

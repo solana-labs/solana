@@ -72,13 +72,12 @@ impl PubSubService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commitment::BlockCommitmentCache;
-    use solana_ledger::{
-        blockstore::Blockstore,
+    use solana_runtime::{
+        bank::Bank,
+        bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
     };
-    use solana_runtime::{bank::Bank, bank_forks::BankForks};
     use std::{
         net::{IpAddr, Ipv4Addr},
         sync::RwLock,
@@ -88,17 +87,13 @@ mod tests {
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks,
-            Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
-            )),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         ));
         let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();

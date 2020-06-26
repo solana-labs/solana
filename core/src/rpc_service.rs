@@ -1,7 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
+    cluster_info::ClusterInfo, rpc::*, rpc_health::*,
     send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
@@ -13,6 +13,7 @@ use regex::Regex;
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
+    commitment::BlockCommitmentCache,
     snapshot_utils,
 };
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
@@ -378,9 +379,7 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(
-            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
-        ));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
