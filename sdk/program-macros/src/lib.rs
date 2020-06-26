@@ -6,13 +6,13 @@ use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::*;
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse::{Parse, ParseStream, Result},
+    parse::{Parse, ParseStream, Parser, Result},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
-    token::Comma,
-    ExprCall, Fields, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta, Path,
+    token::{Brace, Comma},
+    ExprCall, Field, Fields, FieldsNamed, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta, Path,
     Type,
 };
 
@@ -29,6 +29,19 @@ impl ToTokens for ProgramId {
         let id = &self.0;
         tokens.extend(quote! { #id });
     }
+}
+
+fn parse_named_field(stream: proc_macro2::TokenStream) -> Result<Field> {
+    let parser = Field::parse_named;
+    parser.parse(TokenStream::from(stream))
+}
+
+fn list_field_names(fields: &Fields) -> Punctuated<Ident, Comma> {
+    let mut field_names: Punctuated<Ident, Comma> = Punctuated::new();
+    for field in fields.iter() {
+        field_names.push(field.ident.as_ref().unwrap().clone());
+    }
+    field_names
 }
 
 fn parse_account(account: NestedMeta) -> AccountDetails {
@@ -301,6 +314,73 @@ fn build_helper_fns(
     stream
 }
 
+fn build_verbose_enum(program_details: &ProgramDetails) -> proc_macro2::TokenStream {
+    let mut verbose_enum = program_details.instruction_enum.clone();
+    let mut impl_stream = proc_macro2::TokenStream::new();
+
+    let original_ident = verbose_enum.ident.clone();
+    verbose_enum.ident = format_ident!("{}Verbose", original_ident);
+
+    for (variant, variant_details) in verbose_enum
+        .variants
+        .iter_mut()
+        .zip(program_details.variants.iter())
+    {
+        if !variant_details.account_details.is_empty() {
+            let variant_ident = &variant.ident;
+            let field_names = list_field_names(&variant.fields);
+
+            // Build new verbose fields by adding accounts to field list
+            // Also populate `from_instruction` return statements
+            let mut punctuate_fields: Punctuated<Field, Comma> = Punctuated::new();
+            let mut impl_field_stream = proc_macro2::TokenStream::new();
+            for (i, account) in variant_details.account_details.iter().enumerate() {
+                let ident = &account.ident;
+                let field = if account.is_optional {
+                    impl_field_stream.extend(quote! { #ident: account_keys.get(#i).cloned(), });
+                    parse_named_field(quote!(#ident: Option<u8>)).unwrap()
+                } else if account.allows_multiple {
+                    impl_field_stream.extend(quote! { #ident: account_keys[#i..].to_vec(), });
+                    parse_named_field(quote!(#ident: Vec<u8>)).unwrap()
+                } else {
+                    impl_field_stream.extend(quote! { #ident: account_keys[#i], });
+                    parse_named_field(quote!(#ident: u8)).unwrap()
+                };
+                punctuate_fields.push(field);
+            }
+            for field in variant.fields.iter().cloned() {
+                let ident = &field.ident;
+                impl_field_stream.extend(quote! { #ident });
+                punctuate_fields.push(field);
+            }
+            variant.fields = Fields::Named(FieldsNamed {
+                brace_token: Brace {
+                    span: Span::call_site(),
+                },
+                named: punctuate_fields,
+            });
+
+            // Build cases for `from_instruction` match statement
+            let verbose_enum_ident = &verbose_enum.ident;
+            impl_stream.extend(quote! {
+                #original_ident::#variant_ident { #field_names }
+                    => #verbose_enum_ident::#variant_ident { #impl_field_stream },
+            })
+        }
+    }
+    let verbose_enum_ident = &verbose_enum.ident;
+    quote! {
+        #verbose_enum
+        impl #verbose_enum_ident {
+            pub fn from_instruction(instruction: #original_ident, account_keys: Vec<u8>) -> Self {
+                match instruction {
+                    #impl_stream
+                }
+            }
+        }
+    }
+}
+
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn instructions(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -309,17 +389,27 @@ pub fn instructions(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let instruction_enum = build_instruction_enum(&program_details);
     let helper_fns = build_helper_fns(&program_details, program_id);
+    let verbose_instruction_enum = build_verbose_enum(&program_details);
 
     TokenStream::from(quote! {
         #instruction_enum
         #helper_fns
+        #verbose_instruction_enum
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::Stmt;
+    use syn::{Stmt, Variant};
+
+    #[test]
+    fn test_list_field_names() {
+        let variant: Variant = parse_quote! { Test { field: u64, another: String } };
+        let field_names = list_field_names(&variant.fields);
+        let list: Punctuated<Ident, Comma> = parse_quote! { field, another };
+        assert_eq!(field_names, list);
+    }
 
     #[test]
     fn test_format_doc() {
@@ -569,4 +659,7 @@ mod tests {
         };
         assert_eq!(helper_fns[1], expected_fns[1]);
     }
+    // Build_verbose_enum cannot be unit tested, do to its dependency on `parse_named_field()`; it
+    // errors on `procedural macro API is used outside of a procedural macro`. See integration tests
+    // in sdk/tests/program_macros instead.
 }
