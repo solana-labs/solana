@@ -293,8 +293,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
-    // Keep around at most two snapshot archives
-    let archives = get_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
+    // Keep around at most three snapshot archives
+    let mut archives = get_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
+    // Keep the oldest snapshot so we can always play the ledger from it.
+    archives.pop();
     for old_archive in archives.into_iter().skip(2) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
