@@ -105,3 +105,117 @@ extern crate log as logger;
 #[cfg(test)]
 #[macro_use]
 extern crate solana_sdk_macro_frozen_abi;
+
+/// Parses a program-instruction enum to generate Instruction build functions and other utilities
+///
+/// `#[instructions(...)]` container attribute should contain the program id expression (eg.
+/// `test_program::id()`)
+///
+/// Input:
+///   * Annotated program-instruction enum. Requirements:
+///     * Enum must either derive Serialize, or have a custom `serialize()` implementation
+///     * Only named variant fields supported
+///
+/// Output:
+///   * Documented program-instruction enum
+///   * A helper function for each variant to generate an Instruction from account Pubkeys and field input
+///   * A verbose enum that exposes account instruction information, as well as a `from_instruction` method for conversion
+///
+/// Account annotation: Variants should be tagged with the `accounts` attribute, containing a list
+/// of accounts. Each account should be in the format `account_name(<attributes>)`, where
+/// `<attributes>` are a comma-separated list.
+///
+/// Supported account attributes:
+///   * `WRITABLE` - account should be loaded as read-write
+///   * `SIGNER` - account is a signer of the transaction
+///   * `optional` - account is optional, account utilities will be wrapped in an Option
+///   * `multiple` - instruction supports multiple accounts with identical attributes, account utilities will be wrapped in a Vec
+///   * `desc` - human-readable description of the account for documentation, name-value format: `desc = "<description>"`
+///
+///
+/// Example input enum:
+///
+/// ```rust,ignore
+/// #[instructions(test_program::id())]
+/// #[derive(Clone, Debug, PartialEq, Serialize)]
+/// pub enum TestInstruction {
+///     /// Transfer lamports
+///     #[accounts(
+///         from_account(SIGNER, WRITABLE, desc = "Funding account"),
+///         to_account(WRITABLE, desc = "Recipient account")
+///     )]
+///     Transfer {
+///         /// The transfer amount
+///         lamports: u64,
+///     },
+/// }
+/// ```
+///
+///
+/// Example output:
+///
+/// ```rust
+/// use bincode::serialize;
+/// use serde_derive::Serialize;
+/// use solana_sdk::{
+///     instruction::{AccountMeta, Instruction},
+///     pubkey::Pubkey,
+/// };
+/// mod test_program {
+///     solana_sdk::declare_id!("8dGutFWpfHymgGDV6is389USqGRqSfpGZyhBrF1VPWDg");
+/// }
+///
+/// #[derive(Clone, Debug, PartialEq, Serialize)]
+/// pub enum TestInstruction {
+///     /// Transfer lamports
+///     #[doc = "<br/>"]
+///     #[doc = "* Accounts expected by this instruction:"]
+///     #[doc = "  0. `[WRITABLE, SIGNER]` Funding account"]
+///     #[doc = "  1. `[WRITABLE]` Recipient account"]
+///     Transfer {
+///         /// The transfer amount
+///         lamports: u64
+///     },
+/// }
+///
+/// pub fn transfer(
+///     from_account: Pubkey,
+///     to_account: Pubkey,
+///     lamports: u64
+/// ) -> Instruction {
+///     let mut accounts: Vec<AccountMeta> = vec![];
+///     accounts.push(AccountMeta::new(from_account, true));
+///     accounts.push(AccountMeta::new(to_account, false));
+///
+///     let data = serialize(&TestInstruction::Transfer{lamports}).unwrap();
+///     Instruction {
+///         program_id: test_program::id(),
+///         data,
+///         accounts,
+///     }
+/// }
+///
+/// #[derive(Clone, Debug, PartialEq, Serialize)]
+/// pub enum TestInstructionVerbose {
+///     /// Transfer lamports
+///     Transfer {
+///         from_account: u8,
+///         to_account: u8,
+///         /// The transfer amount
+///         lamports: u64
+///     },
+/// }
+///
+/// impl TestInstructionVerbose {
+///    pub fn from_instruction(instruction: TestInstruction, account_keys: Vec<u8>) -> Self {
+///        match instruction {
+///            TestInstruction::Transfer { lamports } => TestInstructionVerbose::Transfer {
+///                from_account: account_keys[0],
+///                to_account: account_keys[1],
+///                lamports,
+///             }
+///         }
+///     }
+/// }
+/// ```
+pub use solana_sdk_program_macros::instructions;
