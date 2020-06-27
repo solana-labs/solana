@@ -4,6 +4,7 @@ use clap::{
 };
 use serde_json::json;
 use solana_clap_utils::input_validators::{is_parsable, is_slot};
+use solana_ledger::entry::Entry;
 use solana_ledger::{
     bank_forks_utils,
     blockstore::Blockstore,
@@ -19,8 +20,8 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
-    shred_version::compute_shred_version,
+    clock::Slot, genesis_config::GenesisConfig, hash::Hash, native_token::lamports_to_sol,
+    pubkey::Pubkey, shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -69,16 +70,61 @@ fn output_slot_rewards(
     Ok(())
 }
 
+fn output_entry(
+    blockstore: &Blockstore,
+    method: &LedgerOutputMethod,
+    slot: Slot,
+    entry_index: usize,
+    entry: &Entry,
+) {
+    match method {
+        LedgerOutputMethod::Print => {
+            println!(
+                "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
+                entry_index,
+                entry.num_hashes,
+                entry.hash,
+                entry.transactions.len()
+            );
+            for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
+                println!("    Transaction {}", transactions_index);
+                let transaction_status = blockstore
+                    .read_transaction_status((transaction.signatures[0], slot))
+                    .unwrap_or_else(|err| {
+                        eprintln!(
+                            "Failed to read transaction status for {} at slot {}: {}",
+                            transaction.signatures[0], slot, err
+                        );
+                        None
+                    })
+                    .map(|transaction_status| transaction_status.into());
+
+                solana_cli::display::println_transaction(
+                    &transaction,
+                    &transaction_status,
+                    "      ",
+                );
+            }
+        }
+        LedgerOutputMethod::Json => {
+            // Note: transaction status is not output in JSON yet
+            serde_json::to_writer(stdout(), &entry).expect("serialize entry");
+            stdout().write_all(b",\n").expect("newline");
+        }
+    }
+}
+
 fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
     allow_dead_slots: bool,
     method: &LedgerOutputMethod,
+    verbose_level: u64,
 ) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
             if *method == LedgerOutputMethod::Print {
-                println!("Slot is dead");
+                println!(" Slot is dead");
             }
         } else {
             return Err("Dead slot".to_string());
@@ -90,49 +136,54 @@ fn output_slot(
         .map_err(|err| format!("Failed to load entries for slot {}: {:?}", slot, err))?;
 
     if *method == LedgerOutputMethod::Print {
-        println!("Slot Meta {:?}", blockstore.meta(slot));
-        println!("Number of shreds: {}", num_shreds);
-    }
-
-    for (entry_index, entry) in entries.iter().enumerate() {
-        match method {
-            LedgerOutputMethod::Print => {
+        if let Ok(Some(meta)) = blockstore.meta(slot) {
+            if verbose_level >= 2 {
+                println!(" Slot Meta {:?}", meta);
+            } else {
                 println!(
-                    "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
-                    entry_index,
-                    entry.num_hashes,
-                    entry.hash,
-                    entry.transactions.len()
+                    " num_shreds: {} parent_slot: {} num_entries: {}",
+                    num_shreds,
+                    meta.parent_slot,
+                    entries.len()
                 );
-                for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
-                    println!("    Transaction {}", transactions_index);
-                    let transaction_status = blockstore
-                        .read_transaction_status((transaction.signatures[0], slot))
-                        .unwrap_or_else(|err| {
-                            eprintln!(
-                                "Failed to read transaction status for {} at slot {}: {}",
-                                transaction.signatures[0], slot, err
-                            );
-                            None
-                        })
-                        .map(|transaction_status| transaction_status.into());
-
-                    solana_cli::display::println_transaction(
-                        &transaction,
-                        &transaction_status,
-                        "      ",
-                    );
-                }
-            }
-            LedgerOutputMethod::Json => {
-                // Note: transaction status is not output in JSON yet
-                serde_json::to_writer(stdout(), &entry).expect("serialize entry");
-                stdout().write_all(b",\n").expect("newline");
             }
         }
     }
 
-    output_slot_rewards(blockstore, slot, method)
+    if verbose_level >= 2 {
+        for (entry_index, entry) in entries.iter().enumerate() {
+            output_entry(blockstore, method, slot, entry_index, entry);
+        }
+
+        output_slot_rewards(blockstore, slot, method)?;
+    } else if verbose_level >= 1 {
+        let mut transactions = 0;
+        let mut hashes = 0;
+        let mut program_ids = HashMap::new();
+        for entry in &entries {
+            transactions += entry.transactions.len();
+            hashes += entry.num_hashes;
+            for transaction in &entry.transactions {
+                for instruction in &transaction.message().instructions {
+                    let program_id =
+                        transaction.message().account_keys[instruction.program_id_index as usize];
+                    *program_ids.entry(program_id).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let hash = if let Some(entry) = entries.last() {
+            entry.hash
+        } else {
+            Hash::default()
+        };
+        println!(
+            "  Transactions: {} hashes: {} block_hash: {}",
+            transactions, hashes, hash,
+        );
+        println!("  Programs: {:?}", program_ids);
+    }
+    Ok(())
 }
 
 fn output_ledger(
@@ -140,9 +191,13 @@ fn output_ledger(
     starting_slot: Slot,
     allow_dead_slots: bool,
     method: LedgerOutputMethod,
+    num_slots: Option<Slot>,
+    verbose_level: u64,
+    only_rooted: bool,
 ) {
-    let rooted_slot_iterator =
-        RootedSlotIterator::new(starting_slot, &blockstore).unwrap_or_else(|err| {
+    let slot_iterator = blockstore
+        .slot_meta_iterator(starting_slot)
+        .unwrap_or_else(|err| {
             eprintln!(
                 "Failed to load entries starting from slot {}: {:?}",
                 starting_slot, err
@@ -154,17 +209,29 @@ fn output_ledger(
         stdout().write_all(b"{\"ledger\":[\n").expect("open array");
     }
 
-    for (slot, slot_meta) in rooted_slot_iterator {
+    let num_slots = num_slots.unwrap_or(std::u64::MAX);
+    let mut num_printed = 0;
+    for (slot, slot_meta) in slot_iterator {
+        if only_rooted && !blockstore.is_root(slot) {
+            continue;
+        }
+
         match method {
-            LedgerOutputMethod::Print => println!("Slot {}", slot),
+            LedgerOutputMethod::Print => {
+                println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
+            }
             LedgerOutputMethod::Json => {
                 serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
                 stdout().write_all(b",\n").expect("newline");
             }
         }
 
-        if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method) {
+        if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
             eprintln!("{}", err);
+        }
+        num_printed += 1;
+        if num_printed >= num_slots as usize {
+            break;
         }
     }
 
@@ -690,6 +757,28 @@ fn main() {
             .about("Print the ledger")
             .arg(&starting_slot_arg)
             .arg(&allow_dead_slots_arg)
+            .arg(
+                Arg::with_name("num_slots")
+                    .long("num-slots")
+                    .value_name("SLOT")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .help("Number of slots to print"),
+            )
+            .arg(
+                Arg::with_name("only_rooted")
+                    .long("only-rooted")
+                    .takes_value(false)
+                    .help("Only print root slots"),
+            )
+            .arg(
+                Arg::with_name("verbose")
+                    .long("verbose")
+                    .short("v")
+                    .multiple(true)
+                    .takes_value(false)
+                    .help("How verbose to print the ledger contents."),
+            )
         )
         .subcommand(
             SubCommand::with_name("copy")
@@ -935,12 +1024,18 @@ fn main() {
     match matches.subcommand() {
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+            let only_rooted = arg_matches.is_present("only_rooted");
+            let verbose = arg_matches.occurrences_of("verbose");
             output_ledger(
                 open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary),
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
+                num_slots,
+                verbose,
+                only_rooted,
             );
         }
         ("copy", Some(arg_matches)) => {
@@ -1010,6 +1105,7 @@ fn main() {
                     slot,
                     allow_dead_slots,
                     &LedgerOutputMethod::Print,
+                    std::u64::MAX,
                 ) {
                     eprintln!("{}", err);
                 }
@@ -1023,6 +1119,9 @@ fn main() {
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Json,
+                None,
+                std::u64::MAX,
+                true,
             );
         }
         ("set-dead-slot", Some(arg_matches)) => {
