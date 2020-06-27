@@ -1,0 +1,14 @@
+error[E0599]: no method named `serialize` found for enum `TestInstruction` in the current scope
+ --> $DIR/custom_serde.rs:5:1
+  |
+5 | #[instructions(test_program::id())]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `TestInstruction`
+6 | #[derive(Clone, Debug, PartialEq)]
+7 | pub enum TestInstruction {
+  | ------------------------ method `serialize` not found for this
+  |
+  = help: items from traits can only be used if the trait is implemented and in scope
+  = note: the following traits define an item `serialize`, perhaps you need to implement one of them:
+          candidate #1: `serde::ser::Serialize`
+          candidate #2: `serde_bytes::ser::Serialize`
+  = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,23 +1,19 @@
-use bincode::serialize;
-use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
+    program_error::ProgramError,
     pubkey::Pubkey,
 };
 use solana_sdk_program_macros::instructions;
 
 #[instructions(test_program::id())]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum TestInstruction {
+#[derive(Clone, Debug, PartialEq)]
+pub enum CustomSerdeInstruction {
     /// Transfer lamports
     #[accounts(
         from_account(SIGNER, WRITABLE, desc = "Funding account"),
         to_account(WRITABLE, desc = "Recipient account")
     )]
-    Transfer {
-        /// Test a field comment
-        lamports: u64,
-    },
+    Variant,
 
     /// Provide one required signature and a variable list of other signatures
     #[accounts(
@@ -35,18 +31,30 @@ pub enum TestInstruction {
     OptionalAccount,
 }
 
+impl CustomSerdeInstruction {
+    pub fn serialize(self: &Self) -> Result<Vec<u8>, ProgramError> {
+        let mut output = vec![0u8; 1];
+        match self {
+            Self::Variant => output[0] = 0,
+            Self::MultipleAccounts => output[0] = 1,
+            Self::OptionalAccount => output[0] = 2,
+        }
+        Ok(output)
+    }
+}
+
 mod test_program {
     solana_sdk::declare_id!("8dGutFWpfHymgGDV6is389USqGRqSfpGZyhBrF1VPWDg");
 }
 
 #[test]
-fn test_helper_fns() {
+fn test_helper_fns_custom_serde() {
     let pubkey0 = Pubkey::new_rand();
     let pubkey1 = Pubkey::new_rand();
     let pubkey2 = Pubkey::new_rand();
 
     assert_eq!(
-        transfer(pubkey0, pubkey1, 42),
+        variant(pubkey0, pubkey1),
         Instruction {
             program_id: test_program::id(),
             accounts: vec![
@@ -61,7 +69,7 @@ fn test_helper_fns() {
                     is_writable: true,
                 }
             ],
-            data: serialize(&TestInstruction::Transfer { lamports: 42 }).unwrap(),
+            data: CustomSerdeInstruction::Variant.serialize().unwrap(),
         }
     );
 
@@ -86,7 +94,9 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::MultipleAccounts).unwrap(),
+            data: CustomSerdeInstruction::MultipleAccounts
+                .serialize()
+                .unwrap(),
         }
     );
 
@@ -99,7 +109,9 @@ fn test_helper_fns() {
                 is_signer: false,
                 is_writable: true,
             }],
-            data: serialize(&TestInstruction::MultipleAccounts).unwrap(),
+            data: CustomSerdeInstruction::MultipleAccounts
+                .serialize()
+                .unwrap(),
         }
     );
 
@@ -124,7 +136,7 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::OptionalAccount).unwrap(),
+            data: CustomSerdeInstruction::OptionalAccount.serialize().unwrap(),
         }
     );
 
@@ -144,39 +156,38 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::OptionalAccount).unwrap(),
+            data: CustomSerdeInstruction::OptionalAccount.serialize().unwrap(),
         }
     );
 }
 
 #[test]
-fn test_from_instruction() {
-    let transfer = TestInstruction::Transfer { lamports: 42 };
-    let verbose_transfer = TestInstructionVerbose::from_instruction(transfer, vec![2, 3]);
+fn test_from_instruction_custom_serde() {
+    let transfer = CustomSerdeInstruction::Variant;
+    let verbose_transfer = CustomSerdeInstructionVerbose::from_instruction(transfer, vec![2, 3]);
     assert_eq!(
         verbose_transfer,
-        TestInstructionVerbose::Transfer {
+        CustomSerdeInstructionVerbose::Variant {
             from_account: 2,
             to_account: 3,
-            lamports: 42,
         }
     );
 
-    let multiple = TestInstruction::MultipleAccounts;
-    let verbose_multiple = TestInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]);
+    let multiple = CustomSerdeInstruction::MultipleAccounts;
+    let verbose_multiple = CustomSerdeInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]);
     assert_eq!(
         verbose_multiple,
-        TestInstructionVerbose::MultipleAccounts {
+        CustomSerdeInstructionVerbose::MultipleAccounts {
             required_account: 2,
             signers: vec![3, 4],
         }
     );
 
-    let optional = TestInstruction::OptionalAccount;
-    let verbose_optional = TestInstructionVerbose::from_instruction(optional, vec![2, 3, 4]);
+    let optional = CustomSerdeInstruction::OptionalAccount;
+    let verbose_optional = CustomSerdeInstructionVerbose::from_instruction(optional, vec![2, 3, 4]);
     assert_eq!(
         verbose_optional,
-        TestInstructionVerbose::OptionalAccount {
+        CustomSerdeInstructionVerbose::OptionalAccount {
             required_account: 2,
             sysvar: 3,
             authority: Some(4),

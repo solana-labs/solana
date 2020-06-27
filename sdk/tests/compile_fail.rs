@@ -8,5 +8,6 @@ fn compile_test() {
     t.compile_fail("tests/compile-fail/accounts_list_missing.rs");
     t.compile_fail("tests/compile-fail/account_optional_multiple.rs");
     t.compile_fail("tests/compile-fail/account_tag.rs");
+    t.compile_fail("tests/compile-fail/custom_serde.rs");
     t.compile_fail("tests/compile-fail/unnamed_fields.rs");
 }
