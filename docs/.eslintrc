@@ -1,0 +1,21 @@
+{
+    "env": {
+      "browser": true,
+      "node": true
+    },
+    "parser": "babel-eslint",
+    "rules": {
+      "strict": 0,
+      "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "no-trailing-spaces": ["error", { "skipBlankLines": true }]
+    },
+    "settings": {
+      "react": {
+        "version": "detect", // React version. "detect" automatically picks the version you have installed.
+      }
+    },
+    "extends": [
+      "eslint:recommended",
+      "plugin:react/recommended"
+    ]
+  }
