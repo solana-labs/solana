@@ -271,7 +271,7 @@ pub mod tests {
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
         let (blockstore, l_receiver, completed_slots_receiver) =
-            Blockstore::open_with_signal(&blockstore_path)
+            Blockstore::open_with_signal(&blockstore_path, None)
                 .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
