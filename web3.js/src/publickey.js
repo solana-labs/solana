@@ -98,7 +98,7 @@ export class PublicKey {
    * Derive a program address from seeds and a program ID.
    */
   static async createProgramAddress(
-    seeds: Array<string>,
+    seeds: Array<Buffer | Uint8Array>,
     programId: PublicKey,
   ): Promise<PublicKey> {
     let buffer = Buffer.alloc(0);
