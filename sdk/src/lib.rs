@@ -188,13 +188,12 @@ extern crate solana_sdk_macro_frozen_abi;
 /// pub fn transfer(
 ///     from_account: Pubkey,
 ///     to_account: Pubkey,
-///     lamports: u64
+///     data: Vec<u8>,
 /// ) -> Instruction {
 ///     let mut accounts: Vec<AccountMeta> = vec![];
 ///     accounts.push(AccountMeta::new(from_account, true));
 ///     accounts.push(AccountMeta::new(to_account, false));
 ///
-///     let data = serialize(&TestInstruction::Transfer{lamports}).unwrap();
 ///     Instruction {
 ///         program_id: test_program::id(),
 ///         data,

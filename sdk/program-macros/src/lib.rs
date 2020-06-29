@@ -154,18 +154,18 @@ impl AccountDetails {
         if self.is_optional {
             quote! {
                 if let Some(#ident) = #ident {
-                    account_metas.push(#account_meta_path(#ident, #is_signer));
+                    accounts.push(#account_meta_path(#ident, #is_signer));
                 }
             }
         } else if self.allows_multiple {
             quote! {
                 for pubkey in #ident.into_iter() {
-                    account_metas.push(#account_meta_path(pubkey, #is_signer));
+                    accounts.push(#account_meta_path(pubkey, #is_signer));
                 }
             }
         } else {
             quote! {
-                account_metas.push(#account_meta_path(#ident, #is_signer));
+                accounts.push(#account_meta_path(#ident, #is_signer));
             }
         }
     }
@@ -269,7 +269,6 @@ fn build_helper_fns(
     program_id: ProgramId,
 ) -> proc_macro2::TokenStream {
     let mut stream = proc_macro2::TokenStream::new();
-    let ident = &program_details.instruction_enum.ident;
     for (variant, variant_details) in program_details
         .instruction_enum
         .variants
@@ -281,13 +280,11 @@ fn build_helper_fns(
                 &variant.ident.to_string().to_snake_case(),
                 Span::call_site(),
             );
-            let variant_ident = &variant.ident;
-            let mut fields: Punctuated<Ident, Comma> = Punctuated::new();
             let mut args: Punctuated<FnArg, Comma> = Punctuated::new();
 
             let mut accounts_stream = proc_macro2::TokenStream::new();
             accounts_stream.extend(quote! {
-                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
             });
             for account in &variant_details.account_details {
                 let account_meta = account.format_account_meta();
@@ -299,27 +296,19 @@ fn build_helper_fns(
                 args.push(account.format_arg());
             }
 
-            for field in variant.fields.iter() {
-                let ident = field.ident.as_ref().unwrap();
-                fields.push(ident.clone());
-
-                if let Type::Path(path) = &field.ty {
-                    let arg: FnArg = parse_quote!(#ident: #path);
-                    args.push(arg);
-                }
-            }
-
-            stream.extend(
-                quote!( pub fn #fn_ident( #args ) -> ::solana_sdk::instruction::Instruction {
-                        #accounts_stream
-                        ::solana_sdk::instruction::Instruction::new(
-                            #program_id,
-                            &#ident::#variant_ident{ #fields },
-                            account_metas,
-                        )
+            stream.extend(quote!(
+                pub fn #fn_ident(
+                    #args,
+                    data: Vec<u8>,
+                ) -> ::solana_sdk::instruction::Instruction {
+                    #accounts_stream
+                    ::solana_sdk::instruction::Instruction {
+                        program_id: #program_id,
+                        data,
+                        accounts,
                     }
-                ),
-            );
+                }
+            ));
         }
     }
     stream
@@ -488,7 +477,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, false));
+            accounts.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, false));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -496,7 +485,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, true));
+            accounts.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, true));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -504,7 +493,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+            accounts.push(::solana_sdk::instruction::AccountMeta::new(test, true));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -512,7 +501,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(if let Some(test) = test {
-            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+            accounts.push(::solana_sdk::instruction::AccountMeta::new(test, true));
         });
         assert_eq!(account_meta, expected_account_meta);
 
@@ -521,7 +510,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(for pubkey in test.into_iter() {
-            account_metas.push(::solana_sdk::instruction::AccountMeta::new(pubkey, true));
+            accounts.push(::solana_sdk::instruction::AccountMeta::new(pubkey, true));
         });
         assert_eq!(account_meta, expected_account_meta);
     }
@@ -663,39 +652,39 @@ mod tests {
             pub fn test(
                 test_account: ::solana_sdk::pubkey::Pubkey,
                 another: ::solana_sdk::pubkey::Pubkey,
-                lamports: u64,
+                data: Vec<u8>,
             ) -> ::solana_sdk::instruction::Instruction {
-                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
-                account_metas.push(
+                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                accounts.push(
                     ::solana_sdk::instruction::AccountMeta::new(test_account, true)
                 );
                 if let Some(another) = another {
-                    account_metas.push(
+                    accounts.push(
                         ::solana_sdk::instruction::AccountMeta::new_readonly(another, false)
                     );
                 }
-                ::solana_sdk::instruction::Instruction::new(
-                    program::id(),
-                    &TestInstruction::Transfer{lamports,},
-                    account_metas,
-                )
+                ::solana_sdk::instruction::Instruction {
+                    program_id: program::id(),
+                    data,
+                    accounts,
+                }
             }
 
             pub fn multiple(
-                signers: Vec<::solana_sdk::pubkey::Pubkey>
+                signers: Vec<::solana_sdk::pubkey::Pubkey>,
+                data: Vec<u8>,
             ) -> ::solana_sdk::instruction::Instruction {
-                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
                 for pubkey in signers.into_iter() {
-                    account_metas.push(
+                    accounts.push(
                         ::solana_sdk::instruction::AccountMeta::new_readonly(pubkey, true)
                     );
                 }
-
-                ::solana_sdk::instruction::Instruction::new(
-                    program::id(),
-                    &TestInstruction::Multiple{},
-                    account_metas,
-                )
+                ::solana_sdk::instruction::Instruction {
+                    program_id: program::id(),
+                    data,
+                    accounts,
+                }
             }
         };
         assert_eq!(helper_fns[1], expected_fns[1]);

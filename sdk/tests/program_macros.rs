@@ -50,8 +50,9 @@ fn test_helper_fns() {
     let pubkey1 = Pubkey::new_rand();
     let pubkey2 = Pubkey::new_rand();
 
+    let transfer_data = serialize(&TestInstruction::Transfer { lamports: 42 }).unwrap();
     assert_eq!(
-        transfer(pubkey0, pubkey1, 42),
+        transfer(pubkey0, pubkey1, transfer_data.clone()),
         Instruction {
             program_id: test_program::id(),
             accounts: vec![
@@ -66,12 +67,17 @@ fn test_helper_fns() {
                     is_writable: true,
                 }
             ],
-            data: serialize(&TestInstruction::Transfer { lamports: 42 }).unwrap(),
+            data: transfer_data,
         }
     );
 
+    let multiple_accounts_data = serialize(&TestInstruction::MultipleAccounts).unwrap();
     assert_eq!(
-        multiple_accounts(pubkey0, vec![pubkey1, pubkey2]),
+        multiple_accounts(
+            pubkey0,
+            vec![pubkey1, pubkey2],
+            multiple_accounts_data.clone()
+        ),
         Instruction {
             program_id: test_program::id(),
             accounts: vec![
@@ -91,27 +97,31 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::MultipleAccounts).unwrap(),
+            data: multiple_accounts_data.clone(),
         }
     );
 
     assert_eq!(
-        multiple_accounts(pubkey0, vec![]),
+        multiple_accounts(pubkey0, vec![], multiple_accounts_data.clone()),
         Instruction {
             program_id: test_program::id(),
-            accounts: vec![
-                AccountMeta {
-                    pubkey: pubkey0,
-                    is_signer: false,
-                    is_writable: true,
-                }
-            ],
-            data: serialize(&TestInstruction::MultipleAccounts).unwrap(),
+            accounts: vec![AccountMeta {
+                pubkey: pubkey0,
+                is_signer: false,
+                is_writable: true,
+            }],
+            data: multiple_accounts_data,
         }
     );
 
+    let optional_account_data = serialize(&TestInstruction::OptionalAccount).unwrap();
     assert_eq!(
-        optional_account(pubkey0, pubkey1, Some(pubkey2)),
+        optional_account(
+            pubkey0,
+            pubkey1,
+            Some(pubkey2),
+            optional_account_data.clone()
+        ),
         Instruction {
             program_id: test_program::id(),
             accounts: vec![
@@ -131,12 +141,12 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::OptionalAccount).unwrap(),
+            data: optional_account_data.clone(),
         }
     );
 
     assert_eq!(
-        optional_account(pubkey0, pubkey1, None),
+        optional_account(pubkey0, pubkey1, None, optional_account_data.clone()),
         Instruction {
             program_id: test_program::id(),
             accounts: vec![
@@ -151,7 +161,7 @@ fn test_helper_fns() {
                     is_writable: false,
                 }
             ],
-            data: serialize(&TestInstruction::OptionalAccount).unwrap(),
+            data: optional_account_data,
         }
     );
 }
