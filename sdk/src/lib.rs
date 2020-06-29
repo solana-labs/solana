@@ -108,7 +108,7 @@ extern crate solana_sdk_macro_frozen_abi;
 
 /// Parses a program-instruction enum to generate Instruction build functions and other utilities
 ///
-/// `#[instructions(...)]` container attribute should contain the program id expression (eg.
+/// `#[instructions(...)]` container attribute must contain the program id expression (eg.
 /// `test_program::id()`)
 ///
 /// Input:
@@ -121,21 +121,28 @@ extern crate solana_sdk_macro_frozen_abi;
 ///   * A helper function for each variant to generate an Instruction from account Pubkeys and field input
 ///   * A verbose enum that exposes account instruction information, as well as a `from_instruction` method for conversion
 ///
-/// Account annotation: Variants should be tagged with the `accounts` attribute, containing a list
-/// of accounts. Each account should be in the format `account_name(<attributes>)`, where
-/// `<attributes>` are a comma-separated list.
-///
-/// Supported account attributes:
-///   * `WRITABLE` - account should be loaded as read-write
-///   * `SIGNER` - account is a signer of the transaction
-///   * `optional` - account is optional, account utilities will be wrapped in an Option
-///   * `multiple` - instruction supports multiple accounts with identical attributes, account utilities will be wrapped in a Vec
-///   * `desc` - human-readable description of the account for documentation, name-value format: `desc = "<description>"`
+/// Supported variant attributes:
+///   * `accounts` - a list of accounts. Each account should be in the format
+/// `account_name(<attributes>)`, where `<attributes>` are a comma-separated list.
+///   Supported account attributes:
+///     * `WRITABLE` - account should be loaded as read-write
+///     * `SIGNER` - account is a signer of the transaction
+///     * `optional` - account is optional, account utilities will be wrapped in an Option
+///     * `multiple` - instruction supports multiple accounts with identical attributes, account utilities will be wrapped in a Vec
+///     * `desc` - human-readable description of the account for documentation, name-value format: `desc = "<description>"`
+///   * `skip` - variant will be skipped in helper-function and verbose-enum expansion
 ///
 ///
 /// Example input enum:
 ///
-/// ```rust,ignore
+/// ```rust
+/// use bincode::serialize;
+/// use serde_derive::Serialize;
+/// use solana_sdk::instructions;
+/// mod test_program {
+///     solana_sdk::declare_id!("8dGutFWpfHymgGDV6is389USqGRqSfpGZyhBrF1VPWDg");
+/// }
+///
 /// #[instructions(test_program::id())]
 /// #[derive(Clone, Debug, PartialEq, Serialize)]
 /// pub enum TestInstruction {

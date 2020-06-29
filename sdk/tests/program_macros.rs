@@ -26,13 +26,18 @@ pub enum TestInstruction {
     )]
     MultipleAccounts,
 
-    /// Consumes a stored nonce, replacing it with a successor
+    /// Do some action with 2 required accounts and one optional account
     #[accounts(
         required_account(SIGNER, WRITABLE, desc = "Required account"),
         sysvar(desc = "Sysvar"),
         authority(SIGNER, optional, desc = "Authority")
     )]
     OptionalAccount,
+
+    /// Skip this variant in helper-function and verbose-enum expansion
+    #[accounts(required_account(SIGNER, WRITABLE, desc = "Required account"))]
+    #[skip]
+    SkipVariant,
 }
 
 mod test_program {
@@ -152,7 +157,7 @@ fn test_helper_fns() {
 #[test]
 fn test_from_instruction() {
     let transfer = TestInstruction::Transfer { lamports: 42 };
-    let verbose_transfer = TestInstructionVerbose::from_instruction(transfer, vec![2, 3]);
+    let verbose_transfer = TestInstructionVerbose::from_instruction(transfer, vec![2, 3]).unwrap();
     assert_eq!(
         verbose_transfer,
         TestInstructionVerbose::Transfer {
@@ -163,7 +168,8 @@ fn test_from_instruction() {
     );
 
     let multiple = TestInstruction::MultipleAccounts;
-    let verbose_multiple = TestInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]);
+    let verbose_multiple =
+        TestInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]).unwrap();
     assert_eq!(
         verbose_multiple,
         TestInstructionVerbose::MultipleAccounts {
@@ -173,7 +179,8 @@ fn test_from_instruction() {
     );
 
     let optional = TestInstruction::OptionalAccount;
-    let verbose_optional = TestInstructionVerbose::from_instruction(optional, vec![2, 3, 4]);
+    let verbose_optional =
+        TestInstructionVerbose::from_instruction(optional, vec![2, 3, 4]).unwrap();
     assert_eq!(
         verbose_optional,
         TestInstructionVerbose::OptionalAccount {
@@ -182,4 +189,7 @@ fn test_from_instruction() {
             authority: Some(4),
         }
     );
+
+    let skip = TestInstruction::SkipVariant;
+    assert!(TestInstructionVerbose::from_instruction(skip, vec![0]).is_err());
 }

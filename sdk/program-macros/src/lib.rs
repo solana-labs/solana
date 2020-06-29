@@ -13,7 +13,7 @@ use syn::{
     punctuated::Punctuated,
     token::{Brace, Comma},
     Attribute, ExprCall, Field, Fields, FieldsNamed, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta,
-    Path, Type,
+    Path, Type, Variant,
 };
 
 struct ProgramId(ExprCall);
@@ -185,6 +185,7 @@ impl AccountDetails {
 
 struct VariantDetails {
     account_details: Vec<AccountDetails>,
+    skip: bool,
 }
 
 struct ProgramDetails {
@@ -227,6 +228,7 @@ impl Parse for ProgramDetails {
         let mut variants: Vec<VariantDetails> = vec![];
         for variant in instruction_enum.variants.iter_mut() {
             let mut account_details: Vec<AccountDetails> = vec![];
+            let mut skip = false;
             variant.attrs.retain(|attr| {
                 if attr.path.is_ident("accounts") {
                     let accounts_parse = attr.parse_meta();
@@ -243,6 +245,9 @@ impl Parse for ProgramDetails {
                         Meta::NameValue(_) => abort!(attr, "unrecognized accounts format"),
                     }
                     false
+                } else if attr.path.is_ident("skip") {
+                    skip = true;
+                    false
                 } else {
                     true
                 }
@@ -252,7 +257,10 @@ impl Parse for ProgramDetails {
                 abort!(fields, "macro does not support unnamed variant fields");
             }
 
-            variants.push(VariantDetails { account_details });
+            variants.push(VariantDetails {
+                account_details,
+                skip,
+            });
         }
 
         Ok(ProgramDetails {
@@ -298,54 +306,56 @@ fn build_helper_fns(
         .iter()
         .zip(program_details.variants.iter())
     {
-        let fn_ident = Ident::new(
-            &variant.ident.to_string().to_snake_case(),
-            Span::call_site(),
-        );
-        let variant_ident = &variant.ident;
-        let mut fields: Punctuated<Ident, Comma> = Punctuated::new();
-        let mut args: Punctuated<FnArg, Comma> = Punctuated::new();
+        if !variant_details.skip {
+            let fn_ident = Ident::new(
+                &variant.ident.to_string().to_snake_case(),
+                Span::call_site(),
+            );
+            let variant_ident = &variant.ident;
+            let mut fields: Punctuated<Ident, Comma> = Punctuated::new();
+            let mut args: Punctuated<FnArg, Comma> = Punctuated::new();
 
-        let mut accounts_stream = proc_macro2::TokenStream::new();
-        accounts_stream.extend(quote! {
-            let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
-        });
-        for account in &variant_details.account_details {
-            let accounts = account.format_account_meta();
+            let mut accounts_stream = proc_macro2::TokenStream::new();
             accounts_stream.extend(quote! {
-                #accounts
+                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
             });
+            for account in &variant_details.account_details {
+                let accounts = account.format_account_meta();
+                accounts_stream.extend(quote! {
+                    #accounts
+                });
 
-            args.push(account.format_arg());
-        }
-
-        for field in variant.fields.iter() {
-            let ident = field.ident.as_ref().unwrap();
-            fields.push(ident.clone());
-
-            if let Type::Path(path) = &field.ty {
-                let arg: FnArg = parse_quote!(#ident: #path);
-                args.push(arg);
+                args.push(account.format_arg());
             }
-        }
 
-        let data_serialization = match program_details.serializer {
-            Serializer::Custom => quote!(#ident::#variant_ident{ #fields }.serialize()),
-            Serializer::Serde => quote!(serialize(&#ident::#variant_ident{ #fields })),
-        };
+            for field in variant.fields.iter() {
+                let ident = field.ident.as_ref().unwrap();
+                fields.push(ident.clone());
 
-        stream.extend(
-            quote!( pub fn #fn_ident( #args ) -> ::solana_sdk::instruction::Instruction {
-                    #accounts_stream
-                    let data = #data_serialization.unwrap();
-                    ::solana_sdk::instruction::Instruction {
-                        program_id: #program_id,
-                        data,
-                        accounts,
-                    }
+                if let Type::Path(path) = &field.ty {
+                    let arg: FnArg = parse_quote!(#ident: #path);
+                    args.push(arg);
                 }
-            ),
-        );
+            }
+
+            let data_serialization = match program_details.serializer {
+                Serializer::Custom => quote!(#ident::#variant_ident{ #fields }.serialize()),
+                Serializer::Serde => quote!(serialize(&#ident::#variant_ident{ #fields })),
+            };
+
+            stream.extend(
+                quote!( pub fn #fn_ident( #args ) -> ::solana_sdk::instruction::Instruction {
+                        #accounts_stream
+                        let data = #data_serialization.unwrap();
+                        ::solana_sdk::instruction::Instruction {
+                            program_id: #program_id,
+                            data,
+                            accounts,
+                        }
+                    }
+                ),
+            );
+        }
     }
     stream
 }
@@ -357,60 +367,69 @@ fn build_verbose_enum(program_details: &ProgramDetails) -> proc_macro2::TokenStr
     let original_ident = verbose_enum.ident.clone();
     verbose_enum.ident = format_ident!("{}Verbose", original_ident);
 
+    let mut retain_variants: Punctuated<Variant, Comma> = Punctuated::new();
     for (variant, variant_details) in verbose_enum
         .variants
         .iter_mut()
         .zip(program_details.variants.iter())
     {
-        if !variant_details.account_details.is_empty() {
-            let variant_ident = &variant.ident;
-            let field_names = list_field_names(&variant.fields);
+        if !variant_details.skip {
+            if !variant_details.account_details.is_empty() {
+                let variant_ident = &variant.ident;
+                let field_names = list_field_names(&variant.fields);
 
-            // Build new verbose fields by adding accounts to field list
-            // Also populate `from_instruction` return statements
-            let mut punctuate_fields: Punctuated<Field, Comma> = Punctuated::new();
-            let mut impl_field_stream = proc_macro2::TokenStream::new();
-            for (i, account) in variant_details.account_details.iter().enumerate() {
-                let ident = &account.ident;
-                let field = if account.is_optional {
-                    impl_field_stream.extend(quote! { #ident: account_keys.get(#i).cloned(), });
-                    parse_named_field(quote!(#ident: Option<u8>)).unwrap()
-                } else if account.allows_multiple {
-                    impl_field_stream.extend(quote! { #ident: account_keys[#i..].to_vec(), });
-                    parse_named_field(quote!(#ident: Vec<u8>)).unwrap()
-                } else {
-                    impl_field_stream.extend(quote! { #ident: account_keys[#i], });
-                    parse_named_field(quote!(#ident: u8)).unwrap()
-                };
-                punctuate_fields.push(field);
-            }
-            for field in variant.fields.iter().cloned() {
-                let ident = &field.ident;
-                impl_field_stream.extend(quote! { #ident });
-                punctuate_fields.push(field);
-            }
-            variant.fields = Fields::Named(FieldsNamed {
-                brace_token: Brace {
-                    span: Span::call_site(),
-                },
-                named: punctuate_fields,
-            });
+                // Build new verbose fields by adding accounts to field list
+                // Also populate `from_instruction` return statements
+                let mut punctuate_fields: Punctuated<Field, Comma> = Punctuated::new();
+                let mut impl_field_stream = proc_macro2::TokenStream::new();
+                for (i, account) in variant_details.account_details.iter().enumerate() {
+                    let ident = &account.ident;
+                    let field = if account.is_optional {
+                        impl_field_stream.extend(quote! { #ident: account_keys.get(#i).cloned(), });
+                        parse_named_field(quote!(#ident: Option<u8>)).unwrap()
+                    } else if account.allows_multiple {
+                        impl_field_stream.extend(quote! { #ident: account_keys[#i..].to_vec(), });
+                        parse_named_field(quote!(#ident: Vec<u8>)).unwrap()
+                    } else {
+                        impl_field_stream.extend(quote! { #ident: account_keys[#i], });
+                        parse_named_field(quote!(#ident: u8)).unwrap()
+                    };
+                    punctuate_fields.push(field);
+                }
+                for field in variant.fields.iter().cloned() {
+                    let ident = &field.ident;
+                    impl_field_stream.extend(quote! { #ident });
+                    punctuate_fields.push(field);
+                }
+                variant.fields = Fields::Named(FieldsNamed {
+                    brace_token: Brace {
+                        span: Span::call_site(),
+                    },
+                    named: punctuate_fields,
+                });
 
-            // Build cases for `from_instruction` match statement
-            let verbose_enum_ident = &verbose_enum.ident;
-            impl_stream.extend(quote! {
-                #original_ident::#variant_ident { #field_names }
-                    => #verbose_enum_ident::#variant_ident { #impl_field_stream },
-            })
+                // Build cases for `from_instruction` match statement
+                let verbose_enum_ident = &verbose_enum.ident;
+                impl_stream.extend(quote! {
+                    #original_ident::#variant_ident { #field_names }
+                        => Ok(#verbose_enum_ident::#variant_ident { #impl_field_stream }),
+                })
+            }
+            retain_variants.push(variant.clone());
         }
     }
+    verbose_enum.variants = retain_variants;
     let verbose_enum_ident = &verbose_enum.ident;
     quote! {
         #verbose_enum
         impl #verbose_enum_ident {
-            pub fn from_instruction(instruction: #original_ident, account_keys: Vec<u8>) -> Self {
+            pub fn from_instruction(
+                instruction: #original_ident,
+                account_keys: Vec<u8>
+            ) -> Result<Self, &'static str> {
                 match instruction {
                     #impl_stream
+                    _ => Err("variant skipped in verbose enum, no conversion available")
                 }
             }
         }
@@ -576,6 +595,8 @@ mod tests {
                 },
                 /// Multiple signers
                 Multiple,
+                /// Skip this one
+                SkipVariant,
             }
         };
         let account_details0 = vec![
@@ -604,14 +625,28 @@ mod tests {
             is_optional: false,
             allows_multiple: true,
         }];
+        let account_details2 = vec![AccountDetails {
+            ident: Ident::new("signer", Span::call_site()),
+            desc: "A signer".to_string(),
+            is_signer: true,
+            is_writable: false,
+            is_optional: false,
+            allows_multiple: false,
+        }];
         ProgramDetails {
             instruction_enum,
             variants: vec![
                 VariantDetails {
                     account_details: account_details0,
+                    skip: false,
                 },
                 VariantDetails {
                     account_details: account_details1,
+                    skip: false,
+                },
+                VariantDetails {
+                    account_details: account_details2,
+                    skip: true,
                 },
             ],
             serializer: Serializer::Serde,
@@ -641,6 +676,11 @@ mod tests {
                 #[doc = "* Accounts expected by this instruction:"]
                 #[doc = "  * (Multiple) `[SIGNER]` A signer"]
                 Multiple,
+                /// Skip this one
+                #[doc = "<br/>"]
+                #[doc = "* Accounts expected by this instruction:"]
+                #[doc = "  0. `[SIGNER]` A signer"]
+                SkipVariant,
             }
         };
         assert_eq!(documented_enum, expected_enum);

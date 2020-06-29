@@ -29,6 +29,11 @@ pub enum CustomSerdeInstruction {
         authority(SIGNER, optional, desc = "Authority")
     )]
     OptionalAccount,
+
+    /// Skip this variant in helper-function and verbose-enum expansion
+    #[accounts(required_account(SIGNER, WRITABLE, desc = "Required account"))]
+    #[skip]
+    SkipVariant,
 }
 
 impl CustomSerdeInstruction {
@@ -38,6 +43,7 @@ impl CustomSerdeInstruction {
             Self::Variant => output[0] = 0,
             Self::MultipleAccounts => output[0] = 1,
             Self::OptionalAccount => output[0] = 2,
+            Self::SkipVariant => output[0] = 3,
         }
         Ok(output)
     }
@@ -164,7 +170,8 @@ fn test_helper_fns_custom_serde() {
 #[test]
 fn test_from_instruction_custom_serde() {
     let transfer = CustomSerdeInstruction::Variant;
-    let verbose_transfer = CustomSerdeInstructionVerbose::from_instruction(transfer, vec![2, 3]);
+    let verbose_transfer =
+        CustomSerdeInstructionVerbose::from_instruction(transfer, vec![2, 3]).unwrap();
     assert_eq!(
         verbose_transfer,
         CustomSerdeInstructionVerbose::Variant {
@@ -174,7 +181,8 @@ fn test_from_instruction_custom_serde() {
     );
 
     let multiple = CustomSerdeInstruction::MultipleAccounts;
-    let verbose_multiple = CustomSerdeInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]);
+    let verbose_multiple =
+        CustomSerdeInstructionVerbose::from_instruction(multiple, vec![2, 3, 4]).unwrap();
     assert_eq!(
         verbose_multiple,
         CustomSerdeInstructionVerbose::MultipleAccounts {
@@ -184,7 +192,8 @@ fn test_from_instruction_custom_serde() {
     );
 
     let optional = CustomSerdeInstruction::OptionalAccount;
-    let verbose_optional = CustomSerdeInstructionVerbose::from_instruction(optional, vec![2, 3, 4]);
+    let verbose_optional =
+        CustomSerdeInstructionVerbose::from_instruction(optional, vec![2, 3, 4]).unwrap();
     assert_eq!(
         verbose_optional,
         CustomSerdeInstructionVerbose::OptionalAccount {
@@ -193,4 +202,7 @@ fn test_from_instruction_custom_serde() {
             authority: Some(4),
         }
     );
+
+    let skip = CustomSerdeInstruction::SkipVariant;
+    assert!(CustomSerdeInstructionVerbose::from_instruction(skip, vec![0]).is_err());
 }
