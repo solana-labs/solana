@@ -14,4 +14,4 @@ find src -name '*.md' -a \! -name SUMMARY.md |
 
 mdbook --version
 mdbook-linkcheck --version
-make -j"$(nproc)"
+make -j"$(nproc)" test

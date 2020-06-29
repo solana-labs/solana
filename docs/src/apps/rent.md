@@ -16,7 +16,7 @@ As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch 
 
 This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching to 3.56 SOL per mebibyte-year):
 
-```
+```text
 Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
 ```
 
@@ -27,14 +27,14 @@ The rent calculation includes account metadata (address, owner, lamports, etc) i
 For example, an account is created with the initial transfer of 10,000 lamports and no additional data. Rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports:
 
 
-```
+```text
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
 Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
 ```
 
 The account balance will be reduced to 5,122 lamports at the next epoch even if there is no activity:
 
-```
+```text
 Account Balance: 5,122 = 7,561 (current balance) - 2,439 (this account's rent fee for an epoch)
 ```
 
@@ -50,6 +50,6 @@ Note: Use the [`getMinimumBalanceForRentExemption` RPC endpoint](jsonrpc-api.md#
 
 For example, a program executable with the size of 15,000 bytes requires a balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
 
-```
+```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
