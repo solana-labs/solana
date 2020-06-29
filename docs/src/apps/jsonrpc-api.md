@@ -279,7 +279,9 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 * `<u64>` - slot, as u64 integer
-* `<string>` - (optional) encoding for each returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary".
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
+  If parameter not provided, the default encoding is JSON.
 
 #### Results:
 
@@ -398,7 +400,9 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 * `<string>` - transaction signature as base-58 encoded string
-* `<string>` - (optional) encoding for the returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary".
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
+  If parameter not provided, the default encoding is JSON.
 
 #### Results:
 
