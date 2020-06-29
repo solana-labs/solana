@@ -536,7 +536,7 @@ impl ReplayStage {
                             if let Some(last_voted_slot) = tower.last_voted_slot() {
                                 // If the current heaviest bank is not a descendant of the last voted slot,
                                 // there must be a partition
-                                let partition_detected = !ancestors.get(&heaviest_bank.slot()).map(|ancestors| ancestors.contains(&last_voted_slot)).unwrap_or(true);
+                                let partition_detected = Self::is_partition_detected(&ancestors, last_voted_slot, heaviest_bank.slot());
 
                                 if !partition_exists && partition_detected
                                 {
@@ -632,6 +632,18 @@ impl ReplayStage {
             t_replay,
             commitment_service,
         }
+    }
+
+    fn is_partition_detected(
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        last_voted_slot: Slot,
+        heaviest_slot: Slot,
+    ) -> bool {
+        last_voted_slot != heaviest_slot
+            && !ancestors
+                .get(&heaviest_slot)
+                .map(|ancestors| ancestors.contains(&last_voted_slot))
+                .unwrap_or(true)
     }
 
     fn report_memory(
@@ -1907,6 +1919,22 @@ pub(crate) mod tests {
         sync::{Arc, RwLock},
     };
     use trees::tr;
+
+    #[test]
+    fn test_is_partition_detected() {
+        let (bank_forks, _) = setup_forks();
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        // Last vote 1 is an ancestor of the heaviest slot 3, no partition
+        assert!(!ReplayStage::is_partition_detected(&ancestors, 1, 3));
+        // Last vote 1 is an ancestor of the from heaviest slot 1, no partition
+        assert!(!ReplayStage::is_partition_detected(&ancestors, 3, 3));
+        // Last vote 2 is not an ancestor of the heaviest slot 3,
+        // partition detected!
+        assert!(ReplayStage::is_partition_detected(&ancestors, 2, 3));
+        // Last vote 4 is not an ancestor of the heaviest slot 3,
+        // partition detected!
+        assert!(ReplayStage::is_partition_detected(&ancestors, 4, 3));
+    }
 
     #[test]
     fn test_child_slots_of_same_parent() {
