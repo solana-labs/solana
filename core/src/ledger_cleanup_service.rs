@@ -29,9 +29,6 @@ pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 // and starve other blockstore users.
 pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
 
-// Delay between purges to cooperate with other blockstore users
-pub const DEFAULT_DELAY_BETWEEN_PURGES: Duration = Duration::from_millis(500);
-
 // Compacting at a slower interval than purging helps keep IOPS down.
 // Once a day should be ample
 const DEFAULT_COMPACTION_SLOT_INTERVAL: u64 = TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
@@ -67,7 +64,6 @@ impl LedgerCleanupService {
                     max_ledger_shreds,
                     &mut last_purge_slot,
                     DEFAULT_PURGE_SLOT_INTERVAL,
-                    Some(DEFAULT_DELAY_BETWEEN_PURGES),
                     &mut last_compaction_slot,
                     DEFAULT_COMPACTION_SLOT_INTERVAL,
                 ) {
@@ -142,7 +138,6 @@ impl LedgerCleanupService {
         max_ledger_shreds: u64,
         last_purge_slot: &mut u64,
         purge_interval: u64,
-        delay_between_purges: Option<Duration>,
         last_compaction_slot: &mut u64,
         compaction_interval: u64,
     ) -> Result<(), RecvTimeoutError> {
@@ -156,6 +151,7 @@ impl LedgerCleanupService {
             "purge: last_root={}, last_purge_slot={}, purge_interval={}, last_compaction_slot={}, disk_utilization={:?}",
             root, last_purge_slot, purge_interval, last_compaction_slot, disk_utilization_pre
         );
+
         *last_purge_slot = root;
 
         let (slots_to_clean, purge_first_slot, lowest_cleanup_slot, total_shreds) =
@@ -183,11 +179,10 @@ impl LedgerCleanupService {
                         purge_first_slot, lowest_cleanup_slot
                     );
 
-                    let mut purge_time = Measure::start("purge_slots_with_delay");
-                    blockstore.purge_slots_with_delay(
+                    let mut purge_time = Measure::start("purge_slots");
+                    blockstore.purge_slots(
                         purge_first_slot,
                         lowest_cleanup_slot,
-                        delay_between_purges,
                         PurgeType::PrimaryIndex,
                     );
                     purge_time.stop();
@@ -275,7 +270,6 @@ mod tests {
             5,
             &mut last_purge_slot,
             10,
-            None,
             &mut last_compaction_slot,
             10,
         )
@@ -333,7 +327,6 @@ mod tests {
                 initial_slots,
                 &mut last_purge_slot,
                 10,
-                None,
                 &mut last_compaction_slot,
                 10,
             )

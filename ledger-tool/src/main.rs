@@ -1432,7 +1432,7 @@ fn main() {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
             let blockstore = open_blockstore(&ledger_path, AccessType::PrimaryOnly);
-            blockstore.purge_slots(start_slot, end_slot);
+            blockstore.purge_and_compact_slots(start_slot, end_slot);
             blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
