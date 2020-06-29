@@ -382,7 +382,6 @@ mod tests {
             max_ledger_shreds,
             &mut last_purge_slot,
             10,
-            None,
             &mut last_compaction_slot,
             10,
         )
