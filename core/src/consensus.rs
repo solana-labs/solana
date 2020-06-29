@@ -345,18 +345,16 @@ impl Tower {
 
     fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
         if current_slot > self.last_timestamp.slot {
-            let mut timestamp = Utc::now().timestamp();
-            if timestamp <= self.last_timestamp.timestamp {
-                timestamp = self.last_timestamp.timestamp + 1;
+            let timestamp = Utc::now().timestamp();
+            if timestamp > self.last_timestamp.timestamp {
+                self.last_timestamp = BlockTimestamp {
+                    slot: current_slot,
+                    timestamp,
+                };
+                return Some(timestamp);
             }
-            self.last_timestamp = BlockTimestamp {
-                slot: current_slot,
-                timestamp,
-            };
-            Some(timestamp)
-        } else {
-            None
         }
+        None
     }
 
     pub fn root(&self) -> Option<Slot> {
@@ -690,12 +688,7 @@ pub mod test {
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
     };
-    use std::{
-        collections::HashMap,
-        rc::Rc,
-        sync::RwLock,
-        {thread::sleep, time::Duration},
-    };
+    use std::{collections::HashMap, rc::Rc, sync::RwLock};
     use trees::{tr, Tree, TreeWalk};
 
     pub(crate) struct VoteSimulator {
@@ -1830,18 +1823,13 @@ pub mod test {
         let mut tower = Tower::default();
         assert!(tower.maybe_timestamp(0).is_none());
         assert!(tower.maybe_timestamp(1).is_some());
-        assert_eq!(tower.maybe_timestamp(1), None); // Refuse to timestamp an older slot
-        assert!(tower.maybe_timestamp(100).is_some());
+        assert!(tower.maybe_timestamp(0).is_none()); // Refuse to timestamp an older slot
+        assert!(tower.maybe_timestamp(1).is_none()); // Refuse to timestamp the same slot twice
 
-        let BlockTimestamp { slot, timestamp } = tower.last_timestamp;
-        assert!(tower.maybe_timestamp(slot + 1).is_some());
-        assert!(tower.last_timestamp.timestamp > timestamp);
+        tower.last_timestamp.timestamp -= 1; // Move last_timestamp into the past
+        assert!(tower.maybe_timestamp(2).is_some()); // slot 2 gets a timestamp
 
-        // Ensure that timestamp increases by 1 if two slots are timestamped at the
-        // same `Utc::now().timestamp()` value
-        tower.last_timestamp.timestamp += 1_000_000;
-        let future_timestamp = tower.last_timestamp.timestamp;
-        assert!(tower.maybe_timestamp(slot + 2).is_some());
-        assert_eq!(tower.last_timestamp.timestamp, future_timestamp + 1);
+        tower.last_timestamp.timestamp += 1_000_000; // Move last_timestamp well into the future
+        assert!(tower.maybe_timestamp(3).is_none()); // slot 3 gets no timestamp
     }
 }
