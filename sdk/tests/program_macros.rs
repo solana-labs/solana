@@ -99,11 +99,13 @@ fn test_helper_fns() {
         multiple_accounts(pubkey0, vec![]),
         Instruction {
             program_id: test_program::id(),
-            accounts: vec![AccountMeta {
-                pubkey: pubkey0,
-                is_signer: false,
-                is_writable: true,
-            }],
+            accounts: vec![
+                AccountMeta {
+                    pubkey: pubkey0,
+                    is_signer: false,
+                    is_writable: true,
+                }
+            ],
             data: serialize(&TestInstruction::MultipleAccounts).unwrap(),
         }
     );

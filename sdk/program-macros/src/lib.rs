@@ -12,8 +12,8 @@ use syn::{
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
     token::{Brace, Comma},
-    Attribute, ExprCall, Field, Fields, FieldsNamed, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta,
-    Path, Type, Variant,
+    ExprCall, Field, Fields, FieldsNamed, FnArg, Ident, ItemEnum, Lit, Meta, NestedMeta, Path,
+    Type, Variant,
 };
 
 struct ProgramId(ExprCall);
@@ -154,18 +154,18 @@ impl AccountDetails {
         if self.is_optional {
             quote! {
                 if let Some(#ident) = #ident {
-                    accounts.push(#account_meta_path(#ident, #is_signer));
+                    account_metas.push(#account_meta_path(#ident, #is_signer));
                 }
             }
         } else if self.allows_multiple {
             quote! {
                 for pubkey in #ident.into_iter() {
-                    accounts.push(#account_meta_path(pubkey, #is_signer));
+                    account_metas.push(#account_meta_path(pubkey, #is_signer));
                 }
             }
         } else {
             quote! {
-                accounts.push(#account_meta_path(#ident, #is_signer));
+                account_metas.push(#account_meta_path(#ident, #is_signer));
             }
         }
     }
@@ -191,40 +191,11 @@ struct VariantDetails {
 struct ProgramDetails {
     instruction_enum: ItemEnum,
     variants: Vec<VariantDetails>,
-    serializer: Serializer,
-}
-
-enum Serializer {
-    Custom,
-    Serde,
-}
-
-impl Serializer {
-    fn get(attrs: &[Attribute]) -> Result<Self> {
-        for attr in attrs {
-            if let Meta::List(list) = attr.parse_meta()? {
-                if list.path.is_ident("derive") {
-                    for nested_meta in list.nested {
-                        if let NestedMeta::Meta(meta) = nested_meta {
-                            if let Meta::Path(derived) = meta {
-                                if derived.is_ident("Serialize") {
-                                    return Ok(Serializer::Serde);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(Serializer::Custom)
-    }
 }
 
 impl Parse for ProgramDetails {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut instruction_enum = ItemEnum::parse(input)?;
-        let serializer = Serializer::get(&instruction_enum.attrs)?;
-
         let mut variants: Vec<VariantDetails> = vec![];
         for variant in instruction_enum.variants.iter_mut() {
             let mut account_details: Vec<AccountDetails> = vec![];
@@ -266,7 +237,6 @@ impl Parse for ProgramDetails {
         Ok(ProgramDetails {
             instruction_enum,
             variants,
-            serializer,
         })
     }
 }
@@ -317,12 +287,13 @@ fn build_helper_fns(
 
             let mut accounts_stream = proc_macro2::TokenStream::new();
             accounts_stream.extend(quote! {
-                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
             });
             for account in &variant_details.account_details {
-                let accounts = account.format_account_meta();
+                let account_meta = account.format_account_meta();
                 accounts_stream.extend(quote! {
-                    #accounts
+                    #account_meta
+
                 });
 
                 args.push(account.format_arg());
@@ -338,20 +309,14 @@ fn build_helper_fns(
                 }
             }
 
-            let data_serialization = match program_details.serializer {
-                Serializer::Custom => quote!(#ident::#variant_ident{ #fields }.serialize()),
-                Serializer::Serde => quote!(serialize(&#ident::#variant_ident{ #fields })),
-            };
-
             stream.extend(
                 quote!( pub fn #fn_ident( #args ) -> ::solana_sdk::instruction::Instruction {
                         #accounts_stream
-                        let data = #data_serialization.unwrap();
-                        ::solana_sdk::instruction::Instruction {
-                            program_id: #program_id,
-                            data,
-                            accounts,
-                        }
+                        ::solana_sdk::instruction::Instruction::new(
+                            #program_id,
+                            &#ident::#variant_ident{ #fields },
+                            account_metas,
+                        )
                     }
                 ),
             );
@@ -523,7 +488,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            accounts.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, false));
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, false));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -531,7 +496,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            accounts.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, true));
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new_readonly(test, true));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -539,7 +504,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(
-            accounts.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
         );
         assert_eq!(account_meta, expected_account_meta);
 
@@ -547,7 +512,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(if let Some(test) = test {
-            accounts.push(::solana_sdk::instruction::AccountMeta::new(test, true));
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(test, true));
         });
         assert_eq!(account_meta, expected_account_meta);
 
@@ -556,7 +521,7 @@ mod tests {
         let account_meta = account_details.format_account_meta();
         let account_meta: Stmt = parse_quote!(#account_meta);
         let expected_account_meta: Stmt = parse_quote!(for pubkey in test.into_iter() {
-            accounts.push(::solana_sdk::instruction::AccountMeta::new(pubkey, true));
+            account_metas.push(::solana_sdk::instruction::AccountMeta::new(pubkey, true));
         });
         assert_eq!(account_meta, expected_account_meta);
     }
@@ -649,7 +614,6 @@ mod tests {
                     skip: true,
                 },
             ],
-            serializer: Serializer::Serde,
         }
     }
 
@@ -701,38 +665,37 @@ mod tests {
                 another: ::solana_sdk::pubkey::Pubkey,
                 lamports: u64,
             ) -> ::solana_sdk::instruction::Instruction {
-                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
-                accounts.push(
+                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                account_metas.push(
                     ::solana_sdk::instruction::AccountMeta::new(test_account, true)
                 );
                 if let Some(another) = another {
-                    accounts.push(
+                    account_metas.push(
                         ::solana_sdk::instruction::AccountMeta::new_readonly(another, false)
                     );
                 }
-                let data = serialize(&TestInstruction::Transfer{lamports,}).unwrap();
-                ::solana_sdk::instruction::Instruction {
-                    program_id: program::id(),
-                    data,
-                    accounts,
-                }
+                ::solana_sdk::instruction::Instruction::new(
+                    program::id(),
+                    &TestInstruction::Transfer{lamports,},
+                    account_metas,
+                )
             }
 
             pub fn multiple(
                 signers: Vec<::solana_sdk::pubkey::Pubkey>
             ) -> ::solana_sdk::instruction::Instruction {
-                let mut accounts: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
+                let mut account_metas: Vec<::solana_sdk::instruction::AccountMeta> = vec![];
                 for pubkey in signers.into_iter() {
-                    accounts.push(
+                    account_metas.push(
                         ::solana_sdk::instruction::AccountMeta::new_readonly(pubkey, true)
                     );
                 }
-                let data = serialize(&TestInstruction::Multiple{}).unwrap();
-                ::solana_sdk::instruction::Instruction {
-                    program_id: program::id(),
-                    data,
-                    accounts,
-                }
+
+                ::solana_sdk::instruction::Instruction::new(
+                    program::id(),
+                    &TestInstruction::Multiple{},
+                    account_metas,
+                )
             }
         };
         assert_eq!(helper_fns[1], expected_fns[1]);
