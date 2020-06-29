@@ -684,7 +684,7 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 
         let end_slot = last_slot.unwrap();
         info!("Purging slots {} to {}", start_slot, end_slot);
-        blockstore.purge_slots_with_delay(start_slot, end_slot, None, PurgeType::Exact);
+        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
         blockstore.purge_from_next_slots(start_slot, end_slot);
         info!("Purging done, compacting db..");
         if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
