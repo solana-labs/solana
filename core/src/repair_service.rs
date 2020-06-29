@@ -217,11 +217,11 @@ impl RepairService {
                 });
             }
 
-            if last_stats.elapsed().as_secs() > 1 {
+            if last_stats.elapsed().as_secs() > 2 {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
                     + repair_stats.orphan.count;
-                info!("repair_stats: {:#?}", repair_stats);
+                info!("repair_stats: {:?}", repair_stats);
                 if repair_total > 0 {
                     datapoint_info!(
                         "serve_repair-repair",
