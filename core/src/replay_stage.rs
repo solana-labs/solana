@@ -541,9 +541,10 @@ impl ReplayStage {
                                 if !partition_exists && partition_detected
                                 {
                                     warn!(
-                                        "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
+                                        "PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
+                                        heaviest_bank.slot(),
+                                        last_voted_slot,
                                         reset_bank.slot(),
-                                        tower.last_vote()
                                     );
                                     inc_new_counter_info!("replay_stage-partition_detected", 1);
                                     datapoint_info!(
@@ -555,9 +556,10 @@ impl ReplayStage {
                                     && !partition_detected
                                 {
                                     warn!(
-                                        "PARTITION resolved fork: {} last vote: {:?}",
-                                        reset_bank.slot(),
-                                        last_voted_slot
+                                        "PARTITION resolved heaviest fork: {} last vote: {:?}, reset slot: {}",
+                                        heaviest_bank.slot(),
+                                        last_voted_slot,
+                                        reset_bank.slot()
                                     );
                                     partition_exists = false;
                                     inc_new_counter_info!("replay_stage-partition_resolved", 1);
