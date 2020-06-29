@@ -300,7 +300,7 @@ impl ReplayStage {
                 let mut tower = Tower::new(&my_pubkey, &vote_account, root, &heaviest_bank);
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
-                let mut partition = false;
+                let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
                 loop {
@@ -533,32 +533,35 @@ impl ReplayStage {
                             last_reset = reset_bank.last_blockhash();
                             tpu_has_bank = false;
 
-                            if !partition
-                                && vote_bank.as_ref().map(|(b, _)| b.slot())
-                                    != Some(reset_bank.slot())
-                            {
-                                warn!(
-                                    "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
-                                    reset_bank.slot(),
-                                    tower.last_vote()
-                                );
-                                inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                datapoint_info!(
-                                    "replay_stage-partition",
-                                    ("slot", reset_bank.slot() as i64, i64)
-                                );
-                                partition = true;
-                            } else if partition
-                                && vote_bank.as_ref().map(|(b, _)| b.slot())
-                                    == Some(reset_bank.slot())
-                            {
-                                warn!(
-                                    "PARTITION resolved fork: {} last vote: {:?}",
-                                    reset_bank.slot(),
-                                    tower.last_vote()
-                                );
-                                partition = false;
-                                inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                            if let Some(last_voted_slot) = tower.last_voted_slot() {
+                                // If the current heaviest bank is not a descendant of the last voted slot,
+                                // there must be a partition
+                                let partition_detected = !ancestors.get(&heaviest_bank.slot()).map(|ancestors| ancestors.contains(&last_voted_slot)).unwrap_or(true);
+
+                                if !partition_exists && partition_detected
+                                {
+                                    warn!(
+                                        "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
+                                        reset_bank.slot(),
+                                        tower.last_vote()
+                                    );
+                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    datapoint_info!(
+                                        "replay_stage-partition",
+                                        ("slot", reset_bank.slot() as i64, i64)
+                                    );
+                                    partition_exists = true;
+                                } else if partition_exists
+                                    && !partition_detected
+                                {
+                                    warn!(
+                                        "PARTITION resolved fork: {} last vote: {:?}",
+                                        reset_bank.slot(),
+                                        last_voted_slot
+                                    );
+                                    partition_exists = false;
+                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                                }
                             }
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
