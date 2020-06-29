@@ -1,4 +1,6 @@
-# Command Line Wallets
+---
+title: Command Line Wallets
+---
 
 Solana supports several different types of wallets that can be used to interface
 directly with the Solana command-line tools.
@@ -11,7 +13,7 @@ To use a Command Line Wallet, you must first [install the Solana CLI tools](../c
 
 ## File System Wallet
 
-A *file system wallet*, aka an FS wallet, is a directory in your computer's
+A _file system wallet_, aka an FS wallet, is a directory in your computer's
 file system. Each file in the directory holds a keypair.
 
 ### File System Wallet Security
@@ -28,11 +30,11 @@ keypairs are stored on your computer as files, a skilled hacker with physical
 access to your computer may be able to access it. Using an encrypted hard
 drive, such as FileVault on MacOS, minimizes that risk.
 
-{% page-ref page="../file-system-wallet/README.md" %}
+[File System Wallet](../file-system-wallet/README.md")
 
 ## Paper Wallet
 
-A *paper wallet* is a collection of *seed phrases* written on paper. A seed
+A _paper wallet_ is a collection of _seed phrases_ written on paper. A seed
 phrase is some number of words (typically 12 or 24) that can be used to
 regenerate a keypair on demand.
 
@@ -47,7 +49,7 @@ wallets are used in conjunction with
 Paper wallets and custody services are an excellent way to secure a large number
 of tokens for a long period of time.
 
-{% page-ref page="../paper-wallet/README.md" %}
+[Paper Wallets](../paper-wallet/README.md)
 
 ## Hardware Wallet
 
@@ -62,4 +64,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of a file
 system wallet.
 
-{% page-ref page="../hardware-wallet/README.md" %}
+[Hardware Wallets]("../hardware-wallet/README.md")

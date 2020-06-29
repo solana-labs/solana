@@ -1,4 +1,6 @@
-# Managing Forks
+---
+title: Managing Forks
+---
 
 The ledger is permitted to fork at slot boundaries. The resulting data structure forms a tree called a _blockstore_. When the validator interprets the blockstore, it must maintain state for each fork in the chain. We call each instance an _active fork_. It is the responsibility of a validator to weigh those forks, such that it may eventually select a fork.
 
@@ -12,10 +14,10 @@ An active fork is as a sequence of checkpoints that has a length at least one lo
 
 The following sequences are _active forks_:
 
-* {4, 2, 1}
-* {5, 2, 1}
-* {6, 3, 1}
-* {7, 3, 1}
+- {4, 2, 1}
+- {5, 2, 1}
+- {6, 3, 1}
+- {7, 3, 1}
 
 ## Pruning and Squashing
 

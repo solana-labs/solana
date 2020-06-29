@@ -1,18 +1,20 @@
-# Testing Programs
+---
+title: Testing Programs
+---
 
 Applications send transactions to a Solana cluster and query validators to confirm the transactions were processed and to check each transaction's result. When the cluster doesn't behave as anticipated, it could be for a number of reasons:
 
-* The program is buggy
-* The BPF loader rejected an unsafe program instruction
-* The transaction was too big
-* The transaction was invalid
-* The Runtime tried to execute the transaction when another one was accessing
+- The program is buggy
+- The BPF loader rejected an unsafe program instruction
+- The transaction was too big
+- The transaction was invalid
+- The Runtime tried to execute the transaction when another one was accessing
 
   the same account
 
-* The network dropped the transaction
-* The cluster rolled back the ledger
-* A validator responded to queries maliciously
+- The network dropped the transaction
+- The cluster rolled back the ledger
+- A validator responded to queries maliciously
 
 ## The AsyncClient and SyncClient Traits
 
@@ -49,4 +51,3 @@ Below the TPU level is the Bank. The Bank doesn't do signature verification or g
 ## Unit-testing with the Runtime
 
 Below the Bank is the Runtime. The Runtime is the ideal test environment for unit-testing. By statically linking the Runtime into a native program implementation, the developer gains the shortest possible edit-compile-run loop. Without any dynamic linking, stack traces include debug symbols and program errors are straightforward to troubleshoot.
-

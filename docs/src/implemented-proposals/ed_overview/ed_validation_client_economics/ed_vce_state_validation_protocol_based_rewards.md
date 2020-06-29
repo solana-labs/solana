@@ -1,19 +1,21 @@
-# State-validation Protocol-based Rewards
+---
+title: State-validation Protocol-based Rewards
+---
 
 **Subject to change.**
 
 Validator-clients have two functional roles in the Solana network:
 
-* Validate \(vote\) the current global state of that PoH.
-* Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
+- Validate \(vote\) the current global state of that PoH.
+- Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
 
 Validator-client rewards for these services are to be distributed at the end of each Solana epoch. As previously discussed, compensation for validator-clients is provided via a protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator \(see below\) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each transaction fee, less a protocol-specified amount that is destroyed \(see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\).
 
 The effective protocol-based annual interest rate \(%\) per epoch received by validation-clients is to be a function of:
 
-* the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](README.md)\)
-* the fraction of staked SOLs out of the current total circulating supply,
-* the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
+- the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](README.md)\)
+- the fraction of staked SOLs out of the current total circulating supply,
+- the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
 
 The first factor is a function of protocol parameters only \(i.e. independent of validator behavior in a given epoch\) and results in a global validation reward schedule designed to incentivize early participation, provide clear monetary stability and provide optimal security in the network.
 

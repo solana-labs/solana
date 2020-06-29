@@ -1,4 +1,6 @@
-# Read-Only Accounts
+---
+title: Read-Only Accounts
+---
 
 This design covers the handling of readonly and writable accounts in the [runtime](../validator/runtime.md). Multiple transactions that modify the same account must be processed serially so that they are always replayed in the same order. Otherwise, this could introduce non-determinism to the ledger. Some transactions, however, only need to read, and not modify, the data in particular accounts. Multiple transactions that only read the same account can be processed in parallel, since replay order does not matter, providing a performance benefit.
 
@@ -10,7 +12,7 @@ Runtime transaction processing rules need to be updated slightly. Programs still
 
 Readonly accounts have the following property:
 
-* Read-only access to all account fields, including lamports (cannot be credited or debited), and account data
+- Read-only access to all account fields, including lamports (cannot be credited or debited), and account data
 
 Instructions that credit, debit, or modify the readonly account will fail.
 

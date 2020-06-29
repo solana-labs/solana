@@ -1,4 +1,6 @@
-# History of the Solana Codebase
+---
+title: History of the Solana Codebase
+---
 
 In November of 2017, Anatoly Yakovenko published a whitepaper describing Proof
 of History, a technique for keeping time between computers that do not trust

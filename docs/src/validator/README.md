@@ -1,4 +1,6 @@
-# Anatomy of a Validator
+---
+title: Anatomy of a Validator
+---
 
 ![Validator block diagrams](../.gitbook/assets/validator.svg)
 

@@ -1,4 +1,6 @@
-# Validator Timestamp Oracle
+---
+title: Validator Timestamp Oracle
+---
 
 Third-party users of Solana sometimes need to know the real-world time a block
 was produced, generally to meet compliance requirements for external auditors or
@@ -10,17 +12,18 @@ The general outline of the proposed implementation is as follows:
 - At regular intervals, each validator records its observed time for a known slot
   on-chain (via a Timestamp added to a slot Vote)
 - A client can request a block time for a rooted block using the `getBlockTime`
-RPC method. When a client requests a timestamp for block N:
+  RPC method. When a client requests a timestamp for block N:
 
   1. A validator determines a "cluster" timestamp for a recent timestamped slot
-  before block N by observing all the timestamped Vote instructions recorded on
-  the ledger that reference that slot, and determining the stake-weighted mean
-  timestamp.
+     before block N by observing all the timestamped Vote instructions recorded on
+     the ledger that reference that slot, and determining the stake-weighted mean
+     timestamp.
 
   2. This recent mean timestamp is then used to calculate the timestamp of
-  block N using the cluster's established slot duration
+     block N using the cluster's established slot duration
 
 Requirements:
+
 - Any validator replaying the ledger in the future must come up with the same
   time for every block since genesis
 - Estimated block times should not drift more than an hour or so before resolving
@@ -43,8 +46,7 @@ records its observed time by including a timestamp in its Vote instruction
 submission. The corresponding slot for the timestamp is the newest Slot in the
 Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
 identity keypair as a usual Vote. In order to enable this reporting, the Vote
-struct needs to be extended to include a timestamp field, `timestamp:
-Option<UnixTimestamp>`, which will be set to `None` in most Votes.
+struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
 
 This proposal suggests that Vote instructions with `Some(timestamp)` be issued
 every 30min, which should be short enough to prevent block times drifting very
@@ -67,7 +69,7 @@ A validator's vote account will hold its most recent slot-timestamp in VoteState
 ### Vote Program
 
 The on-chain Vote program needs to be extended to process a timestamp sent with
-a Vote instruction from validators. In addition to its current process\_vote
+a Vote instruction from validators. In addition to its current process_vote
 functionality (including loading the correct Vote account and verifying that the
 transaction signer is the expected validator), this process needs to compare the
 timestamp and corresponding slot to the currently stored values to verify that
@@ -86,7 +88,7 @@ let timestamp_slot = floor(current_slot / timestamp_interval);
 Then the validator needs to gather all Vote WithTimestamp transactions from the
 ledger that reference that slot, using `Blockstore::get_slot_entries()`. As these
 transactions could have taken some time to reach and be processed by the leader,
-the validator needs to scan several completed blocks after the timestamp\_slot to
+the validator needs to scan several completed blocks after the timestamp_slot to
 get a reasonable set of Timestamps. The exact number of slots will need to be
 tuned: More slots will enable greater cluster participation and more timestamp
 datapoints; fewer slots will speed how long timestamp filtering takes.
@@ -109,5 +111,5 @@ let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
 where `block_n_slot_offset` is the difference between the slot of block N and
-the timestamp\_slot, and `slot_duration` is derived from the cluster's
+the timestamp_slot, and `slot_duration` is derived from the cluster's
 `slots_per_year` stored in each Bank

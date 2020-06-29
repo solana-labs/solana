@@ -1,4 +1,6 @@
-# Embedding the Move Langauge
+---
+title: Embedding the Move Langauge
+---
 
 ## Problem
 
@@ -10,15 +12,15 @@ The biggest design difference between Solana's runtime and Libra's Move VM is ho
 
 This proposal attempts to define a way to embed the Move VM such that:
 
-* cross-module invocations within Move do not require the runtime's
+- cross-module invocations within Move do not require the runtime's
 
   cross-program runtime checks
 
-* Move programs can leverage functionality in other Solana programs and vice
+- Move programs can leverage functionality in other Solana programs and vice
 
   versa
 
-* Solana's runtime parallelism is exposed to batches of Move and non-Move
+- Solana's runtime parallelism is exposed to batches of Move and non-Move
 
   transactions
 
@@ -33,4 +35,3 @@ All data accounts owned by Move modules must set their owners to the loader, `MO
 ### Interacting with Solana programs
 
 To invoke instructions in non-Move programs, Solana would need to extend the Move VM with a `process_instruction()` system call. It would work the same as `process_instruction()` Rust BPF programs.
-

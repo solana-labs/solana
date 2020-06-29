@@ -1,4 +1,6 @@
-# Persistent Account Storage
+---
+title: Persistent Account Storage
+---
 
 ## Persistent Account Storage
 
@@ -49,9 +51,9 @@ An account can be _garbage-collected_ when squashing makes it unreachable.
 
 Three possible options exist:
 
-* Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
-* Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
-* Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
+- Maintain a HashSet of root forks. One is expected to be created every second. The entire tree can be garbage-collected later. Alternatively, if every fork keeps a reference count of accounts, garbage collection could occur any time an index location is updated.
+- Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
+- Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
 
 ## Append-only Writes
 
@@ -85,10 +87,9 @@ To snapshot, the underlying memory-mapped files in the AppendVec need to be flus
 
 ## Performance
 
-* Append-only writes are fast. SSDs and NVMEs, as well as all the OS level kernel data structures, allow for appends to run as fast as PCI or NVMe bandwidth will allow \(2,700 MB/s\).
-* Each replay and banking thread writes concurrently to its own AppendVec.
-* Each AppendVec could potentially be hosted on a separate NVMe.
-* Each replay and banking thread has concurrent read access to all the AppendVecs without blocking writes.
-* Index requires an exclusive write lock for writes. Single-thread performance for HashMap updates is on the order of 10m per second.
-* Banking and Replay stages should use 32 threads per NVMe. NVMes have optimal performance with 32 concurrent readers or writers.
-
+- Append-only writes are fast. SSDs and NVMEs, as well as all the OS level kernel data structures, allow for appends to run as fast as PCI or NVMe bandwidth will allow \(2,700 MB/s\).
+- Each replay and banking thread writes concurrently to its own AppendVec.
+- Each AppendVec could potentially be hosted on a separate NVMe.
+- Each replay and banking thread has concurrent read access to all the AppendVecs without blocking writes.
+- Index requires an exclusive write lock for writes. Single-thread performance for HashMap updates is on the order of 10m per second.
+- Banking and Replay stages should use 32 threads per NVMe. NVMes have optimal performance with 32 concurrent readers or writers.

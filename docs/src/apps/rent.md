@@ -1,4 +1,6 @@
-# Storage Rent for Accounts
+---
+title: Storage Rent for Accounts
+---
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the cluster must actively maintain the data to process any future transactions on it. This is different from Bitcoin and Ethereum, where storing accounts doesn't incur any costs.
 
@@ -26,8 +28,12 @@ The rent calculation includes account metadata (address, owner, lamports, etc) i
 
 For example, an account is created with the initial transfer of 10,000 lamports and no additional data. Rent is immediately debited from it on creation, resulting in a balance of 7,561 lamports:
 
+<<<<<<< HEAD
 
 ```text
+=======
+```
+>>>>>>> Move all docs to /docs folder to support Docusaurus
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
 Account Balance: 7,561 = 10,000 (transfered lamports) - 2,439 (this account's rent fee for an epoch)
 ```
