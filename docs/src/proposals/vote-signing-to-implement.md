@@ -1,4 +1,6 @@
-# Secure Vote Signing
+---
+title: Secure Vote Signing
+---
 
 ## Secure Vote Signing
 
@@ -11,21 +13,25 @@ The following sections outline how this architecture would work:
 ### Message Flow
 
 1. The node initializes the enclave at startup
-   * The enclave generates an asymmetric key and returns the public key to the
+
+   - The enclave generates an asymmetric key and returns the public key to the
 
      node
 
-   * The keypair is ephemeral. A new keypair is generated on node bootup. A
+   - The keypair is ephemeral. A new keypair is generated on node bootup. A
 
      new keypair might also be generated at runtime based on some to be determined
 
      criteria.
 
-   * The enclave returns its attestation report to the node
+   - The enclave returns its attestation report to the node
+
 2. The node performs attestation of the enclave \(e.g using Intel's IAS APIs\)
-   * The node ensures that the Secure Enclave is running on a TPM and is
+
+   - The node ensures that the Secure Enclave is running on a TPM and is
 
      signed by a trusted party
+
 3. The stakeholder of the node grants ephemeral key permission to use its stake.
 
    This process is to be determined.
@@ -34,13 +40,13 @@ The following sections outline how this architecture would work:
 
    using its interface to sign transactions and other data.
 
-   * In case of vote signing, the node needs to verify the PoH. The PoH
+   - In case of vote signing, the node needs to verify the PoH. The PoH
 
      verification is an integral part of signing. The enclave would be
 
      presented with some verifiable data to check before signing the vote.
 
-   * The process of generating the verifiable data in untrusted space is to be determined
+   - The process of generating the verifiable data in untrusted space is to be determined
 
 ### PoH Verification
 
@@ -54,7 +60,7 @@ The following sections outline how this architecture would work:
 
    a fork that does not contain `X` increases\).
 
-   * The lockout period for `X+y` is still `N` until the node votes again.
+   - The lockout period for `X+y` is still `N` until the node votes again.
 
 3. The lockout period increment is capped \(e.g. factor `F` applies maximum 32
 
@@ -64,21 +70,21 @@ The following sections outline how this architecture would work:
 
    means
 
-   * Enclave is initialized with `N`, `F` and `Factor cap`
-   * Enclave stores `Factor cap` number of entry IDs on which the node had
+   - Enclave is initialized with `N`, `F` and `Factor cap`
+   - Enclave stores `Factor cap` number of entry IDs on which the node had
 
      previously voted
 
-   * The sign request contains the entry ID for the new vote
-   * Enclave verifies that new vote's entry ID is on the correct fork
+   - The sign request contains the entry ID for the new vote
+   - Enclave verifies that new vote's entry ID is on the correct fork
 
      \(following the rules \#1 and \#2 above\)
 
 ### Ancestor Verification
 
-This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last\_tick at which each node voted 4. It sends new vote request to vote-signing service
+This is alternate, albeit, less certain approach to verifying voting fork. 1. The validator maintains an active set of nodes in the cluster 2. It observes the votes from the active set in the last voting period 3. It stores the ancestor/last_tick at which each node voted 4. It sends new vote request to vote-signing service
 
-* It includes previous votes from nodes in the active set, and their
+- It includes previous votes from nodes in the active set, and their
 
   corresponding ancestors
 
@@ -86,8 +92,8 @@ This is alternate, albeit, less certain approach to verifying voting fork. 1. Th
 
      and the vote ancestor matches with majority of the nodes
 
-* It signs the new vote if the check is successful
-* It asserts \(raises an alarm of some sort\) if the check is unsuccessful
+- It signs the new vote if the check is successful
+- It asserts \(raises an alarm of some sort\) if the check is unsuccessful
 
 The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH \(as it'll be rejected by the cluster\). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing \(as part of
 
@@ -108,4 +114,3 @@ A staking client should be configurable to prevent voting on inactive forks. Thi
    enclave.
 
 2. Need infrastructure for granting stake to an ephemeral key.
-

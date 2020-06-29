@@ -1,12 +1,14 @@
-# Tower BFT
+---
+title: Tower BFT
+---
 
 This design describes Solana's _Tower BFT_ algorithm. It addresses the following problems:
 
-* Some forks may not end up accepted by the supermajority of the cluster, and voters need to recover from voting on such forks.
-* Many forks may be votable by different voters, and each voter may see a different set of votable forks. The selected forks should eventually converge for the cluster.
-* Reward based votes have an associated risk. Voters should have the ability to configure how much risk they take on.
-* The [cost of rollback](tower-bft.md#cost-of-rollback) needs to be computable. It is important to clients that rely on some measurable form of Consistency. The costs to break consistency need to be computable, and increase super-linearly for older votes.
-* ASIC speeds are different between nodes, and attackers could employ Proof of History ASICS that are much faster than the rest of the cluster. Consensus needs to be resistant to attacks that exploit the variability in Proof of History ASIC speed.
+- Some forks may not end up accepted by the supermajority of the cluster, and voters need to recover from voting on such forks.
+- Many forks may be votable by different voters, and each voter may see a different set of votable forks. The selected forks should eventually converge for the cluster.
+- Reward based votes have an associated risk. Voters should have the ability to configure how much risk they take on.
+- The [cost of rollback](tower-bft.md#cost-of-rollback) needs to be computable. It is important to clients that rely on some measurable form of Consistency. The costs to break consistency need to be computable, and increase super-linearly for older votes.
+- ASIC speeds are different between nodes, and attackers could employ Proof of History ASICS that are much faster than the rest of the cluster. Consensus needs to be resistant to attacks that exploit the variability in Proof of History ASIC speed.
 
 For brevity this design assumes that a single voter with a stake is deployed as an individual validator in the cluster.
 
@@ -35,35 +37,35 @@ Before a vote is pushed to the stack, all the votes leading up to vote with a lo
 For example, a vote stack with the following state:
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | ---: | ---: | ---: |
-| 4 | 4 | 2 | 6 |
-| 3 | 3 | 4 | 7 |
-| 2 | 2 | 8 | 10 |
-| 1 | 1 | 16 | 17 |
+| ---: | --------: | ------: | -------------------: |
+|    4 |         4 |       2 |                    6 |
+|    3 |         3 |       4 |                    7 |
+|    2 |         2 |       8 |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 _Vote 5_ is at time 9, and the resulting state is
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | ---: | ---: | ---: |
-| 5 | 9 | 2 | 11 |
-| 2 | 2 | 8 | 10 |
-| 1 | 1 | 16 | 17 |
+| ---: | --------: | ------: | -------------------: |
+|    5 |         9 |       2 |                   11 |
+|    2 |         2 |       8 |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 _Vote 6_ is at time 10
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | ---: | ---: | ---: |
-| 6 | 10 | 2 | 12 |
-| 5 | 9 | 4 | 13 |
-| 2 | 2 | 8 | 10 |
-| 1 | 1 | 16 | 17 |
+| ---: | --------: | ------: | -------------------: |
+|    6 |        10 |       2 |                   12 |
+|    5 |         9 |       4 |                   13 |
+|    2 |         2 |       8 |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 At time 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at time 11 is applied the votes including and above _vote 2_ will be popped.
 
 | vote | vote time | lockout | lock expiration time |
-| ---: | ---: | ---: | ---: |
-| 7 | 11 | 2 | 13 |
-| 1 | 1 | 16 | 17 |
+| ---: | --------: | ------: | -------------------: |
+|    7 |        11 |       2 |                   13 |
+|    1 |         1 |      16 |                   17 |
 
 The lockout for vote 1 will not increase from 16 until the stack contains 5 votes.
 
@@ -85,18 +87,18 @@ Each validator can independently set a threshold of cluster commitment to a fork
 
 The following parameters need to be tuned:
 
-* Number of votes in the stack before dequeue occurs \(32\).
-* Rate of growth for lockouts in the stack \(2x\).
-* Starting default lockout \(2\).
-* Threshold depth for minimum cluster commitment before committing to the fork \(8\).
-* Minimum cluster commitment size at threshold depth \(50%+\).
+- Number of votes in the stack before dequeue occurs \(32\).
+- Rate of growth for lockouts in the stack \(2x\).
+- Starting default lockout \(2\).
+- Threshold depth for minimum cluster commitment before committing to the fork \(8\).
+- Minimum cluster commitment size at threshold depth \(50%+\).
 
 ### Free Choice
 
 A "Free Choice" is an unenforcible validator action. There is no way for the protocol to encode and enforce these actions since each validator can modify the code and adjust the algorithm. A validator that maximizes self-reward over all possible futures should behave in such a way that the system is stable, and the local greedy choice should result in a greedy choice over all possible futures. A set of validator that are engaging in choices to disrupt the protocol should be bound by their stake weight to the denial of service. Two options exits for validator:
 
-* a validator can outrun previous validator in virtual generation and submit a concurrent fork
-* a validator can withhold a vote to observe multiple forks before voting
+- a validator can outrun previous validator in virtual generation and submit a concurrent fork
+- a validator can withhold a vote to observe multiple forks before voting
 
 In both cases, the validator in the cluster have several forks to pick from concurrently, even though each fork represents a different height. In both cases it is impossible for the protocol to detect if the validator behavior is intentional or not.
 
@@ -129,8 +131,8 @@ This attack is then limited to censoring the previous leaders fees, and individu
 
 An attacker generates a concurrent fork from an older block to try to rollback the cluster. In this attack the concurrent fork is competing with forks that have already been voted on. This attack is limited by the exponential growth of the lockouts.
 
-* 1 vote has a lockout of 2 slots. Concurrent fork must be at least 2 slots ahead, and be produced in 1 slot. Therefore requires an ASIC 2x faster.
-* 2 votes have a lockout of 4 slots. Concurrent fork must be at least 4 slots ahead and produced in 2 slots. Therefore requires an ASIC 2x faster.
-* 3 votes have a lockout of 8 slots. Concurrent fork must be at least 8 slots ahead and produced in 3 slots. Therefore requires an ASIC 2.6x faster.
-* 10 votes have a lockout of 1024 slots. 1024/10, or 102.4x faster ASIC.
-* 20 votes have a lockout of 2^20 slots. 2^20/20, or 52,428.8x faster ASIC.
+- 1 vote has a lockout of 2 slots. Concurrent fork must be at least 2 slots ahead, and be produced in 1 slot. Therefore requires an ASIC 2x faster.
+- 2 votes have a lockout of 4 slots. Concurrent fork must be at least 4 slots ahead and produced in 2 slots. Therefore requires an ASIC 2x faster.
+- 3 votes have a lockout of 8 slots. Concurrent fork must be at least 8 slots ahead and produced in 3 slots. Therefore requires an ASIC 2.6x faster.
+- 10 votes have a lockout of 1024 slots. 1024/10, or 102.4x faster ASIC.
+- 20 votes have a lockout of 2^20 slots. 2^20/20, or 52,428.8x faster ASIC.

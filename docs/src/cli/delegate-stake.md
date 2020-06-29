@@ -1,8 +1,14 @@
-# Delegate Stake
-This page describes the workflow and commands needed to create and manage stake
-accounts, and to delegate your stake accounts to a validator using the Solana
-command-line tools.  The [stake accounts](../staking/stake-accounts.md)
-document provides an overview of stake account features and concepts.
+---
+title: Delegate Stake
+---
+
+After you have [received SOL](transfer-tokens.md), you might consider putting
+it to use by delegating _stake_ to a validator. Stake is what we call tokens
+in a _stake account_. Solana weights validator votes by the amount of stake
+delegated to them, which gives those validators more influence in determining
+then next valid block of transactions in the blockchain. Solana then generates
+new SOL periodically to reward stakers and validators. You earn more rewards
+the more stake you delegate.
 
 ## Create a Stake Account
 To delegate stake, you will need to transfer some tokens into a stake account.
@@ -55,8 +61,19 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Set Stake and Withdraw Authorities
+<<<<<<< HEAD
 [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
 can be set when creating an account via the
+=======
+
+Staking commands look to keypairs to authorize certain stake account
+operations. They use the stake authority to authorize stake delegation,
+deactivating stake, splitting stake, and setting a new stake authority. They
+use the withdraw authority to authorize withdrawing stake, and when setting
+either a new stake or withdraw authority.
+
+Stake and withdraw authorities can be set when creating an account via the
+>>>>>>> Move all docs to /docs folder to support Docusaurus
 `--stake-authority` and `--withdraw-authority` options, or afterward with the
 `solana stake-authorize` command. For example, to set a new stake authority,
 run:
@@ -87,8 +104,7 @@ solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STR
 number corresponding to which derived account this is. The first account might
 be "0", then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts
 as the base address. The command derives a new address from the base address
-and seed string. To see what stake address the command will derive, use `solana
-create-address-with-seed`:
+and seed string. To see what stake address the command will derive, use `solana create-address-with-seed`:
 
 ```bash
 solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
@@ -190,6 +206,6 @@ keypair for the new account, and `<AMOUNT>` is the number of tokens to transfer
 to the new account.
 
 To split a stake account into a derived account address, use the `--seed`
-option.  See
+option. See
 [Derive Stake Account Addresses](#advanced-derive-stake-account-addresses)
 for details.

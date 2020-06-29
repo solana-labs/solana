@@ -1,31 +1,25 @@
-Building the Solana Docs
----
+# Docs Readme
 
-Install dependencies, build, and test the docs:
+Solana's Docs are built using [Docusaurus 2](https://v2.docusaurus.io/).
 
-```bash
-$ brew install coreutils
-$ brew install mscgen
-$ cargo install svgbob_cli
-$ cargo install mdbook-linkcheck
-$ cargo install mdbook
-$ ./build.sh
+### Installation
+
+```
+$ yarn
 ```
 
-Run any Rust tests in the markdown:
+### Local Development
 
-```bash
-$ make test
+```
+$ yarn start
 ```
 
-Render markdown as HTML:
+This command starts a local development server and open up a browser window. Most changes are reflected live without having to restart the server.
 
-```bash
-$ make build
+### Build
+
+```
+$ yarn build
 ```
 
-Render and view the docs:
-
-```bash
-$ make open
-```
+This command generates static content into the `build` directory and can be served using any static contents hosting service.

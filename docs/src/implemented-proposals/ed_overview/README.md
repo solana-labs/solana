@@ -1,4 +1,6 @@
-# Cluster Economics
+---
+title: Cluster Economics
+---
 
 **Subject to change.**
 

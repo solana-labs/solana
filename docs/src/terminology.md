@@ -1,4 +1,6 @@
-# Terminology
+---
+title: Terminology
+---
 
 The following terms are used throughout the documentation.
 
@@ -78,9 +80,9 @@ An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#t
 
 A preimage resistant [hash](terminology.md#hash) over the final contents of an entry, which acts as the [entry's](terminology.md#entry) globally unique identifier. The hash serves as evidence of:
 
- * The entry being generated after a duration of time
- * The specified [transactions](terminology.md#transaction) are those included in the entry
- * The entry's position with respect to other entries in [ledger](terminology.md#ledger)
+- The entry being generated after a duration of time
+- The specified [transactions](terminology.md#transaction) are those included in the entry
+- The entry's position with respect to other entries in [ledger](terminology.md#ledger)
 
 See [Proof of History](terminology.md#proof-of-history).
 

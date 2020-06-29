@@ -1,4 +1,6 @@
-# Economic Design MVP
+---
+title: Economic Design MVP
+---
 
 **Subject to change.**
 
@@ -6,7 +8,7 @@ The preceding sections, outlined in the [Economic Design Overview](../README.md)
 
 ## MVP Economic Features
 
-* Faucet to deliver testnet SOLs to validators for staking and application development.
-* Mechanism by which validators are rewarded via network inflation.
-* Ability to delegate tokens to validator nodes
-* Validator set commission fees on interest from delegated tokens.
+- Faucet to deliver testnet SOLs to validators for staking and application development.
+- Mechanism by which validators are rewarded via network inflation.
+- Ability to delegate tokens to validator nodes
+- Validator set commission fees on interest from delegated tokens.

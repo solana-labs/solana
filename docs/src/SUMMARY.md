@@ -1,4 +1,6 @@
-# Table of contents
+---
+title: Table of contents
+---
 
 * [Introduction](introduction.md)
 * [Wallet Guide](wallet-guide/README.md)

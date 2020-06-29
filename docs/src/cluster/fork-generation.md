@@ -1,4 +1,6 @@
-# Fork Generation
+---
+title: Fork Generation
+---
 
 This section describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
 
@@ -66,10 +68,10 @@ Note that an `E` appearing on 2 forks at the same slot is a slashable condition,
 
 It's useful to consider leader rotation over PoH tick count as time division of the job of encoding state for the cluster. The following table presents the above tree of forks as a time-divided ledger.
 
-| leader slot | L1 | L2 | L3 | L4 | L5 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| data | E1 | E2 | E3 | E4 | E5 |
-| ticks since prev |  |  |  | x | xx |
+| leader slot      | L1  | L2  | L3  | L4  | L5  |
+| :--------------- | :-- | :-- | :-- | :-- | :-- |
+| data             | E1  | E2  | E3  | E4  | E5  |
+| ticks since prev |     |     |     | x   | xx  |
 
 Note that only data from leader L3 will be accepted during leader slot L3. Data from L3 may include "catchup" ticks back to a slot other than L2 if L3 did not observe L2's data. L4 and L5's transmissions include the "ticks to prev" PoH entries.
 

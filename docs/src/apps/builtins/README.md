@@ -1,4 +1,6 @@
-# Builtin Programs
+---
+title: Builtin Programs
+---
 
 Solana contains a small handful of builtin programs, which are required to run
 validator nodes. Unlike third-party programs, the builtin programs are part of
@@ -18,15 +20,15 @@ programs, as well include instructions from third-party programs.
 
 Create accounts and transfer lamports between them
 
-* Program ID: `11111111111111111111111111111111`
-* Instructions: [SystemInstruction](https://docs.rs/solana-sdk/LATEST_SOLANA_RELEASE_VERSION/solana_sdk/system_instruction/enum.SystemInstruction.html)
+- Program ID: `11111111111111111111111111111111`
+- Instructions: [SystemInstruction](https://docs.rs/solana-sdk/LATEST_SOLANA_RELEASE_VERSION/solana_sdk/system_instruction/enum.SystemInstruction.html)
 
 ## Config Program
 
 Add configuration data to the chain and the list of public keys that are permitted to modify it
 
-* Program ID: `Config1111111111111111111111111111111111111`
-* Instructions: [config_instruction](https://docs.rs/solana-config-program/LATEST_SOLANA_RELEASE_VERSION/solana_config_program/config_instruction/index.html)
+- Program ID: `Config1111111111111111111111111111111111111`
+- Instructions: [config_instruction](https://docs.rs/solana-config-program/LATEST_SOLANA_RELEASE_VERSION/solana_config_program/config_instruction/index.html)
 
 Unlike the other programs, the Config program does not define any individual
 instructions. It has just one implicit instruction, a "store" instruction. Its
@@ -37,22 +39,22 @@ data to store in it.
 
 Create stake accounts and delegate it to validators
 
-* Program ID: `Stake11111111111111111111111111111111111111`
-* Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/LATEST_SOLANA_RELEASE_VERSION/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
+- Program ID: `Stake11111111111111111111111111111111111111`
+- Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/LATEST_SOLANA_RELEASE_VERSION/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
 
 ## Vote Program
 
 Create vote accounts and vote on blocks
 
-* Program ID: `Vote111111111111111111111111111111111111111`
-* Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/LATEST_SOLANA_RELEASE_VERSION/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
+- Program ID: `Vote111111111111111111111111111111111111111`
+- Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/LATEST_SOLANA_RELEASE_VERSION/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
 ## BPF Loader
 
 Add programs to the chain.
 
-* Program ID: `BPFLoader1111111111111111111111111111111111`
-* Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/LATEST_SOLANA_RELEASE_VERSION/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
+- Program ID: `BPFLoader1111111111111111111111111111111111`
+- Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/LATEST_SOLANA_RELEASE_VERSION/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
 
 The BPF Loader marks itself as its "owner" of the executable account it
 creates to store your program. When a user invokes an instruction via a

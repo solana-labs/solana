@@ -1,4 +1,6 @@
-# Ledger Hardware Wallet
+---
+title: Ledger Hardware Wallet
+---
 
 The Ledger Nano S hardware wallet offers secure storage of your Solana private
 keys. The Solana Ledger app enables derivation of essentially infinite keys, and
@@ -27,10 +29,10 @@ solana-keygen pubkey usb://ledger
 
 This confirms your Ledger device is connected properly and in the correct state
 to interact with the Solana CLI. The command returns your Ledger's unique
-*wallet ID*. When you have multiple Nano S devices connected to the same
+_wallet ID_. When you have multiple Nano S devices connected to the same
 computer, you can use your wallet ID to specify which Ledger hardware wallet
-you want to use.  If you only plan to use a single Nano S on your computer
-at a time, you don't need to include the wallet ID.  For information on
+you want to use. If you only plan to use a single Nano S on your computer
+at a time, you don't need to include the wallet ID. For information on
 using the wallet ID to use a specific Ledger, see
 [Manage Multiple Hardware Wallets](#manage-multiple-hardware-wallets).
 
@@ -45,7 +47,7 @@ your own accounts for different purposes, or use different keypairs on the
 device as signing authorities for a stake account, for example.
 
 All of the following commands will display different addresses, associated with
-the keypair path given.  Try them out!
+the keypair path given. Try them out!
 
 ```bash
 solana-keygen pubkey usb://ledger
@@ -62,8 +64,9 @@ Just make a note of which keypair URL you used to derive any address you will be
 using to receive tokens.
 
 If you are only planning to use a single address/keypair on your device, a good
-easy-to-remember path might be to use the address at `key=0`.  View this address
+easy-to-remember path might be to use the address at `key=0`. View this address
 with:
+
 ```bash
 solana-keygen pubkey usb://ledger?key=0
 ```
@@ -76,12 +79,14 @@ associated keypair URL as the signer for transactions from that address.
 
 To view the balance of any account, regardless of which wallet it uses, use the
 `solana balance` command:
+
 ```bash
 solana balance SOME_WALLET_ADDRESS
 ```
 
 For example, if your address is `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`,
 then enter the following command to view the balance:
+
 ```bash
 solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 ```
@@ -91,15 +96,15 @@ You can also view the balance of any account address on the Accounts tab in the
 and paste the address in the box to view the balance in you web browser.
 
 Note: Any address with a balance of 0 SOL, such as a newly created one on your
-Ledger, will show as "Not Found" in the explorer.  Empty accounts and non-existent
-accounts are treated the same in Solana.  This will change when your account
+Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existent
+accounts are treated the same in Solana. This will change when your account
 address has some SOL in it.
 
 ### Send SOL from a Ledger Nano S
 
 To send some tokens from an address controlled by your Nano S device, you will
 need to use the device to sign a transaction, using the same keypair URL you
-used to derive the address.  To do this, make sure your Nano S is plugged in,
+used to derive the address. To do this, make sure your Nano S is plugged in,
 unlocked with the PIN, Ledger Live is not running, and the Solana App is open
 on the device, showing "Application is Ready".
 
@@ -112,12 +117,12 @@ from the associated address will decrease.
 solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 ```
 
-Below is a full example.  First, an address is viewed at a certain keypair URL.
-Second, the balance of tht address is checked.  Lastly, a transfer transaction
+Below is a full example. First, an address is viewed at a certain keypair URL.
+Second, the balance of tht address is checked. Lastly, a transfer transaction
 is entered to send `1` SOL to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
 When you hit Enter for a transfer command, you will be prompted to approve the
-transaction details on your Ledger device.  On the device, use the right and
-left buttons to review the transaction details.  If they look correct, click
+transaction details on your Ledger device. On the device, use the right and
+left buttons to review the transaction details. If they look correct, click
 both buttons on the "Approve" screen, otherwise push both buttons on the "Reject"
 screen.
 
@@ -137,8 +142,8 @@ Signature: kemu9jDEuPirKNRKiHan7ycybYsZp7pFefAdvWZRq5VRHCLgXTXaFVw3pfh87MQcWX4kQ
 
 After approving the transaction on your device, the program will display the
 transaction signature, and wait for the maximum number of confirmations (32)
-before returning.  This only takes a few seconds, and then the transaction is
-finalized on the Solana network.  You can view details of this or any other
+before returning. This only takes a few seconds, and then the transaction is
+finalized on the Solana network. You can view details of this or any other
 transaction by going to the Transaction tab in the
 [Explorer](https://explorer.solana.com/transactions)
 and paste in the transaction signature.
@@ -148,7 +153,7 @@ and paste in the transaction signature.
 ### Manage Multiple Hardware Wallets
 
 It is sometimes useful to sign a transaction with keys from multiple hardware
-wallets. Signing with multiple wallets requires *fully qualified keypair URLs*.
+wallets. Signing with multiple wallets requires _fully qualified keypair URLs_.
 When the URL is not fully qualified, the Solana CLI will prompt you with
 the fully qualified URLs of all connected hardware wallets, and ask you to
 choose which wallet to use for each signature.
@@ -183,7 +188,7 @@ on one of the public testnets.
 
 You can use the command-line to install the latest Solana Ledger app release
 before it has been validated by
-the Ledger team and made available via Ledger Live.  Note that because the app
+the Ledger team and made available via Ledger Live. Note that because the app
 is not installed via Ledger Live, you will need to approve installation from an
 "unsafe" manager, as well as see the message, "This app is not genuine" each
 time you open the app. Once the app is available on Ledger Live, you can
@@ -261,9 +266,6 @@ solana-keygen pubkey usb://ledger\?key=0
 
 Check out our [Wallet Support Page](../wallet-guide/support.md)
 for ways to get help.
-
-
-
 
 Read more about [sending and receiving tokens](../cli/transfer-tokens.md) and
 [delegating stake](../cli/delegate-stake.md). You can use your Ledger keypair URL
