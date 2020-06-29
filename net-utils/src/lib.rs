@@ -7,6 +7,7 @@ use std::io::{self, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use url::Url;
 
 mod ip_echo_server;
 use ip_echo_server::IpEchoServerMessage;
@@ -298,6 +299,14 @@ pub fn parse_port_range(port_range: &str) -> Option<PortRange> {
 }
 
 pub fn parse_host(host: &str) -> Result<IpAddr, String> {
+    // First, check if the host syntax is valid. This check is needed because addresses
+    // such as `("localhost:1234", 0)` will resolve to IPs on some networks.
+    let parsed_url = Url::parse(&format!("http://{}", host)).map_err(|e| e.to_string())?;
+    if parsed_url.port().is_some() {
+        return Err(format!("Expected port in URL: {}", host));
+    }
+
+    // Next, check to see if it resolves to an IP address
     let ips: Vec<_> = (host, 0)
         .to_socket_addrs()
         .map_err(|err| err.to_string())?
