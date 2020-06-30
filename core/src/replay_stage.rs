@@ -261,11 +261,21 @@ impl ReplayStage {
                     mut progress,
                     mut heaviest_subtree_fork_choice,
                     unlock_heaviest_subtree_fork_choice_slot,
-                ) = Self::initialize_progress_and_fork_choice(
-                    &bank_forks.read().unwrap(),
-                    &my_pubkey,
-                    &vote_account,
-                );
+                ) = {
+                    let (root_bank, frozen_baks) = {
+                        let bank_forks = bank_forks.read().unwrap();
+                        (
+                            bank_forks.root_bank().clone(),
+                            bank_forks.frozen_banks().values().cloned().collect(),
+                        )
+                    };
+                    Self::initialize_progress_and_fork_choice(
+                        root_bank,
+                        frozen_baks,
+                        &my_pubkey,
+                        &vote_account,
+                    )
+                };
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -618,12 +628,12 @@ impl ReplayStage {
     }
 
     pub(crate) fn initialize_progress_and_fork_choice(
-        bank_forks: &BankForks,
+        root_bank: Arc<Bank>,
+        mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> (Arc<Bank>, ProgressMap, HeaviestSubtreeForkChoice, Slot) {
         let mut progress = ProgressMap::default();
-        let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
 
         frozen_banks.sort_by_key(|bank| bank.slot());
 
@@ -642,7 +652,6 @@ impl ReplayStage {
                 ),
             );
         }
-        let root_bank = bank_forks.root_bank().clone();
         let root = root_bank.slot();
         let unlock_heaviest_subtree_fork_choice_slot =
             Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());

@@ -90,7 +90,9 @@ pub struct Tower {
     last_vote: Vote,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
-    save_path: PathBuf,
+    path: PathBuf,
+    #[serde(skip)]
+    tmp_path: PathBuf,
 }
 
 impl Default for Tower {
@@ -102,7 +104,8 @@ impl Default for Tower {
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
-            save_path: PathBuf::default(),
+            path: PathBuf::default(),
+            tmp_path: PathBuf::default(),
         }
     }
 }
@@ -115,9 +118,12 @@ impl Tower {
         heaviest_bank: &Bank,
         save_path: &Path,
     ) -> Self {
+        let path = Self::get_filename(&PathBuf::from(save_path), node_pubkey);
+        let tmp_path = Self::get_tmp_filename(&path);
         let mut tower = Self {
             node_pubkey: *node_pubkey,
-            save_path: PathBuf::from(save_path),
+            path,
+            tmp_path,
             ..Tower::default()
         };
         tower.initialize_lockouts_from_bank_forks(vote_account_pubkey, root, heaviest_bank);
@@ -154,7 +160,8 @@ impl Tower {
             heaviest_subtree_fork_choice,
             unlock_heaviest_subtree_fork_choice_slot,
         ) = crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
-            &bank_forks,
+            bank_forks.root_bank().clone(),
+            bank_forks.frozen_banks().values().cloned().collect(),
             &my_pubkey,
             &vote_account,
         );
@@ -820,6 +827,10 @@ impl Tower {
             .with_extension("bin")
     }
 
+    pub fn get_tmp_filename(path: &Path) -> PathBuf {
+        path.with_extension("bin.new")
+    }
+
     pub fn save(&self, node_keypair: &Arc<Keypair>) -> Result<()> {
         if self.node_pubkey != node_keypair.pubkey() {
             return Err(TowerError::WrongTower(format!(
@@ -829,9 +840,8 @@ impl Tower {
             )));
         }
 
-        fs::create_dir_all(&self.save_path)?;
-        let filename = Self::get_filename(&self.save_path, &self.node_pubkey);
-        let new_filename = filename.with_extension("new");
+        let filename = &self.path;
+        let new_filename = &self.tmp_path;
         {
             let mut file = File::create(&new_filename)?;
             let saveable_tower = SavedTower::new(self, node_keypair)?;
@@ -845,6 +855,7 @@ impl Tower {
 
     pub fn restore(save_path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
         let filename = Self::get_filename(save_path, node_pubkey);
+        fs::create_dir_all(&filename.parent().unwrap())?;
 
         let file = File::open(&filename)?;
         let mut stream = BufReader::new(file);
@@ -854,7 +865,8 @@ impl Tower {
             return Err(TowerError::InvalidSignature);
         }
         let mut tower = saved_tower.deserialize()?;
-        tower.save_path = save_path.to_path_buf();
+        tower.path = filename;
+        tower.tmp_path = Self::get_tmp_filename(&tower.path);
 
         // check that the tower actually belongs to this node
         if &tower.node_pubkey != node_pubkey {
@@ -2274,19 +2286,17 @@ pub mod test {
         G: Fn(&PathBuf),
     {
         let dir = TempDir::new().unwrap();
+        let identity_keypair = Arc::new(Keypair::new());
 
         // Use values that will not match the default derived from BankForks
         let mut tower = Tower::new_for_tests(10, 0.9);
-        tower.save_path = dir.path().to_path_buf();
+        tower.path = Tower::get_filename(&dir.path().to_path_buf(), &identity_keypair.pubkey());
+        tower.tmp_path = Tower::get_tmp_filename(&tower.path);
 
-        let identity_keypair = Arc::new(Keypair::new());
         modify_original(&mut tower, &identity_keypair.pubkey());
 
         tower.save(&identity_keypair).unwrap();
-        modify_serialized(&Tower::get_filename(
-            &tower.save_path,
-            &identity_keypair.pubkey(),
-        ));
+        modify_serialized(&tower.path);
         let loaded = Tower::restore(&dir.path(), &identity_keypair.pubkey());
 
         (tower, loaded)
