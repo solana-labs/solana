@@ -618,13 +618,13 @@ impl Validator {
     }
 }
 
-fn empty_vote_account(bank: &Arc<Bank>, vote_account: &Pubkey) -> Option<bool> {
+fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
         if let Some(vote_state) = VoteState::from(&account) {
-            return Some(vote_state.votes.is_empty());
+            return !vote_state.votes.is_empty();
         }
     }
-    None
+    false
 }
 
 #[allow(clippy::type_complexity)]
@@ -723,13 +723,24 @@ fn new_banks_from_ledger(
             tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
         .unwrap_or_else(|err| {
-            if config.require_tower
-                && empty_vote_account(&bank_forks.working_bank(), &vote_account) != Some(true)
-            {
-                error!("Tower restore failed: {:?}", err);
+            let is_already_active = active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+            if config.require_tower && is_already_active {
+                error!("Required tower restore failed: {:?}", err);
+                error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
                 process::exit(1);
             }
-            error!("Rebuilding tower from the latest vote account: {}", err);
+            let not_found = if let crate::consensus::TowerError::IOError(io_err) = &err {
+                io_err.kind() == std::io::ErrorKind::NotFound
+            } else {
+                false
+            };
+            if not_found && !is_already_active {
+                // Currently, don't protect against spoofed snapshots with no tower at all
+                info!("Ignoring expected failed tower restore because this is the initial validator start with the vote account...");
+            } else {
+                error!("Rebuilding tower from the latest vote account due to failed tower restore: {}", err);
+            }
+
             Tower::new_from_bankforks(
                 &bank_forks,
                 &ledger_path,
