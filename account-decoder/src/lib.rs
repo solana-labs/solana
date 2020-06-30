@@ -40,14 +40,14 @@ impl From<Vec<u8>> for EncodedAccountData {
 #[serde(rename_all = "camelCase")]
 pub enum AccountEncoding {
     Binary,
-    Json,
+    JsonParsed,
 }
 
 impl EncodedAccount {
     pub fn encode(account: Account, encoding: AccountEncoding) -> Self {
         let data = match encoding {
             AccountEncoding::Binary => account.data.into(),
-            AccountEncoding::Json => {
+            AccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) = parse_account_data(&account.owner, &account.data) {
                     EncodedAccountData::Json(parsed_data)
                 } else {

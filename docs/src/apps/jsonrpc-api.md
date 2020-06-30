@@ -139,9 +139,8 @@ Returns all information associated with the account of provided Pubkey
 * `<string>` - Pubkey of account to query, as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following optional fields:
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or json".
-    JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data.
-    If parameter not provided, the default encoding is binary.
+  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
@@ -289,9 +288,8 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 * `<u64>` - slot, as u64 integer
-* `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary".
-  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
-  If parameter not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON.
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
 
@@ -410,9 +408,8 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 * `<string>` - transaction signature as base-58 encoded string
-* `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary".
-  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
-  If parameter not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON.
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
 
@@ -791,9 +788,8 @@ Returns all accounts owned by the provided program Pubkey
 * `<string>` - Pubkey of program, as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following optional fields:
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or json".
-    JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data.
-    If parameter not provided, the default encoding is binary.
+  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
