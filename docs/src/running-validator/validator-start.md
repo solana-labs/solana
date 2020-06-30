@@ -55,18 +55,6 @@ To run it:
 sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
-Also, for those validators running Solana as a systemd service, to disable throttling of logs, please add the following to `/etc/systemd/journald.conf`:
-
-```bash
-RateLimitInterval=0
-RateLimitBurst=0
-```
-
-Then run:
-```bash
-systemctl restart systemd-journald
-```
-
 ## Generate identity
 
 Create an identity keypair for your validator by running:
@@ -208,6 +196,26 @@ solana-validator \
   --rpc-port 8899 \
   --entrypoint devnet.solana.com:8001 \
   --limit-ledger-size
+  --log ~/solana-validator.log
+```
+
+Lastly, to configure logging, please run the following:
+
+```bash
+# Setup log rotation
+
+cat > logrotate.sol <<EOF
+~/solana-validator.log {
+  rotate 7
+  daily
+  missingok
+  postrotate
+    systemctl kill -s USR1 sol.service
+  endscript
+}
+EOF
+sudo cp logrotate.sol /etc/logrotate.d/sol
+systemctl restart logrotate.service
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise
