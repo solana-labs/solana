@@ -23,6 +23,7 @@ solana-logger = { path = "../logger", version = "1.3.0" }
 solana-version = { path = "../version", version = "1.3.0" }
 tokio = "0.1"
 tokio-codec = "0.1"
+url = "2.1.1"
 
 [lib]
 name = "solana_net_utils"

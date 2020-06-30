@@ -4386,6 +4386,7 @@ dependencies = [
  "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
+ "url 2.1.1",
 ]
 
 [[package]]
