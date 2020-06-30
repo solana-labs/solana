@@ -97,6 +97,7 @@ module.exports = {
       "@docusaurus/preset-classic",
       {
         docs: {
+          path: "src",
           // It is recommended to set document id as docs home page (`docs/` path).
           homePageId: "introduction",
           sidebarPath: require.resolve("./sidebars.js"),
