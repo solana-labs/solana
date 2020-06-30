@@ -736,6 +736,14 @@ pub fn main() {
                 .help("Require the genesis have this hash"),
         )
         .arg(
+            Arg::with_name("expected_bank_hash")
+                .long("expected-bank-hash")
+                .value_name("HASH")
+                .takes_value(true)
+                .validator(hash_validator)
+                .help("When wait-for-supermajority <x>, require the bank at <x> to have this hash"),
+        )
+        .arg(
             Arg::with_name("expected_shred_version")
                 .long("expected-shred-version")
                 .value_name("VERSION")
@@ -755,6 +763,7 @@ pub fn main() {
         .arg(
             Arg::with_name("wait_for_supermajority")
                 .long("wait-for-supermajority")
+                .requires("expected_bank_hash")
                 .value_name("SLOT")
                 .validator(is_slot)
                 .help("After processing the ledger and the next slot is SLOT, wait until a supermajority of stake is visible on gossip before starting PoH"),
@@ -890,6 +899,9 @@ pub fn main() {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
+            .map(|s| Hash::from_str(&s).unwrap()),
+        expected_bank_hash: matches
+            .value_of("expected_bank_hash")
             .map(|s| Hash::from_str(&s).unwrap()),
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),

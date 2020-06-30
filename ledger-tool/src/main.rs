@@ -1363,8 +1363,9 @@ fn main() {
                         .and_then(|package| {
                             snapshot_utils::archive_snapshot_package(&package).map(|ok| {
                                 println!(
-                                    "Successfully created snapshot for slot {}: {:?}",
+                                    "Successfully created snapshot for slot {}, hash {}: {:?}",
                                     bank.slot(),
+                                    bank.hash(),
                                     package.tar_output_file
                                 );
                                 println!(

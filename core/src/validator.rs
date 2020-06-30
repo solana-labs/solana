@@ -64,6 +64,7 @@ use std::{
 pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
+    pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
@@ -90,6 +91,7 @@ impl Default for ValidatorConfig {
         Self {
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
+            expected_bank_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
             max_ledger_shreds: None,
@@ -227,8 +229,8 @@ impl Validator {
         if let Some(expected_shred_version) = config.expected_shred_version {
             if expected_shred_version != node.info.shred_version {
                 error!(
-                    "shred version mismatch: expected {}",
-                    expected_shred_version
+                    "shred version mismatch: expected {} found: {}",
+                    expected_shred_version, node.info.shred_version,
                 );
                 process::exit(1);
             }
@@ -392,7 +394,9 @@ impl Validator {
                 (None, None)
             };
 
-        wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check);
+        if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
+            std::process::exit(1);
+        }
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
@@ -698,14 +702,35 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
     drop(blockstore);
 }
 
+// Return true on error, indicating the validator should exit.
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
-) {
-    if config.wait_for_supermajority != Some(bank.slot()) {
-        return;
+) -> bool {
+    if let Some(wait_for_supermajority) = config.wait_for_supermajority {
+        match wait_for_supermajority.cmp(&bank.slot()) {
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Greater => {
+                error!("Ledger does not have enough data to wait for supermajority, please enable snapshot fetch. Has {} needs {}", bank.slot(), wait_for_supermajority);
+                return true;
+            }
+            _ => {}
+        }
+    } else {
+        return false;
+    }
+
+    if let Some(expected_bank_hash) = config.expected_bank_hash {
+        if bank.hash() != expected_bank_hash {
+            error!(
+                "Bank hash({}) does not match expected value: {}",
+                bank.hash(),
+                expected_bank_hash
+            );
+            return true;
+        }
     }
 
     info!(
@@ -725,6 +750,7 @@ fn wait_for_supermajority(
         sleep(Duration::new(1, 0));
     }
     rpc_override_health_check.store(false, Ordering::Relaxed);
+    false
 }
 
 pub struct TestValidator {
@@ -1057,5 +1083,57 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_wait_for_supermajority() {
+        solana_logger::setup();
+        use solana_sdk::genesis_config::create_genesis_config;
+        use solana_sdk::hash::hash;
+        let node_keypair = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let mut config = ValidatorConfig::default();
+        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        assert!(!wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=0, wait=1, should fail
+        config.wait_for_supermajority = Some(1);
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=1, wait=0, should pass, bank is past the wait slot
+        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+        config.wait_for_supermajority = Some(0);
+        assert!(!wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=1, wait=1, equal, but bad hash provided
+        config.wait_for_supermajority = Some(1);
+        config.expected_bank_hash = Some(hash(&[1]));
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check
+        ));
     }
 }
