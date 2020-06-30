@@ -42,7 +42,7 @@ the `--cuda` argument to `solana-validator`.
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
-## Tune System
+## System Tuning
 
 For Linux validators, the solana repo includes a daemon to adjust system settings to optimize
 performance (namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
@@ -53,6 +53,18 @@ To run it:
 
 ```bash
 sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+```
+
+Also, for those validators running Solana as a systemd service, to disable throttling of logs, please add the following to `/etc/systemd/journald.conf`:
+
+```bash
+RateLimitInterval=0
+RateLimitBurst=0
+```
+
+Then run:
+```bash
+systemctl restart systemd-journald
 ```
 
 ## Generate identity
