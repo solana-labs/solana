@@ -15,9 +15,9 @@ use std::str::FromStr;
 /// A duplicate representation of a Message for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcAccount {
+pub struct EncodedAccount {
     pub lamports: u64,
-    pub data: EncodedAccount,
+    pub data: EncodedAccountData,
     pub owner: String,
     pub executable: bool,
     pub rent_epoch: Epoch,
@@ -25,12 +25,12 @@ pub struct RpcAccount {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
-pub enum EncodedAccount {
+pub enum EncodedAccountData {
     Binary(String),
     Json(Value),
 }
 
-impl From<Vec<u8>> for EncodedAccount {
+impl From<Vec<u8>> for EncodedAccountData {
     fn from(data: Vec<u8>) -> Self {
         Self::Binary(bs58::encode(data).into_string())
     }
@@ -43,19 +43,19 @@ pub enum AccountEncoding {
     Json,
 }
 
-impl RpcAccount {
+impl EncodedAccount {
     pub fn encode(account: Account, encoding: AccountEncoding) -> Self {
         let data = match encoding {
             AccountEncoding::Binary => account.data.into(),
             AccountEncoding::Json => {
                 if let Ok(parsed_data) = parse_account_data(&account.owner, &account.data) {
-                    EncodedAccount::Json(parsed_data)
+                    EncodedAccountData::Json(parsed_data)
                 } else {
                     account.data.into()
                 }
             }
         };
-        RpcAccount {
+        EncodedAccount {
             lamports: account.lamports,
             data,
             owner: account.owner.to_string(),
@@ -66,8 +66,8 @@ impl RpcAccount {
 
     pub fn decode(&self) -> Option<Account> {
         let data = match &self.data {
-            EncodedAccount::Json(_) => None,
-            EncodedAccount::Binary(blob) => bs58::decode(blob).into_vec().ok(),
+            EncodedAccountData::Json(_) => None,
+            EncodedAccountData::Binary(blob) => bs58::decode(blob).into_vec().ok(),
         }?;
         Some(Account {
             lamports: self.lamports,

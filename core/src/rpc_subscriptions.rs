@@ -7,7 +7,7 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_account_decoder::{AccountEncoding, RpcAccount};
+use solana_account_decoder::{AccountEncoding, EncodedAccount};
 use solana_client::rpc_response::{
     Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
@@ -91,7 +91,7 @@ struct SubscriptionData<S> {
     last_notified_slot: RwLock<Slot>,
 }
 type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, SubscriptionData<Response<RpcAccount>>>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, SubscriptionData<Response<EncodedAccount>>>>>;
 type RpcProgramSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, SubscriptionData<Response<RpcKeyedAccount>>>>>;
 type RpcSignatureSubscriptions = RwLock<
@@ -226,13 +226,13 @@ impl RpcNotifier {
 fn filter_account_result(
     result: Option<(Account, Slot)>,
     last_notified_slot: Slot,
-) -> (Box<dyn Iterator<Item = RpcAccount>>, Slot) {
+) -> (Box<dyn Iterator<Item = EncodedAccount>>, Slot) {
     if let Some((account, fork)) = result {
         // If fork < last_notified_slot this means that we last notified for a fork
         // and should notify that the account state has been reverted.
         if fork != last_notified_slot {
             return (
-                Box::new(iter::once(RpcAccount::encode(
+                Box::new(iter::once(EncodedAccount::encode(
                     account,
                     AccountEncoding::Binary,
                 ))),
@@ -267,7 +267,7 @@ fn filter_program_results(
                 .into_iter()
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: RpcAccount::encode(account, AccountEncoding::Binary),
+                    account: EncodedAccount::encode(account, AccountEncoding::Binary),
                 }),
         ),
         last_notified_slot,
@@ -456,7 +456,7 @@ impl RpcSubscriptions {
         pubkey: Pubkey,
         commitment: Option<CommitmentConfig>,
         sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<RpcAccount>>,
+        subscriber: Subscriber<Response<EncodedAccount>>,
     ) {
         let commitment_level = commitment
             .unwrap_or_else(CommitmentConfig::single)

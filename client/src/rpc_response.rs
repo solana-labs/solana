@@ -1,5 +1,5 @@
 use crate::client_error;
-use solana_account_decoder::RpcAccount;
+use solana_account_decoder::EncodedAccount;
 use solana_sdk::{
     clock::{Epoch, Slot},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -90,7 +90,7 @@ pub struct RpcInflationRate {
 #[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
-    pub account: RpcAccount,
+    pub account: EncodedAccount,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
