@@ -2,10 +2,12 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
     ArgMatches, SubCommand,
 };
+use regex::Regex;
 use serde_json::json;
 use solana_clap_utils::input_validators::{is_parsable, is_slot};
 use solana_ledger::entry::Entry;
 use solana_ledger::{
+    ancestor_iterator::AncestorIterator,
     bank_forks_utils,
     blockstore::Blockstore,
     blockstore_db::{self, AccessType, Column, Database},
@@ -25,11 +27,11 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryInto,
     ffi::OsStr,
     fs::{self, File},
-    io::{self, stdout, Write},
+    io::{self, stdout, BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
@@ -835,6 +837,25 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
+            SubCommand::with_name("parse_full_frozen")
+            .about("Parses log for information about critical events about ancestors of the given `ending_slot`")
+            .arg(&starting_slot_arg)
+            .arg(
+                Arg::with_name("ending_slot")
+                    .long("ending-slot")
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .help("The last slot to iterate to"),
+            )
+            .arg(
+                Arg::with_name("log_path")
+                    .long("log-path")
+                    .value_name("PATH")
+                    .takes_value(true)
+                    .help("path to log file to parse"),
+            )
+        )
+        .subcommand(
             SubCommand::with_name("genesis-hash")
             .about("Prints the ledger's genesis hash")
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1132,6 +1153,70 @@ fn main() {
                     Ok(_) => println!("Slot {} dead", slot),
                     Err(err) => eprintln!("Failed to set slot {} dead slot: {}", slot, err),
                 }
+            }
+        }
+        ("parse_full_frozen", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let mut ancestors = BTreeSet::new();
+            if blockstore.meta(ending_slot).unwrap().is_none() {
+                panic!("Ending slot doesn't exist");
+            }
+            for a in AncestorIterator::new(ending_slot, &blockstore) {
+                ancestors.insert(a);
+                if a <= starting_slot {
+                    break;
+                }
+            }
+            println!("ancestors: {:?}", ancestors.iter());
+
+            let mut frozen = BTreeMap::new();
+            let mut full = BTreeMap::new();
+            let frozen_regex = Regex::new(r"bank frozen: (\d*)").unwrap();
+            let full_regex = Regex::new(r"slot (\d*) is full").unwrap();
+
+            let log_file = PathBuf::from(value_t_or_exit!(arg_matches, "log_path", String));
+            let f = BufReader::new(File::open(log_file).unwrap());
+            println!("Reading log file");
+            for line in f.lines() {
+                if let Ok(line) = line {
+                    let parse_results = {
+                        if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
+                            Some((slot_string, &mut frozen))
+                        } else if let Some(slot_string) = full_regex.captures_iter(&line).next() {
+                            Some((slot_string, &mut full))
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some((slot_string, map)) = parse_results {
+                        let slot = slot_string
+                            .get(1)
+                            .expect("Only one match group")
+                            .as_str()
+                            .parse::<u64>()
+                            .unwrap();
+                        if ancestors.contains(&slot) && !map.contains_key(&slot) {
+                            map.insert(slot, line);
+                        }
+                        if slot == starting_slot
+                            && frozen.contains_key(&slot)
+                            && full.contains_key(&slot)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
+                assert_eq!(slot1, slot2);
+                println!(
+                    "Slot: {}\n, full: {}\n, frozen: {}",
+                    slot1, full_log, frozen_log
+                );
             }
         }
         ("verify", Some(arg_matches)) => {
