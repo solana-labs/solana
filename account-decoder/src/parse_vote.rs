@@ -5,12 +5,12 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::{BlockTimestamp, Lockout, VoteState};
 
-pub fn parse_vote(data: &[u8]) -> Result<RpcVoteState, ParseAccountError> {
+pub fn parse_vote(data: &[u8]) -> Result<DisplayVoteState, ParseAccountError> {
     let mut vote_state = VoteState::deserialize(data).map_err(ParseAccountError::from)?;
     let epoch_credits = vote_state
         .epoch_credits()
         .iter()
-        .map(|(epoch, credits, previous_credits)| RpcEpochCredits {
+        .map(|(epoch, credits, previous_credits)| DisplayEpochCredits {
             epoch: *epoch,
             credits: *credits,
             previous_credits: *previous_credits,
@@ -19,7 +19,7 @@ pub fn parse_vote(data: &[u8]) -> Result<RpcVoteState, ParseAccountError> {
     let votes = vote_state
         .votes
         .iter()
-        .map(|lockout| RpcLockout {
+        .map(|lockout| DisplayLockout {
             slot: lockout.slot,
             confirmation_count: lockout.confirmation_count,
         })
@@ -27,7 +27,7 @@ pub fn parse_vote(data: &[u8]) -> Result<RpcVoteState, ParseAccountError> {
     let authorized_voters = vote_state
         .authorized_voters()
         .iter()
-        .map(|(epoch, authorized_voter)| RpcAuthorizedVoters {
+        .map(|(epoch, authorized_voter)| DisplayAuthorizedVoters {
             epoch: *epoch,
             authorized_voter: authorized_voter.to_string(),
         })
@@ -38,14 +38,16 @@ pub fn parse_vote(data: &[u8]) -> Result<RpcVoteState, ParseAccountError> {
         .iter()
         .filter(|(pubkey, _, _)| pubkey != &Pubkey::default())
         .map(
-            |(authorized_pubkey, epoch_of_last_authorized_switch, target_epoch)| RpcPriorVoters {
-                authorized_pubkey: authorized_pubkey.to_string(),
-                epoch_of_last_authorized_switch: *epoch_of_last_authorized_switch,
-                target_epoch: *target_epoch,
+            |(authorized_pubkey, epoch_of_last_authorized_switch, target_epoch)| {
+                DisplayPriorVoters {
+                    authorized_pubkey: authorized_pubkey.to_string(),
+                    epoch_of_last_authorized_switch: *epoch_of_last_authorized_switch,
+                    target_epoch: *target_epoch,
+                }
             },
         )
         .collect();
-    Ok(RpcVoteState {
+    Ok(DisplayVoteState {
         node_pubkey: vote_state.node_pubkey.to_string(),
         authorized_withdrawer: vote_state.authorized_withdrawer.to_string(),
         commission: vote_state.commission,
@@ -61,26 +63,26 @@ pub fn parse_vote(data: &[u8]) -> Result<RpcVoteState, ParseAccountError> {
 /// A duplicate representation of VoteState for pretty JSON serialization
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcVoteState {
+pub struct DisplayVoteState {
     node_pubkey: String,
     authorized_withdrawer: String,
     commission: u8,
-    votes: Vec<RpcLockout>,
+    votes: Vec<DisplayLockout>,
     root_slot: Option<Slot>,
-    authorized_voters: Vec<RpcAuthorizedVoters>,
-    prior_voters: Vec<RpcPriorVoters>,
-    epoch_credits: Vec<RpcEpochCredits>,
+    authorized_voters: Vec<DisplayAuthorizedVoters>,
+    prior_voters: Vec<DisplayPriorVoters>,
+    epoch_credits: Vec<DisplayEpochCredits>,
     last_timestamp: BlockTimestamp,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcLockout {
+struct DisplayLockout {
     slot: Slot,
     confirmation_count: u32,
 }
 
-impl From<&Lockout> for RpcLockout {
+impl From<&Lockout> for DisplayLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
             slot: lockout.slot,
@@ -91,14 +93,14 @@ impl From<&Lockout> for RpcLockout {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcAuthorizedVoters {
+struct DisplayAuthorizedVoters {
     epoch: Epoch,
     authorized_voter: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcPriorVoters {
+struct DisplayPriorVoters {
     authorized_pubkey: String,
     epoch_of_last_authorized_switch: Epoch,
     target_epoch: Epoch,
@@ -106,7 +108,7 @@ struct RpcPriorVoters {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RpcEpochCredits {
+struct DisplayEpochCredits {
     epoch: Epoch,
     credits: u64,
     previous_credits: u64,
