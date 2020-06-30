@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#set -e
+set -e
 
 shifted_args=()
 while [[ -n $1 ]]; do
