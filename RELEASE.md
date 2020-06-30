@@ -123,11 +123,12 @@ Alternatively use the Github UI.
      ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the **release branch** with something like:
     ```
-    git co -b version_update
-    git ls-files -m | xargs git add
+    git co -b version_update origin/vX.Y
+    git add -u
     git commit -m 'Bump version to X.Y.Z+1'
-    git push -u origin version_update
+    git push -u <user-remote> version_update
     ```
+1. Open a PR against origin/vX.Y and then merge the PR after passing CI.
 
 ### Prepare for the next release
 1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release nodes.  This allows people to incrementally add new release notes until it's time for the next release
