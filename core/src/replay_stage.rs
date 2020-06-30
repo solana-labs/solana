@@ -300,7 +300,7 @@ impl ReplayStage {
                 let mut tower = Tower::new(&my_pubkey, &vote_account, root, &heaviest_bank);
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
-                let mut partition = false;
+                let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
                 loop {
@@ -533,32 +533,37 @@ impl ReplayStage {
                             last_reset = reset_bank.last_blockhash();
                             tpu_has_bank = false;
 
-                            if !partition
-                                && vote_bank.as_ref().map(|(b, _)| b.slot())
-                                    != Some(reset_bank.slot())
-                            {
-                                warn!(
-                                    "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
-                                    reset_bank.slot(),
-                                    tower.last_vote()
-                                );
-                                inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                datapoint_info!(
-                                    "replay_stage-partition",
-                                    ("slot", reset_bank.slot() as i64, i64)
-                                );
-                                partition = true;
-                            } else if partition
-                                && vote_bank.as_ref().map(|(b, _)| b.slot())
-                                    == Some(reset_bank.slot())
-                            {
-                                warn!(
-                                    "PARTITION resolved fork: {} last vote: {:?}",
-                                    reset_bank.slot(),
-                                    tower.last_vote()
-                                );
-                                partition = false;
-                                inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                            if let Some(last_voted_slot) = tower.last_voted_slot() {
+                                // If the current heaviest bank is not a descendant of the last voted slot,
+                                // there must be a partition
+                                let partition_detected = Self::is_partition_detected(&ancestors, last_voted_slot, heaviest_bank.slot());
+
+                                if !partition_exists && partition_detected
+                                {
+                                    warn!(
+                                        "PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
+                                        heaviest_bank.slot(),
+                                        last_voted_slot,
+                                        reset_bank.slot(),
+                                    );
+                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    datapoint_info!(
+                                        "replay_stage-partition",
+                                        ("slot", reset_bank.slot() as i64, i64)
+                                    );
+                                    partition_exists = true;
+                                } else if partition_exists
+                                    && !partition_detected
+                                {
+                                    warn!(
+                                        "PARTITION resolved heaviest fork: {} last vote: {:?}, reset slot: {}",
+                                        heaviest_bank.slot(),
+                                        last_voted_slot,
+                                        reset_bank.slot()
+                                    );
+                                    partition_exists = false;
+                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                                }
                             }
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
@@ -627,6 +632,18 @@ impl ReplayStage {
             t_replay,
             commitment_service,
         }
+    }
+
+    fn is_partition_detected(
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        last_voted_slot: Slot,
+        heaviest_slot: Slot,
+    ) -> bool {
+        last_voted_slot != heaviest_slot
+            && !ancestors
+                .get(&heaviest_slot)
+                .map(|ancestors| ancestors.contains(&last_voted_slot))
+                .unwrap_or(true)
     }
 
     fn report_memory(
@@ -1902,6 +1919,22 @@ pub(crate) mod tests {
         sync::{Arc, RwLock},
     };
     use trees::tr;
+
+    #[test]
+    fn test_is_partition_detected() {
+        let (bank_forks, _) = setup_forks();
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        // Last vote 1 is an ancestor of the heaviest slot 3, no partition
+        assert!(!ReplayStage::is_partition_detected(&ancestors, 1, 3));
+        // Last vote 1 is an ancestor of the from heaviest slot 1, no partition
+        assert!(!ReplayStage::is_partition_detected(&ancestors, 3, 3));
+        // Last vote 2 is not an ancestor of the heaviest slot 3,
+        // partition detected!
+        assert!(ReplayStage::is_partition_detected(&ancestors, 2, 3));
+        // Last vote 4 is not an ancestor of the heaviest slot 3,
+        // partition detected!
+        assert!(ReplayStage::is_partition_detected(&ancestors, 4, 3));
+    }
 
     #[test]
     fn test_child_slots_of_same_parent() {
