@@ -1182,9 +1182,15 @@ fn wait_for_next_snapshot(
     }
 }
 
+fn farf_dir() -> PathBuf {
+    std::env::var("FARF_DIR")
+        .unwrap_or_else(|_| "farf".to_string())
+        .into()
+}
+
 fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<PathBuf>) {
     let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
-        .map(|_| TempDir::new().unwrap())
+        .map(|_| tempfile::tempdir_in(farf_dir()).unwrap())
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
@@ -1205,8 +1211,8 @@ fn setup_snapshot_validator_config(
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     // Create the snapshot config
-    let snapshot_dir = TempDir::new().unwrap();
-    let snapshot_output_path = TempDir::new().unwrap();
+    let snapshot_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let snapshot_output_path = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_config = SnapshotConfig {
         snapshot_interval_slots,
         snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),

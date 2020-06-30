@@ -173,6 +173,7 @@ impl LocalCluster {
             leader_node.info.rpc.port(),
             leader_node.info.rpc_pubsub.port(),
         ));
+        leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -300,6 +301,7 @@ impl LocalCluster {
             validator_node.info.rpc_pubsub.port(),
         ));
         let voting_keypair = Arc::new(voting_keypair);
+        config.account_paths = vec![ledger_path.join("accounts")];
         let validator_server = Validator::new(
             validator_node,
             &validator_keypair,
@@ -558,7 +560,8 @@ impl Cluster for LocalCluster {
 
         // Restart the node
         let validator_info = &cluster_validator_info.info;
-
+        cluster_validator_info.config.account_paths =
+            vec![validator_info.ledger_path.join("accounts")];
         let restarted_node = Validator::new(
             node,
             &validator_info.keypair,
