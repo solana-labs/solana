@@ -421,8 +421,6 @@ Returns transaction details for a confirmed transaction
 - `<string>` - transaction signature as base-58 encoded string
 N encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 - `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary".
-  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
-  If parameter not provided, the default encoding is JSON.
 
 #### Results:
 

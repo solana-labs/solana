@@ -61,19 +61,8 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Set Stake and Withdraw Authorities
-<<<<<<< HEAD
 [Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
 can be set when creating an account via the
-=======
-
-Staking commands look to keypairs to authorize certain stake account
-operations. They use the stake authority to authorize stake delegation,
-deactivating stake, splitting stake, and setting a new stake authority. They
-use the withdraw authority to authorize withdrawing stake, and when setting
-either a new stake or withdraw authority.
-
-Stake and withdraw authorities can be set when creating an account via the
->>>>>>> Move all docs to /docs folder to support Docusaurus
 `--stake-authority` and `--withdraw-authority` options, or afterward with the
 `solana stake-authorize` command. For example, to set a new stake authority,
 run:
