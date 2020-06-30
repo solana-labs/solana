@@ -160,11 +160,11 @@ fn update_retransmit_stats(
             ),
         );
         let mut packets_by_slot = stats.packets_by_slot.lock().unwrap();
-        info!("retransmit: packets_by_slot: {:#?}", packets_by_slot);
+        info!("retransmit: packets_by_slot: {:?}", packets_by_slot);
         packets_by_slot.clear();
         drop(packets_by_slot);
         let mut packets_by_source = stats.packets_by_source.lock().unwrap();
-        info!("retransmit: packets_by_source: {:#?}", packets_by_source);
+        info!("retransmit: packets_by_source: {:?}", packets_by_source);
         packets_by_source.clear();
     }
 }

@@ -2084,7 +2084,7 @@ impl ClusterInfo {
     }
 
     fn print_reset_stats(&self, last_print: &mut Instant) {
-        if last_print.elapsed().as_millis() > 1000 {
+        if last_print.elapsed().as_millis() > 2000 {
             datapoint_info!(
                 "cluster_info_stats",
                 ("entrypoint", self.stats.entrypoint.clear(), i64),
