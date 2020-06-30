@@ -806,7 +806,7 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly(); // update the docs
+            self.collect_rent_eagerly();
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
