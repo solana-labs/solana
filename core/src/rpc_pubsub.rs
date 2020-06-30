@@ -4,9 +4,8 @@ use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_client::rpc_response::{
-    Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
-};
+use solana_account_decoder::RpcAccount;
+use solana_client::rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult};
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{

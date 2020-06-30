@@ -7,8 +7,9 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
+use solana_account_decoder::{AccountEncoding, RpcAccount};
 use solana_client::rpc_response::{
-    Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
+    Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
 use solana_sdk::{
@@ -230,7 +231,13 @@ fn filter_account_result(
         // If fork < last_notified_slot this means that we last notified for a fork
         // and should notify that the account state has been reverted.
         if fork != last_notified_slot {
-            return (Box::new(iter::once(RpcAccount::encode(account))), fork);
+            return (
+                Box::new(iter::once(RpcAccount::encode(
+                    account,
+                    AccountEncoding::Binary,
+                ))),
+                fork,
+            );
         }
     }
     (Box::new(iter::empty()), last_notified_slot)
@@ -260,7 +267,7 @@ fn filter_program_results(
                 .into_iter()
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: RpcAccount::encode(account),
+                    account: RpcAccount::encode(account, AccountEncoding::Binary),
                 }),
         ),
         last_notified_slot,

@@ -7,9 +7,10 @@ use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
+use solana_account_decoder::RpcAccount;
 use solana_client::{
     rpc_client::{get_rpc_request_str, RpcClient},
-    rpc_response::{Response, RpcAccount, RpcSignatureResult},
+    rpc_response::{Response, RpcSignatureResult},
 };
 use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
