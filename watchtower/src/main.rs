@@ -20,6 +20,7 @@ use solana_transaction_status::{ConfirmedBlock, TransactionEncoding};
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     collections::HashMap,
+    collections::HashSet,
     error,
     str::FromStr,
     thread::sleep,
@@ -158,9 +159,13 @@ fn get_config() -> Config {
 }
 
 fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: ConfirmedBlock) {
-    let break_program_id = "BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC"
-        .parse::<Pubkey>()
-        .unwrap();
+    let break_program_ids: HashSet<Pubkey> = [
+        "BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC",
+        "brkLHMdveYjzgaK3a4FbofAGhj3QJRAUyNxLJqKsKXs",
+    ]
+    .iter()
+    .map(|x| x.parse::<Pubkey>().unwrap())
+    .collect();
     let mut vote_transactions = 0;
 
     for rpc_transaction in &confirmed_block.transactions {
@@ -181,7 +186,7 @@ fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: Con
                             notify = false;
                         }
                     }
-                    if program_pubkey == break_program_id {
+                    if break_program_ids.contains(&program_pubkey) {
                         notify = false;
                     }
                 }
