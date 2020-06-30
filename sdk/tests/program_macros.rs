@@ -22,7 +22,7 @@ pub enum TestInstruction {
     /// Provide one required signature and a variable list of other signatures
     #[accounts(
         required_account(WRITABLE, desc = "Required account"),
-        signers(SIGNER, multiple, desc = "Signer")
+        signers(SIGNER, multiple = true, desc = "Signer")
     )]
     MultipleAccounts,
 
@@ -30,7 +30,7 @@ pub enum TestInstruction {
     #[accounts(
         required_account(SIGNER, WRITABLE, desc = "Required account"),
         sysvar(desc = "Sysvar"),
-        authority(SIGNER, optional, desc = "Authority")
+        authority(SIGNER, optional = true, desc = "Authority")
     )]
     OptionalAccount,
 

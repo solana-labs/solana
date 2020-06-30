@@ -65,16 +65,6 @@ fn parse_account(account: NestedMeta) -> AccountDetails {
                                 is_signer = true;
                             } else if path.is_ident("WRITABLE") {
                                 is_writable = true;
-                            } else if path.is_ident("optional") {
-                                if allows_multiple {
-                                    abort!(path, "account cannot be optional and allow multiples");
-                                }
-                                is_optional = true;
-                            } else if path.is_ident("multiple") {
-                                if is_optional {
-                                    abort!(path, "account cannot be optional and allow multiples");
-                                }
-                                allows_multiple = true;
                             } else {
                                 abort!(path, "unrecognized account detail");
                             }
@@ -83,6 +73,26 @@ fn parse_account(account: NestedMeta) -> AccountDetails {
                             if name_value.path.is_ident("desc") {
                                 if let Lit::Str(doc) = name_value.lit {
                                     desc = doc.value();
+                                }
+                            } else if name_value.path.is_ident("optional") {
+                                if let Lit::Bool(opt) = &name_value.lit {
+                                    if opt.value && allows_multiple {
+                                        abort!(
+                                            name_value,
+                                            "account cannot be optional and allow multiples"
+                                        );
+                                    }
+                                    is_optional = opt.value;
+                                }
+                            } else if name_value.path.is_ident("multiple") {
+                                if let Lit::Bool(mult) = &name_value.lit {
+                                    if mult.value && is_optional {
+                                        abort!(
+                                            name_value,
+                                            "account cannot be optional and allow multiples"
+                                        );
+                                    }
+                                    allows_multiple = mult.value;
                                 }
                             } else {
                                 abort!(name_value, "unrecognized account detail");

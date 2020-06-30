@@ -7,7 +7,7 @@ mod test_program;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TestInstruction {
     #[accounts(
-        from_account(optional, multiple, desc = "Account"),
+        from_account(optional = true, multiple = true, desc = "Account"),
     )]
     Transfer { lamports: u64 },
 }
