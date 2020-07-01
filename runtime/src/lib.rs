@@ -4,6 +4,7 @@ pub mod accounts_index;
 pub mod append_vec;
 pub mod bank;
 pub mod bank_client;
+pub mod bank_utils;
 mod blockhash_queue;
 pub mod bloom;
 pub mod builtin_programs;
