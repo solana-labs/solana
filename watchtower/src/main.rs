@@ -16,7 +16,7 @@ use solana_sdk::{
     clock::Slot, hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding};
+use solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding};
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     collections::HashMap,
@@ -226,7 +226,7 @@ fn load_blocks(
     let mut blocks = vec![];
     for slot in slots.into_iter() {
         let block =
-            rpc_client.get_confirmed_block_with_encoding(slot, TransactionEncoding::Binary)?;
+            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Binary)?;
         blocks.push((slot, block));
     }
     Ok(blocks)

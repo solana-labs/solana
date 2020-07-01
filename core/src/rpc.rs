@@ -40,7 +40,7 @@ use solana_sdk::{
     transaction::{self, Transaction},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+    ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
@@ -541,7 +541,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
         if self.config.enable_rpc_transaction_history
             && slot
@@ -710,7 +710,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_transaction(
         &self,
         signature: Signature,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         if self.config.enable_rpc_transaction_history {
             Ok(self
@@ -1031,7 +1031,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>>;
 
     #[rpc(meta, name = "getBlockTime")]
@@ -1050,7 +1050,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>>;
 
     #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
@@ -1525,7 +1525,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
         meta.get_confirmed_block(slot, encoding)
     }
@@ -1547,7 +1547,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         let signature = verify_signature(&signature_str)?;
         meta.get_confirmed_transaction(signature, encoding)
@@ -1647,7 +1647,7 @@ pub mod tests {
         system_transaction,
         transaction::{self, TransactionError},
     };
-    use solana_transaction_status::{EncodedTransaction, RpcMessage, TransactionWithStatusMeta};
+    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
@@ -3213,8 +3213,8 @@ pub mod tests {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     let meta = meta.unwrap();
                     let transaction_recent_blockhash = match transaction.message {
-                        RpcMessage::Parsed(message) => message.recent_blockhash,
-                        RpcMessage::Raw(message) => message.recent_blockhash,
+                        UiMessage::Parsed(message) => message.recent_blockhash,
+                        UiMessage::Raw(message) => message.recent_blockhash,
                     };
                     assert_eq!(transaction_recent_blockhash, blockhash.to_string());
                     assert_eq!(meta.status, Ok(()));

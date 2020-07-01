@@ -28,7 +28,7 @@ use solana_sdk::{
     transaction::{self, Transaction},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+    ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
@@ -238,13 +238,13 @@ impl RpcClient {
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<ConfirmedBlock> {
-        self.get_confirmed_block_with_encoding(slot, TransactionEncoding::Json)
+        self.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Json)
     }
 
     pub fn get_confirmed_block_with_encoding(
         &self,
         slot: Slot,
-        encoding: TransactionEncoding,
+        encoding: UiTransactionEncoding,
     ) -> ClientResult<ConfirmedBlock> {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
     }
@@ -285,7 +285,7 @@ impl RpcClient {
     pub fn get_confirmed_transaction(
         &self,
         signature: &Signature,
-        encoding: TransactionEncoding,
+        encoding: UiTransactionEncoding,
     ) -> ClientResult<ConfirmedTransaction> {
         self.send(
             RpcRequest::GetConfirmedTransaction,

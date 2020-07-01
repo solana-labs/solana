@@ -5,7 +5,7 @@ use solana_sdk::{
     hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
     transaction::Transaction,
 };
-use solana_transaction_status::RpcTransactionStatusMeta;
+use solana_transaction_status::UiTransactionStatusMeta;
 use std::{collections::HashMap, fmt, io};
 
 // Pretty print a "name value"
@@ -81,7 +81,7 @@ pub fn println_signers(
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
     transaction: &Transaction,
-    transaction_status: &Option<RpcTransactionStatusMeta>,
+    transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
 ) -> io::Result<()> {
     let message = &transaction.message;
@@ -204,7 +204,7 @@ pub fn write_transaction<W: io::Write>(
 
 pub fn println_transaction(
     transaction: &Transaction,
-    transaction_status: &Option<RpcTransactionStatusMeta>,
+    transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
 ) {
     let mut w = Vec::new();
