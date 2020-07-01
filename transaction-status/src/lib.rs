@@ -16,6 +16,7 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 
+/// A duplicate representation of an Instruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum RpcInstruction {
@@ -62,6 +63,7 @@ impl Default for TransactionStatusMeta {
     }
 }
 
+/// A duplicate representation of TransactionStatusMeta with `err` field
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionStatusMeta {
@@ -141,7 +143,7 @@ pub enum RpcMessage {
     Raw(RpcRawMessage),
 }
 
-/// A duplicate representation of a Message for pretty JSON serialization
+/// A duplicate representation of a Message, in raw format, for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcRawMessage {
@@ -151,7 +153,7 @@ pub struct RpcRawMessage {
     pub instructions: Vec<RpcCompiledInstruction>,
 }
 
-/// A duplicate representation of a Message for pretty JSON serialization
+/// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcParsedMessage {
