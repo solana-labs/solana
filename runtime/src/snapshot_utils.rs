@@ -222,7 +222,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     fs::create_dir_all(tar_dir)?;
 
     // Create the staging directories
-    let staging_dir = TempDir::new()?;
+    let staging_dir = tempfile::tempdir_in(tar_dir)?;
     let staging_accounts_dir = staging_dir.path().join(TAR_ACCOUNTS_DIR);
     let staging_snapshots_dir = staging_dir.path().join(TAR_SNAPSHOTS_DIR);
     let staging_version_file = staging_dir.path().join(TAR_VERSION_FILE);
