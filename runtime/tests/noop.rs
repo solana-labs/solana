@@ -18,6 +18,6 @@ fn test_program_native_noop() {
     let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
     let bank_client = BankClient::new(bank);
     bank_client
-        .send_instruction(&alice_keypair, instruction)
+        .send_and_confirm_instruction(&alice_keypair, instruction)
         .unwrap();
 }

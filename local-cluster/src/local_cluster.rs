@@ -21,6 +21,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     genesis_config::{GenesisConfig, OperatingMode},
+    message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -407,19 +408,21 @@ impl LocalCluster {
         {
             // 1) Create vote account
 
-            let mut transaction = Transaction::new_signed_instructions(
+            let instructions = vote_instruction::create_account(
+                &from_account.pubkey(),
+                &vote_account_pubkey,
+                &VoteInit {
+                    node_pubkey,
+                    authorized_voter: vote_account_pubkey,
+                    authorized_withdrawer: vote_account_pubkey,
+                    commission: 0,
+                },
+                amount,
+            );
+            let message = Message::new(&instructions, Some(&from_account.pubkey()));
+            let mut transaction = Transaction::new(
                 &[from_account.as_ref(), vote_account],
-                &vote_instruction::create_account(
-                    &from_account.pubkey(),
-                    &vote_account_pubkey,
-                    &VoteInit {
-                        node_pubkey,
-                        authorized_voter: vote_account_pubkey,
-                        authorized_withdrawer: vote_account_pubkey,
-                        commission: 0,
-                    },
-                    amount,
-                ),
+                message,
                 client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .unwrap()
@@ -436,16 +439,18 @@ impl LocalCluster {
                 )
                 .expect("get balance");
 
-            let mut transaction = Transaction::new_signed_instructions(
+            let instructions = stake_instruction::create_account_and_delegate_stake(
+                &from_account.pubkey(),
+                &stake_account_pubkey,
+                &vote_account_pubkey,
+                &Authorized::auto(&stake_account_pubkey),
+                &Lockup::default(),
+                amount,
+            );
+            let message = Message::new(&instructions, Some(&from_account.pubkey()));
+            let mut transaction = Transaction::new(
                 &[from_account.as_ref(), &stake_account_keypair],
-                &stake_instruction::create_account_and_delegate_stake(
-                    &from_account.pubkey(),
-                    &stake_account_pubkey,
-                    &vote_account_pubkey,
-                    &Authorized::auto(&stake_account_pubkey),
-                    &Lockup::default(),
-                    amount,
-                ),
+                message,
                 client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .unwrap()

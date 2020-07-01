@@ -1,5 +1,6 @@
 //! The `retransmit_stage` retransmits shreds between validators
 
+use crate::cluster_info_vote_listener::VoteTracker;
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_slots::ClusterSlots,
@@ -159,11 +160,11 @@ fn update_retransmit_stats(
             ),
         );
         let mut packets_by_slot = stats.packets_by_slot.lock().unwrap();
-        info!("retransmit: packets_by_slot: {:#?}", packets_by_slot);
+        info!("retransmit: packets_by_slot: {:?}", packets_by_slot);
         packets_by_slot.clear();
         drop(packets_by_slot);
         let mut packets_by_source = stats.packets_by_source.lock().unwrap();
-        info!("retransmit: packets_by_source: {:#?}", packets_by_source);
+        info!("retransmit: packets_by_source: {:?}", packets_by_source);
         packets_by_source.clear();
     }
 }
@@ -413,6 +414,7 @@ impl RetransmitStage {
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+        vote_tracker: Arc<VoteTracker>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -457,6 +459,7 @@ impl RetransmitStage {
                 rv && is_connected
             },
             cluster_slots,
+            vote_tracker,
         );
 
         let thread_hdls = t_retransmit;

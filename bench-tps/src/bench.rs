@@ -14,6 +14,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction, system_transaction,
@@ -652,10 +653,9 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
             .par_iter()
             .map(|(k, t)| {
-                let tx = Transaction::new_unsigned_instructions(
-                    &system_instruction::transfer_many(&k.pubkey(), &t),
-                );
-                (*k, tx)
+                let instructions = system_instruction::transfer_many(&k.pubkey(), &t);
+                let message = Message::new(&instructions, Some(&k.pubkey()));
+                (*k, Transaction::new_unsigned(message))
             })
             .collect();
         make_txs.stop();
@@ -970,7 +970,7 @@ fn fund_move_keys<T: Client>(
     let libra_funding_key = Keypair::new();
     let tx = librapay_transaction::create_account(funding_key, &libra_funding_key, 1, blockhash);
     client
-        .send_message(&[funding_key, &libra_funding_key], tx.message)
+        .send_and_confirm_message(&[funding_key, &libra_funding_key], tx.message)
         .unwrap();
 
     info!("minting to funding keypair");
@@ -983,7 +983,7 @@ fn fund_move_keys<T: Client>(
         blockhash,
     );
     client
-        .send_message(&[funding_key, libra_genesis_key], tx.message)
+        .send_and_confirm_message(&[funding_key, libra_genesis_key], tx.message)
         .unwrap();
 
     info!("creating {} move accounts...", keypairs.len());
@@ -1005,7 +1005,7 @@ fn fund_move_keys<T: Client>(
         let ser_size = bincode::serialized_size(&tx).unwrap();
         let mut keys = vec![funding_key];
         keys.extend(&keypairs);
-        client.send_message(&keys, tx.message).unwrap();
+        client.send_and_confirm_message(&keys, tx.message).unwrap();
 
         if i % 10 == 0 {
             info!(
@@ -1023,12 +1023,12 @@ fn fund_move_keys<T: Client>(
         .iter()
         .map(|key| (key.pubkey(), total / NUM_FUNDING_KEYS as u64))
         .collect();
-    let tx = Transaction::new_signed_instructions(
-        &[funding_key],
-        &system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
-        blockhash,
-    );
-    client.send_message(&[funding_key], tx.message).unwrap();
+    let instructions = system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts);
+    let message = Message::new(&instructions, Some(&funding_key.pubkey()));
+    let tx = Transaction::new(&[funding_key], message, blockhash);
+    client
+        .send_and_confirm_message(&[funding_key], tx.message)
+        .unwrap();
     let mut balance = 0;
     for _ in 0..20 {
         if let Ok(balance_) = client
@@ -1051,7 +1051,7 @@ fn fund_move_keys<T: Client>(
     for (i, key) in libra_funding_keys.iter().enumerate() {
         let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
         client
-            .send_message(&[&funding_keys[i], &key], tx.message)
+            .send_and_confirm_message(&[&funding_keys[i], &key], tx.message)
             .unwrap();
 
         let tx = librapay_transaction::transfer(
@@ -1064,7 +1064,7 @@ fn fund_move_keys<T: Client>(
             blockhash,
         );
         client
-            .send_message(&[&funding_keys[i], &libra_funding_key], tx.message)
+            .send_and_confirm_message(&[&funding_keys[i], &libra_funding_key], tx.message)
             .unwrap();
 
         info!("funded libra funding key {}", i);

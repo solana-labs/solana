@@ -93,8 +93,8 @@ mod tests {
             owner_pubkey,
             lamports,
         );
-        let message = Message::new(&instructions);
-        bank_client.send_message(&[payer_keypair, account_keypair], message)
+        let message = Message::new(&instructions, Some(&payer_keypair.pubkey()));
+        bank_client.send_and_confirm_message(&[payer_keypair, account_keypair], message)
     }
 
     fn send_set_owner(
@@ -109,8 +109,8 @@ mod tests {
             &old_owner_keypair.pubkey(),
             new_owner_pubkey,
         );
-        let message = Message::new_with_payer(&[instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[payer_keypair, old_owner_keypair], message)
+        let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
+        bank_client.send_and_confirm_message(&[payer_keypair, old_owner_keypair], message)
     }
 
     #[test]

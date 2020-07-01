@@ -55,6 +55,7 @@ use std::{
     },
     time::Duration,
 };
+use trees::{Tree, TreeWalk};
 
 pub mod blockstore_purge;
 
@@ -301,6 +302,23 @@ impl Blockstore {
         blockstore.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blockstore, signal_receiver, completed_slots_receiver))
+    }
+
+    pub fn add_tree(&self, forks: Tree<Slot>, is_orphan: bool) {
+        let mut walk = TreeWalk::from(forks);
+        while let Some(visit) = walk.get() {
+            let slot = visit.node().data;
+            if self.meta(slot).unwrap().is_some() {
+                walk.forward();
+                continue;
+            }
+            let parent = walk.get_parent().map(|n| n.data);
+            if parent.is_some() || !is_orphan {
+                let (shreds, _) = make_slot_entries(slot, parent.unwrap_or(slot), 1);
+                self.insert_shreds(shreds, None, false).unwrap();
+            }
+            walk.forward();
+        }
     }
 
     pub fn set_no_compaction(&mut self, no_compaction: bool) {
@@ -1125,6 +1143,12 @@ impl Blockstore {
             new_consumed,
             shred.reference_tick(),
         );
+        if slot_meta.is_full() {
+            info!(
+                "slot {} is full, last: {}",
+                slot_meta.slot, slot_meta.last_index
+            );
+        }
         data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(())
@@ -2933,6 +2957,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
+        message::Message,
         native_token::sol_to_lamports,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
@@ -5200,9 +5225,8 @@ pub mod tests {
                 timestamp,
             };
             let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
-
-            let vote_tx =
-                Transaction::new_signed_instructions(&[keypair], &[vote_ix], Hash::default());
+            let vote_msg = Message::new(&[vote_ix], Some(&keypair.pubkey()));
+            let vote_tx = Transaction::new(&[keypair], vote_msg, Hash::default());
 
             vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
             let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
@@ -6131,14 +6155,14 @@ pub mod tests {
                 .insert_shreds(all_shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting just the codes, enough for recovery
             blockstore
                 .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting some codes, but not enough for recovery
             blockstore
@@ -6149,7 +6173,7 @@ pub mod tests {
                 )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting just the codes, and some data, enough for recovery
             let shreds: Vec<_> = data_shreds[..data_shreds.len() - 1]
@@ -6161,7 +6185,7 @@ pub mod tests {
                 .insert_shreds(shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting some codes, and some data, but enough for recovery
             let shreds: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
@@ -6173,7 +6197,7 @@ pub mod tests {
                 .insert_shreds(shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting all shreds in 2 rounds, make sure nothing is lost
             let shreds1: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
@@ -6193,7 +6217,7 @@ pub mod tests {
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test not all, but enough data and coding shreds in 2 rounds to trigger recovery,
             // make sure nothing is lost
@@ -6218,7 +6242,7 @@ pub mod tests {
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
 
             // Test insert shreds in 2 rounds, but not enough to trigger
             // recovery, make sure nothing is lost
@@ -6243,7 +6267,7 @@ pub mod tests {
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
-            blockstore.purge_slots(0, slot);
+            blockstore.purge_and_compact_slots(0, slot);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

@@ -60,7 +60,7 @@ impl AsyncClient for BankClient {
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> Result<Signature> {
-        let message = Message::new(&[instruction]);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
 
@@ -79,7 +79,11 @@ impl AsyncClient for BankClient {
 }
 
 impl SyncClient for BankClient {
-    fn send_message<T: Signers>(&self, keypairs: &T, message: Message) -> Result<Signature> {
+    fn send_and_confirm_message<T: Signers>(
+        &self,
+        keypairs: &T,
+        message: Message,
+    ) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
@@ -87,16 +91,25 @@ impl SyncClient for BankClient {
     }
 
     /// Create and process a transaction from a single instruction.
-    fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature> {
-        let message = Message::new(&[instruction]);
-        self.send_message(&[keypair], message)
+    fn send_and_confirm_instruction(
+        &self,
+        keypair: &Keypair,
+        instruction: Instruction,
+    ) -> Result<Signature> {
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
+        self.send_and_confirm_message(&[keypair], message)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
-    fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature> {
+    fn transfer_and_confirm(
+        &self,
+        lamports: u64,
+        keypair: &Keypair,
+        pubkey: &Pubkey,
+    ) -> Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.send_instruction(keypair, transfer_instruction)
+        self.send_and_confirm_instruction(keypair, transfer_instruction)
     }
 
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
@@ -306,8 +319,10 @@ mod tests {
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));
 
-        let message = Message::new(&[transfer_instruction]);
-        bank_client.send_message(&doe_keypairs, message).unwrap();
+        let message = Message::new(&[transfer_instruction], Some(&john_pubkey));
+        bank_client
+            .send_and_confirm_message(&doe_keypairs, message)
+            .unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
     }
 }

@@ -37,12 +37,24 @@ pub const TAR_VERSION_FILE: &str = "version";
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_1_0: &str = "1.1.0";
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
-const OUTPUT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
+const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
     V1_1_0,
     V1_2_0,
+}
+
+impl Default for SnapshotVersion {
+    fn default() -> Self {
+        DEFAULT_SNAPSHOT_VERSION
+    }
+}
+
+impl fmt::Display for SnapshotVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(From::from(*self))
+    }
 }
 
 impl From<SnapshotVersion> for &'static str {
@@ -58,6 +70,15 @@ impl FromStr for SnapshotVersion {
     type Err = &'static str;
 
     fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
+        // Remove leading 'v' or 'V' from slice
+        let version_string = if version_string
+            .get(..1)
+            .map_or(false, |s| s.eq_ignore_ascii_case("v"))
+        {
+            &version_string[1..]
+        } else {
+            version_string
+        };
         match version_string {
             VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
             VERSION_STRING_V1_2_0 => Ok(SnapshotVersion::V1_2_0),
@@ -134,6 +155,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
     compression: CompressionType,
+    snapshot_version: SnapshotVersion,
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -164,6 +186,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_file,
         bank.get_accounts_hash(),
         compression,
+        snapshot_version,
     );
 
     Ok(package)
@@ -234,7 +257,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(OUTPUT_SNAPSHOT_VERSION.as_str().as_bytes())?;
+        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())?;
     }
 
     let (compression_option, file_ext) = get_compression_ext(&snapshot_package.compression);
@@ -417,6 +440,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
+    snapshot_version: SnapshotVersion,
 ) -> Result<SlotSnapshotPaths> {
     let slot = bank.slot();
     // snapshot_path/slot
@@ -432,13 +456,12 @@ pub fn add_snapshot<P: AsRef<Path>>(
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
+        let serde_style = match snapshot_version {
+            SnapshotVersion::V1_1_0 => SerdeStyle::OLDER,
+            SnapshotVersion::V1_2_0 => SerdeStyle::NEWER,
+        };
         serialize_into(stream.by_ref(), bank)?;
-        bankrc_to_stream(
-            SerdeStyle::NEWER,
-            stream.by_ref(),
-            &bank.rc,
-            snapshot_storages,
-        )?;
+        bankrc_to_stream(serde_style, stream.by_ref(), &bank.rc, snapshot_storages)?;
         Ok(())
     };
     let consumed_size =

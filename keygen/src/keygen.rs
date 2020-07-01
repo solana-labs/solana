@@ -592,11 +592,14 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         }
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
-            let simple_message = Message::new(&[Instruction::new(
-                Pubkey::default(),
-                &0,
-                vec![AccountMeta::new(keypair.pubkey(), true)],
-            )])
+            let simple_message = Message::new(
+                &[Instruction::new(
+                    Pubkey::default(),
+                    &0,
+                    vec![AccountMeta::new(keypair.pubkey(), true)],
+                )],
+                Some(&keypair.pubkey()),
+            )
             .serialize();
             let signature = keypair.try_sign_message(&simple_message)?;
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();

@@ -1,19 +1,15 @@
 # Delegate Stake
-
-After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating *stake* to a validator. Stake is what we call tokens
-in a *stake account*. Solana weights validator votes by the amount of stake
-delegated to them, which gives those validators more influence in determining
-then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. You earn more rewards
-the more stake you delegate.
+This page describes the workflow and commands needed to create and manage stake
+accounts, and to delegate your stake accounts to a validator using the Solana
+command-line tools.  The [stake accounts](../staking/stake-accounts.md)
+document provides an overview of stake account features and concepts.
 
 ## Create a Stake Account
-
 To delegate stake, you will need to transfer some tokens into a stake account.
 To create an account, you will need a keypair. Its public key will be used as
-the stake account address. No need for a password or encryption here; this
-keypair will be discarded right after creating the stake account.
+the [stake account address](../staking/stake-accounts.md#account-address).
+No need for a password or encryption here; this keypair will be discarded right
+after creating the stake account.
 
 ```bash
 solana-keygen new --no-passphrase -o stake-account.json
@@ -22,9 +18,7 @@ solana-keygen new --no-passphrase -o stake-account.json
 The output will contain the public key after the text `pubkey:`.
 
 ```text
-============================================================================
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
-============================================================================
 ```
 
 Copy the public key and store it for safekeeping. You will need it any time you
@@ -42,7 +36,7 @@ solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> \
 a new stake account at the public key of stake-account.json.
 
 The stake-account.json file can now be discarded. To authorize additional
-actions, you will use the `--stake-authority` or `withdraw-authority` keypair,
+actions, you will use the `--stake-authority` or `--withdraw-authority` keypair,
 not stake-account.json.
 
 View the new stake account with the `solana stake-account` command:
@@ -61,14 +55,8 @@ Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 ```
 
 ### Set Stake and Withdraw Authorities
-
-Staking commands look to keypairs to authorize certain stake account
-operations. They use the stake authority to authorize stake delegation,
-deactivating stake, splitting stake, and setting a new stake authority.  They
-use the withdraw authority to authorize withdrawing stake, and when setting
-either a new stake or withdraw authority.
-
-Stake and withdraw authorities can be set when creating an account via the
+[Stake and withdraw authorities](../staking/stake-accounts.md#understanding-account-authorities)
+can be set when creating an account via the
 `--stake-authority` and `--withdraw-authority` options, or afterward with the
 `solana stake-authorize` command. For example, to set a new stake authority,
 run:

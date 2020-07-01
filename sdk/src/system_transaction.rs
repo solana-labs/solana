@@ -2,6 +2,7 @@
 
 use crate::{
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
@@ -19,20 +20,18 @@ pub fn create_account(
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
     let to_pubkey = to_keypair.pubkey();
-    let create_instruction =
+    let instruction =
         system_instruction::create_account(&from_pubkey, &to_pubkey, lamports, space, program_id);
-    Transaction::new_signed_instructions(
-        &[from_keypair, to_keypair],
-        &[create_instruction],
-        recent_blockhash,
-    )
+    let message = Message::new(&[instruction], Some(&from_pubkey));
+    Transaction::new(&[from_keypair, to_keypair], message, recent_blockhash)
 }
 
 /// Create and sign new system_instruction::Assign transaction
 pub fn assign(from_keypair: &Keypair, recent_blockhash: Hash, program_id: &Pubkey) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let assign_instruction = system_instruction::assign(&from_pubkey, program_id);
-    Transaction::new_signed_instructions(&[from_keypair], &[assign_instruction], recent_blockhash)
+    let instruction = system_instruction::assign(&from_pubkey, program_id);
+    let message = Message::new(&[instruction], Some(&from_pubkey));
+    Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
 /// Create and sign new system_instruction::Transfer transaction
@@ -43,8 +42,9 @@ pub fn transfer(
     recent_blockhash: Hash,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
-    Transaction::new_signed_instructions(&[from_keypair], &[transfer_instruction], recent_blockhash)
+    let instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let message = Message::new(&[instruction], Some(&from_pubkey));
+    Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
 /// Create and sign new nonced system_instruction::Transfer transaction
@@ -57,14 +57,12 @@ pub fn nonced_transfer(
     nonce_hash: Hash,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
-    let instructions = vec![transfer_instruction];
-    Transaction::new_signed_with_nonce(
-        instructions,
+    let instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let message = Message::new_with_nonce(
+        vec![instruction],
         Some(&from_pubkey),
-        &[from_keypair, nonce_authority],
         nonce_account,
         &nonce_authority.pubkey(),
-        nonce_hash,
-    )
+    );
+    Transaction::new(&[from_keypair, nonce_authority], message, nonce_hash)
 }

@@ -26,9 +26,9 @@ pub fn load_program<T: Client>(
         loader_pubkey,
     );
     bank_client
-        .send_message(
+        .send_and_confirm_message(
             &[from_keypair, &program_keypair],
-            Message::new(&[instruction]),
+            Message::new(&[instruction], Some(&from_keypair.pubkey())),
         )
         .unwrap();
 
@@ -37,17 +37,17 @@ pub fn load_program<T: Client>(
     for chunk in program.chunks(chunk_size) {
         let instruction =
             loader_instruction::write(&program_pubkey, loader_pubkey, offset, chunk.to_vec());
-        let message = Message::new_with_payer(&[instruction], Some(&from_keypair.pubkey()));
+        let message = Message::new(&[instruction], Some(&from_keypair.pubkey()));
         bank_client
-            .send_message(&[from_keypair, &program_keypair], message)
+            .send_and_confirm_message(&[from_keypair, &program_keypair], message)
             .unwrap();
         offset += chunk_size as u32;
     }
 
     let instruction = loader_instruction::finalize(&program_pubkey, loader_pubkey);
-    let message = Message::new_with_payer(&[instruction], Some(&from_keypair.pubkey()));
+    let message = Message::new(&[instruction], Some(&from_keypair.pubkey()));
     bank_client
-        .send_message(&[from_keypair, &program_keypair], message)
+        .send_and_confirm_message(&[from_keypair, &program_keypair], message)
         .unwrap();
 
     program_pubkey

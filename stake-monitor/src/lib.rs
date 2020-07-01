@@ -396,16 +396,18 @@ mod test {
 
         // Configure stake1
         let stake1_keypair = Keypair::new();
+        let instructions = stake_instruction::create_account(
+            &payer.pubkey(),
+            &stake1_keypair.pubkey(),
+            &Authorized::auto(&payer.pubkey()),
+            &Lockup::default(),
+            one_sol,
+        );
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake1_signature = rpc_client
-            .send_transaction(&Transaction::new_signed_instructions(
+            .send_transaction(&Transaction::new(
                 &[&payer, &stake1_keypair],
-                &stake_instruction::create_account(
-                    &payer.pubkey(),
-                    &stake1_keypair.pubkey(),
-                    &Authorized::auto(&payer.pubkey()),
-                    &Lockup::default(),
-                    one_sol,
-                ),
+                message,
                 blockhash,
             ))
             .unwrap();
@@ -426,35 +428,39 @@ mod test {
 
         // Configure stake2 with non-compliant lockup
         let stake2_keypair = Keypair::new();
+        let instructions = stake_instruction::create_account(
+            &payer.pubkey(),
+            &stake2_keypair.pubkey(),
+            &Authorized::auto(&payer.pubkey()),
+            &Lockup {
+                custodian: payer.pubkey(),
+                ..Lockup::default()
+            },
+            one_sol,
+        );
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake2_signature = rpc_client
-            .send_transaction(&Transaction::new_signed_instructions(
+            .send_transaction(&Transaction::new(
                 &[&payer, &stake2_keypair],
-                &stake_instruction::create_account(
-                    &payer.pubkey(),
-                    &stake2_keypair.pubkey(),
-                    &Authorized::auto(&payer.pubkey()),
-                    &Lockup {
-                        custodian: payer.pubkey(),
-                        ..Lockup::default()
-                    },
-                    one_sol,
-                ),
+                message,
                 blockhash,
             ))
             .unwrap();
 
         // Configure stake3
         let stake3_keypair = Keypair::new();
+        let instructions = stake_instruction::create_account(
+            &payer.pubkey(),
+            &stake3_keypair.pubkey(),
+            &Authorized::auto(&payer.pubkey()),
+            &Lockup::default(),
+            one_sol,
+        );
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake3_initialize_signature = rpc_client
-            .send_transaction(&Transaction::new_signed_instructions(
+            .send_transaction(&Transaction::new(
                 &[&payer, &stake3_keypair],
-                &stake_instruction::create_account(
-                    &payer.pubkey(),
-                    &stake3_keypair.pubkey(),
-                    &Authorized::auto(&payer.pubkey()),
-                    &Lockup::default(),
-                    one_sol,
-                ),
+                message,
                 blockhash,
             ))
             .unwrap();
@@ -471,7 +477,7 @@ mod test {
             .send_transaction_with_config(
                 &Transaction::new(
                     &[&payer, &stake3_keypair],
-                    Message::new_with_payer(
+                    Message::new(
                         &[stake_instruction::withdraw(
                             &stake3_keypair.pubkey(),
                             &stake3_keypair.pubkey(),
@@ -498,16 +504,18 @@ mod test {
 
         // Configure stake4
         let stake4_keypair = Keypair::new();
+        let instructions = stake_instruction::create_account(
+            &payer.pubkey(),
+            &stake4_keypair.pubkey(),
+            &Authorized::auto(&payer.pubkey()),
+            &Lockup::default(),
+            2 * one_sol,
+        );
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake4_initialize_signature = rpc_client
-            .send_transaction(&Transaction::new_signed_instructions(
+            .send_transaction(&Transaction::new(
                 &[&payer, &stake4_keypair],
-                &stake_instruction::create_account(
-                    &payer.pubkey(),
-                    &stake4_keypair.pubkey(),
-                    &Authorized::auto(&payer.pubkey()),
-                    &Lockup::default(),
-                    2 * one_sol,
-                ),
+                message,
                 blockhash,
             ))
             .unwrap();
@@ -525,7 +533,7 @@ mod test {
             .send_transaction_with_config(
                 &Transaction::new(
                     &[&payer, &stake5_keypair],
-                    Message::new_with_payer(
+                    Message::new(
                         &stake_instruction::split(
                             &stake4_keypair.pubkey(),
                             &payer.pubkey(),

@@ -1,6 +1,6 @@
 [package]
 name = "solana-ledger"
-version = "1.2.5"
+version = "1.2.9"
 description = "Solana ledger"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -32,24 +32,25 @@ reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 regex = "1.3.7"
 serde = "1.0.110"
 serde_bytes = "0.11.4"
-solana-transaction-status = { path = "../transaction-status", version = "1.2.5" }
-solana-genesis-programs = { path = "../genesis-programs", version = "1.2.5" }
-solana-logger = { path = "../logger", version = "1.2.5" }
-solana-measure = { path = "../measure", version = "1.2.5" }
-solana-merkle-tree = { path = "../merkle-tree", version = "1.2.5" }
-solana-metrics = { path = "../metrics", version = "1.2.5" }
-solana-perf = { path = "../perf", version = "1.2.5" }
+solana-transaction-status = { path = "../transaction-status", version = "1.2.9" }
+solana-genesis-programs = { path = "../genesis-programs", version = "1.2.9" }
+solana-logger = { path = "../logger", version = "1.2.9" }
+solana-measure = { path = "../measure", version = "1.2.9" }
+solana-merkle-tree = { path = "../merkle-tree", version = "1.2.9" }
+solana-metrics = { path = "../metrics", version = "1.2.9" }
+solana-perf = { path = "../perf", version = "1.2.9" }
 ed25519-dalek = "1.0.0-pre.3"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.2.5" }
-solana-runtime = { path = "../runtime", version = "1.2.5" }
-solana-sdk = { path = "../sdk", version = "1.2.5" }
-solana-stake-program = { path = "../programs/stake", version = "1.2.5" }
-solana-vote-program = { path = "../programs/vote", version = "1.2.5" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.2.9" }
+solana-runtime = { path = "../runtime", version = "1.2.9" }
+solana-sdk = { path = "../sdk", version = "1.2.9" }
+solana-stake-program = { path = "../programs/stake", version = "1.2.9" }
+solana-vote-program = { path = "../programs/vote", version = "1.2.9" }
 symlink = "0.1.0"
 tar = "0.4.28"
 thiserror = "1.0"
 tempfile = "3.1.0"
 lazy_static = "1.4.0"
+trees = "0.2.1"
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
@@ -61,7 +62,7 @@ features = ["lz4"]
 [dev-dependencies]
 assert_matches = "1.3.0"
 matches = "0.1.6"
-solana-budget-program = { path = "../programs/budget", version = "1.2.5" }
+solana-budget-program = { path = "../programs/budget", version = "1.2.9" }
 
 [lib]
 crate-type = ["lib"]

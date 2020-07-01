@@ -6,7 +6,9 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::{keypair_of, keypairs_of, pubkey_of},
-    input_validators::{is_keypair_or_ask_keyword, is_pubkey, is_pubkey_or_keypair, is_slot},
+    input_validators::{
+        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+    },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_client::rpc_client::RpcClient;
@@ -22,7 +24,7 @@ use solana_core::{
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::{
-    bank_forks::{CompressionType, SnapshotConfig},
+    bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_perf::recycler::enable_recycler_warming;
@@ -700,6 +702,15 @@ pub fn main() {
                 .help("Number of slots between generating accounts hash."),
         )
         .arg(
+            Arg::with_name("snapshot_version")
+                .long("snapshot-version")
+                .value_name("SNAPSHOT_VERSION")
+		.validator(is_parsable::<SnapshotVersion>)
+		.takes_value(true)
+		.default_value(SnapshotVersion::default().into())
+		.help("Output snapshot version"),
+        )
+        .arg(
             Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
@@ -730,6 +741,14 @@ pub fn main() {
                 .help("Require the genesis have this hash"),
         )
         .arg(
+            Arg::with_name("expected_bank_hash")
+                .long("expected-bank-hash")
+                .value_name("HASH")
+                .takes_value(true)
+                .validator(hash_validator)
+                .help("When wait-for-supermajority <x>, require the bank at <x> to have this hash"),
+        )
+        .arg(
             Arg::with_name("expected_shred_version")
                 .long("expected-shred-version")
                 .value_name("VERSION")
@@ -749,6 +768,7 @@ pub fn main() {
         .arg(
             Arg::with_name("wait_for_supermajority")
                 .long("wait-for-supermajority")
+                .requires("expected_bank_hash")
                 .value_name("SLOT")
                 .validator(is_slot)
                 .help("After processing the ledger and the next slot is SLOT, wait until a supermajority of stake is visible on gossip before starting PoH"),
@@ -885,6 +905,9 @@ pub fn main() {
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(&s).unwrap()),
+        expected_bank_hash: matches
+            .value_of("expected_bank_hash")
+            .map(|s| Hash::from_str(&s).unwrap()),
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
@@ -974,6 +997,15 @@ pub fn main() {
             _ => panic!("Compression type not recognized: {}", compression_str),
         }
     }
+    let snapshot_version =
+        matches
+            .value_of("snapshot_version")
+            .map_or(SnapshotVersion::default(), |s| {
+                s.parse::<SnapshotVersion>().unwrap_or_else(|err| {
+                    eprintln!("Error: {}", err);
+                    exit(1)
+                })
+            });
     validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
@@ -983,6 +1015,7 @@ pub fn main() {
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
         compression: snapshot_compression,
+        snapshot_version,
     });
 
     validator_config.accounts_hash_interval_slots =

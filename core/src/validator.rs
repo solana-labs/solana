@@ -23,10 +23,11 @@ use crate::{
     tvu::{Sockets, Tvu, TvuConfig},
 };
 use crossbeam_channel::unbounded;
+use rand::{thread_rng, Rng};
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
-    blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
     blockstore_processor, create_new_tmp_ledger,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
@@ -60,6 +61,7 @@ use std::{
 pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
+    pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
@@ -86,6 +88,7 @@ impl Default for ValidatorConfig {
         Self {
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
+            expected_bank_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
             max_ledger_shreds: None,
@@ -180,6 +183,16 @@ impl Validator {
         sigverify::init();
         info!("Done.");
 
+        if let Some(shred_version) = config.expected_shred_version {
+            if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
+                backup_and_clear_blockstore(
+                    ledger_path,
+                    wait_for_supermajority_slot + 1,
+                    shred_version,
+                );
+            }
+        }
+
         info!("creating bank...");
         let (
             genesis_config,
@@ -219,8 +232,8 @@ impl Validator {
         if let Some(expected_shred_version) = config.expected_shred_version {
             if expected_shred_version != node.info.shred_version {
                 error!(
-                    "shred version mismatch: expected {}",
-                    expected_shred_version
+                    "shred version mismatch: expected {} found: {}",
+                    expected_shred_version, node.info.shred_version,
                 );
                 process::exit(1);
             }
@@ -380,7 +393,9 @@ impl Validator {
                 (None, None)
             };
 
-        wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check);
+        if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
+            std::process::exit(1);
+        }
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
@@ -626,14 +641,95 @@ fn new_banks_from_blockstore(
     )
 }
 
+fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_version: u16) {
+    use std::time::Instant;
+    let blockstore = Blockstore::open(ledger_path).unwrap();
+    let mut do_copy_and_clear = false;
+
+    // Search for shreds with incompatible version in blockstore
+    if let Ok(slot_meta_iterator) = blockstore.slot_meta_iterator(start_slot) {
+        for (slot, _meta) in slot_meta_iterator {
+            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
+                for shred in &shreds {
+                    if shred.version() != shred_version {
+                        do_copy_and_clear = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // If found, then copy shreds to another db and clear from start_slot
+    if do_copy_and_clear {
+        let folder_name = format!("backup_rocksdb_{}", thread_rng().gen_range(0, 99999));
+        let backup_blockstore = Blockstore::open(&ledger_path.join(folder_name));
+        let mut last_print = Instant::now();
+        let mut copied = 0;
+        let mut last_slot = None;
+        let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot).unwrap();
+        for (slot, _meta) in slot_meta_iterator {
+            if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
+                if let Ok(ref backup_blockstore) = backup_blockstore {
+                    copied += shreds.len();
+                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                }
+            }
+            if last_print.elapsed().as_millis() > 3000 {
+                info!(
+                    "Copying shreds from slot {} copied {} so far.",
+                    start_slot, copied
+                );
+                last_print = Instant::now();
+            }
+            last_slot = Some(slot);
+        }
+
+        let end_slot = last_slot.unwrap();
+        info!("Purging slots {} to {}", start_slot, end_slot);
+        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+        blockstore.purge_from_next_slots(start_slot, end_slot);
+        info!("Purging done, compacting db..");
+        if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
+            warn!(
+                "Error from compacting storage from {} to {}: {:?}",
+                start_slot, end_slot, e
+            );
+        }
+        info!("done");
+    }
+    drop(blockstore);
+}
+
+// Return true on error, indicating the validator should exit.
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
-) {
-    if config.wait_for_supermajority != Some(bank.slot()) {
-        return;
+) -> bool {
+    if let Some(wait_for_supermajority) = config.wait_for_supermajority {
+        match wait_for_supermajority.cmp(&bank.slot()) {
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Greater => {
+                error!("Ledger does not have enough data to wait for supermajority, please enable snapshot fetch. Has {} needs {}", bank.slot(), wait_for_supermajority);
+                return true;
+            }
+            _ => {}
+        }
+    } else {
+        return false;
+    }
+
+    if let Some(expected_bank_hash) = config.expected_bank_hash {
+        if bank.hash() != expected_bank_hash {
+            error!(
+                "Bank hash({}) does not match expected value: {}",
+                bank.hash(),
+                expected_bank_hash
+            );
+            return true;
+        }
     }
 
     info!(
@@ -653,6 +749,7 @@ fn wait_for_supermajority(
         sleep(Duration::new(1, 0));
     }
     rpc_override_health_check.store(false, Ordering::Relaxed);
+    false
 }
 
 pub struct TestValidator {
@@ -903,6 +1000,43 @@ mod tests {
     }
 
     #[test]
+    fn test_backup_and_clear_blockstore() {
+        use std::time::Instant;
+        solana_logger::setup();
+        use solana_ledger::get_tmp_ledger_path;
+        use solana_ledger::{blockstore, entry};
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let entries = entry::create_ticks(1, 0, Hash::default());
+
+            info!("creating shreds");
+            let mut last_print = Instant::now();
+            for i in 1..10 {
+                let shreds = blockstore::entries_to_test_shreds(entries.clone(), i, i - 1, true, 1);
+                blockstore.insert_shreds(shreds, None, true).unwrap();
+                if last_print.elapsed().as_millis() > 5000 {
+                    info!("inserted {}", i);
+                    last_print = Instant::now();
+                }
+            }
+            drop(blockstore);
+
+            backup_and_clear_blockstore(&blockstore_path, 5, 2);
+
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            assert!(blockstore.meta(4).unwrap().unwrap().next_slots.is_empty());
+            for i in 5..10 {
+                assert!(blockstore
+                    .get_data_shreds_for_slot(i, 0)
+                    .unwrap()
+                    .is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -949,5 +1083,57 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_wait_for_supermajority() {
+        solana_logger::setup();
+        use solana_sdk::genesis_config::create_genesis_config;
+        use solana_sdk::hash::hash;
+        let node_keypair = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let mut config = ValidatorConfig::default();
+        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        assert!(!wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=0, wait=1, should fail
+        config.wait_for_supermajority = Some(1);
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=1, wait=0, should pass, bank is past the wait slot
+        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+        config.wait_for_supermajority = Some(0);
+        assert!(!wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone()
+        ));
+
+        // bank=1, wait=1, equal, but bad hash provided
+        config.wait_for_supermajority = Some(1);
+        config.expected_bank_hash = Some(hash(&[1]));
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check
+        ));
     }
 }
