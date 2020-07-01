@@ -884,7 +884,7 @@ pub enum TowerError {
     IOError(#[from] std::io::Error),
 
     #[error("Serialization Error: {0}")]
-    SerializeError(#[from] Box<bincode::ErrorKind>),
+    SerializeError(#[from] bincode::Error),
 
     #[error("The signature on the saved tower is invalid")]
     InvalidSignature,
