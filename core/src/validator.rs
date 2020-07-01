@@ -6,7 +6,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
-    consensus::{reconcile_blockstore_roots_with_tower, Tower},
+    consensus::{reconcile_blockstore_roots_with_tower, Tower, TowerError},
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -719,7 +719,6 @@ fn new_banks_from_ledger(
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
             let slot_history = root_bank.get_slot_history();
-            // assert bank is frozen
             tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
         .unwrap_or_else(|err| {
@@ -729,7 +728,7 @@ fn new_banks_from_ledger(
                 error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
                 process::exit(1);
             }
-            let not_found = if let crate::consensus::TowerError::IOError(io_err) = &err {
+            let not_found = if let TowerError::IOError(io_err) = &err {
                 io_err.kind() == std::io::ErrorKind::NotFound
             } else {
                 false

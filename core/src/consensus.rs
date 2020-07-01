@@ -704,7 +704,6 @@ impl Tower {
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
-        error!("adjust_lockouts_after_replay....");
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
@@ -729,7 +728,6 @@ impl Tower {
         // return immediately if last_voted_slot is None, votes are empty...
         if self.lockouts.votes.is_empty() {
             assert_eq!(self.root(), None);
-            // assert self.last_vote, ???
             return Ok(self);
         }
 
