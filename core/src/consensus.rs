@@ -116,9 +116,9 @@ impl Tower {
         vote_account_pubkey: &Pubkey,
         root: Slot,
         heaviest_bank: &Bank,
-        save_path: &Path,
+        path: &Path,
     ) -> Self {
-        let path = Self::get_filename(&PathBuf::from(save_path), node_pubkey);
+        let path = Self::get_filename(&path, node_pubkey);
         let tmp_path = Self::get_tmp_filename(&path);
         let mut tower = Self {
             node_pubkey: *node_pubkey,
@@ -822,8 +822,7 @@ impl Tower {
     }
 
     pub fn get_filename(path: &Path, node_pubkey: &Pubkey) -> PathBuf {
-        PathBuf::from(path)
-            .join(format!("tower-{}", node_pubkey))
+        path.join(format!("tower-{}", node_pubkey))
             .with_extension("bin")
     }
 
@@ -854,8 +853,8 @@ impl Tower {
         Ok(())
     }
 
-    pub fn restore(save_path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
-        let filename = Self::get_filename(save_path, node_pubkey);
+    pub fn restore(path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
+        let filename = Self::get_filename(path, node_pubkey);
         // Ensure to create parent dir here, because restore() precedes save() always
         fs::create_dir_all(&filename.parent().unwrap())?;
 
