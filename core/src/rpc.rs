@@ -29,7 +29,7 @@ use solana_runtime::{
     log_collector::LogCollector,
 };
 use solana_sdk::{
-    clock::{Epoch, Slot, UnixTimestamp},
+    clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -253,11 +253,10 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank(commitment)?.inflation().into())
     }
 
-    pub fn get_inflation_rate(&self, epoch: Option<Epoch>) -> Result<RpcInflationRate> {
+    pub fn get_inflation_rate(&self) -> Result<RpcInflationRate> {
         let bank = self.bank(None)?;
-        let operating_mode = bank.operating_mode();
-        let epoch = epoch.unwrap_or_else(|| bank.epoch());
-        let inflation = solana_genesis_programs::get_inflation_for_epoch(operating_mode, epoch);
+        let epoch = bank.epoch();
+        let inflation = bank.inflation();
         let year =
             (bank.epoch_schedule().get_last_slot_in_epoch(epoch)) as f64 / bank.slots_per_year();
 
@@ -859,11 +858,7 @@ pub trait RpcSol {
     ) -> Result<RpcInflationGovernor>;
 
     #[rpc(meta, name = "getInflationRate")]
-    fn get_inflation_rate(
-        &self,
-        meta: Self::Metadata,
-        epoch: Option<Epoch>,
-    ) -> Result<RpcInflationRate>;
+    fn get_inflation_rate(&self, meta: Self::Metadata) -> Result<RpcInflationRate>;
 
     #[rpc(meta, name = "getEpochSchedule")]
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule>;
@@ -1128,13 +1123,9 @@ impl RpcSol for RpcSolImpl {
         meta.get_inflation_governor(commitment)
     }
 
-    fn get_inflation_rate(
-        &self,
-        meta: Self::Metadata,
-        epoch: Option<Epoch>,
-    ) -> Result<RpcInflationRate> {
+    fn get_inflation_rate(&self, meta: Self::Metadata) -> Result<RpcInflationRate> {
         debug!("get_inflation_rate rpc request received");
-        meta.get_inflation_rate(epoch)
+        meta.get_inflation_rate()
     }
 
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
@@ -2138,35 +2129,7 @@ pub mod tests {
         let expected_inflation_governor: RpcInflationGovernor = bank.inflation().into();
         assert_eq!(inflation_governor, expected_inflation_governor);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationRate"}"#; // Queries current epoch by default
-        let rep = io.handle_request_sync(&req, meta.clone());
-        let res: Response = serde_json::from_str(&rep.expect("actual response"))
-            .expect("actual response deserialization");
-        let inflation_rate: RpcInflationRate = if let Response::Single(res) = res {
-            if let Output::Success(res) = res {
-                serde_json::from_value(res.result).unwrap()
-            } else {
-                panic!("Expected success");
-            }
-        } else {
-            panic!("Expected single response");
-        };
-        let operating_mode = bank.operating_mode();
-        let inflation = solana_genesis_programs::get_inflation_for_epoch(operating_mode, 0);
-        let year = (bank.epoch_schedule().get_last_slot_in_epoch(0)) as f64 / bank.slots_per_year();
-        let expected_inflation_rate = RpcInflationRate {
-            total: inflation.total(year),
-            validator: inflation.validator(year),
-            foundation: inflation.foundation(year),
-            epoch: 0,
-        };
-        assert_eq!(inflation_rate, expected_inflation_rate);
-
-        let epoch = 40_000_000; // After default foundation term
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getInflationRate","params":[{}]}}"#,
-            epoch
-        ); // Queries current epoch by default
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getInflationRate"}"#; // Queries current epoch
         let rep = io.handle_request_sync(&req, meta);
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
@@ -2179,10 +2142,14 @@ pub mod tests {
         } else {
             panic!("Expected single response");
         };
+        let inflation = bank.inflation();
+        let epoch = bank.epoch();
+        let year =
+            (bank.epoch_schedule().get_last_slot_in_epoch(epoch)) as f64 / bank.slots_per_year();
         let expected_inflation_rate = RpcInflationRate {
-            total: 0.015,
-            validator: 0.015,
-            foundation: 0.0,
+            total: inflation.total(year),
+            validator: inflation.validator(year),
+            foundation: inflation.foundation(year),
             epoch,
         };
         assert_eq!(inflation_rate, expected_inflation_rate);
