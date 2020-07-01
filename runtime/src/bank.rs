@@ -188,8 +188,11 @@ impl HashAgeKind {
     }
 }
 
+// Bank's common fields shared by all supported snapshot versions for deserialization.
+// Sync fields with BankFieldsToSerialize! This is paired with it.
+// All members are made public to remain Bank's members private and to make versioned deserializer workable on this
 #[derive(Clone, Default)]
-pub(crate) struct BankFields {
+pub(crate) struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: Ancestors,
     pub(crate) hash: Hash,
@@ -223,7 +226,11 @@ pub(crate) struct BankFields {
     pub(crate) is_delta: bool,
 }
 
-pub(crate) struct RefBankFields<'a> {
+// Bank's common fields shared by all supported snapshot versions for serialization.
+// This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
+// So, sync fields with BankFieldsToDeserialize!
+// all members are made public to remain Bank private and to make versioned serializer workable on this
+pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
     pub(crate) ancestors: &'a Ancestors,
     pub(crate) hash: Hash,
@@ -553,7 +560,7 @@ impl Bank {
     pub(crate) fn new_from_fields(
         bank_rc: BankRc,
         genesis_config: &GenesisConfig,
-        fields: BankFields,
+        fields: BankFieldsToDeserialize,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -642,8 +649,8 @@ impl Bank {
     }
 
     /// Return subset of bank fields representing serializable state
-    pub(crate) fn get_ref_fields(&self) -> RefBankFields {
-        RefBankFields {
+    pub(crate) fn get_fields_to_serialize(&self) -> BankFieldsToSerialize {
+        BankFieldsToSerialize {
             blockhash_queue: &self.blockhash_queue,
             ancestors: &self.ancestors,
             hash: *self.hash.read().unwrap(),

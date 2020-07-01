@@ -6,7 +6,7 @@ use {
         },
         accounts_index::Ancestors,
         append_vec::AppendVec,
-        bank::{Bank, BankFields, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
         epoch_stakes::EpochStakes,
         message_processor::MessageProcessor,
@@ -81,9 +81,9 @@ trait TypeContext<'a> {
         + From<&'a AccountStorageEntry>
         + Into<AccountStorageEntry>;
 
-    fn serialize_bank_fields<S: serde::ser::Serializer>(
+    fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_bank: &SerializableBank<'a, Self>,
+        serializable_bank: &SerializableBankAndStorage<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized;
@@ -99,7 +99,7 @@ trait TypeContext<'a> {
         stream: &mut BufReader<R>,
     ) -> Result<
         (
-            BankFields,
+            BankFieldsToDeserialize,
             AccountsDbFields<Self::SerializableAccountStorageEntry>,
         ),
         Error,
@@ -176,7 +176,7 @@ where
         ($x:ident) => {
             bincode::serialize_into(
                 stream,
-                &SerializableBank::<$x> {
+                &SerializableBankAndStorage::<$x> {
                     bank,
                     snapshot_storages,
                     phantom: std::marker::PhantomData::default(),
@@ -194,18 +194,18 @@ where
     })
 }
 
-struct SerializableBank<'a, C> {
+struct SerializableBankAndStorage<'a, C> {
     bank: &'a Bank,
     snapshot_storages: &'a [SnapshotStorage],
     phantom: std::marker::PhantomData<C>,
 }
 
-impl<'a, C: TypeContext<'a>> Serialize for SerializableBank<'a, C> {
+impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
-        C::serialize_bank_fields(serializer, self)
+        C::serialize_bank_and_storage(serializer, self)
     }
 }
 
@@ -229,7 +229,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
 impl<'a, C> IgnoreAsHelper for SerializableAccountsDB<'a, C> {}
 
 fn reconstruct_bank_from_fields<E, P>(
-    bank_fields: BankFields,
+    bank_fields: BankFieldsToDeserialize,
     accounts_db_fields: AccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
