@@ -551,20 +551,18 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>) {
         let last_voted_slot = tower.last_voted_slot();
-        let heaviest_slot_on_same_voted_fork = last_voted_slot
-            .map(|last_voted_slot| {
-                let heaviest_slot_on_same_voted_fork =
-                    self.best_slot(last_voted_slot).unwrap_or_default();
-                if heaviest_slot_on_same_voted_fork == 0 {
-                    error!("fix me.....");
-                    None
-                } else if heaviest_slot_on_same_voted_fork == last_voted_slot {
-                    None
-                } else {
-                    Some(heaviest_slot_on_same_voted_fork)
-                }
-            })
-            .unwrap_or(None);
+        let heaviest_slot_on_same_voted_fork = last_voted_slot.map(|last_voted_slot| {
+            if tower.is_restored_stray_slot(last_voted_slot) {
+                return None;
+            }
+            let heaviest_slot_on_same_voted_fork =
+                self.best_slot(last_voted_slot).expect("a bank at last_voted_slot is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
+            if heaviest_slot_on_same_voted_fork == last_voted_slot {
+                None
+            } else {
+                Some(heaviest_slot_on_same_voted_fork)
+            }
+        }).unwrap_or(None);
         let heaviest_slot = self.best_overall_slot();
         let r_bank_forks = bank_forks.read().unwrap();
         (

@@ -19,7 +19,7 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
     ops::Bound::{Included, Unbounded},
@@ -93,6 +93,8 @@ pub struct Tower {
     path: PathBuf,
     #[serde(skip)]
     tmp_path: PathBuf,
+    #[serde(skip)]
+    restored_stray_slots: BTreeSet<Slot>,
 }
 
 impl Default for Tower {
@@ -106,6 +108,7 @@ impl Default for Tower {
             last_timestamp: BlockTimestamp::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
+            restored_stray_slots: BTreeSet::default(),
         }
     }
 }
@@ -481,10 +484,19 @@ impl Tower {
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
         let root = self.lockouts.root_slot.unwrap_or(0);
+        let mut maybe_stray_ancestors = HashSet::new();
+
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let empty = HashSet::default();
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or(&empty);
+                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+                    if self.is_restored_stray_slot(last_voted_slot) {
+                        maybe_stray_ancestors = self.restored_stray_slots.range(0..last_voted_slot).copied().collect();
+                        &maybe_stray_ancestors
+                    } else {
+                        panic!("no ancestors: {}", last_voted_slot)
+                    }
+                });
+
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
                 if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
@@ -697,6 +709,18 @@ impl Tower {
         bank_weight
     }
 
+    fn voted_slots(&self) -> Vec<Slot> {
+        self.lockouts
+            .votes
+            .iter()
+            .map(|lockout| lockout.slot)
+            .collect()
+    }
+
+    pub fn is_restored_stray_slot(&self, slot: Slot) -> bool {
+        self.restored_stray_slots.contains(&slot)
+    }
+
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
     // tower lockouts may need adjustment
     pub fn adjust_lockouts_after_replay(
@@ -785,6 +809,7 @@ impl Tower {
             assert!(self.last_vote != Vote::default());
         }
         // should call self.votes.pop_expired_votes()?
+        self.restored_stray_slots = self.voted_slots().into_iter().collect();
         Ok(self)
     }
 
@@ -2381,16 +2406,6 @@ pub mod test {
             assert_eq!(blockstore.last_root(), 1);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-    }
-
-    impl Tower {
-        fn voted_slots(&self) -> Vec<Slot> {
-            self.lockouts
-                .votes
-                .iter()
-                .map(|lockout| lockout.slot)
-                .collect()
-        }
     }
 
     #[test]
