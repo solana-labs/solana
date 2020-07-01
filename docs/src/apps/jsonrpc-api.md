@@ -677,11 +677,11 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getInflationRate
 
-Returns the specific inflation values for a particular epoch
+Returns the specific inflation values for the current epoch
 
 #### Parameters:
 
-* `<u64>` - (optional) Epoch, default is the current epoch
+None
 
 #### Results:
 
