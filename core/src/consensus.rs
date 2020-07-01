@@ -843,18 +843,20 @@ impl Tower {
         let filename = &self.path;
         let new_filename = &self.tmp_path;
         {
+            // overwrite anything if exists
             let mut file = File::create(&new_filename)?;
-            let saveable_tower = SavedTower::new(self, node_keypair)?;
-            bincode::serialize_into(&mut file, &saveable_tower)?;
-            //file.sync_all().unwrap();
+            let saved_tower = SavedTower::new(self, node_keypair)?;
+            bincode::serialize_into(&mut file, &saved_tower)?;
+            // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         }
         fs::rename(&new_filename, &filename)?;
-        //File::open(&self.save_path).unwrap().sync_all().unwrap();
+        // self.path.parent().sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         Ok(())
     }
 
     pub fn restore(save_path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
         let filename = Self::get_filename(save_path, node_pubkey);
+        // Ensure to create parent dir here, because restore() precedes save() always
         fs::create_dir_all(&filename.parent().unwrap())?;
 
         let file = File::open(&filename)?;
