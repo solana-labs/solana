@@ -204,7 +204,7 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             snapshot_hash,
-        ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
+        ) = new_banks_from_ledger(config, ledger_path, poh_verify);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -565,9 +565,9 @@ impl Validator {
 }
 
 #[allow(clippy::type_complexity)]
-fn new_banks_from_blockstore(
+fn new_banks_from_ledger(
     config: &ValidatorConfig,
-    blockstore_path: &Path,
+    ledger_path: &Path,
     poh_verify: bool,
 ) -> (
     GenesisConfig,
@@ -578,8 +578,8 @@ fn new_banks_from_blockstore(
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
 ) {
-    let genesis_config =
-        open_genesis_config(blockstore_path, config.max_genesis_archive_unpacked_size);
+    info!("loading ledger from {:?}...", ledger_path);
+    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
 
     // This needs to be limited otherwise the state in the VoteAccount data
     // grows too large
@@ -594,16 +594,13 @@ fn new_banks_from_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             error!("genesis hash mismatch: expected {}", expected_genesis_hash);
-            error!(
-                "Delete the ledger directory to continue: {:?}",
-                blockstore_path
-            );
+            error!("Delete the ledger directory to continue: {:?}", ledger_path);
             process::exit(1);
         }
     }
 
     let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+        Blockstore::open_with_signal(ledger_path).expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {

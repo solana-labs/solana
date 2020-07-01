@@ -321,7 +321,7 @@ impl Tower {
     }
 
     #[cfg(test)]
-    pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
+    fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         let vote = Vote::new(vec![slot], hash);
         self.record_bank_vote(vote)
     }
