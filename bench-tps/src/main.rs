@@ -32,6 +32,7 @@ fn main() {
         use_move,
         multi_client,
         num_lamports_per_account,
+        target_node,
         ..
     } = &cli_config;
 
@@ -82,6 +83,19 @@ fn main() {
             exit(1);
         }
         Arc::new(client)
+    } else if let Some(target_node) = target_node {
+        info!("Searching for target_node: {:?}", target_node);
+        let mut target_client = None;
+        for node in nodes {
+            if node.id == *target_node {
+                target_client = Some(Arc::new(get_client(&[node])));
+                break;
+            }
+        }
+        target_client.unwrap_or_else(|| {
+            eprintln!("Target node {} not found", target_node);
+            exit(1);
+        })
     } else {
         Arc::new(get_client(&nodes))
     };

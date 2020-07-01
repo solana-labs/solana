@@ -1,7 +1,10 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
 use solana_faucet::faucet::FAUCET_PORT;
 use solana_sdk::fee_calculator::FeeRateGovernor;
-use solana_sdk::signature::{read_keypair_file, Keypair};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{read_keypair_file, Keypair},
+};
 use std::{net::SocketAddr, process::exit, time::Duration};
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
@@ -26,6 +29,7 @@ pub struct Config {
     pub use_move: bool,
     pub num_lamports_per_account: u64,
     pub target_slots_per_epoch: u64,
+    pub target_node: Option<Pubkey>,
 }
 
 impl Default for Config {
@@ -49,6 +53,7 @@ impl Default for Config {
             use_move: false,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
             target_slots_per_epoch: 0,
+            target_node: None,
         }
     }
 }
@@ -118,6 +123,14 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
             Arg::with_name("no-multi-client")
                 .long("no-multi-client")
                 .help("Disable multi-client support, only transact with the entrypoint."),
+        )
+        .arg(
+            Arg::with_name("target_node")
+                .long("target-node")
+                .requires("no-multi-client")
+                .takes_value(true)
+                .value_name("PUBKEY")
+                .help("Specify an exact node to send transactions to."),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -265,6 +278,9 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
 
     args.use_move = matches.is_present("use-move");
     args.multi_client = !matches.is_present("no-multi-client");
+    args.target_node = matches
+        .value_of("target_node")
+        .map(|target_str| target_str.parse().unwrap());
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
         args.num_lamports_per_account = v.to_string().parse().expect("can't parse lamports");
