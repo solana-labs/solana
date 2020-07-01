@@ -42,7 +42,7 @@ the `--cuda` argument to `solana-validator`.
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
-## Tune System
+## System Tuning
 
 For Linux validators, the solana repo includes a daemon to adjust system settings to optimize
 performance (namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
@@ -196,6 +196,26 @@ solana-validator \
   --rpc-port 8899 \
   --entrypoint devnet.solana.com:8001 \
   --limit-ledger-size
+  --log ~/solana-validator.log
+```
+
+Lastly, to configure log rotation, please run the following:
+
+```bash
+# Setup log rotation
+
+cat > logrotate.sol <<EOF
+~/solana-validator.log {
+  rotate 7
+  daily
+  missingok
+  postrotate
+    systemctl kill -s USR1 sol.service
+  endscript
+}
+EOF
+sudo cp logrotate.sol /etc/logrotate.d/sol
+systemctl restart logrotate.service
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise
