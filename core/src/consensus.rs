@@ -799,7 +799,7 @@ impl Tower {
             .retain(move |_| diverged_descendant_flags.next().unwrap());
 
         if self.lockouts.votes.is_empty() {
-            error!("resetting root_slot and last_vote in tower!");
+            info!("All restored votes are behind replayed_root_slot; resetting root_slot and last_vote in tower!");
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
