@@ -2019,10 +2019,17 @@ impl ClusterInfo {
                 responses
                     .iter()
                     .enumerate()
-                    .map(|(j, _response)| ResponseScore {
-                        to: i,
-                        responses_index: j,
-                        score,
+                    .map(|(j, response)| {
+                        let response_score = match response.data {
+                            CrdsData::ContactInfo(_) => 3,
+                            CrdsData::Vote(_, _) => 2,
+                            _ => 1,
+                        };
+                        ResponseScore {
+                            to: i,
+                            responses_index: j,
+                            score: score + response_score,
+                        }
                     })
                     .collect::<Vec<ResponseScore>>()
             })
