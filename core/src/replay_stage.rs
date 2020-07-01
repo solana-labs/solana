@@ -257,7 +257,6 @@ impl ReplayStage {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let (
-                    _root_bank,
                     mut progress,
                     mut heaviest_subtree_fork_choice,
                     unlock_heaviest_subtree_fork_choice_slot,
@@ -617,7 +616,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
-    ) -> (Arc<Bank>, ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
         let (root_bank, frozen_baks) = {
             let bank_forks = bank_forks.read().unwrap();
             (
@@ -626,13 +625,12 @@ impl ReplayStage {
             )
         };
 
-        let (progress_map, fork_choice, slot) = Self::initialize_progress_and_fork_choice(
+        Self::initialize_progress_and_fork_choice(
             &root_bank,
             frozen_baks,
             &my_pubkey,
             &vote_account,
-        );
-        (root_bank, progress_map, fork_choice, slot)
+        )
     }
 
     pub(crate) fn initialize_progress_and_fork_choice(
