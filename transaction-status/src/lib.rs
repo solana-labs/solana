@@ -23,7 +23,7 @@ pub enum RpcInstruction {
     Parsed(Value),
 }
 
-/// A duplicate representation of a Message for pretty JSON serialization
+/// A duplicate representation of a CompiledInstruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcCompiledInstruction {

@@ -15,6 +15,7 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
     commitment::{commitment_arg_with_default, COMMITMENT_ARG},
@@ -28,7 +29,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::{RpcAccount, RpcKeyedAccount},
+    rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -1226,7 +1227,7 @@ fn process_show_account(
     let cli_account = CliAccount {
         keyed_account: RpcKeyedAccount {
             pubkey: account_pubkey.to_string(),
-            account: RpcAccount::encode(account),
+            account: UiAccount::encode(account, UiAccountEncoding::Binary),
         },
         use_lamports_unit,
     };
