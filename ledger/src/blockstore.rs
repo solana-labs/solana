@@ -37,8 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, EncodedTransaction, Rewards, RpcTransactionStatusMeta,
-    TransactionEncoding, TransactionStatusMeta, TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, EncodedTransaction, Rewards, TransactionStatusMeta,
+    TransactionWithStatusMeta, UiTransactionEncoding, UiTransactionStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
@@ -1516,7 +1516,7 @@ impl Blockstore {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<ConfirmedBlock> {
         datapoint_info!(
             "blockstore-rpc-api",
@@ -1528,7 +1528,7 @@ impl Blockstore {
         if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
-        let encoding = encoding.unwrap_or(TransactionEncoding::Json);
+        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
             let slot_meta = match slot_meta_cf.get(slot)? {
@@ -1579,7 +1579,7 @@ impl Blockstore {
     fn map_transactions_to_statuses<'a>(
         &self,
         slot: Slot,
-        encoding: TransactionEncoding,
+        encoding: UiTransactionEncoding,
         iterator: impl Iterator<Item = Transaction> + 'a,
     ) -> Vec<TransactionWithStatusMeta> {
         iterator
@@ -1591,7 +1591,7 @@ impl Blockstore {
                     meta: self
                         .read_transaction_status((signature, slot))
                         .expect("Expect database get to succeed")
-                        .map(RpcTransactionStatusMeta::from),
+                        .map(UiTransactionStatusMeta::from),
                 }
             })
             .collect()
@@ -1761,7 +1761,7 @@ impl Blockstore {
     pub fn get_confirmed_transaction(
         &self,
         signature: Signature,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         datapoint_info!(
             "blockstore-rpc-api",
@@ -1770,7 +1770,7 @@ impl Blockstore {
         if let Some((slot, status)) = self.get_transaction_status(signature)? {
             let transaction = self.find_transaction_in_slot(slot, signature)?
                 .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
-            let encoding = encoding.unwrap_or(TransactionEncoding::Json);
+            let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
             let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
             Ok(Some(ConfirmedTransaction {
                 slot,
@@ -5100,7 +5100,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<UiTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -5164,7 +5164,7 @@ pub mod tests {
                 .iter()
                 .cloned()
                 .map(|(tx, meta)| TransactionWithStatusMeta {
-                    transaction: EncodedTransaction::encode(tx, TransactionEncoding::Json),
+                    transaction: EncodedTransaction::encode(tx, UiTransactionEncoding::Json),
                     meta,
                 })
                 .collect(),
@@ -5185,7 +5185,7 @@ pub mod tests {
                 .iter()
                 .cloned()
                 .map(|(tx, meta)| TransactionWithStatusMeta {
-                    transaction: EncodedTransaction::encode(tx, TransactionEncoding::Json),
+                    transaction: EncodedTransaction::encode(tx, UiTransactionEncoding::Json),
                     meta,
                 })
                 .collect(),
@@ -5802,7 +5802,7 @@ pub mod tests {
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(&[slot - 1, slot]).unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<UiTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -5845,7 +5845,7 @@ pub mod tests {
         for (transaction, status) in expected_transactions.clone() {
             let signature = transaction.signatures[0];
             let encoded_transaction =
-                EncodedTransaction::encode(transaction, TransactionEncoding::Json);
+                EncodedTransaction::encode(transaction, UiTransactionEncoding::Json);
             let expected_transaction = ConfirmedTransaction {
                 slot,
                 transaction: TransactionWithStatusMeta {
@@ -6073,7 +6073,7 @@ pub mod tests {
 
             let map = blockstore.map_transactions_to_statuses(
                 slot,
-                TransactionEncoding::Json,
+                UiTransactionEncoding::Json,
                 transactions.into_iter(),
             );
             assert_eq!(map.len(), 5);
