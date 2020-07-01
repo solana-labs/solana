@@ -1,7 +1,5 @@
 //! @brief Syscall stubs when building for non-BPF targets
 
-<<<<<<< HEAD:sdk/bpf/rust/test/src/lib.rs
-=======
 #[cfg(not(target_arch = "bpf"))]
 fn print_line_to_stdout(_message: &str) {
     #[cfg(not(feature = "program"))]
@@ -15,7 +13,6 @@ fn print_line_to_stdout(_message: &str) {
 }
 
 #[cfg(not(target_arch = "bpf"))]
->>>>>>> 52526a9bc... Prevent stub inclusion when building shared objects (#10875):sdk/src/program_stubs.rs
 #[no_mangle]
 /// # Safety
 pub unsafe fn sol_log_(message: *const u8, length: u64) {

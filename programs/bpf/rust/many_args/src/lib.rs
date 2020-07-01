@@ -29,13 +29,8 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 #[cfg(test)]
 mod test {
     use super::*;
-<<<<<<< HEAD
-    // Pulls in the stubs required for `info!()`
-    solana_sdk_bpf_test::stubs!();
-=======
     // Pull in syscall stubs when building for non-BPF targets
     solana_sdk::program_stubs!();
->>>>>>> 52526a9bc... Prevent stub inclusion when building shared objects (#10875)
 
     #[test]
     fn test_entrypoint() {
