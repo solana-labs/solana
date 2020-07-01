@@ -261,21 +261,7 @@ impl ReplayStage {
                     mut progress,
                     mut heaviest_subtree_fork_choice,
                     unlock_heaviest_subtree_fork_choice_slot,
-                ) = {
-                    let (root_bank, frozen_baks) = {
-                        let bank_forks = bank_forks.read().unwrap();
-                        (
-                            bank_forks.root_bank().clone(),
-                            bank_forks.frozen_banks().values().cloned().collect(),
-                        )
-                    };
-                    Self::initialize_progress_and_fork_choice(
-                        root_bank,
-                        frozen_baks,
-                        &my_pubkey,
-                        &vote_account,
-                    )
-                };
+                ) = Self::initialize_progress_and_fork_choice_with_locked_bank_forks(&bank_forks, &my_pubkey, &vote_account);
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -627,12 +613,34 @@ impl ReplayStage {
                 .unwrap_or(true)
     }
 
-    pub(crate) fn initialize_progress_and_fork_choice(
-        root_bank: Arc<Bank>,
-        mut frozen_banks: Vec<Arc<Bank>>,
+    fn initialize_progress_and_fork_choice_with_locked_bank_forks(
+        bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> (Arc<Bank>, ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+        let (root_bank, frozen_baks) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (
+                bank_forks.root_bank().clone(),
+                bank_forks.frozen_banks().values().cloned().collect(),
+            )
+        };
+
+        let (progress_map, fork_choice, slot) = Self::initialize_progress_and_fork_choice(
+            &root_bank,
+            frozen_baks,
+            &my_pubkey,
+            &vote_account,
+        );
+        (root_bank, progress_map, fork_choice, slot)
+    }
+
+    pub(crate) fn initialize_progress_and_fork_choice(
+        root_bank: &Arc<Bank>,
+        mut frozen_banks: Vec<Arc<Bank>>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
         let mut progress = ProgressMap::default();
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -659,7 +667,6 @@ impl ReplayStage {
             HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
 
         (
-            root_bank,
             progress,
             heaviest_subtree_fork_choice,
             unlock_heaviest_subtree_fork_choice_slot,

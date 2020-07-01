@@ -627,6 +627,48 @@ fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -
     false
 }
 
+fn post_process_restored_tower(
+    restored_tower: crate::consensus::Result<Tower>,
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
+    config: &ValidatorConfig,
+    ledger_path: &Path,
+    bank_forks: &BankForks,
+) -> Tower {
+    restored_tower
+        .and_then(|tower| {
+            let root_bank = bank_forks.root_bank();
+            let slot_history = root_bank.get_slot_history();
+            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+        })
+        .unwrap_or_else(|err| {
+            let is_already_active = active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+            if config.require_tower && is_already_active {
+                error!("Required tower restore failed: {:?}", err);
+                error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
+                process::exit(1);
+            }
+            let not_found = if let TowerError::IOError(io_err) = &err {
+                io_err.kind() == std::io::ErrorKind::NotFound
+            } else {
+                false
+            };
+            if not_found && !is_already_active {
+                // Currently, don't protect against spoofed snapshots with no tower at all
+                info!("Ignoring expected failed tower restore because this is the initial validator start with the vote account...");
+            } else {
+                error!("Rebuilding tower from the latest vote account due to failed tower restore: {}", err);
+            }
+
+            Tower::new_from_bankforks(
+                &bank_forks,
+                &ledger_path,
+                &validator_identity,
+                &vote_account,
+            )
+        })
+}
+
 #[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
@@ -715,38 +757,14 @@ fn new_banks_from_ledger(
         process::exit(1);
     });
 
-    let tower = restored_tower
-        .and_then(|tower| {
-            let root_bank = bank_forks.root_bank();
-            let slot_history = root_bank.get_slot_history();
-            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
-        })
-        .unwrap_or_else(|err| {
-            let is_already_active = active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
-            if config.require_tower && is_already_active {
-                error!("Required tower restore failed: {:?}", err);
-                error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
-                process::exit(1);
-            }
-            let not_found = if let TowerError::IOError(io_err) = &err {
-                io_err.kind() == std::io::ErrorKind::NotFound
-            } else {
-                false
-            };
-            if not_found && !is_already_active {
-                // Currently, don't protect against spoofed snapshots with no tower at all
-                info!("Ignoring expected failed tower restore because this is the initial validator start with the vote account...");
-            } else {
-                error!("Rebuilding tower from the latest vote account due to failed tower restore: {}", err);
-            }
-
-            Tower::new_from_bankforks(
-                &bank_forks,
-                &ledger_path,
-                &validator_identity,
-                &vote_account,
-            )
-        });
+    let tower = post_process_restored_tower(
+        restored_tower,
+        &validator_identity,
+        &vote_account,
+        &config,
+        &ledger_path,
+        &bank_forks,
+    );
 
     info!(
         "Tower state: root slot={:?}, last vote slot={:?}",

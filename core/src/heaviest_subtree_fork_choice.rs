@@ -553,6 +553,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         let last_voted_slot = tower.last_voted_slot();
         let heaviest_slot_on_same_voted_fork = last_voted_slot.map(|last_voted_slot| {
             if tower.is_restored_stray_slot(last_voted_slot) {
+                // return None because bank_forks doesn't have corresponding banks
                 return None;
             }
             let heaviest_slot_on_same_voted_fork =

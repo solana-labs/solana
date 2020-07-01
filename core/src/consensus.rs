@@ -157,17 +157,14 @@ impl Tower {
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> Self {
-        let (
-            root_bank,
-            _progress,
-            heaviest_subtree_fork_choice,
-            unlock_heaviest_subtree_fork_choice_slot,
-        ) = crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
-            bank_forks.root_bank().clone(),
-            bank_forks.frozen_banks().values().cloned().collect(),
-            &my_pubkey,
-            &vote_account,
-        );
+        let root_bank = bank_forks.root_bank();
+        let (_progress, heaviest_subtree_fork_choice, unlock_heaviest_subtree_fork_choice_slot) =
+            crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
+                root_bank,
+                bank_forks.frozen_banks().values().cloned().collect(),
+                &my_pubkey,
+                &vote_account,
+            );
         let root = root_bank.slot();
 
         let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
@@ -176,7 +173,7 @@ impl Tower {
                 .expect("The best overall slot must be one of `frozen_banks` which all exist in bank_forks")
                 .clone()
         } else {
-            Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or(root_bank)
+            Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or_else(|| root_bank.clone())
         };
 
         Self::new(
