@@ -58,7 +58,7 @@ use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize},
 };
-use solana_transaction_status::{EncodedTransaction, TransactionEncoding};
+use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     error,
@@ -1174,7 +1174,7 @@ fn process_confirm(
             if let Some(transaction_status) = status {
                 if config.verbose {
                     match rpc_client
-                        .get_confirmed_transaction(signature, TransactionEncoding::Binary)
+                        .get_confirmed_transaction(signature, UiTransactionEncoding::Binary)
                     {
                         Ok(confirmed_transaction) => {
                             println!(

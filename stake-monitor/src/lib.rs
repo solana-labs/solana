@@ -7,7 +7,7 @@ use solana_sdk::{
     pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
-use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
+use solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta};
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 pub type PubkeyString = String;
@@ -65,7 +65,7 @@ impl AccountsInfo {
 fn process_transaction(
     slot: Slot,
     transaction: &Transaction,
-    meta: &RpcTransactionStatusMeta,
+    meta: &UiTransactionStatusMeta,
     accounts: &mut HashMap<PubkeyString, AccountInfo>,
 ) {
     let mut last_instruction = true;
@@ -289,7 +289,7 @@ fn load_blocks(
     let mut blocks = vec![];
     for slot in slots.into_iter() {
         let block =
-            rpc_client.get_confirmed_block_with_encoding(slot, TransactionEncoding::Binary)?;
+            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Binary)?;
         blocks.push((slot, block));
     }
     Ok(blocks)
