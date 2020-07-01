@@ -4282,6 +4282,7 @@ dependencies = [
  "clap",
  "histogram",
  "log 0.4.8",
+ "regex",
  "serde_json",
  "serde_yaml",
  "signal-hook",
