@@ -19,17 +19,47 @@ pub fn parse_nonce(data: &[u8]) -> Result<UiNonceState, ParseAccountError> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiNonceState {
     Uninitialized,
     Initialized(UiNonceData),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiNonceData {
     pub authority: String,
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use solana_sdk::{
+        hash::Hash,
+        nonce::{
+            state::{Data, Versions},
+            State,
+        },
+        pubkey::Pubkey,
+    };
+
+    #[test]
+    fn test_parse_nonce() {
+        let nonce_data = Versions::new_current(State::Initialized(Data::default()));
+        let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
+        assert_eq!(
+            parse_nonce(&nonce_account_data).unwrap(),
+            UiNonceState::Initialized(UiNonceData {
+                authority: Pubkey::default().to_string(),
+                blockhash: Hash::default().to_string(),
+                fee_calculator: FeeCalculator::default(),
+            }),
+        );
+
+        let bad_data = vec![0; 4];
+        assert!(parse_nonce(&bad_data).is_err());
+    }
 }

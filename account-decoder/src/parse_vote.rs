@@ -59,7 +59,7 @@ pub fn parse_vote(data: &[u8]) -> Result<UiVoteState, ParseAccountError> {
 }
 
 /// A duplicate representation of VoteState for pretty JSON serialization
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiVoteState {
     node_pubkey: String,
@@ -73,7 +73,7 @@ pub struct UiVoteState {
     last_timestamp: BlockTimestamp,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct UiLockout {
     slot: Slot,
@@ -89,14 +89,14 @@ impl From<&Lockout> for UiLockout {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct UiAuthorizedVoters {
     epoch: Epoch,
     authorized_voter: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct UiPriorVoters {
     authorized_pubkey: String,
@@ -104,10 +104,31 @@ struct UiPriorVoters {
     target_epoch: Epoch,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct UiEpochCredits {
     epoch: Epoch,
     credits: u64,
     previous_credits: u64,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use solana_vote_program::vote_state::VoteStateVersions;
+
+    #[test]
+    fn test_parse_vote() {
+        let vote_state = VoteState::default();
+        let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
+        let mut expected_vote_state = UiVoteState::default();
+        expected_vote_state.node_pubkey = Pubkey::default().to_string();
+        expected_vote_state.authorized_withdrawer = Pubkey::default().to_string();
+        assert_eq!(parse_vote(&vote_account_data).unwrap(), expected_vote_state,);
+
+        let bad_data = vec![0; 4];
+        assert!(parse_vote(&bad_data).is_err());
+    }
 }

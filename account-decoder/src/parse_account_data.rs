@@ -49,3 +49,32 @@ pub fn parse_account_data(program_id: &Pubkey, data: &[u8]) -> Result<Value, Par
         format!("{:?}", program_name).to_kebab_case(): parsed_json
     }))
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use solana_sdk::nonce::{
+        state::{Data, Versions},
+        State,
+    };
+    use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
+
+    #[test]
+    fn test_parse_account_data() {
+        let other_program = Pubkey::new_rand();
+        let data = vec![0; 4];
+        assert!(parse_account_data(&other_program, &data).is_err());
+
+        let vote_state = VoteState::default();
+        let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
+        let parsed = parse_account_data(&solana_vote_program::id(), &vote_account_data).unwrap();
+        assert!(parsed.as_object().unwrap().contains_key("vote"));
+
+        let nonce_data = Versions::new_current(State::Initialized(Data::default()));
+        let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
+        let parsed = parse_account_data(&system_program::id(), &nonce_account_data).unwrap();
+        assert!(parsed.as_object().unwrap().contains_key("nonce"));
+    }
+}
