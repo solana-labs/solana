@@ -193,6 +193,7 @@ impl fmt::Display for GenesisConfig {
              Operating mode: {:?}\n\
              Genesis hash: {}\n\
              Shred version: {}\n\
+             Ticks per slot: {:?}\n\
              Hashes per tick: {:?}\n\
              Slots per epoch: {}\n\
              Warmup epochs: {}abled\n\
@@ -205,6 +206,7 @@ impl fmt::Display for GenesisConfig {
             self.operating_mode,
             self.hash(),
             compute_shred_version(&self.hash(), None),
+            self.ticks_per_slot,
             self.poh_config.hashes_per_tick,
             self.epoch_schedule.slots_per_epoch,
             if self.epoch_schedule.warmup {
