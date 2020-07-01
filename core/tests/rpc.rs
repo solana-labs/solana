@@ -7,7 +7,7 @@ use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
-use solana_account_decoder::EncodedAccount;
+use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_client::{get_rpc_request_str, RpcClient},
     rpc_response::{Response, RpcSignatureResult},
@@ -173,7 +173,7 @@ fn test_rpc_subscriptions() {
     // Track when subscriptions are ready
     let (ready_sender, ready_receiver) = channel::<()>();
     // Track account notifications are received
-    let (account_sender, account_receiver) = channel::<Response<EncodedAccount>>();
+    let (account_sender, account_receiver) = channel::<Response<UiAccount>>();
     // Track when status notifications are received
     let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
 

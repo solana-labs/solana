@@ -1,4 +1,4 @@
-use solana_account_decoder::AccountEncoding;
+use solana_account_decoder::UiAccountEncoding;
 use solana_sdk::{clock::Epoch, commitment_config::CommitmentConfig};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,7 +45,7 @@ pub struct RpcInflationConfig {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcAccountInfoConfig {
-    pub encoding: Option<AccountEncoding>,
+    pub encoding: Option<UiAccountEncoding>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }

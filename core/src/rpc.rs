@@ -8,7 +8,7 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_account_decoder::{AccountEncoding, EncodedAccount};
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::*,
     rpc_request::{
@@ -207,14 +207,14 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
-    ) -> Result<RpcResponse<Option<EncodedAccount>>> {
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
-        let encoding = config.encoding.unwrap_or(AccountEncoding::Binary);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         new_response(
             &bank,
             bank.get_account(pubkey)
-                .map(|account| EncodedAccount::encode(account, encoding)),
+                .map(|account| UiAccount::encode(account, encoding)),
         )
     }
 
@@ -235,13 +235,13 @@ impl JsonRpcRequestProcessor {
     ) -> Result<Vec<RpcKeyedAccount>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
-        let encoding = config.encoding.unwrap_or(AccountEncoding::Binary);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         Ok(bank
             .get_program_accounts(Some(&program_id))
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: EncodedAccount::encode(account, encoding.clone()),
+                account: UiAccount::encode(account, encoding.clone()),
             })
             .collect())
     }
@@ -833,7 +833,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
-    ) -> Result<RpcResponse<Option<EncodedAccount>>>;
+    ) -> Result<RpcResponse<Option<UiAccount>>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -1086,7 +1086,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
-    ) -> Result<RpcResponse<Option<EncodedAccount>>> {
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         meta.get_account_info(&pubkey, config)

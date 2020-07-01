@@ -15,9 +15,9 @@ use std::str::FromStr;
 /// A duplicate representation of a Message for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct EncodedAccount {
+pub struct UiAccount {
     pub lamports: u64,
-    pub data: EncodedAccountData,
+    pub data: UiAccountData,
     pub owner: String,
     pub executable: bool,
     pub rent_epoch: Epoch,
@@ -25,12 +25,12 @@ pub struct EncodedAccount {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
-pub enum EncodedAccountData {
+pub enum UiAccountData {
     Binary(String),
     Json(Value),
 }
 
-impl From<Vec<u8>> for EncodedAccountData {
+impl From<Vec<u8>> for UiAccountData {
     fn from(data: Vec<u8>) -> Self {
         Self::Binary(bs58::encode(data).into_string())
     }
@@ -38,24 +38,24 @@ impl From<Vec<u8>> for EncodedAccountData {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub enum AccountEncoding {
+pub enum UiAccountEncoding {
     Binary,
     JsonParsed,
 }
 
-impl EncodedAccount {
-    pub fn encode(account: Account, encoding: AccountEncoding) -> Self {
+impl UiAccount {
+    pub fn encode(account: Account, encoding: UiAccountEncoding) -> Self {
         let data = match encoding {
-            AccountEncoding::Binary => account.data.into(),
-            AccountEncoding::JsonParsed => {
+            UiAccountEncoding::Binary => account.data.into(),
+            UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) = parse_account_data(&account.owner, &account.data) {
-                    EncodedAccountData::Json(parsed_data)
+                    UiAccountData::Json(parsed_data)
                 } else {
                     account.data.into()
                 }
             }
         };
-        EncodedAccount {
+        UiAccount {
             lamports: account.lamports,
             data,
             owner: account.owner.to_string(),
@@ -66,8 +66,8 @@ impl EncodedAccount {
 
     pub fn decode(&self) -> Option<Account> {
         let data = match &self.data {
-            EncodedAccountData::Json(_) => None,
-            EncodedAccountData::Binary(blob) => bs58::decode(blob).into_vec().ok(),
+            UiAccountData::Json(_) => None,
+            UiAccountData::Binary(blob) => bs58::decode(blob).into_vec().ok(),
         }?;
         Some(Account {
             lamports: self.lamports,

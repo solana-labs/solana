@@ -111,7 +111,7 @@ mod tests {
     use crate::{nonce::nonce_arg, offline::blockhash_query::BlockhashQuery};
     use clap::App;
     use serde_json::{self, json, Value};
-    use solana_account_decoder::{AccountEncoding, EncodedAccount};
+    use solana_account_decoder::{UiAccount, UiAccountEncoding};
     use solana_client::{
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcFeeCalculator, RpcResponseContext},
@@ -350,7 +350,7 @@ mod tests {
         )
         .unwrap();
         let nonce_pubkey = Pubkey::new(&[4u8; 32]);
-        let rpc_nonce_account = EncodedAccount::encode(nonce_account, AccountEncoding::Binary);
+        let rpc_nonce_account = UiAccount::encode(nonce_account, UiAccountEncoding::Binary);
         let get_account_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(Some(rpc_nonce_account)),

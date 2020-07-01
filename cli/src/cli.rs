@@ -15,7 +15,7 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
-use solana_account_decoder::{AccountEncoding, EncodedAccount};
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
     commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
@@ -1226,7 +1226,7 @@ fn process_show_account(
     let cli_account = CliAccount {
         keyed_account: RpcKeyedAccount {
             pubkey: account_pubkey.to_string(),
-            account: EncodedAccount::encode(account, AccountEncoding::Binary),
+            account: UiAccount::encode(account, UiAccountEncoding::Binary),
         },
         use_lamports_unit,
     };
