@@ -92,7 +92,7 @@ pub struct Tower {
     #[serde(skip)]
     path: PathBuf,
     #[serde(skip)]
-    tmp_path: PathBuf,
+    tmp_path: PathBuf, // used before atomic fs::rename()
     #[serde(skip)]
     restored_stray_slots: BTreeSet<Slot>,
 }
