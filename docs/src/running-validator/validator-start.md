@@ -199,7 +199,7 @@ solana-validator \
   --log ~/solana-validator.log
 ```
 
-Lastly, to configure logging, please run the following:
+Lastly, to configure log rotation, please run the following:
 
 ```bash
 # Setup log rotation
