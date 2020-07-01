@@ -12,7 +12,7 @@ use serde_json::Value;
 use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use std::str::FromStr;
 
-/// A duplicate representation of a Message for pretty JSON serialization
+/// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAccount {
