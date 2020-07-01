@@ -42,6 +42,7 @@
   * [Stake](running-validator/validator-stake.md)
   * [Monitor a Validator](running-validator/validator-monitor.md)
   * [Publish Validator Info](running-validator/validator-info.md)
+  * [Restart a Cluster](running-validator/restart-cluster.md)
   * [Troubleshoot](running-validator/validator-troubleshoot.md)
 * [Participate in Tour de SOL](tour-de-sol/README.md)
   * [Useful Links & Discussion](tour-de-sol/useful-links.md)
