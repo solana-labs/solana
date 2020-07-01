@@ -54,6 +54,7 @@ members = [
     "sys-tuner",
     "tokens",
     "transaction-status",
+    "account-decoder",
     "upload-perf",
     "net-utils",
     "version",

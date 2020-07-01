@@ -137,7 +137,10 @@ Returns all information associated with the account of provided Pubkey
 #### Parameters:
 
 * `<string>` - Pubkey of account to query, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
@@ -147,7 +150,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
 * `<object>` - otherwise, a JSON object containing:
   * `lamports: <u64>`, number of lamports assigned to this account, as a u64
   * `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-  * `data: <string>`, base-58 encoded data associated with the account
+  * `data: <string|object>`, data associated with the account, either as base-58 encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
   * `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
   * `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
 
@@ -155,10 +158,16 @@ The result will be an RpcResponse JSON object with `value` equal to:
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["2gVkYWexTHR5Hb2aLeQN3tnngvWzisFKXDUPrgMHpdST"]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF","rentEpoch":2}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":"11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},"id":1}
+
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",{"encoding":"json"}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":{"nonce":{"initialized":{"authority":"Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX","blockhash":"3xLP3jK6dVJwpeGeTDYTwdDK3TKchUf1gYYGHa4sF3XJ","feeCalculator":{"lamportsPerSignature":5000}}}},"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},"id":1}
 ```
 
 ### getBalance
@@ -279,9 +288,8 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 * `<u64>` - slot, as u64 integer
-* `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary".
-  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
-  If parameter not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON.
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
 
@@ -400,9 +408,8 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 * `<string>` - transaction signature as base-58 encoded string
-* `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary".
-  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit program data.
-  If parameter not provided, the default encoding is JSON.
+* `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON.
+  Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
 
@@ -779,7 +786,10 @@ Returns all accounts owned by the provided program Pubkey
 #### Parameters:
 
 * `<string>` - Pubkey of program, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
@@ -789,7 +799,7 @@ The result field will be an array of JSON objects, which will contain:
 * `account: <object>` - a JSON object, with the following sub fields:
    * `lamports: <u64>`, number of lamports assigned to this account, as a u64
    * `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   * `data: <string>`, base-58 encoded data associated with the account
+   `data: <string|object>`, data associated with the account, either as base-58 encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
    * `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    * `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
 

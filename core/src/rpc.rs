@@ -8,6 +8,7 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::*,
     rpc_request::{
@@ -205,10 +206,16 @@ impl JsonRpcRequestProcessor {
     pub fn get_account_info(
         &self,
         pubkey: &Pubkey,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>> {
-        let bank = self.bank(commitment)?;
-        new_response(&bank, bank.get_account(pubkey).map(RpcAccount::encode))
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        new_response(
+            &bank,
+            bank.get_account(pubkey)
+                .map(|account| UiAccount::encode(account, encoding)),
+        )
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -224,15 +231,17 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<Vec<RpcKeyedAccount>> {
-        Ok(self
-            .bank(commitment)?
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        Ok(bank
             .get_program_accounts(Some(&program_id))
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: RpcAccount::encode(account),
+                account: UiAccount::encode(account, encoding.clone()),
             })
             .collect())
     }
@@ -823,15 +832,15 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>>;
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
         &self,
         meta: Self::Metadata,
         program_id_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<Vec<RpcKeyedAccount>>;
 
     #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
@@ -1076,11 +1085,11 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>> {
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
-        meta.get_account_info(&pubkey, commitment)
+        meta.get_account_info(&pubkey, config)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -1100,14 +1109,14 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         program_id_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<Vec<RpcKeyedAccount>> {
         debug!(
             "get_program_accounts rpc request received: {:?}",
             program_id_str
         );
         let program_id = verify_pubkey(program_id_str)?;
-        meta.get_program_accounts(&program_id, commitment)
+        meta.get_program_accounts(&program_id, config)
     }
 
     fn get_inflation_governor(

@@ -4,9 +4,8 @@ use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_client::rpc_response::{
-    Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
-};
+use solana_account_decoder::UiAccount;
+use solana_client::rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult};
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{
@@ -37,7 +36,7 @@ pub trait RpcSolPubSub {
     fn account_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcAccount>>,
+        subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
     );
@@ -172,7 +171,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcAccount>>,
+        subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
     ) {

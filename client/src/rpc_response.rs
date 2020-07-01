@@ -1,13 +1,12 @@
-use crate::{client_error, rpc_request::RpcError};
+use crate::client_error;
+use solana_account_decoder::UiAccount;
 use solana_sdk::{
-    account::Account,
     clock::{Epoch, Slot},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     inflation::Inflation,
-    pubkey::Pubkey,
     transaction::{Result, TransactionError},
 };
-use std::{collections::HashMap, net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 
@@ -91,50 +90,13 @@ pub struct RpcInflationRate {
 #[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
-    pub account: RpcAccount,
+    pub account: UiAccount,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignatureResult {
     pub err: Option<TransactionError>,
-}
-
-/// A duplicate representation of a Message for pretty JSON serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcAccount {
-    pub lamports: u64,
-    pub data: String,
-    pub owner: String,
-    pub executable: bool,
-    pub rent_epoch: Epoch,
-}
-
-impl RpcAccount {
-    pub fn encode(account: Account) -> Self {
-        RpcAccount {
-            lamports: account.lamports,
-            data: bs58::encode(account.data.clone()).into_string(),
-            owner: account.owner.to_string(),
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
-        }
-    }
-
-    pub fn decode(&self) -> std::result::Result<Account, RpcError> {
-        Ok(Account {
-            lamports: self.lamports,
-            data: bs58::decode(self.data.clone()).into_vec().map_err(|_| {
-                RpcError::RpcRequestError("Could not parse encoded account data".to_string())
-            })?,
-            owner: Pubkey::from_str(&self.owner).map_err(|_| {
-                RpcError::RpcRequestError("Could not parse encoded account owner".to_string())
-            })?,
-            executable: self.executable,
-            rent_epoch: self.rent_epoch,
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -11,6 +11,7 @@ use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
+use solana_account_decoder::UiAccount;
 use solana_sdk::{
     account::Account,
     clock::{
@@ -440,9 +441,9 @@ impl RpcClient {
                 let Response {
                     context,
                     value: rpc_account,
-                } = serde_json::from_value::<Response<Option<RpcAccount>>>(result_json)?;
+                } = serde_json::from_value::<Response<Option<UiAccount>>>(result_json)?;
                 trace!("Response account {:?} {:?}", pubkey, rpc_account);
-                let account = rpc_account.and_then(|rpc_account| rpc_account.decode().ok());
+                let account = rpc_account.and_then(|rpc_account| rpc_account.decode());
                 Ok(Response {
                     context,
                     value: account,

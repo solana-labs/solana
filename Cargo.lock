@@ -3630,6 +3630,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-account-decoder"
+version = "1.3.0"
+dependencies = [
+ "Inflector",
+ "bincode",
+ "bs58 0.3.1",
+ "lazy_static",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-sdk 1.3.0",
+ "solana-vote-program",
+ "spl-memo",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-accounts-bench"
 version = "1.3.0"
 dependencies = [
@@ -3816,6 +3833,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-budget-program",
  "solana-clap-utils",
  "solana-cli-config",
@@ -3866,6 +3884,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-logger",
  "solana-net-utils",
  "solana-sdk 1.3.0",
@@ -3925,6 +3944,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "serial_test_derive",
+ "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-budget-program",
  "solana-clap-utils",
@@ -4794,6 +4814,8 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-sdk 1.3.0",
+ "solana-stake-program",
+ "solana-vote-program",
  "spl-memo",
 ]
 
