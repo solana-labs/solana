@@ -62,9 +62,14 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
             .collect()
     }
 
-    pub fn would_purge(&self, pubkey: &Pubkey) -> SlotList<T> {
-        let list = &self.account_maps.get(&pubkey).unwrap().1.read().unwrap();
-        self.get_rooted_entries(&list)
+    // returns the rooted entries and the storage ref count
+    pub fn would_purge(&self, pubkey: &Pubkey) -> (SlotList<T>, RefCount) {
+        let (ref_count, slots_list) = self.account_maps.get(&pubkey).unwrap();
+        let slots_list_r = &slots_list.read().unwrap();
+        (
+            self.get_rooted_entries(&slots_list_r),
+            ref_count.load(Ordering::Relaxed),
+        )
     }
 
     // filter any rooted entries and return them along with a bool that indicates
@@ -73,6 +78,17 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         let list = &mut self.account_maps.get(&pubkey).unwrap().1.write().unwrap();
         let reclaims = self.get_rooted_entries(&list);
         list.retain(|(slot, _)| !self.is_root(*slot));
+        (reclaims, list.is_empty())
+    }
+
+    pub fn purge_exact(&self, pubkey: &Pubkey, slots: HashSet<Slot>) -> (SlotList<T>, bool) {
+        let list = &mut self.account_maps.get(&pubkey).unwrap().1.write().unwrap();
+        let reclaims = list
+            .iter()
+            .filter(|(slot, _)| slots.contains(&slot))
+            .cloned()
+            .collect();
+        list.retain(|(slot, _)| !slots.contains(slot));
         (reclaims, list.is_empty())
     }
 

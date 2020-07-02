@@ -229,7 +229,6 @@ impl BankForks {
                 bank.squash();
                 is_root_bank_squashed = bank_slot == root;
 
-                bank.clean_accounts();
                 bank.update_accounts_hash();
 
                 if self.snapshot_config.is_some() && accounts_package_sender.is_some() {
