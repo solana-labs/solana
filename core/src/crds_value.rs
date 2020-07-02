@@ -76,6 +76,7 @@ pub enum CrdsData {
     AccountsHashes(SnapshotHash),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     Version(Version),
+    ValidatorGroup(ValidatorGroup),
 }
 
 impl Sanitize for CrdsData {
@@ -103,6 +104,7 @@ impl Sanitize for CrdsData {
                 val.sanitize()
             }
             CrdsData::Version(version) => version.sanitize(),
+            CrdsData::ValidatorGroup(group) => group.sanitize(),
         }
     }
 }
@@ -235,6 +237,37 @@ impl Version {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ValidatorGroup {
+    pub from: Pubkey,
+    pub set: Vec<Pubkey>,
+    pub wallclock: u64,
+}
+
+impl Sanitize for ValidatorGroup {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+
+        if !self.set.contains(&self.from) {
+            return Err(SanitizeError::InvalidValue);
+        }
+
+        Ok(())
+    }
+}
+
+impl ValidatorGroup {
+    pub fn new(from: &Pubkey, set: Vec<Pubkey>) -> Self {
+        Self {
+            from: *from,
+            set,
+            wallclock: timestamp(),
+        }
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -246,6 +279,7 @@ pub enum CrdsValueLabel {
     EpochSlots(EpochSlotsIndex, Pubkey),
     AccountsHashes(Pubkey),
     Version(Pubkey),
+    ValidatorGroup(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -258,6 +292,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
+            CrdsValueLabel::ValidatorGroup(_) => write!(f, "ValidatorGroup({})", self),
         }
     }
 }
@@ -272,6 +307,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::EpochSlots(_, p) => *p,
             CrdsValueLabel::AccountsHashes(p) => *p,
             CrdsValueLabel::Version(p) => *p,
+            CrdsValueLabel::ValidatorGroup(p) => *p,
         }
     }
 }
@@ -289,6 +325,7 @@ impl CrdsValue {
         value.sign(keypair);
         value
     }
+
     /// Totally unsecure unverifiable wallclock of the node that generated this message
     /// Latest wallclock is always picked.
     /// This is used to time out push messages.
@@ -301,6 +338,7 @@ impl CrdsValue {
             CrdsData::AccountsHashes(hash) => hash.wallclock,
             CrdsData::EpochSlots(_, p) => p.wallclock,
             CrdsData::Version(version) => version.wallclock,
+            CrdsData::ValidatorGroup(group) => group.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -312,6 +350,7 @@ impl CrdsValue {
             CrdsData::AccountsHashes(hash) => hash.from,
             CrdsData::EpochSlots(_, p) => p.from,
             CrdsData::Version(version) => version.from,
+            CrdsData::ValidatorGroup(group) => group.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -323,14 +362,17 @@ impl CrdsValue {
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
+            CrdsData::ValidatorGroup(_) => CrdsValueLabel::ValidatorGroup(self.pubkey()),
         }
     }
+
     pub fn contact_info(&self) -> Option<&ContactInfo> {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => Some(contact_info),
             _ => None,
         }
     }
+
     pub fn vote(&self) -> Option<&Vote> {
         match &self.data {
             CrdsData::Vote(_, vote) => Some(vote),
@@ -380,6 +422,13 @@ impl CrdsValue {
         }
     }
 
+    pub fn validator_group(&self) -> Option<&ValidatorGroup> {
+        match &self.data {
+            CrdsData::ValidatorGroup(validator_group) => Some(validator_group),
+            _ => None,
+        }
+    }
+
     /// Return all the possible labels for a record identified by Pubkey.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
@@ -388,6 +437,7 @@ impl CrdsValue {
             CrdsValueLabel::SnapshotHashes(*key),
             CrdsValueLabel::AccountsHashes(*key),
             CrdsValueLabel::Version(*key),
+            CrdsValueLabel::ValidatorGroup(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
@@ -438,7 +488,7 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 5 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
+        let mut hits = [false; 6 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
@@ -447,9 +497,10 @@ mod test {
                 CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
                 CrdsValueLabel::Version(_) => hits[4] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 5] = true,
+                CrdsValueLabel::ValidatorGroup(_) => hits[5] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 6] = true,
                 CrdsValueLabel::EpochSlots(ix, _) => {
-                    hits[*ix as usize + MAX_VOTES as usize + 5] = true
+                    hits[*ix as usize + MAX_VOTES as usize + 6] = true
                 }
             }
         }
@@ -593,6 +644,25 @@ mod test {
         assert_eq!(CrdsValue::compute_vote_index(0, vote_refs), 0);
         let vote_refs = votes.iter().collect();
         assert_eq!(CrdsValue::compute_vote_index(30, vote_refs), 30);
+    }
+
+    #[test]
+    fn test_validator_group_sanitize() {
+        use solana_sdk::signature::Signer;
+
+        // Check a ValidatorGroup contains its own Pubkey, and fails to sanitize one that does not.
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let valid_value = CrdsValue::new_unsigned(CrdsData::ValidatorGroup(ValidatorGroup::new(
+            &keypair.pubkey(),
+            vec![pubkey, Keypair::new().pubkey()],
+        )));
+        assert_eq!(valid_value.sanitize(), Ok(()));
+        let invalid_value = CrdsValue::new_unsigned(CrdsData::ValidatorGroup(ValidatorGroup::new(
+            &keypair.pubkey(),
+            vec![Keypair::new().pubkey(), Keypair::new().pubkey()],
+        )));
+        assert_eq!(invalid_value.sanitize(), Err(SanitizeError::InvalidValue));
     }
 
     fn serialize_deserialize_value(value: &mut CrdsValue, keypair: &Keypair) {

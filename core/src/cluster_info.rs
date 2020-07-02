@@ -19,7 +19,7 @@ use crate::{
     crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
-        Version, Vote, MAX_WALLCLOCK,
+        ValidatorGroup, Version, Vote, MAX_WALLCLOCK,
     },
     epoch_slots::EpochSlots,
     result::{Error, Result},
@@ -204,9 +204,11 @@ struct GossipStats {
     entrypoint2: Counter,
     push_vote_read: Counter,
     vote_process_push: Counter,
+    validator_group_process_push: Counter,
     get_votes: Counter,
     get_accounts_hash: Counter,
     get_snapshot_hash: Counter,
+    get_validator_group: Counter,
     all_tvu_peers: Counter,
     tvu_peers: Counter,
     retransmit_peers: Counter,
@@ -743,6 +745,18 @@ impl ClusterInfo {
             .process_push_message(&self.id(), vec![entry], now);
     }
 
+    pub fn push_validator_group(&self, mut keys: Vec<Pubkey>) {
+        let now = timestamp();
+        keys.dedup();
+        let group = ValidatorGroup::new(&self.id(), keys);
+        let group = CrdsValue::new_signed(CrdsData::ValidatorGroup(group), &self.keypair);
+        self.time_gossip_write_lock(
+            "push_validator_group_process_push",
+            &self.stats.validator_group_process_push,
+        )
+        .process_push_message(&self.id(), vec![group], now);
+    }
+
     pub fn send_vote(&self, vote: &Transaction) -> Result<()> {
         let tpu = self.my_contact_info().tpu;
         let buf = serialize(vote)?;
@@ -789,6 +803,33 @@ impl ClusterInfo {
                 None
             })
             .collect()
+    }
+
+    pub fn get_validator_group<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
+    where
+        F: FnOnce(Vec<ValidatorGroup>) -> Y,
+    {
+        let lock =
+            self.time_gossip_read_lock("get_validator_group", &self.stats.get_validator_group);
+
+        lock.crds
+            .table
+            .get(&CrdsValueLabel::ValidatorGroup(*pubkey))
+            .map(|x| x.value.validator_group().unwrap())
+            .map(|group| {
+                // Find each group members ValidatorGroup entry.
+                group
+                    .set
+                    .iter()
+                    .filter_map(|member| {
+                        lock.crds
+                            .table
+                            .get(&CrdsValueLabel::ValidatorGroup(*member))
+                            .and_then(|x| x.value.validator_group().cloned())
+                    })
+                    .collect()
+            })
+            .map(map)
     }
 
     pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
@@ -1503,6 +1544,7 @@ impl ClusterInfo {
     pub fn gossip(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
+        validator_group_keys: Vec<Arc<Keypair>>,
         sender: PacketSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -1547,6 +1589,12 @@ impl ClusterInfo {
                     //we saw a deadlock passing an self.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
                         self.push_self(&stakes);
+                        self.push_validator_group(
+                            validator_group_keys
+                                .iter()
+                                .map(|key| key.pubkey())
+                                .collect(),
+                        );
                         last_push = timestamp();
                     }
                     let elapsed = timestamp() - start;
@@ -2558,6 +2606,31 @@ mod tests {
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Arc;
+
+    #[test]
+    fn test_push_validator_group() {
+        // single validator with multiple (3) nodes.
+        let identity = Keypair::new();
+        let nodekey1 = Keypair::new();
+        let nodekey2 = Keypair::new();
+        let keygroup = vec![identity.pubkey(), nodekey1.pubkey(), nodekey2.pubkey()];
+
+        // crds setup
+        let contact_info = ContactInfo::new_localhost(&identity.pubkey(), 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+
+        // test empty crds
+        let group = cluster_info.get_validator_group(&identity.pubkey(), |x| x);
+        assert_eq!(group, None);
+
+        // test push and retrieve of a validator group
+        cluster_info.push_validator_group(keygroup.clone());
+        let group = cluster_info
+            .get_validator_group(&identity.pubkey(), |x| x)
+            .unwrap();
+        let group = group.get(0).unwrap();
+        assert_eq!(keygroup, group.set);
+    }
 
     #[test]
     fn test_gossip_node() {

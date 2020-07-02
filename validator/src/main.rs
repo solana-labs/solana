@@ -779,6 +779,15 @@ pub fn main() {
                        May be specified multiple times. If unspecified any snapshot hash will be accepted"),
         )
         .arg(
+            Arg::with_name("node_identity_key")
+                .long("node-identity")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A node key represents the current nodes identity in gossip in gossip."),
+        )
+        .arg(
             Arg::with_name("no_untrusted_rpc")
                 .long("no-untrusted-rpc")
                 .takes_value(false)
@@ -885,6 +894,11 @@ pub fn main() {
     } else {
         None
     };
+
+    // Get set of known node keys this validator may represent.
+    let validator_group_keys = keypairs_of(&matches, "node_identity_key")
+        .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
+        .unwrap_or_else(|| vec![]);
 
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
@@ -1304,6 +1318,7 @@ pub fn main() {
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
+        validator_group_keys,
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,
         &validator_config,
