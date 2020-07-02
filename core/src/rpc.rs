@@ -243,7 +243,7 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .filter(|(_, account)| {
                 filters.iter().all(|filter_type| match filter_type {
-                    RpcFilterType::CompareBytes(compare) => compare.bytes_match(&account.data),
+                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
                 })
             })
             .map(|(pubkey, account)| RpcKeyedAccount {

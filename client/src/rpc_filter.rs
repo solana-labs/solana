@@ -3,13 +3,13 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcFilterType {
-    CompareBytes(CompareBytes),
+    Memcmp(Memcmp),
 }
 
 impl RpcFilterType {
     pub fn verify(&self) -> Result<(), RpcFilterError> {
         match self {
-            RpcFilterType::CompareBytes(compare) => bs58::decode(&compare.bytes)
+            RpcFilterType::Memcmp(compare) => bs58::decode(&compare.bytes)
                 .into_vec()
                 .map(|_| ())
                 .map_err(|e| e.into()),
@@ -24,14 +24,14 @@ pub enum RpcFilterError {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CompareBytes {
+pub struct Memcmp {
     /// Data offset to begin match
     offset: usize,
     /// Base-58 encoded bytes
     bytes: String,
 }
 
-impl CompareBytes {
+impl Memcmp {
     pub fn bytes_match(&self, data: &[u8]) -> bool {
         let bytes = bs58::decode(&self.bytes).into_vec();
         if bytes.is_err() {
@@ -57,49 +57,49 @@ mod tests {
         let data = vec![1, 2, 3, 4, 5];
 
         // Exact match of data succeeds
-        assert!(CompareBytes {
+        assert!(Memcmp {
             offset: 0,
             bytes: bs58::encode(vec![1, 2, 3, 4, 5]).into_string(),
         }
         .bytes_match(&data));
 
         // Partial match of data succeeds
-        assert!(CompareBytes {
+        assert!(Memcmp {
             offset: 0,
             bytes: bs58::encode(vec![1, 2]).into_string(),
         }
         .bytes_match(&data));
 
         // Offset partial match of data succeeds
-        assert!(CompareBytes {
+        assert!(Memcmp {
             offset: 2,
             bytes: bs58::encode(vec![3, 4]).into_string(),
         }
         .bytes_match(&data));
 
         // Incorrect partial match of data fails
-        assert!(!CompareBytes {
+        assert!(!Memcmp {
             offset: 0,
             bytes: bs58::encode(vec![2]).into_string(),
         }
         .bytes_match(&data));
 
         // Bytes overrun data fails
-        assert!(!CompareBytes {
+        assert!(!Memcmp {
             offset: 2,
             bytes: bs58::encode(vec![3, 4, 5, 6]).into_string(),
         }
         .bytes_match(&data));
 
         // Offset outside data fails
-        assert!(!CompareBytes {
+        assert!(!Memcmp {
             offset: 6,
             bytes: bs58::encode(vec![5]).into_string(),
         }
         .bytes_match(&data));
 
         // Invalid base-58 fails
-        assert!(!CompareBytes {
+        assert!(!Memcmp {
             offset: 0,
             bytes: "III".to_string(),
         }
