@@ -243,6 +243,7 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .filter(|(_, account)| {
                 filters.iter().all(|filter_type| match filter_type {
+                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
                     RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
                 })
             })
@@ -2334,7 +2335,7 @@ pub mod tests {
             .expect("actual response deserialization");
         assert_eq!(expected, result);
 
-        // Test filter; since bytes are empty, should still match
+        // Test memcmp filter; since bytes are empty, should still match
         let req = format!(
             r#"{{
                 "jsonrpc":"2.0",
@@ -2388,7 +2389,75 @@ pub mod tests {
             }}"#,
             new_program_id
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "result":[],
+                "id":1}}
+            "#,
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test dataSize filter
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "dataSize": 0
+                    }}
+                ]}}]
+            }}"#,
+            new_program_id
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "result":[
+                    {{
+                        "pubkey": "{}",
+                        "account": {{
+                            "owner": "{}",
+                            "lamports": 20,
+                            "data": "",
+                            "executable": false,
+                            "rentEpoch": 0
+                        }}
+                    }}
+                ],
+                "id":1}}
+            "#,
+            bob.pubkey(),
+            new_program_id
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "dataSize": 1
+                    }}
+                ]}}]
+            }}"#,
+            new_program_id
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{
                 "jsonrpc":"2.0",

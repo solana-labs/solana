@@ -3,12 +3,14 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcFilterType {
+    DataSize(u64),
     Memcmp(Memcmp),
 }
 
 impl RpcFilterType {
     pub fn verify(&self) -> Result<(), RpcFilterError> {
         match self {
+            RpcFilterType::DataSize(_) => Ok(()),
             RpcFilterType::Memcmp(compare) => {
                 let encoding = compare.encoding.as_ref().unwrap_or(&MemcmpEncoding::Binary);
                 match encoding {
