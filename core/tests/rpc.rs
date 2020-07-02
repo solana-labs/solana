@@ -121,14 +121,14 @@ fn test_rpc_invalid_requests() {
     let json = post_rpc(req, &leader_data);
 
     let the_error = json["error"]["message"].as_str().unwrap();
-    assert_eq!(the_error, "Invalid");
+    assert_eq!(the_error, "Invalid param: Invalid");
 
     // test invalid get_account_info request
     let req = json_req!("getAccountInfo", json!(["invalid9999"]));
     let json = post_rpc(req, &leader_data);
 
     let the_error = json["error"]["message"].as_str().unwrap();
-    assert_eq!(the_error, "Invalid");
+    assert_eq!(the_error, "Invalid param: Invalid");
 
     // test invalid get_account_info request
     let req = json_req!("getAccountInfo", json!([bob_pubkey.to_string()]));

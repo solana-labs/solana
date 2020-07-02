@@ -770,19 +770,19 @@ impl JsonRpcRequestProcessor {
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
     input
         .verify()
-        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
     input
         .parse()
-        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
 fn verify_signature(input: &str) -> Result<Signature> {
     input
         .parse()
-        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
 /// Run transactions against a frozen bank without committing the results
@@ -1644,6 +1644,7 @@ pub mod tests {
         futures::future::Future, ErrorCode, MetaIoHandler, Output, Response, Value,
     };
     use jsonrpc_core_client::transports::local;
+    use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         blockstore_processor::fill_blockstore_slot_with_ticks,
@@ -2306,7 +2307,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"getProgramAccounts","params":["{}"]}}"#,
             new_program_id
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{
                 "jsonrpc":"2.0",
@@ -2326,6 +2327,74 @@ pub mod tests {
             "#,
             bob.pubkey(),
             new_program_id
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test filter; since bytes are empty, should still match
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "memcmp": {{"offset": 0,"bytes": ""}}
+                    }}
+                ]}}]
+            }}"#,
+            new_program_id
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "result":[
+                    {{
+                        "pubkey": "{}",
+                        "account": {{
+                            "owner": "{}",
+                            "lamports": 20,
+                            "data": "",
+                            "executable": false,
+                            "rentEpoch": 0
+                        }}
+                    }}
+                ],
+                "id":1}}
+            "#,
+            bob.pubkey(),
+            new_program_id
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "memcmp": {{"offset": 0,"bytes": "1"}}
+                    }}
+                ]}}]
+            }}"#,
+            new_program_id
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "result":[],
+                "id":1}}
+            "#,
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -2912,13 +2981,32 @@ pub mod tests {
     }
 
     #[test]
+    fn test_rpc_verify_filter() {
+        let filter = RpcFilterType::Memcmp(Memcmp {
+            offset: 0,
+            bytes: MemcmpEncodedBytes::Binary(
+                "13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string(),
+            ),
+            encoding: None,
+        });
+        assert_eq!(verify_filter(&filter).unwrap(), ());
+        // Invalid base-58
+        let filter = RpcFilterType::Memcmp(Memcmp {
+            offset: 0,
+            bytes: MemcmpEncodedBytes::Binary("III".to_string()),
+            encoding: None,
+        });
+        assert!(verify_filter(&filter).is_err());
+    }
+
+    #[test]
     fn test_rpc_verify_pubkey() {
         let pubkey = Pubkey::new_rand();
         assert_eq!(verify_pubkey(pubkey.to_string()).unwrap(), pubkey);
         let bad_pubkey = "a1b2c3d4";
         assert_eq!(
             verify_pubkey(bad_pubkey.to_string()),
-            Err(Error::invalid_params("WrongSize"))
+            Err(Error::invalid_params("Invalid param: WrongSize"))
         );
     }
 
@@ -2932,7 +3020,7 @@ pub mod tests {
         let bad_signature = "a1b2c3d4";
         assert_eq!(
             verify_signature(&bad_signature.to_string()),
-            Err(Error::invalid_params("WrongSize"))
+            Err(Error::invalid_params("Invalid param: WrongSize"))
         );
     }
 

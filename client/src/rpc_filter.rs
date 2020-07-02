@@ -9,10 +9,18 @@ pub enum RpcFilterType {
 impl RpcFilterType {
     pub fn verify(&self) -> Result<(), RpcFilterError> {
         match self {
-            RpcFilterType::Memcmp(compare) => bs58::decode(&compare.bytes)
-                .into_vec()
-                .map(|_| ())
-                .map_err(|e| e.into()),
+            RpcFilterType::Memcmp(compare) => {
+                let encoding = compare.encoding.as_ref().unwrap_or(&MemcmpEncoding::Binary);
+                match encoding {
+                    MemcmpEncoding::Binary => {
+                        let MemcmpEncodedBytes::Binary(bytes) = &compare.bytes;
+                        bs58::decode(&bytes)
+                            .into_vec()
+                            .map(|_| ())
+                            .map_err(|e| e.into())
+                    }
+                }
+            }
         }
     }
 }
@@ -24,27 +32,45 @@ pub enum RpcFilterError {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MemcmpEncoding {
+    Binary,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum MemcmpEncodedBytes {
+    Binary(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Memcmp {
     /// Data offset to begin match
-    offset: usize,
-    /// Base-58 encoded bytes
-    bytes: String,
+    pub offset: usize,
+    /// Bytes, encoded with specified encoding, or default Binary
+    pub bytes: MemcmpEncodedBytes,
+    /// Optional encoding specification
+    pub encoding: Option<MemcmpEncoding>,
 }
 
 impl Memcmp {
     pub fn bytes_match(&self, data: &[u8]) -> bool {
-        let bytes = bs58::decode(&self.bytes).into_vec();
-        if bytes.is_err() {
-            return false;
+        match &self.bytes {
+            MemcmpEncodedBytes::Binary(bytes) => {
+                let bytes = bs58::decode(bytes).into_vec();
+                if bytes.is_err() {
+                    return false;
+                }
+                let bytes = bytes.unwrap();
+                if self.offset > data.len() {
+                    return false;
+                }
+                if data[self.offset..].len() < bytes.len() {
+                    return false;
+                }
+                data[self.offset..self.offset + bytes.len()] == bytes[..]
+            }
         }
-        let bytes = bytes.unwrap();
-        if self.offset > data.len() {
-            return false;
-        }
-        if data[self.offset..].len() < bytes.len() {
-            return false;
-        }
-        data[self.offset..self.offset + bytes.len()] == bytes[..]
     }
 }
 
@@ -59,49 +85,56 @@ mod tests {
         // Exact match of data succeeds
         assert!(Memcmp {
             offset: 0,
-            bytes: bs58::encode(vec![1, 2, 3, 4, 5]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1, 2, 3, 4, 5]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Partial match of data succeeds
         assert!(Memcmp {
             offset: 0,
-            bytes: bs58::encode(vec![1, 2]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1, 2]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Offset partial match of data succeeds
         assert!(Memcmp {
             offset: 2,
-            bytes: bs58::encode(vec![3, 4]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![3, 4]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Incorrect partial match of data fails
         assert!(!Memcmp {
             offset: 0,
-            bytes: bs58::encode(vec![2]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![2]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Bytes overrun data fails
         assert!(!Memcmp {
             offset: 2,
-            bytes: bs58::encode(vec![3, 4, 5, 6]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![3, 4, 5, 6]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Offset outside data fails
         assert!(!Memcmp {
             offset: 6,
-            bytes: bs58::encode(vec![5]).into_string(),
+            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![5]).into_string()),
+            encoding: None,
         }
         .bytes_match(&data));
 
         // Invalid base-58 fails
         assert!(!Memcmp {
             offset: 0,
-            bytes: "III".to_string(),
+            bytes: MemcmpEncodedBytes::Binary("III".to_string()),
+            encoding: None,
         }
         .bytes_match(&data));
     }
