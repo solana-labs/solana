@@ -304,7 +304,7 @@ impl Blockstore {
         Ok((blockstore, signal_receiver, completed_slots_receiver))
     }
 
-    pub fn add_tree(&self, forks: Tree<Slot>, is_orphan: bool) {
+    pub fn add_tree(&self, forks: Tree<Slot>, is_orphan: bool, is_slot_complete: bool) {
         let mut walk = TreeWalk::from(forks);
         while let Some(visit) = walk.get() {
             let slot = visit.node().data;
@@ -314,7 +314,14 @@ impl Blockstore {
             }
             let parent = walk.get_parent().map(|n| n.data);
             if parent.is_some() || !is_orphan {
-                let (shreds, _) = make_slot_entries(slot, parent.unwrap_or(slot), 1);
+                let entries = create_ticks(2, 0, Hash::default());
+                let shreds = entries_to_test_shreds(
+                    entries.clone(),
+                    slot,
+                    parent.unwrap_or(slot),
+                    is_slot_complete,
+                    0,
+                );
                 self.insert_shreds(shreds, None, false).unwrap();
             }
             walk.forward();
