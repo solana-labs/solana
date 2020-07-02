@@ -239,18 +239,20 @@ test('serialize unsigned transaction', () => {
   expect(expectedTransaction.signatures.length).toBe(1);
 });
 
-test('get sign data for transaction', () => {
+test('externally signed stake delegate', () => {
   const from_keypair = nacl.sign.keyPair.fromSeed(
     Uint8Array.from(Array(32).fill(1)),
   );
-  const from = new Account(Buffer.from(from_keypair.secretKey));
-  const to = new PublicKey(2);
+  const authority = new Account(Buffer.from(from_keypair.secretKey));
+  const stake = new PublicKey(2);
   const recentBlockhash = new PublicKey(3).toBuffer();
-  var tx = SystemProgram.transfer({
-    fromPubkey: from.publicKey,
-    toPubkey: to,
-    lamports: 42,
+  const vote = new PublicKey(4);
+  var tx = StakeProgram.delegate({
+    stakePubkey: stake,
+    authorizedPubkey: authority.publicKey,
+    votePubkey: vote,
   });
+  const from = authority;
   tx.recentBlockhash = bs58.encode(recentBlockhash);
   const tx_bytes = tx.serializeMessage();
   const signature = nacl.sign.detached(tx_bytes, from.secretKey);
