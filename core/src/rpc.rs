@@ -232,15 +232,12 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        config: Option<RpcProgramAccountsConfig>,
+        config: Option<RpcAccountInfoConfig>,
+        filters: Vec<RpcFilterType>,
     ) -> Result<Vec<RpcKeyedAccount>> {
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.account_config.commitment)?;
-        let encoding = config
-            .account_config
-            .encoding
-            .unwrap_or(UiAccountEncoding::Binary);
-        let filters = config.filters.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         Ok(bank
             .get_program_accounts(Some(&program_id))
             .into_iter()
@@ -770,6 +767,12 @@ impl JsonRpcRequestProcessor {
     }
 }
 
+fn verify_filter(input: &RpcFilterType) -> Result<()> {
+    input
+        .verify()
+        .map_err(|e| Error::invalid_params(format!("{:?}", e)))
+}
+
 fn verify_pubkey(input: String) -> Result<Pubkey> {
     input
         .parse()
@@ -1121,7 +1124,18 @@ impl RpcSol for RpcSolImpl {
             program_id_str
         );
         let program_id = verify_pubkey(program_id_str)?;
-        meta.get_program_accounts(&program_id, config)
+        let (config, filters) = if let Some(config) = config {
+            (
+                Some(config.account_config),
+                config.filters.unwrap_or_default(),
+            )
+        } else {
+            (None, vec![])
+        };
+        for filter in &filters {
+            verify_filter(filter)?;
+        }
+        meta.get_program_accounts(&program_id, config, filters)
     }
 
     fn get_inflation_governor(
