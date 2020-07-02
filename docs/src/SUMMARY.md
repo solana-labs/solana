@@ -121,5 +121,6 @@ title: Table of contents
   * [Tick Verification](proposals/tick-verification.md)
   * [Block Confirmation](proposals/block-confirmation.md)
   * [Rust Clients](proposals/rust-clients.md)
+  * [RPC Transaction History](proposals/rpc-transaction-history.md)
   * [Optimistic Confirmation](proposals/optimistic_confirmation.md)
   * [Program Instruction Macro](proposals/program-instruction-macro.md)
