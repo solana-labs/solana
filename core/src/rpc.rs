@@ -2390,13 +2390,7 @@ pub mod tests {
             new_program_id
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "result":[],
-                "id":1}}
-            "#,
-        );
+        let expected = "{\"jsonrpc\":\"2.0\",\"result\":[],\"id\":1}".to_string();
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -2457,14 +2451,8 @@ pub mod tests {
             }}"#,
             new_program_id
         );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "result":[],
-                "id":1}}
-            "#,
-        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = "{\"jsonrpc\":\"2.0\",\"result\":[],\"id\":1}".to_string();
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -3058,7 +3046,7 @@ pub mod tests {
             ),
             encoding: None,
         });
-        assert_eq!(verify_filter(&filter).unwrap(), ());
+        assert_eq!(verify_filter(&filter), Ok(()));
         // Invalid base-58
         let filter = RpcFilterType::Memcmp(Memcmp {
             offset: 0,
