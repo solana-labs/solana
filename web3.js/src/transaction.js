@@ -210,9 +210,6 @@ export class Transaction {
     let numReadonlySignedAccounts = 0;
     let numReadonlyUnsignedAccounts = 0;
 
-    const accountKeys = this.signatures.map(({publicKey}) =>
-      publicKey.toString(),
-    );
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {
@@ -226,6 +223,18 @@ export class Transaction {
       }
     });
 
+    // Append programID account metas
+    programIds.forEach(programId => {
+      accountMetas.push({
+        pubkey: new PublicKey(programId),
+        isSigner: false,
+        isWritable: false,
+      });
+    });
+
+    // Prefix accountMetas with feePayer here whenever that gets implemented
+
+    // Sort. Prioritizing first by signer, then by writable
     accountMetas.sort(function (x, y) {
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
       const checkWritable =
@@ -233,31 +242,66 @@ export class Transaction {
       return checkSigner || checkWritable;
     });
 
-    accountMetas.forEach(({pubkey, isSigner, isWritable}) => {
-      const keyStr = pubkey.toString();
-      if (!accountKeys.includes(keyStr)) {
-        accountKeys.push(keyStr);
-        if (isSigner) {
-          this.signatures.push({
-            signature: null,
-            publicKey: pubkey,
-          });
-          if (!isWritable) {
-            numReadonlySignedAccounts += 1;
-          }
-        } else if (!isWritable) {
+    // Cull duplicate account metas
+    const uniqueMetas: AccountMeta[] = [];
+    accountMetas.forEach(accountMeta => {
+      const pubkeyString = accountMeta.pubkey.toString();
+      const uniqueIndex = uniqueMetas.findIndex(x => {
+        return x.pubkey.toString() === pubkeyString;
+      });
+      if (uniqueIndex > -1) {
+        uniqueMetas[uniqueIndex].isWritable =
+          uniqueMetas[uniqueIndex].isWritable || accountMeta.isWritable;
+      } else {
+        uniqueMetas.push(accountMeta);
+      }
+    });
+
+    this.signatures.forEach(signature => {
+      const sigPubkeyString = signature.publicKey.toString();
+      const uniqueIndex = uniqueMetas.findIndex(x => {
+        return x.pubkey.toString() === sigPubkeyString;
+      });
+      if (uniqueIndex > -1) {
+        uniqueMetas[uniqueIndex].isSigner = true;
+      } else {
+        uniqueMetas.unshift({
+          pubkey: new PublicKey(sigPubkeyString),
+          isSigner: true,
+          isWritable: true,
+        });
+      }
+    });
+
+    // Split out signing from nonsigning keys and count readonlys
+    const signedKeys: string[] = [];
+    const unsignedKeys: string[] = [];
+    uniqueMetas.forEach(({pubkey, isSigner, isWritable}) => {
+      if (isSigner) {
+        // Promote the first signer to writable as it is the fee payer
+        const first = signedKeys.length === 0;
+        signedKeys.push(pubkey.toString());
+        if (!first && !isWritable) {
+          numReadonlySignedAccounts += 1;
+        }
+      } else {
+        unsignedKeys.push(pubkey.toString());
+        if (!isWritable) {
           numReadonlyUnsignedAccounts += 1;
         }
       }
     });
 
-    programIds.forEach(programId => {
-      if (!accountKeys.includes(programId)) {
-        accountKeys.push(programId);
-        numReadonlyUnsignedAccounts += 1;
-      }
-    });
+    // Initialize signature array, if needed
+    if (this.signatures.length === 0) {
+      const signatures: Array<SignaturePubkeyPair> = [];
+      signedKeys.forEach(pubkey => {
+        signatures.push({signature: null, publicKey: new PublicKey(pubkey)});
+      });
+      this.signatures = signatures;
+    }
 
+    const accountKeys = signedKeys.concat(unsignedKeys);
     const instructions: CompiledInstruction[] = this.instructions.map(
       instruction => {
         const {data, programId} = instruction;
