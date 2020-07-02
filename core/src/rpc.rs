@@ -11,6 +11,7 @@ use jsonrpc_derive::rpc;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::*,
+    rpc_filter::RpcFilterType,
     rpc_request::{
         DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
@@ -231,14 +232,23 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        config: Option<RpcAccountInfoConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     ) -> Result<Vec<RpcKeyedAccount>> {
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.commitment)?;
-        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        let bank = self.bank(config.account_config.commitment)?;
+        let encoding = config
+            .account_config
+            .encoding
+            .unwrap_or(UiAccountEncoding::Binary);
+        let filters = config.filters.unwrap_or_default();
         Ok(bank
             .get_program_accounts(Some(&program_id))
             .into_iter()
+            .filter(|(_, account)| {
+                filters.iter().all(|filter_type| match filter_type {
+                    RpcFilterType::CompareBytes(compare) => compare.bytes_match(&account.data),
+                })
+            })
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
                 account: UiAccount::encode(account, encoding.clone()),
@@ -839,7 +849,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         program_id_str: String,
-        config: Option<RpcAccountInfoConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     ) -> Result<Vec<RpcKeyedAccount>>;
 
     #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
@@ -1104,7 +1114,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         program_id_str: String,
-        config: Option<RpcAccountInfoConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     ) -> Result<Vec<RpcKeyedAccount>> {
         debug!(
             "get_program_accounts rpc request received: {:?}",
