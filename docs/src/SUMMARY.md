@@ -101,6 +101,7 @@
   * [Validator Timestamp Oracle](implemented-proposals/validator-timestamp-oracle.md)
   * [Commitment](implemented-proposals/commitment.md)
   * [Snapshot Verification](implemented-proposals/snapshot-verification.md)
+  * [RPC Transaction History](implemented-proposals/rpc-transaction-history.md)
 * [Accepted Design Proposals](proposals/README.md)
   * [Ledger Replication](proposals/ledger-replication-to-implement.md)
   * [Secure Vote Signing](proposals/vote-signing-to-implement.md)
