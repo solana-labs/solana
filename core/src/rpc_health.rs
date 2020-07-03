@@ -52,7 +52,7 @@ impl RpcHealth {
             let (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) = {
                 (
                     self.cluster_info
-                        .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
+                        .get_accounts_hash_for_node(&self.cluster_info.node_id(), |hashes| {
                             hashes
                                 .iter()
                                 .max_by(|a, b| a.0.cmp(&b.0))

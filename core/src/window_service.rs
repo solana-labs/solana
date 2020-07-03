@@ -336,7 +336,7 @@ impl WindowService {
         );
 
         let t_window = Self::start_recv_window_thread(
-            cluster_info.id(),
+            cluster_info.identity(),
             exit,
             &blockstore,
             insert_sender,

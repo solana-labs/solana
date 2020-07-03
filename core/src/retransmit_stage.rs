@@ -239,7 +239,7 @@ fn retransmit(
     let mut peers_len = 0;
     epoch_cache_update.stop();
 
-    let my_id = cluster_info.id();
+    let my_id = cluster_info.identity();
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;

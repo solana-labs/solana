@@ -32,7 +32,7 @@ impl GossipService {
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "GossipService: id: {}, listening on: {:?}",
-            &cluster_info.id(),
+            &cluster_info.node_id(),
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::receiver(
@@ -100,7 +100,7 @@ pub fn discover(
     let (gossip_service, ip_echo, spy_ref) =
         make_gossip_node(entrypoint, &exit, my_gossip_addr, my_shred_version);
 
-    let id = spy_ref.id();
+    let id = spy_ref.node_id();
     info!("Entrypoint: {:?}", entrypoint);
     info!("Node Id: {:?}", id);
     if let Some(my_gossip_addr) = my_gossip_addr {
@@ -264,7 +264,7 @@ fn make_gossip_node(
     } else {
         ClusterInfo::spy_node(&keypair.pubkey(), shred_version)
     };
-    let cluster_info = ClusterInfo::new(node, keypair);
+    let cluster_info = ClusterInfo::new(node, keypair.clone(), keypair);
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }

@@ -146,7 +146,7 @@ impl RepairService {
         vote_tracker: Arc<VoteTracker>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let id = cluster_info.id();
+        let id = cluster_info.identity();
         Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();

@@ -154,7 +154,13 @@ fn start_gossip_node(
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
-    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &gossip_exit_flag);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        vec![],
+        gossip_socket,
+        &gossip_exit_flag,
+    );
     (cluster_info, gossip_exit_flag, gossip_service)
 }
 
@@ -895,10 +901,17 @@ pub fn main() {
         None
     };
 
-    // Get set of known node keys this validator may represent.
+    // get set of known node keys this validator may be represented by.
     let validator_group_keys = keypairs_of(&matches, "node_identity_key")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![]);
+
+    // when we have validator group keys, use the first as the node keypair instead.
+    let node_keypair = if !validator_group_keys.is_empty() {
+        validator_group_keys.get(0).cloned().unwrap()
+    } else {
+        identity_keypair.clone()
+    };
 
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
@@ -911,7 +924,7 @@ pub fn main() {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
-            identity_pubkey: identity_keypair.pubkey(),
+            identity_pubkey: node_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
@@ -1056,7 +1069,7 @@ pub fn main() {
         let logfile = matches
             .value_of("logfile")
             .map(|s| s.into())
-            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
+            .unwrap_or_else(|| format!("solana-validator-{}.log", node_keypair.pubkey()));
 
         if logfile == "-" {
             None
@@ -1075,7 +1088,7 @@ pub fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
-    solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
+    solana_metrics::set_host_id(node_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
     if cuda {
@@ -1133,7 +1146,7 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point);
 
     let mut node = Node::new_with_external_ip(
-        &identity_keypair.pubkey(),
+        &node_keypair.pubkey(),
         &gossip_addr,
         dynamic_port_range,
         bind_address,
@@ -1189,7 +1202,7 @@ pub fn main() {
         }
         if !no_genesis_fetch {
             let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
-                &identity_keypair,
+                &node_keypair,
                 &cluster_entrypoint.gossip,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
@@ -1315,6 +1328,7 @@ pub fn main() {
     let validator = Validator::new(
         node,
         &identity_keypair,
+        &node_keypair,
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,

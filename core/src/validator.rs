@@ -151,6 +151,7 @@ impl Validator {
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
+        node_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
@@ -159,10 +160,11 @@ impl Validator {
         poh_verify: bool,
         config: &ValidatorConfig,
     ) -> Self {
-        let id = keypair.pubkey();
-        assert_eq!(id, node.info.id);
+        let id_pubkey = keypair.pubkey();
+        assert_eq!(node_keypair.pubkey(), node.info.id);
 
-        warn!("identity: {}", id);
+        warn!("identity: {}", id_pubkey);
+        warn!("node: {}", node_keypair.pubkey());
         warn!("vote account: {}", vote_account);
 
         if config.voting_disabled {
@@ -241,7 +243,11 @@ impl Validator {
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
-        let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info.clone(),
+            node_keypair.clone(),
+            keypair.clone(),
+        ));
         let blockstore = Arc::new(blockstore);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
@@ -341,14 +347,14 @@ impl Validator {
             bank.last_blockhash(),
             bank.slot(),
             leader_schedule_cache.next_leader_slot(
-                &id,
+                &id_pubkey,
                 bank.slot(),
                 &bank,
                 Some(&blockstore),
                 GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             ),
             bank.ticks_per_slot(),
-            &id,
+            &id_pubkey,
             &blockstore,
             blockstore.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
@@ -478,9 +484,9 @@ impl Validator {
             bank_forks,
         );
 
-        datapoint_info!("validator-new", ("id", id.to_string(), String));
+        datapoint_info!("validator-new", ("id", id_pubkey.to_string(), String));
         Self {
-            id,
+            id: id_pubkey,
             gossip_service,
             serve_repair_service,
             rpc_service,
@@ -806,6 +812,7 @@ impl TestValidator {
         let node = Validator::new(
             node,
             &node_keypair,
+            &node_keypair,
             &ledger_path,
             &leader_voting_keypair.pubkey(),
             vec![leader_voting_keypair.clone()],
@@ -864,7 +871,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let mut total_activated_stake = 0;
     let all_tvu_peers = cluster_info.all_tvu_peers();
     let my_shred_version = cluster_info.my_shred_version();
-    let my_id = cluster_info.id();
+    let my_id = cluster_info.identity();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
         let vote_state = VoteState::from(&vote_account).unwrap_or_default();

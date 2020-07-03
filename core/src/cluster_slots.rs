@@ -100,7 +100,7 @@ impl ClusterSlots {
                 .clone();
 
             *self.validator_stakes.write().unwrap() = validator_stakes;
-            let id = cluster_info.id();
+            let id = cluster_info.node_id();
             *self.self_id.write().unwrap() = id;
             *self.epoch.write().unwrap() = Some(root_epoch);
         }
