@@ -5,9 +5,9 @@ steps:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
-      NUMBER_OF_VALIDATOR_NODES: 4
+      NUMBER_OF_VALIDATOR_NODES: 2
       ENABLE_GPU: "false"
-      NUMBER_OF_CLIENT_NODES: 2
+      NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=2=--tx_count 5000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
       APPLY_PARTITIONS: "true"
