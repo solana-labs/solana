@@ -899,9 +899,8 @@ impl Bank {
             (*inflation).validator(year) * self.capitalization() as f64 * period
         };
 
-        let validator_points = self.stakes.write().unwrap().claim_points();
-        let validator_point_value =
-            self.check_point_value(validator_rewards / validator_points as f64);
+        let validator_point_value = self.pay_validator_rewards(validator_rewards as u64);
+
         self.update_sysvar_account(&sysvar::rewards::id(), |account| {
             sysvar::rewards::create_account(
                 self.inherit_sysvar_account_balance(account),
@@ -909,65 +908,82 @@ impl Bank {
             )
         });
 
-        let validator_rewards = self.pay_validator_rewards(validator_point_value);
-
         self.capitalization
             .fetch_add(validator_rewards as u64, Ordering::Relaxed);
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return total payout
-    fn pay_validator_rewards(&mut self, point_value: f64) -> u64 {
+    fn pay_validator_rewards(&mut self, validator_rewards: u64) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
-        let mut validator_rewards = HashMap::new();
 
-        let total_validator_rewards = self
-            .stake_delegations()
+        let stake_delegations = self.stake_delegations();
+
+        // first, count total points
+        let points: u128 = stake_delegations
             .iter()
             .map(|(stake_pubkey, delegation)| {
                 match (
                     self.get_account(&stake_pubkey),
                     self.get_account(&delegation.voter_pubkey),
                 ) {
-                    (Some(mut stake_account), Some(mut vote_account)) => {
-                        let rewards = stake_state::redeem_rewards(
-                            &mut stake_account,
-                            &mut vote_account,
-                            point_value,
-                            Some(&stake_history),
-                        );
-                        if let Ok((stakers_reward, voters_reward)) = rewards {
-                            self.store_account(&stake_pubkey, &stake_account);
-                            self.store_account(&delegation.voter_pubkey, &vote_account);
-
-                            if voters_reward > 0 {
-                                *validator_rewards
-                                    .entry(delegation.voter_pubkey)
-                                    .or_insert(0i64) += voters_reward as i64;
-                            }
-
-                            if stakers_reward > 0 {
-                                *validator_rewards.entry(*stake_pubkey).or_insert(0i64) +=
-                                    stakers_reward as i64;
-                            }
-
-                            stakers_reward + voters_reward
-                        } else {
-                            debug!(
-                                "stake_state::redeem_rewards() failed for {}: {:?}",
-                                stake_pubkey, rewards
-                            );
-                            0
-                        }
-                    }
+                    (Some(stake_account), Some(vote_account)) => stake_state::calculate_points(
+                        &stake_account,
+                        &vote_account,
+                        Some(&stake_history),
+                    )
+                    .unwrap_or(0),
                     (_, _) => 0,
                 }
             })
             .sum();
 
+        let point_value = self.check_point_value(validator_rewards as f64 / points as f64);
+
+        let mut rewards = HashMap::new();
+
+        // pay according to point value
+        stake_delegations
+            .iter()
+            .for_each(|(stake_pubkey, delegation)| {
+                match (
+                    self.get_account(&stake_pubkey),
+                    self.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(mut stake_account), Some(mut vote_account)) => {
+                        let redeemed = stake_state::redeem_rewards(
+                            &mut stake_account,
+                            &mut vote_account,
+                            point_value,
+                            Some(&stake_history),
+                        );
+                        if let Ok((stakers_reward, voters_reward)) = redeemed {
+                            self.store_account(&stake_pubkey, &stake_account);
+                            self.store_account(&delegation.voter_pubkey, &vote_account);
+
+                            if voters_reward > 0 {
+                                *rewards.entry(delegation.voter_pubkey).or_insert(0i64) +=
+                                    voters_reward as i64;
+                            }
+
+                            if stakers_reward > 0 {
+                                *rewards.entry(*stake_pubkey).or_insert(0i64) +=
+                                    stakers_reward as i64;
+                            }
+                        } else {
+                            debug!(
+                                "stake_state::redeem_rewards() failed for {}: {:?}",
+                                stake_pubkey, redeemed
+                            );
+                        }
+                    }
+                    (_, _) => (),
+                }
+            });
+
         assert_eq!(self.rewards, None);
-        self.rewards = Some(validator_rewards.drain().collect());
-        total_validator_rewards
+        self.rewards = Some(rewards.drain().collect());
+        point_value
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
