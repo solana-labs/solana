@@ -1,9 +1,11 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    repair_service::RepairStats,
     repair_weighted_traversal::{self, Contains},
     serve_repair::RepairType,
 };
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore};
+use solana_measure::measure::Measure;
 use solana_runtime::epoch_stakes::EpochStakes;
 use solana_sdk::{
     clock::Slot,
@@ -134,9 +136,10 @@ impl RepairWeight {
         max_new_orphans: usize,
         max_new_shreds: usize,
         ignore_slots: &dyn Contains<Slot>,
+        repair_stats: Option<&mut RepairStats>,
     ) -> Vec<RepairType> {
         let mut repairs = vec![];
-
+        let mut get_best_orphans_elapsed = Measure::start("get_best_orphans");
         // Update the orphans in order from heaviest to least heavy
         self.get_best_orphans(
             blockstore,
@@ -145,10 +148,17 @@ impl RepairWeight {
             epoch_schedule,
             max_new_orphans,
         );
+        get_best_orphans_elapsed.stop();
 
+        let mut get_best_shreds_elapsed = Measure::start("get_best_orphans");
         // Find the best incomplete slots in rooted subtree
         self.get_best_shreds(blockstore, &mut repairs, max_new_shreds, ignore_slots);
+        get_best_shreds_elapsed.stop();
 
+        if let Some(repair_stats) = repair_stats {
+            repair_stats.get_best_orphans_us += get_best_orphans_elapsed.as_us();
+            repair_stats.get_best_shreds_us += get_best_shreds_elapsed.as_us();
+        }
         repairs
     }
 
