@@ -36,8 +36,9 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     true
   else
     check_status=$?
-    echo "Some Cargo.lock might be outdated; update them (or just be a compilation error?)"
-    echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh [check|update] ..."
+    echo "$0: Some Cargo.lock might be outdated; sync them (or just be a compilation error?)" >&2
+    echo "$0: protip: $ ./scripts/cargo-for-all-lock-files.sh [--ignore-exit-code] ... \\" >&2
+    echo "$0:   [tree (for outdated Cargo.lock sync)|check (for compilation error)|update -p foo --precise x.y.z (for your Cargo.toml update)] ..." >&2
     exit "$check_status"
   fi
 else
