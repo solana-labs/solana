@@ -790,6 +790,14 @@ Returns all accounts owned by the provided program Pubkey
   * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   * (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+  * (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
+
+##### Filters:
+* `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
+  * `offset: <usize>` - offset into program account data to start comparison
+  * `bytes: <string>` - data to match, as base-58 encoded string
+
+* `dataSize: <u64>` - compares the program account data length with the provided data size
 
 #### Results:
 
@@ -808,6 +816,12 @@ The result field will be an array of JSON objects, which will contain:
 ```bash
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"account":{"data":"2R9jLfiAQ9bgdcw6h8s44439","executable":false,"lamports":15298080,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","rentEpoch":28},"pubkey":"CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"}],"id":1}
+
+// Request with Filters
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"filters":[{"dataSize": 17},{"memcmp": {"offset": 4, "bytes": "3Mc6vR"}}]}]}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":[{"account":{"data":"2R9jLfiAQ9bgdcw6h8s44439","executable":false,"lamports":15298080,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","rentEpoch":28},"pubkey":"CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"}],"id":1}
