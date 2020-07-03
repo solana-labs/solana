@@ -56,9 +56,9 @@ use std::{
     },
 };
 
-fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
+fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
-    Ok(Response { context, value })
+    Response { context, value }
 }
 
 pub fn is_confirmed_rooted(
@@ -207,11 +207,11 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        new_response(
+        Ok(new_response(
             &bank,
             bank.get_account(pubkey)
                 .map(|account| UiAccount::encode(account, encoding)),
-        )
+        ))
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -284,7 +284,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
         let bank = self.bank(commitment);
-        new_response(&bank, bank.get_balance(pubkey))
+        Ok(new_response(&bank, bank.get_balance(pubkey)))
     }
 
     fn get_recent_blockhash(
@@ -293,13 +293,13 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
         let bank = self.bank(commitment);
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
-        new_response(
+        Ok(new_response(
             &bank,
             RpcBlockhashFeeCalculator {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
             },
-        )
+        ))
     }
 
     fn get_fees(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcFees>> {
@@ -308,14 +308,14 @@ impl JsonRpcRequestProcessor {
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
             .expect("bank blockhash queue should contain blockhash");
-        new_response(
+        Ok(new_response(
             &bank,
             RpcFees {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
                 last_valid_slot,
             },
-        )
+        ))
     }
 
     fn get_fee_calculator_for_blockhash(
@@ -325,21 +325,21 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
         let bank = self.bank(commitment);
         let fee_calculator = bank.get_fee_calculator(blockhash);
-        new_response(
+        Ok(new_response(
             &bank,
             fee_calculator.map(|fee_calculator| RpcFeeCalculator { fee_calculator }),
-        )
+        ))
     }
 
     fn get_fee_rate_governor(&self) -> Result<RpcResponse<RpcFeeRateGovernor>> {
         let bank = self.bank(None);
         let fee_rate_governor = bank.get_fee_rate_governor();
-        new_response(
+        Ok(new_response(
             &bank,
             RpcFeeRateGovernor {
                 fee_rate_governor: fee_rate_governor.clone(),
             },
-        )
+        ))
     }
 
     pub fn confirm_transaction(
@@ -350,8 +350,8 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(commitment);
         let status = bank.get_signature_status(signature);
         match status {
-            Some(status) => new_response(&bank, status.is_ok()),
-            None => new_response(&bank, false),
+            Some(status) => Ok(new_response(&bank, status.is_ok())),
+            None => Ok(new_response(&bank, false)),
         }
     }
 
@@ -411,7 +411,7 @@ impl JsonRpcRequestProcessor {
         } else {
             (HashSet::new(), AccountAddressFilter::Exclude)
         };
-        new_response(
+        Ok(new_response(
             &bank,
             bank.get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
                 .into_iter()
@@ -420,14 +420,14 @@ impl JsonRpcRequestProcessor {
                     lamports,
                 })
                 .collect(),
-        )
+        ))
     }
 
     fn get_supply(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcSupply>> {
         let bank = self.bank(commitment);
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
         let total_supply = bank.capitalization();
-        new_response(
+        Ok(new_response(
             &bank,
             RpcSupply {
                 total: total_supply,
@@ -439,7 +439,7 @@ impl JsonRpcRequestProcessor {
                     .map(|pubkey| pubkey.to_string())
                     .collect(),
             },
-        )
+        ))
     }
 
     fn get_vote_accounts(
@@ -1483,13 +1483,13 @@ impl RpcSol for RpcSolImpl {
             None
         };
 
-        new_response(
+        Ok(new_response(
             &bank,
             RpcSimulateTransactionResult {
                 err: result.err(),
                 logs,
             },
-        )
+        ))
     }
 
     fn get_slot_leader(
