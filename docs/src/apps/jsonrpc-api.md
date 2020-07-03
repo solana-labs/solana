@@ -41,6 +41,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
+* [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 * [getSupply](jsonrpc-api.md#getsupply)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -941,6 +942,41 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+```
+
+### getStakeActivation
+
+Returns epoch activation information for a stake account
+
+#### Parameters:
+
+* `<string>` - Pubkey of stake account to query, as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+
+#### Results:
+
+The result will be a JSON object with the following fields:
+
+* `active: <u64>` - stake active during the epoch
+* `activating: <u64>` - stake activating during the epoch; will be added to active stake the following epoch
+* `deactivating: <u64>` - stake deactivating during the epoch; will be subtracted from active stake the following epoch
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"activating":99873287840,"active":124429280,"deactivating":0},"id":1}
+
+// Request with Epoch
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT", {"epoch": 4}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"activating":99997717120,"active":0,"deactivating":0},"id":1}
 ```
 
 ### getSupply
