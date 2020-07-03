@@ -3005,6 +3005,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "raptorq"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e3e0cd5c27717803cbd3151329de9aa784376703a3a850b00c0dae30da86cf2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "rayon"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3937,6 +3946,7 @@ dependencies = [
  "num_cpus",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
+ "raptorq",
  "rayon",
  "regex",
  "reqwest",
