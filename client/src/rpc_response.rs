@@ -202,3 +202,11 @@ pub struct RpcSupply {
     pub non_circulating: u64,
     pub non_circulating_accounts: Vec<String>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcStakeActivation {
+    pub active: u64,
+    pub activating: u64,
+    pub deactivating: u64,
+}
