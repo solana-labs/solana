@@ -8,6 +8,9 @@ while [[ -n $1 ]]; do
     escape_marker=found
     shift
     break
+  elif [[ $1 = "--ignore-exit-code" ]]; then
+    ignore=1
+    shift
   else
     shifted_args+=("$1")
     shift
@@ -33,9 +36,17 @@ for lock_file in $files; do
   if [[ -n $CI ]]; then
     echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
   fi
-  (
-    set -x
-    cd "$(dirname "$lock_file")"
-    cargo "${shifted_args[@]}" "$@"
-  )
+
+  if (set -x && cd "$(dirname "$lock_file")" && cargo "${shifted_args[@]}" "$@"); then
+    # noop
+    true
+  else
+    failed_exit_code=$?
+    if [[ -n $ignore ]]; then
+      echo "$0: WARN: ignoring last cargo command failed exit code as requested:" $failed_exit_code
+      true
+    else
+      exit $failed_exit_code
+    fi
+  fi
 done
