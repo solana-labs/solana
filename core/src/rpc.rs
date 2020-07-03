@@ -1659,9 +1659,9 @@ pub mod tests {
         hash::{hash, Hash},
         instruction::InstructionError,
         message::Message,
-        rpc_port,
+        nonce, rpc_port,
         signature::{Keypair, Signer},
-        system_transaction,
+        system_instruction, system_program, system_transaction,
         transaction::{self, TransactionError},
     };
     use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
@@ -2298,6 +2298,7 @@ pub mod tests {
             meta,
             bank,
             blockhash,
+            alice,
             ..
         } = start_rpc_handler_with_tx(&bob.pubkey());
 
@@ -2335,7 +2336,31 @@ pub mod tests {
             .expect("actual response deserialization");
         assert_eq!(expected, result);
 
-        // Test memcmp filter; since bytes are empty, should still match
+        // Set up nonce accounts to test filters
+        let nonce_keypair0 = Keypair::new();
+        let instruction = system_instruction::create_nonce_account(
+            &alice.pubkey(),
+            &nonce_keypair0.pubkey(),
+            &bob.pubkey(),
+            100_000,
+        );
+        let message = Message::new(&instruction, Some(&alice.pubkey()));
+        let tx = Transaction::new(&[&alice, &nonce_keypair0], message, blockhash);
+        bank.process_transaction(&tx).unwrap();
+
+        let nonce_keypair1 = Keypair::new();
+        let authority = Pubkey::new_rand();
+        let instruction = system_instruction::create_nonce_account(
+            &alice.pubkey(),
+            &nonce_keypair1.pubkey(),
+            &authority,
+            100_000,
+        );
+        let message = Message::new(&instruction, Some(&alice.pubkey()));
+        let tx = Transaction::new(&[&alice, &nonce_keypair1], message, blockhash);
+        bank.process_transaction(&tx).unwrap();
+
+        // Test memcmp filter; filter on Initialized state
         let req = format!(
             r#"{{
                 "jsonrpc":"2.0",
@@ -2343,38 +2368,18 @@ pub mod tests {
                 "method":"getProgramAccounts",
                 "params":["{}",{{"filters": [
                     {{
-                        "memcmp": {{"offset": 0,"bytes": ""}}
+                        "memcmp": {{"offset": 4,"bytes": "{}"}}
                     }}
                 ]}}]
             }}"#,
-            new_program_id
+            system_program::id(),
+            bs58::encode(vec![1]).into_string(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "result":[
-                    {{
-                        "pubkey": "{}",
-                        "account": {{
-                            "owner": "{}",
-                            "lamports": 20,
-                            "data": "",
-                            "executable": false,
-                            "rentEpoch": 0
-                        }}
-                    }}
-                ],
-                "id":1}}
-            "#,
-            bob.pubkey(),
-            new_program_id
-        );
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
             .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        assert_eq!(accounts.len(), 2);
 
         let req = format!(
             r#"{{
@@ -2383,19 +2388,18 @@ pub mod tests {
                 "method":"getProgramAccounts",
                 "params":["{}",{{"filters": [
                     {{
-                        "memcmp": {{"offset": 0,"bytes": "1"}}
+                        "memcmp": {{"offset": 0,"bytes": "{}"}}
                     }}
                 ]}}]
             }}"#,
-            new_program_id
+            system_program::id(),
+            bs58::encode(vec![1]).into_string(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = "{\"jsonrpc\":\"2.0\",\"result\":[],\"id\":1}".to_string();
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
             .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        assert_eq!(accounts.len(), 0);
 
         // Test dataSize filter
         let req = format!(
@@ -2405,38 +2409,18 @@ pub mod tests {
                 "method":"getProgramAccounts",
                 "params":["{}",{{"filters": [
                     {{
-                        "dataSize": 0
+                        "dataSize": {}
                     }}
                 ]}}]
             }}"#,
-            new_program_id
+            system_program::id(),
+            nonce::State::size(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "result":[
-                    {{
-                        "pubkey": "{}",
-                        "account": {{
-                            "owner": "{}",
-                            "lamports": 20,
-                            "data": "",
-                            "executable": false,
-                            "rentEpoch": 0
-                        }}
-                    }}
-                ],
-                "id":1}}
-            "#,
-            bob.pubkey(),
-            new_program_id
-        );
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
             .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        assert_eq!(accounts.len(), 2);
 
         let req = format!(
             r#"{{
@@ -2449,15 +2433,61 @@ pub mod tests {
                     }}
                 ]}}]
             }}"#,
-            new_program_id
+            system_program::id(),
         );
-        let res = io.handle_request_sync(&req, meta);
-        let expected = "{\"jsonrpc\":\"2.0\",\"result\":[],\"id\":1}".to_string();
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
             .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        assert_eq!(accounts.len(), 0);
+
+        // Test multiple filters
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "memcmp": {{"offset": 4,"bytes": "{}"}}
+                    }},
+                    {{
+                        "memcmp": {{"offset": 8,"bytes": "{}"}}
+                    }}
+                ]}}]
+            }}"#,
+            system_program::id(),
+            bs58::encode(vec![1]).into_string(),
+            authority,
+        ); // Filter on Initialized and Nonce authority
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
+            .expect("actual response deserialization");
+        assert_eq!(accounts.len(), 1);
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}",{{"filters": [
+                    {{
+                        "memcmp": {{"offset": 4,"bytes": "{}"}}
+                    }},
+                    {{
+                        "dataSize": 1
+                    }}
+                ]}}]
+            }}"#,
+            system_program::id(),
+            bs58::encode(vec![1]).into_string(),
+        ); // Filter on Initialized and non-matching data size
+        let res = io.handle_request_sync(&req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
+            .expect("actual response deserialization");
+        assert_eq!(accounts.len(), 0);
     }
 
     #[test]
