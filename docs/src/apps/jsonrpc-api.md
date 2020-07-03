@@ -960,8 +960,8 @@ Returns epoch activation information for a stake account
 The result will be a JSON object with the following fields:
 
 * `active: <u64>` - stake active during the epoch
-* `activating: <u64>` - stake activating during the epoch; will be added to active stake the following epoch
-* `deactivating: <u64>` - stake deactivating during the epoch; will be subtracted from active stake the following epoch
+* `activating: <u64>` - stake scheduled for activation; will be added to the active stake in one or more epochs
+* `deactivating: <u64>` - stake scheduled for deactivation; will be subtracted from active stake in one or more epochs
 
 #### Example:
 
