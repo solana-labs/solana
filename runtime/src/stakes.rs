@@ -15,9 +15,8 @@ pub struct Stakes {
     /// stake_delegations
     stake_delegations: HashMap<Pubkey, Delegation>,
 
-    /// unclaimed points.
-    //  a point is a credit multiplied by the stake
-    points: u64,
+    /// unused
+    unused: u64,
 
     /// current epoch, used to calculate current stake
     epoch: Epoch,
@@ -49,7 +48,7 @@ impl Stakes {
 
             Stakes {
                 stake_delegations: self.stake_delegations.clone(),
-                points: self.points,
+                unused: self.unused,
                 epoch,
                 vote_accounts: self
                     .vote_accounts
@@ -105,15 +104,6 @@ impl Stakes {
                     || self.calculate_stake(pubkey, self.epoch, Some(&self.stake_history)),
                     |v| v.0,
                 );
-
-                // count any increase in points, can only go forward
-                let old_credits = old
-                    .and_then(|(_stake, old_account)| VoteState::credits_from(old_account))
-                    .unwrap_or(0);
-
-                let credits = VoteState::credits_from(account).unwrap_or(old_credits);
-
-                self.points += credits.saturating_sub(old_credits) * stake;
 
                 self.vote_accounts.insert(*pubkey, (stake, account.clone()));
             }
@@ -175,18 +165,6 @@ impl Stakes {
             .max_by(|(_ak, av), (_bk, bv)| av.0.cmp(&bv.0))
             .and_then(|(_k, (_stake, account))| VoteState::from(account))
             .map(|vote_state| vote_state.node_pubkey)
-    }
-
-    /// currently unclaimed points
-    pub fn points(&self) -> u64 {
-        self.points
-    }
-
-    /// "claims" points, resets points to 0
-    pub fn claim_points(&mut self) -> u64 {
-        let points = self.points;
-        self.points = 0;
-        points
     }
 }
 
@@ -300,76 +278,6 @@ pub mod tests {
         let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
 
         assert_eq!(stakes.highest_staked_node(), Some(vote11_node_pubkey))
-    }
-
-    #[test]
-    fn test_stakes_points() {
-        let mut stakes = Stakes::default();
-        stakes.epoch = 4;
-
-        let stake = 42;
-        assert_eq!(stakes.points(), 0);
-        assert_eq!(stakes.claim_points(), 0);
-        assert_eq!(stakes.claim_points(), 0);
-
-        let ((vote_pubkey, mut vote_account), (stake_pubkey, stake_account)) =
-            create_staked_node_accounts(stake);
-
-        stakes.store(&vote_pubkey, &vote_account);
-        stakes.store(&stake_pubkey, &stake_account);
-
-        assert_eq!(stakes.points(), 0);
-        assert_eq!(stakes.claim_points(), 0);
-
-        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
-        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
-            if let Some(v) = vote_state.as_mut() {
-                v.process_slot_vote_unchecked(i as u64)
-            }
-            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
-            VoteState::to(&versioned, &mut vote_account).unwrap();
-            match versioned {
-                VoteStateVersions::Current(v) => {
-                    vote_state = Some(*v);
-                }
-                _ => panic!("Has to be of type Current"),
-            };
-            stakes.store(&vote_pubkey, &vote_account);
-            assert_eq!(
-                stakes.points(),
-                vote_state.as_ref().unwrap().credits() * stake
-            );
-        }
-        vote_account.lamports = 0;
-        stakes.store(&vote_pubkey, &vote_account);
-        assert_eq!(
-            stakes.points(),
-            vote_state.as_ref().unwrap().credits() * stake
-        );
-
-        assert_eq!(
-            stakes.claim_points(),
-            vote_state.as_ref().unwrap().credits() * stake
-        );
-        assert_eq!(stakes.claim_points(), 0);
-        assert_eq!(stakes.claim_points(), 0);
-
-        // points come out of nowhere, but don't care here ;)
-        vote_account.lamports = 1;
-        stakes.store(&vote_pubkey, &vote_account);
-        assert_eq!(
-            stakes.points(),
-            vote_state.as_ref().unwrap().credits() * stake
-        );
-
-        // test going backwards, should never go backwards
-        let old_vote_state = vote_state;
-        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
-        stakes.store(&vote_pubkey, &vote_account);
-        assert_eq!(
-            stakes.points(),
-            old_vote_state.as_ref().unwrap().credits() * stake
-        );
     }
 
     #[test]
