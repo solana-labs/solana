@@ -362,6 +362,15 @@ impl Authorized {
     }
 }
 
+/// captures a rewards round as lamports to be awarded
+///  and the total points over which those lamports
+///  are to be distributed
+//  basically read as rewards/points, but in integers instead of as an f64
+pub struct PointValue {
+    pub rewards: u64, // lamports to split
+    pub points: u128, // over these points
+}
+
 impl Stake {
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.delegation.stake(epoch, history)
@@ -369,7 +378,7 @@ impl Stake {
 
     pub fn redeem_rewards(
         &mut self,
-        point_value: f64,
+        point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
     ) -> Option<(u64, u64)> {
@@ -419,7 +428,8 @@ impl Stake {
                 0
             };
 
-            points += self.delegation.stake(*epoch, stake_history) as u128 * epoch_credits as u128;
+            points += u128::from(self.delegation.stake(*epoch, stake_history))
+                * u128::from(epoch_credits);
 
             // don't want to assume anything about order of the iterator...
             credits_observed = credits_observed.max(*credits);
@@ -435,36 +445,40 @@ impl Stake {
     //  returns None if there's no payout or if any deserved payout is < 1 lamport
     pub fn calculate_rewards(
         &self,
-        point_value: f64,
+        point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
     ) -> Option<(u64, u64, u64)> {
-        if self.credits_observed >= vote_state.credits() {
-            return None;
-        }
-
         let (points, credits_observed) =
             self.calculate_points_and_credits(vote_state, stake_history);
 
-        let rewards = points as f64 * point_value;
-
-        // don't bother trying to collect fractional lamports
-        if rewards < 1f64 {
+        if points == 0 || point_value.points == 0 {
             return None;
         }
 
+        let rewards = points
+            .checked_mul(u128::from(point_value.rewards))
+            .unwrap()
+            .checked_div(point_value.points)
+            .unwrap();
+
+        assert!(rewards <= u128::from(std::u64::MAX));
+        let rewards = rewards as u64;
+
+        // don't bother trying to split if fractional lamports got truncated
+        if rewards == 0 {
+            return None;
+        }
         let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(rewards);
 
-        if (voter_rewards < 1f64 || staker_rewards < 1f64) && is_split {
-            // don't bother trying to collect fractional lamports
+        if (voter_rewards == 0 || staker_rewards == 0) && is_split {
+            // don't collect if we lose a whole lamport somewhere
+            //  is_split means there should be tokens on both sides,
+            //  uncool to move credits_observed if one side didn't get paid
             return None;
         }
 
-        Some((
-            staker_rewards as u64,
-            voter_rewards as u64,
-            credits_observed,
-        ))
+        Some((staker_rewards, voter_rewards, credits_observed))
     }
 
     fn redelegate(
@@ -868,7 +882,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 pub fn redeem_rewards(
     stake_account: &mut Account,
     vote_account: &mut Account,
-    point_value: f64,
+    point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
@@ -2216,7 +2230,14 @@ mod tests {
         // this one can't collect now, credits_observed == vote_state.credits()
         assert_eq!(
             None,
-            stake.redeem_rewards(1_000_000_000.0, &vote_state, None)
+            stake.redeem_rewards(
+                &PointValue {
+                    rewards: 1_000_000_000,
+                    points: 1
+                },
+                &vote_state,
+                None
+            )
         );
 
         // put 2 credits in at epoch 0
@@ -2226,7 +2247,14 @@ mod tests {
         // this one should be able to collect exactly 2
         assert_eq!(
             Some((stake_lamports * 2, 0)),
-            stake.redeem_rewards(1.0, &vote_state, None)
+            stake.redeem_rewards(
+                &PointValue {
+                    rewards: 1,
+                    points: 1
+                },
+                &vote_state,
+                None
+            )
         );
 
         assert_eq!(
@@ -2252,7 +2280,14 @@ mod tests {
         // this one can't collect now, credits_observed == vote_state.credits()
         assert_eq!(
             None,
-            stake.calculate_rewards(1_000_000_000.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 1_000_000_000,
+                    points: 1
+                },
+                &vote_state,
+                None
+            )
         );
 
         // put 2 credits in at epoch 0
@@ -2262,14 +2297,28 @@ mod tests {
         // this one should be able to collect exactly 2
         assert_eq!(
             Some((stake.delegation.stake * 2, 0, 2)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 2,
+                    points: 2 // all his
+                },
+                &vote_state,
+                None
+            )
         );
 
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (already observed one)
         assert_eq!(
             Some((stake.delegation.stake, 0, 2)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 1,
+                    points: 1
+                },
+                &vote_state,
+                None
+            )
         );
 
         // put 1 credit in epoch 1
@@ -2279,7 +2328,14 @@ mod tests {
         // this one should be able to collect the one just added
         assert_eq!(
             Some((stake.delegation.stake, 0, 3)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 2,
+                    points: 2
+                },
+                &vote_state,
+                None
+            )
         );
 
         // put 1 credit in epoch 2
@@ -2287,7 +2343,14 @@ mod tests {
         // this one should be able to collect 2 now
         assert_eq!(
             Some((stake.delegation.stake * 2, 0, 4)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 2,
+                    points: 2
+                },
+                &vote_state,
+                None
+            )
         );
 
         stake.credits_observed = 0;
@@ -2301,7 +2364,14 @@ mod tests {
                 0,
                 4
             )),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 4,
+                    points: 4
+                },
+                &vote_state,
+                None
+            )
         );
 
         // same as above, but is a really small commission out of 32 bits,
@@ -2309,12 +2379,26 @@ mod tests {
         vote_state.commission = 1;
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 4,
+                    points: 4
+                },
+                &vote_state,
+                None
+            )
         );
         vote_state.commission = 99;
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
-            stake.calculate_rewards(1.0, &vote_state, None)
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 4,
+                    points: 4
+                },
+                &vote_state,
+                None
+            )
         );
     }
 
