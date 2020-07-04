@@ -327,7 +327,7 @@ pub fn process_blockstore_from_root(
                 hard_forks.write().unwrap().register(*hard_fork_slot);
             } else {
                 warn!(
-                    "Hard fork at {} ignored, option can be removed.",
+                    "Hard fork at {} ignored, --hard-fork option can be removed.",
                     hard_fork_slot
                 );
             }
