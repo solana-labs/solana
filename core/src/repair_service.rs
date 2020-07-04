@@ -16,6 +16,7 @@ use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
     shred::Nonce,
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
 use std::{
@@ -70,6 +71,29 @@ pub struct RepairStats {
     pub shred: RepairStatsGroup,
     pub highest_shred: RepairStatsGroup,
     pub orphan: RepairStatsGroup,
+}
+
+#[derive(Default, Debug)]
+pub struct RepairTiming {
+    pub lowest_slot_elapsed: u64,
+    pub update_completed_slots_elapsed: u64,
+    pub generate_repairs_elapsed: u64,
+    pub send_repairs_elapsed: u64,
+}
+
+impl RepairTiming {
+    fn update(
+        &mut self,
+        lowest_slot_elapsed: u64,
+        update_completed_slots_elapsed: u64,
+        generate_repairs_elapsed: u64,
+        send_repairs_elapsed: u64,
+    ) {
+        self.lowest_slot_elapsed += lowest_slot_elapsed;
+        self.update_completed_slots_elapsed += update_completed_slots_elapsed;
+        self.generate_repairs_elapsed += generate_repairs_elapsed;
+        self.send_repairs_elapsed += send_repairs_elapsed;
+    }
 }
 
 pub const MAX_REPAIR_LENGTH: usize = 512;
@@ -150,6 +174,7 @@ impl RepairService {
         let id = cluster_info.id();
         Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         let mut repair_stats = RepairStats::default();
+        let mut repair_timing = RepairTiming::default();
         let mut last_stats = Instant::now();
         let duplicate_slot_repair_statuses = HashMap::new();
         Self::initialize_epoch_slots(
@@ -162,13 +187,20 @@ impl RepairService {
                 break;
             }
 
+            let mut lowest_slot_elapsed;
+            let mut update_completed_slots_elapsed;
+            let mut generate_repairs_elapsed;
             let repairs = {
                 let root_bank = repair_info.bank_forks.read().unwrap().root_bank().clone();
                 let new_root = root_bank.slot();
+                lowest_slot_elapsed = Measure::start("lowest_slot_elapsed");
                 let lowest_slot = blockstore.lowest_slot();
                 Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
+                lowest_slot_elapsed.stop();
+                update_completed_slots_elapsed = Measure::start("update_completed_slots_elapsed");
                 Self::update_completed_slots(&repair_info.completed_slots_receiver, &cluster_info);
                 cluster_slots.update(new_root, &cluster_info, &repair_info.bank_forks);
+                update_completed_slots_elapsed.stop();
                 /*let new_duplicate_slots = Self::find_new_duplicate_slots(
                     &duplicate_slot_repair_statuses,
                     blockstore,
@@ -192,15 +224,20 @@ impl RepairService {
                     &mut repair_stats,
                     &repair_socket,
                 );*/
-                Self::generate_repairs(
+
+                generate_repairs_elapsed = Measure::start("generate_repairs_elapsed");
+                let repairs = Self::generate_repairs(
                     blockstore,
                     root_bank.slot(),
                     MAX_REPAIR_LENGTH,
                     &duplicate_slot_repair_statuses,
                     &vote_tracker,
-                )
+                );
+                generate_repairs_elapsed.stop();
+                repairs
             };
 
+            let mut send_repairs_elapsed = Measure::start("send_repairs_elapsed");
             if let Ok(repairs) = repairs {
                 let mut cache = HashMap::new();
                 repairs.into_iter().for_each(|repair_request| {
@@ -217,6 +254,13 @@ impl RepairService {
                     }
                 });
             }
+            send_repairs_elapsed.stop();
+            repair_timing.update(
+                lowest_slot_elapsed.as_us(),
+                update_completed_slots_elapsed.as_us(),
+                generate_repairs_elapsed.as_us(),
+                send_repairs_elapsed.as_us(),
+            );
 
             if last_stats.elapsed().as_secs() > 2 {
                 let repair_total = repair_stats.shred.count
@@ -234,7 +278,31 @@ impl RepairService {
                         ("repair-orphan", repair_stats.orphan.max, i64),
                     );
                 }
+                datapoint_info!(
+                    "serve_repair-repair-timing",
+                    (
+                        "lowest_slot_elapsed",
+                        repair_timing.lowest_slot_elapsed,
+                        i64
+                    ),
+                    (
+                        "update_completed_slots_elapsed",
+                        repair_timing.update_completed_slots_elapsed,
+                        i64
+                    ),
+                    (
+                        "generate_repairs_elapsed",
+                        repair_timing.generate_repairs_elapsed,
+                        i64
+                    ),
+                    (
+                        "send_repairs_elapsed",
+                        repair_timing.send_repairs_elapsed,
+                        i64
+                    ),
+                );
                 repair_stats = RepairStats::default();
+                repair_timing = RepairTiming::default();
                 last_stats = Instant::now();
             }
             sleep(Duration::from_millis(REPAIR_MS));
