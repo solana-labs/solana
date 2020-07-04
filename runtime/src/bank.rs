@@ -55,7 +55,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{self, Delegation};
+use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     cell::RefCell,
@@ -900,8 +900,11 @@ impl Bank {
             (*inflation).validator(year) * self.capitalization() as f64 * period
         } as u64;
 
+        let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+
         let validator_point_value = self.pay_validator_rewards(validator_rewards);
 
+        // this sysvar could be retired...
         self.update_sysvar_account(&sysvar::rewards::id(), |account| {
             sysvar::rewards::create_account(
                 self.inherit_sysvar_account_balance(account),
@@ -909,13 +912,19 @@ impl Bank {
             )
         });
 
+        let validator_rewards_paid =
+            self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
+
+        // verify that we didn't pay any more than we expected to
+        assert!(validator_rewards >= validator_rewards_paid);
+
         self.capitalization
-            .fetch_add(validator_rewards, Ordering::Relaxed);
+            .fetch_add(validator_rewards_paid, Ordering::Relaxed);
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return total payout
-    fn pay_validator_rewards(&mut self, validator_rewards: u64) -> f64 {
+    fn pay_validator_rewards(&mut self, rewards: u64) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
         let stake_delegations = self.stake_delegations();
@@ -939,7 +948,11 @@ impl Bank {
             })
             .sum();
 
-        let point_value = self.check_point_value(validator_rewards as f64 / points as f64);
+        if points == 0 {
+            return 0.0;
+        }
+
+        let point_value = PointValue { rewards, points };
 
         let mut rewards = HashMap::new();
 
@@ -955,7 +968,7 @@ impl Bank {
                         let redeemed = stake_state::redeem_rewards(
                             &mut stake_account,
                             &mut vote_account,
-                            point_value,
+                            &point_value,
                             Some(&stake_history),
                         );
                         if let Ok((stakers_reward, voters_reward)) = redeemed {
@@ -984,7 +997,7 @@ impl Bank {
 
         assert_eq!(self.rewards, None);
         self.rewards = Some(rewards.drain().collect());
-        point_value
+        point_value.rewards as f64 / point_value.points as f64
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
@@ -1000,21 +1013,6 @@ impl Bank {
     pub fn update_recent_blockhashes(&self) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         self.update_recent_blockhashes_locked(&blockhash_queue);
-    }
-
-    // If the point values are not `normal`, bring them back into range and
-    // set them to the last value or 0.
-    fn check_point_value(&self, mut validator_point_value: f64) -> f64 {
-        let rewards = sysvar::rewards::Rewards::from_account(
-            &self
-                .get_account(&sysvar::rewards::id())
-                .unwrap_or_else(|| sysvar::rewards::create_account(1, 0.0)),
-        )
-        .unwrap_or_else(Default::default);
-        if !validator_point_value.is_normal() {
-            validator_point_value = rewards.validator_point_value;
-        }
-        validator_point_value
     }
 
     fn collect_fees(&self) {
@@ -6393,23 +6391,6 @@ mod tests {
         );
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn test_check_point_value() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let bank = Arc::new(Bank::new(&genesis_config));
-
-        // check that point values are 0 if no previous value was known and current values are not normal
-        assert_eq!(bank.check_point_value(std::f64::INFINITY), 0.0);
-
-        bank.store_account(
-            &sysvar::rewards::id(),
-            &sysvar::rewards::create_account(1, 1.0),
-        );
-        // check that point values are the previous value if current values are not normal
-        assert_eq!(bank.check_point_value(std::f64::INFINITY), 1.0);
     }
 
     #[test]

@@ -87,6 +87,13 @@ impl Stakes {
             .sum()
     }
 
+    pub fn vote_balance_and_staked(&self) -> u64 {
+        self.vote_accounts
+            .iter()
+            .map(|(_pubkey, (staked, account))| staked + account.lamports)
+            .sum()
+    }
+
     pub fn is_stake(account: &Account) -> bool {
         solana_vote_program::check_id(&account.owner)
             || solana_stake_program::check_id(&account.owner)
