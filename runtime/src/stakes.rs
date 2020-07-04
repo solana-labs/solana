@@ -173,9 +173,7 @@ pub mod tests {
     use super::*;
     use solana_sdk::{pubkey::Pubkey, rent::Rent};
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state::{
-        self, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
-    };
+    use solana_vote_program::vote_state::{self, VoteState};
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {

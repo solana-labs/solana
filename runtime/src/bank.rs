@@ -897,9 +897,9 @@ impl Bank {
             let inflation = self.inflation.read().unwrap();
 
             (*inflation).validator(year) * self.capitalization() as f64 * period
-        };
+        } as u64;
 
-        let validator_point_value = self.pay_validator_rewards(validator_rewards as u64);
+        let validator_point_value = self.pay_validator_rewards(validator_rewards);
 
         self.update_sysvar_account(&sysvar::rewards::id(), |account| {
             sysvar::rewards::create_account(
@@ -909,7 +909,7 @@ impl Bank {
         });
 
         self.capitalization
-            .fetch_add(validator_rewards as u64, Ordering::Relaxed);
+            .fetch_add(validator_rewards, Ordering::Relaxed);
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
@@ -4645,7 +4645,22 @@ mod tests {
         }
         bank.store_account(&vote_id, &vote_account);
 
-        let validator_points = bank.stakes.read().unwrap().points();
+        let validator_points: u128 = bank
+            .stake_delegations()
+            .iter()
+            .map(|(stake_pubkey, delegation)| {
+                match (
+                    bank.get_account(&stake_pubkey),
+                    bank.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(stake_account), Some(vote_account)) => {
+                        stake_state::calculate_points(&stake_account, &vote_account, None)
+                            .unwrap_or(0)
+                    }
+                    (_, _) => 0,
+                }
+            })
+            .sum();
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
