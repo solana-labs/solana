@@ -959,9 +959,9 @@ Returns epoch activation information for a stake account
 
 The result will be a JSON object with the following fields:
 
+* `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
 * `active: <u64>` - stake active during the epoch
-* `activating: <u64>` - stake scheduled for activation; will be added to the active stake in one or more epochs
-* `deactivating: <u64>` - stake scheduled for deactivation; will be subtracted from active stake in one or more epochs
+* `inactive: <u64>` - stake inactive during the epoch
 
 #### Example:
 
@@ -970,13 +970,13 @@ The result will be a JSON object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"activating":99873287840,"active":124429280,"deactivating":0},"id":1}
+{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
 
 // Request with Epoch
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT", {"epoch": 4}]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"activating":99997717120,"active":0,"deactivating":0},"id":1}
+{"jsonrpc":"2.0","result":{"active":124429280,"inactive":73287840,"state":"activating"},"id":1}
 ```
 
 ### getSupply
