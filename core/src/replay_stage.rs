@@ -617,7 +617,7 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
-        let (root_bank, frozen_baks) = {
+        let (root_bank, frozen_banks) = {
             let bank_forks = bank_forks.read().unwrap();
             (
                 bank_forks.root_bank().clone(),
@@ -627,7 +627,7 @@ impl ReplayStage {
 
         Self::initialize_progress_and_fork_choice(
             &root_bank,
-            frozen_baks,
+            frozen_banks,
             &my_pubkey,
             &vote_account,
         )
