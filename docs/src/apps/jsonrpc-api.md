@@ -41,10 +41,14 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
+<<<<<<< HEAD
 * [getSlotsPerSegment](jsonrpc-api.md#getslotspersegment)
 * [getStoragePubkeysForSlot](jsonrpc-api.md#getstoragepubkeysforslot)
 * [getStorageTurn](jsonrpc-api.md#getstorageturn)
 * [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
+=======
+* [getStakeActivation](jsonrpc-api.md#getstakeactivation)
+>>>>>>> 4de0713aa... Rpc: Add getStakeActivation endpoint (#10902)
 * [getSupply](jsonrpc-api.md#getsupply)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -923,6 +927,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
 ```
 
+<<<<<<< HEAD
 ### getSlotsPerSegment
 
 Returns the current storage segment size in terms of slots
@@ -979,11 +984,32 @@ A JSON object consisting of
 
 * `blockhash: <string>` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
 * `slot: <u64>` - the current storage turn slot
+=======
+### getStakeActivation
+
+Returns epoch activation information for a stake account
+
+#### Parameters:
+
+* `<string>` - Pubkey of stake account to query, as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+
+#### Results:
+
+The result will be a JSON object with the following fields:
+
+* `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
+* `active: <u64>` - stake active during the epoch
+* `inactive: <u64>` - stake inactive during the epoch
+>>>>>>> 4de0713aa... Rpc: Add getStakeActivation endpoint (#10902)
 
 #### Example:
 
 ```bash
 // Request
+<<<<<<< HEAD
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurn"}' http://localhost:8899
  // Result
 {"jsonrpc":"2.0","result":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "slot": 2048},"id":1}
@@ -1008,6 +1034,18 @@ None
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurnRate"}' http://localhost:8899
  // Result
 {"jsonrpc":"2.0","result":1024,"id":1}
+=======
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+
+// Request with Epoch
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT", {"epoch": 4}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"active":124429280,"inactive":73287840,"state":"activating"},"id":1}
+>>>>>>> 4de0713aa... Rpc: Add getStakeActivation endpoint (#10902)
 ```
 
 ### getSupply
