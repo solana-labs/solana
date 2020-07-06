@@ -363,8 +363,9 @@ Returns a list of confirmed blocks
 #### Results:
 
 The result field will be an array of u64 integers listing confirmed blocks
-between start_slot and either end_slot, if provided, or latest confirmed block,
-inclusive.
+between `start_slot` and either `end_slot`, if provided, or latest confirmed block,
+inclusive.  Max range allowed is 500,000 slots.
+
 
 #### Example:
 
@@ -378,7 +379,8 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ### getConfirmedSignaturesForAddress
 
-Returns a list of all the confirmed signatures for transactions involving an address, within a specified Slot range. Max range allowed is 10_000 Slots.
+Returns a list of all the confirmed signatures for transactions involving an
+address, within a specified Slot range. Max range allowed is 10,000 Slots
 
 #### Parameters:
 
