@@ -52,6 +52,7 @@ _ ci/order-crates-for-publishing.py
 _ cargo +"$rust_stable" fmt --all -- --check
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
+# run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ cargo +"$rust_nightly" clippy -Zunstable-options --workspace --all-targets -- --deny=warnings
 
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008

@@ -74,6 +74,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
+#[frozen_abi(digest = "9chBcbXVJ4fK7uGgydQzam5aHipaAKFw6V4LDFpjbE4w")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
@@ -107,6 +108,20 @@ pub struct BankRc {
     pub(crate) slot: Slot,
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_sdk::abi_example::AbiExample;
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for BankRc {
+    fn example() -> Self {
+        BankRc {
+            // Set parent to None to cut the recursion into another Bank
+            parent: RwLock::new(None),
+            accounts: AbiExample::example(),
+            slot: AbiExample::example(),
+        }
+    }
+}
+
 impl BankRc {
     pub(crate) fn new(accounts: Accounts, slot: Slot) -> Self {
         Self {
@@ -121,7 +136,7 @@ impl BankRc {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, AbiExample)]
 pub struct StatusCacheRc {
     /// where all the Accounts are stored
     /// A cache of signature statuses
@@ -188,7 +203,7 @@ impl HashAgeKind {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 struct UnusedAccounts {
     unused1: HashSet<Pubkey>,
     unused2: HashSet<Pubkey>,
@@ -196,7 +211,8 @@ struct UnusedAccounts {
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
-#[derive(Default, Deserialize, Serialize)]
+#[frozen_abi(digest = "GsvisJfTaHxmTX4s6gQs2bZtxVggB7F325XDdXTA573p")]
+#[derive(Default, Deserialize, Serialize, AbiExample)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     #[serde(skip)]

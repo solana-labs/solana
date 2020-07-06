@@ -1,6 +1,6 @@
 //! configuration for network inflation
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Inflation {
     /// Initial inflation percentage, from time=0

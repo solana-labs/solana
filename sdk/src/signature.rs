@@ -47,7 +47,9 @@ impl Keypair {
 }
 
 #[repr(transparent)]
-#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+)]
 pub struct Signature(GenericArray<u8, U64>);
 
 impl crate::sanitize::Sanitize for Signature {}

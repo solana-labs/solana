@@ -7,7 +7,6 @@ repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 license = "Apache-2.0"
 edition = "2018"
-build = "../build.rs"
 
 [lib]
 proc-macro = true

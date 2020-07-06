@@ -9,7 +9,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
 const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct Uncompressed {
     pub first_slot: Slot,
     pub num: usize,
@@ -28,7 +28,7 @@ impl Sanitize for Uncompressed {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct Flate2 {
     pub first_slot: Slot,
     pub num: usize,
@@ -142,7 +142,7 @@ impl Uncompressed {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample, AbiEnumVisitor)]
 pub enum CompressedSlots {
     Flate2(Flate2),
     Uncompressed(Uncompressed),
@@ -211,7 +211,7 @@ impl CompressedSlots {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, AbiExample)]
 pub struct EpochSlots {
     pub from: Pubkey,
     pub slots: Vec<CompressedSlots>,

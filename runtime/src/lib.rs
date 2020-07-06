@@ -1,3 +1,4 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 pub mod accounts;
 pub mod accounts_db;
 pub mod accounts_index;
@@ -37,6 +38,9 @@ extern crate solana_vote_program;
 extern crate solana_metrics;
 #[macro_use]
 extern crate serde_derive;
+
+#[macro_use]
+extern crate solana_sdk_macro_frozen_abi;
 
 extern crate fs_extra;
 extern crate tempfile;

@@ -1,3 +1,5 @@
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+use solana_sdk::abi_example::IgnoreAsHelper;
 use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
 // Serializable version of AccountStorageEntry for snapshot format
@@ -7,6 +9,9 @@ pub(super) struct SerializableAccountStorageEntry {
     accounts: SerializableAppendVec,
     count_and_status: (usize, AccountStorageStatus),
 }
+
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+impl IgnoreAsHelper for SerializableAccountStorageEntry {}
 
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {
@@ -29,6 +34,9 @@ impl Into<AccountStorageEntry> for SerializableAccountStorageEntry {
 struct SerializableAppendVec {
     current_len: usize,
 }
+
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+impl IgnoreAsHelper for SerializableAppendVec {}
 
 impl From<&AppendVec> for SerializableAppendVec {
     fn from(rhs: &AppendVec) -> SerializableAppendVec {

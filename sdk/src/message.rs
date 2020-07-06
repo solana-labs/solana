@@ -138,7 +138,8 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[frozen_abi(digest = "BVC5RhetsNpheGipt5rUrkR6RDDUHtD5sCLK1UjymL4S")]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
@@ -156,7 +157,8 @@ pub struct MessageHeader {
     pub num_readonly_unsigned_accounts: u8,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[frozen_abi(digest = "A18PN3BWKw4hU69STY79SyRS3tS6w54nCgYRRx77vQiL")]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`

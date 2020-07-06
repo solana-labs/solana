@@ -7,13 +7,13 @@ use std::{collections::HashMap, sync::Arc};
 pub type NodeIdToVoteAccounts = HashMap<Pubkey, NodeVoteAccounts>;
 pub type EpochAuthorizedVoters = HashMap<Pubkey, Pubkey>;
 
-#[derive(Clone, Serialize, Debug, Deserialize, Default, PartialEq)]
+#[derive(Clone, Serialize, Debug, Deserialize, Default, PartialEq, AbiExample)]
 pub struct NodeVoteAccounts {
     pub vote_accounts: Vec<Pubkey>,
     pub total_stake: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, AbiExample)]
 pub struct EpochStakes {
     stakes: Arc<Stakes>,
     total_stake: u64,

@@ -52,7 +52,8 @@ impl<E> DecodeError<E> for NonceError {
 /// maximum permitted size of data: 10 MB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[frozen_abi(digest = "E343asdJPd3aEbHSsmeeGzvztc9X2maaHhWxVS4P6hvW")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
 pub enum SystemInstruction {
     /// Create a new account
     ///

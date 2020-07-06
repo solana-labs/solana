@@ -278,3 +278,50 @@ fn test_bank_serialize_newer() {
 fn test_bank_serialize_older() {
     test_bank_serialize_style(SerdeStyle::OLDER)
 }
+
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+mod test_bank_rc_serialize {
+    use super::*;
+
+    // These some what long test harness is required to freeze the ABI of
+    // BankRc's serialization due to versioned nature
+    #[frozen_abi(digest = "HfCP74JKqPdeAccNJEj7KEoNxtsmX3zRqc2rpTy1NC7H")]
+    #[derive(Serialize, AbiExample)]
+    pub struct BandRcAbiTestWrapperFuture {
+        #[serde(serialize_with = "wrapper_future")]
+        bank_rc: BankRc,
+    }
+
+    pub fn wrapper_future<S>(bank_rc: &BankRc, s: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let snapshot_storages = bank_rc.accounts.accounts_db.get_snapshot_storages(0);
+        (SerializableBankRc::<future::Context> {
+            bank_rc,
+            snapshot_storages: &snapshot_storages,
+            phantom: std::marker::PhantomData::default(),
+        })
+        .serialize(s)
+    }
+
+    #[frozen_abi(digest = "43niyekyWwreLALcdEeFFpd7h8U6pgSXGqfKBRw8H7Vy")]
+    #[derive(Serialize, AbiExample)]
+    pub struct BandRcAbiTestWrapperLegacy {
+        #[serde(serialize_with = "wrapper_legacy")]
+        bank_rc: BankRc,
+    }
+
+    pub fn wrapper_legacy<S>(bank_rc: &BankRc, s: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let snapshot_storages = bank_rc.accounts.accounts_db.get_snapshot_storages(0);
+        (SerializableBankRc::<legacy::Context> {
+            bank_rc,
+            snapshot_storages: &snapshot_storages,
+            phantom: std::marker::PhantomData::default(),
+        })
+        .serialize(s)
+    }
+}

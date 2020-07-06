@@ -29,7 +29,7 @@ pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, AbiExample)]
 pub struct CrdsFilter {
     pub filter: Bloom<Hash>,
     mask: u64,

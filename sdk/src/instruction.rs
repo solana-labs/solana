@@ -7,7 +7,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 /// Reasons the runtime might have rejected an instruction.
-#[derive(Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
 pub enum InstructionError {
     /// Deprecated! Use CustomError instead!
     /// The program instruction returned an error
@@ -214,7 +214,7 @@ impl AccountMeta {
 }
 
 /// An instruction to execute a program
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct CompiledInstruction {
     /// Index into the transaction keys array indicating the program account that executes this instruction

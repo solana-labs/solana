@@ -1,7 +1,7 @@
 //! configuration for network rent
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug, AbiExample)]
 pub struct Rent {
     /// Rental rate
     pub lamports_per_byte_year: u64,

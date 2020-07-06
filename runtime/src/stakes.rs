@@ -7,7 +7,7 @@ use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, Sta
 use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
 
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
     /// vote accounts
     vote_accounts: HashMap<Pubkey, (u64, Account)>,
