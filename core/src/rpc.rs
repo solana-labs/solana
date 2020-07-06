@@ -774,6 +774,12 @@ impl JsonRpcRequestProcessor {
                 epoch
             )));
         }
+        if epoch > bank.epoch() {
+            return Err(Error::invalid_params(format!(
+                "Invalid param: epoch {:?} has not yet started",
+                epoch
+            )));
+        }
 
         let stake_account = bank
             .get_account(pubkey)
@@ -793,10 +799,25 @@ impl JsonRpcRequestProcessor {
 
         let (active, activating, deactivating) =
             delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
+        let stake_activation_state = if deactivating > 0 {
+            StakeActivationState::Deactivating
+        } else if activating > 0 {
+            StakeActivationState::Activating
+        } else if active > 0 {
+            StakeActivationState::Active
+        } else {
+            StakeActivationState::Inactive
+        };
+        let inactive_stake = match stake_activation_state {
+            StakeActivationState::Activating => activating,
+            StakeActivationState::Active => 0,
+            StakeActivationState::Deactivating => delegation.stake.saturating_sub(active),
+            StakeActivationState::Inactive => delegation.stake,
+        };
         Ok(RpcStakeActivation {
+            state: stake_activation_state,
             active,
-            activating,
-            deactivating,
+            inactive: inactive_stake,
         })
     }
 }

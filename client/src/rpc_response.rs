@@ -205,8 +205,17 @@ pub struct RpcSupply {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub enum StakeActivationState {
+    Activating,
+    Active,
+    Deactivating,
+    Inactive,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcStakeActivation {
+    pub state: StakeActivationState,
     pub active: u64,
-    pub activating: u64,
-    pub deactivating: u64,
+    pub inactive: u64,
 }
