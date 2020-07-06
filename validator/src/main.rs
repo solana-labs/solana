@@ -698,6 +698,15 @@ pub fn main() {
                       0 to disable snapshots"),
         )
         .arg(
+            Arg::with_name("snapshot_version")
+                .long("snapshot-version")
+                .value_name("SNAPSHOT_VERSION")
+                .validator(|s: String| if s == "1.1.0" { Ok(()) } else { Err(format!("Invalid snapshot version: {}", s)) })
+                .takes_value(true)
+                .default_value("1.1.0")
+                .help("Output snapshot version"),
+        )
+        .arg(
             Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
