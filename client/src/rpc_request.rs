@@ -102,6 +102,7 @@ impl fmt::Display for RpcRequest {
 pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
 pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
+pub const MAX_GET_CONFIRMED_BLOCKS_RANGE: u64 = 500_000;
 
 impl RpcRequest {
     pub(crate) fn build_request_json(self, id: u64, params: Value) -> Value {
