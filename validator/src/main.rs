@@ -370,12 +370,29 @@ fn check_genesis_hash(
     Ok(())
 }
 
+fn load_local_genesis(
+    ledger_path: &std::path::Path,
+    expected_genesis_hash: Option<Hash>,
+) -> Result<GenesisConfig, String> {
+    let existing_genesis = GenesisConfig::load(&ledger_path)
+        .map_err(|err| format!("Failed to load genesis config: {}", err))?;
+    check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
+
+    Ok(existing_genesis)
+}
+
 fn download_then_check_genesis_hash(
     rpc_addr: &SocketAddr,
     ledger_path: &std::path::Path,
     expected_genesis_hash: Option<Hash>,
     max_genesis_archive_unpacked_size: u64,
+    no_genesis_fetch: bool,
 ) -> Result<Hash, String> {
+    if no_genesis_fetch {
+        let genesis_config = load_local_genesis(ledger_path, expected_genesis_hash)?;
+        return Ok(genesis_config.hash());
+    }
+
     let genesis_package = ledger_path.join("genesis.tar.bz2");
     let genesis_config =
         if let Ok(tmp_genesis_package) = download_genesis_if_missing(rpc_addr, &genesis_package) {
@@ -395,11 +412,7 @@ fn download_then_check_genesis_hash(
 
             downloaded_genesis
         } else {
-            let existing_genesis = GenesisConfig::load(&ledger_path)
-                .map_err(|err| format!("Failed to load genesis config: {}", err))?;
-            check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
-
-            existing_genesis
+            load_local_genesis(ledger_path, expected_genesis_hash)?
         };
 
     Ok(genesis_config.hash())
@@ -549,7 +562,6 @@ pub fn main() {
             Arg::with_name("no_snapshot_fetch")
                 .long("no-snapshot-fetch")
                 .takes_value(false)
-                .requires("entrypoint")
                 .help("Do not attempt to fetch a snapshot from the cluster, \
                       start from a local snapshot if present"),
         )
@@ -557,7 +569,6 @@ pub fn main() {
             Arg::with_name("no_genesis_fetch")
                 .long("no-genesis-fetch")
                 .takes_value(false)
-                .requires("entrypoint")
                 .help("Do not fetch genesis from the cluster"),
         )
         .arg(
@@ -1204,7 +1215,7 @@ pub fn main() {
         ) {
             exit(1);
         }
-        if !no_genesis_fetch {
+        if !no_genesis_fetch || !no_snapshot_fetch {
             let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
                 &identity_keypair,
                 &cluster_entrypoint.gossip,
@@ -1241,6 +1252,7 @@ pub fn main() {
                         &ledger_path,
                         validator_config.expected_genesis_hash,
                         max_genesis_archive_unpacked_size,
+                        no_genesis_fetch,
                     );
 
                     if let Ok(genesis_hash) = genesis_hash {
