@@ -487,7 +487,7 @@ impl Tower {
             .map(|last_voted_slot| {
                 let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                     if self.is_restored_stray_slot(last_voted_slot) {
-                        // Construct artifical ancestors because we can't with ancestors from bank_forks
+                        // Construct artifical ancestors because we can't derive them from given ancestors (=bank_forks)
                         maybe_stray_ancestors = self.restored_stray_slots.range(0..last_voted_slot).copied().collect();
                         &maybe_stray_ancestors
                     } else {
