@@ -817,6 +817,15 @@ impl Bank {
         }
     }
 
+    pub fn rehash(&self) {
+        let mut hash = self.hash.write().unwrap();
+        let new = self.hash_internal_state();
+        if new != *hash {
+            warn!("Updating bank hash to {}", new);
+            *hash = new;
+        }
+    }
+
     pub fn freeze(&self) {
         let mut hash = self.hash.write().unwrap();
 
