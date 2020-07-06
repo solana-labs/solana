@@ -41,6 +41,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
+* [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 * [getSupply](jsonrpc-api.md#getsupply)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -941,6 +942,41 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+```
+
+### getStakeActivation
+
+Returns epoch activation information for a stake account
+
+#### Parameters:
+
+* `<string>` - Pubkey of stake account to query, as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+
+#### Results:
+
+The result will be a JSON object with the following fields:
+
+* `state: <string` - the stake account's activation state, one of: `active`, `inactive`, `activating`, `deactivating`
+* `active: <u64>` - stake active during the epoch
+* `inactive: <u64>` - stake inactive during the epoch
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+
+// Request with Epoch
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT", {"epoch": 4}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"active":124429280,"inactive":73287840,"state":"activating"},"id":1}
 ```
 
 ### getSupply

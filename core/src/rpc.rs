@@ -30,6 +30,7 @@ use solana_runtime::{
     log_collector::LogCollector,
 };
 use solana_sdk::{
+    account_utils::StateMut,
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
@@ -37,9 +38,12 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::Signature,
+    stake_history::StakeHistory,
+    sysvar::{stake_history, Sysvar},
     timing::slot_duration_from_slots_per_year,
     transaction::{self, Transaction},
 };
+use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
@@ -755,6 +759,67 @@ impl JsonRpcRequestProcessor {
             .get_first_available_block()
             .unwrap_or_default()
     }
+
+    pub fn get_stake_activation(
+        &self,
+        pubkey: &Pubkey,
+        config: Option<RpcStakeConfig>,
+    ) -> Result<RpcStakeActivation> {
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
+        let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
+        if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
+            return Err(Error::invalid_params(format!(
+                "Invalid param: epoch {:?} is too far in the past",
+                epoch
+            )));
+        }
+        if epoch > bank.epoch() {
+            return Err(Error::invalid_params(format!(
+                "Invalid param: epoch {:?} has not yet started",
+                epoch
+            )));
+        }
+
+        let stake_account = bank
+            .get_account(pubkey)
+            .ok_or_else(|| Error::invalid_params("Invalid param: account not found".to_string()))?;
+        let stake_state: StakeState = stake_account
+            .state()
+            .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
+        let delegation = stake_state.delegation().ok_or_else(|| {
+            Error::invalid_params("Invalid param: stake account has not been delegated".to_string())
+        })?;
+
+        let stake_history_account = bank
+            .get_account(&stake_history::id())
+            .ok_or_else(Error::internal_error)?;
+        let stake_history =
+            StakeHistory::from_account(&stake_history_account).ok_or_else(Error::internal_error)?;
+
+        let (active, activating, deactivating) =
+            delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
+        let stake_activation_state = if deactivating > 0 {
+            StakeActivationState::Deactivating
+        } else if activating > 0 {
+            StakeActivationState::Activating
+        } else if active > 0 {
+            StakeActivationState::Active
+        } else {
+            StakeActivationState::Inactive
+        };
+        let inactive_stake = match stake_activation_state {
+            StakeActivationState::Activating => activating,
+            StakeActivationState::Active => 0,
+            StakeActivationState::Deactivating => delegation.stake.saturating_sub(active),
+            StakeActivationState::Inactive => delegation.stake,
+        };
+        Ok(RpcStakeActivation {
+            state: stake_activation_state,
+            active,
+            inactive: inactive_stake,
+        })
+    }
 }
 
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
@@ -1062,6 +1127,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getFirstAvailableBlock")]
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
+
+    #[rpc(meta, name = "getStakeActivation")]
+    fn get_stake_activation(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        config: Option<RpcStakeConfig>,
+    ) -> Result<RpcStakeActivation>;
 }
 
 pub struct RpcSolImpl;
@@ -1588,6 +1661,20 @@ impl RpcSol for RpcSolImpl {
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
         Ok(meta.get_first_available_block())
+    }
+
+    fn get_stake_activation(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        config: Option<RpcStakeConfig>,
+    ) -> Result<RpcStakeActivation> {
+        debug!(
+            "get_stake_activation rpc request received: {:?}",
+            pubkey_str
+        );
+        let pubkey = verify_pubkey(pubkey_str)?;
+        meta.get_stake_activation(&pubkey, config)
     }
 }
 
