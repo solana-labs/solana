@@ -66,6 +66,8 @@ pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
     pub bank_weight: u128,
+    // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
+    // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
     pub pubkey_votes: Vec<(Pubkey, Slot)>,
 }
@@ -456,7 +458,7 @@ impl Tower {
                         .lockout_intervals;
                     // Find any locked out intervals in this bank with endpoint >= last_vote,
                     // implies they are locked out at last_vote
-                    for (_, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
+                    for (_lockout_ineterval_end, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
                         for (lockout_interval_start, vote_account_pubkey) in value {
                             // Only count lockouts on slots that are:
                             // 1) Not ancestors of `last_vote`
@@ -1196,11 +1198,15 @@ pub mod test {
         // count toward the switch threshold. This means the other validator's
         // vote lockout no longer counts
         vote_simulator.set_root(43);
+        // Refresh ancestors and descendants for new root.
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+
         assert_eq!(
             tower.check_switch_threshold(
                 110,
-                &vote_simulator.bank_forks.read().unwrap().ancestors(),
-                &vote_simulator.bank_forks.read().unwrap().descendants(),
+                &ancestors,
+                &descendants,
                 &vote_simulator.progress,
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
