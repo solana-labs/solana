@@ -23,6 +23,7 @@ use solana_core::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
+use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
     bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
@@ -852,6 +853,20 @@ pub fn main() {
                     "maximum total uncompressed file size of downloaded genesis archive",
                 ),
         )
+        .arg(
+            Arg::with_name("wal_recovery_mode")
+                .long("wal-recovery-mode")
+                .value_name("MODE")
+                .takes_value(true)
+                .possible_values(&[
+                    "tolerate_corrupted_tail_records",
+                    "absolute_consistency",
+                    "point_in_time",
+                    "skip_any_corrupted_record"])
+                .help(
+                    "Mode to recovery the ledger db write ahead log."
+                ),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -869,6 +884,9 @@ pub fn main() {
     let no_check_vote_account = matches.is_present("no_check_vote_account");
     let private_rpc = matches.is_present("private_rpc");
     let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
+    let wal_recovery_mode = matches
+        .value_of("wal_recovery_mode")
+        .map(BlockstoreRecoveryMode::from);
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let _ = fs::create_dir_all(&ledger_path);
@@ -927,6 +945,7 @@ pub fn main() {
         trusted_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
+        wal_recovery_mode,
         ..ValidatorConfig::default()
     };
 

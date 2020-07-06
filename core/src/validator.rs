@@ -26,6 +26,7 @@ use rand::{thread_rng, Rng};
 use solana_ledger::{
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
+    blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor, create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -84,6 +85,7 @@ pub struct ValidatorConfig {
     pub no_rocksdb_compaction: bool,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
+    pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
 }
 
 impl Default for ValidatorConfig {
@@ -111,6 +113,7 @@ impl Default for ValidatorConfig {
             no_rocksdb_compaction: false,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+            wal_recovery_mode: None,
         }
     }
 }
@@ -600,7 +603,8 @@ fn new_banks_from_ledger(
     }
 
     let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(ledger_path).expect("Failed to open ledger database");
+        Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
+            .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {

@@ -4,8 +4,8 @@
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use crate::{
     blockstore_db::{
-        columns as cf, AccessType, Column, Database, IteratorDirection, IteratorMode, LedgerColumn,
-        Result, WriteBatch,
+        columns as cf, AccessType, BlockstoreRecoveryMode, Column, Database, IteratorDirection,
+        IteratorMode, LedgerColumn, Result, WriteBatch,
     },
     blockstore_meta::*,
     entry::{create_ticks, Entry},
@@ -231,17 +231,22 @@ impl Blockstore {
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
-        Self::do_open(ledger_path, AccessType::PrimaryOnly)
+        Self::do_open(ledger_path, AccessType::PrimaryOnly, None)
     }
 
     pub fn open_with_access_type(
         ledger_path: &Path,
         access_type: AccessType,
+        recovery_mode: Option<BlockstoreRecoveryMode>,
     ) -> Result<Blockstore> {
-        Self::do_open(ledger_path, access_type)
+        Self::do_open(ledger_path, access_type, recovery_mode)
     }
 
-    fn do_open(ledger_path: &Path, access_type: AccessType) -> Result<Blockstore> {
+    fn do_open(
+        ledger_path: &Path,
+        access_type: AccessType,
+        recovery_mode: Option<BlockstoreRecoveryMode>,
+    ) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
@@ -250,7 +255,7 @@ impl Blockstore {
         // Open the database
         let mut measure = Measure::start("open");
         info!("Opening database at {:?}", blockstore_path);
-        let db = Database::open(&blockstore_path, access_type)?;
+        let db = Database::open(&blockstore_path, access_type, recovery_mode)?;
 
         // Create the metadata column family
         let meta_cf = db.column();
@@ -331,8 +336,10 @@ impl Blockstore {
 
     pub fn open_with_signal(
         ledger_path: &Path,
+        recovery_mode: Option<BlockstoreRecoveryMode>,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blockstore = Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly)?;
+        let mut blockstore =
+            Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly, recovery_mode)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -2717,7 +2724,7 @@ pub fn create_new_ledger(
     genesis_config.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore = Blockstore::open_with_access_type(ledger_path, access_type)?;
+    let blockstore = Blockstore::open_with_access_type(ledger_path, access_type, None)?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
@@ -3654,7 +3661,7 @@ pub mod tests {
     pub fn test_new_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, recvr, _) = Blockstore::open_with_signal(&ledger_path).unwrap();
+        let (ledger, recvr, _) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
@@ -3734,7 +3741,7 @@ pub mod tests {
     pub fn test_completed_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -3756,7 +3763,7 @@ pub mod tests {
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -3796,7 +3803,7 @@ pub mod tests {
     pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
