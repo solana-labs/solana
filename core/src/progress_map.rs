@@ -14,7 +14,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub(crate) type LockoutIntervals = BTreeMap<Slot, Vec<(Slot, Rc<Pubkey>)>>;
+type VotedSlot = Slot;
+type ExpirationSlot = Slot;
+pub(crate) type LockoutIntervals = BTreeMap<ExpirationSlot, Vec<(VotedSlot, Rc<Pubkey>)>>;
 
 #[derive(Default)]
 pub(crate) struct ReplaySlotStats(ConfirmationTiming);
