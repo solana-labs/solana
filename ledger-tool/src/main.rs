@@ -1201,7 +1201,7 @@ fn main() {
                         if ancestors.contains(&slot) && !map.contains_key(&slot) {
                             map.insert(slot, line);
                         }
-                        if slot == starting_slot
+                        if slot == ending_slot
                             && frozen.contains_key(&slot)
                             && full.contains_key(&slot)
                         {
