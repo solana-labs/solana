@@ -383,7 +383,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
 ```
 
-### getConfirmedSignaturesForAddress
+### deprecatedGetConfirmedSignaturesForAddress
 
 Returns a list of all the confirmed signatures for transactions involving an
 address, within a specified Slot range. Max range allowed is 10,000 Slots
@@ -406,11 +406,37 @@ The signatures will be ordered based on the Slot in which they were confirmed in
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 100]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"deprecatedGetConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 100]}' localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"]},"id":1}
 ```
+
+### getConfirmedSignaturesForAddress
+
+Returns confirmed signatures for transactions involving an
+address backwards in time from the provided slot
+
+#### Parameters:
+* `<string>` - account address as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following field:
+  * `startAfter: <string>` - start searching backwards from this transaction signature,
+                             which must be a confirmed signature for the account
+                             address.  If not provided the search starts from
+                             the highest max confirmed block.
+  * `limit: <number>` - maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+
+#### Results:
+The result field will be an array transaction signature information, ordered
+from newest to oldest transaction:
+* `<object>`
+  * `signature: <string>` - transaction signature as base-58 encoded string
+  * `slot: <u64>` - The slot that contains the block with the transaction
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+
+
+#### Example:
+TODO...
 
 ### getConfirmedTransaction
 
