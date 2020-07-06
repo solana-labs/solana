@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use log::*;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
     IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 use serde::de::DeserializeOwned;
@@ -138,11 +138,51 @@ pub enum ActualAccessType {
     Secondary,
 }
 
+#[derive(Debug, Clone)]
+pub enum BlockstoreRecoveryMode {
+    TolerateCorruptedTailRecords,
+    AbsoluteConsistency,
+    PointInTime,
+    SkipAnyCorruptedRecord,
+}
+
+impl From<&str> for BlockstoreRecoveryMode {
+    fn from(string: &str) -> Self {
+        match string {
+            "tolerate_corrupted_tail_records" => {
+                BlockstoreRecoveryMode::TolerateCorruptedTailRecords
+            }
+            "absolute_consistency" => BlockstoreRecoveryMode::AbsoluteConsistency,
+            "point_in_time" => BlockstoreRecoveryMode::PointInTime,
+            "skip_any_corrupted_record" => BlockstoreRecoveryMode::SkipAnyCorruptedRecord,
+            bad_mode => panic!("Invalid recovery mode: {}", bad_mode),
+        }
+    }
+}
+impl Into<DBRecoveryMode> for BlockstoreRecoveryMode {
+    fn into(self) -> DBRecoveryMode {
+        match self {
+            BlockstoreRecoveryMode::TolerateCorruptedTailRecords => {
+                DBRecoveryMode::TolerateCorruptedTailRecords
+            }
+            BlockstoreRecoveryMode::AbsoluteConsistency => DBRecoveryMode::AbsoluteConsistency,
+            BlockstoreRecoveryMode::PointInTime => DBRecoveryMode::PointInTime,
+            BlockstoreRecoveryMode::SkipAnyCorruptedRecord => {
+                DBRecoveryMode::SkipAnyCorruptedRecord
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Rocks(rocksdb::DB, ActualAccessType);
 
 impl Rocks {
-    fn open(path: &Path, access_type: AccessType) -> Result<Rocks> {
+    fn open(
+        path: &Path,
+        access_type: AccessType,
+        recovery_mode: Option<BlockstoreRecoveryMode>,
+    ) -> Result<Rocks> {
         use columns::{
             AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
             Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
@@ -152,6 +192,9 @@ impl Rocks {
 
         // Use default database options
         let mut db_options = get_db_options();
+        if let Some(recovery_mode) = recovery_mode {
+            db_options.set_wal_recovery_mode(recovery_mode.into());
+        }
 
         // Column family names
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
@@ -627,8 +670,12 @@ pub struct WriteBatch<'a> {
 }
 
 impl Database {
-    pub fn open(path: &Path, access_type: AccessType) -> Result<Self> {
-        let backend = Arc::new(Rocks::open(path, access_type)?);
+    pub fn open(
+        path: &Path,
+        access_type: AccessType,
+        recovery_mode: Option<BlockstoreRecoveryMode>,
+    ) -> Result<Self> {
+        let backend = Arc::new(Rocks::open(path, access_type, recovery_mode)?);
 
         Ok(Database {
             backend,

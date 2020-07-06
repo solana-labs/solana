@@ -12,7 +12,7 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::Blockstore,
-    blockstore_db::{self, AccessType, Column, Database},
+    blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
@@ -532,8 +532,12 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
     Ok(())
 }
 
-fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
-    match Blockstore::open_with_access_type(ledger_path, access_type) {
+fn open_blockstore(
+    ledger_path: &Path,
+    access_type: AccessType,
+    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+) -> Blockstore {
+    match Blockstore::open_with_access_type(ledger_path, access_type, wal_recovery_mode) {
         Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
@@ -543,7 +547,7 @@ fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
 }
 
 fn open_database(ledger_path: &Path, access_type: AccessType) -> Database {
-    match Database::open(&ledger_path.join("rocksdb"), access_type) {
+    match Database::open(&ledger_path.join("rocksdb"), access_type, None) {
         Ok(database) => database,
         Err(err) => {
             eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
@@ -567,8 +571,9 @@ fn load_bank_forks(
     genesis_config: &GenesisConfig,
     process_options: ProcessOptions,
     access_type: AccessType,
+    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
 ) -> bank_forks_utils::LoadResult {
-    let blockstore = open_blockstore(&ledger_path, access_type);
+    let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
     let snapshot_path = ledger_path.clone().join(if blockstore.is_primary_access() {
         "snapshot"
     } else {
@@ -707,6 +712,21 @@ fn main() {
                 .help("Use DIR for ledger location"),
         )
         .bigtable_subcommand()
+        .arg(
+            Arg::with_name("wal_recovery_mode")
+                .long("wal-recovery-mode")
+                .value_name("MODE")
+                .takes_value(true)
+                .global(true)
+                .possible_values(&[
+                    "tolerate_corrupted_tail_records",
+                    "absolute_consistency",
+                    "point_in_time",
+                    "skip_any_corrupted_record"])
+                .help(
+                    "Mode to recovery the ledger db write ahead log."
+                ),
+        )
         .subcommand(
             SubCommand::with_name("print")
             .about("Print the ledger")
@@ -977,13 +997,21 @@ fn main() {
         exit(1);
     });
 
+    let wal_recovery_mode = matches
+        .value_of("wal_recovery_mode")
+        .map(BlockstoreRecoveryMode::from);
+
     match matches.subcommand() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
-                open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary),
+                open_blockstore(
+                    &ledger_path,
+                    AccessType::TryPrimaryThenSecondary,
+                    wal_recovery_mode,
+                ),
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
@@ -1012,6 +1040,7 @@ fn main() {
                 &genesis_config,
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!(
@@ -1031,7 +1060,11 @@ fn main() {
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
             for slot in slots {
                 println!("Slot {}", slot);
                 if let Err(err) = output_slot(
@@ -1048,7 +1081,11 @@ fn main() {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
-                open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary),
+                open_blockstore(
+                    &ledger_path,
+                    AccessType::TryPrimaryThenSecondary,
+                    wal_recovery_mode,
+                ),
                 starting_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Json,
@@ -1056,7 +1093,8 @@ fn main() {
         }
         ("set-dead-slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-            let blockstore = open_blockstore(&ledger_path, AccessType::PrimaryOnly);
+            let blockstore =
+                open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
             for slot in slots {
                 match blockstore.set_dead_slot(slot) {
                     Ok(_) => println!("Slot {} dead", slot),
@@ -1067,7 +1105,11 @@ fn main() {
         ("parse_full_frozen", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
             let mut ancestors = BTreeSet::new();
             if blockstore.meta(ending_slot).unwrap().is_none() {
                 panic!("Ending slot doesn't exist");
@@ -1146,6 +1188,7 @@ fn main() {
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             )
             .unwrap_or_else(|err| {
                 eprintln!("Ledger verification failed: {:?}", err);
@@ -1169,6 +1212,7 @@ fn main() {
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
@@ -1220,6 +1264,7 @@ fn main() {
                 &genesis_config,
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks
@@ -1314,6 +1359,7 @@ fn main() {
                 &genesis_config,
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
@@ -1362,6 +1408,7 @@ fn main() {
                 &genesis_config,
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
@@ -1472,12 +1519,17 @@ fn main() {
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
-            let blockstore = open_blockstore(&ledger_path, AccessType::PrimaryOnly);
+            let blockstore =
+                open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
             blockstore.purge_and_compact_slots(start_slot, end_slot);
             blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
-            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
             let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
@@ -1530,8 +1582,12 @@ fn main() {
                 });
         }
         ("bounds", Some(arg_matches)) => {
-            match open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary)
-                .slot_meta_iterator(0)
+            match open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            )
+            .slot_meta_iterator(0)
             {
                 Ok(metas) => {
                     let all = arg_matches.is_present("all");
