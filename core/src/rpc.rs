@@ -17,6 +17,10 @@ use jsonrpc_derive::rpc;
 use solana_client::{
     rpc_config::*,
     rpc_request::{
+<<<<<<< HEAD
+=======
+        DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
+>>>>>>> aef6bf272... getConfirmedBlocks now has an upper limit on slot range
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
@@ -545,6 +549,12 @@ impl JsonRpcRequestProcessor {
         );
         if end_slot < start_slot {
             return Ok(vec![]);
+        }
+        if end_slot - start_slot > MAX_GET_CONFIRMED_BLOCKS_RANGE {
+            return Err(Error::invalid_params(format!(
+                "Slot range too large; max {}",
+                MAX_GET_CONFIRMED_BLOCKS_RANGE
+            )));
         }
         Ok(self
             .blockstore
@@ -3365,13 +3375,44 @@ pub mod tests {
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
+<<<<<<< HEAD
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
         let res = io.handle_request_sync(&req, meta);
+=======
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9,11]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+>>>>>>> aef6bf272... getConfirmedBlocks now has an upper limit on slot range
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, Vec::<Slot>::new());
+
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_largest_confirmed_root(std::u64::MAX);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,{}]}}"#,
+            MAX_GET_CONFIRMED_BLOCKS_RANGE
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![1, 3, 4, 8]);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,{}]}}"#,
+            MAX_GET_CONFIRMED_BLOCKS_RANGE + 1
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Slot range too large; max 500000"},"id":1}"#.to_string(),
+            )
+        );
     }
 
     #[test]
