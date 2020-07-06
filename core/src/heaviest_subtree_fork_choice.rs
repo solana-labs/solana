@@ -494,11 +494,12 @@ impl HeaviestSubtreeForkChoice {
     fn heaviest_slot_on_same_voted_fork(&self, tower: &Tower) -> Option<Slot> {
         let last_voted_slot = tower.last_voted_slot();
 
+        if tower.is_stray_last_vote() {
+            // return None because bank_forks doesn't have corresponding banks
+            return None;
+        }
+
         last_voted_slot.map(|last_voted_slot| {
-            if tower.is_restored_stray_slot(last_voted_slot) {
-                // return None because bank_forks doesn't have corresponding banks
-                return None;
-            }
             let heaviest_slot_on_same_voted_fork =
                 self.best_slot(last_voted_slot).expect("a bank at last_voted_slot is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
             if heaviest_slot_on_same_voted_fork == last_voted_slot {
@@ -1501,14 +1502,14 @@ mod test {
     }
 
     #[test]
-    fn test_is_restored_stray_slot() {
+    fn test_stray_restored_slot() {
         let forks = tr(0) / (tr(1) / tr(2));
         let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
 
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(1, Hash::default());
 
-        assert_eq!(tower.is_restored_stray_slot(1), false);
+        assert_eq!(tower.is_stray_last_vote(), false);
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             Some(2)
@@ -1521,7 +1522,7 @@ mod test {
             .adjust_lockouts_after_replay(0, &slot_history)
             .unwrap();
 
-        assert_eq!(tower.is_restored_stray_slot(1), true);
+        assert_eq!(tower.is_stray_last_vote(), true);
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             None

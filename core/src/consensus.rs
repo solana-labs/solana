@@ -19,7 +19,7 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
     ops::Bound::{Included, Unbounded},
@@ -94,7 +94,7 @@ pub struct Tower {
     #[serde(skip)]
     tmp_path: PathBuf, // used before atomic fs::rename()
     #[serde(skip)]
-    restored_stray_slots: BTreeSet<Slot>,
+    stray_restored_slots: HashSet<Slot>,
 }
 
 impl Default for Tower {
@@ -108,7 +108,7 @@ impl Default for Tower {
             last_timestamp: BlockTimestamp::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
-            restored_stray_slots: BTreeSet::default(),
+            stray_restored_slots: HashSet::default(),
         }
     }
 }
@@ -480,20 +480,14 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
-        let root = self.lockouts.root_slot.unwrap_or(0);
-        let mut maybe_stray_ancestors = HashSet::new();
-
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
-                    if self.is_restored_stray_slot(last_voted_slot) {
-                        // Construct artifical ancestors because we can't derive them from given ancestors (=bank_forks)
-                        maybe_stray_ancestors = self.restored_stray_slots.range(0..last_voted_slot).copied().collect();
-                        &maybe_stray_ancestors
-                    } else {
-                        panic!("no ancestors: {}", last_voted_slot)
-                    }
-                });
+                let last_vote_ancestors = if self.is_stray_last_vote() {
+                    // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
+                    &self.stray_restored_slots
+                } else {
+                    ancestors.get(&last_voted_slot).unwrap()
+                };
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -715,8 +709,12 @@ impl Tower {
             .collect()
     }
 
-    pub fn is_restored_stray_slot(&self, slot: Slot) -> bool {
-        self.restored_stray_slots.contains(&slot)
+    pub fn is_stray_last_vote(&self) -> bool {
+        if let Some(last_voted_slot) = self.last_voted_slot() {
+            self.stray_restored_slots.contains(&last_voted_slot)
+        } else {
+            false
+        }
     }
 
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
@@ -804,10 +802,13 @@ impl Tower {
             self.last_vote = Vote::default();
         } else {
             self.lockouts.root_slot = Some(replayed_root_slot);
-            assert!(self.last_vote != Vote::default());
+            assert_eq!(
+                self.last_vote.last_voted_slot().unwrap(),
+                *self.voted_slots().last().unwrap()
+            );
         }
         // should call self.votes.pop_expired_votes()?
-        self.restored_stray_slots = self.voted_slots().into_iter().collect();
+        self.stray_restored_slots = self.voted_slots().into_iter().collect();
         Ok(self)
     }
 
@@ -1386,6 +1387,7 @@ pub mod test {
 
     #[test]
     fn test_switch_threshold_across_tower_reload() {
+        solana_logger::setup();
         // Init state
         let mut vote_simulator = VoteSimulator::new(2);
         let my_pubkey = vote_simulator.node_pubkeys[0];
@@ -1487,20 +1489,28 @@ pub mod test {
             .unwrap()
             .clone();
         let total_stake = bank0.total_epoch_stake();
-        let forks = tr(0) / (tr(1) / (tr(2) / tr(10) / (tr(43) / (tr(44) / (tr(110) / tr(111))))));
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    / tr(10)
+                    / (tr(43) / (tr(44) / (tr(45) / tr(222)) / (tr(110) / tr(111))))));
+        let replayed_root_slot = 44;
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+
+        // prepend tower restart!
+        let mut slot_history = SlotHistory::default();
+        vote_simulator.set_root(replayed_root_slot);
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
-
-        let mut slot_history = SlotHistory::default();
-        for slot in &[0, 1, 2, 43, 44, 110] {
+        for slot in &[0, 1, 2, 43, replayed_root_slot] {
             slot_history.add(*slot);
         }
         let mut tower = tower
-            .adjust_lockouts_after_replay(110, &slot_history)
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
+
         assert_eq!(tower.voted_slots(), vec![45, 46, 47, 48, 49]);
 
         // Trying to switch to another fork at 110 should fail
@@ -1516,8 +1526,20 @@ pub mod test {
             SwitchForkDecision::FailedSwitchThreshold
         );
 
-        vote_simulator.simulate_lockout_interval(111, (10, 49), &other_vote_account);
+        vote_simulator.simulate_lockout_interval(111, (45, 50), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::FailedSwitchThreshold
+        );
 
+        vote_simulator.simulate_lockout_interval(111, (110, 200), &other_vote_account);
         assert_eq!(
             tower.check_switch_threshold(
                 110,
@@ -1533,7 +1555,7 @@ pub mod test {
         tower.record_vote(110, Hash::default());
         tower.record_vote(111, Hash::default());
         assert_eq!(tower.voted_slots(), vec![110, 111]);
-        assert_eq!(tower.lockouts.root_slot, Some(110));
+        assert_eq!(tower.lockouts.root_slot, Some(replayed_root_slot));
     }
 
     #[test]
