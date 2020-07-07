@@ -1,15 +1,7 @@
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitmentConfig {
     pub commitment: CommitmentLevel,
-}
-
-impl Default for CommitmentConfig {
-    fn default() -> Self {
-        CommitmentConfig {
-            commitment: CommitmentLevel::Max,
-        }
-    }
 }
 
 impl CommitmentConfig {
@@ -60,4 +52,10 @@ pub enum CommitmentLevel {
     Root,
     Single,
     SingleGossip,
+}
+
+impl Default for CommitmentLevel {
+    fn default() -> Self {
+        Self::Max
+    }
 }
