@@ -3,6 +3,7 @@ use crate::{
     entry::{create_ticks, Entry},
     erasure::Session,
 };
+use bincode::config::Options;
 use core::cell::RefCell;
 use rayon::{
     iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
@@ -137,8 +138,8 @@ impl Shred {
     where
         T: Deserialize<'de>,
     {
-        let ret = bincode::config()
-            .limit(PACKET_DATA_SIZE as u64)
+        let ret = bincode::options()
+            .with_limit(PACKET_DATA_SIZE as u64)
             .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)
