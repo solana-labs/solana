@@ -766,11 +766,7 @@ fn new_banks_from_ledger(
         &bank_forks,
     );
 
-    info!(
-        "Tower state: root slot={:?}, last vote slot={:?}",
-        tower.root(),
-        tower.last_voted_slot()
-    );
+    info!("Tower state: {:?}", tower);
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 

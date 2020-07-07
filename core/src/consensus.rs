@@ -4,6 +4,7 @@ use crate::{
 };
 use chrono::prelude::*;
 use solana_ledger::{blockstore::Blockstore, blockstore_db};
+use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_sdk::{
     account::Account,
@@ -853,6 +854,8 @@ impl Tower {
     }
 
     pub fn save(&self, node_keypair: &Arc<Keypair>) -> Result<()> {
+        let mut measure = Measure::start("tower_save-ms");
+
         if self.node_pubkey != node_keypair.pubkey() {
             return Err(TowerError::WrongTower(format!(
                 "node_pubkey is {:?} but found tower for {:?}",
@@ -872,11 +875,16 @@ impl Tower {
         }
         fs::rename(&new_filename, &filename)?;
         // self.path.parent().sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
+
+        measure.stop();
+        inc_new_counter_info!("tower_save-ms", measure.as_ms() as usize);
+
         Ok(())
     }
 
     pub fn restore(path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
         let filename = Self::get_filename(path, node_pubkey);
+
         // Ensure to create parent dir here, because restore() precedes save() always
         fs::create_dir_all(&filename.parent().unwrap())?;
 
