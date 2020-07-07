@@ -728,7 +728,11 @@ impl Tower {
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
-        info!("adjusting lockouts after replay up to {}: {:?}", replayed_root_slot, self.voted_slots());
+        info!(
+            "adjusting lockouts after replay up to {}: {:?}",
+            replayed_root_slot,
+            self.voted_slots()
+        );
 
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
@@ -765,7 +769,8 @@ impl Tower {
         }
 
         // only divergent slots will be retained
-        let mut retain_flags_for_each_vote_in_reverse: Vec<_> = Vec::with_capacity(self.lockouts.votes.len());
+        let mut retain_flags_for_each_vote_in_reverse: Vec<_> =
+            Vec::with_capacity(self.lockouts.votes.len());
         let mut still_in_future = true;
         let mut past_outside_history = false;
         let mut found = false;
@@ -803,7 +808,8 @@ impl Tower {
 
             retain_flags_for_each_vote_in_reverse.push(!found);
         }
-        let mut retain_flags_for_each_vote = retain_flags_for_each_vote_in_reverse.into_iter().rev();
+        let mut retain_flags_for_each_vote =
+            retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
         self.lockouts
             .votes
@@ -2377,9 +2383,9 @@ pub mod test {
         let loaded = loaded.unwrap();
         assert_eq!(loaded, tower);
         assert_eq!(tower.threshold_depth, 10);
-        assert_eq!(tower.threshold_size, 0.9);
+        assert!((tower.threshold_size - 0.9_f64).abs() < f64::EPSILON);
         assert_eq!(loaded.threshold_depth, 10);
-        assert_eq!(loaded.threshold_size, 0.9);
+        assert!((loaded.threshold_size - 0.9_f64).abs() < f64::EPSILON);
     }
 
     #[test]

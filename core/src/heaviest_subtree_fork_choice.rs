@@ -492,7 +492,6 @@ impl HeaviestSubtreeForkChoice {
     }
 
     fn heaviest_slot_on_same_voted_fork(&self, tower: &Tower) -> Option<Slot> {
-
         tower.last_voted_slot().map(|last_voted_slot| {
             let heaviest_slot_on_same_voted_fork = self.best_slot(last_voted_slot);
             if heaviest_slot_on_same_voted_fork.is_none() && tower.is_stray_last_vote() {
@@ -500,7 +499,9 @@ impl HeaviestSubtreeForkChoice {
                 // return None because bank_forks doesn't have corresponding banks
                 return None;
             };
-            let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork.expect("a bank at last_voted_slot is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
+            let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork.expect(
+                "a bank at last_voted_slot is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing",
+            );
 
             if heaviest_slot_on_same_voted_fork == last_voted_slot {
                 None
