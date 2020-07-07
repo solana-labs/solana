@@ -1516,9 +1516,21 @@ mod test {
             Some(2)
         );
 
-        // Make slot 1 a restored stray slot
+        // Make slot 1 (existing in bank_forks) a restored stray slot
         let mut slot_history = SlotHistory::default();
         slot_history.add(0);
+        tower = tower
+            .adjust_lockouts_after_replay(0, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.is_stray_last_vote(), true);
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            Some(2)
+        );
+
+        // Make slot 3 (NOT existing in bank_forks) a restored stray slot
+        tower.record_vote(3, Hash::default());
         tower = tower
             .adjust_lockouts_after_replay(0, &slot_history)
             .unwrap();
