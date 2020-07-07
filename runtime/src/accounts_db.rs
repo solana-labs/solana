@@ -567,13 +567,13 @@ impl AccountsDB {
     fn inc_store_counts(
         no_delete_id: AppendVecId,
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
-        store_counts: &mut HashMap<AppendVecId, usize>,
+        store_counts: &mut HashMap<AppendVecId, (Slot, usize)>,
         already_counted: &mut HashSet<AppendVecId>,
     ) {
         if already_counted.contains(&no_delete_id) {
             return;
         }
-        *store_counts.get_mut(&no_delete_id).unwrap() += 1;
+        store_counts.get_mut(&no_delete_id).unwrap().1 = 1;
         already_counted.insert(no_delete_id);
         let mut affected_pubkeys = HashSet::new();
         for (key, (account_infos, _ref_count)) in purges {
@@ -598,7 +598,7 @@ impl AccountsDB {
 
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
-        store_counts: &mut HashMap<AppendVecId, usize>,
+        store_counts: &mut HashMap<AppendVecId, (Slot, usize)>,
     ) {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
@@ -610,7 +610,7 @@ impl AccountsDB {
             } else {
                 let mut no_delete = false;
                 for (_slot, account_info) in account_infos {
-                    if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                    if store_counts.get(&account_info.store_id).unwrap().1 != 0 {
                         no_delete = true;
                         break;
                     }
@@ -630,6 +630,70 @@ impl AccountsDB {
         }
     }
 
+    fn rewrite_purge_stores(
+        &self,
+        store_counts: &HashMap<AppendVecId, (Slot, usize)>,
+        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
+    ) {
+        let mut purge_stores = Vec::new();
+        let storage = self.storage.read().unwrap();
+        for (store_id, (slot, count)) in store_counts {
+            if *count != 0 {
+                if let Some(slot_storage) = storage.0.get(slot) {
+                    if let Some(store) = slot_storage.get(store_id) {
+                        purge_stores.push((*slot, *store_id, store.clone()));
+                    }
+                }
+            }
+        }
+        drop(storage);
+
+        for (slot, store_id, store) in purge_stores {
+            info!("iterating store: {} {:?}", store_id, *store.count_and_status.read().unwrap());
+            let mut total_size = 0;
+            let mut start = 0;
+            let mut accounts = Vec::new();
+            let mut hashes = Vec::new();
+            let mut write_versions = Vec::new();
+            while let Some((account, next)) = store.accounts.get_account(start) {
+                if let Some((account_infos, _ref_count)) = purges.get(&account.meta.pubkey) {
+                    for (_slot, account_info) in account_infos {
+                        if account_info.store_id == store.id {
+                            accounts.push((account.meta.pubkey, account.clone_account()));
+                            hashes.push(*account.hash);
+                            write_versions.push(account.meta.write_version);
+                            total_size += next - start;
+                            break;
+                        }
+                    }
+                }
+                start = next;
+            }
+            let aligned_total = Self::get_aligned(total_size as u64);
+
+            if aligned_total > 0 {
+                let shrunken_store = self.create_and_insert_store(slot, aligned_total);
+                let accounts_refs: Vec<_> = accounts.iter().map(|(k, a)| (k, a)).collect();
+
+                let infos = self.store_accounts_to(
+                    slot,
+                    &accounts_refs,
+                    &hashes,
+                    |_| shrunken_store.clone(),
+                    write_versions.into_iter(),
+                );
+                let reclaims = self.update_index(slot, infos, &accounts_refs);
+
+                self.handle_reclaims_maybe_cleanup(&reclaims);
+
+                let mut storage = self.storage.write().unwrap();
+                if let Some(slot_storage) = storage.0.get_mut(&slot) {
+                    slot_storage.retain(|_key, store| store.count() > 0);
+                }
+            }
+        }
+    }
+
     // Purge zero lamport accounts and older rooted account states as garbage
     // collection
     // Only remove those accounts where the entire rooted history of the account
@@ -642,7 +706,7 @@ impl AccountsDB {
         let accounts_index = self.accounts_index.read().unwrap();
         let pubkeys: Vec<Pubkey> = accounts_index.account_maps.keys().cloned().collect();
         // parallel scan the index.
-        let (mut purges, purges_in_root) = pubkeys
+        let (purges, purges_in_root) = pubkeys
             .par_chunks(4096)
             .map(|pubkeys: &[Pubkey]| {
                 let mut purges_in_root = Vec::new();
@@ -671,6 +735,12 @@ impl AccountsDB {
 
         drop(accounts_index);
         accounts_scan.stop();
+        for (key, (account_infos, ref_count)) in &purges {
+            info!("purge({}): {:?}", ref_count, key);
+            for info in account_infos {
+                info!("  : {:?}", info);
+            }
+        }
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         if !purges_in_root.is_empty() {
@@ -683,18 +753,18 @@ impl AccountsDB {
 
         // Calculate store counts as if everything was purged
         // Then purge if we can
-        let mut store_counts: HashMap<AppendVecId, usize> = HashMap::new();
+        let mut store_counts: HashMap<AppendVecId, (Slot, usize)> = HashMap::new();
         let storage = self.storage.read().unwrap();
         for (account_infos, _ref_count) in purges.values() {
             for (slot, account_info) in account_infos {
                 let slot_storage = storage.0.get(&slot).unwrap();
                 let store = slot_storage.get(&account_info.store_id).unwrap();
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
-                    *store_count -= 1;
+                    store_count.1 -= 1;
                 } else {
                     store_counts.insert(
                         account_info.store_id,
-                        store.count_and_status.read().unwrap().0 - 1,
+                        (*slot, store.count_and_status.read().unwrap().0 - 1),
                     );
                 }
             }
@@ -706,27 +776,33 @@ impl AccountsDB {
         Self::calc_delete_dependencies(&purges, &mut store_counts);
         calc_deps_time.stop();
 
+        self.rewrite_purge_stores(&store_counts, &purges);
+
         // Only keep purges where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
         let mut purge_filter = Measure::start("purge_filter");
-        purges.retain(|_pubkey, (account_infos, _ref_count)| {
+        /*purges.retain(|_pubkey, (account_infos, _ref_count)| {
             for (_slot, account_info) in account_infos.iter() {
-                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                if store_counts.get(&account_info.store_id).unwrap().1 != 0 {
                     return false;
                 }
             }
             true
-        });
+        });*/
         purge_filter.stop();
 
         let mut reclaims_time = Measure::start("reclaims");
         // Recalculate reclaims with new purge set
+        let mut all_slots = HashSet::new();
         let purges_key_to_slot_set: Vec<_> = purges
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
                 (
                     key,
-                    HashSet::from_iter(slots_list.into_iter().map(|(slot, _)| slot)),
+                    HashSet::from_iter(slots_list.into_iter().map(|(slot, _)| {
+                        all_slots.insert(slot);
+                        slot
+                    })),
                 )
             })
             .collect();
@@ -751,6 +827,14 @@ impl AccountsDB {
         }
 
         self.handle_reclaims_maybe_cleanup(&reclaims);
+
+        let mut storage = self.storage.write().unwrap();
+        for slot in all_slots {
+            if let Some(slot_storage) = storage.0.get_mut(&slot) {
+                slot_storage.retain(|_key, store| store.count() > 0);
+            }
+        }
+
         reclaims_time.stop();
         datapoint_info!(
             "clean_accounts",
@@ -818,6 +902,10 @@ impl AccountsDB {
 
     fn shrink_slot_forced(&self, slot: Slot) {
         self.do_shrink_slot(slot, true);
+    }
+
+    fn get_aligned(total: u64) -> u64 {
+        (total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -892,9 +980,9 @@ impl AccountsDB {
                 },
             )
             .sum();
-        let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
+        let aligned_total = Self::get_aligned(alive_total);
 
-        debug!(
+        info!(
             "shrinking: slot: {}, stored_accounts: {} => alive_accounts: {} ({} bytes; aligned to: {})",
             slot,
             stored_accounts.len(),
@@ -1994,7 +2082,10 @@ impl AccountsDB {
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, list) in &self.accounts_index.read().unwrap().account_maps {
             info!("  key: {}", pubkey);
-            info!("      slots: {:?}", *list.1.read().unwrap());
+            info!("  slots:");
+            for entry in list.1.read().unwrap().iter() {
+                info!("    {:?}", entry);
+            }
         }
     }
 
@@ -4099,18 +4190,57 @@ pub mod tests {
         }
 
         let mut store_counts = HashMap::new();
-        store_counts.insert(0, 0);
-        store_counts.insert(1, 0);
-        store_counts.insert(2, 0);
-        store_counts.insert(3, 1);
+        store_counts.insert(0, (0, 0));
+        store_counts.insert(1, (0, 0));
+        store_counts.insert(2, (0, 0));
+        store_counts.insert(3, (0, 1));
         AccountsDB::calc_delete_dependencies(&purges, &mut store_counts);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
         stores.sort();
         for store in &stores {
-            info!("store: {:?} : {}", store, store_counts.get(&store).unwrap());
+            info!(
+                "store: {:?} : {:?}",
+                store,
+                store_counts.get(&store).unwrap()
+            );
         }
         for x in 0..3 {
-            assert!(store_counts[&x] >= 1);
+            assert!(store_counts[&x].1 >= 1);
         }
+    }
+
+    #[test]
+    fn test_shrink1() {
+        solana_logger::setup();
+        let accounts = AccountsDB::new_single();
+        let owner = Pubkey::new_rand();
+        let some_lamport = 1;
+        let data_len = 5000;
+
+        let no_data = 0;
+        let account_zero = Account::new(0, no_data, &owner);
+
+        let key0 = Pubkey::new_rand();
+        let account0 = Account::new(some_lamport + 1, data_len, &owner);
+
+        let key1 = Pubkey::new_rand();
+        let account1 = Account::new(some_lamport + 2, data_len, &owner);
+
+        let key2 = Pubkey::new_rand();
+        let account2 = Account::new(some_lamport + 3, data_len, &owner);
+
+        accounts.store(0, &[(&key0, &account0)]);
+        accounts.store(0, &[(&key1, &account1)]);
+        accounts.store(1, &[(&key1, &account_zero)]);
+        accounts.store(1, &[(&key2, &account2)]);
+
+        accounts.add_root(0);
+        accounts.add_root(1);
+
+        accounts.print_accounts_stats("pre-shrink");
+        accounts.clean_accounts();
+        accounts.process_dead_slots(None);
+        info!("\n\n*****\n");
+        accounts.print_accounts_stats("post");
     }
 }
