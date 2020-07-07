@@ -72,8 +72,7 @@ pub fn is_confirmed_rooted(
     slot: Slot,
 ) -> bool {
     slot <= block_commitment_cache.highest_confirmed_root()
-        && (blockstore.is_root(slot)
-            || bank.status_cache_ancestors().contains(&slot))
+        && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
 #[derive(Debug, Default, Clone)]
@@ -3825,11 +3824,27 @@ pub mod tests {
         block_commitment.entry(2).or_insert(cache1);
         block_commitment.entry(3).or_insert(cache2);
         let highest_confirmed_root = 1;
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, highest_confirmed_root, 50, bank.clone(), 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            highest_confirmed_root,
+            50,
+            bank.clone(),
+            0,
+            0,
+        );
 
-        assert!(is_confirmed_rooted(&block_commitment_cache, &bank, &blockstore, 0));
-        assert!(is_confirmed_rooted(&block_commitment_cache, &bank, &blockstore, 1));
+        assert!(is_confirmed_rooted(
+            &block_commitment_cache,
+            &bank,
+            &blockstore,
+            0
+        ));
+        assert!(is_confirmed_rooted(
+            &block_commitment_cache,
+            &bank,
+            &blockstore,
+            1
+        ));
         assert!(!is_confirmed_rooted(
             &block_commitment_cache,
             &bank,
