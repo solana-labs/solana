@@ -7,6 +7,7 @@ use solana_runtime::{
     bank::*,
 };
 use solana_sdk::{account::Account, genesis_config::create_genesis_config, pubkey::Pubkey};
+use std::collections::HashSet;
 use std::{path::PathBuf, sync::Arc};
 use test::Bencher;
 
@@ -67,10 +68,17 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let accounts = Accounts::new(vec![PathBuf::from("bench_accounts_hash_internal")]);
     let mut pubkeys: Vec<Pubkey> = vec![];
-    create_test_accounts(&accounts, &mut pubkeys, 60000, 0);
+    let num_accounts = 60_000;
+    let slot = 0;
+    create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = vec![(0, 0)].into_iter().collect();
-    accounts.accounts_db.update_accounts_hash(0, &ancestors);
-    bencher.iter(|| assert!(accounts.verify_bank_hash(0, &ancestors)));
+    let cap_exempt = HashSet::new();
+    let (_, total_lamports) = accounts
+        .accounts_db
+        .update_accounts_hash(0, &ancestors, &cap_exempt);
+    bencher.iter(|| {
+        assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports, &cap_exempt))
+    });
 }
 
 #[bench]
@@ -80,8 +88,11 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = vec![(0, 0)].into_iter().collect();
+    let cap_exempt = HashSet::new();
     bencher.iter(|| {
-        accounts.accounts_db.update_accounts_hash(0, &ancestors);
+        accounts
+            .accounts_db
+            .update_accounts_hash(0, &ancestors, &cap_exempt);
     });
 }
 

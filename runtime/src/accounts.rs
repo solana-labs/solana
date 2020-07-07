@@ -428,8 +428,19 @@ impl Accounts {
     }
 
     #[must_use]
-    pub fn verify_bank_hash(&self, slot: Slot, ancestors: &Ancestors) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
+    pub fn verify_bank_hash_and_lamports(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        total_lamports: u64,
+        capitalization_exempt: &HashSet<Pubkey>,
+    ) -> bool {
+        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
+            slot,
+            ancestors,
+            total_lamports,
+            capitalization_exempt,
+        ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {

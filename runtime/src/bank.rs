@@ -429,6 +429,10 @@ pub struct Bank {
     pub operating_mode: Option<OperatingMode>,
 
     pub lazy_rent_collection: AtomicBool,
+
+    pub builtin_programs: Arc<RwLock<HashSet<Pubkey>>>,
+
+    pub genesis_cap_exempt_ids: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -550,6 +554,8 @@ impl Bank {
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
+            builtin_programs: parent.builtin_programs.clone(),
+            genesis_cap_exempt_ids: parent.genesis_cap_exempt_ids.clone(),
         };
 
         datapoint_info!(
@@ -658,6 +664,8 @@ impl Bank {
             skip_drop: new(),
             operating_mode: Some(genesis_config.operating_mode),
             lazy_rent_collection: new(),
+            genesis_cap_exempt_ids: new(),
+            builtin_programs: new(),
         };
         bank.finish_init();
 
@@ -1172,6 +1180,7 @@ impl Bank {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, account);
+            self.genesis_cap_exempt_ids.write().unwrap().insert(*pubkey);
         }
 
         // highest staked node is the first collector
@@ -1216,6 +1225,10 @@ impl Bank {
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_loadable_account(name);
         self.store_account(program_id, &account);
+        self.genesis_cap_exempt_ids
+            .write()
+            .unwrap()
+            .insert(*program_id);
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
@@ -2777,9 +2790,14 @@ impl Bank {
     /// snapshot.
     #[must_use]
     fn verify_bank_hash(&self) -> bool {
-        self.rc
-            .accounts
-            .verify_bank_hash(self.slot(), &self.ancestors)
+        let mut capitalization_exempt = self.builtin_programs.read().unwrap().clone();
+        capitalization_exempt.extend(self.genesis_cap_exempt_ids.read().unwrap().iter());
+        self.rc.accounts.verify_bank_hash_and_lamports(
+            self.slot(),
+            &self.ancestors,
+            self.capitalization(),
+            &capitalization_exempt,
+        )
     }
 
     pub fn get_snapshot_storages(&self) -> SnapshotStorages {
@@ -2841,10 +2859,15 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.rc
-            .accounts
-            .accounts_db
-            .update_accounts_hash(self.slot(), &self.ancestors)
+        let mut capitalization_exempt = self.builtin_programs.read().unwrap().clone();
+        capitalization_exempt.extend(self.genesis_cap_exempt_ids.read().unwrap().iter());
+        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+            self.slot(),
+            &self.ancestors,
+            &capitalization_exempt,
+        );
+        assert_eq!(total_lamports, self.capitalization());
+        hash
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -3096,6 +3119,7 @@ impl Bank {
                 debug!("Added builtin loader {} under {:?}", name, program_id);
             }
         }
+        self.builtin_programs.write().unwrap().insert(program_id);
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {
