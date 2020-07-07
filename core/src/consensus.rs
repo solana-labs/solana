@@ -748,7 +748,7 @@ impl Tower {
 
         use solana_sdk::slot_history::Check;
 
-        // return immediately if last_voted_slot is None, votes are empty...
+        // return immediately if votes are empty...
         if self.lockouts.votes.is_empty() {
             assert_eq!(self.root(), None);
             return Ok(self);
@@ -756,30 +756,35 @@ impl Tower {
 
         let last_voted_slot = self.last_voted_slot().unwrap();
         if slot_history.check(last_voted_slot) == Check::TooOld {
+            // We could try hard to anchor with other older votes, but opt to simplify the
+            // following logic
             return Err(TowerError::TooOld(last_voted_slot, slot_history.oldest()));
         }
 
-        let mut diverged_descendant_flags_in_reverse: Vec<_> =
-            Vec::with_capacity(self.lockouts.votes.len());
+        // only divergent slots will be retained
+        let mut retain_flags_for_each_vote_in_reverse: Vec<_> = Vec::with_capacity(self.lockouts.votes.len());
         let mut still_in_future = true;
         let mut past_outside_history = false;
         let mut found = false;
+
+        // iterate over votes in the newest => oldest order
+        // bail out early if bad condition is found
         for vote in self.lockouts.votes.iter().rev() {
             let check = slot_history.check(vote.slot);
 
-            // this can't happen unless we're fed with bogus snapshot
             if !found && check == Check::Found {
                 found = true;
             } else if found && check == Check::NotFound {
+                // this can't happen unless we're fed with bogus snapshot
                 return Err(TowerError::InconsistentWithSlotHistory(
                     "diverged ancestor?".to_owned(),
                 ));
             }
 
-            // really odd cases: bad ordered votes?
             if still_in_future && check != Check::Future {
                 still_in_future = false;
             } else if !still_in_future && check == Check::Future {
+                // really odd cases: bad ordered votes?
                 return Err(TowerError::InconsistentWithSlotHistory(
                     "time warmped?".to_owned(),
                 ));
@@ -787,23 +792,28 @@ impl Tower {
             if !past_outside_history && check == Check::TooOld {
                 past_outside_history = true;
             } else if past_outside_history && check != Check::TooOld {
+                // really odd cases: bad ordered votes?
                 return Err(TowerError::InconsistentWithSlotHistory(
                     "not too old once after got too old?".to_owned(),
                 ));
             }
 
-            diverged_descendant_flags_in_reverse.push(!found);
+            retain_flags_for_each_vote_in_reverse.push(!found);
         }
-        let mut diverged_descendant_flags = diverged_descendant_flags_in_reverse.into_iter().rev();
+        let mut retain_flags_for_each_vote = retain_flags_for_each_vote_in_reverse.into_iter().rev();
+
         self.lockouts
             .votes
-            .retain(move |_| diverged_descendant_flags.next().unwrap());
+            .retain(move |_| retain_flags_for_each_vote.next().unwrap());
 
         if self.lockouts.votes.is_empty() {
-            info!("All restored votes are behind replayed_root_slot; resetting root_slot and last_vote in tower!");
+            info!("All restored votes were behind replayed_root_slot; resetting root_slot and last_vote in tower!");
+
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
+            info!("Some restored votes were on different fork: {:?}!", self.voted_slots());
+
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
                 self.last_vote.last_voted_slot().unwrap(),
