@@ -400,7 +400,7 @@ export class Transaction {
    */
   serialize(): Buffer {
     const {signatures} = this;
-    if (!signatures) {
+    if (!signatures || signatures.length === 0 || !this.verifySignatures()) {
       throw new Error('Transaction has not been signed');
     }
 
