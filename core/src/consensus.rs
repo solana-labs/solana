@@ -483,12 +483,15 @@ impl Tower {
     ) -> SwitchForkDecision {
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let last_vote_ancestors = if self.is_stray_last_vote() {
-                    // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
-                    &self.stray_restored_slots
-                } else {
-                    ancestors.get(&last_voted_slot).unwrap()
-                };
+                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+                    if self.is_stray_last_vote() {
+                        // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
+                        info!("returning restored slots {:?} because of stray last vote...", self.stray_restored_slots);
+                        &self.stray_restored_slots
+                    } else {
+                        panic!("no ancestor!")
+                    }
+                });
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -812,7 +815,7 @@ impl Tower {
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
-            info!("Some restored votes were on different fork: {:?}!", self.voted_slots());
+            info!("Some restored votes were on different fork or are future votes on unrooted slots: {:?}!", self.voted_slots());
 
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
