@@ -721,7 +721,7 @@ impl AccountsDB {
 
         let mut reclaims_time = Measure::start("reclaims");
         // Recalculate reclaims with new purge set
-        let purges_key_to_slot_set: Vec<_> = purges
+        let pubkey_to_slot_set: Vec<_> = purges
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
                 (
@@ -733,7 +733,7 @@ impl AccountsDB {
         let accounts_index = self.accounts_index.read().unwrap();
         let mut reclaims = Vec::new();
         let mut dead_keys = Vec::new();
-        for (pubkey, slots_set) in purges_key_to_slot_set {
+        for (pubkey, slots_set) in pubkey_to_slot_set {
             let (new_reclaims, is_empty) = accounts_index.purge_exact(&pubkey, slots_set);
             if is_empty {
                 dead_keys.push(pubkey);
