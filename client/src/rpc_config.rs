@@ -1,4 +1,3 @@
-use crate::rpc_filter::RpcFilterType;
 use solana_sdk::{clock::Epoch, commitment_config::CommitmentConfig};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,14 +37,6 @@ pub struct RpcLargestAccountsConfig {
 #[serde(rename_all = "camelCase")]
 pub struct RpcStakeConfig {
     pub epoch: Option<Epoch>,
-    #[serde(flatten)]
-    pub commitment: Option<CommitmentConfig>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcProgramAccountsConfig {
-    pub filters: Option<Vec<RpcFilterType>>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }
