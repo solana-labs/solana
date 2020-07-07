@@ -2215,6 +2215,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9bdc5e856e51e685846fb6c13a1f5e5432946c2c90501bdc76a1319f19e29da"
+dependencies = [
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "syn 1.0.27",
+]
+
+[[package]]
 name = "rusty-fork"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2532,6 +2543,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version",
+ "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -2551,6 +2563,7 @@ dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.17",
  "quote 1.0.6",
+ "rustversion",
  "syn 1.0.27",
 ]
 
