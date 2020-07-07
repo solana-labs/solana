@@ -1,20 +1,46 @@
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate serde_derive;
 
+pub mod parse_accounts;
+pub mod parse_instruction;
+
+use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
+use serde_json::Value;
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
+    instruction::CompiledInstruction,
     message::MessageHeader,
     transaction::{Result, Transaction, TransactionError},
 };
 
-/// A duplicate representation of a Message for pretty JSON serialization
+/// A duplicate representation of an Instruction for pretty JSON serialization
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum UiInstruction {
+    Compiled(UiCompiledInstruction),
+    Parsed(Value),
+}
+
+/// A duplicate representation of a CompiledInstruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcCompiledInstruction {
+pub struct UiCompiledInstruction {
     pub program_id_index: u8,
     pub accounts: Vec<u8>,
     pub data: String,
+}
+
+impl From<&CompiledInstruction> for UiCompiledInstruction {
+    fn from(instruction: &CompiledInstruction) -> Self {
+        Self {
+            program_id_index: instruction.program_id_index,
+            accounts: instruction.accounts.clone(),
+            data: bs58::encode(instruction.data.clone()).into_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -37,9 +63,10 @@ impl Default for TransactionStatusMeta {
     }
 }
 
+/// A duplicate representation of TransactionStatusMeta with `err` field
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransactionStatusMeta {
+pub struct UiTransactionStatusMeta {
     pub err: Option<TransactionError>,
     pub status: Result<()>, // This field is deprecated.  See https://github.com/solana-labs/solana/issues/9302
     pub fee: u64,
@@ -47,7 +74,7 @@ pub struct RpcTransactionStatusMeta {
     pub post_balances: Vec<u64>,
 }
 
-impl From<TransactionStatusMeta> for RpcTransactionStatusMeta {
+impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
     fn from(meta: TransactionStatusMeta) -> Self {
         Self {
             err: meta.status.clone().err(),
@@ -104,76 +131,112 @@ pub struct ConfirmedTransaction {
 /// A duplicate representation of a Transaction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransaction {
+pub struct UiTransaction {
     pub signatures: Vec<String>,
-    pub message: RpcMessage,
+    pub message: UiMessage,
 }
 
-/// A duplicate representation of a Message for pretty JSON serialization
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum UiMessage {
+    Parsed(UiParsedMessage),
+    Raw(UiRawMessage),
+}
+
+/// A duplicate representation of a Message, in raw format, for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcMessage {
+pub struct UiRawMessage {
     pub header: MessageHeader,
     pub account_keys: Vec<String>,
     pub recent_blockhash: String,
-    pub instructions: Vec<RpcCompiledInstruction>,
+    pub instructions: Vec<UiCompiledInstruction>,
+}
+
+/// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiParsedMessage {
+    pub account_keys: Value,
+    pub recent_blockhash: String,
+    pub instructions: Vec<UiInstruction>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
-    pub meta: Option<RpcTransactionStatusMeta>,
+    pub meta: Option<UiTransactionStatusMeta>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub enum TransactionEncoding {
+pub enum UiTransactionEncoding {
     Binary,
     Json,
+    JsonParsed,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
     Binary(String),
-    Json(RpcTransaction),
+    Json(UiTransaction),
 }
 
 impl EncodedTransaction {
-    pub fn encode(transaction: Transaction, encoding: TransactionEncoding) -> Self {
-        if encoding == TransactionEncoding::Json {
-            EncodedTransaction::Json(RpcTransaction {
-                signatures: transaction
-                    .signatures
-                    .iter()
-                    .map(|sig| sig.to_string())
-                    .collect(),
-                message: RpcMessage {
-                    header: transaction.message.header,
-                    account_keys: transaction
-                        .message
-                        .account_keys
-                        .iter()
-                        .map(|pubkey| pubkey.to_string())
-                        .collect(),
-                    recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                    instructions: transaction
-                        .message
-                        .instructions
-                        .iter()
-                        .map(|instruction| RpcCompiledInstruction {
-                            program_id_index: instruction.program_id_index,
-                            accounts: instruction.accounts.clone(),
-                            data: bs58::encode(instruction.data.clone()).into_string(),
-                        })
-                        .collect(),
-                },
-            })
-        } else {
-            EncodedTransaction::Binary(
+    pub fn encode(transaction: Transaction, encoding: UiTransactionEncoding) -> Self {
+        match encoding {
+            UiTransactionEncoding::Binary => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
-            )
+            ),
+            _ => {
+                let message = if encoding == UiTransactionEncoding::Json {
+                    UiMessage::Raw(UiRawMessage {
+                        header: transaction.message.header,
+                        account_keys: transaction
+                            .message
+                            .account_keys
+                            .iter()
+                            .map(|pubkey| pubkey.to_string())
+                            .collect(),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| instruction.into())
+                            .collect(),
+                    })
+                } else {
+                    UiMessage::Parsed(UiParsedMessage {
+                        account_keys: parse_accounts(&transaction.message),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| {
+                                let program_id =
+                                    instruction.program_id(&transaction.message.account_keys);
+                                if let Some(parsed_instruction) = parse(program_id, instruction) {
+                                    UiInstruction::Parsed(parsed_instruction)
+                                } else {
+                                    UiInstruction::Compiled(instruction.into())
+                                }
+                            })
+                            .collect(),
+                    })
+                };
+                EncodedTransaction::Json(UiTransaction {
+                    signatures: transaction
+                        .signatures
+                        .iter()
+                        .map(|sig| sig.to_string())
+                        .collect(),
+                    message,
+                })
+            }
         }
     }
     pub fn decode(&self) -> Option<Transaction> {

@@ -13,6 +13,7 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::*,
     rpc_filter::RpcFilterType,
@@ -45,7 +46,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+    ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
@@ -160,10 +161,16 @@ impl JsonRpcRequestProcessor {
     pub fn get_account_info(
         &self,
         pubkey: &Pubkey,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>> {
-        let bank = self.bank(commitment)?;
-        new_response(&bank, bank.get_account(pubkey).map(RpcAccount::encode))
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        new_response(
+            &bank,
+            bank.get_account(pubkey)
+                .map(|account| UiAccount::encode(account, encoding)),
+        )
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -179,11 +186,13 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
         filters: Vec<RpcFilterType>,
     ) -> Result<Vec<RpcKeyedAccount>> {
-        Ok(self
-            .bank(commitment)?
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        Ok(bank
             .get_program_accounts(Some(&program_id))
             .into_iter()
             .filter(|(_, account)| {
@@ -194,7 +203,7 @@ impl JsonRpcRequestProcessor {
             })
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: RpcAccount::encode(account),
+                account: UiAccount::encode(account, encoding.clone()),
             })
             .collect())
     }
@@ -493,7 +502,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
         if self.config.enable_rpc_transaction_history
             && slot
@@ -662,7 +671,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_transaction(
         &self,
         signature: Signature,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         if self.config.enable_rpc_transaction_history {
             Ok(self
@@ -847,8 +856,8 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>>;
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -1042,7 +1051,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>>;
 
     #[rpc(meta, name = "getBlockTime")]
@@ -1061,7 +1070,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>>;
 
     #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
@@ -1104,11 +1113,11 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcAccount>>> {
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
-        meta.get_account_info(&pubkey, commitment)
+        meta.get_account_info(&pubkey, config)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -1135,15 +1144,18 @@ impl RpcSol for RpcSolImpl {
             program_id_str
         );
         let program_id = verify_pubkey(program_id_str)?;
-        let (commitment, filters) = if let Some(config) = config {
-            (config.commitment, config.filters.unwrap_or_default())
+        let (config, filters) = if let Some(config) = config {
+            (
+                Some(config.account_config),
+                config.filters.unwrap_or_default(),
+            )
         } else {
             (None, vec![])
         };
         for filter in &filters {
             verify_filter(filter)?;
         }
-        meta.get_program_accounts(&program_id, commitment, filters)
+        meta.get_program_accounts(&program_id, config, filters)
     }
 
     fn get_inflation_governor(
@@ -1548,7 +1560,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
         meta.get_confirmed_block(slot, encoding)
     }
@@ -1570,7 +1582,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-        encoding: Option<TransactionEncoding>,
+        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         let signature = verify_signature(&signature_str)?;
         meta.get_confirmed_transaction(signature, encoding)
@@ -1679,7 +1691,7 @@ pub mod tests {
         system_instruction, system_program, system_transaction,
         transaction::{self, TransactionError},
     };
-    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
+    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
@@ -3416,7 +3428,11 @@ pub mod tests {
             if let EncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     let meta = meta.unwrap();
-                    assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
+                    let transaction_recent_blockhash = match transaction.message {
+                        UiMessage::Parsed(message) => message.recent_blockhash,
+                        UiMessage::Raw(message) => message.recent_blockhash,
+                    };
+                    assert_eq!(transaction_recent_blockhash, blockhash.to_string());
                     assert_eq!(meta.status, Ok(()));
                     assert_eq!(meta.err, None);
                 } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {

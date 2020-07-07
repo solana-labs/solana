@@ -11,6 +11,7 @@ use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
+use solana_account_decoder::UiAccount;
 use solana_sdk::{
     account::Account,
     clock::{
@@ -28,7 +29,7 @@ use solana_sdk::{
     transaction::{self, Transaction},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+    ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
@@ -238,13 +239,13 @@ impl RpcClient {
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<ConfirmedBlock> {
-        self.get_confirmed_block_with_encoding(slot, TransactionEncoding::Json)
+        self.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Json)
     }
 
     pub fn get_confirmed_block_with_encoding(
         &self,
         slot: Slot,
-        encoding: TransactionEncoding,
+        encoding: UiTransactionEncoding,
     ) -> ClientResult<ConfirmedBlock> {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
     }
@@ -285,7 +286,7 @@ impl RpcClient {
     pub fn get_confirmed_transaction(
         &self,
         signature: &Signature,
-        encoding: TransactionEncoding,
+        encoding: UiTransactionEncoding,
     ) -> ClientResult<ConfirmedTransaction> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
@@ -452,9 +453,9 @@ impl RpcClient {
                 let Response {
                     context,
                     value: rpc_account,
-                } = serde_json::from_value::<Response<Option<RpcAccount>>>(result_json)?;
+                } = serde_json::from_value::<Response<Option<UiAccount>>>(result_json)?;
                 trace!("Response account {:?} {:?}", pubkey, rpc_account);
-                let account = rpc_account.and_then(|rpc_account| rpc_account.decode().ok());
+                let account = rpc_account.and_then(|rpc_account| rpc_account.decode());
                 Ok(Response {
                     context,
                     value: account,
