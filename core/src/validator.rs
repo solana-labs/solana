@@ -199,6 +199,10 @@ impl Validator {
             }
         }
 
+        for accounts_path in &config.account_paths {
+            cleanup_accounts_path(accounts_path);
+        }
+
         let (
             genesis_config,
             bank_forks,
@@ -959,6 +963,33 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     online_stake * 100 / total_activated_stake
 }
 
+fn cleanup_accounts_dir_entry(path: std::fs::DirEntry, accounts_file_regex: &regex::Regex) {
+    if let Ok(file_type) = path.file_type() {
+        if file_type.is_file() {
+            if let Ok(file_name) = path.file_name().into_string() {
+                if accounts_file_regex.is_match(&file_name) {
+                    if let Err(e) = std::fs::remove_file(path.path()) {
+                        info!("Couldn't delete file: {:?} error: {:?}", path, e);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Cleanup anything that looks like an accounts append-vec
+fn cleanup_accounts_path(account_path: &std::path::Path) {
+    use regex::Regex;
+    let accounts_file_regex = Regex::new(r"(\d+).(\d+)").unwrap();
+    if let Ok(dir_entries) = std::fs::read_dir(&account_path) {
+        for entry in dir_entries {
+            if let Ok(path) = entry {
+                cleanup_accounts_dir_entry(path, &accounts_file_regex);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1136,5 +1167,21 @@ mod tests {
             &cluster_info,
             rpc_override_health_check
         ));
+    }
+
+    #[test]
+    fn accounts_clean() {
+        use std::fs::File;
+        let temp_dir = tempfile::tempdir_in("farf").unwrap();
+        let temp_path = temp_dir.path();
+        {
+            let _file1 = File::create(temp_path.join("foo.txt")).unwrap();
+            let _file2 = File::create(temp_path.join("123.2222")).unwrap();
+        }
+        std::fs::create_dir(temp_path.join("12.088")).unwrap();
+        cleanup_accounts_path(temp_dir.path());
+        assert!(File::open(temp_path.join("foo.txt")).is_ok());
+        assert!(File::open(temp_path.join("123.2222")).is_err());
+        assert!(std::fs::read_dir(temp_path.join("12.088")).is_ok());
     }
 }
