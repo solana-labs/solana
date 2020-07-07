@@ -3,6 +3,7 @@ members = [
     "bench-exchange",
     "bench-streamer",
     "bench-tps",
+    "bucket-ledger",
     "accounts-bench",
     "banking-bench",
     "chacha",

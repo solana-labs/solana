@@ -2,6 +2,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
     ArgMatches, SubCommand,
 };
+use log::*;
 use serde_json::json;
 use solana_clap_utils::input_validators::is_slot;
 use solana_ledger::{
@@ -32,7 +33,7 @@ use std::{
     sync::Arc,
 };
 
-use log::*;
+mod bucket;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -647,6 +648,16 @@ fn main() {
                 .help("Use DIR for ledger location"),
         )
         .subcommand(
+            SubCommand::with_name("bucket-upload")
+            .about("Injest the ledger")
+            .arg(&starting_slot_arg)
+        )
+        .subcommand(
+            SubCommand::with_name("bucket-test")
+            .about("Injest the ledger")
+            .arg(&starting_slot_arg)
+        )
+        .subcommand(
             SubCommand::with_name("print")
             .about("Print the ledger")
             .arg(&starting_slot_arg)
@@ -862,6 +873,42 @@ fn main() {
     });
 
     match matches.subcommand() {
+        ("bucket-upload", Some(arg_matches)) => {
+            use solana_bucket_ledger::BucketLedger;
+
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
+            let blockstore = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+            let bucket_ledger = BucketLedger::new("solana-ledger", "us-west-1")
+                .expect("Unable to BucketLedger::new()");
+
+            let mut runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime
+                .block_on(bucket::do_upload_to_bucket(
+                    blockstore,
+                    bucket_ledger,
+                    starting_slot,
+                    ending_slot,
+                ))
+                .unwrap_or_else(|err| {
+                    eprintln!("{:?}", err);
+                    exit(1);
+                });
+        }
+        ("bucket-test", Some(_arg_matches)) => {
+            use solana_bucket_ledger::BucketLedger;
+
+            let bucket_ledger = BucketLedger::new("solana-ledger", "us-west-1")
+                .expect("Unable to BucketLedger::new()");
+
+            let mut runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime
+                .block_on(bucket::do_test(bucket_ledger))
+                .unwrap_or_else(|err| {
+                    eprintln!("{:?}", err);
+                    exit(1);
+                });
+        }
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             output_ledger(

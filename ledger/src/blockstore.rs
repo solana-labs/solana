@@ -1649,7 +1649,7 @@ impl Blockstore {
                         slot_transaction_iterator,
                     ),
                     rewards,
-                    block_time: None, // See https://github.com/solana-labs/solana/issues/10089
+                    block_time: None,
                 };
                 return Ok(block);
             }
