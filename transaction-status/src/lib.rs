@@ -133,6 +133,7 @@ pub enum TransactionEncoding {
     Binary,
     Json,
 }
+pub type UiTransactionEncoding = TransactionEncoding;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
