@@ -725,6 +725,8 @@ impl Tower {
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
+        info!("adjusting lockouts after replay up to {}: {:?}", replayed_root_slot, self.voted_slots());
+
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
@@ -807,9 +809,10 @@ impl Tower {
                 self.last_vote.last_voted_slot().unwrap(),
                 *self.voted_slots().last().unwrap()
             );
+            // should call self.votes.pop_expired_votes()?
+            self.stray_restored_slots = self.voted_slots().into_iter().collect();
         }
-        // should call self.votes.pop_expired_votes()?
-        self.stray_restored_slots = self.voted_slots().into_iter().collect();
+
         Ok(self)
     }
 
@@ -2358,7 +2361,12 @@ pub mod test {
     fn test_load_tower_ok() {
         let (tower, loaded) =
             run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| ());
-        assert_eq!(loaded.unwrap(), tower)
+        let loaded = loaded.unwrap();
+        assert_eq!(loaded, tower);
+        assert_eq!(tower.threshold_depth, 10);
+        assert_eq!(tower.threshold_size, 0.9);
+        assert_eq!(loaded.threshold_depth, 10);
+        assert_eq!(loaded.threshold_size, 0.9);
     }
 
     #[test]
@@ -2501,6 +2509,7 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
         assert_eq!(tower.root(), None);
+        assert_eq!(tower.stray_restored_slots, HashSet::default());
     }
 
     #[test]
