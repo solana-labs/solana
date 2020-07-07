@@ -184,7 +184,7 @@ impl BankForks {
         &mut self,
         root: Slot,
         accounts_package_sender: &Option<AccountsPackageSender>,
-        largest_confirmed_root: Option<Slot>,
+        highest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = self.root_bank().epoch();
         self.root = root;
@@ -261,7 +261,7 @@ impl BankForks {
         }
         let new_tx_count = root_bank.transaction_count();
 
-        self.prune_non_root(root, largest_confirmed_root);
+        self.prune_non_root(root, highest_confirmed_root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
@@ -338,13 +338,13 @@ impl BankForks {
         Ok(())
     }
 
-    fn prune_non_root(&mut self, root: Slot, largest_confirmed_root: Option<Slot>) {
+    fn prune_non_root(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
         let descendants = self.descendants();
         self.banks.retain(|slot, _| {
             *slot == root
                 || descendants[&root].contains(slot)
                 || (*slot < root
-                    && *slot >= largest_confirmed_root.unwrap_or(root)
+                    && *slot >= highest_confirmed_root.unwrap_or(root)
                     && descendants[slot].contains(&root))
         });
         datapoint_debug!(

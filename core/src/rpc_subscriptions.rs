@@ -47,7 +47,7 @@ pub struct SlotInfo {
 pub struct CacheSlotInfo {
     pub current_slot: Slot,
     pub node_root: Slot,
-    pub largest_confirmed_root: Slot,
+    pub highest_confirmed_root: Slot,
     pub highest_confirmed_slot: Slot,
 }
 
@@ -179,7 +179,7 @@ where
         ) in hashmap.iter()
         {
             let slot = match commitment.commitment {
-                CommitmentLevel::Max => cache_slot_info.largest_confirmed_root,
+                CommitmentLevel::Max => cache_slot_info.highest_confirmed_root,
                 CommitmentLevel::Recent => cache_slot_info.current_slot,
                 CommitmentLevel::Root => cache_slot_info.node_root,
                 CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
@@ -466,7 +466,7 @@ impl RpcSubscriptions {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .largest_confirmed_root(),
+                .highest_confirmed_root(),
             CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
             CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
             CommitmentLevel::Single => self

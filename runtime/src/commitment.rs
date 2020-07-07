@@ -39,7 +39,7 @@ impl BlockCommitment {
 #[derive(Default)]
 pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
-    largest_confirmed_root: Slot,
+    highest_confirmed_root: Slot,
     total_stake: u64,
     bank: Arc<Bank>,
     root: Slot,
@@ -63,7 +63,7 @@ impl std::fmt::Debug for BlockCommitmentCache {
 impl BlockCommitmentCache {
     pub fn new(
         block_commitment: HashMap<Slot, BlockCommitment>,
-        largest_confirmed_root: Slot,
+        highest_confirmed_root: Slot,
         total_stake: u64,
         bank: Arc<Bank>,
         root: Slot,
@@ -71,7 +71,7 @@ impl BlockCommitmentCache {
     ) -> Self {
         Self {
             block_commitment,
-            largest_confirmed_root,
+            highest_confirmed_root,
             total_stake,
             bank,
             root,
@@ -83,8 +83,8 @@ impl BlockCommitmentCache {
         self.block_commitment.get(&slot)
     }
 
-    pub fn largest_confirmed_root(&self) -> Slot {
-        self.largest_confirmed_root
+    pub fn highest_confirmed_root(&self) -> Slot {
+        self.highest_confirmed_root
     }
 
     pub fn total_stake(&self) -> u64 {
@@ -159,15 +159,15 @@ impl BlockCommitmentCache {
         Self {
             block_commitment,
             total_stake: 42,
-            largest_confirmed_root: root,
+            highest_confirmed_root: root,
             bank,
             root,
             highest_confirmed_slot: root,
         }
     }
 
-    pub fn set_largest_confirmed_root(&mut self, root: Slot) {
-        self.largest_confirmed_root = root;
+    pub fn set_highest_confirmed_root(&mut self, root: Slot) {
+        self.highest_confirmed_root = root;
     }
 }
 

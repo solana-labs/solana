@@ -1025,11 +1025,11 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            let largest_confirmed_root = Some(
+            let highest_confirmed_root = Some(
                 block_commitment_cache
                     .read()
                     .unwrap()
-                    .largest_confirmed_root(),
+                    .highest_confirmed_root(),
             );
             Self::handle_new_root(
                 new_root,
@@ -1037,7 +1037,7 @@ impl ReplayStage {
                 progress,
                 accounts_hash_sender,
                 all_pubkeys,
-                largest_confirmed_root,
+                highest_confirmed_root,
                 heaviest_subtree_fork_choice,
             );
             subscriptions.notify_roots(rooted_slots);
@@ -1729,14 +1729,14 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         accounts_hash_sender: &Option<AccountsPackageSender>,
         all_pubkeys: &mut PubkeyReferences,
-        largest_confirmed_root: Option<Slot>,
+        highest_confirmed_root: Option<Slot>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
         bank_forks.write().unwrap().set_root(
             new_root,
             accounts_hash_sender,
-            largest_confirmed_root,
+            highest_confirmed_root,
         );
         let r_bank_forks = bank_forks.read().unwrap();
         let new_epoch = bank_forks.read().unwrap().root_bank().epoch();
@@ -2109,7 +2109,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_handle_new_root_ahead_of_largest_confirmed_root() {
+    fn test_handle_new_root_ahead_of_highest_confirmed_root() {
         let genesis_config = create_genesis_config(10_000).genesis_config;
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
