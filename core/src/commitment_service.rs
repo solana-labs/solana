@@ -35,7 +35,7 @@ impl CommitmentAggregationData {
     }
 }
 
-fn get_largest_confirmed_root(mut rooted_stake: Vec<(Slot, u64)>, total_stake: u64) -> Slot {
+fn get_highest_confirmed_root(mut rooted_stake: Vec<(Slot, u64)>, total_stake: u64) -> Slot {
     rooted_stake.sort_by(|a, b| a.0.cmp(&b.0).reverse());
     let mut stake_sum = 0;
     for (root, stake) in rooted_stake {
@@ -109,12 +109,12 @@ impl AggregateCommitmentService {
             let (block_commitment, rooted_stake) =
                 Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
-            let largest_confirmed_root =
-                get_largest_confirmed_root(rooted_stake, aggregation_data.total_stake);
+            let highest_confirmed_root =
+                get_highest_confirmed_root(rooted_stake, aggregation_data.total_stake);
 
             let mut new_block_commitment = BlockCommitmentCache::new(
                 block_commitment,
-                largest_confirmed_root,
+                highest_confirmed_root,
                 aggregation_data.total_stake,
                 aggregation_data.bank,
                 aggregation_data.root,
@@ -139,7 +139,7 @@ impl AggregateCommitmentService {
             subscriptions.notify_subscribers(CacheSlotInfo {
                 current_slot: w_block_commitment_cache.slot(),
                 node_root: w_block_commitment_cache.root(),
-                largest_confirmed_root: w_block_commitment_cache.largest_confirmed_root(),
+                highest_confirmed_root: w_block_commitment_cache.highest_confirmed_root(),
                 highest_confirmed_slot: w_block_commitment_cache.highest_confirmed_slot(),
             });
         }
@@ -233,18 +233,18 @@ mod tests {
     use solana_vote_program::vote_state::{self, VoteStateVersions};
 
     #[test]
-    fn test_get_largest_confirmed_root() {
-        assert_eq!(get_largest_confirmed_root(vec![], 10), 0);
+    fn test_get_highest_confirmed_root() {
+        assert_eq!(get_highest_confirmed_root(vec![], 10), 0);
         let mut rooted_stake = vec![];
         rooted_stake.push((0, 5));
         rooted_stake.push((1, 5));
-        assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 0);
+        assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 0);
         let mut rooted_stake = vec![];
         rooted_stake.push((1, 5));
         rooted_stake.push((0, 10));
         rooted_stake.push((2, 5));
         rooted_stake.push((1, 4));
-        assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 1);
+        assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 1);
     }
 
     #[test]
@@ -451,6 +451,6 @@ mod tests {
             }
         }
         assert_eq!(rooted_stake.len(), 2);
-        assert_eq!(get_largest_confirmed_root(rooted_stake, 100), 1)
+        assert_eq!(get_highest_confirmed_root(rooted_stake, 100), 1)
     }
 }

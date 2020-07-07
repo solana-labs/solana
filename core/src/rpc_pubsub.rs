@@ -740,7 +740,7 @@ mod tests {
         let cache_slot_info = CacheSlotInfo {
             current_slot: 2,
             node_root: 1,
-            largest_confirmed_root: 1,
+            highest_confirmed_root: 1,
             highest_confirmed_slot: 1,
         };
         rpc.subscriptions.notify_subscribers(cache_slot_info);

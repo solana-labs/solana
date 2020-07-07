@@ -70,7 +70,7 @@ pub fn is_confirmed_rooted(
     blockstore: &Blockstore,
     slot: Slot,
 ) -> bool {
-    slot <= block_commitment_cache.largest_confirmed_root()
+    slot <= block_commitment_cache.highest_confirmed_root()
         && (blockstore.is_root(slot)
             || block_commitment_cache
                 .bank()
@@ -137,7 +137,7 @@ impl JsonRpcRequestProcessor {
                     .block_commitment_cache
                     .read()
                     .unwrap()
-                    .largest_confirmed_root();
+                    .highest_confirmed_root();
                 debug!("RPC using block: {:?}", slot);
                 slot
             }
@@ -552,7 +552,7 @@ impl JsonRpcRequestProcessor {
                     .block_commitment_cache
                     .read()
                     .unwrap()
-                    .largest_confirmed_root()
+                    .highest_confirmed_root()
         {
             let result = self.blockstore.get_confirmed_block(slot, encoding);
             self.check_slot_cleaned_up(&result, slot)?;
@@ -572,7 +572,7 @@ impl JsonRpcRequestProcessor {
             self.block_commitment_cache
                 .read()
                 .unwrap()
-                .largest_confirmed_root(),
+                .highest_confirmed_root(),
         );
         if end_slot < start_slot {
             return Ok(vec![]);
@@ -591,7 +591,7 @@ impl JsonRpcRequestProcessor {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .largest_confirmed_root()
+                .highest_confirmed_root()
         {
             // This calculation currently assumes that bank.slots_per_year will remain unchanged after
             // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
@@ -662,7 +662,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .largest_confirmed_root()
+                            .highest_confirmed_root()
                     })
                     .map(|(slot, status_meta)| {
                         let err = status_meta.status.clone().err();
@@ -725,7 +725,7 @@ impl JsonRpcRequestProcessor {
                             .block_commitment_cache
                             .read()
                             .unwrap()
-                            .largest_confirmed_root()
+                            .highest_confirmed_root()
                 })
         } else {
             None
@@ -744,7 +744,7 @@ impl JsonRpcRequestProcessor {
                 self.block_commitment_cache
                     .read()
                     .unwrap()
-                    .largest_confirmed_root(),
+                    .highest_confirmed_root(),
             );
             self.blockstore
                 .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
@@ -3538,7 +3538,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_largest_confirmed_root(8);
+            .set_highest_confirmed_root(8);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
@@ -3594,7 +3594,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_largest_confirmed_root(7);
+            .set_highest_confirmed_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
@@ -3826,9 +3826,9 @@ pub mod tests {
         block_commitment.entry(1).or_insert(cache0);
         block_commitment.entry(2).or_insert(cache1);
         block_commitment.entry(3).or_insert(cache2);
-        let largest_confirmed_root = 1;
+        let highest_confirmed_root = 1;
         let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0, 0);
+            BlockCommitmentCache::new(block_commitment, highest_confirmed_root, 50, bank, 0, 0);
 
         assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 0));
         assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 1));
