@@ -71,6 +71,8 @@ pub struct RepairStats {
     pub shred: RepairStatsGroup,
     pub highest_shred: RepairStatsGroup,
     pub orphan: RepairStatsGroup,
+    pub get_best_orphans_us: u64,
+    pub get_best_shreds_us: u64,
 }
 
 #[derive(Default, Debug)]
@@ -177,6 +179,7 @@ impl RepairService {
         let mut repair_timing = RepairTiming::default();
         let mut last_stats = Instant::now();
         let duplicate_slot_repair_statuses = HashMap::new();
+
         Self::initialize_epoch_slots(
             blockstore,
             &cluster_info,

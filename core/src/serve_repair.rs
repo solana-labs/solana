@@ -33,7 +33,7 @@ use std::{
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 pub const DEFAULT_NONCE: u32 = 42;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RepairType {
     Orphan(Slot),
     HighestShred(Slot, u64),

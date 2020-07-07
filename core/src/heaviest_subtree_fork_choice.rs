@@ -348,6 +348,12 @@ impl HeaviestSubtreeForkChoice {
         self.add_votes(&new_votes, epoch_stakes, epoch_schedule);
     }
 
+    pub fn stake_voted_at(&self, slot: Slot) -> Option<u64> {
+        self.fork_infos
+            .get(&slot)
+            .map(|fork_info| fork_info.stake_voted_at)
+    }
+
     fn propagate_new_leaf(&mut self, slot: Slot, parent: Slot) {
         let parent_best_slot = self
             .best_slot(parent)
@@ -523,13 +529,6 @@ impl HeaviestSubtreeForkChoice {
             self.latest_votes,
             best_path.iter().rev().collect::<Vec<&Slot>>()
         );
-    }
-
-    #[cfg(test)]
-    fn stake_voted_at(&self, slot: Slot) -> Option<u64> {
-        self.fork_infos
-            .get(&slot)
-            .map(|fork_info| fork_info.stake_voted_at)
     }
 
     #[cfg(test)]
