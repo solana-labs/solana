@@ -116,7 +116,7 @@ impl AggregateCommitmentService {
                 block_commitment,
                 highest_confirmed_root,
                 aggregation_data.total_stake,
-                aggregation_data.bank,
+                aggregation_data.bank.slot(),
                 aggregation_data.root,
                 aggregation_data.root,
             );

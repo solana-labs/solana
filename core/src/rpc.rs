@@ -183,7 +183,7 @@ impl JsonRpcRequestProcessor {
                 HashMap::new(),
                 0,
                 0,
-                bank.clone(),
+                bank.slot(),
                 0,
                 0,
             ))),
@@ -1796,7 +1796,7 @@ pub mod tests {
             block_commitment,
             0,
             10,
-            bank.clone(),
+            bank.slot(),
             0,
             0,
         )));
@@ -3324,7 +3324,7 @@ pub mod tests {
             block_commitment,
             0,
             42,
-            bank_forks.read().unwrap().working_bank(),
+            bank_forks.read().unwrap().highest_slot(),
             0,
             0,
         )));
@@ -3828,7 +3828,7 @@ pub mod tests {
             block_commitment,
             highest_confirmed_root,
             50,
-            bank.clone(),
+            bank.slot(),
             0,
             0,
         );
