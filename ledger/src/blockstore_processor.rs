@@ -709,6 +709,8 @@ fn load_frozen_forks(
     let mut last_root_slot = root_bank.slot();
     let mut slots_elapsed = 0;
     let mut txs = 0;
+    let mut last_clean_slot = root_bank.slot();
+    let mut consumed_budget = 0;
     process_next_slots(
         root_bank,
         root_meta,
@@ -753,6 +755,12 @@ fn load_frozen_forks(
             pending_slots.clear();
             initial_forks.clear();
             last_root_slot = slot;
+            if slot - last_clean_slot > 500 {
+                bank.process_dead_slots();
+                consumed_budget = bank.process_stale_slot_with_budget(consumed_budget, 100);
+                bank.clean_accounts();
+                last_clean_slot = slot;
+            }
         }
         slots_elapsed += 1;
 
