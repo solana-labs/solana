@@ -102,7 +102,7 @@ where
 {
     bincode::config()
         .limit(PACKET_DATA_SIZE as u64)
-        .deserialize(data)
+        .deserialize_from(data)
 }
 
 #[cfg(test)]
