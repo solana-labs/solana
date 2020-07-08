@@ -40,7 +40,8 @@ pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     highest_confirmed_root: Slot,
     total_stake: u64,
-    recent_slot: Slot,
+    /// The slot of the bank from which all other slots were calculated.
+    slot: Slot,
     root: Slot,
     pub highest_confirmed_slot: Slot,
 }
@@ -52,7 +53,7 @@ impl std::fmt::Debug for BlockCommitmentCache {
             .field("total_stake", &self.total_stake)
             .field(
                 "bank",
-                &format_args!("Bank({{current_slot: {:?}}})", self.recent_slot),
+                &format_args!("Bank({{current_slot: {:?}}})", self.slot),
             )
             .field("root", &self.root)
             .finish()
@@ -64,7 +65,7 @@ impl BlockCommitmentCache {
         block_commitment: HashMap<Slot, BlockCommitment>,
         highest_confirmed_root: Slot,
         total_stake: u64,
-        recent_slot: Slot,
+        slot: Slot,
         root: Slot,
         highest_confirmed_slot: Slot,
     ) -> Self {
@@ -72,7 +73,7 @@ impl BlockCommitmentCache {
             block_commitment,
             highest_confirmed_root,
             total_stake,
-            recent_slot,
+            slot,
             root,
             highest_confirmed_slot,
         }
@@ -91,7 +92,7 @@ impl BlockCommitmentCache {
     }
 
     pub fn slot(&self) -> Slot {
-        self.recent_slot
+        self.slot
     }
 
     pub fn root(&self) -> Slot {
@@ -148,14 +149,14 @@ impl BlockCommitmentCache {
         }
     }
 
-    pub fn new_for_tests_with_slots(recent_slot: Slot, root: Slot) -> Self {
+    pub fn new_for_tests_with_slots(slot: Slot, root: Slot) -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
         Self {
             block_commitment,
             total_stake: 42,
             highest_confirmed_root: root,
-            recent_slot,
+            slot,
             root,
             highest_confirmed_slot: root,
         }
