@@ -41,7 +41,7 @@ pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     highest_confirmed_root: Slot,
     total_stake: u64,
-    bank: Arc<Bank>,
+    recent_slot: Slot,
     root: Slot,
     pub highest_confirmed_slot: Slot,
 }
@@ -53,7 +53,7 @@ impl std::fmt::Debug for BlockCommitmentCache {
             .field("total_stake", &self.total_stake)
             .field(
                 "bank",
-                &format_args!("Bank({{current_slot: {:?}}})", self.bank.slot()),
+                &format_args!("Bank({{current_slot: {:?}}})", self.recent_slot),
             )
             .field("root", &self.root)
             .finish()
@@ -73,7 +73,7 @@ impl BlockCommitmentCache {
             block_commitment,
             highest_confirmed_root,
             total_stake,
-            bank,
+            recent_slot: bank.slot(),
             root,
             highest_confirmed_slot,
         }
@@ -91,12 +91,8 @@ impl BlockCommitmentCache {
         self.total_stake
     }
 
-    pub fn bank(&self) -> Arc<Bank> {
-        self.bank.clone()
-    }
-
     pub fn slot(&self) -> Slot {
-        self.bank.slot()
+        self.recent_slot
     }
 
     pub fn root(&self) -> Slot {
@@ -160,7 +156,7 @@ impl BlockCommitmentCache {
             block_commitment,
             total_stake: 42,
             highest_confirmed_root: root,
-            bank,
+            recent_slot: bank.slot(),
             root,
             highest_confirmed_slot: root,
         }
