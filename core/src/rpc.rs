@@ -67,15 +67,12 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 
 pub fn is_confirmed_rooted(
     block_commitment_cache: &BlockCommitmentCache,
+    bank: &Bank,
     blockstore: &Blockstore,
     slot: Slot,
 ) -> bool {
     slot <= block_commitment_cache.highest_confirmed_root()
-        && (blockstore.is_root(slot)
-            || block_commitment_cache
-                .bank()
-                .status_cache_ancestors()
-                .contains(&slot))
+        && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
 #[derive(Debug, Default, Clone)]
@@ -693,7 +690,7 @@ impl JsonRpcRequestProcessor {
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && is_confirmed_rooted(&r_block_commitment_cache, &self.blockstore, slot)
+            && is_confirmed_rooted(&r_block_commitment_cache, bank, &self.blockstore, slot)
         {
             None
         } else {
@@ -3827,18 +3824,36 @@ pub mod tests {
         block_commitment.entry(2).or_insert(cache1);
         block_commitment.entry(3).or_insert(cache2);
         let highest_confirmed_root = 1;
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, highest_confirmed_root, 50, bank, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            highest_confirmed_root,
+            50,
+            bank.clone(),
+            0,
+            0,
+        );
 
-        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 0));
-        assert!(is_confirmed_rooted(&block_commitment_cache, &blockstore, 1));
+        assert!(is_confirmed_rooted(
+            &block_commitment_cache,
+            &bank,
+            &blockstore,
+            0
+        ));
+        assert!(is_confirmed_rooted(
+            &block_commitment_cache,
+            &bank,
+            &blockstore,
+            1
+        ));
         assert!(!is_confirmed_rooted(
             &block_commitment_cache,
+            &bank,
             &blockstore,
             2
         ));
         assert!(!is_confirmed_rooted(
             &block_commitment_cache,
+            &bank,
             &blockstore,
             3
         ));
