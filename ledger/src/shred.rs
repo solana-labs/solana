@@ -140,6 +140,8 @@ impl Shred {
     {
         let ret = bincode::options()
             .with_limit(PACKET_DATA_SIZE as u64)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)

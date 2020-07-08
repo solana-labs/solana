@@ -10,6 +10,8 @@ where
     let limit = crate::packet::PACKET_DATA_SIZE as u64;
     bincode::options()
         .with_limit(limit)
+        .with_fixint_encoding() // As per https://github.com/servo/bincode/issues/333, these two options are needed
+        .allow_trailing_bytes() // to retain the behavior of bincode::deserialize with the new `options()` method
         .deserialize_from(instruction_data)
         .map_err(|_| InstructionError::InvalidInstructionData)
 }

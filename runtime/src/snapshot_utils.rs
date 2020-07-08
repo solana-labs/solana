@@ -725,6 +725,8 @@ where
     let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
         let mut bank: Bank = bincode::options()
             .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(&mut stream)?;
 
         info!("Rebuilding accounts...");
@@ -760,6 +762,8 @@ where
         info!("Rebuilding status cache...");
         let slot_deltas: Vec<BankSlotDelta> = bincode::options()
             .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(stream)?;
         Ok(slot_deltas)
     })?;

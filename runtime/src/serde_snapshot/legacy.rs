@@ -193,6 +193,8 @@ impl<'a> TypeContext<'a> for Context {
         // (1st of 3 elements) read in map of slots to account storage entries
         let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::options()
             .with_limit(serialized_len)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(&mut stream)?;
 
         // (2nd of 3 elements) read in write version

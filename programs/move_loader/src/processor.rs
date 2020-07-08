@@ -131,6 +131,8 @@ impl MoveProcessor {
         let mut writer = std::io::Cursor::new(data);
         bincode::options()
             .with_limit(original_len)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .serialize_into(&mut writer, &state)
             .map_err(map_data_error)?;
         if writer.position() < original_len {
