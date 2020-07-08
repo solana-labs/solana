@@ -9,7 +9,7 @@ where
     let limit = crate::packet::PACKET_DATA_SIZE as u64;
     bincode::config()
         .limit(limit)
-        .deserialize(instruction_data)
+        .deserialize_from(instruction_data)
         .map_err(|_| InstructionError::InvalidInstructionData)
 }
 
