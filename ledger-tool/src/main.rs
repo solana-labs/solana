@@ -572,6 +572,7 @@ fn load_bank_forks(
     process_options: ProcessOptions,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    snapshot_archive_path: Option<PathBuf>,
 ) -> bank_forks_utils::LoadResult {
     let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
     let snapshot_path = ledger_path.clone().join(if blockstore.is_primary_access() {
@@ -582,9 +583,11 @@ fn load_bank_forks(
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
+        let snapshot_package_output_path =
+            snapshot_archive_path.unwrap_or_else(|| ledger_path.clone());
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
-            snapshot_package_output_path: ledger_path.clone(),
+            snapshot_package_output_path,
             snapshot_path,
             compression: CompressionType::Bzip2,
             snapshot_version: SnapshotVersion::default(),
@@ -592,7 +595,7 @@ fn load_bank_forks(
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
         if !blockstore.is_primary_access() {
-            // Be defenstive, when default account dir is explicitly specified, it's still possible
+            // Be defensive, when default account dir is explicitly specified, it's still possible
             // to wipe the dir possibly shared by the running validator!
             eprintln!("Error: custom accounts path is not supported under secondary access");
             exit(1);
@@ -727,6 +730,14 @@ fn main() {
                     "Mode to recovery the ledger db write ahead log."
                 ),
         )
+        .arg(
+            Arg::with_name("snapshot_archive_path")
+                .long("snapshot-archive-path")
+                .value_name("DIR")
+                .takes_value(true)
+                .global(true)
+                .help("Use DIR for ledger location"),
+        )
         .subcommand(
             SubCommand::with_name("print")
             .about("Print the ledger")
@@ -826,6 +837,12 @@ fn main() {
                     .long("skip-poh-verify")
                     .takes_value(false)
                     .help("Skip ledger PoH verification"),
+            )
+            .arg(
+                Arg::with_name("print_accounts_stats")
+                    .long("print-accounts-stats")
+                    .takes_value(false)
+                    .help("After verifying the ledger, print some information about the account stores."),
             )
         ).subcommand(
             SubCommand::with_name("graph")
@@ -1002,6 +1019,10 @@ fn main() {
         exit(1);
     });
 
+    let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
+        .ok()
+        .map(PathBuf::from);
+
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -1046,6 +1067,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!(
@@ -1182,23 +1204,29 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 ..ProcessOptions::default()
             };
+            let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
             println!(
                 "genesis hash: {}",
                 open_genesis_config_by(&ledger_path, arg_matches).hash()
             );
 
-            load_bank_forks(
+            let (bank_forks, _, _) = load_bank_forks(
                 arg_matches,
                 &ledger_path,
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             )
             .unwrap_or_else(|err| {
                 eprintln!("Ledger verification failed: {:?}", err);
                 exit(1);
             });
+            if print_accounts_stats {
+                let working_bank = bank_forks.working_bank();
+                working_bank.print_accounts_stats();
+            }
             println!("Ok");
         }
         ("graph", Some(arg_matches)) => {
@@ -1218,6 +1246,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
@@ -1270,6 +1299,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks
@@ -1366,6 +1396,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
@@ -1420,6 +1451,7 @@ fn main() {
                 process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+                snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();

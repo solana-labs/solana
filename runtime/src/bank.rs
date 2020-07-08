@@ -2890,6 +2890,10 @@ impl Bank {
         self.rc.accounts.accounts_db.shrink_all_slots();
     }
 
+    pub fn print_accounts_stats(&self) {
+        self.rc.accounts.accounts_db.print_accounts_stats("");
+    }
+
     pub fn process_stale_slot_with_budget(
         &self,
         mut consumed_budget: usize,
