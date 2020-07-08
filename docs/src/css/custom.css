@@ -7,7 +7,7 @@
 
 /* You can override the default Infima variables here. */
 
-@import url('https://fonts.googleapis.com/css2?family=Rubik');
+@import url('https://fonts.googleapis.com/css2?family=Roboto');
 
 :root {
   --ifm-color-primary: #25c2a0;
@@ -19,7 +19,7 @@
   --ifm-color-primary-lightest: #abd5c6;
   --ifm-code-font-size: 95%;
   --ifm-spacing-horizontal: 1em;
-  --ifm-font-family-base: "Rubik", system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --ifm-font-family-base: "Roboto", system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
   --ifm-footer-background-color: #232323;
 }
 
