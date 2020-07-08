@@ -1,31 +1,4 @@
 {
-  "__inputs": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "5.2.3"
-    },
-    {
-      "type": "panel",
-      "id": "graph",
-      "name": "Graph",
-      "version": "5.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "singlestat",
-      "name": "Singlestat",
-      "version": "5.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "table",
-      "name": "Table",
-      "version": "5.0.0"
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -42,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": null,
-  "iteration": 1593566799866,
+  "id": 1547,
+  "iteration": 1591834899194,
   "links": [
     {
       "asDropdown": true,
@@ -6285,7 +6258,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"get-best-orphans-us\") AS \"get-best-orphans-us\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"set-root-elapsed\") AS \"set-root-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6324,7 +6297,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"get-best-shreds-us\") AS \"get-best-shreds-us\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"get-votes-elapsed\") AS \"get-votes-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -6363,9 +6336,243 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"add-votes-us\") AS \"add-votes-us\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"add-votes-elapsed\") AS \"add-votes-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"get-best-orphans-elapsed\") AS \"get-best-orphans-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"get-best-shreds-elapsed\") AS \"get-best-shreds-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"update-completed-slots-elapsed\") AS \"update-completed-slots-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"update-completed-slots-elapsed\") AS \"update-completed-slots-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"send-repairs-elapsed\") AS \"send-repairs-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "F",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"lowest-slot-elapsed\") AS \"lowest-slot-elapsed\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair-timing\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "G",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6387,7 +6594,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Repair Time",
+      "title": "Repair Timing",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -11791,7 +11998,7 @@
       }
     }
   ],
-  "refresh": false,
+  "refresh": "1m",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -11799,8 +12006,8 @@
     "list": [
       {
         "current": {
-          "text": "Solana Metrics (read-only)",
-          "value": "Solana Metrics (read-only)"
+          "text": "$datasource",
+          "value": "$datasource"
         },
         "hide": 1,
         "label": "Data Source",
@@ -11812,28 +12019,38 @@
         "type": "datasource"
       },
       {
-        "allValue": ".*",
-        "current": {},
-        "datasource": "$datasource",
+        "allValue": null,
+        "current": {
+          "text": "Mainnet Beta",
+          "value": "mainnet-beta"
+        },
         "hide": 1,
         "includeAll": false,
         "label": "Testnet",
         "multi": false,
         "name": "testnet",
-        "options": [],
-        "query": "show databases",
-        "refresh": 1,
-        "regex": "(devnet|tds|mainnet-beta|testnet.*)",
-        "sort": 1,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
+        "options": [
+          {
+            "selected": true,
+            "text": "Devnet",
+            "value": "devnet"
+          },
+          {
+            "selected": false,
+            "text": "Mainnet Beta",
+            "value": "mainnet-beta"
+          },
+          {
+            "selected": false,
+            "text": "Testnet",
+            "value": "tds"
+          }
+        ],
+        "query": "devnet,mainnet-beta,tds",
+        "type": "custom"
       },
       {
         "allValue": ".*",
-        "current": {},
         "datasource": "$datasource",
         "hide": 0,
         "includeAll": true,
@@ -11854,8 +12071,8 @@
     ]
   },
   "time": {
-    "from": "2020-07-01T01:15:18.956Z",
-    "to": "2020-07-01T02:15:18.956Z"
+    "from": "now-15m",
+    "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
@@ -11878,7 +12095,7 @@
     ]
   },
   "timezone": "",
-  "title": "Cluster Telemetry (edge)",
-  "uid": "monitor-edge",
-  "version": 6
+  "title": "Cluster Telemetry",
+  "uid": "monitor",
+  "version": 1
 }

@@ -82,7 +82,6 @@ pub struct RepairTiming {
     pub update_completed_slots_elapsed: u64,
     pub get_best_orphans_elapsed: u64,
     pub get_best_shreds_elapsed: u64,
-    pub generate_repairs_elapsed: u64,
     pub send_repairs_elapsed: u64,
 }
 
@@ -94,7 +93,6 @@ impl RepairTiming {
         add_votes_elapsed: u64,
         lowest_slot_elapsed: u64,
         update_completed_slots_elapsed: u64,
-        generate_repairs_elapsed: u64,
         send_repairs_elapsed: u64,
     ) {
         self.set_root_elapsed += set_root_elapsed;
@@ -102,7 +100,6 @@ impl RepairTiming {
         self.add_votes_elapsed += add_votes_elapsed;
         self.lowest_slot_elapsed += lowest_slot_elapsed;
         self.update_completed_slots_elapsed += update_completed_slots_elapsed;
-        self.generate_repairs_elapsed += generate_repairs_elapsed;
         self.send_repairs_elapsed += send_repairs_elapsed;
     }
 }
@@ -206,7 +203,6 @@ impl RepairService {
             let mut add_votes_elapsed;
             let mut lowest_slot_elapsed;
             let mut update_completed_slots_elapsed;
-            let mut generate_repairs_elapsed;
             let repairs = {
                 let root_bank = repair_info.bank_forks.read().unwrap().root_bank().clone();
                 let new_root = root_bank.slot();
@@ -272,8 +268,7 @@ impl RepairService {
                     &repair_socket,
                 );*/
 
-                generate_repairs_elapsed = Measure::start("generate_repairs_elapsed");
-                let repairs = repair_weight.get_best_weighted_repairs(
+                repair_weight.get_best_weighted_repairs(
                     blockstore,
                     root_bank.epoch_stakes_map(),
                     root_bank.epoch_schedule(),
@@ -281,9 +276,7 @@ impl RepairService {
                     MAX_REPAIR_LENGTH,
                     &duplicate_slot_repair_statuses,
                     Some(&mut repair_timing),
-                );
-                generate_repairs_elapsed.stop();
-                repairs
+                )
             };
 
             let mut cache = HashMap::new();
@@ -308,7 +301,6 @@ impl RepairService {
                 add_votes_elapsed.as_us(),
                 lowest_slot_elapsed.as_us(),
                 update_completed_slots_elapsed.as_us(),
-                generate_repairs_elapsed.as_us(),
                 send_repairs_elapsed.as_us(),
             );
 
@@ -330,36 +322,31 @@ impl RepairService {
                 }
                 datapoint_info!(
                     "serve_repair-repair-timing",
-                    ("set_root_elapsed", repair_timing.set_root_elapsed, i64),
-                    ("get_votes_elapsed", repair_timing.get_votes_elapsed, i64),
-                    ("add-votes-us", repair_timing.add_votes_elapsed, i64),
+                    ("set-root-elapsed", repair_timing.set_root_elapsed, i64),
+                    ("get-votes-elapsed", repair_timing.get_votes_elapsed, i64),
+                    ("add-votes-elapsed", repair_timing.add_votes_elapsed, i64),
                     (
-                        "get-best-orphans-us",
+                        "get-best-orphans-elapsed",
                         repair_timing.get_best_orphans_elapsed,
                         i64
                     ),
                     (
-                        "get-best-shreds-us",
+                        "get-best-shreds-elapsed",
                         repair_timing.get_best_shreds_elapsed,
                         i64
                     ),
                     (
-                        "lowest_slot_elapsed",
+                        "lowest-slot-elapsed",
                         repair_timing.lowest_slot_elapsed,
                         i64
                     ),
                     (
-                        "update_completed_slots_elapsed",
+                        "update-completed-slots-elapsed",
                         repair_timing.update_completed_slots_elapsed,
                         i64
                     ),
                     (
-                        "generate_repairs_elapsed",
-                        repair_timing.generate_repairs_elapsed,
-                        i64
-                    ),
-                    (
-                        "send_repairs_elapsed",
+                        "send-repairs-elapsed",
                         repair_timing.send_repairs_elapsed,
                         i64
                     ),
