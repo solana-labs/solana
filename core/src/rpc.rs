@@ -3026,7 +3026,7 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            cluster_info.clone(),
+            cluster_info,
             Hash::default(),
             Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
@@ -3065,7 +3065,7 @@ pub mod tests {
             blockstore,
             validator_exit,
             health.clone(),
-            cluster_info.clone(),
+            cluster_info,
             Hash::default(),
             Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
@@ -3212,7 +3212,7 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            cluster_info.clone(),
+            cluster_info,
             Hash::default(),
             Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
@@ -3239,7 +3239,7 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            cluster_info.clone(),
+            cluster_info,
             Hash::default(),
             Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
@@ -3326,7 +3326,7 @@ pub mod tests {
             blockstore,
             validator_exit,
             RpcHealth::stub(),
-            cluster_info.clone(),
+            cluster_info,
             Hash::default(),
             Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
