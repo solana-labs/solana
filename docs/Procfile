@@ -1,1 +1,0 @@
-web: bin/start-nginx-solo -- --port $PORT
