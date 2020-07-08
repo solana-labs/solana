@@ -16,6 +16,7 @@ import {url} from './url';
 import {sleep} from '../src/util/sleep';
 import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
 import type {SignatureStatus, TransactionError} from '../src/connection';
+import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
 
 // Testing blockhash cache takes around 30s to complete
 jest.setTimeout(40000);
@@ -1629,33 +1630,13 @@ test('transaction', async () => {
         '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 0,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
+  const airdropFromSig = await connection.requestAirdrop(
+    accountFrom.publicKey,
+    minimumAmount + 100010,
+  );
+  mockConfirmTransaction(airdropFromSig);
+  await connection.confirmTransaction(airdropFromSig, 0);
+
   mockRpc.push([
     url,
     {
@@ -1672,11 +1653,6 @@ test('transaction', async () => {
       },
     },
   ]);
-  const airdropFromSig = await connection.requestAirdrop(
-    accountFrom.publicKey,
-    minimumAmount + 100010,
-  );
-  await connection.confirmTransaction(airdropFromSig, 0);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(
     minimumAmount + 100010,
   );
@@ -1767,34 +1743,7 @@ test('transaction', async () => {
     {skipPreflight: true},
   );
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 0,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
-
+  mockConfirmTransaction(signature);
   let confirmResult = (await connection.confirmTransaction(signature, 0)).value;
   verifySignatureStatus(confirmResult);
 
@@ -1826,6 +1775,9 @@ test('transaction', async () => {
   expect(signature).not.toEqual(signature2);
   expect(transaction.recentBlockhash).not.toEqual(transaction2.recentBlockhash);
 
+  mockConfirmTransaction(signature2);
+  await connection.confirmTransaction(signature2, 0);
+
   mockRpc.push([
     url,
     {
@@ -1844,10 +1796,17 @@ test('transaction', async () => {
     toPubkey: accountTo.publicKey,
     lamports: 9,
   });
-  await connection.sendTransaction(transaction3, [accountFrom], {
-    skipPreflight: true,
-  });
+  const signature3 = await connection.sendTransaction(
+    transaction3,
+    [accountFrom],
+    {
+      skipPreflight: true,
+    },
+  );
   expect(transaction2.recentBlockhash).toEqual(transaction3.recentBlockhash);
+
+  mockConfirmTransaction(signature3);
+  await connection.confirmTransaction(signature3, 0);
 
   // Sleep until blockhash cache times out
   await sleep(
@@ -1873,9 +1832,15 @@ test('transaction', async () => {
     lamports: 13,
   });
 
-  await connection.sendTransaction(transaction4, [accountFrom], {
-    skipPreflight: true,
-  });
+  const signature4 = await connection.sendTransaction(
+    transaction4,
+    [accountFrom],
+    {
+      skipPreflight: true,
+    },
+  );
+  mockConfirmTransaction(signature4);
+  await connection.confirmTransaction(signature4, 0);
 
   expect(transaction4.recentBlockhash).not.toEqual(
     transaction3.recentBlockhash,

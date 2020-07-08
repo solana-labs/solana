@@ -7,6 +7,7 @@ import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
+import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
 
 if (!mockRpcEnabled) {
   // Testing max commitment level takes around 20s to complete
@@ -58,7 +59,12 @@ test('create and query nonce account', async () => {
     },
   ]);
 
-  await connection.requestAirdrop(from.publicKey, minimumAmount * 2);
+  const signature = await connection.requestAirdrop(
+    from.publicKey,
+    minimumAmount * 2,
+  );
+  mockConfirmTransaction(signature);
+  await connection.confirmTransaction(signature, 0);
 
   mockRpc.push([
     url,
@@ -99,9 +105,15 @@ test('create and query nonce account', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, [from, nonceAccount], {
-    skipPreflight: true,
-  });
+  const nonceSignature = await connection.sendTransaction(
+    transaction,
+    [from, nonceAccount],
+    {
+      skipPreflight: true,
+    },
+  );
+  mockConfirmTransaction(nonceSignature);
+  await connection.confirmTransaction(nonceSignature, 0);
 
   mockRpc.push([
     url,
@@ -173,7 +185,12 @@ test('create and query nonce account with seed', async () => {
     },
   ]);
 
-  await connection.requestAirdrop(from.publicKey, minimumAmount * 2);
+  const signature = await connection.requestAirdrop(
+    from.publicKey,
+    minimumAmount * 2,
+  );
+  mockConfirmTransaction(signature);
+  await connection.confirmTransaction(signature, 0);
 
   mockRpc.push([
     url,
@@ -216,7 +233,11 @@ test('create and query nonce account with seed', async () => {
     authorizedPubkey: from.publicKey,
     lamports: minimumAmount,
   });
-  await connection.sendTransaction(transaction, [from], {skipPreflight: true});
+  const nonceSignature = await connection.sendTransaction(transaction, [from], {
+    skipPreflight: true,
+  });
+  mockConfirmTransaction(nonceSignature);
+  await connection.confirmTransaction(nonceSignature, 0);
 
   mockRpc.push([
     url,
