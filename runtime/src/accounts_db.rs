@@ -1975,6 +1975,53 @@ impl AccountsDB {
             }
         }
     }
+
+    pub fn print_accounts_stats(&self, label: &'static str) {
+        self.print_index(label);
+        self.print_count_and_status(label);
+    }
+
+    fn print_index(&self, label: &'static str) {
+        let mut roots: Vec<_> = self
+            .accounts_index
+            .read()
+            .unwrap()
+            .roots
+            .iter()
+            .cloned()
+            .collect();
+        roots.sort();
+        info!("{}: accounts_index roots: {:?}", label, roots,);
+        for (pubkey, list) in &self.accounts_index.read().unwrap().account_maps {
+            info!("  key: {}", pubkey);
+            info!("      slots: {:?}", *list.1.read().unwrap());
+        }
+    }
+
+    fn print_count_and_status(&self, label: &'static str) {
+        let storage = self.storage.read().unwrap();
+        let mut slots: Vec<_> = storage.0.keys().cloned().collect();
+        slots.sort();
+        info!("{}: count_and status for {} slots:", label, slots.len());
+        for slot in &slots {
+            let slot_stores = storage.0.get(slot).unwrap();
+
+            let mut ids: Vec<_> = slot_stores.keys().cloned().collect();
+            ids.sort();
+            for id in &ids {
+                let entry = slot_stores.get(id).unwrap();
+                info!(
+                    "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                    slot,
+                    id,
+                    *entry.count_and_status.read().unwrap(),
+                    entry.approx_store_count.load(Ordering::Relaxed),
+                    entry.accounts.len(),
+                    entry.accounts.capacity(),
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2557,7 +2604,7 @@ pub mod tests {
         accounts.store(1, &[(&pubkey, &account)]);
 
         //slot is gone
-        print_accounts("pre-clean", &accounts);
+        accounts.print_accounts_stats("pre-clean");
         accounts.clean_accounts();
         accounts.process_dead_slots(None);
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
@@ -2737,50 +2784,6 @@ pub mod tests {
         assert_eq!(accounts.uncleaned_root_count(), 0);
     }
 
-    fn print_accounts(label: &'static str, accounts: &AccountsDB) {
-        print_index(label, accounts);
-        print_count_and_status(label, accounts);
-    }
-
-    fn print_index(label: &'static str, accounts: &AccountsDB) {
-        let mut roots: Vec<_> = accounts
-            .accounts_index
-            .read()
-            .unwrap()
-            .roots
-            .iter()
-            .cloned()
-            .collect();
-        roots.sort();
-        info!("{}: accounts.accounts_index roots: {:?}", label, roots,);
-        for (pubkey, list) in &accounts.accounts_index.read().unwrap().account_maps {
-            info!("  key: {}", pubkey);
-            info!("      slots: {:?}", *list.1.read().unwrap());
-        }
-    }
-
-    fn print_count_and_status(label: &'static str, accounts: &AccountsDB) {
-        let storage = accounts.storage.read().unwrap();
-        let mut slots: Vec<_> = storage.0.keys().cloned().collect();
-        slots.sort();
-        info!("{}: count_and status for {} slots:", label, slots.len());
-        for slot in &slots {
-            let slot_stores = storage.0.get(slot).unwrap();
-
-            let mut ids: Vec<_> = slot_stores.keys().cloned().collect();
-            ids.sort();
-            for id in &ids {
-                let entry = slot_stores.get(id).unwrap();
-                info!(
-                    "  slot: {} id: {} count_and_status: {:?}",
-                    slot,
-                    id,
-                    *entry.count_and_status.read().unwrap()
-                );
-            }
-        }
-    }
-
     #[test]
     fn test_accounts_db_serialize1() {
         solana_logger::setup();
@@ -2849,7 +2852,7 @@ pub mod tests {
             accounts.bank_hashes.read().unwrap().get(&latest_slot)
         );
 
-        print_count_and_status("daccounts", &daccounts);
+        daccounts.print_count_and_status("daccounts");
 
         // Don't check the first 35 accounts which have not been modified on slot 0
         check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
@@ -2884,7 +2887,7 @@ pub mod tests {
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
         let daccounts =
             crate::serde_snapshot::reconstruct_accounts_db_via_serialization(accounts, slot);
-        print_count_and_status("daccounts", &daccounts);
+        daccounts.print_count_and_status("daccounts");
         daccounts
     }
 
@@ -2930,11 +2933,11 @@ pub mod tests {
         current_slot += 1;
         accounts.add_root(current_slot);
 
-        print_accounts("pre_purge", &accounts);
+        accounts.print_accounts_stats("pre_purge");
 
         accounts.clean_accounts();
 
-        print_accounts("post_purge", &accounts);
+        accounts.print_accounts_stats("post_purge");
 
         // Make sure the index is not touched
         assert_eq!(
@@ -2990,7 +2993,7 @@ pub mod tests {
         accounts.set_hash(current_slot, current_slot - 1);
         accounts.add_root(current_slot);
 
-        print_accounts("pre_purge", &accounts);
+        accounts.print_accounts_stats("pre_purge");
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
@@ -3004,7 +3007,7 @@ pub mod tests {
             hash
         );
 
-        print_accounts("post_purge", &accounts);
+        accounts.print_accounts_stats("post_purge");
 
         // Make sure the index is for pubkey cleared
         assert!(accounts
@@ -3066,14 +3069,14 @@ pub mod tests {
 
         assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
 
-        print_accounts("accounts", &accounts);
+        accounts.print_accounts_stats("accounts");
 
         accounts.clean_accounts();
 
-        print_accounts("accounts_post_purge", &accounts);
+        accounts.print_accounts_stats("accounts_post_purge");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
 
-        print_accounts("reconstructed", &accounts);
+        accounts.print_accounts_stats("reconstructed");
 
         assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
     }
@@ -3120,12 +3123,12 @@ pub mod tests {
         accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
         accounts.add_root(current_slot);
 
-        print_accounts("pre_f", &accounts);
+        accounts.print_accounts_stats("pre_f");
         accounts.update_accounts_hash(4, &HashMap::default());
 
         let accounts = f(accounts, current_slot);
 
-        print_accounts("post_f", &accounts);
+        accounts.print_accounts_stats("post_f");
 
         assert_load_account(&accounts, current_slot, pubkey, some_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
@@ -3149,7 +3152,7 @@ pub mod tests {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-            print_accounts("after_reconstruct", &accounts);
+            accounts.print_accounts_stats("after_reconstruct");
             accounts.clean_accounts();
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
@@ -3739,11 +3742,11 @@ pub mod tests {
         accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
         accounts.add_root(current_slot);
 
-        print_count_and_status("before reconstruct", &accounts);
+        accounts.print_count_and_status("before reconstruct");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-        print_count_and_status("before purge zero", &accounts);
+        accounts.print_count_and_status("before purge zero");
         accounts.clean_accounts();
-        print_count_and_status("after purge zero", &accounts);
+        accounts.print_count_and_status("after purge zero");
 
         assert_load_account(&accounts, current_slot, pubkey, old_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
