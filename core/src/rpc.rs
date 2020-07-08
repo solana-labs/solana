@@ -1690,7 +1690,7 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
     }
     bincode::config()
         .limit(PACKET_DATA_SIZE as u64)
-        .deserialize(&wire_transaction)
+        .deserialize_from(&wire_transaction[..])
         .map_err(|err| {
             info!("transaction deserialize error: {:?}", err);
             Error::invalid_params(&err.to_string())
