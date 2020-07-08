@@ -1,1 +1,1 @@
-web: bin/start-nginx-solo
+web: npm run start -- --port "$PORT" 
