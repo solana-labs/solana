@@ -4925,8 +4925,8 @@ mod tests {
                     .burn(bank.fee_calculator.lamports_per_signature * 2)
                     .0
         );
-        assert_eq!(results[0], Ok(()));
-        assert_eq!(results[1], Ok(()));
+        assert_eq!(results[0], Ok(bank.fee_calculator.clone()));
+        assert_eq!(results[1], Ok(bank.fee_calculator.clone()));
     }
 
     #[test]
@@ -5036,6 +5036,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let alice = Keypair::new();
         let bob = Keypair::new();
+        let fee_calculator = bank.fee_calculator.clone();
 
         let tx1 =
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
@@ -5046,7 +5047,7 @@ mod tests {
             .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, false)
             .0
             .fee_collection_results;
-        assert_eq!(results_alice[0], Ok(()));
+        assert_eq!(results_alice[0], Ok(fee_calculator));
 
         // try executing an interleaved transfer twice
         assert_eq!(
