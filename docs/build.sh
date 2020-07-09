@@ -13,7 +13,7 @@ find src -name '*.md' -a \! -name SUMMARY.md |
  done
 
 # auto-generate src/cli/usage.md
-#./build-cli-usage.sh
+./build-cli-usage.sh
 
 ./set-solana-release-tag.sh
 
@@ -41,5 +41,7 @@ if [[ -n $CI ]]; then
     PROD="--prod"
   fi
 fi
+
+./set-vercel-project-name.sh
 
 vercel deploy . --local-config=vercel.json --confirm $TOKEN_OPT $PROD
