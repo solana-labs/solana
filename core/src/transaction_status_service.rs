@@ -1,9 +1,6 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
-use solana_runtime::{
-    bank::{Bank, HashAgeKind},
-    nonce_utils,
-};
+use solana_runtime::bank::Bank;
 use solana_transaction_status::TransactionStatusMeta;
 use std::{
     sync::{
@@ -48,27 +45,24 @@ impl TransactionStatusService {
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
         let TransactionStatusBatch {
-            bank,
+            slot,
             transactions,
-            statuses,
+            results,
             balances,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
-        let slot = bank.slot();
-        for (((transaction, (status, hash_age_kind)), pre_balances), post_balances) in transactions
+        for (
+            (((transaction, fee_result), (status, _hash_age_kind)), pre_balances),
+            post_balances,
+        ) in transactions
             .iter()
-            .zip(statuses)
+            .zip(results.fee_collection_results)
+            .zip(results.processing_results)
             .zip(balances.pre_balances)
             .zip(balances.post_balances)
         {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_calculator = match hash_age_kind {
-                    Some(HashAgeKind::DurableNonce(_, account)) => {
-                        nonce_utils::fee_calculator_of(&account)
-                    }
-                    _ => bank.get_fee_calculator(&transaction.message().recent_blockhash),
-                }
-                .expect("FeeCalculator must exist");
+                let fee_calculator = fee_result.expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 let (writable_keys, readonly_keys) =
                     transaction.message.get_account_keys_by_lock_type();

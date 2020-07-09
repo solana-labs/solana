@@ -170,7 +170,7 @@ pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) + Sync + Send>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
-    pub fee_collection_results: Vec<Result<()>>,
+    pub fee_collection_results: Vec<Result<FeeCalculator>>,
     pub processing_results: Vec<TransactionProcessResult>,
 }
 pub struct TransactionBalancesSet {
@@ -1494,7 +1494,7 @@ impl Bank {
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
         executed: &[TransactionProcessResult],
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<FeeCalculator>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
         let results = OrderedIterator::new(txs, iteration_order)
@@ -1517,24 +1517,27 @@ impl Bank {
 
                 let message = tx.message();
                 match *res {
-                    Err(TransactionError::InstructionError(_, _)) => {
-                        // credit the transaction fee even in case of InstructionError
-                        // necessary to withdraw from account[0] here because previous
-                        // work of doing so (in accounts.load()) is ignored by store_account()
-                        //
-                        // ...except nonce accounts, which will have their post-load,
-                        // pre-execute account state stored
-                        if !is_durable_nonce {
-                            self.withdraw(&message.account_keys[0], fee)?;
+                    Err(ref err) => {
+                        if let TransactionError::InstructionError(_, _) = err {
+                            // credit the transaction fee even in case of InstructionError
+                            // necessary to withdraw from account[0] here because previous
+                            // work of doing so (in accounts.load()) is ignored by store_account()
+                            //
+                            // ...except nonce accounts, which will have their post-load,
+                            // pre-execute account state stored
+                            if !is_durable_nonce {
+                                self.withdraw(&message.account_keys[0], fee)?;
+                            }
+                            fees += fee;
+                            Ok(fee_calculator)
+                        } else {
+                            Err(err.clone())
                         }
-                        fees += fee;
-                        Ok(())
                     }
                     Ok(()) => {
                         fees += fee;
-                        Ok(())
+                        Ok(fee_calculator)
                     }
-                    _ => res.clone(),
                 }
             })
             .collect();
@@ -2121,6 +2124,9 @@ impl Bank {
         self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false)
             .0
             .fee_collection_results
+            .into_iter()
+            .map(|res| res.map(|_| ()))
+            .collect()
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of

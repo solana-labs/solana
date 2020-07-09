@@ -15,7 +15,7 @@ use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
+    bank::{Bank, TransactionBalancesSet, TransactionResults},
     bank_forks::BankForks,
     transaction_batch::TransactionBatch,
 };
@@ -62,33 +62,22 @@ fn execute_batch(
     bank: &Arc<Bank>,
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
-    let (
-        TransactionResults {
-            fee_collection_results,
-            processing_results,
-        },
-        balances,
-    ) = batch.bank().load_execute_and_commit_transactions(
+    let (results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
     );
+    let fee_collection_results = results.fee_collection_results.clone();
 
     if let Some(sender) = transaction_status_sender {
-        send_transaction_status_batch(
-            bank.clone(),
-            batch.transactions(),
-            processing_results,
-            balances,
-            sender,
-        );
+        send_transaction_status_batch(bank.slot(), batch.transactions(), results, balances, sender);
     }
 
     let mut first_err = None;
     for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
-                first_err = Some(result.clone());
+                first_err = Some(Err(err.clone()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -809,25 +798,24 @@ fn process_single_slot(
 }
 
 pub struct TransactionStatusBatch {
-    pub bank: Arc<Bank>,
+    pub slot: Slot,
     pub transactions: Vec<Transaction>,
-    pub statuses: Vec<TransactionProcessResult>,
+    pub results: TransactionResults,
     pub balances: TransactionBalancesSet,
 }
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 
 pub fn send_transaction_status_batch(
-    bank: Arc<Bank>,
+    slot: Slot,
     transactions: &[Transaction],
-    statuses: Vec<TransactionProcessResult>,
+    results: TransactionResults,
     balances: TransactionBalancesSet,
     transaction_status_sender: TransactionStatusSender,
 ) {
-    let slot = bank.slot();
     if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
-        bank,
+        slot,
         transactions: transactions.to_vec(),
-        statuses,
+        results,
         balances,
     }) {
         trace!(

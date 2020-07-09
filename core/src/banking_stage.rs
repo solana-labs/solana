@@ -533,23 +533,21 @@ impl BankingStage {
         let num_to_commit = num_to_commit.unwrap();
 
         if num_to_commit != 0 {
-            let transaction_statuses = bank
-                .commit_transactions(
-                    txs,
-                    None,
-                    &mut loaded_accounts,
-                    &results,
-                    tx_count,
-                    signature_count,
-                )
-                .processing_results;
+            let results = bank.commit_transactions(
+                txs,
+                None,
+                &mut loaded_accounts,
+                &results,
+                tx_count,
+                signature_count,
+            );
 
             if let Some(sender) = transaction_status_sender {
                 let post_balances = bank.collect_balances(txs);
                 send_transaction_status_batch(
-                    bank.clone(),
+                    bank.slot(),
                     batch.transactions(),
-                    transaction_statuses,
+                    results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     sender,
                 );
