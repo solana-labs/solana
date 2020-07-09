@@ -44,4 +44,4 @@ fi
 
 ./set-vercel-project-name.sh
 
-vercel deploy . --local-config=vercel.json --confirm $TOKEN_OPT $PROD
+vercel deploy . --local-config=vercel.json --confirm "$TOKEN_OPT" "$PROD"
