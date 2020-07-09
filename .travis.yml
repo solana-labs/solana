@@ -107,21 +107,20 @@ jobs:
         - ../.travis/commitlint.sh
         - source .travis/script.sh
 
-    # docs pull request
+    # docs pull request or publishing
     - name: "docs"
-      if: type = pull_request
-      language: node_js
-      node_js:
-        - "node"
+      language: rust
+      rust:
+        - stable
 
-      cache:
-        directories:
-          - ~/.npm
+      services:
+        - docker
 
       before_install:
         - .travis/affects.sh docs/ .travis || travis_terminate 0
         - cd docs/
         - source .travis/before_install.sh
-
+      install:
+        - source ci/rust-version.sh
       script:
         - source .travis/script.sh

@@ -3,8 +3,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-source ../ci/rust-version.sh stable
-
 : "${rust_stable:=}" # Pacify shellcheck
 
 usage=$(cargo +"$rust_stable" -q run -p solana-cli -- -C ~/.foo --help | sed -e 's|'"$HOME"'|~|g' -e 's/[[:space:]]\+$//')
