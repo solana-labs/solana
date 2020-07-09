@@ -95,7 +95,18 @@ pub struct Tower {
     #[serde(skip)]
     tmp_path: PathBuf, // used before atomic fs::rename()
     #[serde(skip)]
-    // this could be emptied; but left intact indefinitely for easier implementation
+    // Restored voted slots which cannot be found in SlotHistory at replayed root
+    // (This's kind of special field for slashing-free validator restart with edge cases).
+    // Those voted slots means they are/were on a different fork (which may not be available
+    // in bank_forks after validator restart) or are unrooted slots following the replayed
+    // rooted slot.
+    // This is only used to construct synthesized ancestors for the last vote, if restored
+    // last_vote's ancestors cannot be found in bank_forks. That's because fork choice
+    // and switch threshold requires that information.
+    // That way we avoid mangling bank_forks or relaxing bank_forks invariants just for
+    // validator's restart porpose.
+    // This could be emptied after some time; but left intact indefinitely for easier
+    // implementation
     stray_restored_slots: HashSet<Slot>,
 }
 
