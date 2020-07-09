@@ -644,7 +644,7 @@ fn post_process_restored_tower(
         .unwrap_or_else(|err| {
             let is_already_active = active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
             if config.require_tower && is_already_active {
-                error!("Required tower restore failed: {:?}", err);
+                error!("Requested mandatory tower restore failed: {:?}", err);
                 error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
                 process::exit(1);
             }

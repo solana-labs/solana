@@ -754,7 +754,7 @@ impl Tower {
         slot_history: &SlotHistory,
     ) -> Result<Self> {
         info!(
-            "adjusting lockouts after replay up to {}: {:?}",
+            "adjusting lockouts (after replay up to {}): {:?}",
             replayed_root_slot,
             self.voted_slots()
         );
