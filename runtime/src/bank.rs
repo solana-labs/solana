@@ -1875,9 +1875,32 @@ impl Bank {
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
 
+        let should_enable = match self.operating_mode() {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => current_epoch >= Epoch::max_value(),
+            OperatingMode::Stable => {
+                #[cfg(not(test))]
+                let should_enable = current_epoch >= Epoch::max_value();
+
+                // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
+                // which depends on OperatingMode::Stable
+                #[cfg(test)]
+                let should_enable = true;
+
+                should_enable
+            }
+        };
+
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
-            if current_slot_index > 0 {
+            // this needs to be gated because this potentially can change the behavior
+            // (= bank hash) at each start of epochs
+            let slot_skipped = if should_enable {
+                (self.slot() - self.parent_slot()) > 1
+            } else {
+                current_slot_index > 0
+            };
+            if slot_skipped {
                 // Generate special partitions because there are skipped slots
                 // exactly at the epoch transition.
 
@@ -1890,24 +1913,9 @@ impl Bank {
                     parent_epoch,
                 ));
 
-                let should_enable = match self.operating_mode() {
-                    OperatingMode::Development => true,
-                    OperatingMode::Preview => current_epoch >= Epoch::max_value(),
-                    OperatingMode::Stable => {
-                        #[cfg(not(test))]
-                        let should_enable = current_epoch >= Epoch::max_value();
-
-                        // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
-                        // which depends on OperatingMode::Stable
-                        #[cfg(test)]
-                        let should_enable = true;
-
-                        should_enable
-                    }
-                };
                 // this needs to be gated because this potentially can change the behavior
                 // (= bank hash) at each start of epochs
-                if should_enable {
+                if should_enable && current_slot_index > 0 {
                     // ... for current epoch
                     partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
                         0,
@@ -3642,7 +3650,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_across_epoch_with_gap() {
+    fn test_rent_eager_across_epoch_with_full_gap() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
@@ -3659,6 +3667,30 @@ mod tests {
             bank.rent_collection_partitions(),
             vec![(14, 31, 32), (0, 0, 64), (0, 17, 64)]
         );
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.rent_collection_partitions(), vec![(17, 18, 64)]);
+    }
+
+    #[test]
+    fn test_rent_eager_across_epoch_with_half_gap() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
+
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 32)]);
+        for _ in 2..15 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        assert_eq!(bank.rent_collection_partitions(), vec![(13, 14, 32)]);
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 32));
+        assert_eq!(
+            bank.rent_collection_partitions(),
+            vec![(14, 31, 32), (0, 0, 64)]
+        );
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 64)]);
     }
 
     #[test]
