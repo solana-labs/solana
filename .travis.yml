@@ -114,6 +114,9 @@ jobs:
       node_js:
         - "node"
 
+      services:
+        - docker
+
       cache:
         directories:
           - ~/.npm

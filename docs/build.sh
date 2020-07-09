@@ -15,7 +15,8 @@ find src -name '*.md' -a \! -name SUMMARY.md |
  done
 
 # auto-generate src/cli/usage.md
-./build-cli-usage.sh
+source ../ci/rust-version.sh
+../ci/docker-run.sh "$rust_stable_docker_image" docs/build-cli-usage.sh
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
