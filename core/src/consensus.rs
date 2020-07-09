@@ -20,7 +20,7 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
     ops::Bound::{Included, Unbounded},
@@ -107,7 +107,7 @@ pub struct Tower {
     // validator's restart porpose.
     // This could be emptied after some time; but left intact indefinitely for easier
     // implementation
-    stray_restored_slots: HashSet<Slot>,
+    stray_restored_slots: BTreeSet<Slot>,
 }
 
 impl Default for Tower {
@@ -121,7 +121,7 @@ impl Default for Tower {
             last_timestamp: BlockTimestamp::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
-            stray_restored_slots: HashSet::default(),
+            stray_restored_slots: BTreeSet::default(),
         }
     }
 }
@@ -503,7 +503,7 @@ impl Tower {
                         // Also, can't just return empty ancestors because we should exclude
                         // lockouts on stray last vote's ancestors in the lockout_intervals later
                         // in this fn.
-                        stray_restored_ancestors = self.stray_restored_slots.clone();
+                        stray_restored_ancestors = self.stray_restored_slots.clone().into_iter().collect();
                         stray_restored_ancestors.remove(&last_voted_slot);
                         info!(
                             "returning restored slots {:?} because of stray last vote ({})...",
@@ -737,10 +737,12 @@ impl Tower {
 
     pub fn is_stray_last_vote(&self) -> bool {
         if let Some(last_voted_slot) = self.last_voted_slot() {
-            self.stray_restored_slots.contains(&last_voted_slot)
-        } else {
-            false
+            if let Some(max_stray_slot) = self.stray_restored_slots.iter().next_back() {
+                return *max_stray_slot == last_voted_slot;
+            }
         }
+
+        false
     }
 
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
@@ -2568,7 +2570,7 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
         assert_eq!(tower.root(), None);
-        assert_eq!(tower.stray_restored_slots, HashSet::default());
+        assert_eq!(tower.stray_restored_slots, BTreeSet::default());
     }
 
     #[test]

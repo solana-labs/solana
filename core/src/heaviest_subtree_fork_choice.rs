@@ -1519,6 +1519,8 @@ mod test {
         // Make slot 1 (existing in bank_forks) a restored stray slot
         let mut slot_history = SlotHistory::default();
         slot_history.add(0);
+        // Work around TooOldSlotHistory
+        slot_history.add(999);
         tower = tower
             .adjust_lockouts_after_replay(0, &slot_history)
             .unwrap();
