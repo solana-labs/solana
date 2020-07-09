@@ -486,7 +486,12 @@ impl Tower {
                 let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                     if self.is_stray_last_vote() {
                         // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
-                        info!("returning restored slots {:?} because of stray last vote...", self.stray_restored_slots);
+                        // Also, can't just return empty ancestors because we should exclude
+                        // lockouts on stray last vote's ancestors in the lockout_intervals.
+                        info!(
+                            "returning restored slots {:?} because of stray last vote ({})...",
+                            self.stray_restored_slots, last_voted_slot
+                        );
                         &self.stray_restored_slots
                     } else {
                         panic!("no ancestor!")
@@ -773,16 +778,18 @@ impl Tower {
             Vec::with_capacity(self.lockouts.votes.len());
         let mut still_in_future = true;
         let mut past_outside_history = false;
-        let mut found = false;
+        let mut anchored = false;
 
         // iterate over votes in the newest => oldest order
         // bail out early if bad condition is found
+        let mut checked_slot = None;
         for vote in self.lockouts.votes.iter().rev() {
-            let check = slot_history.check(vote.slot);
+            checked_slot = Some(vote.slot);
+            let check = slot_history.check(checked_slot.unwrap());
 
-            if !found && check == Check::Found {
-                found = true;
-            } else if found && check == Check::NotFound {
+            if !anchored && check == Check::Found {
+                anchored = true;
+            } else if anchored && check == Check::NotFound {
                 // this can't happen unless we're fed with bogus snapshot
                 return Err(TowerError::InconsistentWithSlotHistory(
                     "diverged ancestor?".to_owned(),
@@ -794,7 +801,7 @@ impl Tower {
             } else if !still_in_future && check == Check::Future {
                 // really odd cases: bad ordered votes?
                 return Err(TowerError::InconsistentWithSlotHistory(
-                    "time warmped?".to_owned(),
+                    "time warped?".to_owned(),
                 ));
             }
             if !past_outside_history && check == Check::TooOld {
@@ -806,8 +813,16 @@ impl Tower {
                 ));
             }
 
-            retain_flags_for_each_vote_in_reverse.push(!found);
+            retain_flags_for_each_vote_in_reverse.push(!anchored);
         }
+
+        if !anchored && checked_slot.unwrap() > slot_history.newest() {
+            return Err(TowerError::TooNew(
+                checked_slot.unwrap(),
+                slot_history.newest(),
+            ));
+        }
+
         let mut retain_flags_for_each_vote =
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
@@ -946,8 +961,11 @@ pub enum TowerError {
     #[error("The tower does not match this validator: {0}")]
     WrongTower(String),
 
-    #[error("The tower is too old: last voted slot in tower ({0}) < oldest slot in available history ({1})")]
+    #[error("The tower is too old: newest slot in tower ({0}) << oldest slot in available history ({1})")]
     TooOld(Slot, Slot),
+
+    #[error("The tower is too new: oldest slot in tower ({0}) >> newest slot in available history ({1})")]
+    TooNew(Slot, Slot),
 
     #[error("The tower is inconsistent with slot history: {0}")]
     InconsistentWithSlotHistory(String),
@@ -2543,7 +2561,30 @@ pub mod test {
         slot_history.add(MAX_ENTRIES);
 
         let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
-        assert_eq!(format!("{}", result.unwrap_err()), "The tower is too old: last voted slot in tower (0) < oldest slot in available history (1)");
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is too old: newest slot in tower (0) << oldest slot in available history (1)"
+        );
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load44() {
+        solana_logger::setup();
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.votes.push_back(Lockout::new(100));
+        tower.lockouts.votes.push_back(Lockout::new(101));
+        let vote = Vote::new(vec![101], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(2);
+
+        let result = tower.adjust_lockouts_after_replay(2, &slot_history);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is too new: oldest slot in tower (100) >> newest slot in available history (2)"
+        );
     }
 
     #[test]
@@ -2582,7 +2623,7 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(0, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is inconsistent with slot history: time warmped?"
+            "The tower is inconsistent with slot history: time warped?"
         );
     }
 
@@ -2662,8 +2703,9 @@ pub mod test {
         slot_history.add(0);
         slot_history.add(1);
         slot_history.add(2);
+        slot_history.add(7);
 
-        let replayed_root_slot = 2;
+        let replayed_root_slot = 7;
         tower = tower
             .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
