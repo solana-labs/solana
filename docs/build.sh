@@ -2,7 +2,6 @@
 set -ex
 
 cd "$(dirname "$0")"
-PATH=/usr/bin:"$PATH"
 
 # md check
 find src -name '*.md' -a \! -name SUMMARY.md |
@@ -18,11 +17,9 @@ find src -name '*.md' -a \! -name SUMMARY.md |
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
-npm install
 npm run build
 
 # Deploy the /build content using vercel
-npm i -g vercel
 if [[ -d .vercel ]]; then
   rm -r .vercel
 fi
