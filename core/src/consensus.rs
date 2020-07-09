@@ -499,7 +499,8 @@ impl Tower {
             .map(|last_voted_slot| {
                 let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                     if self.is_stray_last_vote() {
-                        // Use stray restored ancestors because we can't derive them from given ancestors (=bank_forks)
+                        // Use stray restored ancestors because we can't derive them from
+                        // given ancestors (=bank_forks)
                         // Also, can't just return empty ancestors because we should exclude
                         // lockouts on stray last vote's ancestors in the lockout_intervals later
                         // in this fn.
@@ -879,12 +880,17 @@ impl Tower {
             .retain(move |_| retain_flags_for_each_vote.next().unwrap());
 
         if self.lockouts.votes.is_empty() {
-            info!("All restored votes were behind replayed_root_slot; resetting root_slot and last_vote in tower!");
+            info!(
+                "All restored votes were behind replayed_root_slot; resetting root_slot and last_vote in tower!",
+            );
 
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
-            info!("Some restored votes were on different fork or are upcoming votes on unrooted slots: {:?}!", self.voted_slots());
+            info!(
+                "Some restored votes were on different fork or are upcoming votes on unrooted slots: {:?}!",
+                self.voted_slots()
+            );
 
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
@@ -959,7 +965,7 @@ impl Tower {
             // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         }
         fs::rename(&new_filename, &filename)?;
-        // self.path.parent().sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
+        // self.path.parent().sync_all() hurts performance same as the above sync
 
         measure.stop();
         inc_new_counter_info!("tower_save-ms", measure.as_ms() as usize);
@@ -1009,10 +1015,16 @@ pub enum TowerError {
     #[error("The tower does not match this validator: {0}")]
     WrongTower(String),
 
-    #[error("The tower is too old: newest slot in tower ({0}) << oldest slot in available history ({1})")]
+    #[error(
+        "The tower is too old: \
+        newest slot in tower ({0}) << oldest slot in available history ({1})"
+    )]
     TooOldTower(Slot, Slot),
 
-    #[error("The slot history is too old: oldest slot in tower ({0}) >> newest slot in available history ({1})")]
+    #[error(
+        "The slot history is too old: \
+        oldest slot in tower ({0}) >> newest slot in available history ({1})"
+    )]
     TooOldSlotHistory(Slot, Slot),
 
     #[error("The tower is inconsistent with slot history: {0}")]
