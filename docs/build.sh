@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -ex
 
+# shellcheck source=ci/env.sh
 source ../ci/env.sh
 
 cd "$(dirname "$0")"
@@ -14,7 +15,9 @@ find src -name '*.md' -a \! -name SUMMARY.md |
    fi
  done
 
-# auto-generate src/cli/usage.md
+: "${rust_stable_docker_image:=}" # Pacify shellcheck
+
+# shellcheck source=ci/rust-version.sh
 source ../ci/rust-version.sh
 ../ci/docker-run.sh "$rust_stable_docker_image" docs/build-cli-usage.sh
 ./set-solana-release-tag.sh

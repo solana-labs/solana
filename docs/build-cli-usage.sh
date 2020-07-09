@@ -3,6 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
+# shellcheck source=ci/rust-version.sh
 source ../ci/rust-version.sh stable
 
 : "${rust_stable:=}" # Pacify shellcheck
