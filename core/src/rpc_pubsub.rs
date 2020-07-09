@@ -525,9 +525,8 @@ mod tests {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
                 bank_forks.clone(),
-                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_bank(
-                    bank_forks.read().unwrap().get(1).unwrap().clone(),
-                    1,
+                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                    1, 1,
                 ))),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),

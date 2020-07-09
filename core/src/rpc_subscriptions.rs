@@ -961,9 +961,8 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_bank(
-                bank_forks.read().unwrap().get(1).unwrap().clone(),
-                1,
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                1, 1,
             ))),
         );
         subscriptions.add_account_subscription(
@@ -1158,7 +1157,7 @@ pub(crate) mod tests {
         block_commitment.entry(0).or_insert(cache0);
         block_commitment.entry(1).or_insert(cache1);
         let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, 10, bank1, 0, 0);
+            BlockCommitmentCache::new(block_commitment, 0, 10, bank1.slot(), 0, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
@@ -1433,9 +1432,8 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_bank(
-                bank_forks.read().unwrap().get(1).unwrap().clone(),
-                1,
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                1, 1,
             ))),
         );
         let sub_id0 = SubscriptionId::Number(0 as u64);
