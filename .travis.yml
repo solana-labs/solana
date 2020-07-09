@@ -125,3 +125,6 @@ jobs:
 
       script:
         - source .travis/script.sh
+
+      deploy:
+        vercel_token: $VERCEL_TOKEN
