@@ -1,9 +1,6 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
-use crate::{
-    cluster_info::ClusterInfo, rpc::*, rpc_health::*,
-    send_transaction_service::SendTransactionService, validator::ValidatorExit,
-};
+use crate::{cluster_info::ClusterInfo, rpc::*, rpc_health::*, validator::ValidatorExit};
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
@@ -14,6 +11,7 @@ use solana_ledger::blockstore::Blockstore;
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
+    send_transaction_service::SendTransactionService,
     snapshot_utils,
 };
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
