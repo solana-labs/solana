@@ -2,6 +2,7 @@
 set -ex
 
 cd "$(dirname "$0")"
+PATH=/usr/bin:"$PATH"
 
 # md check
 find src -name '*.md' -a \! -name SUMMARY.md |
@@ -14,7 +15,6 @@ find src -name '*.md' -a \! -name SUMMARY.md |
 
 # auto-generate src/cli/usage.md
 ./build-cli-usage.sh
-
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
