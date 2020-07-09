@@ -250,9 +250,10 @@ impl JsonRpcService {
             override_health_check,
         ));
 
+        let tpu_address = cluster_info.my_contact_info().tpu;
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
         let send_transaction_service = Arc::new(SendTransactionService::new(
-            &cluster_info,
+            tpu_address,
             &bank_forks,
             &exit_send_transaction_service,
         ));

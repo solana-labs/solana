@@ -1,4 +1,3 @@
-use crate::cluster_info::ClusterInfo;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, signature::Signature};
@@ -41,12 +40,11 @@ struct ProcessTransactionsResult {
 
 impl SendTransactionService {
     pub fn new(
-        cluster_info: &Arc<ClusterInfo>,
+        tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (sender, receiver) = channel::<TransactionInfo>();
-        let tpu_address = cluster_info.my_contact_info().tpu;
 
         let thread = Self::retry_thread(receiver, bank_forks.clone(), tpu_address, exit.clone());
         Self {
@@ -192,17 +190,19 @@ impl SendTransactionService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::rpc::tests::new_bank_forks;
-    use solana_sdk::{pubkey::Pubkey, signature::Signer};
+    use solana_sdk::{
+        genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
+        system_transaction,
+    };
 
     #[test]
     fn service_exit() {
-        let cluster_info = Arc::new(ClusterInfo::default());
-        let bank_forks = new_bank_forks().0;
+        let tpu_address = "127.0.0.1:0".parse().unwrap();
+        let bank = Bank::default();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let exit = Arc::new(AtomicBool::new(false));
 
-        let send_tranaction_service =
-            SendTransactionService::new(&cluster_info, &bank_forks, &exit);
+        let send_tranaction_service = SendTransactionService::new(tpu_address, &bank_forks, &exit);
 
         exit.store(true, Ordering::Relaxed);
         send_tranaction_service.join().unwrap();
@@ -212,10 +212,11 @@ mod test {
     fn process_transactions() {
         solana_logger::setup();
 
-        let (bank_forks, mint_keypair, _voting_keypair) = new_bank_forks();
-        let cluster_info = ClusterInfo::default();
+        let (genesis_config, mint_keypair) = create_genesis_config(4);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = "127.0.0.1:0".parse().unwrap();
 
         let root_bank = Arc::new(Bank::new_from_parent(
             &bank_forks.read().unwrap().working_bank(),
@@ -234,12 +235,8 @@ mod test {
 
         let failed_signature = {
             let blockhash = working_bank.last_blockhash();
-            let transaction = solana_sdk::system_transaction::transfer(
-                &mint_keypair,
-                &Pubkey::default(),
-                1,
-                blockhash,
-            );
+            let transaction =
+                system_transaction::transfer(&mint_keypair, &Pubkey::default(), 1, blockhash);
             let signature = transaction.signatures[0];
             working_bank.process_transaction(&transaction).unwrap_err();
             signature
