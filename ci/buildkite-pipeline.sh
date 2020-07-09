@@ -213,7 +213,7 @@ pull_or_push_steps() {
 
   # doc/ changes:
   if affects ^docs/; then
-    command_step docs ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image docs/build.sh" 5
+    command_step docs "docs/build.sh" 5
   fi
 
   # web3.js and explorer changes run on Travis...
