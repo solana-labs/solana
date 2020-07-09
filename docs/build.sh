@@ -18,11 +18,11 @@ find src -name '*.md' -a \! -name SUMMARY.md |
 ./set-solana-release-tag.sh
 
 # Build from /src into /build
-yarn
-yarn build
+npm install
+npm run build
 
 # Deploy the /build content using vercel
-yarn global add vercel
+npm i -g vercel
 if [[ -d .vercel ]]; then
   rm -r .vercel
 fi
