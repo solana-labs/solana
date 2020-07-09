@@ -1578,7 +1578,7 @@ impl Bank {
             executed,
             loaded_accounts,
             &self.rent_collector,
-            &self.last_blockhash(),
+            &self.last_blockhash_with_fee_calculator(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -6678,6 +6678,70 @@ mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::BlockhashNotFound),
         );
+    }
+
+    #[test]
+    fn test_nonce_fee_calculator_updates() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        genesis_config.rent.lamports_per_byte_year = 0;
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+
+        // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
+        let (custodian_keypair, nonce_keypair) =
+            nonce_setup(&mut bank, &mint_keypair, 500_000, 100_000, None).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        // Grab the hash and fee_calculator stored in the nonce account
+        let (stored_nonce_hash, stored_fee_calculator) = bank
+            .get_account(&nonce_pubkey)
+            .and_then(|acc| {
+                let state =
+                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
+                match state {
+                    Ok(nonce::State::Initialized(ref data)) => {
+                        Some((data.blockhash, data.fee_calculator.clone()))
+                    }
+                    _ => None,
+                }
+            })
+            .unwrap();
+
+        // Kick nonce hash off the blockhash_queue
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        // Durable Nonce transfer
+        let nonce_tx = Transaction::new_signed_with_payer(
+            &[
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &Pubkey::new_rand(), 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            stored_nonce_hash,
+        );
+        bank.process_transaction(&nonce_tx).unwrap();
+
+        // Grab the new hash and fee_calculator; both should be updated
+        let (nonce_hash, fee_calculator) = bank
+            .get_account(&nonce_pubkey)
+            .and_then(|acc| {
+                let state =
+                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
+                match state {
+                    Ok(nonce::State::Initialized(ref data)) => {
+                        Some((data.blockhash, data.fee_calculator.clone()))
+                    }
+                    _ => None,
+                }
+            })
+            .unwrap();
+
+        assert_ne!(stored_nonce_hash, nonce_hash);
+        assert_ne!(stored_fee_calculator, fee_calculator);
     }
 
     #[test]
