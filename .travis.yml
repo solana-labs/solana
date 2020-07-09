@@ -106,3 +106,23 @@ jobs:
       script:
         - ../.travis/commitlint.sh
         - source .travis/script.sh
+
+    # docs pull request
+    - name: "docs"
+      if: type = pull_request
+      language: node_js
+      node_js:
+        - "node"
+
+      cache:
+        directories:
+          - ~/.npm
+
+      before_install:
+        - .travis/affects.sh docs/ .travis || travis_terminate 0
+        - cd docs/
+        - source .travis/before_install.sh
+
+      script:
+        - ../.travis/commitlint.sh
+        - source .travis/script.sh
