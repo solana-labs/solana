@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex
 
-source "$(dirname "$0")"/../ci/env.sh
+source ../ci/env.sh
 
 cd "$(dirname "$0")"
 
