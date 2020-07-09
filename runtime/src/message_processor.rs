@@ -1354,7 +1354,7 @@ mod tests {
         let not_owned_account = Account::new(84, 1, &Pubkey::new_rand());
         let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, false, true);
 
-        let mut accounts = vec![
+        let accounts = vec![
             Rc::new(RefCell::new(owned_account)),
             Rc::new(RefCell::new(not_owned_account)),
         ];

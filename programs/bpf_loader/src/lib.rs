@@ -393,7 +393,7 @@ mod tests {
         );
 
         // Case: Write bytes to an offset
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
         assert_eq!(
             Ok(()),
@@ -410,7 +410,7 @@ mod tests {
         );
 
         // Case: Overflow
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
