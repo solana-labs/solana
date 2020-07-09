@@ -95,6 +95,7 @@ pub struct Tower {
     #[serde(skip)]
     tmp_path: PathBuf, // used before atomic fs::rename()
     #[serde(skip)]
+    // this could be emptied; but left intact indefinitely for easier implementation
     stray_restored_slots: HashSet<Slot>,
 }
 
@@ -481,6 +482,8 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
+        let mut stray_restored_ancestors = HashSet::default();
+
         self.last_voted_slot()
             .map(|last_voted_slot| {
                 let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
@@ -488,11 +491,13 @@ impl Tower {
                         // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
                         // Also, can't just return empty ancestors because we should exclude
                         // lockouts on stray last vote's ancestors in the lockout_intervals.
+                        stray_restored_ancestors = self.stray_restored_slots.clone();
+                        stray_restored_ancestors.remove(&last_voted_slot);
                         info!(
                             "returning restored slots {:?} because of stray last vote ({})...",
-                            self.stray_restored_slots, last_voted_slot
+                            stray_restored_ancestors, last_voted_slot
                         );
-                        &self.stray_restored_slots
+                        &stray_restored_ancestors
                     } else {
                         panic!("no ancestor!")
                     }
