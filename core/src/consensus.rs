@@ -1019,7 +1019,8 @@ pub enum TowerError {
     InconsistentWithSlotHistory(String),
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[frozen_abi(digest = "Gaxfwvx5MArn52mKZQgzHmDCyn5YfCuTHvp5Et3rFfpp")]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct SavedTower {
     signature: Signature,
     data: Vec<u8>,
