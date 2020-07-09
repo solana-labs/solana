@@ -3,7 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply, rpc_error::RpcCustomError,
-    rpc_health::*, send_transaction_service::SendTransactionService, validator::ValidatorExit,
+    rpc_health::*, validator::ValidatorExit,
 };
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
@@ -28,6 +28,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache},
     log_collector::LogCollector,
+    send_transaction_service::SendTransactionService,
 };
 use solana_sdk::{
     account_utils::StateMut,
