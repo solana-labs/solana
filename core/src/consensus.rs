@@ -501,7 +501,8 @@ impl Tower {
                     if self.is_stray_last_vote() {
                         // Use stray restored slots because we can't derive them from given ancestors (=bank_forks)
                         // Also, can't just return empty ancestors because we should exclude
-                        // lockouts on stray last vote's ancestors in the lockout_intervals.
+                        // lockouts on stray last vote's ancestors in the lockout_intervals later
+                        // in this fn.
                         stray_restored_ancestors = self.stray_restored_slots.clone();
                         stray_restored_ancestors.remove(&last_voted_slot);
                         info!(
