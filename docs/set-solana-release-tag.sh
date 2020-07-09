@@ -24,5 +24,5 @@ fi
 
 set -x
 if [[ -n $CI ]]; then
-  find src/ -name \*.md -exec sed -i '' "s/LATEST_SOLANA_RELEASE_VERSION/$LATEST_SOLANA_RELEASE_VERSION/g" {} \;
+  find src/ -name \*.md -exec sed -i "s/LATEST_SOLANA_RELEASE_VERSION/$LATEST_SOLANA_RELEASE_VERSION/g" {} \;
 fi
