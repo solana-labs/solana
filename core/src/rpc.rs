@@ -5,7 +5,7 @@ use crate::{
     non_circulating_supply::calculate_non_circulating_supply, rpc_error::RpcCustomError,
     rpc_health::*, send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
-use bincode::serialize;
+use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
@@ -1688,8 +1688,10 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
         info!("{}", err);
         return Err(Error::invalid_params(&err));
     }
-    bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
+    bincode::options()
+        .with_limit(PACKET_DATA_SIZE as u64)
+        .with_fixint_encoding()
+        .allow_trailing_bytes()
         .deserialize_from(&wire_transaction[..])
         .map_err(|err| {
             info!("transaction deserialize error: {:?}", err);

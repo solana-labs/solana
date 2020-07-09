@@ -1,6 +1,9 @@
-use crate::account_state::{pubkey_to_address, LibraAccountState};
-use crate::data_store::DataStore;
-use crate::error_mappers::*;
+use crate::{
+    account_state::{pubkey_to_address, LibraAccountState},
+    data_store::DataStore,
+    error_mappers::*,
+};
+use bincode::config::Options;
 use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -126,8 +129,10 @@ impl MoveProcessor {
     ) -> Result<(), InstructionError> {
         let original_len = data.len() as u64;
         let mut writer = std::io::Cursor::new(data);
-        bincode::config()
-            .limit(original_len)
+        bincode::options()
+            .with_limit(original_len)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .serialize_into(&mut writer, &state)
             .map_err(map_data_error)?;
         if writer.position() < original_len {

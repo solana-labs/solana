@@ -1,6 +1,6 @@
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 use solana_sdk::abi_example::IgnoreAsHelper;
-use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
+use {super::*, bincode::config::Options, solana_measure::measure::Measure, std::cell::RefCell};
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -191,8 +191,10 @@ impl<'a> TypeContext<'a> for Context {
         let serialized_len = min(serialized_len, deserialize_from(&mut stream)?);
 
         // (1st of 3 elements) read in map of slots to account storage entries
-        let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::config()
-            .limit(serialized_len)
+        let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::options()
+            .with_limit(serialized_len)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(&mut stream)?;
 
         // (2nd of 3 elements) read in write version

@@ -1,5 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::{cuda_runtime::PinnedVec, recycler::Recycler};
+use bincode::config::Options;
 use serde::Serialize;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use std::net::SocketAddr;
@@ -100,8 +101,10 @@ pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
+    bincode::options()
+        .with_limit(PACKET_DATA_SIZE as u64)
+        .with_fixint_encoding()
+        .allow_trailing_bytes()
         .deserialize_from(data)
 }
 
