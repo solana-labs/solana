@@ -12,7 +12,7 @@ if [[ -n $CI ]]; then
     export CI_BUILD_ID=$TRAVIS_BUILD_ID
     export CI_COMMIT=$TRAVIS_COMMIT
     export CI_JOB_ID=$TRAVIS_JOB_ID
-    if $TRAVIS_PULL_REQUEST; then
+    if [[ $TRAVIS_PULL_REQUEST != false ]]; then
       export CI_PULL_REQUEST=true
     else
       export CI_PULL_REQUEST=
