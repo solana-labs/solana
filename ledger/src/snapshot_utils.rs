@@ -1,7 +1,9 @@
-use crate::bank_forks::CompressionType;
-use crate::hardened_unpack::{unpack_snapshot, UnpackError};
-use crate::snapshot_package::AccountsPackage;
-use bincode::serialize_into;
+use crate::{
+    bank_forks::CompressionType,
+    hardened_unpack::{unpack_snapshot, UnpackError},
+    snapshot_package::AccountsPackage,
+};
+use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
 use flate2::read::GzDecoder;
 use fs_extra::dir::CopyOptions;
@@ -721,8 +723,10 @@ where
 
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
-        let mut bank: Bank = bincode::config()
-            .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+        let mut bank: Bank = bincode::options()
+            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(&mut stream)?;
 
         info!("Rebuilding accounts...");
@@ -757,8 +761,10 @@ where
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
         info!("Rebuilding status cache...");
-        let slot_deltas: Vec<BankSlotDelta> = bincode::config()
-            .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+        let slot_deltas: Vec<BankSlotDelta> = bincode::options()
+            .with_limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(stream)?;
         Ok(slot_deltas)
     })?;
