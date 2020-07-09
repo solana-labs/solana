@@ -51,25 +51,26 @@ pub fn prepare_if_nonce_account(
     account_pubkey: &Pubkey,
     tx_result: &transaction::Result<()>,
     maybe_nonce: Option<(&Pubkey, &Account)>,
-    last_blockhash: &Hash,
+    last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
 ) {
     if let Some((nonce_key, nonce_acc)) = maybe_nonce {
         if account_pubkey == nonce_key {
             // Nonce TX failed with an InstructionError. Roll back
             // its account state
             if tx_result.is_err() {
-                *account = nonce_acc.clone()
-            }
-            // Since hash_age_kind is DurableNonce, unwrap is safe here
-            let state = StateMut::<Versions>::state(nonce_acc)
-                .unwrap()
-                .convert_to_current();
-            if let State::Initialized(ref data) = state {
-                let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
-                    blockhash: *last_blockhash,
-                    ..data.clone()
-                }));
-                account.set_state(&new_data).unwrap();
+                *account = nonce_acc.clone();
+                // Since hash_age_kind is DurableNonce, unwrap is safe here
+                let state = StateMut::<Versions>::state(nonce_acc)
+                    .unwrap()
+                    .convert_to_current();
+                if let State::Initialized(ref data) = state {
+                    let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
+                        blockhash: last_blockhash_with_fee_calculator.0,
+                        fee_calculator: last_blockhash_with_fee_calculator.1.clone(),
+                        ..data.clone()
+                    }));
+                    account.set_state(&new_data).unwrap();
+                }
             }
         }
     }
@@ -254,7 +255,8 @@ mod tests {
         });
     }
 
-    fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
+    fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash, FeeCalculator)
+    {
         let data = Versions::new_current(State::Initialized(nonce::state::Data::default()));
         let account = Account::new_data(42, &data, &system_program::id()).unwrap();
         let pre_account = Account {
@@ -266,6 +268,9 @@ mod tests {
             pre_account,
             account,
             Hash::new(&[1u8; 32]),
+            FeeCalculator {
+                lamports_per_signature: 1234,
+            },
         )
     }
 
@@ -274,7 +279,7 @@ mod tests {
         account_pubkey: &Pubkey,
         tx_result: &transaction::Result<()>,
         maybe_nonce: Option<(&Pubkey, &Account)>,
-        last_blockhash: &Hash,
+        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &Account,
     ) -> bool {
         // Verify expect_account's relationship
@@ -282,7 +287,7 @@ mod tests {
             Some((nonce_pubkey, _nonce_account))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
-                assert_ne!(expect_account, account)
+                assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
             }
             Some((nonce_pubkey, nonce_account)) if nonce_pubkey == account_pubkey => {
                 assert_ne!(expect_account, nonce_account)
@@ -295,22 +300,24 @@ mod tests {
             account_pubkey,
             tx_result,
             maybe_nonce,
-            last_blockhash,
+            last_blockhash_with_fee_calculator,
         );
         expect_account == account
     }
 
     #[test]
     fn test_prepare_if_nonce_account_expected() {
-        let (pre_account_pubkey, pre_account, mut post_account, last_blockhash) =
-            create_accounts_prepare_if_nonce_account();
+        let (
+            pre_account_pubkey,
+            pre_account,
+            mut post_account,
+            last_blockhash,
+            last_fee_calculator,
+        ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
-        let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            blockhash: last_blockhash,
-            ..nonce::state::Data::default()
-        }));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::default()));
         expect_account.set_state(&data).unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
@@ -318,14 +325,14 @@ mod tests {
             &post_account_pubkey,
             &Ok(()),
             Some((&pre_account_pubkey, &pre_account)),
-            &last_blockhash,
+            &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
     }
 
     #[test]
     fn test_prepare_if_nonce_account_not_nonce_tx() {
-        let (pre_account_pubkey, _pre_account, _post_account, last_blockhash) =
+        let (pre_account_pubkey, _pre_account, _post_account, last_blockhash, last_fee_calculator) =
             create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
@@ -336,15 +343,20 @@ mod tests {
             &post_account_pubkey,
             &Ok(()),
             None,
-            &last_blockhash,
+            &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
     }
 
     #[test]
-    fn test_prepare_if_nonce_naccount_ot_nonce_pubkey() {
-        let (pre_account_pubkey, pre_account, mut post_account, last_blockhash) =
-            create_accounts_prepare_if_nonce_account();
+    fn test_prepare_if_nonce_account_not_nonce_pubkey() {
+        let (
+            pre_account_pubkey,
+            pre_account,
+            mut post_account,
+            last_blockhash,
+            last_fee_calculator,
+        ) = create_accounts_prepare_if_nonce_account();
 
         let expect_account = post_account.clone();
         // Wrong key
@@ -353,15 +365,20 @@ mod tests {
             &Pubkey::new(&[1u8; 32]),
             &Ok(()),
             Some((&pre_account_pubkey, &pre_account)),
-            &last_blockhash,
+            &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
     }
 
     #[test]
     fn test_prepare_if_nonce_account_tx_error() {
-        let (pre_account_pubkey, pre_account, mut post_account, last_blockhash) =
-            create_accounts_prepare_if_nonce_account();
+        let (
+            pre_account_pubkey,
+            pre_account,
+            mut post_account,
+            last_blockhash,
+            last_fee_calculator,
+        ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = pre_account.clone();
@@ -369,6 +386,7 @@ mod tests {
             .set_state(&Versions::new_current(State::Initialized(
                 nonce::state::Data {
                     blockhash: last_blockhash,
+                    fee_calculator: last_fee_calculator.clone(),
                     ..nonce::state::Data::default()
                 },
             )))
@@ -382,7 +400,7 @@ mod tests {
                 InstructionError::InvalidArgument.into(),
             )),
             Some((&pre_account_pubkey, &pre_account)),
-            &last_blockhash,
+            &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
     }
