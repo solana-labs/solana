@@ -6626,7 +6626,7 @@ mod tests {
 
         // Durable Nonce transfer
         let nonce_tx = Transaction::new_signed_with_payer(
-            &[
+            vec![
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &Pubkey::new_rand(), 100_000),
             ],
