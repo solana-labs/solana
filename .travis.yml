@@ -124,5 +124,4 @@ jobs:
         - source .travis/before_install.sh
 
       script:
-        - ../.travis/commitlint.sh
         - source .travis/script.sh

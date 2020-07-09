@@ -159,7 +159,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
   - `data: <string|object>`, data associated with the account, either as base-58 encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-  - `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -820,7 +820,7 @@ The result field will be an array of JSON objects, which will contain:
    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
    `data: <string|object>`, data associated with the account, either as base-58 encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-   - `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
+   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 

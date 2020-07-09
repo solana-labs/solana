@@ -26,19 +26,19 @@ fi
 
 PROD=
 if [[ -n $CI ]]; then
-  if [[ -n $TOKEN ]]; then
-    TOKEN_OPT="--token $TOKEN"
+  if [[ -n $VERCEL_TOKEN ]]; then
+    TOKEN_OPTION="--token $VERCEL_TOKEN"
   else
-    echo "TOKEN is undefined.  Needed for Vercel authentication."
+    echo "VERCEL_TOKEN is undefined.  Needed for Vercel authentication."
     exit 1
   fi
 
   # Only push to production domains for non-PR jobs, otherwise just staging
   if [[ -z $CI_PULL_REQUEST ]]; then
-    PROD="--prod"
+    PRODUCTION="--prod"
   fi
 fi
 
 ./set-vercel-project-name.sh
 
-vercel deploy . --local-config=vercel.json --confirm "$TOKEN_OPT" "$PROD"
+vercel deploy . --local-config=vercel.json --confirm "$TOKEN_OPTION" "$PRODUCTION"
