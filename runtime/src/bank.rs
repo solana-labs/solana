@@ -1578,7 +1578,7 @@ impl Bank {
             executed,
             loaded_accounts,
             &self.rent_collector,
-            &self.last_blockhash(),
+            &self.last_blockhash_with_fee_calculator(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -6681,7 +6681,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nonce_fee_calculator_never_changes() {
+    fn test_nonce_fee_calculator_updates() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
         genesis_config.rent.lamports_per_byte_year = 0;
         let mut bank = Arc::new(Bank::new(&genesis_config));
