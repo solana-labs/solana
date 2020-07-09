@@ -504,6 +504,7 @@ impl Tower {
                         // lockouts on stray last vote's ancestors in the lockout_intervals later
                         // in this fn.
                         stray_restored_ancestors = self.stray_restored_slots.clone().into_iter().collect();
+                        assert!(stray_restored_ancestors.contains(&last_voted_slot));
                         stray_restored_ancestors.remove(&last_voted_slot);
                         info!(
                             "returning restored slots {:?} because of stray last vote ({})...",
@@ -805,8 +806,15 @@ impl Tower {
         // iterate over votes in the newest => oldest order
         // bail out early if bad condition is found
         let mut checked_slot = None;
-        for vote in self.lockouts.votes.iter().rev() {
-            checked_slot = Some(vote.slot);
+        let mut voted_slots = if let Some(root) = self.lockouts.root_slot {
+            vec![root]
+        } else {
+            vec![]
+        };
+        voted_slots.extend(self.voted_slots());
+
+        for voted_slot in voted_slots.iter().rev() {
+            checked_slot = Some(*voted_slot);
             let check = slot_history.check(checked_slot.unwrap());
 
             if !anchored && check == Check::Found {
@@ -836,6 +844,15 @@ impl Tower {
             }
 
             retain_flags_for_each_vote_in_reverse.push(!anchored);
+        }
+
+        assert_eq!(
+            voted_slots.len(),
+            retain_flags_for_each_vote_in_reverse.len()
+        );
+
+        if self.lockouts.root_slot.is_some() {
+            retain_flags_for_each_vote_in_reverse.pop();
         }
 
         // All of votes in an unrooted warming-up vote account may cannot be anchored.
@@ -2735,6 +2752,28 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![5, 6]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
+    }
+
+    #[test]
+    fn test_expire_old_votes_on_load65() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.root_slot = Some(2);
+        tower.record_vote(3, Hash::default());
+        tower.record_vote(4, Hash::default());
+        tower.record_vote(5, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+
+        let replayed_root_slot = 2;
+        tower = tower
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.voted_slots(), vec![3, 4, 5]);
         assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
