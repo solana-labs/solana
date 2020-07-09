@@ -17,6 +17,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     clock::Slot,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     message::Message,
     native_loader, nonce,
@@ -664,7 +665,7 @@ impl Accounts {
         res: &[TransactionProcessResult],
         loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
-        last_blockhash: &Hash,
+        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -672,7 +673,7 @@ impl Accounts {
             res,
             loaded,
             rent_collector,
-            last_blockhash,
+            last_blockhash_with_fee_calculator,
         );
         self.accounts_db.store(slot, &accounts_to_store);
     }
@@ -698,7 +699,7 @@ impl Accounts {
         res: &'a [TransactionProcessResult],
         loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
-        last_blockhash: &Hash,
+        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), tx)) in loaded
@@ -734,7 +735,7 @@ impl Accounts {
                     key,
                     res,
                     maybe_nonce,
-                    last_blockhash,
+                    last_blockhash_with_fee_calculator,
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
@@ -1689,7 +1690,7 @@ mod tests {
             &loaders,
             &mut loaded,
             &rent_collector,
-            &Hash::default(),
+            &(Hash::default(), FeeCalculator::default()),
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
