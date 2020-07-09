@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -ex
 
+source ../ci/env.sh
+
 cd "$(dirname "$0")"
 
 # md check
@@ -23,22 +25,16 @@ npm run build
 if [[ -d .vercel ]]; then
   rm -r .vercel
 fi
-
-PROD=
-if [[ -n $CI ]]; then
-  if [[ -n $VERCEL_TOKEN ]]; then
-    TOKEN_OPTION="--token $VERCEL_TOKEN"
-  else
-    echo "VERCEL_TOKEN is undefined.  Needed for Vercel authentication."
-    exit 1
-  fi
-
-  # Only push to production domains for non-PR jobs, otherwise just staging
-  if [[ -z $CI_PULL_REQUEST ]]; then
-    PRODUCTION="--prod"
-  fi
-fi
-
 ./set-vercel-project-name.sh
 
-vercel deploy . --local-config=vercel.json --confirm "$TOKEN_OPTION" "$PRODUCTION"
+if [[ -n $CI ]]; then
+  if [[ -z $CI_PULL_REQUEST ]]; then
+    [[ -n $VERCEL_TOKEN ]] || {
+      echo "VERCEL_TOKEN is undefined.  Needed for Vercel authentication."
+      exit 1
+    }
+    vercel deploy . --local-config=vercel.json --confirm --token "$VERCEL_TOKEN" --prod
+  fi
+else
+  vercel deploy . --local-config=vercel.json
+fi
