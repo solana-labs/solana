@@ -301,7 +301,7 @@ mod test_bank_serialize {
         S: serde::Serializer,
     {
         let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
-        (SerializableBank::<future::Context> {
+        (SerializableBankAndStorage::<future::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
@@ -327,7 +327,7 @@ mod test_bank_serialize {
         S: serde::Serializer,
     {
         let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
-        (SerializableBank::<legacy::Context> {
+        (SerializableBankAndStorage::<legacy::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),

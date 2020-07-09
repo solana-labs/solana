@@ -260,7 +260,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: new(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
-           message_processor: new(),
+            message_processor: new(),
         }
     }
 }
