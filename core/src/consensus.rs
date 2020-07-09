@@ -770,7 +770,10 @@ impl Tower {
         if slot_history.check(last_voted_slot) == Check::TooOld {
             // We could try hard to anchor with other older votes, but opt to simplify the
             // following logic
-            return Err(TowerError::TooOld(last_voted_slot, slot_history.oldest()));
+            return Err(TowerError::TooOldTower(
+                last_voted_slot,
+                slot_history.oldest(),
+            ));
         }
 
         // only divergent slots will be retained
@@ -816,8 +819,10 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.push(!anchored);
         }
 
+        // All of votes in an unrooted warming-up vote account may cannot be anchored.
+        // In that case, just continue; otherwise check for too old slot history.
         if !anchored && checked_slot.unwrap() > slot_history.newest() {
-            return Err(TowerError::TooNew(
+            return Err(TowerError::TooOldSlotHistory(
                 checked_slot.unwrap(),
                 slot_history.newest(),
             ));
@@ -836,7 +841,7 @@ impl Tower {
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
-            info!("Some restored votes were on different fork or are future votes on unrooted slots: {:?}!", self.voted_slots());
+            info!("Some restored votes were on different fork or are upcoming votes on unrooted slots: {:?}!", self.voted_slots());
 
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
@@ -962,10 +967,10 @@ pub enum TowerError {
     WrongTower(String),
 
     #[error("The tower is too old: newest slot in tower ({0}) << oldest slot in available history ({1})")]
-    TooOld(Slot, Slot),
+    TooOldTower(Slot, Slot),
 
-    #[error("The tower is too new: oldest slot in tower ({0}) >> newest slot in available history ({1})")]
-    TooNew(Slot, Slot),
+    #[error("The slot history is too old: oldest slot in tower ({0}) >> newest slot in available history ({1})")]
+    TooOldSlotHistory(Slot, Slot),
 
     #[error("The tower is inconsistent with slot history: {0}")]
     InconsistentWithSlotHistory(String),
@@ -2583,7 +2588,7 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(2, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is too new: oldest slot in tower (100) >> newest slot in available history (2)"
+            "The slot history is too old: oldest slot in tower (100) >> newest slot in available history (2)"
         );
     }
 
