@@ -1641,6 +1641,7 @@ impl Blockstore {
                         slot_transaction_iterator,
                     ),
                     rewards,
+                    block_time: None, // See https://github.com/solana-labs/solana/issues/10089
                 };
                 return Ok(block);
             }
@@ -5244,6 +5245,7 @@ pub mod tests {
             blockhash: blockhash.to_string(),
             previous_blockhash: Hash::default().to_string(),
             rewards: vec![],
+            block_time: None,
         };
         // The previous_blockhash of `expected_block` is default because its parent slot is a
         // root, but empty of entries. This is special handling for snapshot root slots.
@@ -5265,6 +5267,7 @@ pub mod tests {
             blockhash: blockhash.to_string(),
             previous_blockhash: blockhash.to_string(),
             rewards: vec![],
+            block_time: None,
         };
         assert_eq!(confirmed_block, expected_block);
 
