@@ -2,7 +2,7 @@
 extern crate serde_derive;
 
 use solana_sdk::{
-    clock::Slot,
+    clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     message::MessageHeader,
     transaction::{Result, Transaction, TransactionError},
@@ -91,6 +91,7 @@ pub struct ConfirmedBlock {
     pub parent_slot: Slot,
     pub transactions: Vec<TransactionWithStatusMeta>,
     pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
