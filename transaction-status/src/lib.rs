@@ -132,6 +132,8 @@ pub struct TransactionWithStatusMeta {
 pub enum TransactionEncoding {
     Binary,
     Json,
+    JsonParsed, // same as Json in 1.1
+    Raw,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -139,42 +141,45 @@ pub enum TransactionEncoding {
 pub enum EncodedTransaction {
     Binary(String),
     Json(RpcTransaction),
+    Raw(Transaction),
 }
 
 impl EncodedTransaction {
     pub fn encode(transaction: Transaction, encoding: TransactionEncoding) -> Self {
-        if encoding == TransactionEncoding::Json {
-            EncodedTransaction::Json(RpcTransaction {
-                signatures: transaction
-                    .signatures
-                    .iter()
-                    .map(|sig| sig.to_string())
-                    .collect(),
-                message: RpcMessage {
-                    header: transaction.message.header,
-                    account_keys: transaction
-                        .message
-                        .account_keys
+        match encoding {
+            TransactionEncoding::Json | TransactionEncoding::JsonParsed => {
+                EncodedTransaction::Json(RpcTransaction {
+                    signatures: transaction
+                        .signatures
                         .iter()
-                        .map(|pubkey| pubkey.to_string())
+                        .map(|sig| sig.to_string())
                         .collect(),
-                    recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                    instructions: transaction
-                        .message
-                        .instructions
-                        .iter()
-                        .map(|instruction| RpcCompiledInstruction {
-                            program_id_index: instruction.program_id_index,
-                            accounts: instruction.accounts.clone(),
-                            data: bs58::encode(instruction.data.clone()).into_string(),
-                        })
-                        .collect(),
-                },
-            })
-        } else {
-            EncodedTransaction::Binary(
+                    message: RpcMessage {
+                        header: transaction.message.header,
+                        account_keys: transaction
+                            .message
+                            .account_keys
+                            .iter()
+                            .map(|pubkey| pubkey.to_string())
+                            .collect(),
+                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
+                        instructions: transaction
+                            .message
+                            .instructions
+                            .iter()
+                            .map(|instruction| RpcCompiledInstruction {
+                                program_id_index: instruction.program_id_index,
+                                accounts: instruction.accounts.clone(),
+                                data: bs58::encode(instruction.data.clone()).into_string(),
+                            })
+                            .collect(),
+                    },
+                })
+            }
+            TransactionEncoding::Binary => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
-            )
+            ),
+            TransactionEncoding::Raw => EncodedTransaction::Raw(transaction),
         }
     }
     pub fn decode(&self) -> Option<Transaction> {
@@ -184,6 +189,7 @@ impl EncodedTransaction {
                 .into_vec()
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+            EncodedTransaction::Raw(transaction) => Some(transaction.clone()),
         }
     }
 }
