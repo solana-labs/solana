@@ -1,5 +1,7 @@
 //! @brief Syscall stubs when building for non-BPF targets
 
+#![cfg(feature = "program")]
+
 #[cfg(not(target_arch = "bpf"))]
 fn print_line_to_stdout(_message: &str) {
     #[cfg(not(feature = "program"))]
