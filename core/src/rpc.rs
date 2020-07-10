@@ -3568,7 +3568,7 @@ pub mod tests {
         block_commitment_cache
             .write()
             .unwrap()
-            .set_largest_confirmed_root(std::u64::MAX);
+            .set_highest_confirmed_root(std::u64::MAX);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,{}]}}"#,
             MAX_GET_CONFIRMED_BLOCKS_RANGE
