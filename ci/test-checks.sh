@@ -27,7 +27,7 @@ echo --- build environment
 )
 
 export RUST_BACKTRACE=1
-export RUSTFLAGS="-D warnings"
+export RUSTFLAGS="-D warnings -A incomplete_features"
 
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
