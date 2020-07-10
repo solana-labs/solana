@@ -2,6 +2,7 @@
 //
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
+use rand::{thread_rng, Rng};
 use solana_runtime::bank_forks::BankForks;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -39,7 +40,9 @@ impl AccountsBackgroundService {
                 consumed_budget = bank
                     .process_stale_slot_with_budget(consumed_budget, SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
-                if bank.block_height() - last_cleaned_slot > CLEAN_INTERVAL_SLOTS {
+                if bank.block_height() - last_cleaned_slot
+                    > (CLEAN_INTERVAL_SLOTS + thread_rng().gen_range(0, 10))
+                {
                     bank.clean_accounts();
                     last_cleaned_slot = bank.block_height();
                 }
