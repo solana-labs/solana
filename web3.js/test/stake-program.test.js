@@ -142,7 +142,7 @@ test('split', () => {
   expect(transaction.instructions).toHaveLength(2);
   const [systemInstruction, stakeInstruction] = transaction.instructions;
   const systemParams = {
-    fromPubkey: stakePubkey,
+    fromPubkey: authorizedPubkey,
     newAccountPubkey: splitStakePubkey,
     lamports: 0,
     space: StakeProgram.space,
