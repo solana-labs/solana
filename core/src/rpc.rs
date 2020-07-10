@@ -17,11 +17,7 @@ use jsonrpc_derive::rpc;
 use solana_client::{
     rpc_config::*,
     rpc_request::{
-<<<<<<< HEAD
-=======
-        DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
->>>>>>> aef6bf272... getConfirmedBlocks now has an upper limit on slot range
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::*,
@@ -3375,14 +3371,9 @@ pub mod tests {
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
-<<<<<<< HEAD
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
-        let res = io.handle_request_sync(&req, meta);
-=======
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9,11]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
->>>>>>> aef6bf272... getConfirmedBlocks now has an upper limit on slot range
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
