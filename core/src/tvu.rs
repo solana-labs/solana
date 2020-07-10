@@ -22,7 +22,6 @@ use crossbeam_channel::unbounded;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
-    entry_verify_service::EntryVerifyService,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
@@ -34,7 +33,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
@@ -52,7 +51,6 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
-    entry_verify_service: EntryVerifyService,
 }
 
 pub struct Sockets {
@@ -189,9 +187,6 @@ impl Tvu {
             rewards_recorder_sender,
         };
 
-        let (slot_sender, slot_receiver) = channel();
-        let verified_results = Arc::new(RwLock::new(HashMap::new()));
-
         let replay_stage = ReplayStage::new(
             replay_stage_config,
             blockstore.clone(),
@@ -203,12 +198,7 @@ impl Tvu {
             cluster_slots,
             retransmit_slots_sender,
             duplicate_slots_reset_receiver,
-            verified_results.clone(),
-            slot_sender,
         );
-
-        let entry_verify_service =
-            EntryVerifyService::new(slot_receiver, bank_forks.clone(), verified_results, &exit);
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -229,7 +219,6 @@ impl Tvu {
             ledger_cleanup_service,
             accounts_background_service,
             accounts_hash_verifier,
-            entry_verify_service,
         }
     }
 
@@ -243,7 +232,6 @@ impl Tvu {
         self.accounts_background_service.join()?;
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
-        self.entry_verify_service.join()?;
         Ok(())
     }
 }

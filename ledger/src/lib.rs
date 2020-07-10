@@ -7,7 +7,6 @@ pub mod blockstore_db;
 pub mod blockstore_meta;
 pub mod blockstore_processor;
 pub mod entry;
-pub mod entry_verify_service;
 pub mod erasure;
 pub mod genesis_utils;
 pub mod leader_schedule;
@@ -19,7 +18,6 @@ pub mod rooted_slot_iterator;
 pub mod shred;
 pub mod sigverify_shreds;
 pub mod staking_utils;
-pub mod unverified_blocks;
 
 #[macro_use]
 extern crate solana_metrics;

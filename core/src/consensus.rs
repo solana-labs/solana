@@ -696,19 +696,28 @@ pub mod test {
         pub vote_pubkeys: Vec<Pubkey>,
         pub bank_forks: RwLock<BankForks>,
         pub progress: ProgressMap,
-        pub heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
+        pub heaviest_subtree_fork_choice: RwLock<HeaviestSubtreeForkChoice>,
+    }
+
+    struct InitState {
+        validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
+        node_pubkeys: Vec<Pubkey>,
+        vote_pubkeys: Vec<Pubkey>,
+        bank_forks: BankForks,
+        progress: ProgressMap,
+        heaviest_subtree_fork_choice: RwLock<HeaviestSubtreeForkChoice>,
     }
 
     impl VoteSimulator {
         pub(crate) fn new(num_keypairs: usize) -> Self {
-            let (
+            let InitState {
                 validator_keypairs,
                 node_pubkeys,
                 vote_pubkeys,
                 bank_forks,
                 progress,
                 heaviest_subtree_fork_choice,
-            ) = Self::init_state(num_keypairs);
+            } = Self::init_state(num_keypairs);
             Self {
                 validator_keypairs,
                 node_pubkeys,
@@ -759,6 +768,8 @@ pub mod test {
                 }
                 new_bank.freeze();
                 self.heaviest_subtree_fork_choice
+                    .write()
+                    .unwrap()
                     .add_new_leaf_slot(new_bank.slot(), Some(new_bank.parent_slot()));
                 self.bank_forks.write().unwrap().insert(new_bank);
                 walk.forward();
@@ -794,7 +805,7 @@ pub mod test {
                 &ClusterSlots::default(),
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
-                &mut self.heaviest_subtree_fork_choice,
+                &self.heaviest_subtree_fork_choice,
                 &mut BankWeightForkChoice::default(),
             );
 
@@ -841,7 +852,7 @@ pub mod test {
                 &None,
                 &mut PubkeyReferences::default(),
                 None,
-                &mut self.heaviest_subtree_fork_choice,
+                &self.heaviest_subtree_fork_choice,
             )
         }
 
@@ -919,17 +930,8 @@ pub mod test {
             false
         }
 
-        fn init_state(
-            num_keypairs: usize,
-        ) -> (
-            HashMap<Pubkey, ValidatorVoteKeypairs>,
-            Vec<Pubkey>,
-            Vec<Pubkey>,
-            BankForks,
-            ProgressMap,
-            HeaviestSubtreeForkChoice,
-        ) {
-            let keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
+        fn init_state(num_keypairs: usize) -> InitState {
+            let validator_keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
                 let node_keypair = Keypair::new();
                 let vote_keypair = Keypair::new();
                 let stake_keypair = Keypair::new();
@@ -941,25 +943,25 @@ pub mod test {
             })
             .take(num_keypairs)
             .collect();
-            let node_pubkeys: Vec<_> = keypairs
+            let node_pubkeys: Vec<_> = validator_keypairs
                 .values()
                 .map(|keys| keys.node_keypair.pubkey())
                 .collect();
-            let vote_pubkeys: Vec<_> = keypairs
+            let vote_pubkeys: Vec<_> = validator_keypairs
                 .values()
                 .map(|keys| keys.vote_keypair.pubkey())
                 .collect();
 
             let (bank_forks, progress, heaviest_subtree_fork_choice) =
-                initialize_state(&keypairs, 10_000);
-            (
-                keypairs,
+                initialize_state(&validator_keypairs, 10_000);
+            InitState {
+                validator_keypairs,
                 node_pubkeys,
                 vote_pubkeys,
                 bank_forks,
                 progress,
                 heaviest_subtree_fork_choice,
-            )
+            }
         }
     }
 
@@ -967,7 +969,7 @@ pub mod test {
     pub(crate) fn initialize_state(
         validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
         stake: u64,
-    ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
+    ) -> (BankForks, ProgressMap, RwLock<HeaviestSubtreeForkChoice>) {
         let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
             genesis_config,
@@ -990,7 +992,11 @@ pub mod test {
         let bank_forks = BankForks::new(bank0);
         let heaviest_subtree_fork_choice =
             HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
-        (bank_forks, progress, heaviest_subtree_fork_choice)
+        (
+            bank_forks,
+            progress,
+            RwLock::new(heaviest_subtree_fork_choice),
+        )
     }
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {

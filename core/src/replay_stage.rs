@@ -8,6 +8,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
     consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
+    entry_verify_service::EntryVerifyService,
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -18,12 +19,12 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
+use crossbeam_channel::unbounded;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::{Entry, VerifyRecyclers},
-    entry_verify_service::VerifySlotSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
@@ -207,6 +208,7 @@ impl ReplayTiming {
 pub struct ReplayStage {
     t_replay: JoinHandle<Result<()>>,
     commitment_service: AggregateCommitmentService,
+    entry_verify_service: EntryVerifyService,
 }
 
 impl ReplayStage {
@@ -222,8 +224,6 @@ impl ReplayStage {
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
         duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
-        slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
-        verify_slot_sender: VerifySlotSender,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -247,6 +247,37 @@ impl ReplayStage {
             subscriptions.clone(),
         );
 
+        // Read BankForks state
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        frozen_banks.sort_by_key(|bank| bank.slot());
+        let root_bank = bank_forks.read().unwrap().root_bank().clone();
+        let root = root_bank.slot();
+
+        // Create the fork choice structure
+        let unlock_heaviest_subtree_fork_choice_slot =
+            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
+        let heaviest_subtree_fork_choice = Arc::new(RwLock::new(
+            HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks),
+        ));
+
+        // Start the entry verification service
+        let slot_verify_results = Arc::new(RwLock::new(HashMap::new()));
+        let (verify_slot_sender, verify_slot_receiver) = unbounded();
+        let entry_verify_service = EntryVerifyService::new(
+            verify_slot_receiver,
+            bank_forks.clone(),
+            slot_verify_results.clone(),
+            &exit,
+            heaviest_subtree_fork_choice.clone(),
+        );
+
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -255,15 +286,6 @@ impl ReplayStage {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = ProgressMap::default();
-                let mut frozen_banks: Vec<_> = bank_forks
-                    .read()
-                    .unwrap()
-                    .frozen_banks()
-                    .values()
-                    .cloned()
-                    .collect();
-
-                frozen_banks.sort_by_key(|bank| bank.slot());
 
                 // Initialize progress map with any root banks
                 for bank in &frozen_banks {
@@ -284,18 +306,13 @@ impl ReplayStage {
                         .unwrap()
                         .insert(bank.slot(), true);
                 }
-                let root_bank = bank_forks.read().unwrap().root_bank().clone();
-                let root = root_bank.slot();
-                let unlock_heaviest_subtree_fork_choice_slot =
-                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
-                let mut heaviest_subtree_fork_choice =
-                    HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
-                let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
+                let heaviest_bank = if root >= unlock_heaviest_subtree_fork_choice_slot {
                     bank_forks
                         .read()
                         .unwrap()
-                        .get(heaviest_subtree_fork_choice.best_overall_slot())
+                        .get(heaviest_subtree_fork_choice.read().unwrap().best_overall_slot())
                         .expect(
                             "The best overall slot must be one of `frozen_banks` which all
                     exist in bank_forks",
@@ -311,6 +328,7 @@ impl ReplayStage {
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
                 let mut entries_map = HashMap::new();
+
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -348,7 +366,7 @@ impl ReplayStage {
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
-                        &mut heaviest_subtree_fork_choice,
+                        &heaviest_subtree_fork_choice,
                         &subscriptions,
                         &mut entries_map,
                     );
@@ -395,7 +413,7 @@ impl ReplayStage {
                         &cluster_slots,
                         &bank_forks,
                         &mut all_pubkeys,
-                        &mut heaviest_subtree_fork_choice,
+                        &heaviest_subtree_fork_choice,
                         &mut bank_weight_fork_choice,
                     );
                     compute_bank_stats_time.stop();
@@ -417,7 +435,7 @@ impl ReplayStage {
                         leader_id != my_pubkey
                         {
                             let entries = entries_map.remove(&slot).unwrap();
-                            unverified_slots.push((slot, entries, fork_stats.fork_weight));
+                            unverified_slots.push((slot, entries));
                         }
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
@@ -439,14 +457,19 @@ impl ReplayStage {
                     compute_slot_stats_time.stop();
 
                     let mut select_forks_time = Measure::start("select_forks_time");
-                    let fork_choice: &mut dyn ForkChoice =
-                        if forks_root > unlock_heaviest_subtree_fork_choice_slot {
-                            &mut heaviest_subtree_fork_choice
-                        } else {
-                            &mut bank_weight_fork_choice
-                        };
-                    let (heaviest_bank, heaviest_bank_on_same_voted_fork) = fork_choice
-                        .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
+                    let (heaviest_bank, heaviest_bank_on_same_voted_fork) =
+                    {
+                        let mut w_heaviest_subtree_fork_choice;
+                        let fork_choice: &mut dyn ForkChoice =
+                            if forks_root >= unlock_heaviest_subtree_fork_choice_slot {
+                                w_heaviest_subtree_fork_choice = Some(heaviest_subtree_fork_choice.write().unwrap());
+                                &mut **(w_heaviest_subtree_fork_choice.as_mut().unwrap())
+                            } else {
+                                &mut bank_weight_fork_choice
+                            };
+                        fork_choice
+                            .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks)
+                    };
                     select_forks_time.stop();
 
                     Self::report_memory(&allocated, "select_fork", start);
@@ -527,7 +550,7 @@ impl ReplayStage {
                                 &mut all_pubkeys,
                                 &subscriptions,
                                 &block_commitment_cache,
-                                &mut heaviest_subtree_fork_choice,
+                                &heaviest_subtree_fork_choice,
                             )?;
                         };
                         voting_time.as_mut().unwrap().stop();
@@ -678,6 +701,7 @@ impl ReplayStage {
         Self {
             t_replay,
             commitment_service,
+            entry_verify_service,
         }
     }
 
@@ -1182,7 +1206,7 @@ impl ReplayStage {
         all_pubkeys: &mut PubkeyReferences,
         subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
-        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1387,7 +1411,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
-        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
         subscriptions: &Arc<RpcSubscriptions>,
         entries_map: &mut HashMap<Slot, Vec<Entry>>,
     ) -> bool {
@@ -1442,6 +1466,8 @@ impl ReplayStage {
                 info!("bank frozen: {}", bank.slot());
                 bank.freeze();
                 heaviest_subtree_fork_choice
+                    .write()
+                    .unwrap()
                     .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
                 subscriptions.notify_frozen(bank.slot());
             } else {
@@ -1468,7 +1494,7 @@ impl ReplayStage {
         cluster_slots: &ClusterSlots,
         bank_forks: &RwLock<BankForks>,
         all_pubkeys: &mut PubkeyReferences,
-        heaviest_subtree_fork_choice: &mut dyn ForkChoice,
+        heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
         bank_weight_fork_choice: &mut dyn ForkChoice,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -1491,12 +1517,10 @@ impl ReplayStage {
                         &ancestors,
                         all_pubkeys,
                     );
-                    heaviest_subtree_fork_choice.compute_bank_stats(
-                        &bank,
-                        tower,
-                        progress,
-                        &computed_bank_state,
-                    );
+                    heaviest_subtree_fork_choice
+                        .write()
+                        .unwrap()
+                        .compute_bank_stats(&bank, tower, progress, &computed_bank_state);
                     bank_weight_fork_choice.compute_bank_stats(
                         &bank,
                         tower,
@@ -1897,7 +1921,7 @@ impl ReplayStage {
         accounts_hash_sender: &Option<AccountsPackageSender>,
         all_pubkeys: &mut PubkeyReferences,
         highest_confirmed_root: Option<Slot>,
-        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
         bank_forks.write().unwrap().set_root(
@@ -1911,7 +1935,10 @@ impl ReplayStage {
             all_pubkeys.purge();
         }
         progress.handle_new_root(&r_bank_forks);
-        heaviest_subtree_fork_choice.set_root(new_root);
+        heaviest_subtree_fork_choice
+            .write()
+            .unwrap()
+            .set_root(new_root);
     }
 
     fn generate_new_bank_forks(
@@ -2026,7 +2053,7 @@ impl ReplayStage {
             OperatingMode::Development => 0,
             OperatingMode::Stable => std::u64::MAX / 2,
             // Epoch 63
-            OperatingMode::Preview => 21_692_256,
+            OperatingMode::Preview => 0,
         }
     }
 
@@ -2035,12 +2062,13 @@ impl ReplayStage {
             OperatingMode::Development => 0,
             OperatingMode::Stable => std::u64::MAX / 2,
             // Epoch 63
-            OperatingMode::Preview => 21_692_256,
+            OperatingMode::Preview => 0,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
         self.commitment_service.join()?;
+        self.entry_verify_service.join()?;
         self.t_replay.join().map(|_| ())
     }
 }
@@ -2055,7 +2083,6 @@ pub(crate) mod tests {
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
     };
-    use crossbeam_channel::unbounded;
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
@@ -2262,7 +2289,7 @@ pub(crate) mod tests {
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
         let root = 3;
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
+        let heaviest_subtree_fork_choice = RwLock::new(HeaviestSubtreeForkChoice::new(root));
         let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
@@ -2280,7 +2307,7 @@ pub(crate) mod tests {
             &None,
             &mut PubkeyReferences::default(),
             None,
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
@@ -2313,7 +2340,7 @@ pub(crate) mod tests {
             root,
         );
         bank_forks.write().unwrap().insert(root_bank);
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
+        let heaviest_subtree_fork_choice = RwLock::new(HeaviestSubtreeForkChoice::new(root));
         let mut progress = ProgressMap::default();
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
@@ -2325,7 +2352,7 @@ pub(crate) mod tests {
             &None,
             &mut PubkeyReferences::default(),
             Some(confirmed_root),
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
@@ -2381,7 +2408,7 @@ pub(crate) mod tests {
             let mut bad_tx =
                 system_transaction::transfer(&genesis_keypair, &keypair2.pubkey(), 2, blockhash);
             // Make wrong signature so the entry causes a transaction verification failure
-            bad_tx.signatures[0] = Signature::new(&vec![1; 64]);
+            bad_tx.signatures[0] = Signature::new(&[1; 64]);
             let entry =
                 entry::next_entry(&blockhash, hashes_per_tick.saturating_sub(1), vec![bad_tx]);
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
@@ -2832,7 +2859,7 @@ pub(crate) mod tests {
             ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
-        let (bank_forks, mut progress, mut heaviest_subtree_fork_choice) =
+        let (bank_forks, mut progress, heaviest_subtree_fork_choice) =
             initialize_state(&keypairs, 10_000);
         let bank0 = bank_forks.get(0).unwrap().clone();
         let my_keypairs = keypairs.get(&node_pubkey).unwrap();
@@ -2870,7 +2897,7 @@ pub(crate) mod tests {
             &ClusterSlots::default(),
             &bank_forks,
             &mut PubkeyReferences::default(),
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
         );
         assert_eq!(newly_computed, vec![0]);
@@ -2913,7 +2940,7 @@ pub(crate) mod tests {
             &ClusterSlots::default(),
             &bank_forks,
             &mut PubkeyReferences::default(),
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
         );
 
@@ -2948,7 +2975,7 @@ pub(crate) mod tests {
             &ClusterSlots::default(),
             &bank_forks,
             &mut PubkeyReferences::default(),
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
         );
         // No new stats should have been computed
@@ -2965,7 +2992,8 @@ pub(crate) mod tests {
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
         vote_simulator.fill_bank_forks(forks.clone(), &HashMap::new());
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+        let heaviest_subtree_fork_choice =
+            RwLock::new(HeaviestSubtreeForkChoice::new_from_tree(forks));
         let mut frozen_banks: Vec<_> = vote_simulator
             .bank_forks
             .read()
@@ -2986,16 +3014,24 @@ pub(crate) mod tests {
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
-            &mut heaviest_subtree_fork_choice,
+            &heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
         );
 
         assert_eq!(
-            heaviest_subtree_fork_choice.stake_voted_subtree(1).unwrap(),
-            heaviest_subtree_fork_choice.stake_voted_subtree(2).unwrap()
+            heaviest_subtree_fork_choice
+                .read()
+                .unwrap()
+                .stake_voted_subtree(1)
+                .unwrap(),
+            heaviest_subtree_fork_choice
+                .read()
+                .unwrap()
+                .stake_voted_subtree(2)
+                .unwrap()
         );
 
-        let (heaviest_bank, _) = heaviest_subtree_fork_choice.select_forks(
+        let (heaviest_bank, _) = heaviest_subtree_fork_choice.read().unwrap().select_forks(
             &frozen_banks,
             &tower,
             &vote_simulator.progress,
@@ -3060,7 +3096,7 @@ pub(crate) mod tests {
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
-            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &vote_simulator.heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
         );
 
@@ -3083,6 +3119,8 @@ pub(crate) mod tests {
             assert_eq!(
                 vote_simulator
                     .heaviest_subtree_fork_choice
+                    .read()
+                    .unwrap()
                     .best_slot(bank.slot())
                     .unwrap(),
                 3

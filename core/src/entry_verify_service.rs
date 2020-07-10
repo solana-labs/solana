@@ -1,20 +1,21 @@
 use crate::{
-    entry::{Entry, EntrySlice, VerifyOption, VerifyRecyclers},
-    unverified_blocks::UnverifiedBlocks,
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    repair_weighted_traversal::RepairWeightTraversal, unverified_blocks::UnverifiedBlocks,
 };
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use solana_ledger::entry::{Entry, EntrySlice, VerifyOption, VerifyRecyclers};
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::Slot;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{Receiver, RecvTimeoutError, Sender},
     sync::Arc,
     sync::RwLock,
     thread::{self, Builder, JoinHandle},
 };
 
-pub type VerifySlotSender = Sender<Vec<(Slot, Vec<Entry>, u128)>>;
-pub type VerifySlotReceiver = Receiver<Vec<(Slot, Vec<Entry>, u128)>>;
+pub type VerifySlotSender = Sender<Vec<(Slot, Vec<Entry>)>>;
+pub type VerifySlotReceiver = Receiver<Vec<(Slot, Vec<Entry>)>>;
 
 pub struct EntryVerifyService {
     t_verify: JoinHandle<()>,
@@ -26,6 +27,7 @@ impl EntryVerifyService {
         bank_forks: Arc<RwLock<BankForks>>,
         slot_verify_results: Arc<RwLock<HashMap<Slot, bool>>>,
         exit: &Arc<AtomicBool>,
+        heaviest_subtree_fork_choice: Arc<RwLock<HeaviestSubtreeForkChoice>>,
     ) -> Self {
         let exit = exit.clone();
 
@@ -43,6 +45,7 @@ impl EntryVerifyService {
                         &bank_forks,
                         &slot_verify_results,
                         &mut unverified_blocks,
+                        &heaviest_subtree_fork_choice,
                     ) {
                         match e {
                             RecvTimeoutError::Disconnected => break,
@@ -60,12 +63,17 @@ impl EntryVerifyService {
         bank_forks: &Arc<RwLock<BankForks>>,
         slot_verify_results: &Arc<RwLock<HashMap<Slot, bool>>>,
         unverified_blocks: &mut UnverifiedBlocks,
+        // Warning: Do not grab BankForks lock and then try to grab this
+        // lock (must grab this lock first). Otherwise will deadlock with
+        // ReplayStage's `fork_choice.select_forks()` when `fork_choice`
+        // is of type `HeaviestSubtreeForkChoice`.
+        heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
     ) -> Result<(), RecvTimeoutError> {
         unverified_blocks.set_root(&bank_forks);
 
         while let Ok(slot_entries) = slot_receiver.try_recv() {
-            for (slot, entries, weight) in slot_entries {
-                // If slot bank doesn't exist, then it must have been
+            for (slot, entries) in slot_entries {
+                // If the slot's bank doesn't exist, then it must have been
                 // pruned by `set_root` and verification is no longer necessary
                 {
                     // Hold the lock so that `set_root` doesn't get called
@@ -76,23 +84,21 @@ impl EntryVerifyService {
                             "Unverified slot can't be the root, so
                         parent must exist",
                         );
-                        let parent_slot = parent_bank.slot();
                         let parent_hash = parent_bank.last_blockhash();
-                        unverified_blocks.add_unverified_block(
-                            slot,
-                            parent_slot,
-                            entries,
-                            weight,
-                            parent_hash,
-                        );
+                        unverified_blocks.add_unverified_block(slot, entries, parent_hash);
                     }
                 }
             }
         }
 
-        if let Some((heaviest_slot, heaviest_block_info)) =
-            unverified_blocks.pop_heaviest_ancestor()
-        {
+        let best_unverified = {
+            let r_heaviest_subtree_fork_choice = heaviest_subtree_fork_choice.read().unwrap();
+            // Based on the traversal, should always choose parents before children
+            let weighted_traversal = RepairWeightTraversal::new(&r_heaviest_subtree_fork_choice);
+            unverified_blocks.get_heaviest_ancestor(weighted_traversal)
+        };
+
+        if let Some((heaviest_slot, heaviest_block_info)) = best_unverified {
             let mut verifier = heaviest_block_info.entries.start_verify(
                 &heaviest_block_info.parent_hash,
                 VerifyRecyclers::default(),
