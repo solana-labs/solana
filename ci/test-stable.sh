@@ -16,7 +16,7 @@ testName=$(basename "$0" .sh)
 source ci/rust-version.sh stable
 
 export RUST_BACKTRACE=1
-export RUSTFLAGS="-D warnings -A incomplete_features"
+export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
 
 # Clear cached json keypair files
