@@ -9,7 +9,7 @@ pub mod parse_instruction;
 use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
 use serde_json::Value;
 use solana_sdk::{
-    clock::Slot,
+    clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     instruction::CompiledInstruction,
     message::MessageHeader,
@@ -118,6 +118,7 @@ pub struct ConfirmedBlock {
     pub parent_slot: Slot,
     pub transactions: Vec<TransactionWithStatusMeta>,
     pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

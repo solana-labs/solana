@@ -314,6 +314,7 @@ The result field will be an object with the following fields:
   * `rewards: <array>` - an array of JSON objects containing:
     * `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
     * `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+  * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
 
 #### Example:
 
