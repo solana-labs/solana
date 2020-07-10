@@ -13,7 +13,7 @@ use solana_sdk::{
     instruction::Instruction,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
-    slot_history::SlotHistory,
+    slot_history::{Check, SlotHistory},
 };
 use solana_vote_program::{
     vote_instruction,
@@ -757,7 +757,7 @@ impl Tower {
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
     // tower lockouts may need adjustment
     pub fn adjust_lockouts_after_replay(
-        mut self,
+        self,
         replayed_root_slot: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
@@ -786,8 +786,6 @@ impl Tower {
             )
         );
 
-        use solana_sdk::slot_history::Check;
-
         // return immediately if votes are empty...
         if self.lockouts.votes.is_empty() {
             assert_eq!(self.root(), None);
@@ -804,30 +802,41 @@ impl Tower {
             ));
         }
 
-        // only divergent slots will be retained
+        self.do_adjust_lockouts_after_replay(replayed_root_slot, slot_history)
+    }
+
+    fn do_adjust_lockouts_after_replay(
+        mut self,
+        replayed_root_slot: Slot,
+        slot_history: &SlotHistory,
+    ) -> Result<Self> {
+        // retained slots will be consisted only from divergent slots
         let mut retain_flags_for_each_vote_in_reverse: Vec<_> =
             Vec::with_capacity(self.lockouts.votes.len());
+
         let mut still_in_future = true;
         let mut past_outside_history = false;
-        let mut anchored = false;
-
-        // iterate over votes in the newest => oldest order
-        // bail out early if bad condition is found
         let mut checked_slot = None;
-        let mut voted_slots = if let Some(root) = self.lockouts.root_slot {
+        let mut anchored_slot = None;
+
+        let mut root_checked = false;
+        let mut checked_slots = if let Some(root) = self.lockouts.root_slot {
+            root_checked = true;
             vec![root]
         } else {
             vec![]
         };
-        voted_slots.extend(self.voted_slots());
+        checked_slots.extend(self.voted_slots());
 
-        for voted_slot in voted_slots.iter().rev() {
+        // iterate over votes in the newest => oldest order
+        // bail out early if bad condition is found
+        for voted_slot in checked_slots.iter().rev() {
             checked_slot = Some(*voted_slot);
             let check = slot_history.check(checked_slot.unwrap());
 
-            if !anchored && check == Check::Found {
-                anchored = true;
-            } else if anchored && check == Check::NotFound {
+            if anchored_slot.is_none() && check == Check::Found {
+                anchored_slot = checked_slot;
+            } else if anchored_slot.is_some() && check == Check::NotFound {
                 // this can't happen unless we're fed with bogus snapshot
                 return Err(TowerError::InconsistentWithSlotHistory(
                     "diverged ancestor?".to_owned(),
@@ -851,23 +860,25 @@ impl Tower {
                 ));
             }
 
-            retain_flags_for_each_vote_in_reverse.push(!anchored);
+            retain_flags_for_each_vote_in_reverse.push(anchored_slot.is_none());
         }
 
         assert_eq!(
-            voted_slots.len(),
+            checked_slots.len(),
             retain_flags_for_each_vote_in_reverse.len()
         );
 
-        if self.lockouts.root_slot.is_some() {
+        if root_checked {
             retain_flags_for_each_vote_in_reverse.pop();
         }
 
         // All of votes in an unrooted warming-up vote account may not be anchored.
-        // In that case, just continue; otherwise check for too old slot history.
-        if !anchored && checked_slot.unwrap() > slot_history.newest() {
+        // In that case, just continue; otherwise check for too old slot history error.
+        let oldest_slot_in_tower = checked_slot.unwrap();
+        let within_range = oldest_slot_in_tower <= slot_history.newest();
+        if root_checked && anchored_slot.is_none() && !within_range {
             return Err(TowerError::TooOldSlotHistory(
-                checked_slot.unwrap(),
+                oldest_slot_in_tower,
                 slot_history.newest(),
             ));
         }
@@ -897,8 +908,14 @@ impl Tower {
                 self.last_vote.last_voted_slot().unwrap(),
                 *self.voted_slots().last().unwrap()
             );
+            if let Some(anchored_slot) = anchored_slot {
+                self.stray_restored_slots = std::iter::once(anchored_slot)
+                    .chain(self.voted_slots().into_iter())
+                    .collect();
+            } else {
+                self.stray_restored_slots = self.voted_slots().into_iter().collect();
+            }
             // should call self.votes.pop_expired_votes()?
-            self.stray_restored_slots = self.voted_slots().into_iter().collect();
         }
 
         Ok(self)
@@ -2376,6 +2393,7 @@ pub mod test {
             assert_eq!(tower.lockouts.root_slot, None);
         }
 
+        // Prepare simulated validator restart!
         let mut vote_simulator = VoteSimulator::new(2);
         let other_vote_account = vote_simulator.vote_pubkeys[1];
         let bank0 = vote_simulator
@@ -2423,6 +2441,7 @@ pub mod test {
             SwitchForkDecision::FailedSwitchThreshold
         );
 
+        // Add lockout_interval which should be excluded
         vote_simulator.simulate_lockout_interval(111, (45, 50), &other_vote_account);
         assert_eq!(
             tower.check_switch_threshold(
@@ -2436,6 +2455,7 @@ pub mod test {
             SwitchForkDecision::FailedSwitchThreshold
         );
 
+        // Add lockout_interval which should not be excluded
         vote_simulator.simulate_lockout_interval(111, (110, 200), &other_vote_account);
         assert_eq!(
             tower.check_switch_threshold(
@@ -2489,7 +2509,7 @@ pub mod test {
                     .unwrap();
                 let mut buf = [0u8];
                 assert_eq!(file.read(&mut buf).unwrap(), 1);
-                buf[0] += 1;
+                buf[0] = !buf[0];
                 assert_eq!(file.seek(SeekFrom::Start(0)).unwrap(), 0);
                 assert_eq!(file.write(&buf).unwrap(), 1);
             },
@@ -2586,7 +2606,7 @@ pub mod test {
     }
 
     #[test]
-    fn test_adjust_lockouts_after_replay_all_rooted() {
+    fn test_adjust_lockouts_after_replay_all_rooted_with_no_too_old() {
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
@@ -2611,7 +2631,7 @@ pub mod test {
     }
 
     #[test]
-    fn test_adjust_lockouts_after_relay_all_rooted_long_ago() {
+    fn test_adjust_lockouts_after_relay_all_rooted_with_too_old() {
         use solana_sdk::slot_history::MAX_ENTRIES;
 
         let mut tower = Tower::new_for_tests(10, 0.9);
@@ -2745,12 +2765,18 @@ pub mod test {
         slot_history.add(0);
         slot_history.add(2);
 
-        let result = tower.adjust_lockouts_after_replay(2, &slot_history);
+        let result = tower.clone().adjust_lockouts_after_replay(2, &slot_history);
+        assert!(result.is_ok());
+
+        tower.lockouts.root_slot = Some(11);
+        // Skip some assertions to assume we're censored with crafted slots
+        let result = tower.do_adjust_lockouts_after_replay(2, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The slot history is too old: oldest slot in tower (100) >> newest slot in available history (2)"
+            "The slot history is too old: oldest slot in tower (11) >> newest slot in available history (2)"
         );
     }
+
     #[test]
     fn test_adjust_lockouts_after_replay_time_warped() {
         let mut tower = Tower::new_for_tests(10, 0.9);
@@ -2814,18 +2840,21 @@ pub mod test {
 
     #[test]
     fn test_stray_restored_ancestors() {
+        let tower_root = 2;
         let mut tower = Tower::new_for_tests(10, 0.9);
-        tower.lockouts.root_slot = Some(2);
+        tower.lockouts.root_slot = Some(tower_root);
         tower.record_vote(3, Hash::default());
         tower.record_vote(4, Hash::default());
         tower.record_vote(5, Hash::default());
 
+        let ledger_root = 10;
         let mut slot_history = SlotHistory::default();
         slot_history.add(0);
         slot_history.add(1);
-        slot_history.add(2);
+        slot_history.add(tower_root);
+        slot_history.add(ledger_root);
 
-        let replayed_root_slot = 2;
+        let replayed_root_slot = ledger_root;
         tower = tower
             .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
@@ -2833,9 +2862,10 @@ pub mod test {
         assert_eq!(tower.voted_slots(), vec![3, 4, 5]);
         assert_eq!(tower.last_voted_slot(), Some(5));
         assert_eq!(tower.is_stray_last_vote(), true);
+        assert_eq!(tower.lockouts.root_slot, Some(ledger_root));
         assert_eq!(
             tower.stray_restored_ancestors(),
-            vec![3, 4].into_iter().collect()
+            vec![tower_root, 3, 4].into_iter().collect()
         );
     }
 }
