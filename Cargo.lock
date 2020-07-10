@@ -4652,6 +4652,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sdk-bpf-test"
+version = "1.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1e668937b3fc2ecb13ad0285f318b0f81ba06c1b923d4cbc4d9868fb09d39d8"
+
+[[package]]
 name = "solana-sdk-macro"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5325,11 +5331,12 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spl-memo"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e6b954ac8b1df3f0bbb6ad1f21607be304f3cc9914bb9107c44b2065c8479e"
+checksum = "db4ebc6a6d50b55cbe7c84c7f6cd0259f4f82a169eb49ef65ca62b9c69a76a1f"
 dependencies = [
  "solana-sdk 1.2.4",
+ "solana-sdk-bpf-test",
 ]
 
 [[package]]
