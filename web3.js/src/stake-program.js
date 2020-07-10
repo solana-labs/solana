@@ -558,13 +558,12 @@ export class StakeProgram {
     const {stakePubkey, authorizedPubkey, splitStakePubkey, lamports} = params;
 
     let transaction = SystemProgram.createAccount({
-      fromPubkey: stakePubkey,
+      fromPubkey: authorizedPubkey,
       newAccountPubkey: splitStakePubkey,
       lamports: 0,
       space: this.space,
       programId: this.programId,
     });
-    transaction.instructions[0].keys[0].isSigner = false;
     const type = STAKE_INSTRUCTION_LAYOUTS.Split;
     const data = encodeData(type, {lamports});
 
