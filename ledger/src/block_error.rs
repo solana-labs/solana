@@ -26,4 +26,7 @@ pub enum BlockError {
     /// that each block has the same number of hashes
     #[error("trailing entry")]
     TrailingEntry,
+
+    #[error("invalid transaction signature")]
+    InvalidTransactionSignature,
 }

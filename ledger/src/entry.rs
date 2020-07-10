@@ -40,6 +40,13 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 static mut API: Option<Container<Api>> = None;
 
+#[derive(PartialEq)]
+pub enum VerifyOption {
+    TransactionOnly,
+    PohOnly,
+    All,
+}
+
 pub fn init_poh() {
     init(OsStr::new("libpoh-simd.so"));
 }
@@ -232,7 +239,8 @@ pub struct VerifyRecyclers {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum EntryVerificationStatus {
-    Failure,
+    FailedTransaction,
+    FailedPoh,
     Success,
     Pending,
 }
@@ -292,7 +300,7 @@ impl EntryVerificationState {
                 self.verification_status = if res {
                     EntryVerificationStatus::Success
                 } else {
-                    EntryVerificationStatus::Failure
+                    EntryVerificationStatus::FailedPoh
                 };
                 res
             }
@@ -323,8 +331,12 @@ pub trait EntrySlice {
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState;
-    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers)
-        -> EntryVerificationState;
+    fn start_verify(
+        &self,
+        start_hash: &Hash,
+        recyclers: VerifyRecyclers,
+        verify_option: VerifyOption,
+    ) -> EntryVerificationState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
@@ -337,7 +349,7 @@ pub trait EntrySlice {
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default())
+        self.start_verify(start_hash, VerifyRecyclers::default(), VerifyOption::All)
             .finish_verify(self)
     }
 
@@ -371,7 +383,7 @@ impl EntrySlice for [Entry] {
             verification_status: if res {
                 EntryVerificationStatus::Success
             } else {
-                EntryVerificationStatus::Failure
+                EntryVerificationStatus::FailedPoh
             },
             poh_duration_us,
             transaction_duration_us: 0,
@@ -455,7 +467,7 @@ impl EntrySlice for [Entry] {
             verification_status: if res {
                 EntryVerificationStatus::Success
             } else {
-                EntryVerificationStatus::Failure
+                EntryVerificationStatus::FailedPoh
             },
             poh_duration_us,
             transaction_duration_us: 0,
@@ -501,18 +513,34 @@ impl EntrySlice for [Entry] {
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
+        verify_option: VerifyOption,
     ) -> EntryVerificationState {
-        let start = Instant::now();
-        let res = self.verify_transaction_signatures();
-        let transaction_duration_us = timing::duration_as_us(&start.elapsed());
-        if !res {
-            return EntryVerificationState {
-                verification_status: EntryVerificationStatus::Failure,
-                transaction_duration_us,
-                poh_duration_us: 0,
-                device_verification_data: DeviceVerificationData::CPU(),
-            };
-        }
+        let transaction_duration_us = {
+            if verify_option == VerifyOption::TransactionOnly || verify_option == VerifyOption::All
+            {
+                let start = Instant::now();
+                let res = self.verify_transaction_signatures();
+                let transaction_duration_us = timing::duration_as_us(&start.elapsed());
+                let verification_status = if !res {
+                    EntryVerificationStatus::FailedTransaction
+                } else {
+                    EntryVerificationStatus::Success
+                };
+
+                if !res || verify_option == VerifyOption::TransactionOnly {
+                    return EntryVerificationState {
+                        verification_status,
+                        transaction_duration_us,
+                        poh_duration_us: 0,
+                        device_verification_data: DeviceVerificationData::CPU(),
+                    };
+                }
+
+                transaction_duration_us
+            } else {
+                0
+            }
+        };
 
         let start = Instant::now();
         let api = perf_libs::api();

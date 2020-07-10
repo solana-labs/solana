@@ -3,7 +3,9 @@ use crate::{
     blockstore::Blockstore,
     blockstore_db::BlockstoreError,
     blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
+    entry::{
+        create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyOption, VerifyRecyclers,
+    },
     leader_schedule_cache::LeaderScheduleCache,
 };
 use crossbeam_channel::Sender;
@@ -468,6 +470,7 @@ fn confirm_full_slot(
         &mut timing,
         progress,
         skip_verification,
+        false,
         transaction_status_sender,
         opts.entry_callback.as_ref(),
         recyclers,
@@ -487,6 +490,7 @@ pub struct ConfirmationTiming {
     pub replay_elapsed: u64,
     pub poh_verify_elapsed: u64,
     pub transaction_verify_elapsed: u64,
+    pub blocking_vote_or_reset_verify_elapsed: u64,
     pub fetch_elapsed: u64,
     pub fetch_fail_elapsed: u64,
 }
@@ -498,6 +502,7 @@ impl Default for ConfirmationTiming {
             replay_elapsed: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,
+            blocking_vote_or_reset_verify_elapsed: 0,
             fetch_elapsed: 0,
             fetch_fail_elapsed: 0,
         }
@@ -528,10 +533,11 @@ pub fn confirm_slot(
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
+    skip_poh_verify: bool,
     transaction_status_sender: Option<TransactionStatusSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
-) -> result::Result<(), BlockstoreProcessorError> {
+) -> result::Result<Vec<Entry>, BlockstoreProcessorError> {
     let slot = bank.slot();
 
     let (entries, num_shreds, slot_full) = {
@@ -579,11 +585,24 @@ pub fn confirm_slot(
 
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
-        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
-        if entry_state.status() == EntryVerificationStatus::Failure {
-            warn!("Ledger proof of history failed at slot: {}", slot);
-            return Err(BlockError::InvalidEntryHash.into());
-        }
+        let verify_option = if skip_poh_verify {
+            VerifyOption::TransactionOnly
+        } else {
+            VerifyOption::All
+        };
+        let entry_state =
+            entries.start_verify(&progress.last_entry, recyclers.clone(), verify_option);
+        match entry_state.status() {
+            EntryVerificationStatus::FailedPoh => {
+                warn!("Ledger proof of history failed at slot: {}", slot);
+                return Err(BlockError::InvalidEntryHash.into());
+            }
+            EntryVerificationStatus::FailedTransaction => {
+                warn!("Ledger proof of history failed at slot: {}", slot);
+                return Err(BlockError::InvalidTransactionSignature.into());
+            }
+            _ => (),
+        };
         Some(entry_state)
     } else {
         None
@@ -620,7 +639,7 @@ pub fn confirm_slot(
         progress.last_entry = last_entry.hash;
     }
 
-    Ok(())
+    Ok(entries)
 }
 
 // Special handling required for processing the entries in slot 0
