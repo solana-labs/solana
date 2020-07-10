@@ -393,6 +393,7 @@ mod tests {
         );
 
         // Case: Write bytes to an offset
+        #[allow(unused_mut)]
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
         assert_eq!(
@@ -410,6 +411,7 @@ mod tests {
         );
 
         // Case: Overflow
+        #[allow(unused_mut)]
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
         assert_eq!(
