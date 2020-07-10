@@ -1,8 +1,3 @@
-branches:
-  only:
-    - master
-    - /^v\d+\.\d+/
-
 notifications:
   email: false
   slack:
@@ -37,24 +32,6 @@ jobs:
       script:
         - source ci/env.sh
         - ci/publish-tarball.sh
-      deploy:
-        - provider: s3
-          access_key_id: $AWS_ACCESS_KEY_ID
-          secret_access_key: $AWS_SECRET_ACCESS_KEY
-          bucket: release.solana.com
-          region: us-west-1
-          skip_cleanup: true
-          acl: public_read
-          local_dir: travis-s3-upload
-          on:
-            all_branches: true
-        - provider: releases
-          token: $GITHUB_TOKEN
-          skip_cleanup: true
-          file_glob: true
-          file: travis-release-upload/*
-          on:
-            tags: true
     - <<: *release-artifacts
       name: "Windows release artifacts"
       os: windows
