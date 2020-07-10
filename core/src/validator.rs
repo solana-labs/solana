@@ -415,6 +415,7 @@ impl Validator {
         let vote_tracker = Arc::new(VoteTracker::new(bank_forks.read().unwrap().root_bank()));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -459,6 +460,7 @@ impl Validator {
             snapshot_package_sender,
             vote_tracker.clone(),
             retransmit_slots_sender,
+            verified_vote_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -485,6 +487,7 @@ impl Validator {
             node.info.shred_version,
             vote_tracker,
             bank_forks,
+            verified_vote_sender,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

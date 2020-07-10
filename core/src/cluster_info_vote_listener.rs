@@ -28,7 +28,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -40,16 +40,18 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
-pub type VerifiedVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
-pub type VerifiedVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
+pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vote)>;
+pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vote)>;
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
     updates: Option<Vec<Arc<Pubkey>>>,
-    pub total_stake: u64,
+    total_stake: u64,
 }
 
 impl SlotVoteTracker {
@@ -62,7 +64,7 @@ impl SlotVoteTracker {
 #[derive(Default)]
 pub struct VoteTracker {
     // Map from a slot to a set of validators who have voted for that slot
-    pub slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
+    slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
     // Don't track votes from people who are not staked, acts as a spam filter
     epoch_authorized_voters: RwLock<HashMap<Epoch, Arc<EpochAuthorizedVoters>>>,
     leader_schedule_epoch: RwLock<Epoch>,
@@ -202,15 +204,17 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        sender: CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: CrossbeamSender<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
+        verified_vote_sender: VerifiedVoteSender,
     ) -> Self {
         let exit_ = exit.clone();
 
-        let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
+        let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
+            unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
         let listen_thread = Builder::new()
             .name("solana-cluster_info_vote_listener".to_string())
@@ -218,7 +222,7 @@ impl ClusterInfoVoteListener {
                 let _ = Self::recv_loop(
                     exit_,
                     &cluster_info,
-                    verified_vote_packets_sender,
+                    verified_vote_label_packets_sender,
                     verified_vote_transactions_sender,
                 );
             })
@@ -231,9 +235,9 @@ impl ClusterInfoVoteListener {
             .spawn(move || {
                 let _ = Self::bank_send_loop(
                     exit_,
-                    verified_vote_packets_receiver,
+                    verified_vote_label_packets_receiver,
                     poh_recorder,
-                    &sender,
+                    &verified_packets_sender,
                 );
             })
             .unwrap();
@@ -248,6 +252,7 @@ impl ClusterInfoVoteListener {
                     vote_tracker,
                     &bank_forks,
                     subscriptions,
+                    verified_vote_sender,
                 );
             })
             .unwrap();
@@ -267,7 +272,7 @@ impl ClusterInfoVoteListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        verified_vote_packets_sender: VerifiedVotePacketsSender,
+        verified_vote_label_packets_sender: VerifiedLabelVotePacketsSender,
         verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
     ) -> Result<()> {
         let mut last_ts = 0;
@@ -282,7 +287,7 @@ impl ClusterInfoVoteListener {
             if !votes.is_empty() {
                 let (vote_txs, packets) = Self::verify_votes(votes, labels);
                 verified_vote_transactions_sender.send(vote_txs)?;
-                verified_vote_packets_sender.send(packets)?;
+                verified_vote_label_packets_sender.send(packets)?;
             }
 
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
@@ -322,9 +327,9 @@ impl ClusterInfoVoteListener {
 
     fn bank_send_loop(
         exit: Arc<AtomicBool>,
-        verified_vote_packets_receiver: VerifiedVotePacketsReceiver,
+        verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -334,9 +339,10 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
-            if let Err(e) = verified_vote_packets
-                .get_and_process_vote_packets(&verified_vote_packets_receiver, &mut update_version)
-            {
+            if let Err(e) = verified_vote_packets.get_and_process_vote_packets(
+                &verified_vote_label_packets_receiver,
+                &mut update_version,
+            ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return Ok(());
@@ -353,7 +359,7 @@ impl ClusterInfoVoteListener {
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
                     let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    packets_sender.send(msgs)?;
+                    verified_packets_sender.send(msgs)?;
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
                         new_version,
@@ -371,6 +377,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
         subscriptions: Arc<RpcSubscriptions>,
+        verified_vote_sender: VerifiedVoteSender,
     ) -> Result<()> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -387,6 +394,7 @@ impl ClusterInfoVoteListener {
                 root_bank.slot(),
                 &subscriptions,
                 epoch_stakes,
+                &verified_vote_sender,
             ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -407,6 +415,7 @@ impl ClusterInfoVoteListener {
         vote_tracker: &VoteTracker,
         last_root: Slot,
         subscriptions: &RpcSubscriptions,
+        verified_vote_sender: &VerifiedVoteSender,
     ) -> Result<()> {
         Self::get_and_process_votes(
             vote_txs_receiver,
@@ -414,6 +423,7 @@ impl ClusterInfoVoteListener {
             last_root,
             subscriptions,
             None,
+            verified_vote_sender,
         )
     }
 
@@ -423,6 +433,7 @@ impl ClusterInfoVoteListener {
         last_root: Slot,
         subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
+        verified_vote_sender: &VerifiedVoteSender,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
@@ -435,6 +446,7 @@ impl ClusterInfoVoteListener {
             last_root,
             subscriptions,
             epoch_stakes,
+            verified_vote_sender,
         );
         Ok(())
     }
@@ -445,6 +457,7 @@ impl ClusterInfoVoteListener {
         root: Slot,
         subscriptions: &RpcSubscriptions,
         epoch_stakes: Option<&EpochStakes>,
+        verified_vote_sender: &VerifiedVoteSender,
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
@@ -516,6 +529,7 @@ impl ClusterInfoVoteListener {
                     }
 
                     subscriptions.notify_vote(&vote);
+                    let _ = verified_vote_sender.send((*vote_pubkey, vote));
                 }
             }
         }
@@ -782,6 +796,7 @@ mod tests {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
 
         let vote_slots = vec![1, 2];
         validator_voting_keypairs.iter().for_each(|keypairs| {
@@ -805,8 +820,20 @@ mod tests {
             0,
             &subscriptions,
             None,
+            &verified_vote_sender,
         )
         .unwrap();
+
+        // Check that the received votes were pushed to other commponents
+        // subscribing via a channel
+        let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
+        assert_eq!(received_votes.len(), validator_voting_keypairs.len());
+        for (voting_keypair, (received_pubkey, received_vote)) in
+            validator_voting_keypairs.iter().zip(received_votes.iter())
+        {
+            assert_eq!(voting_keypair.vote_keypair.pubkey(), *received_pubkey);
+            assert_eq!(received_vote.slots, vote_slots);
+        }
         for vote_slot in vote_slots {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();
@@ -827,14 +854,17 @@ mod tests {
         // Create some voters at genesis
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         // Send some votes to process
-        let (votes_sender, votes_receiver) = unbounded();
+        let (votes_txs_sender, votes_txs_receiver) = unbounded();
+        let (verified_vote_sender, verified_vote_receiver) = unbounded();
 
+        let mut expected_votes = vec![];
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
             let validator_votes: Vec<_> = keyset
                 .iter()
                 .map(|keypairs| {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
+                    expected_votes.push((vote_keypair.pubkey(), vec![i as Slot + 1]));
                     vote_transaction::new_vote_transaction(
                         vec![i as u64 + 1],
                         Hash::default(),
@@ -845,18 +875,34 @@ mod tests {
                     )
                 })
                 .collect();
-            votes_sender.send(validator_votes).unwrap();
+            votes_txs_sender.send(validator_votes).unwrap();
         }
 
-        // Check that all the votes were registered for each validator correctly
+        // Read and process votes from channel `votes_receiver`
         ClusterInfoVoteListener::get_and_process_votes(
-            &votes_receiver,
+            &votes_txs_receiver,
             &vote_tracker,
             0,
             &subscriptions,
             None,
+            &verified_vote_sender,
         )
         .unwrap();
+
+        // Check that the received votes were pushed to other commponents
+        // subscribing via a channel
+        let received_votes: Vec<_> = verified_vote_receiver
+            .try_iter()
+            .map(|(pubkey, vote)| (pubkey, vote.slots))
+            .collect();
+        assert_eq!(received_votes.len(), validator_voting_keypairs.len());
+        for (expected_pubkey_vote, received_pubkey_vote) in
+            expected_votes.iter().zip(received_votes.iter())
+        {
+            assert_eq!(expected_pubkey_vote, received_pubkey_vote);
+        }
+
+        // Check that all the votes were registered for each validator correctly
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(i as u64 + 1).unwrap();
             let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
@@ -969,7 +1015,15 @@ mod tests {
             &validator0_keypairs.vote_keypair,
         )];
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0, &subscriptions, None);
+        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
+        ClusterInfoVoteListener::process_votes(
+            &vote_tracker,
+            vote_tx,
+            0,
+            &subscriptions,
+            None,
+            &verified_vote_sender,
+        );
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
@@ -1020,7 +1074,14 @@ mod tests {
             })
             .collect();
 
-        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_txs, 0, &subscriptions, None);
+        ClusterInfoVoteListener::process_votes(
+            &vote_tracker,
+            vote_txs,
+            0,
+            &subscriptions,
+            None,
+            &verified_vote_sender,
+        );
 
         let ref_count = Arc::strong_count(
             &vote_tracker
