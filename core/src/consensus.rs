@@ -484,6 +484,14 @@ impl Tower {
         false
     }
 
+    fn use_stray_restored_ancestors(
+        &self,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        slot: Slot,
+    ) -> bool {
+        !ancestors.contains_key(&slot) && self.is_stray_last_vote()
+    }
+
     pub(crate) fn check_switch_threshold(
         &self,
         switch_slot: u64,
@@ -497,23 +505,21 @@ impl Tower {
 
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
-                    if self.is_stray_last_vote() {
-                        // Use stray restored ancestors because we can't derive them from
-                        // given ancestors (=bank_forks)
-                        // Also, can't just return empty ancestors because we should exclude
-                        // lockouts on stray last vote's ancestors in the lockout_intervals later
-                        // in this fn.
-                        stray_restored_ancestors = self.stray_restored_ancestors();
-                        info!(
-                            "returning restored slots {:?} because of stray last vote ({})...",
-                            stray_restored_ancestors, last_voted_slot
-                        );
-                        &stray_restored_ancestors
-                    } else {
-                        panic!("no ancestor!")
-                    }
-                });
+                let last_vote_ancestors = if !self.use_stray_restored_ancestors(ancestors, last_voted_slot) {
+                    ancestors.get(&last_voted_slot).unwrap()
+                } else {
+                    // Use stray restored ancestors because we couldn't derive them from
+                    // given ancestors (=bank_forks)
+                    // Also, can't just return empty ancestors because we should exclude
+                    // lockouts on stray last vote's ancestors in the lockout_intervals later
+                    // in this fn.
+                    stray_restored_ancestors = self.stray_restored_ancestors();
+                    info!(
+                        "returning restored slots {:?} because of stray last vote ({})...",
+                        stray_restored_ancestors, last_voted_slot
+                    );
+                    &stray_restored_ancestors
+                };
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -2853,12 +2859,17 @@ pub mod test {
 
     #[test]
     fn test_stray_restored_ancestors() {
+        let ancestors = vec![(0, HashSet::new())].into_iter().collect();
+
         let tower_root = 2;
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.lockouts.root_slot = Some(tower_root);
         tower.record_vote(3, Hash::default());
         tower.record_vote(4, Hash::default());
         tower.record_vote(5, Hash::default());
+        assert!(!tower.is_stray_last_vote());
+        assert!(!tower.use_stray_restored_ancestors(&ancestors, 0));
+        assert!(!tower.use_stray_restored_ancestors(&ancestors, 1));
 
         let ledger_root = 10;
         let mut slot_history = SlotHistory::default();
@@ -2874,11 +2885,13 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![3, 4, 5]);
         assert_eq!(tower.last_voted_slot(), Some(5));
-        assert_eq!(tower.is_stray_last_vote(), true);
+        assert!(tower.is_stray_last_vote());
         assert_eq!(tower.lockouts.root_slot, Some(ledger_root));
         assert_eq!(
             tower.stray_restored_ancestors(),
             vec![tower_root, 3, 4].into_iter().collect()
         );
+        assert!(!tower.use_stray_restored_ancestors(&ancestors, 0));
+        assert!(tower.use_stray_restored_ancestors(&ancestors, 1));
     }
 }
