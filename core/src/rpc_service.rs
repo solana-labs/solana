@@ -250,10 +250,12 @@ impl JsonRpcService {
 
         let tpu_address = cluster_info.my_contact_info().tpu;
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
-        let send_transaction_service = Arc::new(SendTransactionService::new(
+        let (sender, receiver) = channel();
+        let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,
             &exit_send_transaction_service,
+            receiver,
         ));
 
         let request_processor = JsonRpcRequestProcessor::new(
@@ -265,7 +267,7 @@ impl JsonRpcService {
             health.clone(),
             cluster_info,
             genesis_hash,
-            send_transaction_service,
+            sender,
         );
 
         #[cfg(test)]
