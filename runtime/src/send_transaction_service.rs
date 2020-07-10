@@ -20,8 +20,6 @@ const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but m
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
     sender: Mutex<Sender<TransactionInfo>>,
-    send_socket: UdpSocket,
-    tpu_address: SocketAddr,
 }
 
 struct TransactionInfo {
@@ -51,8 +49,6 @@ impl SendTransactionService {
         Self {
             thread,
             sender: Mutex::new(sender),
-            send_socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            tpu_address,
         }
     }
 
@@ -74,6 +70,7 @@ impl SendTransactionService {
                 }
 
                 if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
+                    Self::send_transaction(&send_socket, &tpu_address, &transaction_info.wire_transaction);
                     if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
                         transactions.insert(transaction_info.signature, transaction_info);
                     } else {
@@ -170,8 +167,6 @@ impl SendTransactionService {
 
     pub fn send(&self, signature: Signature, wire_transaction: Vec<u8>, last_valid_slot: Slot) {
         inc_new_counter_info!("send_transaction_service-enqueue", 1, 1);
-        Self::send_transaction(&self.send_socket, &self.tpu_address, &wire_transaction);
-
         self.sender
             .lock()
             .unwrap()
