@@ -6,7 +6,7 @@ use crate::{
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::VoteTracker,
+    cluster_info_vote_listener::{VerifiedVoteReceiver, VoteTracker},
     cluster_slots::ClusterSlots,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
@@ -96,6 +96,7 @@ impl Tvu {
         snapshot_package_sender: Option<AccountsPackageSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
+        verified_vote_receiver: VerifiedVoteReceiver,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
@@ -146,7 +147,7 @@ impl Tvu {
             tvu_config.shred_version,
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
-            vote_tracker.clone(),
+            verified_vote_receiver,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -278,6 +279,7 @@ pub mod tests {
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
+        let (_verified_vote_sender, verified_vote_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -310,6 +312,7 @@ pub mod tests {
             None,
             Arc::new(VoteTracker::new(&bank)),
             retransmit_slots_sender,
+            verified_vote_receiver,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);
