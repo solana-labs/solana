@@ -3,6 +3,7 @@ use bv::BitVec;
 use fnv::FnvHasher;
 use rand::{self, Rng};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::{cmp, hash::Hasher, marker::PhantomData};
 
 /// Generate a stable hash of `self` for each `hash_index`
@@ -11,12 +12,36 @@ pub trait BloomHashIndex {
     fn hash_at_index(&self, hash_index: u64) -> u64;
 }
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, AbiExample)]
 pub struct Bloom<T: BloomHashIndex> {
     pub keys: Vec<u64>,
     pub bits: BitVec<u64>,
     num_bits_set: u64,
     _phantom: PhantomData<T>,
+}
+
+impl<T: BloomHashIndex> fmt::Debug for Bloom<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Bloom {{ keys.len: {} bits.len: {} num_set: {} bits: ",
+            self.keys.len(),
+            self.bits.len(),
+            self.num_bits_set
+        )?;
+        const MAX_PRINT_BITS: u64 = 10;
+        for i in 0..std::cmp::min(MAX_PRINT_BITS, self.bits.len()) {
+            if self.bits.get(i) {
+                write!(f, "1")?;
+            } else {
+                write!(f, "0")?;
+            }
+        }
+        if self.bits.len() > MAX_PRINT_BITS {
+            write!(f, "..")?;
+        }
+        write!(f, " }}")
+    }
 }
 
 impl<T: BloomHashIndex> solana_sdk::sanitize::Sanitize for Bloom<T> {}
@@ -161,5 +186,23 @@ mod test {
         assert_eq!(Bloom::<Hash>::num_keys(2000f64, 25f64) as u64, 55u64);
         //ensure min keys is 1
         assert_eq!(Bloom::<Hash>::num_keys(20f64, 1000f64) as u64, 1u64);
+    }
+
+    #[test]
+    fn test_debug() {
+        let mut b: Bloom<Hash> = Bloom::new(3, vec![100]);
+        b.add(&Hash::default());
+        assert_eq!(
+            format!("{:?}", b),
+            "Bloom { keys.len: 1 bits.len: 3 num_set: 1 bits: 001 }"
+        );
+
+        let mut b: Bloom<Hash> = Bloom::new(1000, vec![100]);
+        b.add(&Hash::default());
+        b.add(&hash(&[1, 2]));
+        assert_eq!(
+            format!("{:?}", b),
+            "Bloom { keys.len: 1 bits.len: 1000 num_set: 2 bits: 0000000000.. }"
+        );
     }
 }
