@@ -52,7 +52,7 @@ windows)
     set -x
     git --version
     git config core.symlinks true
-    find -type l -delete
+    find . -type l -delete
     git reset --hard
   )
   ;;
