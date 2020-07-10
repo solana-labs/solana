@@ -188,7 +188,7 @@ impl JsonRpcRequestProcessor {
 
         Self {
             config: JsonRpcConfig::default(),
-            bank_forks: bank_forks.clone(),
+            bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
