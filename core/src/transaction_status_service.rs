@@ -62,13 +62,26 @@ impl TransactionStatusService {
             .zip(balances.post_balances)
         {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_calculator = match hash_age_kind {
+                let (fee_calculator, hash_kind) = match hash_age_kind.clone() {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        nonce_utils::fee_calculator_of(&account)
+                        info!("nonce_account: {:?}", account);
+                        (nonce_utils::fee_calculator_of(&account), "durable_nonce")
                     }
-                    _ => bank.get_fee_calculator(&transaction.message().recent_blockhash),
+                    _ => (
+                        bank.get_fee_calculator(&transaction.message().recent_blockhash),
+                        "recent_blockhash",
+                    ),
+                };
+                if fee_calculator.is_none() {
+                    error!(
+                        "{:?} {:?} fee_calculator: {:?}",
+                        transaction.signatures[0],
+                        hash_kind,
+                        fee_calculator.is_some()
+                    );
+                    info!("{:?}", status);
                 }
-                .expect("FeeCalculator must exist");
+                let fee_calculator = fee_calculator.expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 let (writable_keys, readonly_keys) =
                     transaction.message.get_account_keys_by_lock_type();
