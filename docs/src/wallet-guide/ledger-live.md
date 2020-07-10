@@ -38,7 +38,7 @@ line tools](../hardware-wallets/ledger.md).
 - Currently Ledger Live needs to be in "Developer Mode"
   (Settings > Experimental Features > Developer Mode) to see our app.
 
-![Enabling Developer Mode](../.gitbook/assets/ledger-live-enable-developer-mode.png)
+![Enabling Developer Mode](/img/ledger-live-enable-developer-mode.png)
 
 - Go to Manager in the app and find "Solana" in the App Catalog and
   click Install
@@ -46,7 +46,7 @@ line tools](../hardware-wallets/ledger.md).
 - You may be prompted on the Nano S to confirm the install of Solana App
 - "Solana" should now show as "Installed" in the Ledger Live Manager
 
-![Installed Solana App in Manager](../.gitbook/assets/ledger-live-latest-version-installed.png)
+![Installed Solana App in Manager](/img/ledger-live-latest-version-installed.png)
 
 ## Upgrade to the latest version of the Solana App
 
@@ -60,11 +60,11 @@ of the Solana App, please upgrade to version v0.2.2 by following these steps.
 - Click the "Update All" button to update the Solana app to the latest version
   (v.0.2.2)
 
-![Upgrade All button in Manager](../.gitbook/assets/ledger-live-update-available-v0.2.2.png)
+![Upgrade All button in Manager](/img/ledger-live-update-available-v0.2.2.png)
 
 - Once the upgrade is finished, confirm v0.2.2 is installed under "Apps Installed"
 
-![Upgrade complete](../.gitbook/assets/ledger-live-latest-version-installed.png)
+![Upgrade complete](/img/ledger-live-latest-version-installed.png)
 
 ## Interact with Solana network
 

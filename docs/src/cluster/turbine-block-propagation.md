@@ -22,15 +22,15 @@ This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FAN
 
 The following diagram shows how the Leader sends shreds with a Fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
 
-![Leader sends shreds to Neighborhood 0 in Layer 0](../.gitbook/assets/data-plane-seeding.svg)
+![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](../.gitbook/assets/data-plane-fanout.svg)
+![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
 
 Finally, the following diagram shows a two layer cluster with a Fanout of 2.
 
-![Two layer cluster with a Fanout of 2](../.gitbook/assets/data-plane.svg)
+![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
 
 ### Configuration Values
 
@@ -98,4 +98,4 @@ With FEC rate of `32:32`
 
 The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
 
-![Inner workings of a neighborhood](../.gitbook/assets/data-plane-neighborhood.svg)
+![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)

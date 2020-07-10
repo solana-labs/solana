@@ -69,11 +69,11 @@ sorted by signature.
 
 A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the block.
 
-![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle.svg)
+![Block Merkle Diagram](/img/spv-block-merkle.svg)
 
 A Bank-Hash is the hash of the concatenation of the Block-Merkle and Accounts-Hash
 
-![Bank Hash Diagram](../.gitbook/assets/spv-bank-hash.svg)
+![Bank Hash Diagram](/img/spv-bank-hash.svg)
 
 An Accounts-Hash is the hash of the concatentation of the state hashes of each
 account modified during the current slot.

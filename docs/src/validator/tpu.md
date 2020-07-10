@@ -2,4 +2,4 @@
 title: TPU
 ---
 
-![TPU Block Diagram](../.gitbook/assets/tpu.svg)
+![TPU Block Diagram](/img/tpu.svg)

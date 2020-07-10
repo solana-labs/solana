@@ -21,15 +21,15 @@ The first factor is a function of protocol parameters only \(i.e. independent of
 
 At any given point in time, a specific validator's interest rate can be determined based on the proportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For example, consider a hypothetical instance of the network with an initial circulating token supply of 250MM tokens with an additional 250MM vesting over 3 years. Additionally an inflation rate is specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year \(the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch\). With these broad assumptions, the 10-year inflation rate \(adjusted daily for this example\) is shown in **Figure 1**, while the total circulating token supply is illustrated in **Figure 2**. Neglected in this toy-model is the inflation suppression due to the portion of each transaction fee that is to be destroyed.
 
-![](../../../.gitbook/assets/p_ex_schedule.png)
+![](/img/p_ex_schedule.png)
 
 **Figure 1:** In this example schedule, the annual inflation rate \[%\] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate.
 
-![](../../../.gitbook/assets/p_ex_supply.png)
+![](/img/p_ex_supply.png)
 
 **Figure 2:** The total token supply over a 10-year period, based on an initial 250MM tokens with the disinflationary inflation schedule as shown in **Figure 1**. Over time, the interest rate, at a fixed network staked percentage, will reduce concordant with network inflation. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. As previously mentioned, the inflation rate is expected to stabilize near 1-2% which also results in a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for state-validation are not accounted for here. Given these example parameters, annualized validator-specific interest rates can be determined based on the global fraction of tokens bonded as stake, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and a split in interest-based rewards between validators nodes of 80%/20%. Additionally, the fraction of staked circulating supply is assumed to be constant. Based on these assumptions, an annualized validation-client interest rate schedule as a function of % circulating token supply that is staked is shown in **Figure 3**.
 
-![](../../../.gitbook/assets/p_ex_interest.png)
+![](/img/p_ex_interest.png)
 
 **Figure 3:** Shown here are example validator interest rates over time, neglecting transaction fees, segmented by fraction of total circulating supply bonded as stake.
 
