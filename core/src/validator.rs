@@ -642,10 +642,14 @@ fn post_process_restored_tower(
             tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
         .unwrap_or_else(|err| {
-            let is_already_active = active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+            let is_already_active =
+                active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
             if config.require_tower && is_already_active {
                 error!("Requested mandatory tower restore failed: {:?}", err);
-                error!("And there is an existing vote_account containing actual votes. Aborting due to possible conflicting duplicate votes");
+                error!(
+                    "And there is an existing vote_account containing actual votes. \
+                       Aborting due to possible conflicting duplicate votes"
+                );
                 process::exit(1);
             }
             let not_found = if let TowerError::IOError(io_err) = &err {
@@ -655,9 +659,15 @@ fn post_process_restored_tower(
             };
             if not_found && !is_already_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
-                info!("Ignoring expected failed tower restore because this is the initial validator start with the vote account...");
+                info!(
+                    "Ignoring expected failed tower restore because this is the initial \
+                      validator start with the vote account..."
+                );
             } else {
-                error!("Rebuilding tower from the latest vote account due to failed tower restore: {}", err);
+                error!(
+                    "Rebuilding tower from the latest vote account due to failed tower restore: {}",
+                    err
+                );
             }
 
             Tower::new_from_bankforks(

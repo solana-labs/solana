@@ -872,11 +872,13 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.pop();
         }
 
-        // All of votes in an unrooted warming-up vote account may not be anchored.
-        // In that case, just continue; otherwise check for too old slot history error.
+        // All of votes in an unrooted (= !root_checked) warming-up vote account may
+        // not be anchored. In that case, this fn will be Ok(_).
+        // Anyway always check for the too-old-slot-history error if not anchored,
+        // regardless root_checked or not.
         let oldest_slot_in_tower = checked_slot.unwrap();
         let within_range = oldest_slot_in_tower <= slot_history.newest();
-        if root_checked && anchored_slot.is_none() && !within_range {
+        if anchored_slot.is_none() && !within_range {
             return Err(TowerError::TooOldSlotHistory(
                 oldest_slot_in_tower,
                 slot_history.newest(),
@@ -903,6 +905,7 @@ impl Tower {
                 self.voted_slots()
             );
 
+            // Updating root is needed to correctly restore from newly-saved towers
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
                 self.last_vote.last_voted_slot().unwrap(),
@@ -2564,6 +2567,7 @@ pub mod test {
 
     #[test]
     fn test_adjust_lockouts_after_replay_future_slots() {
+        solana_logger::setup();
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
@@ -2579,6 +2583,12 @@ pub mod test {
             .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
 
+        assert_eq!(tower.voted_slots(), vec![2, 3]);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
+
+        tower = tower
+            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
+            .unwrap();
         assert_eq!(tower.voted_slots(), vec![2, 3]);
         assert_eq!(tower.root(), Some(replayed_root_slot));
     }
@@ -2766,7 +2776,10 @@ pub mod test {
         slot_history.add(2);
 
         let result = tower.clone().adjust_lockouts_after_replay(2, &slot_history);
-        assert!(result.is_ok());
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The slot history is too old: oldest slot in tower (100) >> newest slot in available history (2)"
+        );
 
         tower.lockouts.root_slot = Some(11);
         // Skip some assertions to assume we're censored with crafted slots

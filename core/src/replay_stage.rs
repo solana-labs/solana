@@ -260,7 +260,11 @@ impl ReplayStage {
                     mut progress,
                     mut heaviest_subtree_fork_choice,
                     unlock_heaviest_subtree_fork_choice_slot,
-                ) = Self::initialize_progress_and_fork_choice_with_locked_bank_forks(&bank_forks, &my_pubkey, &vote_account);
+                ) = Self::initialize_progress_and_fork_choice_with_locked_bank_forks(
+                    &bank_forks,
+                    &my_pubkey,
+                    &vote_account,
+                );
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
