@@ -615,7 +615,7 @@ const GetSlotLeader = jsonRpcResult('string');
  */
 const GetClusterNodes = jsonRpcResult(
   struct.array([
-    struct({
+    struct.pick({
       pubkey: 'string',
       gossip: struct.union(['null', 'string']),
       tpu: struct.union(['null', 'string']),
@@ -631,7 +631,7 @@ const GetClusterNodes = jsonRpcResult(
 const GetVoteAccounts = jsonRpcResult(
   struct({
     current: struct.array([
-      struct({
+      struct.pick({
         votePubkey: 'string',
         nodePubkey: 'string',
         activatedStake: 'number',
@@ -645,7 +645,7 @@ const GetVoteAccounts = jsonRpcResult(
       }),
     ]),
     delinquent: struct.array([
-      struct({
+      struct.pick({
         votePubkey: 'string',
         nodePubkey: 'string',
         activatedStake: 'number',
@@ -737,7 +737,7 @@ const ConfirmedTransactionMetaResult = struct.union([
 export const GetConfirmedBlockRpcResult = jsonRpcResult(
   struct.union([
     'null',
-    struct({
+    struct.pick({
       blockhash: 'string',
       previousBlockhash: 'string',
       parentSlot: 'number',
@@ -766,7 +766,7 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
 const GetConfirmedTransactionRpcResult = jsonRpcResult(
   struct.union([
     'null',
-    struct({
+    struct.pick({
       slot: 'number',
       transaction: ConfirmedTransactionResult,
       meta: ConfirmedTransactionMetaResult,
