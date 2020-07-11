@@ -25,7 +25,7 @@ impl<T: Eq + Hash> Contains<T> for HashSet<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Visit {
     Visited(Slot),
     Unvisited(Slot),
@@ -41,6 +41,7 @@ impl Visit {
 }
 
 // Iterates through slots in order of weight
+#[derive(Clone)]
 pub struct RepairWeightTraversal<'a> {
     tree: &'a HeaviestSubtreeForkChoice,
     pending: Vec<Visit>,

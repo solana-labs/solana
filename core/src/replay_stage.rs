@@ -268,14 +268,13 @@ impl ReplayStage {
         ));
 
         // Start the entry verification service
-        let slot_verify_results = Arc::new(RwLock::new(HashMap::new()));
         let (verify_slot_sender, verify_slot_receiver) = unbounded();
-        let entry_verify_service = EntryVerifyService::new(
+        let (entry_verify_service, slot_verify_results) = EntryVerifyService::new(
             verify_slot_receiver,
             bank_forks.clone(),
-            slot_verify_results.clone(),
             &exit,
             heaviest_subtree_fork_choice.clone(),
+            &frozen_banks,
         );
 
         #[allow(clippy::cognitive_complexity)]
@@ -424,17 +423,19 @@ impl ReplayStage {
                         let leader_id =
                             *bank_forks.read().unwrap().get(slot).unwrap().collector_id();
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
-                        if !slot_verify_results.read().unwrap().contains_key(&slot) &&
-                        // Our own banks do not need to be verfied. Furthermore,
-                        // they are safe to not send to the `EntryVerifyService`
-                        // (won't update the tree structure there)
-                        // because all banks prior to this bank must have been
-                        // verified (we verify all prevoius blocks in
-                        // `verify_vote_and_reset_bank` before resetting to a block
-                        // for starting PoH).
-                        leader_id != my_pubkey
+                        if !slot_verify_results.read().unwrap().contains_key(&slot)
                         {
-                            let entries = entries_map.remove(&slot).unwrap();
+                            let entries = {
+                                // Our own banks do not need to be verfied, so just
+                                // sending the slot to update fork structure
+                                if leader_id == my_pubkey {
+                                    vec![]
+                                } else {
+                                    entries_map.remove(&slot).expect("If slot is not our own, then
+                                    should exist in `entries_map`")
+                                }
+                            };
+
                             unverified_slots.push((slot, entries));
                         }
                         let confirmed_forks = Self::confirm_forks(
