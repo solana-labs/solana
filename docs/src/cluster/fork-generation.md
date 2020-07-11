@@ -1,4 +1,6 @@
-# Fork Generation
+---
+title: Fork Generation
+---
 
 This section describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
 
@@ -58,7 +60,7 @@ Validators vote based on a greedy choice to maximize their reward described in [
 
 The diagram below represents a validator's view of the PoH stream with possible forks over time. L1, L2, etc. are leader slots, and `E`s represent entries from that leader during that leader's slot. The `x`s represent ticks only, and time flows downwards in the diagram.
 
-![Fork generation](../.gitbook/assets/fork-generation.svg)
+![Fork generation](/img/fork-generation.svg)
 
 Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot. Once a validator commits to a forks, other forks can be discarded below that tick count. For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader. But multiple virtual entries may overlap as they link back to the a previous slot.
 
@@ -66,10 +68,10 @@ Note that an `E` appearing on 2 forks at the same slot is a slashable condition,
 
 It's useful to consider leader rotation over PoH tick count as time division of the job of encoding state for the cluster. The following table presents the above tree of forks as a time-divided ledger.
 
-| leader slot | L1 | L2 | L3 | L4 | L5 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| data | E1 | E2 | E3 | E4 | E5 |
-| ticks since prev |  |  |  | x | xx |
+| leader slot      | L1  | L2  | L3  | L4  | L5  |
+| :--------------- | :-- | :-- | :-- | :-- | :-- |
+| data             | E1  | E2  | E3  | E4  | E5  |
+| ticks since prev |     |     |     | x   | xx  |
 
 Note that only data from leader L3 will be accepted during leader slot L3. Data from L3 may include "catchup" ticks back to a slot other than L2 if L3 did not observe L2's data. L4 and L5's transmissions include the "ticks to prev" PoH entries.
 

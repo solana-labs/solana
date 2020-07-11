@@ -1,9 +1,11 @@
-# Rust Clients
+---
+title: Rust Clients
+---
 
 ## Problem
 
 High-level tests, such as bench-tps, are written in terms of the `Client`
-trait.  When we execute these tests as part of the test suite, we use the
+trait. When we execute these tests as part of the test suite, we use the
 low-level `BankClient` implementation. When we need to run the same test
 against a cluster, we use the `ThinClient` implementation. The problem with
 that approach is that it means the trait will continually expand to include new
@@ -24,7 +26,7 @@ of `Client`. We would then add a new implementation of `Client`, called
 `ThinClient` currently resides.
 
 After this reorg, any code needing a client would be written in terms of
-`ThinClient`.  In unit tests, the functionality would be invoked with
+`ThinClient`. In unit tests, the functionality would be invoked with
 `ThinClient<BankClient>`, whereas `main()` functions, benchmarks and
 integration tests would invoke it with `ThinClient<ClusterClient>`.
 
@@ -46,7 +48,7 @@ that the `Custom(String)` field should be changed to `Custom(Box<dyn Error>)`.
    `RpcClientTng` and an `AsyncClient` implementation
 4. Move all unit-tests from `BankClient` to `ThinClientTng<BankClient>`
 5. Add `ClusterClient`
-5. Move `ThinClient` users to `ThinClientTng<ClusterClient>`
-6. Delete `ThinClient` and rename `ThinClientTng` to `ThinClient`
-7. Move `RpcClient` users to new `ThinClient<ClusterClient>`
-8. Delete `RpcClient` and rename `RpcClientTng` to `RpcClient`
+6. Move `ThinClient` users to `ThinClientTng<ClusterClient>`
+7. Delete `ThinClient` and rename `ThinClientTng` to `ThinClient`
+8. Move `RpcClient` users to new `ThinClient<ClusterClient>`
+9. Delete `RpcClient` and rename `RpcClientTng` to `RpcClient`

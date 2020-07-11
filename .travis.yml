@@ -44,3 +44,27 @@ deploy:
     file: travis-release-upload/*
     on:
       tags: true
+
+jobs:
+  include:
+    # docs pull request or commit
+    - name: "docs"
+      if: type IN (push, pull_request)
+      language: node_js
+      node_js:
+        - "node"
+
+      services:
+        - docker
+
+      cache:
+        directories:
+          - ~/.npm
+
+      before_install:
+        - .travis/affects.sh docs/ .travis || travis_terminate 0
+        - cd docs/
+        - source .travis/before_install.sh
+
+      script:
+        - source .travis/script.sh

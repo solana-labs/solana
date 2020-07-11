@@ -1,14 +1,12 @@
-# Paper Wallet Usage
+---
+title: Paper Wallet Usage
+---
 
 Solana commands can be run without ever saving a keypair to disk on a machine.
 If avoiding writing a private key to disk is a security concern of yours, you've
 come to the right place.
 
-{% hint style="warning" %}
-Even using this secure input method, it's still possible that a private key gets
-written to disk by unencrypted memory swaps. It is the user's responsibility to
-protect against this scenario.
-{% endhint %}
+> Even using this secure input method, it's still possible that a private key gets written to disk by unencrypted memory swaps. It is the user's responsibility to protect against this scenario.
 
 ## Before You Begin
 
@@ -30,10 +28,7 @@ The seed phrase and passphrase can be used together as a paper wallet. As long
 as you keep your seed phrase and passphrase stored safely, you can use them to
 access your account.
 
-{% hint style="info" %}
-For more information about how seed phrases work, review this
-[Bitcoin Wiki page](https://en.bitcoin.it/wiki/Seed_phrase).
-{% endhint %}
+> For more information about how seed phrases work, review this [Bitcoin Wiki page](https://en.bitcoin.it/wiki/Seed_phrase).
 
 ### Seed Phrase Generation
 
@@ -50,26 +45,20 @@ have not made any errors.
 solana-keygen new --no-outfile
 ```
 
-{% hint style="warning" %}
-If the `--no-outfile` flag is **omitted**, the default behavior is to write the
-keypair to `~/.config/solana/id.json`, resulting in a
-[file system wallet](../file-system-wallet/README.md)
-{% endhint %}
+> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](../file-system-wallet/README.md)
 
 The output of this command will display a line like this:
+
 ```bash
 pubkey: 9ZNTfG4NyQgxy2SWjSiQoUyBPEvXT2xo7fKc5hPYYJ7b
 ```
 
-The value shown after `pubkey:` is your *wallet address*.
+The value shown after `pubkey:` is your _wallet address_.
 
 **Note:** In working with paper wallets and file system wallets, the terms "pubkey"
 and "wallet address" are sometimes used interchangably.
 
-{% hint style="info" %}
-For added security, increase the seed phrase word count using the `--word-count`
-argument
-{% endhint %}
+> For added security, increase the seed phrase word count using the `--word-count` argument
 
 For full usage details run:
 
@@ -88,10 +77,7 @@ through entering your seed phrase and a passphrase if you chose to use one.
 solana-keygen pubkey ASK
 ```
 
-{% hint style="info" %}
-Note that you could potentially use different passphrases for the same seed
-phrase. Each unique passphrase will yield a different keypair.
-{% endhint %}
+> Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
 
 The `solana-keygen` tool uses the same BIP39 standard English word list as it
 does to generate seed phrases. If your seed phrase was generated with another
@@ -104,17 +90,12 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 ```
 
 After entering your seed phrase with `solana-keygen pubkey ASK` the console
-will display a string of base-58 character.  This is the *wallet address*
+will display a string of base-58 character. This is the _wallet address_
 associated with your seed phrase.
 
-{% hint style="info" %}
-Copy the derived address to a USB stick for easy usage on networked computers
-{% endhint %}
+> Copy the derived address to a USB stick for easy usage on networked computers
 
-{% hint style="info" %}
-A common next step is to [check the balance](#checking-account-balance) of the
-account associated with a public key
-{% endhint %}
+> A common next step is to [check the balance](#checking-account-balance) of the account associated with a public key
 
 For full usage details run:
 
@@ -142,7 +123,7 @@ keypair generated from your seed phrase, and "Failed" otherwise.
 All that is needed to check an account balance is the public key of an account.
 To retrieve public keys securely from a paper wallet, follow the
 [Public Key Derivation](#public-key-derivation) instructions on an
-[air gapped computer](https://en.wikipedia.org/wiki/Air_gap_\(networking\)).
+[air gapped computer](<https://en.wikipedia.org/wiki/Air_gap_(networking)>).
 Public keys can then be typed manually or transferred via a USB stick to a
 networked machine.
 
@@ -160,7 +141,8 @@ solana balance <PUBKEY>
 ```
 
 ## Creating Multiple Paper Wallet Addresses
-You can create as many wallet addresses as you like.  Simply re-run the
+
+You can create as many wallet addresses as you like. Simply re-run the
 steps in [Seed Phrase Generation](#seed-phrase-generation) or
 [Public Key Derivation](#public-key-derivation) to create a new address.
 Multiple wallet addresses can be useful if you want to transfer tokens between

@@ -1,4 +1,6 @@
-# Turbine Block Propagation
+---
+title: Turbine Block Propagation
+---
 
 A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for sharing any data it receives with the other nodes in its neighborhood, as well as propagating the data on to a small set of nodes in other neighborhoods. This way each node only has to communicate with a small number of nodes.
 
@@ -20,15 +22,15 @@ This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FAN
 
 The following diagram shows how the Leader sends shreds with a Fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
 
-![Leader sends shreds to Neighborhood 0 in Layer 0](../.gitbook/assets/data-plane-seeding.svg)
+![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
 
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](../.gitbook/assets/data-plane-fanout.svg)
+![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
 
 Finally, the following diagram shows a two layer cluster with a Fanout of 2.
 
-![Two layer cluster with a Fanout of 2](../.gitbook/assets/data-plane.svg)
+![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
 
 ### Configuration Values
 
@@ -38,59 +40,62 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 ## Calcuating the required FEC rate
 
-Turbine relies on retransmission of packets between validators.  Due to
+Turbine relies on retransmission of packets between validators. Due to
 retransmission, any network wide packet loss is compounded, and the
 probability of the packet failing to reach is destination increases
-on each hop.  The FEC rate needs to take into account the network wide
+on each hop. The FEC rate needs to take into account the network wide
 packet loss, and the propagation depth.
 
 A shred group is the set of data and coding packets that can be used
-to reconstruct each other.  Each shred group has a chance of failure,
+to reconstruct each other. Each shred group has a chance of failure,
 based on the likelyhood of the number of packets failing that exceeds
 the FEC rate. If a validator fails to reconstruct the shred group,
 then the block cannot be reconstructed, and the validator has to rely
 on repair to fixup the blocks.
 
 The probability of the shred group failing can be computed using the
-binomial distribution.  If the FEC rate is `16:4`, then the group size
+binomial distribution. If the FEC rate is `16:4`, then the group size
 is 20, and at least 4 of the shreds must fail for the group to fail.
 Which is equal to the sum of the probability of 4 or more trails failing
 out of 20.
 
 Probability of a block succeeding in turbine:
 
-* Probability of packet failure: `P = 1 - (1 - network_packet_loss_rate)^2`
-* FEC rate: `K:M`
-* Number of trials: `N = K + M`
-* Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P,  trials = N, failures = i)`
-* Shreds per block: `G`
-* Block success rate: `B = (1 - S) ^ (G / N) `
-* Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
+- Probability of packet failure: `P = 1 - (1 - network_packet_loss_rate)^2`
+- FEC rate: `K:M`
+- Number of trials: `N = K + M`
+- Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P, trials = N, failures = i)`
+- Shreds per block: `G`
+- Block success rate: `B = (1 - S) ^ (G / N)`
+- Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
 
 For example:
 
-* Network packet loss rate is 15%.
-* 50kpts network generates 6400 shreds per second.
-* FEC rate increases the total shres per block by the FEC ratio.
+- Network packet loss rate is 15%.
+- 50kpts network generates 6400 shreds per second.
+- FEC rate increases the total shres per block by the FEC ratio.
 
 With a FEC rate: `16:4`
-* `G = 8000`
-* `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
-* `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775,  trials = 20, failures = i) = 0.689414`
-* `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
+
+- `G = 8000`
+- `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
+- `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775, trials = 20, failures = i) = 0.689414`
+- `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
 
 With FEC rate of `16:16`
-* `G = 12800`
-* `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.002132`
-* `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
+
+- `G = 12800`
+- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.002132`
+- `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
 
 With FEC rate of `32:32`
-* `G = 12800`
-* `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.000048`
-* `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
+
+- `G = 12800`
+- `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775, trials = 64, failures = i) = 0.000048`
+- `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
 
 ## Neighborhoods
 
 The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
 
-![Inner workings of a neighborhood](../.gitbook/assets/data-plane-neighborhood.svg)
+![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)

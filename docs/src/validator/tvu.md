@@ -1,7 +1,9 @@
-# TVU
+---
+title: TVU
+---
 
-![TVU Block Diagram](../.gitbook/assets/tvu.svg)
+![TVU Block Diagram](/img/tvu.svg)
 
 ## Retransmit Stage
 
-![Retransmit Block Diagram](../.gitbook/assets/retransmit_stage.svg)
+![Retransmit Block Diagram](/img/retransmit_stage.svg)

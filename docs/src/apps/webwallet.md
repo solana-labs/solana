@@ -1,4 +1,6 @@
-# Example Client: Web Wallet
+---
+title: "Example Client: Web Wallet"
+---
 
 ## Build and run a web wallet locally
 
@@ -13,4 +15,3 @@ $ git checkout $TAG
 ```
 
 Next, follow the steps in the git repository's [README](https://github.com/solana-labs/example-webwallet/blob/master/README.md).
-

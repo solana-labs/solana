@@ -1,4 +1,6 @@
-# Manage Stake Accounts
+---
+title: Manage Stake Accounts
+---
 
 If you want to delegate stake to many different validators, you will need
 to create a separate stake account for each. If you follow the convention

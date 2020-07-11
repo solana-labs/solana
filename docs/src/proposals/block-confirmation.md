@@ -1,4 +1,6 @@
-# Block Confirmation
+---
+title: Block Confirmation
+---
 
 A validator votes on a PoH hash for two purposes. First, the vote indicates it
 believes the ledger is valid up until that point in time. Second, since many
@@ -14,16 +16,16 @@ height of the block it is voting on. The account stores the 32 highest heights.
 
 ### Problems
 
-* Only the validator knows how to find its own votes directly.
+- Only the validator knows how to find its own votes directly.
 
   Other components, such as the one that calculates confirmation time, needs to
   be baked into the validator code. The validator code queries the bank for all
   accounts owned by the vote program.
 
-* Voting ballots do not contain a PoH hash. The validator is only voting that
+- Voting ballots do not contain a PoH hash. The validator is only voting that
   it has observed an arbitrary block at some height.
 
-* Voting ballots do not contain a hash of the bank state. Without that hash,
+- Voting ballots do not contain a hash of the bank state. Without that hash,
   there is no evidence that the validator executed the transactions and
   verified there were no double spends.
 
@@ -50,8 +52,8 @@ log the time since the NewBlock transaction was submitted.
 
 ### Finality and Payouts
 
-[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm.  It proposes
-that payment to miners be postponed until the *stack* of validator votes reaches
+[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm. It proposes
+that payment to miners be postponed until the _stack_ of validator votes reaches
 a certain depth, at which point rollback is not economically feasible. The vote
 program may therefore implement Tower BFT. Vote instructions would need to
 reference a global Tower account so that it can track cross-block state.
@@ -62,7 +64,7 @@ reference a global Tower account so that it can track cross-block state.
 
 Using programs and accounts to implement this is a bit tedious. The hardest
 part is figuring out how much space to allocate in NewBlock. The two variables
-are the *active set* and the stakes of those validators. If we calculate the
+are the _active set_ and the stakes of those validators. If we calculate the
 active set at the time NewBlock is submitted, the number of validators to
 allocate space for is known upfront. If, however, we allow new validators to
 vote on old blocks, then we'd need a way to allocate space dynamically.

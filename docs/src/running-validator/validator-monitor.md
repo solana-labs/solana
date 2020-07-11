@@ -1,4 +1,6 @@
-# Monitoring a Validator
+---
+title: Monitoring a Validator
+---
 
 ## Check Gossip
 
@@ -43,7 +45,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com
 ```
-
 
 ## Validator Metrics
 

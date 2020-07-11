@@ -1,12 +1,14 @@
-# Inter-chain Transaction Verification
+---
+title: Inter-chain Transaction Verification
+---
 
 ## Problem
 
 Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
 
-* Are technically complex to fully implement
-* Create unstable network scale incentive structures
-* Require consistent and high level cooperation between stakeholders
+- Are technically complex to fully implement
+- Create unstable network scale incentive structures
+- Require consistent and high level cooperation between stakeholders
 
 ## Proposed Solution
 
@@ -36,9 +38,9 @@ The Solana Inter-chain SPV mechanism consists of the following components and pa
 
 A contract deployed on Solana which statelessly verifies SPV proofs for the caller. It takes as arguments for validation:
 
-* An SPV proof in the correct format of the blockchain associated with the program
-* Reference\(s\) to the relevant block headers to compare that proof against
-* The necessary parameters of the transaction to verify
+- An SPV proof in the correct format of the blockchain associated with the program
+- Reference\(s\) to the relevant block headers to compare that proof against
+- The necessary parameters of the transaction to verify
 
   If the proof in question is successfully validated, the SPV program saves proof
 
@@ -54,9 +56,9 @@ A contract deployed on Solana which statelessly verifies SPV proofs for the call
 
 A contract deployed on Solana which coordinates and intermediates the interaction between Clients and Provers and manages the validation of requests, headers, proofs, etc. It is the primary point of access for Client contracts to access the inter-chain. SPV mechanism. It offers the following core features:
 
-* Submit Proof Request - allows client to place a request for a specific proof or set of proofs
-* Cancel Proof Request - allows client to invalidate a pending request
-* Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
+- Submit Proof Request - allows client to place a request for a specific proof or set of proofs
+- Cancel Proof Request - allows client to invalidate a pending request
+- Fill Proof Request - used by Provers to submit for validation a proof corresponding to a given Proof Request
 
   The SPV program maintains a publicly available listing of valid pending Proof
 
@@ -90,15 +92,14 @@ An account-based data structure used to maintain block headers for the purpose o
 
 Store Headers in program sub-accounts indexed by Public address:
 
-* Each sub-account holds one header and has a public key matching the blockhash
-* Requires same number of account data lookups as confirmations per verification
-* Limit on number of confirmations \(15-20\) via max transaction data ceiling
-* No network-wide duplication of individual headers
+- Each sub-account holds one header and has a public key matching the blockhash
+- Requires same number of account data lookups as confirmations per verification
+- Limit on number of confirmations \(15-20\) via max transaction data ceiling
+- No network-wide duplication of individual headers
 
 Linked List of multiple sub-accounts storing headers:
 
-* Maintain sequential index of storage accounts, many headers per storage account
-* Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
-* Compact sequential data address format allows any number of confirmations and fast lookups
-* Facilitates network-wide header duplication inefficiencies
-
+- Maintain sequential index of storage accounts, many headers per storage account
+- Max 2 account data lookups for &gt;99.9% of verifications \(1 for most\)
+- Compact sequential data address format allows any number of confirmations and fast lookups
+- Facilitates network-wide header duplication inefficiencies

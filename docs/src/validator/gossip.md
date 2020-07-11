@@ -1,4 +1,6 @@
-# Gossip Service
+---
+title: Gossip Service
+---
 
 The Gossip Service acts as a gateway to nodes in the control plane. Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a gossip protocol.
 
@@ -24,15 +26,17 @@ Upon receiving a push message, a node examines the message for:
 
 1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
 2. New data: if the message is new to the node
-   * Stores the new information with an updated version in its cluster info and
+
+   - Stores the new information with an updated version in its cluster info and
 
      purges any previous older value
 
-   * Stores the message in `pushed_once` \(used for detecting duplicates,
+   - Stores the message in `pushed_once` \(used for detecting duplicates,
 
      purged after `PUSH_MSG_TIMEOUT * 5` ms\)
 
-   * Retransmits the messages to its own push peers
+   - Retransmits the messages to its own push peers
+
 3. Expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
 
 ### Push Peers, Prune Message
@@ -59,8 +63,8 @@ An eclipse attack is an attempt to take over the set of node connections with ad
 
 This is relevant to our implementation in the following ways.
 
-* Pull messages select a random node from the network. An eclipse attack on _pull_ would require an attacker to influence the random selection in such a way that only adversarial nodes are selected for pull.
-* Push messages maintain an active set of nodes and select a random fanout for every push message. An eclipse attack on _push_ would influence the active set selection, or the random fanout selection.
+- Pull messages select a random node from the network. An eclipse attack on _pull_ would require an attacker to influence the random selection in such a way that only adversarial nodes are selected for pull.
+- Push messages maintain an active set of nodes and select a random fanout for every push message. An eclipse attack on _push_ would influence the active set selection, or the random fanout selection.
 
 ### Time and Stake based weights
 
@@ -86,6 +90,5 @@ The active push protocol described here is based on
 [Plum Tree](https://haslab.uminho.pt/sites/default/files/jop/files/lpr07a.pdf).
 The main differences are:
 
-* Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
-* Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.
-
+- Push messages have a wallclock that is signed by the originator. Once the wallclock expires the message is dropped. A hop limit is difficult to implement in an adversarial setting.
+- Lazy Push is not implemented because its not obvious how to prevent an adversary from forging the message fingerprint. A naive approach would allow an adversary to be prioritized for pull based on their input.

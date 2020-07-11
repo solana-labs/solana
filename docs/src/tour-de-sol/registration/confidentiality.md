@@ -1,4 +1,6 @@
-# Confidentiality
+---
+title: Confidentiality
+---
 
 **Section 8 of the** [**TOUR DE SOL PARTICIPATION TERMS**](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) **references confidentiality.**
 

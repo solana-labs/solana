@@ -1,4 +1,6 @@
-# Cluster Software Installation and Updates
+---
+title: Cluster Software Installation and Updates
+---
 
 Currently users are required to build the solana cluster software themselves from the git repository and manually update it, which is error prone and inconvenient.
 
@@ -93,11 +95,11 @@ To guard against rollback attacks, `solana-install` will refuse to install an up
 
 A release archive is expected to be a tar file compressed with bzip2 with the following internal structure:
 
-* `/version.yml` - a simple YAML file containing the field `"target"` - the
+- `/version.yml` - a simple YAML file containing the field `"target"` - the
 
   target tuple. Any additional fields are ignored.
 
-* `/bin/` -- directory containing available programs in the release.
+- `/bin/` -- directory containing available programs in the release.
 
   `solana-install` will symlink this directory to
 
@@ -105,7 +107,7 @@ A release archive is expected to be a tar file compressed with bzip2 with the fo
 
   variable.
 
-* `...` -- any additional files and directories are permitted
+- `...` -- any additional files and directories are permitted
 
 ## solana-install Tool
 
@@ -113,9 +115,9 @@ The `solana-install` tool is used by the user to install and update their cluste
 
 It manages the following files and directories in the user's home directory:
 
-* `~/.config/solana/install/config.yml` - user configuration and information about currently installed software version
-* `~/.local/share/solana/install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-* `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
+- `~/.config/solana/install/config.yml` - user configuration and information about currently installed software version
+- `~/.local/share/solana/install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
+- `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
 
 ### Command-line Interface
 
@@ -212,4 +214,3 @@ ARGS:
 
 The program will be restarted upon a successful software update
 ```
-

@@ -1,4 +1,6 @@
-# Cluster Test Framework
+---
+title: Cluster Test Framework
+---
 
 This document proposes the Cluster Test Framework \(CTF\). CTF is a test harness that allows tests to execute against a local, in-process cluster or a deployed cluster.
 
@@ -99,4 +101,3 @@ pub fn test_large_invalid_gossip_nodes(
     verify_spends(&cluster);
 }
 ```
-

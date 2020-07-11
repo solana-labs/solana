@@ -1,4 +1,6 @@
-# Ledger Replication
+---
+title: Ledger Replication
+---
 
 Note: this ledger replication solution was partially implemented, but not
 completed. The partial implementation was removed by
@@ -28,7 +30,7 @@ Archivers are specialized _light clients_. They download a part of the ledger \(
 
 We have the following constraints:
 
-* Verification requires generating the CBC blocks. That requires space of 2
+- Verification requires generating the CBC blocks. That requires space of 2
 
   blocks per identity, and 1 CUDA core per identity for the same dataset. So as
 
@@ -36,7 +38,7 @@ We have the following constraints:
 
   identities verified concurrently for the same dataset.
 
-* Validators will randomly sample the set of storage proofs to the set that
+- Validators will randomly sample the set of storage proofs to the set that
 
   they can handle, and only the creators of those chosen proofs will be
 
@@ -48,31 +50,31 @@ We have the following constraints:
 
 ### Constants
 
-1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
+1. SLOTS_PER_SEGMENT: Number of slots in a segment of ledger data. The
 
    unit of storage for an archiver.
 
-2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which archivers
+2. NUM_KEY_ROTATION_SEGMENTS: Number of segments after which archivers
 
    regenerate their encryption keys and select a new dataset to store.
 
-3. NUM\_STORAGE\_PROOFS: Number of storage proofs required for a storage proof
+3. NUM_STORAGE_PROOFS: Number of storage proofs required for a storage proof
 
    claim to be successfully rewarded.
 
-4. RATIO\_OF\_FAKE\_PROOFS: Ratio of fake proofs to real proofs that a storage
+4. RATIO_OF_FAKE_PROOFS: Ratio of fake proofs to real proofs that a storage
 
    mining proof claim has to contain to be valid for a reward.
 
-5. NUM\_STORAGE\_SAMPLES: Number of samples required for a storage mining
+5. NUM_STORAGE_SAMPLES: Number of samples required for a storage mining
 
    proof.
 
-6. NUM\_CHACHA\_ROUNDS: Number of encryption rounds performed to generate
+6. NUM_CHACHA_ROUNDS: Number of encryption rounds performed to generate
 
    encrypted state.
 
-7. NUM\_SLOTS\_PER\_TURN: Number of slots that define a single storage epoch or
+7. NUM_SLOTS_PER_TURN: Number of slots that define a single storage epoch or
 
    a "turn" of the PoRep game.
 
@@ -114,14 +116,14 @@ We have the following constraints:
 
    depending on how paranoid an archiver is:
 
-   * \(a\) archiver can ask a validator
-   * \(b\) archiver can ask multiple validators
-   * \(c\) archiver can ask other archivers
-   * \(d\) archiver can subscribe to the full transaction stream and generate
+   - \(a\) archiver can ask a validator
+   - \(b\) archiver can ask multiple validators
+   - \(c\) archiver can ask other archivers
+   - \(d\) archiver can subscribe to the full transaction stream and generate
 
      the information itself \(assuming the slot is recent enough\)
 
-   * \(e\) archiver can subscribe to an abbreviated transaction stream to
+   - \(e\) archiver can subscribe to an abbreviated transaction stream to
 
      generate the information itself \(assuming the slot is recent enough\)
 
@@ -181,17 +183,17 @@ The Proof of Replication game has 4 primary stages. For each "turn" multiple PoR
 The 4 stages of the PoRep Game are as follows:
 
 1. Proof submission stage
-   * Archivers: submit as many proofs as possible during this stage
-   * Validators: No-op
+   - Archivers: submit as many proofs as possible during this stage
+   - Validators: No-op
 2. Proof verification stage
-   * Archivers: No-op
-   * Validators: Select archivers and verify their proofs from the previous turn
+   - Archivers: No-op
+   - Validators: Select archivers and verify their proofs from the previous turn
 3. Proof challenge stage
-   * Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
-   * Validators: No-op
+   - Archivers: Submit the proof mask with justifications \(for fake proofs submitted 2 turns ago\)
+   - Validators: No-op
 4. Reward collection stage
-   * Archivers: Collect rewards for 3 turns ago
-   * Validators:  Collect rewards for 3 turns ago
+   - Archivers: Collect rewards for 3 turns ago
+   - Validators: Collect rewards for 3 turns ago
 
 For each turn of the PoRep game, both Validators and Archivers evaluate each stage. The stages are run as separate transactions on the storage program.
 
@@ -207,7 +209,7 @@ For each turn of the PoRep game, both Validators and Archivers evaluate each sta
 
    The validator provides an RPC interface to access the this map. Using this API, clients
 
-   can map a segment to an archiver's network address \(correlating it via cluster\_info table\).
+   can map a segment to an archiver's network address \(correlating it via cluster_info table\).
 
    The clients can then send repair requests to the archiver to retrieve segments.
 
@@ -223,17 +225,17 @@ Our solution to this is to force the clients to continue using the same identity
 
 ## Validator attacks
 
-* If a validator approves fake proofs, archiver can easily out them by
+- If a validator approves fake proofs, archiver can easily out them by
 
   showing the initial state for the hash.
 
-* If a validator marks real proofs as fake, no on-chain computation can be done
+- If a validator marks real proofs as fake, no on-chain computation can be done
 
   to distinguish who is correct. Rewards would have to rely on the results from
 
   multiple validators to catch bad actors and archivers from being denied rewards.
 
-* Validator stealing mining proof results for itself. The proofs are derived
+- Validator stealing mining proof results for itself. The proofs are derived
 
   from a signature from an archiver, since the validator does not know the
 
@@ -249,29 +251,29 @@ Some percentage of fake proofs are also necessary to receive a reward from stora
 
 ## Notes
 
-* We can reduce the costs of verification of PoRep by using PoH, and actually
+- We can reduce the costs of verification of PoRep by using PoH, and actually
 
   make it feasible to verify a large number of proofs for a global dataset.
 
-* We can eliminate grinding by forcing everyone to sign the same PoH hash and
+- We can eliminate grinding by forcing everyone to sign the same PoH hash and
 
   use the signatures as the seed
 
-* The game between validators and archivers is over random blocks and random
+- The game between validators and archivers is over random blocks and random
 
   encryption identities and random data samples. The goal of randomization is
 
   to prevent colluding groups from having overlap on data or validation.
 
-* Archiver clients fish for lazy validators by submitting fake proofs that
+- Archiver clients fish for lazy validators by submitting fake proofs that
 
   they can prove are fake.
 
-* To defend against Sybil client identities that try to store the same block we
+- To defend against Sybil client identities that try to store the same block we
 
   force the clients to store for multiple rounds before receiving a reward.
 
-* Validators should also get rewarded for validating submitted storage proofs
+- Validators should also get rewarded for validating submitted storage proofs
 
   as incentive for storing the ledger. They can only validate proofs if they
 
@@ -287,35 +289,35 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
 ## Validator behavior
 
-1. Every NUM\_KEY\_ROTATION\_TICKS it also validates samples received from
+1. Every NUM_KEY_ROTATION_TICKS it also validates samples received from
 
    archivers. It signs the PoH hash at that point and uses the following
 
    algorithm with the signature as the input:
 
-   * The low 5 bits of the first byte of the signature creates an index into
+   - The low 5 bits of the first byte of the signature creates an index into
 
      another starting byte of the signature.
 
-   * The validator then looks at the set of storage proofs where the byte of
+   - The validator then looks at the set of storage proofs where the byte of
 
      the proof's sha state vector starting from the low byte matches exactly
 
      with the chosen byte\(s\) of the signature.
 
-   * If the set of proofs is larger than the validator can handle, then it
+   - If the set of proofs is larger than the validator can handle, then it
 
      increases to matching 2 bytes in the signature.
 
-   * Validator continues to increase the number of matching bytes until a
+   - Validator continues to increase the number of matching bytes until a
 
      workable set is found.
 
-   * It then creates a mask of valid proofs and fake proofs and sends it to
+   - It then creates a mask of valid proofs and fake proofs and sends it to
 
      the leader. This is a storage proof confirmation transaction.
 
-2. After a lockout period of NUM\_SECONDS\_STORAGE\_LOCKOUT seconds, the
+2. After a lockout period of NUM_SECONDS_STORAGE_LOCKOUT seconds, the
 
    validator then submits a storage proof claim transaction which then causes the
 
@@ -331,7 +333,7 @@ The storage epoch should be the number of slots which results in around 100GB-1T
 
    seed for the hash result.
 
-   * A fake proof should consist of an archiver hash of a signature of a PoH
+   - A fake proof should consist of an archiver hash of a signature of a PoH
 
      value. That way when the archiver reveals the fake proof, it can be
 
@@ -362,9 +364,9 @@ SubmitMiningProof {
 keys = [archiver_keypair]
 ```
 
-Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha\_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
+Archivers create these after mining their stored ledger data for a certain hash value. The slot is the end slot of the segment of ledger they are storing, the sha_state the result of the archiver using the hash function to sample their encrypted ledger segment. The signature is the signature that was created when they signed a PoH value for the current storage epoch. The list of proofs from the current storage epoch should be saved in the account state, and then transfered to a list of proofs for the previous epoch when the epoch passes. In a given storage epoch a given archiver should only submit proofs for one segment.
 
-The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS\_PER\_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
+The program should have a list of slots which are valid storage mining slots. This list should be maintained by keeping track of slots which are rooted slots in which a significant portion of the network has voted on with a high lockout value, maybe 32-votes old. Every SLOTS_PER_SEGMENT number of slots would be added to this set. The program should check that the slot is in this set. The set can be maintained by receiving a AdvertiseStorageRecentBlockHash and checking with its bank/Tower BFT state.
 
 The program should do a signature verify check on the signature, public key from the transaction submitter and the message of the previous storage epoch PoH value.
 
@@ -379,7 +381,7 @@ keys = [validator_keypair, archiver_keypair(s) (unsigned)]
 
 A validator will submit this transaction to indicate that a set of proofs for a given segment are valid/not-valid or skipped where the validator did not look at it. The keypairs for the archivers that it looked at should be referenced in the keys so the program logic can go to those accounts and see that the proofs are generated in the previous epoch. The sampling of the storage proofs should be verified ensuring that the correct proofs are skipped by the validator according to the logic outlined in the validator behavior of sampling.
 
-The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof\_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
+The included archiver keys will indicate the the storage samples which are being referenced; the length of the proof_mask should be verified against the set of storage proofs in the referenced archiver account\(s\), and should match with the number of proofs submitted in the previous storage epoch in the state of said archiver account.
 
 ### ClaimStorageReward
 
@@ -401,7 +403,7 @@ ChallengeProofValidation {
 keys = [archiver_keypair, validator_keypair]
 ```
 
-This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash\_seed\_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
+This transaction is for catching lazy validators who are not doing the work to validate proofs. An archiver will submit this transaction when it sees a validator has approved a fake SubmitMiningProof transaction. Since the archiver is a light client not looking at the full chain, it will have to ask a validator or some set of validators for this information maybe via RPC call to obtain all ProofValidations for a certain segment in the previous storage epoch. The program will look in the validator account state see that a ProofValidation is submitted in the previous storage epoch and hash the hash_seed_value and see that the hash matches the SubmitMiningProof transaction and that the validator marked it as valid. If so, then it will save the challenge to the list of challenges that it has in its state.
 
 ### AdvertiseStorageRecentBlockhash
 

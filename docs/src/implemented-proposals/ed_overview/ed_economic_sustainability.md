@@ -1,4 +1,6 @@
-# Economic Sustainability
+---
+title: Economic Sustainability
+---
 
 **Subject to change.**
 
