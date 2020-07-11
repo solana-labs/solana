@@ -1,10 +1,12 @@
-# Bankless Leader
+---
+title: Bankless Leader
+---
 
 A bankless leader does the minimum amount of work to produce a valid block. The leader is tasked with ingress transactions, sorting and filtering valid transactions, arranging them into entries, shredding the entries and broadcasting the shreds. While a validator only needs to reassemble the block and replay execution of well formed entries. The leader does 3x more memory operations before any bank execution than the validator per processed transaction.
 
 ## Rationale
 
-Normal bank operation for a spend needs to do 2 loads and 2 stores. With this design leader just does 1 load. so 4x less account\_db work before generating the block. The store operations are likely to be more expensive than reads.
+Normal bank operation for a spend needs to do 2 loads and 2 stores. With this design leader just does 1 load. so 4x less account_db work before generating the block. The store operations are likely to be more expensive than reads.
 
 When replay stage starts processing the same transactions, it can assume that PoH is valid, and that all the entries are safe for parallel execution. The fee accounts that have been loaded to produce the block are likely to still be in memory, so the additional load should be warm and the cost is likely to be amortized.
 
@@ -25,7 +27,7 @@ The balance cache lookups must reference the same base fork for the entire durat
 Prior to the balance check, the leader validates all the signatures in the transaction.
 
 1. Verify the accounts are not in use and BlockHash is valid.
-2. Check if the fee account is present in the cache, or load the account from accounts\_db and store the lamport balance in the cache.
+2. Check if the fee account is present in the cache, or load the account from accounts_db and store the lamport balance in the cache.
 3. If the balance is less than the fee, drop the transaction.
 4. Subtract the fee from the balance.
 5. For all the keys in the transaction that are Credit-Debit and are referenced by an instruction, reduce their balance to 0 in the cache. The account fee is declared as Credit-Debit, but as long as it is not used in any instruction its balance will not be reduced to 0.

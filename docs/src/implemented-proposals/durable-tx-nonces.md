@@ -1,4 +1,6 @@
-# Durable Transaction Nonces
+---
+title: Durable Transaction Nonces
+---
 
 ## Problem
 
@@ -11,8 +13,8 @@ offline network participants.
 
 ## Requirements
 
-1) The transaction's signature needs to cover the nonce value
-2) The nonce must not be reusable, even in the case of signing key disclosure
+1. The transaction's signature needs to cover the nonce value
+2. The nonce must not be reusable, even in the case of signing key disclosure
 
 ## A Contract-based Solution
 
@@ -25,8 +27,8 @@ When making use of a durable nonce, the client must first query its value from
 account data. A transaction is now constructed in the normal way, but with the
 following additional requirements:
 
-  1) The durable nonce value is used in the `recent_blockhash` field
-  2) An `AdvanceNonceAccount` instruction is the first issued in the transaction
+1. The durable nonce value is used in the `recent_blockhash` field
+2. An `AdvanceNonceAccount` instruction is the first issued in the transaction
 
 ### Contract Mechanics
 
@@ -63,7 +65,7 @@ WithdrawInstruction(to, lamports)
   success
 ```
 
-A client wishing to use this feature starts by creating a nonce account under 
+A client wishing to use this feature starts by creating a nonce account under
 the system program. This account will be in the `Uninitialized` state with no
 stored hash, and thus unusable.
 
@@ -95,11 +97,7 @@ can be changed using the `AuthorizeNonceAccount` instruction. It takes one param
 the `Pubkey` of the new authority. Executing this instruction grants full
 control over the account and its balance to the new authority.
 
-{% hint style="info" %}
-`AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current
-[nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the
-account to sign the transaction.
-{% endhint %}
+> `AdvanceNonceAccount`, `WithdrawNonceAccount` and `AuthorizeNonceAccount` all require the current [nonce authority](../offline-signing/durable-nonce.md#nonce-authority) for the account to sign the transaction.
 
 ### Runtime Support
 
@@ -114,11 +112,11 @@ instruction as the first instruction in the transaction.
 If the runtime determines that a Durable Transaction Nonce is in use, it will
 take the following additional actions to validate the transaction:
 
-  1) The `NonceAccount` specified in the `Nonce` instruction is loaded.
-  2) The `NonceState` is deserialized from the `NonceAccount`'s data field and
-confirmed to be in the `Initialized` state.
-  3) The nonce value stored in the `NonceAccount` is tested to match against the
-one specified in the transaction's `recent_blockhash` field.
+1. The `NonceAccount` specified in the `Nonce` instruction is loaded.
+2. The `NonceState` is deserialized from the `NonceAccount`'s data field and
+   confirmed to be in the `Initialized` state.
+3. The nonce value stored in the `NonceAccount` is tested to match against the
+   one specified in the transaction's `recent_blockhash` field.
 
 If all three of the above checks succeed, the transaction is allowed to continue
 validation.

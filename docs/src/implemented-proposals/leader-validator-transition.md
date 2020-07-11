@@ -1,4 +1,6 @@
-# Leader-to-Validator Transition
+---
+title: Leader-to-Validator Transition
+---
 
 A validator typically spends its time validating blocks. If, however, a staker delegates its stake to a validator, it will occasionally be selected as a _slot leader_. As a slot leader, the validator is responsible for producing blocks during an assigned _slot_. A slot has a duration of some number of preconfigured _ticks_. The duration of those ticks are estimated with a _PoH Recorder_ described later in this document.
 
@@ -48,4 +50,3 @@ The loop is synchronized to PoH and does a synchronous start and stop of the slo
    the TVU may resume voting.
 
 5. Goto 1.
-

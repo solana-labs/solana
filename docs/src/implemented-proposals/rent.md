@@ -1,4 +1,6 @@
-# Rent
+---
+title: Rent
+---
 
 Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
 
@@ -42,11 +44,11 @@ As the overall consequence of this design, all of accounts is stored equally as 
 
 Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/accessed\) was considered. The issues with such an approach are:
 
-* accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
+- accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
 
   but would not be writable during any such transaction
 
-* a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
+- a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
 
   lest accounts that are loaded infrequently get a free ride
 
@@ -54,6 +56,6 @@ Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/acces
 
 Collecting rent via a system instruction was considered, as it would naturally have distributed rent to active and stake-weighted nodes and could have been done incrementally. However:
 
-* it would have adversely affected network throughput
-* it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
-* someone would have to issue the transactions
+- it would have adversely affected network throughput
+- it would require special-casing by the runtime, as accounts with non-SystemProgram owners may be debited by this instruction
+- someone would have to issue the transactions

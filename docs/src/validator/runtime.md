@@ -1,4 +1,6 @@
-# The Runtime
+---
+title: The Runtime
+---
 
 ## The Runtime
 
@@ -20,7 +22,7 @@ Transactions are batched and processed in a pipeline. The TPU and TVU follow a s
 
 The TVU runtime ensures that PoH verification occurs before the runtime processes any transactions.
 
-![Runtime pipeline](../.gitbook/assets/runtime.svg)
+![Runtime pipeline](/img/runtime.svg)
 
 At the _execute_ stage, the loaded accounts have no data dependencies, so all the programs can be executed in parallel.
 
@@ -37,13 +39,13 @@ Execution of the program involves mapping the program's public key to an entrypo
 
 The interface is best described by the `Instruction::data` that the user encodes.
 
-* `CreateAccount` - This allows the user to create an account with an allocated data array and assign it to a Program.
-* `CreateAccountWithSeed` - Same as `CreateAccount`, but the new account's address is derived from 
-  -  the funding account's pubkey,
-  -  a mnemonic string (seed), and
-  -  the pubkey of the Program
-* `Assign` - Allows the user to assign an existing account to a program.
-* `Transfer` - Transfers lamports between accounts.
+- `CreateAccount` - This allows the user to create an account with an allocated data array and assign it to a Program.
+- `CreateAccountWithSeed` - Same as `CreateAccount`, but the new account's address is derived from
+  - the funding account's pubkey,
+  - a mnemonic string (seed), and
+  - the pubkey of the Program
+- `Assign` - Allows the user to assign an existing account to a program.
+- `Transfer` - Transfers lamports between accounts.
 
 ### Program State Security
 
@@ -53,15 +55,15 @@ To pass messages between programs, the receiving program must accept the message
 
 ### Notes
 
-* There is no dynamic memory allocation. Client's need to use `CreateAccount` instructions to create memory before passing it to another program. This instruction can be composed into a single transaction with the call to the program itself.
-* `CreateAccount` and `Assign` guarantee that when account is assigned to the program, the Account's data is zero initialized.
-* Transactions that assign an account to a program or allocate space must be signed by the Account address' private key unless the Account is being created by `CreateAccountWithSeed`, in which case there is no corresponding private key for the account's address/pubkey.
-* Once assigned to program an Account cannot be reassigned.
-* Runtime guarantees that a program's code is the only code that can modify Account data that the Account is assigned to.
-* Runtime guarantees that the program can only spend lamports that are in accounts that are assigned to it.
-* Runtime guarantees the balances belonging to accounts are balanced before and after the transaction.
-* Runtime guarantees that instructions all executed successfully when a transaction is committed.
+- There is no dynamic memory allocation. Client's need to use `CreateAccount` instructions to create memory before passing it to another program. This instruction can be composed into a single transaction with the call to the program itself.
+- `CreateAccount` and `Assign` guarantee that when account is assigned to the program, the Account's data is zero initialized.
+- Transactions that assign an account to a program or allocate space must be signed by the Account address' private key unless the Account is being created by `CreateAccountWithSeed`, in which case there is no corresponding private key for the account's address/pubkey.
+- Once assigned to program an Account cannot be reassigned.
+- Runtime guarantees that a program's code is the only code that can modify Account data that the Account is assigned to.
+- Runtime guarantees that the program can only spend lamports that are in accounts that are assigned to it.
+- Runtime guarantees the balances belonging to accounts are balanced before and after the transaction.
+- Runtime guarantees that instructions all executed successfully when a transaction is committed.
 
 ## Future Work
 
-* [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)
+- [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)

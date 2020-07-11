@@ -1,10 +1,13 @@
-# Send and Receive Tokens
+---
+title: Send and Receive Tokens
+---
+
 This page decribes how to receive and send SOL tokens using the command line
 tools with a command line wallet such as a [paper wallet](../paper-wallet/README.md),
 a [file system wallet](../file-system-wallet/README.md), or a
-[hardware wallet](../hardware-wallets/README.md).  Before you begin, make sure
+[hardware wallet](../hardware-wallets/README.md). Before you begin, make sure
 you have created a wallet and have access to its address (pubkey) and the
-signing keypair.  Check out our
+signing keypair. Check out our
 [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
 
 ## Testing your Wallet
@@ -13,15 +16,15 @@ Before sharing your public key with others, you may want to first ensure the
 key is valid and that you indeed hold the corresponding private key.
 
 In this example, we will create a second wallet in addition to your first wallet,
-and then transfer some tokens to it.  This will confirm that you can send and
+and then transfer some tokens to it. This will confirm that you can send and
 receive tokens on your wallet type of choice.
 
-This test example uses our Developer Testnet, called devnet.  Tokens issued
+This test example uses our Developer Testnet, called devnet. Tokens issued
 on devnet have **no** value, so don't worry if you lose them.
 
 #### Airdrop some tokens to get started
 
-First, *airdrop* yourself some play tokens on the devnet.
+First, _airdrop_ yourself some play tokens on the devnet.
 
 ```bash
 solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -85,6 +88,7 @@ where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
 
 #### Full example of test transfer
+
 ```bash
 $ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
 Generating a new keypair
@@ -130,7 +134,7 @@ $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devn
 To receive tokens, you will need an address for others to send tokens to. In
 Solana, the wallet address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
-you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
+you choose to store keypairs. Keypairs are stored in wallets. Before receiving
 tokens, you will need to [create a wallet](../wallet-guide/cli.md).
 Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58

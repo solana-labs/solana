@@ -1,4 +1,6 @@
-# Programming Model
+---
+title: Programming Model
+---
 
 An _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to _programs_ deployed by app developers beforehand. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transferred. Instructions are executed sequentially and atomically for each transaction. If any instruction is invalid, all account changes in the transaction are discarded.
 
@@ -18,7 +20,7 @@ Each instruction specifies a single program account \(which must be marked execu
 
 ## Deploying Programs to a Cluster
 
-![SDK tools](../.gitbook/assets/sdk-tools.svg)
+![SDK tools](/img/sdk-tools.svg)
 
 As shown in the diagram above, a program author creates a program and compiles it to an ELF shared object containing BPF bytecode and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is a _address_ specified when deploying and is used to reference the program in subsequent transactions.
 

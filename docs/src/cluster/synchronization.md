@@ -1,4 +1,6 @@
-# Synchronization
+---
+title: Synchronization
+---
 
 Fast, reliable synchronization is the biggest reason Solana is able to achieve such high throughput. Traditional blockchains synchronize on large chunks of transactions called blocks. By synchronizing on blocks, a transaction cannot be processed until a duration called "block time" has passed. In Proof of Work consensus, these block times need to be very large \(~10 minutes\) to minimize the odds of multiple validators producing a new valid block at the same time. There's no such constraint in Proof of Stake consensus, but without reliable timestamps, a validator cannot determine the order of incoming blocks. The popular workaround is to tag each block with a [wallclock timestamp](https://en.bitcoin.it/wiki/Block_timestamp). Because of clock drift and variance in network latencies, the timestamp is only accurate within an hour or two. To workaround the workaround, these systems lengthen block times to provide reasonable certainty that the median timestamp on each block is always increasing.
 
@@ -22,6 +24,5 @@ Proof of History is not a consensus mechanism, but it is used to improve the per
 
 ## More on Proof of History
 
-* [water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
-* [Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
-
+- [water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
+- [Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)

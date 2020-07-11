@@ -1,4 +1,6 @@
-# Optimistic Confirmation
+---
+title: Optimistic Confirmation
+---
 
 ## Primitives
 
@@ -16,11 +18,11 @@ Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 Now we define some "Optimistic Slashing" slashing conditions. The intuition
 for these is described below:
 
-* `Intuition`: If a validator submits `vote(X, S)`, the same validator
-should not have voted on a different fork that "overlaps" this fork.
-More concretely, this validator should not have cast another vote
-`vote(X', S')` where the range `[X, S.last]` overlaps the range
-`[X', S'.last]`, `X != X'`, as shown below:
+- `Intuition`: If a validator submits `vote(X, S)`, the same validator
+  should not have voted on a different fork that "overlaps" this fork.
+  More concretely, this validator should not have cast another vote
+  `vote(X', S')` where the range `[X, S.last]` overlaps the range
+  `[X', S'.last]`, `X != X'`, as shown below:
 
 ```text
                                   +-------+
@@ -72,7 +74,7 @@ More concretely, this validator should not have cast another vote
 
 In the diagram above, note that the vote for `S.last` must have been sent after
 the vote for `S'.last` (due to lockouts, the higher vote must have been sent
-later). Thus, the sequence  of votes must have been: `X ... S'.last ... S.last`.
+later). Thus, the sequence of votes must have been: `X ... S'.last ... S.last`.
 This means after the vote on `S'.last`, the validator must have switched back
 to the other fork at some slot `s > S'.last > X`. Thus, the vote for `S.last`
 should have used `s` as the "reference" point, not `X`, because that was the
@@ -82,21 +84,21 @@ To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
 any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
 the votes must satisfy:
 
-* `X <= S.last`, `X' <= S'.last`
-* All `s` in `S` are ancestors/descendants of one another,
-all `s'` in `S'` are ancsestors/descendants of one another,
-*
-* `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
-* `X' > X` implies `X' > S.last` and `S'.last > S.last`
-and for all `s` in `S`, `s + lockout(s) < X'`
-* `X > X'` implies `X > S'.last` and `S.last > S'.last`
-and for all `s` in `S'`, `s + lockout(s) < X`
+- `X <= S.last`, `X' <= S'.last`
+- All `s` in `S` are ancestors/descendants of one another,
+  all `s'` in `S'` are ancsestors/descendants of one another,
+-
+- `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
+- `X' > X` implies `X' > S.last` and `S'.last > S.last`
+  and for all `s` in `S`, `s + lockout(s) < X'`
+- `X > X'` implies `X > S'.last` and `S.last > S'.last`
+  and for all `s` in `S'`, `s + lockout(s) < X`
 
 (The last two rules imply the ranges cannot overlap):
 Otherwise the validator is slashed.
 
 `Range(vote)` - Given a vote `v = vote(X, S)`, define `Range(v)` to be the range
- of slots `[X, S.last]`.
+of slots `[X, S.last]`.
 
 `SP(old_vote, new_vote)` - This is the "Switching Proof" for `old_vote`, the
 validator's latest vote. Such a proof is necessary anytime a validator switches
@@ -113,12 +115,11 @@ The proof is a list of elements `(validator_id, validator_vote(X, S))`, where:
 1. The sum of the stakes of all the validator id's `> 1/3`
 
 2. For each `(validator_id, validator_vote(X, S))`, there exists some slot `s`
-in `S` where:
-    * a.`s` is not a common ancestor of both `validator_vote.last` and
-    `old_vote.last` and `new_vote.last`.
-    * b. `s` is not a descendant of `validator_vote.last`.
-    * c. `s + s.lockout() >= old_vote.last` (implies validator is still locked
-    out on slot `s` at slot `old_vote.last`).
+   in `S` where:
+   _ a.`s` is not a common ancestor of both `validator_vote.last` and
+   `old_vote.last` and `new_vote.last`.
+   _ b. `s` is not a descendant of `validator_vote.last`. \* c. `s + s.lockout() >= old_vote.last` (implies validator is still locked
+   out on slot `s` at slot `old_vote.last`).
 
 Switching forks without a valid switching proof is slashable.
 
@@ -140,12 +141,13 @@ A block `B` that has reached optimistic confirmation will not be reverted
 unless at least one validator is slashed.
 
 ## Proof:
+
 Assume for the sake of contradiction, a block `B` has achieved
 `optimistic confirmation` at some slot `B + n` for some `n`, and:
 
-* Another block `B'` that is not a parent or descendant of `B`
-was finalized.
-* No validators violated any slashing conditions.
+- Another block `B'` that is not a parent or descendant of `B`
+  was finalized.
+- No validators violated any slashing conditions.
 
 By the definition of `optimistic confirmation`, this means `> 2/3` of validators
 have each shown some vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
@@ -164,12 +166,13 @@ Because we know from above `X` for all such votes made by `v` is unique, we know
 there is such a unique `maximal` vote.
 
 ### Lemma 1:
+
 `Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the
 `Optimistic Validators` set, and `S` contains a vote for a slot `s`
 for which:
 
-* `s + s.lockout > B`,
-* `s` is not an ancestor or descendant of `B`,
+- `s + s.lockout > B`,
+- `s` is not an ancestor or descendant of `B`,
 
 then `X > B`.
 
@@ -264,6 +267,7 @@ Since none of these cases are valid, the assumption must have been invalid,
 and the claim is proven.
 
 ### Lemma 2:
+
 Recall `B'` was the block finalized on a different fork than
 "optimistically" confirmed" block `B`.
 
@@ -308,13 +312,13 @@ true that `B' > X`
 ```
 
 `Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Then by
-definition, given the  "optimistcally confirmed" block `B`, `X <= B <= S.last`.
+definition, given the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
 
 Because `X` is a parent of `B`, and `B'` is not a parent or ancestor of `B`,
 then:
 
-* `B' != X`
-* `B'` is not a parent of `X`
+- `B' != X`
+- `B'` is not a parent of `X`
 
 Now consider if `B'` < `X`:
 
@@ -324,16 +328,17 @@ and `B'` is not a parent of `X`, then the validator should not have been able
 to vote on the higher slot `X` that does not descend from `B'`.
 
 ### Proof of Safety:
+
 We now aim to show at least one of the validators in the
 `Optimistic Validators` set violated a slashing rule.
 
 First note that in order for `B'` to have been rooted, there must have been
-`> 2/3` stake that  voted on `B'` or a descendant of `B'`. Given that the
+`> 2/3` stake that voted on `B'` or a descendant of `B'`. Given that the
 `Optimistic Validator` set also contains `> 2/3` of the staked validators,
 it follows that `> 1/3` of the staked validators:
 
-* Rooted `B'` or a descendant of `B'`
-* Also submitted a vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
+- Rooted `B'` or a descendant of `B'`
+- Also submitted a vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
 
 Let the `Delinquent` set be the set of validators that meet the above
 criteria.
@@ -341,10 +346,10 @@ criteria.
 By definition, in order to root `B'`, each validator `V` in `Delinquent`
 must have each made some "switching vote" of the form `Vote(X_v, S_v)` where:
 
-* `S_v.last > B'`
-* `S_v.last` is a descendant of `B'`, so it can't be a descendant of `B`
-* Because `S_v.last` is not a descendant of `B`, then `X_v` cannot be a
-descendant or ancestor of `B`.
+- `S_v.last > B'`
+- `S_v.last` is a descendant of `B'`, so it can't be a descendant of `B`
+- Because `S_v.last` is not a descendant of `B`, then `X_v` cannot be a
+  descendant or ancestor of `B`.
 
 By definition, this delinquent validator `V` also made some vote `Vote(X, S)`
 in the `Optimistic Votes` where by definition of that set (optimistically
@@ -377,19 +382,20 @@ fact that the set of validators in the `Optimistic Voters` set consists of
 a switching proof),`Vote(X_w, S_w)` that was included in validator `V`'s
 switching proof for slot `X'`, where `S_w` contains a slot `s` such that:
 
-* `s` is not a common ancestor of `S.last` and `X'`
-* `s` is not a descendant of `S.last`.
-* `s' + s'.lockout > S.last`
+- `s` is not a common ancestor of `S.last` and `X'`
+- `s` is not a descendant of `S.last`.
+- `s' + s'.lockout > S.last`
 
 Because `B` is an ancestor of `S.last`, it is also true then:
-* `s` is not a common ancestor of `B` and `X'`
-* `s' + s'.lockout > B`
+
+- `s` is not a common ancestor of `B` and `X'`
+- `s' + s'.lockout > B`
 
 which was included in `V`'s switching proof.
 
 Now because `W` is also a member of `Optimistic Voters`, then by the `Lemma 1`
 above, given a vote by `W`, `Vote(X_w, S_w)`, where `S_w` contains a vote for
-a slot  `s` where `s + s.lockout > B`, and `s` is not an ancestor of `B`, then
+a slot `s` where `s + s.lockout > B`, and `s` is not an ancestor of `B`, then
 `X_w > B`.
 
 Because validator `V` included vote `Vote(X_w, S_w)` in its proof of switching

@@ -1,34 +1,40 @@
-# Solana Clusters
+---
+title: Solana Clusters
+---
+
 Solana maintains several different clusters with different purposes.
 
 Before you begin make sure you have first
 [installed the Solana command line tools](cli/install-solana-cli-tools.md)
 
 Explorers:
-* [http://explorer.solana.com/](https://explorer.solana.com/).
-* [http://solanabeach.io/](http://solanabeach.io/).
+
+- [http://explorer.solana.com/](https://explorer.solana.com/).
+- [http://solanabeach.io/](http://solanabeach.io/).
 
 ## Devnet
-* Devnet serves as a playground for anyone who wants to take Solana for a
-test drive, as a user, token holder, app developer, or validator.
-* Application developers should target Devnet.
-* Potential validators should first target Devnet.
-* Key differences between Devnet and Mainnet Beta:
-  * Devnet tokens are **not real**
-  * Devnet includes a token faucet for airdrops for application testing
-  * Devnet may be subject to ledger resets
-  * Devnet typically runs a newer software version than Mainnet Beta
-  * Devnet may be maintained by different validators than Mainnet Beta
- * Gossip entrypoint for Devnet: `devnet.solana.com:8001`
- * RPC URL for Devnet: `https://devnet.solana.com`
 
+- Devnet serves as a playground for anyone who wants to take Solana for a
+  test drive, as a user, token holder, app developer, or validator.
+- Application developers should target Devnet.
+- Potential validators should first target Devnet.
+- Key differences between Devnet and Mainnet Beta:
+  - Devnet tokens are **not real**
+  - Devnet includes a token faucet for airdrops for application testing
+  - Devnet may be subject to ledger resets
+  - Devnet typically runs a newer software version than Mainnet Beta
+  - Devnet may be maintained by different validators than Mainnet Beta
+- Gossip entrypoint for Devnet: `devnet.solana.com:8001`
+- RPC URL for Devnet: `https://devnet.solana.com`
 
 ##### Example `solana` command-line configuration
+
 ```bash
 solana config set --url https://devnet.solana.com
 ```
 
 ##### Example `solana-validator` command-line
+
 ```bash
 $ solana-validator \
     --identity ~/validator-keypair.json \
@@ -46,29 +52,30 @@ $ solana-validator \
 
 The `--trusted-validator`s is operated by Solana
 
-
 ## Testnet
-* Testnet is where we stress test recent release features on a live
-cluster, particularly focused on network performance, stability and validator
-behavior.
-* [Tour de SOL](tour-de-sol/README.md) initiative runs on Testnet, where we
-encourage malicious behavior and attacks on the network to help us find and
-squash bugs or network vulnerabilities.
-* Testnet tokens are **not real**
-* Testnet may be subject to ledger resets.
-* Testnet typically runs a newer software release than both Devnet and
-Mainnet Beta
-* Testnet may be maintained by different validators than Mainnet Beta
-* Gossip entrypoint for Testnet: `35.203.170.30:8001`
-* RPC URL for Testnet: `https://testnet.solana.com`
 
+- Testnet is where we stress test recent release features on a live
+  cluster, particularly focused on network performance, stability and validator
+  behavior.
+- [Tour de SOL](tour-de-sol/README.md) initiative runs on Testnet, where we
+  encourage malicious behavior and attacks on the network to help us find and
+  squash bugs or network vulnerabilities.
+- Testnet tokens are **not real**
+- Testnet may be subject to ledger resets.
+- Testnet typically runs a newer software release than both Devnet and
+  Mainnet Beta
+- Testnet may be maintained by different validators than Mainnet Beta
+- Gossip entrypoint for Testnet: `35.203.170.30:8001`
+- RPC URL for Testnet: `https://testnet.solana.com`
 
 ##### Example `solana` command-line configuration
+
 ```bash
 solana config set --url https://testnet.solana.com
 ```
 
 ##### Example `solana-validator` command-line
+
 ```bash
 $ solana-validator \
     --identity ~/validator-keypair.json \
@@ -87,28 +94,33 @@ $ solana-validator \
 ```
 
 The identity of the `--trusted-validator`s are:
-* `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
-* `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
-* `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
+
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
+- `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
+- `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
 ## Mainnet Beta
+
 A permissionless, persistent cluster for early token holders and launch partners.
 Currently smart contracts, rewards, and inflation are disabled.
- * Tokens that are issued on Mainnet Beta are **real** SOL
- * If you have paid money to purchase/be issued tokens, such as through our
- CoinList auction, these tokens will be transferred on Mainnet Beta.
-   * Note: If you are using a non-command-line wallet such as
-   [Trust Wallet](wallet-guide/trust-wallet.md),
-   the wallet will always be connecting to Mainnet Beta.
- * Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
- * RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
+
+- Tokens that are issued on Mainnet Beta are **real** SOL
+- If you have paid money to purchase/be issued tokens, such as through our
+  CoinList auction, these tokens will be transferred on Mainnet Beta.
+  - Note: If you are using a non-command-line wallet such as
+    [Trust Wallet](wallet-guide/trust-wallet.md),
+    the wallet will always be connecting to Mainnet Beta.
+- Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
+- RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Example `solana` command-line configuration
+
 ```bash
 solana config set --url https://api.mainnet-beta.solana.com
 ```
 
 ##### Example `solana-validator` command-line
+
 ```bash
 $ solana-validator \
     --identity ~/validator-keypair.json \

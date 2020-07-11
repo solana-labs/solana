@@ -1,4 +1,6 @@
-# Commitment
+---
+title: Commitment
+---
 
 The commitment metric aims to give clients a measure of the network confirmation
 and stake levels on a particular block. Clients can then use this information to
@@ -47,9 +49,10 @@ banks are not included in the commitment calculations here.
 
 Now we can naturally augment the above computation to also build a
 `BlockCommitment` array for every bank `b` by:
-1) Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
-2) Replacing `f` with `f'` such that the above computation also builds this
-`BlockCommitment` for every bank `b`.
+
+1. Adding a `ForkCommitmentCache` to collect the `BlockCommitment` structs
+2. Replacing `f` with `f'` such that the above computation also builds this
+   `BlockCommitment` for every bank `b`.
 
 We will proceed with the details of 2) as 1) is trivial.
 
@@ -75,6 +78,7 @@ Now more specifically, we augment the above computation to:
 ```
 
 where `f'` is defined as:
+
 ```text
     fn f`(
         stake: &mut Stake,

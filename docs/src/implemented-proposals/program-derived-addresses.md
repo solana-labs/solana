@@ -1,4 +1,6 @@
-# Program Derived Addresses
+---
+title: Program Derived Addresses
+---
 
 ## Problem
 
@@ -7,14 +9,14 @@ other programs as defined in the [Cross-Program Invocations](cross-program-invoc
 design.
 
 The lack of programmatic signature generation limits the kinds of programs
-that can be implemented in Solana.  A program may be given the
+that can be implemented in Solana. A program may be given the
 authority over an account and later want to transfer that authority to another.
 This is impossible today because the program cannot act as the signer in the transaction that gives authority.
 
 For example, if two users want
 to make a wager on the outcome of a game in Solana, they must each
 transfer their wager's assets to some intermediary that will honor
-their agreement.  Currently, there is no way to implement this intermediary
+their agreement. Currently, there is no way to implement this intermediary
 as a program in Solana because the intermediary program cannot transfer the
 assets to the winner.
 
@@ -22,24 +24,24 @@ This capability is necessary for many DeFi applications since they
 require assets to be transferred to an escrow agent until some event
 occurs that determines the new owner.
 
-* Decentralized Exchanges that transfer assets between matching bid and
-ask orders.
+- Decentralized Exchanges that transfer assets between matching bid and
+  ask orders.
 
-* Auctions that transfer assets to the winner.
+- Auctions that transfer assets to the winner.
 
-* Games or prediction markets that collect and redistribute prizes to
-the winners.
+- Games or prediction markets that collect and redistribute prizes to
+  the winners.
 
 ## Proposed Solution
 
 The key to the design is two-fold:
 
 1. Allow programs to control specific addresses, called Program-Addresses, in such a way that no external
-user can generate valid transactions with signatures for those
-addresses.
+   user can generate valid transactions with signatures for those
+   addresses.
 
 2. Allow programs to programmatically sign for Program-Addresses that are
-present in instructions invoked via [Cross-Program Invocations](cross-program-invocation.md).
+   present in instructions invoked via [Cross-Program Invocations](cross-program-invocation.md).
 
 Given the two conditions, users can securely transfer or assign
 the authority of on-chain assets to Program-Addresses and the program
@@ -48,13 +50,13 @@ can then assign that authority elsewhere at its discretion.
 ### Private keys for Program Addresses
 
 A Program -Address has no private key associated with it, and generating
-a signature for it is impossible.  While it has no private key of
+a signature for it is impossible. While it has no private key of
 its own, it can issue an instruction that includes the Program-Address as a signer.
 
 ### Hash-based generated Program Addresses
 
 All 256-bit values are valid ed25519 curve points and valid ed25519 public
-keys.  All are equally secure and equally as hard to break.
+keys. All are equally secure and equally as hard to break.
 Based on this assumption, Program Addresses can be deterministically
 derived from a base seed using a 256-bit preimage resistant hash function.
 
@@ -81,7 +83,7 @@ pub fn create_address_with_seed(
 ```
 
 Programs can deterministically derive any number of addresses by
-using keywords.  These keywords can symbolically identify how the addresses are used.
+using keywords. These keywords can symbolically identify how the addresses are used.
 
 ```rust,ignore
 //! Generate a derived program address
@@ -146,7 +148,7 @@ fn transfer_one_token_from_escrow(
 ### Instructions that require signers
 
 The addresses generated with `create_program_address` are indistinguishable
-from any other public key.  The only way for the runtime to verify that the
+from any other public key. The only way for the runtime to verify that the
 address belongs to a program is for the program to supply the keywords used
 to generate the address.
 

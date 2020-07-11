@@ -1,4 +1,6 @@
-# Solana ABI management process
+---
+title: Solana ABI management process
+---
 
 This document proposes the Solana ABI management process. The ABI management
 process is an engineering practice and a supporting technical framework to avoid
@@ -109,7 +111,7 @@ This part is a bit complex. There is three inter-depending parts: `AbiExample`,
 First, the generated test creates an example instance of the digested type with
 a trait called `AbiExample`, which should be implemented for all of digested
 types like the `Serialize` and return `Self` like the `Default` trait. Usually,
-it's provided via generic trait specialization for most of common types.  Also
+it's provided via generic trait specialization for most of common types. Also
 it is possible to `derive` for `struct` and `enum` and can be hand-written if
 needed.
 

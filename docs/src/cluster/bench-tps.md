@@ -1,4 +1,6 @@
-# Benchmark a Cluster
+---
+title: Benchmark a Cluster
+---
 
 The Solana git repository contains all the scripts you might need to spin up your own local testnet. Depending on what you're looking to achieve, you may want to run a different variation, as the full-fledged, performance-enhanced multinode testnet is considerably more complex to set up than a Rust-only, singlenode testnode. If you are looking to develop high-level features, such as experimenting with smart contracts, save yourself some setup headaches and stick to the Rust-only singlenode demo. If you're doing performance optimization of the transaction pipeline, consider the enhanced singlenode demo. If you're doing consensus work, you'll need at least a Rust-only multinode demo. If you want to reproduce our TPS metrics, run the enhanced multinode demo.
 
@@ -92,17 +94,17 @@ What just happened? The client demo spins up several threads to send 500,000 tra
 
 ### Testnet Debugging
 
-There are some useful debug messages in the code, you can enable them on a per-module and per-level basis. Before running a leader or validator set the normal RUST\_LOG environment variable.
+There are some useful debug messages in the code, you can enable them on a per-module and per-level basis. Before running a leader or validator set the normal RUST_LOG environment variable.
 
 For example
 
-* To enable `info` everywhere and `debug` only in the solana::banking\_stage module:
+- To enable `info` everywhere and `debug` only in the solana::banking_stage module:
 
   ```bash
   $ export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
-* To enable BPF program logging:
+- To enable BPF program logging:
 
   ```bash
   $ export RUST_LOG=solana_bpf_loader=trace

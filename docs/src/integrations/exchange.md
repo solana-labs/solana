@@ -1,4 +1,6 @@
-# Add Solana to Your Exchange
+---
+title: Add Solana to Your Exchange
+---
 
 This guide describes how to add Solana's native token SOL to your cryptocurrency
 exchange.
@@ -13,6 +15,7 @@ To run an api node:
 
 1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
 2. Boot the node with at least the following parameters:
+
 ```bash
 solana-validator \
   --ledger <LEDGER_PATH> \
@@ -27,18 +30,19 @@ solana-validator \
   --no-untrusted-rpc
 ```
 
-  Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
+Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
 
-  The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining. The shred version will change on any hard forks in the cluster, so including `--expected-shred-version` ensures you are receiving current data from the cluster you expect.
-  [Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
+The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining. The shred version will change on any hard forks in the cluster, so including `--expected-shred-version` ensures you are receiving current data from the cluster you expect.
+[Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-  The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the ledger will keep the entire ledger until it runs out of disk space. A larger value like `--limit-ledger-size 250000000000` is good for a couple days
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the ledger will keep the entire ledger until it runs out of disk space. A larger value like `--limit-ledger-size 250000000000` is good for a couple days
 
-  Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
 
-  Optional parameters to consider:
-  - `--private-rpc` prevents your RPC port from being published for use by other nodes
-  - `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
+Optional parameters to consider:
+
+- `--private-rpc` prevents your RPC port from being published for use by other nodes
+- `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
 
 ### Automatic Restarts
 
@@ -102,17 +106,18 @@ The easiest way to track all the deposit accounts for your exchange is to poll
 for each confirmed block and inspect for addresses of interest, using the
 JSON-RPC service of your Solana api node.
 
-* To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
-passing the last block you have already processed as the start-slot parameter:
+- To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
+  passing the last block you have already processed as the start-slot parameter:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
 
 {"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
 ```
+
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-* For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
+- For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
@@ -195,8 +200,8 @@ can request the block from RPC in binary format, and parse it using either our
 
 You can also query the transaction history of a specific address.
 
-* Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
-request to the api node, specifying a range of recent slots:
+- Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+  request to the api node, specifying a range of recent slots:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 10]}' localhost:8899
@@ -212,8 +217,8 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 }
 ```
 
-* For each signature returned, get the transaction details by sending a
-[`getConfirmedTransaction`](../apps/jsonrpc-api.md#getconfirmedtransaction) request:
+- For each signature returned, get the transaction details by sending a
+  [`getConfirmedTransaction`](../apps/jsonrpc-api.md#getconfirmedtransaction) request:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
@@ -312,6 +317,7 @@ more on [blockhash expiration](#blockhash-expiration) below.
 
 First, get a recent blockhash using the [`getFees` endpoint](../apps/jsonrpc-api.md#getfees)
 or the CLI command:
+
 ```bash
 solana fees --url http://localhost:8899
 ```

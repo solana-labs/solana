@@ -1,4 +1,6 @@
-# Validator
+---
+title: Validator
+---
 
 ## History
 
@@ -36,17 +38,17 @@ We unwrap the many abstraction layers and build a single pipeline that can
 toggle leader mode on whenever the validator's ID shows up in the leader
 schedule.
 
-![Validator block diagram](../.gitbook/assets/validator-proposal.svg)
+![Validator block diagram](/img/validator-proposal.svg)
 
 ## Notable changes
 
-* Hoist FetchStage and BroadcastStage out of TPU
-* BankForks renamed to Banktree
-* TPU moves to new socket-free crate called solana-tpu.
-* TPU's BankingStage absorbs ReplayStage
-* TVU goes away
-* New RepairStage absorbs Shred Fetch Stage and repair requests
-* JSON RPC Service is optional - used for debugging. It should instead be part
+- Hoist FetchStage and BroadcastStage out of TPU
+- BankForks renamed to Banktree
+- TPU moves to new socket-free crate called solana-tpu.
+- TPU's BankingStage absorbs ReplayStage
+- TVU goes away
+- New RepairStage absorbs Shred Fetch Stage and repair requests
+- JSON RPC Service is optional - used for debugging. It should instead be part
   of a separate `solana-blockstreamer` executable.
-* New MulticastStage absorbs retransmit part of RetransmitStage
-* MulticastStage downstream of Blockstore
+- New MulticastStage absorbs retransmit part of RetransmitStage
+- MulticastStage downstream of Blockstore

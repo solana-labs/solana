@@ -1,12 +1,15 @@
-# Offline Transaction Signing
+---
+title: Offline Transaction Signing
+---
 
 Some security models require keeping signing keys, and thus the signing
 process, separated from transaction creation and network broadcast. Examples
 include:
-  * Collecting signatures from geographically disparate signers in a
-[multi-signature scheme](../cli/usage.md#multiple-witnesses)
-  * Signing transactions using an [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking))
-signing device
+
+- Collecting signatures from geographically disparate signers in a
+  [multi-signature scheme](../cli/usage.md#multiple-witnesses)
+- Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
+  signing device
 
 This document describes using Solana's CLI to separately sign and submit a
 transaction.
@@ -14,27 +17,29 @@ transaction.
 ## Commands Supporting Offline Signing
 
 At present, the following commands support offline signing:
-* [`create-stake-account`](../cli/usage.md#solana-create-stake-account)
-* [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
-* [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
-* [`split-stake`](../cli/usage.md#solana-split-stake)
-* [`stake-authorize`](../cli/usage.md#solana-stake-authorize)
-* [`stake-set-lockup`](../cli/usage.md#solana-stake-set-lockup)
-* [`transfer`](../cli/usage.md#solana-transfer)
-* [`withdraw-stake`](../cli/usage.md#solana-withdraw-stake)
+
+- [`create-stake-account`](../cli/usage.md#solana-create-stake-account)
+- [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
+- [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
+- [`split-stake`](../cli/usage.md#solana-split-stake)
+- [`stake-authorize`](../cli/usage.md#solana-stake-authorize)
+- [`stake-set-lockup`](../cli/usage.md#solana-stake-set-lockup)
+- [`transfer`](../cli/usage.md#solana-transfer)
+- [`withdraw-stake`](../cli/usage.md#solana-withdraw-stake)
 
 ## Signing Transactions Offline
 
 To sign a transaction offline, pass the following arguments on the command line
-1) `--sign-only`, prevents the client from submitting the signed transaction
-to the network. Instead, the pubkey/signature pairs are printed to stdout.
-2) `--blockhash BASE58_HASH`, allows the caller to specify the value used to
-fill the transaction's `recent_blockhash` field. This serves a number of
-purposes, namely:
-    * Eliminates the need to connect to the network and query a recent blockhash
-via RPC
-    * Enables the signers to coordinate the blockhash in a multiple-signature
-scheme
+
+1. `--sign-only`, prevents the client from submitting the signed transaction
+   to the network. Instead, the pubkey/signature pairs are printed to stdout.
+2. `--blockhash BASE58_HASH`, allows the caller to specify the value used to
+   fill the transaction's `recent_blockhash` field. This serves a number of
+   purposes, namely:
+   _ Eliminates the need to connect to the network and query a recent blockhash
+   via RPC
+   _ Enables the signers to coordinate the blockhash in a multiple-signature
+   scheme
 
 ### Example: Offline Signing a Payment
 
@@ -60,10 +65,11 @@ Signers (Pubkey=Signature):
 
 To submit a transaction that has been signed offline to the network, pass the
 following arguments on the command line
-1) `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
-2) `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
-includes the pubkey/signature pairs directly in the transaction rather than
-signing it with any local keypair(s)
+
+1. `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
+2. `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
+   includes the pubkey/signature pairs directly in the transaction rather than
+   signing it with any local keypair(s)
 
 ### Example: Submitting an Offline Signed Payment
 

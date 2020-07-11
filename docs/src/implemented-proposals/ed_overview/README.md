@@ -1,4 +1,6 @@
-# Cluster Economics
+---
+title: Cluster Economics
+---
 
 **Subject to change.**
 
@@ -12,6 +14,6 @@ Transaction fees are market-based participant-to-participant transfers, attached
 
 A high-level schematic of Solana’s crypto-economic design is shown below in **Figure 1**. The specifics of validation-client economics are described in sections: [Validation-client Economics](ed_validation_client_economics/README.md), [State-validation Protocol-based Rewards](ed_validation_client_economics/ed_vce_state_validation_protocol_based_rewards.md), [State-validation Transaction Fees](ed_validation_client_economics/ed_vce_state_validation_transaction_fees.md). Also, the section titled [Validation Stake Delegation](ed_validation_client_economics/ed_vce_validation_stake_delegation.md) closes with a discussion of validator delegation opportunities and marketplace. Additionally, in [Storage Rent Economics](ed_storage_rent_economics.md), we describe an implementation of storage rent to account for the externality costs of maintaining the active state of the ledger. An outline of features for an MVP economic design is discussed in the [Economic Design MVP](ed_mvp.md) section.
 
-![](../../.gitbook/assets/economic_design_infl_230719.png)
+![](/img/economic_design_infl_230719.png)
 
 **Figure 1**: Schematic overview of Solana economic incentive design.

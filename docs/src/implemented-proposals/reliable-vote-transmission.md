@@ -1,4 +1,6 @@
-# Reliable Vote Transmission
+---
+title: Reliable Vote Transmission
+---
 
 Validator votes are messages that have a critical function for consensus and continuous operation of the network. Therefore it is critical that they are reliably delivered and encoded into the ledger.
 
@@ -56,4 +58,3 @@ Everything above plus the following:
 4. Worst case 25mb memory overhead per node.
 5. Sub 4 hops worst case to deliver to the entire network.
 6. 80 shreds received by the leader for all the validator messages.
-

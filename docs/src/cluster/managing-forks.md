@@ -1,4 +1,6 @@
-# Managing Forks
+---
+title: Managing Forks
+---
 
 The ledger is permitted to fork at slot boundaries. The resulting data structure forms a tree called a _blockstore_. When the validator interprets the blockstore, it must maintain state for each fork in the chain. We call each instance an _active fork_. It is the responsibility of a validator to weigh those forks, such that it may eventually select a fork.
 
@@ -8,14 +10,14 @@ A validator selects a fork by submiting a vote to a slot leader on that fork. Th
 
 An active fork is as a sequence of checkpoints that has a length at least one longer than the rollback depth. The shortest fork will have a length exactly one longer than the rollback depth. For example:
 
-![Forks](../.gitbook/assets/forks.svg)
+![Forks](/img/forks.svg)
 
 The following sequences are _active forks_:
 
-* {4, 2, 1}
-* {5, 2, 1}
-* {6, 3, 1}
-* {7, 3, 1}
+- {4, 2, 1}
+- {5, 2, 1}
+- {6, 3, 1}
+- {7, 3, 1}
 
 ## Pruning and Squashing
 
@@ -23,12 +25,12 @@ A validator may vote on any checkpoint in the tree. In the diagram above, that's
 
 Starting from the example above, wth a rollback depth of 2, consider a vote on 5 versus a vote on 6. First, a vote on 5:
 
-![Forks after pruning](../.gitbook/assets/forks-pruned.svg)
+![Forks after pruning](/img/forks-pruned.svg)
 
 The new root is 2, and any active forks that are not descendants from 2 are pruned.
 
 Alternatively, a vote on 6:
 
-![Forks](../.gitbook/assets/forks-pruned2.svg)
+![Forks](/img/forks-pruned2.svg)
 
 The tree remains with a root of 1, since the active fork starting at 6 is only 2 checkpoints from the root.

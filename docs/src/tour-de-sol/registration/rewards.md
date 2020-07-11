@@ -1,4 +1,6 @@
-# Rewards
+---
+title: Rewards
+---
 
 ## Reward Calculation <a id="how-are-rewards-calculated"></a>
 
