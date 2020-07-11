@@ -1537,6 +1537,7 @@ impl Bank {
             .map(|(tx, (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
+                        info!("nonce_account: {:?}", account);
                         (nonce_utils::fee_calculator_of(account), true)
                     }
                     _ => (
@@ -1546,6 +1547,18 @@ impl Bank {
                         false,
                     ),
                 };
+                if fee_calculator.is_none() {
+                    error!(
+                        "{:?} {:?} fee_calculator: {:?}",
+                        tx.signatures[0],
+                        if is_durable_nonce {
+                            "durable_nonce"
+                        } else {
+                            "recent_blockhash"
+                        },
+                        fee_calculator.is_some()
+                    );
+                }
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
                 let fee = fee_calculator.calculate_fee(tx.message());
