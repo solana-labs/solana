@@ -46,6 +46,15 @@ linux)
   ;;
 windows)
   TARGET=x86_64-pc-windows-gnu
+  # Enable symlinks used by some build.rs files
+  # source: https://stackoverflow.com/a/52097145/10242004
+  (
+    set -x
+    git --version
+    git config core.symlinks true
+    find . -type l -delete
+    git reset --hard
+  )
   ;;
 *)
   echo CI_OS_NAME unset
