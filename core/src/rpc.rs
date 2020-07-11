@@ -29,7 +29,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache},
     log_collector::LogCollector,
-    send_transaction_service::SendTransactionService,
+    send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_sdk::{
     account_utils::StateMut,
@@ -58,7 +58,8 @@ use std::{
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex, RwLock,
     },
 };
 
@@ -97,7 +98,7 @@ pub struct JsonRpcRequestProcessor {
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
-    send_transaction_service: Arc<SendTransactionService>,
+    transaction_sender: Arc<Mutex<Sender<TransactionInfo>>>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -153,19 +154,22 @@ impl JsonRpcRequestProcessor {
         health: Arc<RpcHealth>,
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
-        send_transaction_service: Arc<SendTransactionService>,
-    ) -> Self {
-        Self {
-            config,
-            bank_forks,
-            block_commitment_cache,
-            blockstore,
-            validator_exit,
-            health,
-            cluster_info,
-            genesis_hash,
-            send_transaction_service,
-        }
+    ) -> (Self, Receiver<TransactionInfo>) {
+        let (sender, receiver) = channel();
+        (
+            Self {
+                config,
+                bank_forks,
+                block_commitment_cache,
+                blockstore,
+                validator_exit,
+                health,
+                cluster_info,
+                genesis_hash,
+                transaction_sender: Arc::new(Mutex::new(sender)),
+            },
+            receiver,
+        )
     }
 
     // Useful for unit testing
@@ -179,9 +183,12 @@ impl JsonRpcRequestProcessor {
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
+        let (sender, receiver) = channel();
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
+
         Self {
             config: JsonRpcConfig::default(),
-            bank_forks: bank_forks.clone(),
+            bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
@@ -195,11 +202,7 @@ impl JsonRpcRequestProcessor {
             health: Arc::new(RpcHealth::new(cluster_info.clone(), None, 0, exit.clone())),
             cluster_info,
             genesis_hash,
-            send_transaction_service: Arc::new(SendTransactionService::new(
-                tpu_address,
-                &bank_forks,
-                &exit,
-            )),
+            transaction_sender: Arc::new(Mutex::new(sender)),
         }
     }
 
@@ -1479,8 +1482,12 @@ impl RpcSol for RpcSolImpl {
             Error::internal_error()
         })?;
 
-        meta.send_transaction_service
-            .send(signature, wire_transaction, last_valid_slot);
+        let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
+        meta.transaction_sender
+            .lock()
+            .unwrap()
+            .send(transaction_info)
+            .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
 
         Ok(signature.to_string())
     }
@@ -1527,8 +1534,12 @@ impl RpcSol for RpcSolImpl {
             }
         }
 
-        meta.send_transaction_service
-            .send(signature, wire_transaction, last_valid_slot);
+        let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
+        meta.transaction_sender
+            .lock()
+            .unwrap()
+            .send(transaction_info)
+            .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
         Ok(signature.to_string())
     }
 
@@ -1883,7 +1894,7 @@ pub mod tests {
             &socketaddr!("127.0.0.1:1234"),
         ));
 
-        let meta = JsonRpcRequestProcessor::new(
+        let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
                 identity_pubkey: *pubkey,
@@ -1896,8 +1907,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info.clone(),
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -3029,7 +3040,7 @@ pub mod tests {
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let bank_forks = new_bank_forks().0;
-        let meta = JsonRpcRequestProcessor::new(
+        let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             new_bank_forks().0,
             block_commitment_cache,
@@ -3038,8 +3049,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
@@ -3068,7 +3079,7 @@ pub mod tests {
             ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
         ));
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let meta = JsonRpcRequestProcessor::new(
+        let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             bank_forks.clone(),
             block_commitment_cache,
@@ -3077,8 +3088,8 @@ pub mod tests {
             health.clone(),
             cluster_info,
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
         let mut bad_transaction =
             system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
@@ -3215,7 +3226,7 @@ pub mod tests {
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let bank_forks = new_bank_forks().0;
-        let request_processor = JsonRpcRequestProcessor::new(
+        let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             bank_forks.clone(),
             block_commitment_cache,
@@ -3224,8 +3235,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(request_processor.validator_exit(), false);
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
@@ -3242,7 +3253,7 @@ pub mod tests {
         let bank_forks = new_bank_forks().0;
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let request_processor = JsonRpcRequestProcessor::new(
+        let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
             block_commitment_cache,
@@ -3251,8 +3262,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(request_processor.validator_exit(), true);
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
@@ -3329,7 +3340,7 @@ pub mod tests {
         config.enable_validator_exit = true;
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let request_processor = JsonRpcRequestProcessor::new(
+        let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
             block_commitment_cache,
@@ -3338,8 +3349,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            Arc::new(SendTransactionService::new(tpu_address, &bank_forks, &exit)),
         );
+        SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {

@@ -7,8 +7,8 @@ use std::{
     net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex, RwLock,
+        mpsc::Receiver,
+        Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
@@ -19,15 +19,22 @@ const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but m
 
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
-    sender: Mutex<Sender<TransactionInfo>>,
-    send_socket: UdpSocket,
-    tpu_address: SocketAddr,
 }
 
-struct TransactionInfo {
+pub struct TransactionInfo {
     signature: Signature,
     wire_transaction: Vec<u8>,
     last_valid_slot: Slot,
+}
+
+impl TransactionInfo {
+    pub fn new(signature: Signature, wire_transaction: Vec<u8>, last_valid_slot: Slot) -> Self {
+        Self {
+            signature,
+            wire_transaction,
+            last_valid_slot,
+        }
+    }
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -44,16 +51,10 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
+        receiver: Receiver<TransactionInfo>,
     ) -> Self {
-        let (sender, receiver) = channel::<TransactionInfo>();
-
         let thread = Self::retry_thread(receiver, bank_forks.clone(), tpu_address, exit.clone());
-        Self {
-            thread,
-            sender: Mutex::new(sender),
-            send_socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            tpu_address,
-        }
+        Self { thread }
     }
 
     fn retry_thread(
@@ -74,6 +75,11 @@ impl SendTransactionService {
                 }
 
                 if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
+                    Self::send_transaction(
+                        &send_socket,
+                        &tpu_address,
+                        &transaction_info.wire_transaction,
+                    );
                     if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
                         transactions.insert(transaction_info.signature, transaction_info);
                     } else {
@@ -168,21 +174,6 @@ impl SendTransactionService {
         }
     }
 
-    pub fn send(&self, signature: Signature, wire_transaction: Vec<u8>, last_valid_slot: Slot) {
-        inc_new_counter_info!("send_transaction_service-enqueue", 1, 1);
-        Self::send_transaction(&self.send_socket, &self.tpu_address, &wire_transaction);
-
-        self.sender
-            .lock()
-            .unwrap()
-            .send(TransactionInfo {
-                signature,
-                wire_transaction,
-                last_valid_slot,
-            })
-            .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
-    }
-
     pub fn join(self) -> thread::Result<()> {
         self.thread.join()
     }
@@ -195,6 +186,7 @@ mod test {
         genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
         system_transaction,
     };
+    use std::sync::mpsc::channel;
 
     #[test]
     fn service_exit() {
@@ -202,8 +194,10 @@ mod test {
         let bank = Bank::default();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let exit = Arc::new(AtomicBool::new(false));
+        let (_sender, receiver) = channel();
 
-        let send_tranaction_service = SendTransactionService::new(tpu_address, &bank_forks, &exit);
+        let send_tranaction_service =
+            SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
         exit.store(true, Ordering::Relaxed);
         send_tranaction_service.join().unwrap();
@@ -248,11 +242,7 @@ mod test {
         info!("Expired transactions are dropped..");
         transactions.insert(
             Signature::default(),
-            TransactionInfo {
-                signature: Signature::default(),
-                wire_transaction: vec![],
-                last_valid_slot: root_bank.slot() - 1,
-            },
+            TransactionInfo::new(Signature::default(), vec![], root_bank.slot() - 1),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -273,11 +263,7 @@ mod test {
         info!("Rooted transactions are dropped...");
         transactions.insert(
             rooted_signature,
-            TransactionInfo {
-                signature: rooted_signature,
-                wire_transaction: vec![],
-                last_valid_slot: working_bank.slot(),
-            },
+            TransactionInfo::new(rooted_signature, vec![], working_bank.slot()),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -298,11 +284,7 @@ mod test {
         info!("Failed transactions are dropped...");
         transactions.insert(
             failed_signature,
-            TransactionInfo {
-                signature: failed_signature,
-                wire_transaction: vec![],
-                last_valid_slot: working_bank.slot(),
-            },
+            TransactionInfo::new(failed_signature, vec![], working_bank.slot()),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -323,11 +305,7 @@ mod test {
         info!("Non-rooted transactions are kept...");
         transactions.insert(
             non_rooted_signature,
-            TransactionInfo {
-                signature: non_rooted_signature,
-                wire_transaction: vec![],
-                last_valid_slot: working_bank.slot(),
-            },
+            TransactionInfo::new(non_rooted_signature, vec![], working_bank.slot()),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -349,11 +327,7 @@ mod test {
         info!("Unknown transactions are retried...");
         transactions.insert(
             Signature::default(),
-            TransactionInfo {
-                signature: Signature::default(),
-                wire_transaction: vec![],
-                last_valid_slot: working_bank.slot(),
-            },
+            TransactionInfo::new(Signature::default(), vec![], working_bank.slot()),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
