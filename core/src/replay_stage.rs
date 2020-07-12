@@ -8,7 +8,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
     consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
-    entry_verify_service::EntryVerifyService,
+    entry_verify_service::{EntryVerifyService, SlotEntriesToVerify, VerifySlotResultReceiver},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -55,7 +55,7 @@ use std::{
         mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc, Mutex, RwLock,
     },
-    thread::{self, sleep, Builder, JoinHandle},
+    thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
 
@@ -269,7 +269,7 @@ impl ReplayStage {
 
         // Start the entry verification service
         let (verify_slot_sender, verify_slot_receiver) = unbounded();
-        let (entry_verify_service, slot_verify_results) = EntryVerifyService::new(
+        let (entry_verify_service, verify_slot_result_receiver) = EntryVerifyService::new(
             verify_slot_receiver,
             bank_forks.clone(),
             &exit,
@@ -285,7 +285,7 @@ impl ReplayStage {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = ProgressMap::default();
-
+                let mut verify_slot_successes: HashSet<Slot> = HashSet::new();
                 // Initialize progress map with any root banks
                 for bank in &frozen_banks {
                     let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
@@ -300,10 +300,8 @@ impl ReplayStage {
                             0,
                         ),
                     );
-                    slot_verify_results
-                        .write()
-                        .unwrap()
-                        .insert(bank.slot(), true);
+                    verify_slot_successes
+                        .insert(bank.slot());
                 }
 
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
@@ -420,11 +418,12 @@ impl ReplayStage {
                     let mut compute_slot_stats_time = Measure::start("compute_slot_stats_time");
                     let mut unverified_slots = vec![];
                     for slot in newly_computed_slot_stats {
-                        let leader_id =
-                            *bank_forks.read().unwrap().get(slot).unwrap().collector_id();
+                        let bank = bank_forks.read().unwrap().get(slot).cloned().unwrap();
+                        let leader_id = *bank.collector_id();
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
-                        if !slot_verify_results.read().unwrap().contains_key(&slot)
-                        {
+                        // Don't want to remove from `entries_map` any frozen banks that
+                        // were present at startup as those won't be there
+                        if !verify_slot_successes.contains(&slot) {
                             let entries = {
                                 // Our own banks do not need to be verfied, so just
                                 // sending the slot to update fork structure
@@ -436,8 +435,20 @@ impl ReplayStage {
                                 }
                             };
 
-                            unverified_slots.push((slot, entries));
+                            // We know `slot` is not a root because the only time a root
+                            // is in the `newly_computed_slot_stats` is the frozen root
+                            // at startup, but that root was added to `verify_slot_successes`
+                            // and thus could not have made it here.
+                            let parent_bank = bank.parent().unwrap();
+                            unverified_slots.push(SlotEntriesToVerify {
+                                slot,
+                                entries,
+                                parent_slot: parent_bank.slot(),
+                                parent_hash: parent_bank
+                                .last_blockhash()
+                            });
                         }
+
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
                             &fork_stats.voted_stakes,
@@ -509,14 +520,22 @@ impl ReplayStage {
                         }
                     }
 
-                    let (verify_poh_result, candidate_slot) = Self::verify_vote_and_reset_bank(
+                    let verify_res = Self::verify_vote_and_reset_bank(
                         &my_pubkey,
-                        &slot_verify_results,
+                        &mut verify_slot_successes,
+                        &verify_slot_result_receiver,
                         &vote_bank.as_ref().map(|b| b.0.clone()),
                         &reset_bank,
                         &mut progress,
+                        &ancestors,
                     );
 
+                    if verify_res.is_none() {
+                        // `verify_slot_result_receiver` has closed
+                        break;
+                    }
+
+                    let (verify_poh_result, verify_slot_failures) = verify_res.unwrap();
                     let mut voting_time = None;
                     let mut reset_bank_time = None;
                     if verify_poh_result {
@@ -628,18 +647,14 @@ impl ReplayStage {
                         }
                         reset_bank_time.as_mut().unwrap().stop();
                         Self::report_memory(&allocated, "reset_bank", start);
-                    } else {
-                        assert!(candidate_slot.is_some());
-                        let candidate_slot = candidate_slot.unwrap();
-                        Self::handle_block_failed_poh(
-                            &blockstore,
-                            &mut progress,
-                            candidate_slot,
-                            descendants.get(&candidate_slot).expect(
-                                "frozen bank must exist in BankForks and thus in descendants map",
-                            ),
-                        );
                     }
+
+                    Self::handle_blocks_failed_poh(
+                        &blockstore,
+                        &mut progress,
+                        &verify_slot_failures,
+                        &descendants
+                    );
 
                     let start = allocated.get();
                     let mut start_leader_time = Measure::start("start_leader_time");
@@ -718,90 +733,129 @@ impl ReplayStage {
                 .unwrap_or(true)
     }
 
-    fn handle_block_failed_poh(
+    fn handle_blocks_failed_poh(
         blockstore: &Blockstore,
         progress: &mut ProgressMap,
-        failed_slot: Slot,
-        descendants: &HashSet<Slot>,
+        verify_slot_failures: &HashSet<Slot>,
+        descendants: &HashMap<Slot, HashSet<Slot>>,
     ) {
-        for slot in std::iter::once(&failed_slot).chain(descendants.iter()) {
-            let bank_progress = progress.get_mut(&slot).expect(
-                "Anything in BankForks must exist
-            in progress map, guaranteed by `generate_new_bank_forks()`",
-            );
-            Self::mark_dead_slot(
-                *slot,
-                bank_progress,
-                blockstore,
-                &BlockstoreProcessorError::InvalidBlock(BlockError::InvalidEntryHash),
-            );
+        for failed_slot in verify_slot_failures {
+            // Might not exist in `descendants` if we got the results after the slot
+            // had already been purged by set root
+            let empty = HashSet::new();
+            let slot_descendants = descendants.get(failed_slot).unwrap_or(&empty);
+            for failed_slot_descendant in
+                std::iter::once(failed_slot).chain(slot_descendants.iter())
+            {
+                let bank_progress = progress.get_mut(&failed_slot).expect(
+                    "Anything in BankForks must exist
+                in progress map, guaranteed by `generate_new_bank_forks()`",
+                );
+                Self::mark_dead_slot(
+                    *failed_slot_descendant,
+                    bank_progress,
+                    blockstore,
+                    &BlockstoreProcessorError::InvalidBlock(BlockError::InvalidEntryHash),
+                );
+            }
         }
     }
 
+    // Returns `None` if `verify_slot_result_receiver` disconnects
     fn verify_vote_and_reset_bank(
         my_pubkey: &Pubkey,
-        slot_verify_results: &RwLock<HashMap<Slot, bool>>,
+        verify_slot_successes: &mut HashSet<Slot>,
+        verify_slot_result_receiver: &VerifySlotResultReceiver,
         vote_bank: &Option<Arc<Bank>>,
         reset_bank: &Option<Arc<Bank>>,
         progress: &mut ProgressMap,
-    ) -> (bool, Option<Slot>) {
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+    ) -> Option<(bool, HashSet<Slot>)> {
         let start = Instant::now();
-        let (res, timing, slot) = if let Some(vote_bank) = vote_bank {
+        let bank_to_verify = if let Some(vote_bank) = vote_bank {
             assert_eq!(vote_bank.slot(), reset_bank.as_ref().unwrap().slot());
-            let timing = &mut progress
-                .get_mut(&vote_bank.slot())
-                .expect("Frozen bank must exist in progress map")
-                .replay_stats;
-            if my_pubkey == vote_bank.collector_id() {
-                (true, Some(timing), Some(vote_bank.slot()))
-            } else {
-                // Poll for result of verification of `vote_bank`'s slot
-                let res = Self::poll_verify_result(slot_verify_results, vote_bank.slot());
-                info!(
-                    "{} poll verification slot {} result: {}",
-                    my_pubkey,
-                    vote_bank.slot(),
-                    res
-                );
-                (res, Some(timing), Some(vote_bank.slot()))
-            }
+            vote_bank
         } else if let Some(reset_bank) = reset_bank {
-            let timing = &mut progress
-                .get_mut(&reset_bank.slot())
-                .expect("Frozen bank must exist in progress map")
-                .replay_stats;
-            if my_pubkey == reset_bank.collector_id() {
-                (true, Some(timing), Some(reset_bank.slot()))
-            } else {
-                // Poll for result of verification of `reset_bank`'s slot
-                let res = Self::poll_verify_result(slot_verify_results, reset_bank.slot());
-                info!(
-                    "{} poll verification slot {} result: {}",
-                    my_pubkey,
-                    reset_bank.slot(),
-                    res
-                );
-                (res, Some(timing), Some(reset_bank.slot()))
-            }
+            reset_bank
         } else {
             // Both vote and reset bank are None, vacuously true
-            (true, None, None)
+            return Some((true, HashSet::new()));
+        };
+
+        let (res, timing, verify_slot_failures) = {
+            let timing = &mut progress
+                .get_mut(&bank_to_verify.slot())
+                .expect("Frozen bank must exist in progress map")
+                .replay_stats;
+            if my_pubkey == bank_to_verify.collector_id() {
+                // Don't need to verify our own slots
+                (true, Some(timing), HashSet::new())
+            } else {
+                let mut verify_slot_failures = HashSet::new();
+                // Poll for result of verification of `bank_to_verify`'s entire fork
+                let res = Self::poll_verify_ancestors(
+                    verify_slot_successes,
+                    &mut verify_slot_failures,
+                    verify_slot_result_receiver,
+                    bank_to_verify.slot(),
+                    ancestors
+                        .get(&bank_to_verify.slot())
+                        .expect("Frozen bank must exist in ancestors map"),
+                )?;
+                info!(
+                    "{} poll verification slot {} result: {}",
+                    my_pubkey,
+                    bank_to_verify.slot(),
+                    res
+                );
+                (res, Some(timing), verify_slot_failures)
+            }
         };
 
         if let Some(timing) = timing {
             timing.blocking_vote_or_reset_verify_elapsed = start.elapsed().as_micros() as u64;
         }
 
-        (res, slot)
+        Some((res, verify_slot_failures))
     }
 
-    fn poll_verify_result(slot_verify_results: &RwLock<HashMap<Slot, bool>>, slot: Slot) -> bool {
-        loop {
-            if let Some(res) = slot_verify_results.read().unwrap().get(&slot) {
-                return *res;
-            }
-            sleep(Duration::from_millis(5));
+    // Polls results on `verify_slot_result_receiver` until either:
+    //
+    // 1) Returns true if `verify_slot` passed verification, which implies all ancestors of
+    // `verify_slot` also passed verification.
+    //
+    // 2) Returns false if any ancestor of `verify_slot` failed verification.
+    //
+    // Also inserts all success/failures detected during polling into `verify_slot_successes` and
+    // `verify_slot_failures` respectively
+    fn poll_verify_ancestors(
+        verify_slot_successes: &mut HashSet<Slot>,
+        verify_slot_failures: &mut HashSet<Slot>,
+        verify_slot_result_receiver: &VerifySlotResultReceiver,
+        verify_slot: Slot,
+        ancestors: &HashSet<Slot>,
+    ) -> Option<bool> {
+        if verify_slot_successes.contains(&verify_slot) {
+            return Some(true);
         }
+        for (slot, result) in verify_slot_result_receiver.iter() {
+            if result {
+                verify_slot_successes.insert(slot);
+                if slot == verify_slot {
+                    return Some(true);
+                }
+            } else {
+                verify_slot_failures.insert(slot);
+                if ancestors.contains(&slot) || slot == verify_slot {
+                    // If an ancestor of this slot failed verification,
+                    // return the ancestor that failed
+                    return Some(false);
+                }
+            }
+        }
+
+        // If we reach this point, then the `verify_slot_result_receiver` has exited
+        None
     }
 
     fn report_memory(

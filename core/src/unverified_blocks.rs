@@ -12,6 +12,7 @@ pub struct UnverifiedBlockInfo {
     children: Vec<Slot>,
     pub entries: Option<Vec<Entry>>,
     pub parent_hash: Hash,
+    pub is_dead: bool,
 }
 
 #[derive(Default)]
@@ -44,25 +45,29 @@ impl UnverifiedBlocks {
         parent_hash: Hash,
     ) {
         info!("unverified_blocks: add_unverified_block {}", slot);
+        let is_dead = {
+            let parent = self
+                .unverified_blocks
+                .get_mut(&parent)
+                .expect("Parent must have been added before child");
+            parent.children.push(slot);
+            parent.is_dead
+        };
+
         self.unverified_blocks.insert(
             slot,
             UnverifiedBlockInfo {
                 parent: Some(parent),
-                entries: if entries.is_empty() {
+                entries: if entries.is_empty() || is_dead {
                     None
                 } else {
                     Some(entries)
                 },
                 children: vec![],
                 parent_hash,
+                is_dead,
             },
         );
-
-        self.unverified_blocks
-            .get_mut(&parent)
-            .expect("Parent must have been added before child")
-            .children
-            .push(slot);
     }
 
     pub fn get_heaviest_block(
@@ -72,8 +77,10 @@ impl UnverifiedBlocks {
         for next in weighted_traversal {
             if let Visit::Unvisited(slot) = next {
                 if let Some(unverified_block) = self.unverified_blocks.get_mut(&slot) {
-                    if let Some(unverified_entries) = unverified_block.entries.take() {
-                        return Some((slot, unverified_block.parent_hash, unverified_entries));
+                    if !unverified_block.is_dead {
+                        if let Some(unverified_entries) = unverified_block.entries.take() {
+                            return Some((slot, unverified_block.parent_hash, unverified_entries));
+                        }
                     }
                 }
             }
@@ -87,6 +94,8 @@ impl UnverifiedBlocks {
         if self.root == new_root {
             return;
         }
+
+        info!("unverified_blocks: set_root {}", new_root);
         let purge_slots = self.subtree_diff(self.root, new_root);
         for slot in purge_slots {
             self.unverified_blocks
@@ -94,7 +103,6 @@ impl UnverifiedBlocks {
                 .expect("Slots reachable from old root must exist in tree");
         }
 
-        info!("unverified_blocks: set_root {}", new_root);
         self.unverified_blocks
             .get_mut(&new_root)
             .expect("new root must exist in `unverified_blocks` map")
