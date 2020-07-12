@@ -173,10 +173,9 @@ pub struct TransactionWithStatusMeta {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
-    Binary, // base58 encoded raw transaction
+    Binary,
     Json,
     JsonParsed,
-    Raw,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -184,7 +183,6 @@ pub enum UiTransactionEncoding {
 pub enum EncodedTransaction {
     Binary(String),
     Json(UiTransaction),
-    Raw(Transaction),
 }
 
 impl EncodedTransaction {
@@ -193,7 +191,6 @@ impl EncodedTransaction {
             UiTransactionEncoding::Binary => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
             ),
-            UiTransactionEncoding::Raw => EncodedTransaction::Raw(transaction),
             _ => {
                 let message = if encoding == UiTransactionEncoding::Json {
                     UiMessage::Raw(UiRawMessage {
@@ -250,7 +247,6 @@ impl EncodedTransaction {
                 .into_vec()
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-            EncodedTransaction::Raw(transaction) => Some(transaction.clone()),
         }
     }
 }
