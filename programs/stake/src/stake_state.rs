@@ -1013,7 +1013,7 @@ pub fn create_account(
 mod tests {
     use super::*;
     use crate::id;
-    use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
+    use solana_sdk::{account::Account, native_token, pubkey::Pubkey, system_program};
     use solana_vote_program::vote_state;
     use std::cell::RefCell;
 
@@ -2262,6 +2262,47 @@ mod tests {
             stake_lamports + (stake_lamports * 2)
         );
         assert_eq!(stake.credits_observed, 2);
+    }
+
+    #[test]
+    fn test_stake_state_calculate_points_with_typical_values() {
+        let mut vote_state = VoteState::default();
+
+        // bootstrap means fully-vested stake at epoch 0 with
+        //  10_000_000 SOL is a big but not unreasaonable stake
+        let stake = Stake::new(
+            native_token::sol_to_lamports(10_000_000f64),
+            &Pubkey::default(),
+            &vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        );
+
+        // this one can't collect now, credits_observed == vote_state.credits()
+        assert_eq!(
+            None,
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 1_000_000_000,
+                    points: 1
+                },
+                &vote_state,
+                None
+            )
+        );
+
+        let epoch_slots: u128 = 14 * 24 * 3600 * 160;
+        // put 193,536,000 credits in at epoch 0, typical for a 14-day epoch
+        //  this loop takes a few seconds...
+        for _ in 0..epoch_slots {
+            vote_state.increment_credits(0);
+        }
+
+        // no overflow on points
+        assert_eq!(
+            u128::from(stake.delegation.stake) * epoch_slots,
+            stake.calculate_points(&vote_state, None)
+        );
     }
 
     #[test]
