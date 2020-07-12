@@ -39,6 +39,7 @@ use solana_sdk::{
 use std::{
     collections::{HashMap, HashSet},
     io::{Error as IOError, Result as IOResult},
+    iter::FromIterator,
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -630,12 +631,30 @@ impl AccountsDB {
         }
     }
 
+    fn purge_keys_exact(
+        &self,
+        pubkey_to_slot_set: Vec<(Pubkey, HashSet<Slot>)>,
+    ) -> (Vec<(u64, AccountInfo)>, Vec<Pubkey>) {
+        let mut reclaims = Vec::new();
+        let mut dead_keys = Vec::new();
+
+        let accounts_index = self.accounts_index.read().unwrap();
+        for (pubkey, slots_set) in pubkey_to_slot_set {
+            let (new_reclaims, is_empty) = accounts_index.purge_exact(&pubkey, slots_set);
+            if is_empty {
+                dead_keys.push(pubkey);
+            }
+            reclaims.extend(new_reclaims);
+        }
+
+        (reclaims, dead_keys)
+    }
+
     // Purge zero lamport accounts and older rooted account states as garbage
     // collection
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self) {
-        use std::iter::FromIterator;
         self.report_store_stats();
 
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -730,27 +749,13 @@ impl AccountsDB {
                 )
             })
             .collect();
-        let accounts_index = self.accounts_index.read().unwrap();
-        let mut reclaims = Vec::new();
-        let mut dead_keys = Vec::new();
-        for (pubkey, slots_set) in pubkey_to_slot_set {
-            let (new_reclaims, is_empty) = accounts_index.purge_exact(&pubkey, slots_set);
-            if is_empty {
-                dead_keys.push(pubkey);
-            }
-            reclaims.extend(new_reclaims);
-        }
 
-        drop(accounts_index);
+        let (reclaims, dead_keys) = self.purge_keys_exact(pubkey_to_slot_set);
 
-        if !dead_keys.is_empty() {
-            let mut accounts_index = self.accounts_index.write().unwrap();
-            for key in &dead_keys {
-                accounts_index.account_maps.remove(key);
-            }
-        }
+        self.handle_dead_keys(dead_keys);
 
         self.handle_reclaims_maybe_cleanup(&reclaims);
+
         reclaims_time.stop();
         datapoint_info!(
             "clean_accounts",
@@ -760,6 +765,19 @@ impl AccountsDB {
             ("calc_deps", calc_deps_time.as_us() as i64, i64),
             ("reclaims", reclaims_time.as_us() as i64, i64),
         );
+    }
+
+    fn handle_dead_keys(&self, dead_keys: Vec<Pubkey>) {
+        if !dead_keys.is_empty() {
+            let mut accounts_index = self.accounts_index.write().unwrap();
+            for key in &dead_keys {
+                if let Some((_ref_count, list)) = accounts_index.account_maps.get(key) {
+                    if list.read().unwrap().is_empty() {
+                        accounts_index.account_maps.remove(key);
+                    }
+                }
+            }
+        }
     }
 
     fn handle_reclaims_maybe_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
@@ -3233,6 +3251,37 @@ pub mod tests {
                 }
             });
         assert_eq!(accounts.len(), 2);
+    }
+
+    #[test]
+    fn test_cleanup_key_not_removed() {
+        solana_logger::setup();
+        let db = AccountsDB::new_single();
+
+        let key = Pubkey::default();
+        let key0 = Pubkey::new_rand();
+        let account0 = Account::new(1, 0, &key);
+
+        db.store(0, &[(&key0, &account0)]);
+
+        let key1 = Pubkey::new_rand();
+        let account1 = Account::new(2, 0, &key);
+        db.store(1, &[(&key1, &account1)]);
+
+        db.print_accounts_stats("pre");
+
+        let slots: HashSet<Slot> = HashSet::from_iter(vec![1].into_iter());
+        let purge_keys = vec![(key1, slots)];
+        let (_reclaims, dead_keys) = db.purge_keys_exact(purge_keys);
+
+        let account2 = Account::new(3, 0, &key);
+        db.store(2, &[(&key1, &account2)]);
+
+        db.handle_dead_keys(dead_keys);
+
+        db.print_accounts_stats("post");
+        let ancestors = vec![(2, 0)].into_iter().collect();
+        assert_eq!(db.load_slow(&ancestors, &key1).unwrap().0.lamports, 3);
     }
 
     #[test]
