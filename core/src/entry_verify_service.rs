@@ -1,8 +1,10 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    repair_weighted_traversal::RepairWeightTraversal, unverified_blocks::UnverifiedBlocks,
+    repair_weighted_traversal::RepairWeightTraversal,
+    result::{Error, Result},
+    unverified_blocks::UnverifiedBlocks,
 };
-use crossbeam_channel::{unbounded, Receiver, SendError, Sender};
+use crossbeam_channel::{unbounded, Receiver, RecvError, Sender, TryRecvError};
 use solana_ledger::entry::{Entry, EntrySlice, VerifyOption, VerifyRecyclers};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, hash::Hash};
@@ -82,7 +84,14 @@ impl EntryVerifyService {
                     &heaviest_subtree_fork_choice,
                 ) {
                     match e {
-                        SendError(_) => break,
+                        Error::CrossbeamSendError
+                        | Error::CrossbeamRecvError(RecvError)
+                        | Error::TryCrossbeamRecvError(TryRecvError::Disconnected) => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Unexpected error {:?}", e);
+                        }
                     }
                 }
             })
@@ -100,37 +109,16 @@ impl EntryVerifyService {
         // ReplayStage's `fork_choice.select_forks()` when `fork_choice`
         // is of type `HeaviestSubtreeForkChoice`.
         heaviest_subtree_fork_choice: &RwLock<HeaviestSubtreeForkChoice>,
-    ) -> Result<(), SendError<VerifyResult>> {
+    ) -> Result<()> {
+        if unverified_blocks.num_valid_unverified() == 0 {
+            // If there's no pending work, we can afford to wait
+            let received = slot_receiver.recv()?;
+            Self::insert_received(received, unverified_blocks);
+        }
+
         // Read out any pending new blocks that need verification
         while let Ok(received) = slot_receiver.try_recv() {
-            for slot_entries_to_verify in received {
-                let SlotEntriesToVerify {
-                    slot,
-                    entries,
-                    parent_slot,
-                    parent_hash,
-                } = slot_entries_to_verify;
-                // This is only safe to call if `slot_entries_to_verify.parent_slot`
-                // exists in `unverified_blocks`. However, we know this must
-                // be true because:
-                //
-                // 1) `parent_slot` must have been added earlier
-                // to `unverified_blocks` since ReplayStage always pushes
-                // ancestors before descendants to the `slot_receiver` channel
-                //
-                // 2) By this point we know means the parent could not have been purged
-                // from `unverified_blocks` due to a verification failure. Thus
-                // the only other possible purge is if `unverified_blocks.set_root()`
-                // purged this slot in an earlier call to this function.
-                //
-                // 3) However, we also know any earler calls to this function could
-                // not have purged this slot through `unverified_blocks.set_root()`. This
-                // is because we checked above that `parent_slot` must exist in `bank_forks`
-                // (because `slot` exists in `bank_forks` and is not a root), so
-                // any earlier calls to `unverified_blocks.set_root()` before that checlk
-                // could not have purged a slot that was not yet purged in `bank_forks`
-                unverified_blocks.add_unverified_block(slot, parent_slot, entries, parent_hash);
-            }
+            Self::insert_received(received, unverified_blocks);
         }
 
         // Purge any blocks that are outdated. Any root in `BankForks` must exist in
@@ -172,6 +160,40 @@ impl EntryVerifyService {
             );
         }
         Ok(())
+    }
+
+    fn insert_received(
+        received: Vec<SlotEntriesToVerify>,
+        unverified_blocks: &mut UnverifiedBlocks,
+    ) {
+        for slot_entries_to_verify in received {
+            let SlotEntriesToVerify {
+                slot,
+                entries,
+                parent_slot,
+                parent_hash,
+            } = slot_entries_to_verify;
+            // This is only safe to call if `slot_entries_to_verify.parent_slot`
+            // exists in `unverified_blocks`. However, we know this must
+            // be true because:
+            //
+            // 1) `parent_slot` must have been added earlier
+            // to `unverified_blocks` since ReplayStage always pushes
+            // ancestors before descendants to the `slot_receiver` channel
+            //
+            // 2) By this point we know means the parent could not have been purged
+            // from `unverified_blocks` due to a verification failure. Thus
+            // the only other possible purge is if `unverified_blocks.set_root()`
+            // purged this slot in an earlier call to this function.
+            //
+            // 3) However, we also know any earler calls to this function could
+            // not have purged this slot through `unverified_blocks.set_root()`. This
+            // is because we checked above that `parent_slot` must exist in `bank_forks`
+            // (because `slot` exists in `bank_forks` and is not a root), so
+            // any earlier calls to `unverified_blocks.set_root()` before that checlk
+            // could not have purged a slot that was not yet purged in `bank_forks`
+            unverified_blocks.add_unverified_block(slot, parent_slot, entries, parent_hash);
+        }
     }
 
     pub fn join(self) -> thread::Result<()> {

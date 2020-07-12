@@ -15,6 +15,7 @@ pub enum Error {
     AddrParse(std::net::AddrParseError),
     JoinError(Box<dyn Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
+    CrossbeamRecvError(crossbeam_channel::RecvError),
     TryCrossbeamRecvError(crossbeam_channel::TryRecvError),
     CrossbeamRecvTimeoutError(crossbeam_channel::RecvTimeoutError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
@@ -44,6 +45,11 @@ impl std::error::Error for Error {}
 impl std::convert::From<std::sync::mpsc::RecvError> for Error {
     fn from(e: std::sync::mpsc::RecvError) -> Error {
         Error::RecvError(e)
+    }
+}
+impl std::convert::From<crossbeam_channel::RecvError> for Error {
+    fn from(e: crossbeam_channel::RecvError) -> Error {
+        Error::CrossbeamRecvError(e)
     }
 }
 impl std::convert::From<crossbeam_channel::TryRecvError> for Error {
