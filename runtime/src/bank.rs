@@ -922,30 +922,50 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Ordering::Relaxed);
     }
 
+    /// map stake delegations into resolved (pubkey, account) pairs
+    ///  returns a vector (has to be copied) of loaded
+    ///   ( (staker info) (voter info) )
+    ///
+    fn stake_delegation_accounts(&self) -> Vec<((Pubkey, Account), (Pubkey, Account))> {
+        self.stakes
+            .read()
+            .unwrap()
+            .stake_delegations()
+            .iter()
+            .filter_map(|(stake_pubkey, delegation)| {
+                match (
+                    self.get_account(&stake_pubkey),
+                    self.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(stake_account), Some(vote_account)) => Some((
+                        (*stake_pubkey, stake_account),
+                        (delegation.voter_pubkey, vote_account),
+                    )),
+                    (_, _) => None,
+                }
+            })
+            .collect()
+    }
+
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return total payout
     fn pay_validator_rewards(&mut self, rewards: u64) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let stake_delegations = self.stake_delegations();
+        let mut stake_delegation_accounts = self.stake_delegation_accounts();
 
-        // first, count total points
-        let points: u128 = stake_delegations
+        let points: u128 = stake_delegation_accounts
             .iter()
-            .map(|(stake_pubkey, delegation)| {
-                match (
-                    self.get_account(&stake_pubkey),
-                    self.get_account(&delegation.voter_pubkey),
-                ) {
-                    (Some(stake_account), Some(vote_account)) => stake_state::calculate_points(
+            .map(
+                |((_stake_pubkey, stake_account), (_vote_pubkey, vote_account))| {
+                    stake_state::calculate_points(
                         &stake_account,
                         &vote_account,
                         Some(&stake_history),
                     )
-                    .unwrap_or(0),
-                    (_, _) => 0,
-                }
-            })
+                    .unwrap_or(0)
+                },
+            )
             .sum();
 
         if points == 0 {
@@ -957,43 +977,33 @@ impl Bank {
         let mut rewards = HashMap::new();
 
         // pay according to point value
-        stake_delegations
-            .iter()
-            .for_each(|(stake_pubkey, delegation)| {
-                match (
-                    self.get_account(&stake_pubkey),
-                    self.get_account(&delegation.voter_pubkey),
-                ) {
-                    (Some(mut stake_account), Some(mut vote_account)) => {
-                        let redeemed = stake_state::redeem_rewards(
-                            &mut stake_account,
-                            &mut vote_account,
-                            &point_value,
-                            Some(&stake_history),
-                        );
-                        if let Ok((stakers_reward, voters_reward)) = redeemed {
-                            self.store_account(&stake_pubkey, &stake_account);
-                            self.store_account(&delegation.voter_pubkey, &vote_account);
+        stake_delegation_accounts.iter_mut().for_each(
+            |((stake_pubkey, stake_account), (vote_pubkey, vote_account))| {
+                let redeemed = stake_state::redeem_rewards(
+                    stake_account,
+                    vote_account,
+                    &point_value,
+                    Some(&stake_history),
+                );
+                if let Ok((stakers_reward, voters_reward)) = redeemed {
+                    self.store_account(&stake_pubkey, &stake_account);
+                    self.store_account(&vote_pubkey, &vote_account);
 
-                            if voters_reward > 0 {
-                                *rewards.entry(delegation.voter_pubkey).or_insert(0i64) +=
-                                    voters_reward as i64;
-                            }
-
-                            if stakers_reward > 0 {
-                                *rewards.entry(*stake_pubkey).or_insert(0i64) +=
-                                    stakers_reward as i64;
-                            }
-                        } else {
-                            debug!(
-                                "stake_state::redeem_rewards() failed for {}: {:?}",
-                                stake_pubkey, redeemed
-                            );
-                        }
+                    if voters_reward > 0 {
+                        *rewards.entry(*vote_pubkey).or_insert(0i64) += voters_reward as i64;
                     }
-                    (_, _) => (),
+
+                    if stakers_reward > 0 {
+                        *rewards.entry(*stake_pubkey).or_insert(0i64) += stakers_reward as i64;
+                    }
+                } else {
+                    debug!(
+                        "stake_state::redeem_rewards() failed for {}: {:?}",
+                        stake_pubkey, redeemed
+                    );
                 }
-            });
+            },
+        );
 
         assert_eq!(self.rewards, None);
         self.rewards = Some(rewards.drain().collect());
@@ -4745,20 +4755,13 @@ mod tests {
         bank.store_account(&vote_id, &vote_account);
 
         let validator_points: u128 = bank
-            .stake_delegations()
+            .stake_delegation_accounts()
             .iter()
-            .map(|(stake_pubkey, delegation)| {
-                match (
-                    bank.get_account(&stake_pubkey),
-                    bank.get_account(&delegation.voter_pubkey),
-                ) {
-                    (Some(stake_account), Some(vote_account)) => {
-                        stake_state::calculate_points(&stake_account, &vote_account, None)
-                            .unwrap_or(0)
-                    }
-                    (_, _) => 0,
-                }
-            })
+            .map(
+                |((_stake_pubkey, stake_account), (_vote_pubkey, vote_account))| {
+                    stake_state::calculate_points(&stake_account, &vote_account, None).unwrap_or(0)
+                },
+            )
             .sum();
 
         // put a child bank in epoch 1, which calls update_rewards()...
