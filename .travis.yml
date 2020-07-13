@@ -18,6 +18,7 @@ jobs:
       if: type = push
       name: "macOS release artifacts"
       os: osx
+      language: rust
       rust:
         - stable
       install:
@@ -43,11 +44,6 @@ jobs:
           file: travis-release-upload/*
           on:
             tags: true
-    - <<: *release-artifacts
-      name: "Linux release artifacts"
-      os: linux
-      before_install:
-        - sudo apt-get install libssl-dev libudev-dev
     - <<: *release-artifacts
       name: "Windows release artifacts"
       os: windows
