@@ -6486,6 +6486,21 @@ mod tests {
     }
 
     #[test]
+    fn test_blockhash_queue_sysvar_consistency() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+
+        let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
+        let recent_blockhashes =
+            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+
+        let sysvar_recent_blockhash = recent_blockhashes[0].blockhash;
+        let bank_last_blockhash = bank.last_blockhash();
+        assert_eq!(sysvar_recent_blockhash, bank_last_blockhash);
+    }
+
+    #[test]
     fn test_bank_inherit_last_vote_sync() {
         let (genesis_config, _) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
