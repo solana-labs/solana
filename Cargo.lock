@@ -4594,9 +4594,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.4"
+version = "1.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b628fa500e0b83df3e96f7cc21dc998d8841a994f1c2109475273e6448afd4"
+checksum = "3869d4a4784d10fc0db91fc666a7ccb916fd47e74636e37c328df5a3b7f8157f"
 dependencies = [
  "bincode",
  "bs58 0.3.1",
@@ -4612,7 +4612,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2",
- "solana-sdk-macro 1.2.4",
+ "solana-sdk-macro 1.2.10",
  "thiserror",
 ]
 
@@ -4653,16 +4653,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-sdk-bpf-test"
-version = "1.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1e668937b3fc2ecb13ad0285f318b0f81ba06c1b923d4cbc4d9868fb09d39d8"
-
-[[package]]
 name = "solana-sdk-macro"
-version = "1.2.4"
+version = "1.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da5f311e7735323eb0ad348c68170c2503a2c56cfa1a261646d8182b373fa670"
+checksum = "d3fba494b48ee7d1b1c9cfd2df292d9dad69ccfd1f2b107eb030e29601cc4103"
 dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.17",
@@ -5332,12 +5326,11 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spl-memo"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db4ebc6a6d50b55cbe7c84c7f6cd0259f4f82a169eb49ef65ca62b9c69a76a1f"
+checksum = "2d28cb8e0db4c8d578cde21a416af3e376ce4c3eeb6f5bcd7025fdf8980a3ce8"
 dependencies = [
- "solana-sdk 1.2.4",
- "solana-sdk-bpf-test",
+ "solana-sdk 1.2.10",
 ]
 
 [[package]]
