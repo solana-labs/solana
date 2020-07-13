@@ -45,11 +45,6 @@ jobs:
           on:
             tags: true
     - <<: *release-artifacts
-      name: "Linux release artifacts"
-      os: linux
-      before_install:
-        - sudo apt-get install libssl-dev libudev-dev
-    - <<: *release-artifacts
       name: "Windows release artifacts"
       os: windows
 
