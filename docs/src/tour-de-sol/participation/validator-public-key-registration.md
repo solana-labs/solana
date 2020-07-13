@@ -1,6 +1,8 @@
-# Create a validator public key
+---
+title: Create a validator public key
+---
 
-In order to participate you need to first register.  See [Registration info](../registration/how-to-register.md).
+In order to participate you need to first register. See [Registration info](../registration/how-to-register.md).
 
 In order to obtain your allotment of SOL you need to publish your
 validator's identity public key under your keybase.io account.
@@ -19,9 +21,7 @@ validator's identity public key under your keybase.io account.
      solana-keygen pubkey ~/validator-keypair.json
    ```
 
-{% hint style="info" %}
-Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
-{% endhint %}
+> Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
 
 Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 

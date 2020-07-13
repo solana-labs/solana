@@ -1,8 +1,12 @@
-# Connecting to a Cluster
+---
+title: Connecting to a Cluster
+---
+
 See [Solana Clusters](../clusters.md) for general information about the
 available clusters.
 
 ## Configure the command-line tool
+
 You can check what cluster the Solana command-line tool (CLI) is currently targeting by
 running the following command:
 
@@ -10,11 +14,12 @@ running the following command:
 solana config get
 ```
 
-Use `solana config set` command to target a particular cluster.  After setting
+Use `solana config set` command to target a particular cluster. After setting
 a cluster target, any future subcommands will send/receive information from that
 cluster.
 
 For example to target the Devnet cluster, run:
+
 ```bash
 solana config set --url https://devnet.solana.com
 ```

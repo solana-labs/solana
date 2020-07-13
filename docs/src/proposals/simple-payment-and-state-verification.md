@@ -1,4 +1,6 @@
-# Simple Payment and State Verification
+---
+title: Simple Payment and State Verification
+---
 
 It is often useful to allow low resourced clients to participate in a Solana
 cluster. Be this participation economic or contract execution, verification
@@ -67,11 +69,11 @@ sorted by signature.
 
 A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the block.
 
-![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle.svg)
+![Block Merkle Diagram](/img/spv-block-merkle.svg)
 
 A Bank-Hash is the hash of the concatenation of the Block-Merkle and Accounts-Hash
 
-![Bank Hash Diagram](../.gitbook/assets/spv-bank-hash.svg)
+![Bank Hash Diagram](/img/spv-bank-hash.svg)
 
 An Accounts-Hash is the hash of the concatentation of the state hashes of each
 account modified during the current slot.
@@ -86,7 +88,7 @@ code, but a single status bit to indicate the transaction's success.
 ### Account State Verification
 
 An account's state (balance or other data) can be verified by submitting a
-transaction with a ___TBD___ Instruction to the cluster. The client can then
+transaction with a **_TBD_** Instruction to the cluster. The client can then
 use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify
 whether the cluster agrees that the acount has reached the expected state.
 
@@ -102,13 +104,13 @@ of consecutive validation votes.
 
 It contains the following:
 
-* Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Hash
+- Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Hash
 
 And a vector of PoH entries:
 
-* Validator vote entries
-* Ticks
-* Light entries
+- Validator vote entries
+- Ticks
+- Light entries
 
 ```text
 /// This Entry definition skips over the transactions and only contains the
@@ -148,8 +150,8 @@ generated state.
 
 For example:
 
-* Epoch validator accounts and their stakes and weights.
-* Computed fee rates
+- Epoch validator accounts and their stakes and weights.
+- Computed fee rates
 
 These values should have an entry in the Bank-Hash. They should live under known
 accounts, and therefore have an index into the hash concatenation.

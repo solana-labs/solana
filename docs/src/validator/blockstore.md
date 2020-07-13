@@ -1,4 +1,6 @@
-# Blockstore
+---
+title: Blockstore
+---
 
 After a block reaches finality, all blocks from that one on down to the genesis block form a linear chain with the familiar name blockchain. Until that point, however, the validator must maintain all potentially valid chains, called _forks_. The process by which forks naturally form as a result of leader rotation is described in [fork generation](../cluster/fork-generation.md). The _blockstore_ data structure described here is how a validator copes with those forks until blocks are finalized.
 
@@ -40,21 +42,23 @@ Repair requests for recent shreds are served out of RAM or recent files and out 
 
 1. Entries in the Blockstore are stored as key-value pairs, where the key is the concatenated slot index and shred index for an entry, and the value is the entry data. Note shred indexes are zero-based for each slot \(i.e. they're slot-relative\).
 2. The Blockstore maintains metadata for each slot, in the `SlotMeta` struct containing:
-   * `slot_index` - The index of this slot
-   * `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
-   * `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
-   * `received` - The highest received shred index for the slot
-   * `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+
+   - `slot_index` - The index of this slot
+   - `num_blocks` - The number of blocks in the slot \(used for chaining to a previous slot\)
+   - `consumed` - The highest shred index `n`, such that for all `m < n`, there exists a shred in this slot with shred index equal to `n` \(i.e. the highest consecutive shred index\).
+   - `received` - The highest received shred index for the slot
+   - `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
 
      the ledger to find possible fork points.
 
-   * `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
-   * `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is\_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is\_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is\_rooted\(n\) be the statement that "the slot\(n\).is\_rooted is true". Then:
+   - `last_index` - The index of the shred that is flagged as the last shred for this slot. This flag on a shred will be set by the leader for a slot when they are transmitting the last shred for a slot.
+   - `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot\(n\) be the slot with index `n`, and slot\(n\).is_full\(\) is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted\(n\) be the statement that "the slot\(n\).is_rooted is true". Then:
 
-     is\_rooted\(0\) is\_rooted\(n+1\) iff \(is\_rooted\(n\) and slot\(n\).is\_full\(\)
+     is_rooted\(0\) is_rooted\(n+1\) iff \(is_rooted\(n\) and slot\(n\).is_full\(\)
+
 3. Chaining - When a shred for a new slot `x` arrives, we check the number of blocks \(`num_blocks`\) for that new slot \(this information is encoded in the shred\). We then know that this new slot chains to slot `x - num_blocks`.
 4. Subscriptions - The Blockstore records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blockstore channel for consumption by the ReplayStage. See the `Blockstore APIs` for details.
-5. Update notifications - The Blockstore notifies listeners when slot\(n\).is\_rooted is flipped from false to true for any `n`.
+5. Update notifications - The Blockstore notifies listeners when slot\(n\).is_rooted is flipped from false to true for any `n`.
 
 ## Blockstore APIs
 

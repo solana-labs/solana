@@ -1,0 +1,69 @@
+/* stylelint-disable docusaurus/copyright-header */
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto');
+
+:root {
+  --ifm-color-primary: #25c2a0;
+  --ifm-color-primary-dark: #409088;
+  --ifm-color-primary-darker: #387462;
+  --ifm-color-primary-darkest: #1b4e3f;
+  --ifm-color-primary-light: #42ba96;
+  --ifm-color-primary-lighter: #86b8b6;
+  --ifm-color-primary-lightest: #abd5c6;
+  --ifm-code-font-size: 95%;
+  --ifm-spacing-horizontal: 1em;
+  --ifm-font-family-base: "Roboto", system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --ifm-footer-background-color: #232323;
+}
+
+
+
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(1.5rem); }
+}
+
+main {
+  margin: 1rem 0 5rem 0;
+}
+
+.docusaurus-highlight-code-line {
+  background-color: rgb(72, 77, 91);
+  display: block;
+  margin: 0 calc(-1 * var(--ifm-pre-padding));
+  padding: 0 var(--ifm-pre-padding);
+}
+
+.card {
+  padding: 1rem;
+  margin-top: 2rem;
+  animation: fadeInUp 400ms backwards;
+  animation-delay: 150ms;
+  transition-property: all;
+  transition-duration: 200ms;
+  box-shadow: 0 8px 28px 4px rgba(86,91,115,0.15);
+}
+
+
+.card a {
+  text-decoration: none;
+}
+
+.card:hover {
+  transform: translate(0px, -5px);
+}
+
+.footer--dark {
+  background-color: #232323 !important;
+}
+
+footer .text--center {
+  padding: 2rem 0 0 0;
+}

@@ -1,4 +1,6 @@
-# Solana ABI management process
+---
+title: Solana ABI management process
+---
 
 This document proposes the Solana ABI management process. The ABI management
 process is an engineering practice and a supporting technical framework to avoid
@@ -82,8 +84,6 @@ We use some degree of macro machinery to automatically generate unit tests
 and calculate a digest from ABI items. This is doable by clever use of
 `serde::Serialize` (`[1]`) and `any::typename` (`[2]`). For a precedent for similar
 implementation, `ink` from the Parity Technologies `[3]` could be informational.
-
-# References
 
 1. [(De)Serialization with type info · Issue #1095 · serde-rs/serde](https://github.com/serde-rs/serde/issues/1095#issuecomment-345483479)
 2. [`std::any::type_name` - Rust](https://doc.rust-lang.org/std/any/fn.type_name.html)

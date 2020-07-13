@@ -1,4 +1,6 @@
-# Drones
+---
+title: Drones
+---
 
 This section defines an off-chain service called a _drone_, which acts as custodian of a user's private key. In its simplest form, it can be used to create _airdrop_ transactions, a token transfer from the drone's account to a client's account.
 
@@ -20,7 +22,7 @@ Note: the Solana cluster will not parallelize transactions funded by the same fe
 
 ## Attack vectors
 
-### Invalid recent\_blockhash
+### Invalid recent_blockhash
 
 The drone may prefer its airdrops only target a particular Solana cluster. To do that, it listens to the cluster for new entry IDs and ensure any requests reference a recent one.
 
@@ -41,4 +43,3 @@ A client may request multiple airdrops before the first has been submitted to th
 If the transaction data size is smaller than the size of the returned signature \(or descriptive error\), a single client can flood the network. Considering that a simple `Transfer` operation requires two public keys \(each 32 bytes\) and a `fee` field, and that the returned signature is 64 bytes \(and a byte to indicate `Ok`\), consideration for this attack may not be required.
 
 In the current design, the drone accepts TCP connections. This allows clients to DoS the service by simply opening lots of idle connections. Switching to UDP may be preferred. The transaction data will be smaller than a UDP packet since the transaction sent to the Solana cluster is already pinned to using UDP.
-

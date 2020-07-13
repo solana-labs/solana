@@ -1,4 +1,6 @@
-# Running a Validator
+---
+title: Running a Validator
+---
 
 This section describes how run a Solana validator node.
 

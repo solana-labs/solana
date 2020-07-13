@@ -1,4 +1,6 @@
-# Slashing rules
+---
+title: Slashing rules
+---
 
 Unlike Proof of Work \(PoW\) where off-chain capital expenses are already
 deployed at the time of block construction/voting, PoS systems require
@@ -28,12 +30,12 @@ In addition to the functional form lockout described above, early
 implementation may be a numerical approximation based on a First In, First Out
 \(FIFO\) data structure and the following logic:
 
-* FIFO queue holding 32 votes per active validator
-* new votes are pushed on top of queue \(`push_front`\)
-* expired votes are popped off top \(`pop_front`\)
-* as votes are pushed into the queue, the lockout of each queued vote doubles
-* votes are removed from back of queue if `queue.len() > 32`
-* the earliest and latest height that has been removed from the back of the
+- FIFO queue holding 32 votes per active validator
+- new votes are pushed on top of queue \(`push_front`\)
+- expired votes are popped off top \(`pop_front`\)
+- as votes are pushed into the queue, the lockout of each queued vote doubles
+- votes are removed from back of queue if `queue.len() > 32`
+- the earliest and latest height that has been removed from the back of the
   queue should be stored
 
 It is likely that a reward will be offered as a % of the slashed amount to any

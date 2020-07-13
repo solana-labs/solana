@@ -1,4 +1,6 @@
-# Durable Transaction Nonces
+---
+title: Durable Transaction Nonces
+---
 
 Durable transaction nonces are a mechanism for getting around the typical
 short lifetime of a transaction's [`recent_blockhash`](../transaction.md#recent-blockhash).
@@ -19,15 +21,16 @@ creation of more complex account ownership arrangements and derived account
 addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
 argument is used to specify this account and is supported by the following
 commands
-* `create-nonce-account`
-* `new-nonce`
-* `withdraw-from-nonce-account`
-* `authorize-nonce-account`
+
+- `create-nonce-account`
+- `new-nonce`
+- `withdraw-from-nonce-account`
+- `authorize-nonce-account`
 
 ### Nonce Account Creation
 
 The durable transaction nonce feature uses an account to store the next nonce
-value.  Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
+value. Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
 so need to carry the minimum balance to achieve this.
 
 A nonce account is created by first generating a new keypair, then create the account on chain
@@ -45,15 +48,9 @@ solana create-nonce-account nonce-keypair.json 1
 2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
 ```
 
-{% hint style="info" %}
-To keep the keypair entirely offline, use the [Paper Wallet](../paper-wallet/README.md)
-keypair generation [instructions](../paper-wallet/paper-wallet-usage.md#seed-phrase-generation.md)
-instead
-{% endhint %}
+> To keep the keypair entirely offline, use the [Paper Wallet](../paper-wallet/README.md) keypair generation [instructions](../paper-wallet/paper-wallet-usage.md#seed-phrase-generation.md) instead
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-create-nonce-account)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 
 ### Querying the Stored Nonce Value
 
@@ -73,9 +70,7 @@ solana nonce nonce-keypair.json
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
 ```
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-get-nonce)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-get-nonce)
 
 ### Advancing the Stored Nonce Value
 
@@ -94,9 +89,7 @@ solana new-nonce nonce-keypair.json
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
 ```
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-new-nonce)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-new-nonce)
 
 ### Display Nonce Account
 
@@ -116,9 +109,7 @@ minimum balance required: 0.00136416 SOL
 nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-nonce-account)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-nonce-account)
 
 ### Withdraw Funds from a Nonce Account
 
@@ -136,13 +127,9 @@ solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0
 3foNy1SBqwXSsfSfTdmYKDuhnVheRnKXpoPySiUDBVeDEs6iMVokgqm7AqfTjbk7QBE8mqomvMUMNQhtdMvFLide
 ```
 
-{% hint style="info" %}
-Close a nonce account by withdrawing the full balance
-{% endhint %}
+> Close a nonce account by withdrawing the full balance
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
 
 ### Assign a New Authority to a Nonce Account
 
@@ -160,21 +147,21 @@ solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
 ```
 
-{% hint style="info" %}
-[Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
-{% endhint %}
+> [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
 
 ## Other Commands Supporting Durable Nonces
 
 To make use of durable nonces with other CLI subcommands, two arguments must be
 supported.
-* `--nonce`, specifies the account storing the nonce value
-* `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
+
+- `--nonce`, specifies the account storing the nonce value
+- `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
 
 The following subcommands have received this treatment so far
-* [`pay`](../cli/usage.md#solana-pay)
-* [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
-* [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
+
+- [`pay`](../cli/usage.md#solana-pay)
+- [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
+- [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 
 ### Example Pay Using Durable Nonce
 
@@ -205,10 +192,7 @@ $ solana airdrop -k alice.json 10
 
 Now Alice needs a nonce account. Create one
 
-{% hint style="info" %}
-Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json`
-has full authority over the nonce account
-{% endhint %}
+> Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
 
 ```bash
 $ solana create-nonce-account -k alice.json nonce.json 1
@@ -231,9 +215,7 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 Alice retries the transaction, this time specifying her nonce account and the
 blockhash stored there
 
-{% hint style="info" %}
-Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
-{% endhint %}
+> Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
 
 ```bash
 $ solana nonce-account nonce.json
@@ -241,6 +223,7 @@ balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
+
 ```bash
 $ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
@@ -248,13 +231,14 @@ HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8
 
 #### - Success!
 
-The transaction succeeds!  Bob receives 1 SOL from Alice and Alice's stored
+The transaction succeeds! Bob receives 1 SOL from Alice and Alice's stored
 nonce advances to a new value
 
 ```bash
 $ solana balance -k bob.json
 1 SOL
 ```
+
 ```bash
 $ solana nonce-account nonce.json
 balance: 1 SOL

@@ -1,4 +1,6 @@
-# Starting a Validator
+---
+title: Starting a Validator
+---
 
 ## Configure Solana CLI
 
@@ -85,11 +87,12 @@ The corresponding identity public key can now be viewed by running:
 ```bash
 solana-keygen pubkey ASK
 ```
+
 and then entering your seed phrase.
 
 See [Paper Wallet Usage](../paper-wallet/paper-wallet-usage.md) for more info.
 
--------
+---
 
 ### Vanity Keypair
 
@@ -101,7 +104,7 @@ solana-keygen grind --starts-with e1v1s
 
 Depending on the string requested, it may take days to find a match...
 
-------
+---
 
 Your validator identity keypair uniquely identifies your validator within the
 network. **It is crucial to back-up this information.**
@@ -137,6 +140,7 @@ Airdrop yourself some SOL to get started:
 ```bash
 solana airdrop 10
 ```
+
 Note that airdrops are only available on Devnet. Testnet SOL can be obtained by
 participating in the [Tour de SOL](../tour-de-sol/README.md) program.
 
@@ -222,11 +226,11 @@ To force validator logging to the console add a `--log -` argument, otherwise
 the validator will automatically log to a file.
 
 > Note: You can use a
-[paper wallet seed phrase](../paper-wallet/paper-wallet-usage.md)
-for your `--identity` and/or
-`--vote-account` keypairs.  To use these, pass the respective argument as
-`solana-validator --identity ASK ... --vote-account ASK ...` and you will be
-prompted to enter your seed phrases and optional passphrase.
+> [paper wallet seed phrase](../paper-wallet/paper-wallet-usage.md)
+> for your `--identity` and/or
+> `--vote-account` keypairs. To use these, pass the respective argument as
+> `solana-validator --identity ASK ... --vote-account ASK ...` and you will be
+> prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and
 running:

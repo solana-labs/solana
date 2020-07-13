@@ -1,31 +1,38 @@
-Building the Solana Docs
----
+# Docs Readme
 
-Install dependencies, build, and test the docs:
+Solana's Docs are built using [Docusaurus 2](https://v2.docusaurus.io/) with `npm`.
+Static content delivery is handled using `vercel`.
 
-```bash
-$ brew install coreutils
-$ brew install mscgen
-$ cargo install svgbob_cli
-$ cargo install mdbook-linkcheck
-$ cargo install mdbook
-$ ./build.sh
+### Installation
+
+```
+$ npm install
 ```
 
-Run any Rust tests in the markdown:
+### Local Development
 
-```bash
-$ make test
+```
+$ npm run start
 ```
 
-Render markdown as HTML:
+This command starts a local development server and open up a browser window. Most changes are reflected live without having to restart the server.
 
-```bash
-$ make build
+### Build
+#### Local Build Testing
+```
+$ npm run build
 ```
 
-Render and view the docs:
+This command generates static content into the `build` directory and can be
+served using any static contents hosting service.
 
-```bash
-$ make open
-```
+#### CI Build Flow
+The docs are built and published in Travis CI with the `docs/build.sh` script.
+On each PR, the docs are built, but not published.
+
+In each post-commit build, docs are built and published using `vercel` to their
+respective domain depending on the build branch.
+
+ - Master branch docs are published to `edge.docs.solana.com`
+ - Beta branch docs are published to `beta.docs.solana.com`
+ - Latest release tag docs are published to `docs.solana.com`

@@ -1,4 +1,6 @@
-# Snapshot Verification
+---
+title: Snapshot Verification
+---
 
 ## Problem
 
@@ -18,11 +20,11 @@ To verify the snapshot, we do the following:
 
 On account store of non-zero lamport accounts, we hash the following data:
 
-* Account owner
-* Account data
-* Account pubkey
-* Account lamports balance
-* Fork the account is stored on
+- Account owner
+- Account data
+- Account pubkey
+- Account lamports balance
+- Fork the account is stored on
 
 Use this resulting hash value as input to an expansion function which expands the hash value into an image value.
 The function will create a 440 byte block of data where the first 32 bytes are the hash value, and the next 440 - 32 bytes are
@@ -42,7 +44,7 @@ a validator bank to read that an account is not present when it really should be
 
 An attack on the xor state could be made to influence its value:
 
-Thus the 440 byte image size comes from this paper, avoiding xor collision with 0 \(or thus any other given bit pattern\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9\_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
+Thus the 440 byte image size comes from this paper, avoiding xor collision with 0 \(or thus any other given bit pattern\): \[[https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf](https://link.springer.com/content/pdf/10.1007%2F3-540-45708-9_19.pdf)\]
 
 The math provides 128 bit security in this case:
 
@@ -52,4 +54,3 @@ k=2^40 accounts
 n=440
 2^(40) * 2^(448 * 8 / 41) ~= O(2^(128))
 ```
-

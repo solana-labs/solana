@@ -1,4 +1,6 @@
-# Leader Rotation
+---
+title: Leader Rotation
+---
 
 At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
 
@@ -31,8 +33,8 @@ Two partitions that are generating half of the blocks each. Neither is coming to
 
 In this unstable scenario, multiple valid leader schedules exist.
 
-* A leader schedule is generated for every fork whose direct parent is in the previous epoch.
-* The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
+- A leader schedule is generated for every fork whose direct parent is in the previous epoch.
+- The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
 
 Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much much larger then slot time and the expected length for a fork to be committed to root.
 
@@ -73,8 +75,8 @@ The seed that is selected is predictable but unbiasable. There is no grinding at
 
 A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
 
-* Ignore votes from validators
-* Refuse to vote for blocks with votes from validators
+- Ignore votes from validators
+- Refuse to vote for blocks with votes from validators
 
 To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
 

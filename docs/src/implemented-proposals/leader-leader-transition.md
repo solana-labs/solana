@@ -1,4 +1,6 @@
-# Leader-to-Leader Transition
+---
+title: Leader-to-Leader Transition
+---
 
 This design describes how leaders transition production of the PoH ledger between each other as each leader generates its own slot.
 
@@ -18,19 +20,19 @@ While a leader is actively receiving entries for the previous slot, the leader c
 
 The downsides:
 
-* Leader delays its own slot, potentially allowing the next leader more time to
+- Leader delays its own slot, potentially allowing the next leader more time to
 
   catch up.
 
 The upsides compared to guards:
 
-* All the space in a block is used for entries.
-* The timeout is not fixed.
-* The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
-* This design doesn't require a ledger hard fork to update.
-* The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
-* The leader can speculatively generate the last tick from the last received entry.
-* The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
+- All the space in a block is used for entries.
+- The timeout is not fixed.
+- The timeout is local to the leader, and therefore can be clever. The leader's heuristic can take into account turbine performance.
+- This design doesn't require a ledger hard fork to update.
+- The previous leader can redundantly transmit the last entry in the block to the next leader, and the next leader can speculatively decide to trust it to generate its block without verification of the previous block.
+- The leader can speculatively generate the last tick from the last received entry.
+- The leader can speculatively process transactions and guess which ones are not going to be encoded by the previous leader. This is also a censorship attack vector. The current leader may withhold transactions that it receives from the clients so it can encode them into its own slot. Once processed, entries can be replayed into PoH quickly.
 
 ## Alternative design options
 
@@ -42,13 +44,12 @@ If the next leader receives the _penultimate tick_ before it produces its own _f
 
 The downsides:
 
-* Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
-* Average case confirmation time for a transaction would be at least 50ms worse.
-* It is part of the ledger definition, so to change this behavior would require a hard fork.
-* Not all the available space is used for entries.
+- Every vote, and therefore confirmation, is delayed by a fixed timeout. 1 tick, or around 100ms.
+- Average case confirmation time for a transaction would be at least 50ms worse.
+- It is part of the ledger definition, so to change this behavior would require a hard fork.
+- Not all the available space is used for entries.
 
 The upsides compared to leader timeout:
 
-* The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
-* The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.
-
+- The next leader has received all the previous entries, so it can start processing transactions without recording them into PoH.
+- The previous leader can redundantly transmit the last entry containing the _penultimate tick_ to the next leader. The next leader can speculatively generate the _last tick_ as soon as it receives the _penultimate tick_, even before verifying it.

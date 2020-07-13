@@ -1,15 +1,15 @@
-# File System Wallet
+---
+title: File System Wallet
+---
 
 This document describes how to create and use a file system wallet with the
-Solana CLI tools.  A file system wallet exists as an unencrypted keypair file
+Solana CLI tools. A file system wallet exists as an unencrypted keypair file
 on your computer system's filesystem.
 
-{% hint style="info" %}
-File system wallets are the **least secure** method of storing SOL tokens.
-Storing large amounts of tokens in a file system wallet is **not recommended**.
-{% endhint %}
+> File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
 
 ## Before you Begin
+
 Make sure you have
 [installed the Solana Command Line Tools](../cli/install-solana-cli-tools.md)
 
@@ -40,8 +40,8 @@ ErRr1caKzK8L8nn4xmEWtimYRiTCAZXjBtVphuZ5vMKy
 ```
 
 This is the public key corresponding to the keypair in
-`~/my-solana-wallet/my-keypair.json`.  The public key of the keypair file is
-your *wallet address*.
+`~/my-solana-wallet/my-keypair.json`. The public key of the keypair file is
+your _wallet address_.
 
 ## Verify your Address against your Keypair file
 
@@ -57,7 +57,8 @@ The command will output "Success" if the given address matches the
 the one in your keypair file, and "Failed" otherwise.
 
 ## Creating Multiple File System Wallet Addresses
-You can create as many wallet addresses as you like.  Simply re-run the
+
+You can create as many wallet addresses as you like. Simply re-run the
 steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)
 and make sure to use a new filename or path with the `--outfile` argument.
 Multiple wallet addresses can be useful if you want to transfer tokens between

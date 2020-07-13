@@ -1,4 +1,6 @@
-# Storage Rent for Accounts
+---
+title: Storage Rent for Accounts
+---
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the cluster must actively maintain the data to process any future transactions on it. This is different from Bitcoin and Ethereum, where storing accounts doesn't incur any costs.
 

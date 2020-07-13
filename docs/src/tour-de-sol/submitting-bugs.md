@@ -1,4 +1,6 @@
-# Submitting Bugs
+---
+title: Submitting Bugs
+---
 
 Please submit all bugs and feedback as [issues in this Github repo](https://github.com/solana-labs/solana/issues).
 

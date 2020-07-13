@@ -1,4 +1,6 @@
-# Snapshot Verification
+---
+title: Snapshot Verification
+---
 
 ## Problem
 
