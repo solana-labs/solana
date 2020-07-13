@@ -554,7 +554,9 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
-        new.update_recent_blockhashes();
+        if !new.fix_recent_blockhashes_sysvar_delay() {
+            new.update_recent_blockhashes();
+        }
         new
     }
 
@@ -1258,7 +1260,9 @@ impl Bank {
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
-            self.update_recent_blockhashes_locked(&w_blockhash_queue);
+            if self.fix_recent_blockhashes_sysvar_delay() {
+                self.update_recent_blockhashes_locked(&w_blockhash_queue);
+            }
         }
     }
 
@@ -2913,6 +2917,16 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
+        let activation_slot = match self.operating_mode() {
+            OperatingMode::Development => 0,
+            OperatingMode::Stable => Slot::MAX / 2,
+            OperatingMode::Preview => Slot::MAX / 2,
+        };
+
+        self.slot() >= activation_slot
     }
 }
 
