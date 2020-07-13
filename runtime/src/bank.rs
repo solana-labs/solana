@@ -7674,7 +7674,7 @@ mod tests {
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
 
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let mut bank = Arc::new(Bank::new(&genesis_config));
         bank.lazy_rent_collection.store(true, Ordering::Relaxed);
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
@@ -7683,15 +7683,22 @@ mod tests {
         assert_eq!(bank.process_stale_slot_with_budget(33, 100), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 100), 33);
 
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
         bank.squash();
 
         let some_lamports = 123;
-        let bank = Arc::new(new_from_parent(&bank));
+        let mut bank = Arc::new(new_from_parent(&bank));
         bank.deposit(&pubkey1, some_lamports);
         bank.deposit(&pubkey2, some_lamports);
 
-        let bank = Arc::new(new_from_parent(&bank));
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
+        let mut bank = Arc::new(new_from_parent(&bank));
         bank.deposit(&pubkey1, some_lamports);
+
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
         bank.squash();
         bank.clean_accounts();
         let force_to_return_alive_account = 0;
