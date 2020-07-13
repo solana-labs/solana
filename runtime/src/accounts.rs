@@ -18,6 +18,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     fee_calculator::FeeCalculator,
+    genesis_config::OperatingMode,
     hash::Hash,
     message::Message,
     native_loader, nonce,
@@ -650,6 +651,7 @@ impl Accounts {
         loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        operating_mode: OperatingMode,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -658,6 +660,8 @@ impl Accounts {
             loaded,
             rent_collector,
             last_blockhash_with_fee_calculator,
+            slot,
+            operating_mode,
         );
         self.accounts_db.store(slot, &accounts_to_store);
     }
@@ -684,6 +688,8 @@ impl Accounts {
         loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        slot: Slot,
+        operating_mode: OperatingMode,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), tx)) in loaded
@@ -720,6 +726,8 @@ impl Accounts {
                     res,
                     maybe_nonce,
                     last_blockhash_with_fee_calculator,
+                    slot,
+                    operating_mode,
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
@@ -1675,6 +1683,8 @@ mod tests {
             &mut loaded,
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
+            std::u64::MAX,
+            OperatingMode::Stable,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts

@@ -1,7 +1,9 @@
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    clock::Slot,
     fee_calculator::FeeCalculator,
+    genesis_config::OperatingMode,
     hash::Hash,
     instruction::CompiledInstruction,
     nonce::{self, state::Versions, State},
@@ -52,13 +54,35 @@ pub fn prepare_if_nonce_account(
     tx_result: &transaction::Result<()>,
     maybe_nonce: Option<(&Pubkey, &Account)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+    slot: Slot,
+    operating_mode: OperatingMode,
 ) {
     if let Some((nonce_key, nonce_acc)) = maybe_nonce {
         if account_pubkey == nonce_key {
             // Nonce TX failed with an InstructionError. Roll back
             // its account state
-            if tx_result.is_err() {
-                *account = nonce_acc.clone();
+
+            if slot > get_fix_nonce_overwrite_slot(operating_mode) {
+                if tx_result.is_err() {
+                    *account = nonce_acc.clone();
+                    // Since hash_age_kind is DurableNonce, unwrap is safe here
+                    let state = StateMut::<Versions>::state(nonce_acc)
+                        .unwrap()
+                        .convert_to_current();
+                    if let State::Initialized(ref data) = state {
+                        let new_data =
+                            Versions::new_current(State::Initialized(nonce::state::Data {
+                                blockhash: last_blockhash_with_fee_calculator.0,
+                                fee_calculator: last_blockhash_with_fee_calculator.1.clone(),
+                                ..data.clone()
+                            }));
+                        account.set_state(&new_data).unwrap();
+                    }
+                }
+            } else {
+                if tx_result.is_err() {
+                    *account = nonce_acc.clone()
+                }
                 // Since hash_age_kind is DurableNonce, unwrap is safe here
                 let state = StateMut::<Versions>::state(nonce_acc)
                     .unwrap()
@@ -66,7 +90,6 @@ pub fn prepare_if_nonce_account(
                 if let State::Initialized(ref data) = state {
                     let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
                         blockhash: last_blockhash_with_fee_calculator.0,
-                        fee_calculator: last_blockhash_with_fee_calculator.1.clone(),
                         ..data.clone()
                     }));
                     account.set_state(&new_data).unwrap();
@@ -83,6 +106,14 @@ pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
     match state {
         State::Initialized(data) => Some(data.fee_calculator),
         _ => None,
+    }
+}
+
+fn get_fix_nonce_overwrite_slot(operating_mode: OperatingMode) -> Slot {
+    match operating_mode {
+        OperatingMode::Development => std::u64::MAX / 2,
+        OperatingMode::Stable => std::u64::MAX / 2,
+        OperatingMode::Preview => std::u64::MAX / 2,
     }
 }
 
@@ -294,6 +325,8 @@ mod tests {
             tx_result,
             maybe_nonce,
             last_blockhash_with_fee_calculator,
+            std::u64::MAX,
+            OperatingMode::Stable,
         );
         expect_account == account
     }
