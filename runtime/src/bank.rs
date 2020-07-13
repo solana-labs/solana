@@ -6917,11 +6917,11 @@ mod tests {
         );
     }
 
-    #[ignore] // This test fails due to operating_mode/slot gating
     #[test]
     fn test_nonce_fee_calculator_updates() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
         genesis_config.rent.lamports_per_byte_year = 0;
+        genesis_config.operating_mode = OperatingMode::Development;
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
         // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees

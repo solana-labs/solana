@@ -111,7 +111,7 @@ pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
 
 fn get_fix_nonce_overwrite_slot(operating_mode: OperatingMode) -> Slot {
     match operating_mode {
-        OperatingMode::Development => std::u64::MAX / 2,
+        OperatingMode::Development => 0,
         OperatingMode::Stable => std::u64::MAX / 2,
         OperatingMode::Preview => std::u64::MAX / 2,
     }
@@ -325,8 +325,8 @@ mod tests {
             tx_result,
             maybe_nonce,
             last_blockhash_with_fee_calculator,
-            std::u64::MAX,
-            OperatingMode::Stable,
+            1,
+            OperatingMode::Development,
         );
         expect_account == account
     }

@@ -1683,8 +1683,8 @@ mod tests {
             &mut loaded,
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
-            std::u64::MAX,
-            OperatingMode::Stable,
+            1,
+            OperatingMode::Development,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
