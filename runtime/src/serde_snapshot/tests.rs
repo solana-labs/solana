@@ -64,7 +64,7 @@ where
     P: AsRef<Path>,
 {
     // read and deserialise the accounts database directly from the stream
-    context_accountsdb_from_fields::<C, P>(
+    reconstruct_accountsdb_from_fields(
         C::deserialize_accounts_db_fields(stream)?,
         account_paths,
         stream_append_vecs_path,
@@ -198,17 +198,15 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     let snapshot_storages = bank2.get_snapshot_storages();
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
-    serialize_into(&mut writer, &bank2).unwrap();
-    crate::serde_snapshot::bankrc_to_stream(
+    crate::serde_snapshot::bank_to_stream(
         serde_style,
         &mut std::io::BufWriter::new(&mut writer),
-        &bank2.rc,
+        &bank2,
         &snapshot_storages,
     )
     .unwrap();
 
-    let mut rdr = Cursor::new(&buf[..]);
-    let mut dbank: Bank = bincode::deserialize_from(&mut rdr).unwrap();
+    let rdr = Cursor::new(&buf[..]);
     let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
 
     // Create a new set of directories for this bank's accounts
@@ -218,17 +216,16 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
     let copied_accounts = TempDir::new().unwrap();
     copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-    dbank.set_bank_rc(
-        crate::serde_snapshot::bankrc_from_stream(
-            serde_style,
-            &dbank_paths,
-            dbank.slot(),
-            &mut reader,
-            copied_accounts.path(),
-        )
-        .unwrap(),
-        ref_sc,
-    );
+    let mut dbank = crate::serde_snapshot::bank_from_stream(
+        serde_style,
+        &mut reader,
+        copied_accounts.path(),
+        &dbank_paths,
+        &genesis_config,
+        &[],
+    )
+    .unwrap();
+    dbank.src = ref_sc;
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
@@ -280,45 +277,58 @@ fn test_bank_serialize_older() {
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-mod test_bank_rc_serialize {
+mod test_bank_serialize {
     use super::*;
+    use solana_sdk::abi_example::AbiExample;
 
     // These some what long test harness is required to freeze the ABI of
-    // BankRc's serialization due to versioned nature
-    #[frozen_abi(digest = "HfCP74JKqPdeAccNJEj7KEoNxtsmX3zRqc2rpTy1NC7H")]
-    #[derive(Serialize, AbiExample)]
-    pub struct BandRcAbiTestWrapperFuture {
+    // Bank's serialization due to versioned nature
+    #[frozen_abi(digest = "9BGkhttaVsELn1zoHMKXLvi3Qty51nY1yz584Fao2Ev9")]
+    #[derive(Default, Serialize)]
+    pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]
-        bank_rc: BankRc,
+        bank: Bank,
     }
 
-    pub fn wrapper_future<S>(bank_rc: &BankRc, s: S) -> std::result::Result<S::Ok, S::Error>
+    impl AbiExample for BankAbiTestWrapperFuture {
+        fn example() -> Self {
+            Self::default()
+        }
+    }
+
+    pub fn wrapper_future<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let snapshot_storages = bank_rc.accounts.accounts_db.get_snapshot_storages(0);
-        (SerializableBankRc::<future::Context> {
-            bank_rc,
+        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
+        (SerializableBankAndStorage::<future::Context> {
+            bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
         })
         .serialize(s)
     }
 
-    #[frozen_abi(digest = "43niyekyWwreLALcdEeFFpd7h8U6pgSXGqfKBRw8H7Vy")]
-    #[derive(Serialize, AbiExample)]
-    pub struct BandRcAbiTestWrapperLegacy {
+    #[frozen_abi(digest = "HYmXta1fhiHe6hZLGJriMqKx9N2U8YRJY51AGZmxzM5m")]
+    #[derive(Default, Serialize)]
+    pub struct BankAbiTestWrapperLegacy {
         #[serde(serialize_with = "wrapper_legacy")]
-        bank_rc: BankRc,
+        bank: Bank,
     }
 
-    pub fn wrapper_legacy<S>(bank_rc: &BankRc, s: S) -> std::result::Result<S::Ok, S::Error>
+    impl AbiExample for BankAbiTestWrapperLegacy {
+        fn example() -> Self {
+            Self::default()
+        }
+    }
+
+    pub fn wrapper_legacy<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let snapshot_storages = bank_rc.accounts.accounts_db.get_snapshot_storages(0);
-        (SerializableBankRc::<legacy::Context> {
-            bank_rc,
+        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
+        (SerializableBankAndStorage::<legacy::Context> {
+            bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
         })

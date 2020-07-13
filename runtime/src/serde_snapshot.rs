@@ -4,10 +4,17 @@ use {
         accounts_db::{
             AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId, BankHashInfo,
         },
+        accounts_index::Ancestors,
         append_vec::AppendVec,
-        bank::BankRc,
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
+        blockhash_queue::BlockhashQueue,
+        epoch_stakes::EpochStakes,
+        message_processor::MessageProcessor,
+        rent_collector::RentCollector,
+        stakes::Stakes,
     },
-    bincode::{deserialize_from, serialize_into, Error},
+    bincode,
+    bincode::{config::Options, serialize_into, Error},
     fs_extra::dir::CopyOptions,
     log::{info, warn},
     rand::{thread_rng, Rng},
@@ -15,7 +22,16 @@ use {
         de::{DeserializeOwned, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
     },
-    solana_sdk::clock::Slot,
+    solana_sdk::{
+        clock::{Epoch, Slot, UnixTimestamp},
+        epoch_schedule::EpochSchedule,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        genesis_config::GenesisConfig,
+        hard_forks::HardForks,
+        hash::Hash,
+        inflation::Inflation,
+        pubkey::Pubkey,
+    },
     std::{
         cmp::min,
         collections::HashMap,
@@ -28,6 +44,10 @@ use {
     },
 };
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_sdk::abi_example::IgnoreAsHelper;
+
+mod common;
 mod future;
 mod legacy;
 mod tests;
@@ -42,28 +62,28 @@ use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tupl
 #[cfg(test)]
 pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
 
-pub use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
+pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum SerdeStyle {
+pub(crate) enum SerdeStyle {
     NEWER,
     OLDER,
 }
 
-const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
+const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct AccountDBFields<T>(HashMap<Slot, Vec<T>>, u64, Slot, BankHashInfo);
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
+struct AccountsDbFields<T>(HashMap<Slot, Vec<T>>, u64, Slot, BankHashInfo);
 
-pub trait TypeContext<'a> {
+trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
         + Into<AccountStorageEntry>;
 
-    fn serialize_bank_rc_fields<S: serde::ser::Serializer>(
+    fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_bank: &SerializableBankRc<'a, Self>,
+        serializable_bank: &SerializableBankAndStorage<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized;
@@ -75,37 +95,63 @@ pub trait TypeContext<'a> {
     where
         Self: std::marker::Sized;
 
-    fn deserialize_accounts_db_fields<R>(
+    fn deserialize_bank_fields<R>(
         stream: &mut BufReader<R>,
-    ) -> Result<AccountDBFields<Self::SerializableAccountStorageEntry>, Error>
+    ) -> Result<
+        (
+            BankFieldsToDeserialize,
+            AccountsDbFields<Self::SerializableAccountStorageEntry>,
+        ),
+        Error,
+    >
     where
         R: Read;
 
-    // we might define fn (de)serialize_bank(...) -> Result<Bank,...> for versionized bank serialization in the future
+    fn deserialize_accounts_db_fields<R>(
+        stream: &mut BufReader<R>,
+    ) -> Result<AccountsDbFields<Self::SerializableAccountStorageEntry>, Error>
+    where
+        R: Read;
 }
 
-pub fn bankrc_from_stream<R, P>(
+fn deserialize_from<R, T>(reader: R) -> bincode::Result<T>
+where
+    R: Read,
+    T: DeserializeOwned,
+{
+    bincode::options()
+        .with_limit(MAX_STREAM_SIZE)
+        .with_fixint_encoding()
+        .allow_trailing_bytes()
+        .deserialize_from::<R, T>(reader)
+}
+
+pub(crate) fn bank_from_stream<R, P>(
     serde_style: SerdeStyle,
-    account_paths: &[PathBuf],
-    slot: Slot,
     stream: &mut BufReader<R>,
-    stream_append_vecs_path: P,
-) -> std::result::Result<BankRc, Error>
+    append_vecs_path: P,
+    account_paths: &[PathBuf],
+    genesis_config: &GenesisConfig,
+    frozen_account_pubkeys: &[Pubkey],
+) -> std::result::Result<Bank, Error>
 where
     R: Read,
     P: AsRef<Path>,
 {
     macro_rules! INTO {
-        ($x:ident) => {
-            Ok(BankRc::new(
-                Accounts::new_empty(context_accountsdb_from_fields::<$x, P>(
-                    $x::deserialize_accounts_db_fields(stream)?,
-                    account_paths,
-                    stream_append_vecs_path,
-                )?),
-                slot,
-            ))
-        };
+        ($x:ident) => {{
+            let (bank_fields, accounts_db_fields) = $x::deserialize_bank_fields(stream)?;
+
+            let bank = reconstruct_bank_from_fields(
+                bank_fields,
+                accounts_db_fields,
+                genesis_config,
+                frozen_account_pubkeys,
+                account_paths,
+                append_vecs_path,
+            )?;
+            Ok(bank)
+        }};
     }
     match serde_style {
         SerdeStyle::NEWER => INTO!(TypeContextFuture),
@@ -117,10 +163,10 @@ where
     })
 }
 
-pub fn bankrc_to_stream<W>(
+pub(crate) fn bank_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
-    bank_rc: &BankRc,
+    bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
 ) -> Result<(), Error>
 where
@@ -128,10 +174,10 @@ where
 {
     macro_rules! INTO {
         ($x:ident) => {
-            serialize_into(
+            bincode::serialize_into(
                 stream,
-                &SerializableBankRc::<$x> {
-                    bank_rc,
+                &SerializableBankAndStorage::<$x> {
+                    bank,
                     snapshot_storages,
                     phantom: std::marker::PhantomData::default(),
                 },
@@ -148,22 +194,22 @@ where
     })
 }
 
-pub struct SerializableBankRc<'a, C> {
-    bank_rc: &'a BankRc,
+struct SerializableBankAndStorage<'a, C> {
+    bank: &'a Bank,
     snapshot_storages: &'a [SnapshotStorage],
     phantom: std::marker::PhantomData<C>,
 }
 
-impl<'a, C: TypeContext<'a>> Serialize for SerializableBankRc<'a, C> {
+impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
-        C::serialize_bank_rc_fields(serializer, self)
+        C::serialize_bank_and_storage(serializer, self)
     }
 }
 
-pub struct SerializableAccountsDB<'a, C> {
+struct SerializableAccountsDB<'a, C> {
     accounts_db: &'a AccountsDB,
     slot: Slot,
     account_storage_entries: &'a [SnapshotStorage],
@@ -179,18 +225,43 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
     }
 }
 
-fn context_accountsdb_from_fields<'a, C, P>(
-    account_db_fields: AccountDBFields<C::SerializableAccountStorageEntry>,
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl<'a, C> IgnoreAsHelper for SerializableAccountsDB<'a, C> {}
+
+fn reconstruct_bank_from_fields<E, P>(
+    bank_fields: BankFieldsToDeserialize,
+    accounts_db_fields: AccountsDbFields<E>,
+    genesis_config: &GenesisConfig,
+    frozen_account_pubkeys: &[Pubkey],
+    account_paths: &[PathBuf],
+    append_vecs_path: P,
+) -> Result<Bank, Error>
+where
+    E: Into<AccountStorageEntry>,
+    P: AsRef<Path>,
+{
+    let mut accounts_db =
+        reconstruct_accountsdb_from_fields(accounts_db_fields, account_paths, append_vecs_path)?;
+    accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
+
+    let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let bank = Bank::new_from_fields(bank_rc, genesis_config, bank_fields);
+
+    Ok(bank)
+}
+
+fn reconstruct_accountsdb_from_fields<E, P>(
+    accounts_db_fields: AccountsDbFields<E>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
 ) -> Result<AccountsDB, Error>
 where
-    C: TypeContext<'a>,
+    E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
     let accounts_db = AccountsDB::new(account_paths.to_vec());
 
-    let AccountDBFields(storage, version, slot, bank_hash_info) = account_db_fields;
+    let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry
     let storage = {

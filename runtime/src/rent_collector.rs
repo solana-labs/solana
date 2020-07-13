@@ -4,7 +4,7 @@ use solana_sdk::{
     rent::Rent, sysvar,
 };
 
-#[derive(Default, Serialize, Deserialize, Clone, AbiExample)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,

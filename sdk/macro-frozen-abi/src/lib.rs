@@ -78,8 +78,11 @@ fn quote_for_specialization_detection() -> TokenStream2 {
             std::sync::atomic::AtomicBool::new(false);
     }
 
-    if !SPECIALIZATION_DETECTOR_INJECTED.load(std::sync::atomic::Ordering::Relaxed) {
-        SPECIALIZATION_DETECTOR_INJECTED.store(true, std::sync::atomic::Ordering::Relaxed);
+    if !SPECIALIZATION_DETECTOR_INJECTED.compare_and_swap(
+        false,
+        true,
+        std::sync::atomic::Ordering::AcqRel,
+    ) {
         quote! {
             mod specialization_detector {
                 trait SpecializedTrait {

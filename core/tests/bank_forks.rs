@@ -110,6 +110,7 @@ mod tests {
     fn restore_from_snapshot(
         old_bank_forks: &BankForks,
         old_last_slot: Slot,
+        old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
@@ -134,7 +135,7 @@ mod tests {
                 &CompressionType::Bzip2,
             ),
             CompressionType::Bzip2,
-            &GenesisConfig::default(),
+            old_genesis_config,
         )
         .unwrap();
 
@@ -169,7 +170,6 @@ mod tests {
         let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, 1);
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
-        let accounts_dir = &snapshot_test_config.accounts_dir;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (s, _r) = channel();
@@ -185,6 +185,7 @@ mod tests {
                 bank_forks.set_root(bank.slot(), &sender, None);
             }
         }
+
         // Generate a snapshot package for last bank
         let last_bank = bank_forks.get(last_slot).unwrap();
         let snapshot_config = &snapshot_test_config.snapshot_config;
@@ -203,10 +204,12 @@ mod tests {
             snapshot_version,
         )
         .unwrap();
-
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
-        restore_from_snapshot(bank_forks, last_slot, &[accounts_dir.path().to_path_buf()]);
+        // Restore bank from snapshot
+        let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
+        let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
+        restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
     }
 
     fn run_test_bank_forks_snapshot_n(snapshot_version: SnapshotVersion) {
