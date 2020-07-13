@@ -1258,6 +1258,7 @@ impl Bank {
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
+            self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
     }
 
