@@ -312,6 +312,7 @@ impl VoteState {
                 "{} dropped vote {:?} failed to match slot:  {:?}",
                 self.node_pubkey, vote, slot_hashes,
             );
+            inc_new_counter_info!("dropped-vote-slot", 1);
             return Err(VoteError::SlotsMismatch);
         }
         if slot_hashes[j].1 != vote.hash {
@@ -319,6 +320,7 @@ impl VoteState {
                 "{} dropped vote {:?} failed to match hash {} {}",
                 self.node_pubkey, vote, vote.hash, slot_hashes[j].1
             );
+            inc_new_counter_info!("dropped-vote-hash", 1);
             return Err(VoteError::SlotHashMismatch);
         }
         Ok(())
