@@ -340,7 +340,12 @@ impl Serializer for AbiDigester {
     }
 
     fn serialize_seq(mut self, len: Option<usize>) -> DigestResult {
-        self.update_with_string(format!("seq (elements = {})", len.unwrap()));
+        let len = len.unwrap();
+        assert_eq!(
+            len, 1,
+            "Exactly 1 seq element is needed to generate the ABI digest precisely"
+        );
+        self.update_with_string(format!("seq (elements = {})", len));
         Ok(self.create_child())
     }
 
@@ -367,7 +372,12 @@ impl Serializer for AbiDigester {
     }
 
     fn serialize_map(mut self, len: Option<usize>) -> DigestResult {
-        self.update_with_string(format!("map (entries = {})", len.unwrap()));
+        let len = len.unwrap();
+        assert_eq!(
+            len, 1,
+            "Exactly 1 map entry is needed to generate the ABI digest precisely"
+        );
+        self.update_with_string(format!("map (entries = {})", len));
         Ok(self.create_child())
     }
 

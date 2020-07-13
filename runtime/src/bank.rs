@@ -107,6 +107,21 @@ pub struct BankRc {
     pub(crate) slot: Slot,
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_sdk::abi_example::AbiExample;
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for BankRc {
+    fn example() -> Self {
+        BankRc {
+            // Set parent to None to cut the recursion into another Bank
+            parent: RwLock::new(None),
+            // AbiExample for Accounts is specially implemented to contain a storage example
+            accounts: AbiExample::example(),
+            slot: AbiExample::example(),
+        }
+    }
+}
+
 impl BankRc {
     pub(crate) fn new(accounts: Accounts, slot: Slot) -> Self {
         Self {
@@ -265,7 +280,9 @@ pub(crate) struct BankFieldsToSerialize<'a> {
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
-#[derive(Default)]
+/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serializeaion
+/// are implemented elsewhere for versioning
+#[derive(Default, AbiExample)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,

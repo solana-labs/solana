@@ -279,21 +279,14 @@ fn test_bank_serialize_older() {
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 mod test_bank_serialize {
     use super::*;
-    use solana_sdk::abi_example::AbiExample;
 
     // These some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "9BGkhttaVsELn1zoHMKXLvi3Qty51nY1yz584Fao2Ev9")]
-    #[derive(Default, Serialize)]
+    #[frozen_abi(digest = "6MnT4MzuLHe4Uq96YaF3JF2gL1RvprzQHCaV9TaWgYLe")]
+    #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]
         bank: Bank,
-    }
-
-    impl AbiExample for BankAbiTestWrapperFuture {
-        fn example() -> Self {
-            Self::default()
-        }
     }
 
     pub fn wrapper_future<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
@@ -301,6 +294,9 @@ mod test_bank_serialize {
         S: serde::Serializer,
     {
         let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
+        // ensure there is a single snapshot storage example for ABI digesting
+        assert_eq!(snapshot_storages.len(), 1);
+
         (SerializableBankAndStorage::<future::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
@@ -309,17 +305,11 @@ mod test_bank_serialize {
         .serialize(s)
     }
 
-    #[frozen_abi(digest = "HYmXta1fhiHe6hZLGJriMqKx9N2U8YRJY51AGZmxzM5m")]
-    #[derive(Default, Serialize)]
+    #[frozen_abi(digest = "92KVEUQ8PwKe5DgZ6AyDQGAi9pvi7kfHdMBE4hcs5EQ4")]
+    #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperLegacy {
         #[serde(serialize_with = "wrapper_legacy")]
         bank: Bank,
-    }
-
-    impl AbiExample for BankAbiTestWrapperLegacy {
-        fn example() -> Self {
-            Self::default()
-        }
     }
 
     pub fn wrapper_legacy<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
@@ -327,6 +317,9 @@ mod test_bank_serialize {
         S: serde::Serializer,
     {
         let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
+        // ensure there is a single snapshot storage example for ABI digesting
+        assert_eq!(snapshot_storages.len(), 1);
+
         (SerializableBankAndStorage::<legacy::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
