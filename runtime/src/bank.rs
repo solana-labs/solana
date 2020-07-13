@@ -968,15 +968,19 @@ impl Bank {
         total_validator_rewards
     }
 
-    pub fn update_recent_blockhashes(&self) {
+    fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
-            let blockhash_queue = self.blockhash_queue.read().unwrap();
-            let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
+            let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
             sysvar::recent_blockhashes::create_account_with_data(
                 self.inherit_sysvar_account_balance(account),
                 recent_blockhash_iter,
             )
         });
+    }
+
+    pub fn update_recent_blockhashes(&self) {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
     // If the point values are not `normal`, bring them back into range and
