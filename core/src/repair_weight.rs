@@ -3,6 +3,7 @@ use crate::{
     repair_service::RepairTiming,
     repair_weighted_traversal::{self, Contains},
     serve_repair::RepairType,
+    tree_diff::TreeDiff,
 };
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore};
 use solana_measure::measure::Measure;

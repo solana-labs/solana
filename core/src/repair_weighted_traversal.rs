@@ -1,6 +1,6 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-    serve_repair::RepairType,
+    serve_repair::RepairType, tree_diff::TreeDiff,
 };
 use solana_ledger::blockstore::Blockstore;
 use solana_sdk::clock::Slot;
