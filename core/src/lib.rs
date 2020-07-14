@@ -62,6 +62,7 @@ pub mod sigverify_stage;
 pub mod snapshot_packager_service;
 pub mod tpu;
 pub mod transaction_status_service;
+pub mod tree_diff;
 pub mod tvu;
 pub mod validator;
 pub mod verified_vote_packets;

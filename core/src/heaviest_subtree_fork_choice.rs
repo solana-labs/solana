@@ -2,6 +2,7 @@ use crate::{
     consensus::{ComputedBankState, Tower},
     fork_choice::ForkChoice,
     progress_map::ProgressMap,
+    tree_diff::TreeDiff,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
 use solana_sdk::{
@@ -141,10 +142,6 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.stake_voted_subtree)
     }
 
-    pub fn contains_slot(&self, slot: Slot) -> bool {
-        self.fork_infos.contains_key(&slot)
-    }
-
     pub fn root(&self) -> Slot {
         self.root
     }
@@ -248,30 +245,6 @@ impl HeaviestSubtreeForkChoice {
         self.propagate_new_leaf(slot, parent)
     }
 
-    // Find all nodes reachable from `root1`, excluding subtree at `root2`
-    pub fn subtree_diff(&self, root1: Slot, root2: Slot) -> HashSet<Slot> {
-        if !self.contains_slot(root1) {
-            return HashSet::new();
-        }
-        let mut pending_slots = vec![root1];
-        let mut reachable_set = HashSet::new();
-        while !pending_slots.is_empty() {
-            let current_slot = pending_slots.pop().unwrap();
-            if current_slot == root2 {
-                continue;
-            }
-            reachable_set.insert(current_slot);
-            for child in self
-                .children(current_slot)
-                .expect("slot was discovered earlier, must exist")
-            {
-                pending_slots.push(*child);
-            }
-        }
-
-        reachable_set
-    }
-
     // Returns if the given `maybe_best_child` is the heaviest among the children
     // it's parent
     fn is_best_child(&self, maybe_best_child: Slot) -> bool {
@@ -303,12 +276,6 @@ impl HeaviestSubtreeForkChoice {
 
     pub fn ancestors(&self, start_slot: Slot) -> Vec<Slot> {
         AncestorIterator::new(start_slot, &self.fork_infos).collect()
-    }
-
-    pub fn children(&self, slot: Slot) -> Option<&[Slot]> {
-        self.fork_infos
-            .get(&slot)
-            .map(|fork_info| &fork_info.children[..])
     }
 
     pub fn merge(
@@ -539,6 +506,18 @@ impl HeaviestSubtreeForkChoice {
     #[cfg(test)]
     fn is_leaf(&self, slot: Slot) -> bool {
         self.fork_infos.get(&slot).unwrap().children.is_empty()
+    }
+}
+
+impl TreeDiff for HeaviestSubtreeForkChoice {
+    fn contains_slot(&self, slot: Slot) -> bool {
+        self.fork_infos.contains_key(&slot)
+    }
+
+    fn children(&self, slot: Slot) -> Option<&[Slot]> {
+        self.fork_infos
+            .get(&slot)
+            .map(|fork_info| &fork_info.children[..])
     }
 }
 
