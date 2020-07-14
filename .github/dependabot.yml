@@ -11,8 +11,8 @@ updates:
     interval: daily
     time: "01:00"
     timezone: America/Los_Angeles
-  labels:
-    - "automerge"
+  #labels:
+  #  - "automerge"
   open-pull-requests-limit: 3
   
 - package-ecosystem: npm
