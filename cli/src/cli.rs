@@ -395,6 +395,7 @@ pub enum CliCommand {
     VoteUpdateCommission {
         vote_account_pubkey: Pubkey,
         commission: u8,
+        withdraw_authority: SignerIndex,
     },
     // Wallet Commands
     Address,
@@ -2214,7 +2215,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
-        } => process_vote_update_commission(&rpc_client, config, &vote_account_pubkey, *commission),
+            withdraw_authority,
+        } => process_vote_update_commission(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            *commission,
+            *withdraw_authority,
+        ),
 
         // Wallet Commands
 
