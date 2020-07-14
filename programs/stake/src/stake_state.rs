@@ -19,7 +19,7 @@ use solana_sdk::{
     stake_history::{StakeHistory, StakeHistoryEntry},
 };
 use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::TryFrom};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
@@ -462,8 +462,7 @@ impl Stake {
             .checked_div(point_value.points)
             .unwrap();
 
-        assert!(rewards <= u128::from(std::u64::MAX));
-        let rewards = rewards as u64;
+        let rewards = u64::try_from(rewards).unwrap();
 
         // don't bother trying to split if fractional lamports got truncated
         if rewards == 0 {
