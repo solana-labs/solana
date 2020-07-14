@@ -26,6 +26,7 @@ if [[ -z $TRAVIS_COMMIT_RANGE ]]; then
 fi
 
 cd "$basedir"
+echo "Checking commits in TRAVIS_COMMIT_RANGE: $TRAVIS_COMMIT_RANGE"
 while IFS= read -r line; do
   echo "$line" | npx commitlint
 done < <(git log "$TRAVIS_COMMIT_RANGE" --format=%s -- .)
