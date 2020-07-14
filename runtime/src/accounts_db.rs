@@ -567,7 +567,7 @@ impl AccountsDB {
 
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
-        store_counts: &mut HashMap<AppendVecId, usize>,
+        store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
     ) {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
@@ -579,7 +579,7 @@ impl AccountsDB {
             } else {
                 let mut no_delete = false;
                 for (_slot, account_info) in account_infos {
-                    if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                    if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
                         no_delete = true;
                         break;
                     }
@@ -599,18 +599,10 @@ impl AccountsDB {
                     if already_counted.contains(&id) {
                         continue;
                     }
-                    *store_counts.get_mut(&id).unwrap() += 1;
+                    store_counts.get_mut(&id).unwrap().0 += 1;
                     already_counted.insert(id);
 
-                    let mut affected_pubkeys = HashSet::new();
-                    for (key, (account_infos, _ref_count)) in purges {
-                        for (_slot, account_info) in account_infos {
-                            if account_info.store_id == id {
-                                affected_pubkeys.insert(key);
-                                break;
-                            }
-                        }
-                    }
+                    let affected_pubkeys = &store_counts.get(&id).unwrap().1;
                     for key in affected_pubkeys {
                         for (_slot, account_info) in &purges.get(&key).unwrap().0 {
                             if !already_counted.contains(&account_info.store_id) {
@@ -694,18 +686,21 @@ impl AccountsDB {
 
         // Calculate store counts as if everything was purged
         // Then purge if we can
-        let mut store_counts: HashMap<AppendVecId, usize> = HashMap::new();
+        let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
         let storage = self.storage.read().unwrap();
-        for (account_infos, _ref_count) in purges.values() {
+        for (key, (account_infos, _ref_count)) in &purges {
             for (slot, account_info) in account_infos {
                 let slot_storage = storage.0.get(&slot).unwrap();
                 let store = slot_storage.get(&account_info.store_id).unwrap();
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
-                    *store_count -= 1;
+                    store_count.0 -= 1;
+                    store_count.1.insert(*key);
                 } else {
+                    let mut key_set = HashSet::new();
+                    key_set.insert(*key);
                     store_counts.insert(
                         account_info.store_id,
-                        store.count_and_status.read().unwrap().0 - 1,
+                        (store.count_and_status.read().unwrap().0 - 1, key_set),
                     );
                 }
             }
@@ -722,7 +717,7 @@ impl AccountsDB {
         let mut purge_filter = Measure::start("purge_filter");
         purges.retain(|_pubkey, (account_infos, _ref_count)| {
             for (_slot, account_info) in account_infos.iter() {
-                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
                     return false;
                 }
             }
@@ -4140,18 +4135,22 @@ pub mod tests {
         }
 
         let mut store_counts = HashMap::new();
-        store_counts.insert(0, 0);
-        store_counts.insert(1, 0);
-        store_counts.insert(2, 0);
-        store_counts.insert(3, 1);
+        store_counts.insert(0, (0, HashSet::from_iter(vec![key0])));
+        store_counts.insert(1, (0, HashSet::from_iter(vec![key0, key1])));
+        store_counts.insert(2, (0, HashSet::from_iter(vec![key1, key2])));
+        store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
         AccountsDB::calc_delete_dependencies(&purges, &mut store_counts);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
         stores.sort();
         for store in &stores {
-            info!("store: {:?} : {}", store, store_counts.get(&store).unwrap());
+            info!(
+                "store: {:?} : {:?}",
+                store,
+                store_counts.get(&store).unwrap()
+            );
         }
         for x in 0..3 {
-            assert!(store_counts[&x] >= 1);
+            assert!(store_counts[&x].0 >= 1);
         }
     }
 }
