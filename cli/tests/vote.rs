@@ -50,6 +50,7 @@ fn test_vote_authorize_and_withdraw() {
     let vote_account_pubkey = vote_account_keypair.pubkey();
     config.signers = vec![&default_signer, &vote_account_keypair];
     config.command = CliCommand::CreateVoteAccount {
+        vote_account: 1,
         seed: None,
         identity_account: 0,
         authorized_voter: None,

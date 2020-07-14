@@ -58,6 +58,7 @@ fn test_stake_delegation_force() {
     let vote_keypair = Keypair::new();
     config.signers = vec![&default_signer, &vote_keypair];
     config.command = CliCommand::CreateVoteAccount {
+        vote_account: 1,
         seed: None,
         identity_account: 0,
         authorized_voter: None,

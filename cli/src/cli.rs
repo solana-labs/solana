@@ -367,6 +367,7 @@ pub enum CliCommand {
     },
     // Vote Commands
     CreateVoteAccount {
+        vote_account: SignerIndex,
         seed: Option<String>,
         identity_account: SignerIndex,
         authorized_voter: Option<Pubkey>,
@@ -2157,6 +2158,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create vote account
         CliCommand::CreateVoteAccount {
+            vote_account,
             seed,
             identity_account,
             authorized_voter,
@@ -2165,6 +2167,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_vote_account(
             &rpc_client,
             config,
+            *vote_account,
             seed,
             *identity_account,
             authorized_voter,
@@ -3476,6 +3479,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
+            vote_account: 1,
             seed: None,
             identity_account: 2,
             authorized_voter: Some(bob_pubkey),
@@ -3714,6 +3718,7 @@ mod tests {
         let bob_keypair = Keypair::new();
         let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
+            vote_account: 1,
             seed: None,
             identity_account: 2,
             authorized_voter: Some(bob_pubkey),
