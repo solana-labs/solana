@@ -89,7 +89,7 @@ struct SubscriptionData<S, T> {
 }
 #[derive(Default, Clone)]
 struct ProgramConfig {
-    filters: Option<Vec<RpcFilterType>>,
+    filters: Vec<RpcFilterType>,
     encoding: Option<UiAccountEncoding>,
 }
 type RpcAccountSubscriptions = RwLock<
@@ -279,10 +279,17 @@ fn filter_program_results(
 ) -> (Box<dyn Iterator<Item = RpcKeyedAccount>>, Slot) {
     let config = config.unwrap_or_default();
     let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+    let filters = config.filters;
     (
         Box::new(
             accounts
                 .into_iter()
+                .filter(move |(_, account)| {
+                    filters.iter().all(|filter_type| match filter_type {
+                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                    })
+                })
                 .map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
                     account: UiAccount::encode(account, encoding.clone()),
@@ -575,7 +582,7 @@ impl RpcSubscriptions {
             subscriber,
             0, // last_notified_slot is not utilized for program subscriptions
             Some(ProgramConfig {
-                filters: config.filters,
+                filters: config.filters.unwrap_or_default(),
                 encoding: config.account_config.encoding,
             }),
         );
