@@ -316,7 +316,8 @@ pub fn parse_vote_update_validator(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let (new_identity_account, new_identity_pubkey) =
         signer_of(matches, "new_identity_account", wallet_manager)?;
-    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+    let (authorized_withdrawer, authorized_withdrawer_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
     let payer_provided = None;
     let signer_info = generate_unique_signers(
@@ -330,6 +331,7 @@ pub fn parse_vote_update_validator(
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account: signer_info.index_of(new_identity_pubkey).unwrap(),
+            withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -565,8 +567,9 @@ pub fn process_vote_update_validator(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     new_identity_account: SignerIndex,
+    withdraw_authority: SignerIndex,
 ) -> ProcessResult {
-    let authorized_withdrawer = config.signers[1];
+    let authorized_withdrawer = config.signers[withdraw_authority];
     let new_identity_account = config.signers[new_identity_account];
     let new_identity_pubkey = new_identity_account.pubkey();
     check_unique_pubkeys(
@@ -971,6 +974,7 @@ mod tests {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,
                     new_identity_account: 2,
+                    withdraw_authority: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

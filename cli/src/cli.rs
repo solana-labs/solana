@@ -391,6 +391,7 @@ pub enum CliCommand {
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
         new_identity_account: SignerIndex,
+        withdraw_authority: SignerIndex,
     },
     VoteUpdateCommission {
         vote_account_pubkey: Pubkey,
@@ -2206,11 +2207,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account,
+            withdraw_authority,
         } => process_vote_update_validator(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *new_identity_account,
+            *withdraw_authority,
         ),
         CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
@@ -3498,6 +3501,7 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 2,
+            withdraw_authority: 1,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -3729,6 +3733,7 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 1,
+            withdraw_authority: 1,
         };
         assert!(process_command(&config).is_err());
 
