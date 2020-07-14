@@ -479,7 +479,9 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
-        new.update_recent_blockhashes();
+        if !new.fix_recent_blockhashes_sysvar_delay() {
+            new.update_recent_blockhashes();
+        }
         new
     }
 
@@ -763,15 +765,19 @@ impl Bank {
         total_validator_rewards
     }
 
-    pub fn update_recent_blockhashes(&self) {
+    fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
-            let blockhash_queue = self.blockhash_queue.read().unwrap();
-            let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
+            let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
             sysvar::recent_blockhashes::create_account_with_data(
                 self.inherit_sysvar_account_balance(account),
                 recent_blockhash_iter,
             )
         });
+    }
+
+    pub fn update_recent_blockhashes(&self) {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
     // If the point values are not `normal`, bring them back into range and
@@ -1040,6 +1046,9 @@ impl Bank {
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
+            if self.fix_recent_blockhashes_sysvar_delay() {
+                self.update_recent_blockhashes_locked(&w_blockhash_queue);
+            }
         }
     }
 
@@ -2675,6 +2684,16 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
+        let activation_slot = match self.operating_mode() {
+            OperatingMode::Development => 0,
+            OperatingMode::Stable => Slot::MAX / 2,
+            OperatingMode::Preview => Slot::MAX / 2,
+        };
+
+        self.slot() >= activation_slot
     }
 }
 
@@ -6253,6 +6272,21 @@ mod tests {
     }
 
     #[test]
+    fn test_blockhash_queue_sysvar_consistency() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+
+        let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
+        let recent_blockhashes =
+            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+
+        let sysvar_recent_blockhash = recent_blockhashes[0].blockhash;
+        let bank_last_blockhash = bank.last_blockhash();
+        assert_eq!(sysvar_recent_blockhash, bank_last_blockhash);
+    }
+
+    #[test]
     fn test_bank_inherit_last_vote_sync() {
         let (genesis_config, _) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -7349,25 +7383,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4qpzttntyJ4g144CA5uTC9yRw9bZALk2BvYVpRAEasYo"
+                    "HsNNxYe9FjPZtW8zNwSrLsB6d8YXoWqhpegE328C5Wvy",
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "32H83DKDGWs7h9419KWbXXvhsUpWc8quqkTH9t8XmCCW"
+                    "DV3oAdp4qTQr9eU2s9F1mHMypGAHzSrRvkoSgc9Tgr5R"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "EdKHbx8z3wJ7r3ZPA8FExbKTz9HUdgZEqSBa62tUcbpQ"
+                    "3hRFavWgtFfhKojc8hJqeJWMcyxdt8DbXWME3p6Zes36"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "RiGo5uEeSP2kT7wrNVMBkZzUY1QRhCUYxeQ22ey51XZ"
+                    "4pXHMCcRwVJgkKNMysho5riYNhdS4JAj1budis41EopU"
                 );
                 break;
             }
@@ -7421,7 +7455,7 @@ mod tests {
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
 
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let mut bank = Arc::new(Bank::new(&genesis_config));
         bank.lazy_rent_collection.store(true, Ordering::Relaxed);
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
@@ -7430,15 +7464,22 @@ mod tests {
         assert_eq!(bank.process_stale_slot_with_budget(33, 100), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 100), 33);
 
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
         bank.squash();
 
         let some_lamports = 123;
-        let bank = Arc::new(new_from_parent(&bank));
+        let mut bank = Arc::new(new_from_parent(&bank));
         bank.deposit(&pubkey1, some_lamports);
         bank.deposit(&pubkey2, some_lamports);
 
-        let bank = Arc::new(new_from_parent(&bank));
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
+        let mut bank = Arc::new(new_from_parent(&bank));
         bank.deposit(&pubkey1, some_lamports);
+
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
+
         bank.squash();
         bank.clean_accounts();
         let force_to_return_alive_account = 0;
