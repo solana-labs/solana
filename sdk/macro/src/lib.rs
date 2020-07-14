@@ -82,7 +82,7 @@ impl Parse for RespanInput {
                     respan_using: ident.span(),
                 })
             }
-            val @ _ => Err(syn::Error::new_spanned(
+            val => Err(syn::Error::new_spanned(
                 val,
                 "expected None-delimited group",
             )),
@@ -129,7 +129,7 @@ pub fn respan(input: TokenStream) -> TokenStream {
             t
         })
         .collect();
-    return TokenStream::from(to_respan);
+    TokenStream::from(to_respan)
 }
 
 #[proc_macro]
