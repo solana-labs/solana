@@ -253,7 +253,7 @@ pub fn parse_create_vote_account(
     default_signer_path: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let (vote_account, _) = signer_of(matches, "vote_account", wallet_manager)?;
+    let (vote_account, vote_account_pubkey) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let (identity_account, identity_pubkey) =
         signer_of(matches, "identity_account", wallet_manager)?;
@@ -271,6 +271,7 @@ pub fn parse_create_vote_account(
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
+            vote_account: signer_info.index_of(vote_account_pubkey).unwrap(),
             seed,
             identity_account: signer_info.index_of(identity_pubkey).unwrap(),
             authorized_voter,
@@ -320,7 +321,8 @@ pub fn parse_vote_update_validator(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let (new_identity_account, new_identity_pubkey) =
         signer_of(matches, "new_identity_account", wallet_manager)?;
-    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+    let (authorized_withdrawer, authorized_withdrawer_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
     let payer_provided = None;
     let signer_info = generate_unique_signers(
@@ -334,6 +336,7 @@ pub fn parse_vote_update_validator(
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account: signer_info.index_of(new_identity_pubkey).unwrap(),
+            withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -346,7 +349,8 @@ pub fn parse_vote_update_commission(
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
-    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+    let (authorized_withdrawer, authorized_withdrawer_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
     let commission = value_t_or_exit!(matches, "commission", u8);
 
     let payer_provided = None;
@@ -361,6 +365,7 @@ pub fn parse_vote_update_commission(
         command: CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
+            withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -420,13 +425,14 @@ pub fn parse_withdraw_from_vote_account(
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
+    vote_account: SignerIndex,
     seed: &Option<String>,
     identity_account: SignerIndex,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
 ) -> ProcessResult {
-    let vote_account = config.signers[1];
+    let vote_account = config.signers[vote_account];
     let vote_account_pubkey = vote_account.pubkey();
     let vote_account_address = if let Some(seed) = seed {
         Pubkey::create_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
@@ -551,8 +557,9 @@ pub fn process_vote_update_validator(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     new_identity_account: SignerIndex,
+    withdraw_authority: SignerIndex,
 ) -> ProcessResult {
-    let authorized_withdrawer = config.signers[1];
+    let authorized_withdrawer = config.signers[withdraw_authority];
     let new_identity_account = config.signers[new_identity_account];
     let new_identity_pubkey = new_identity_account.pubkey();
     check_unique_pubkeys(
@@ -584,8 +591,9 @@ pub fn process_vote_update_commission(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     commission: u8,
+    withdraw_authority: SignerIndex,
 ) -> ProcessResult {
-    let authorized_withdrawer = config.signers[1];
+    let authorized_withdrawer = config.signers[withdraw_authority];
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
@@ -817,6 +825,7 @@ mod tests {
             parse_command(&test_create_vote_account, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
@@ -845,6 +854,7 @@ mod tests {
             parse_command(&test_create_vote_account2, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
@@ -877,6 +887,7 @@ mod tests {
             parse_command(&test_create_vote_account3, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
                     seed: None,
                     identity_account: 2,
                     authorized_voter: Some(authed),
@@ -907,6 +918,7 @@ mod tests {
             parse_command(&test_create_vote_account4, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
@@ -934,6 +946,7 @@ mod tests {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,
                     new_identity_account: 2,
+                    withdraw_authority: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -956,6 +969,7 @@ mod tests {
                 command: CliCommand::VoteUpdateCommission {
                     vote_account_pubkey: pubkey,
                     commission: 42,
+                    withdraw_authority: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

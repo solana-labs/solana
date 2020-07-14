@@ -382,6 +382,7 @@ pub enum CliCommand {
     },
     // Vote Commands
     CreateVoteAccount {
+        vote_account: SignerIndex,
         seed: Option<String>,
         identity_account: SignerIndex,
         authorized_voter: Option<Pubkey>,
@@ -407,10 +408,12 @@ pub enum CliCommand {
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
         new_identity_account: SignerIndex,
+        withdraw_authority: SignerIndex,
     },
     VoteUpdateCommission {
         vote_account_pubkey: Pubkey,
         commission: u8,
+        withdraw_authority: SignerIndex,
     },
     // Wallet Commands
     Address,
@@ -2128,6 +2131,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create vote account
         CliCommand::CreateVoteAccount {
+            vote_account,
             seed,
             identity_account,
             authorized_voter,
@@ -2136,6 +2140,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_vote_account(
             &rpc_client,
             config,
+            *vote_account,
             seed,
             *identity_account,
             authorized_voter,
@@ -2180,16 +2185,25 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account,
+            withdraw_authority,
         } => process_vote_update_validator(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *new_identity_account,
+            *withdraw_authority,
         ),
         CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
-        } => process_vote_update_commission(&rpc_client, config, &vote_account_pubkey, *commission),
+            withdraw_authority,
+        } => process_vote_update_commission(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            *commission,
+            *withdraw_authority,
+        ),
 
         // Wallet Commands
 
@@ -3417,6 +3431,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
+            vote_account: 1,
             seed: None,
             identity_account: 2,
             authorized_voter: Some(bob_pubkey),
@@ -3442,6 +3457,7 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 2,
+            withdraw_authority: 1,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -3659,6 +3675,7 @@ mod tests {
         let bob_keypair = Keypair::new();
         let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
+            vote_account: 1,
             seed: None,
             identity_account: 2,
             authorized_voter: Some(bob_pubkey),
@@ -3678,6 +3695,7 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 1,
+            withdraw_authority: 1,
         };
         assert!(process_command(&config).is_err());
 
