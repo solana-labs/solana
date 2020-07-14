@@ -294,7 +294,7 @@ pub fn process_blockstore(
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
-    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts, &recyclers)
+    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts, &recyclers, None)
 }
 
 // Process blockstore from a known root bank
@@ -304,6 +304,7 @@ pub fn process_blockstore_from_root(
     bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
@@ -368,6 +369,7 @@ pub fn process_blockstore_from_root(
                 &mut root,
                 opts,
                 recyclers,
+                transaction_status_sender,
             )?;
             (initial_forks, leader_schedule_cache)
         } else {
@@ -456,6 +458,7 @@ fn confirm_full_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
@@ -465,7 +468,7 @@ fn confirm_full_slot(
         &mut timing,
         progress,
         skip_verification,
-        None,
+        transaction_status_sender,
         opts.entry_callback.as_ref(),
         recyclers,
     )?;
@@ -629,7 +632,7 @@ fn process_bank_0(
 ) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
-    confirm_full_slot(blockstore, bank0, opts, recyclers, &mut progress)
+    confirm_full_slot(blockstore, bank0, opts, recyclers, &mut progress, None)
         .expect("processing for bank 0 must succeed");
     bank0.freeze();
     Ok(())
@@ -702,6 +705,7 @@ fn load_frozen_forks(
     root: &mut Slot,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
     let mut initial_forks = HashMap::new();
     let mut last_status_report = Instant::now();
@@ -741,7 +745,16 @@ fn load_frozen_forks(
         let initial_allocation = allocated.get();
 
         let mut progress = ConfirmationProgress::new(last_entry_hash);
-        if process_single_slot(blockstore, &bank, opts, recyclers, &mut progress).is_err() {
+        if process_single_slot(
+            blockstore,
+            &bank,
+            opts,
+            recyclers,
+            &mut progress,
+            transaction_status_sender.clone(),
+        )
+        .is_err()
+        {
             continue;
         }
         txs += progress.num_txs;
@@ -788,10 +801,11 @@ fn process_single_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see DuplicateSignature errors later in ReplayStage
-    confirm_full_slot(blockstore, bank, opts, recyclers, progress).map_err(|err| {
+    confirm_full_slot(blockstore, bank, opts, recyclers, progress, transaction_status_sender).map_err(|err| {
         let slot = bank.slot();
         warn!("slot {} failed to verify: {}", slot, err);
         if blockstore.is_primary_access() {
@@ -2418,14 +2432,21 @@ pub mod tests {
             &opts,
             &recyclers,
             &mut ConfirmationProgress::new(bank0.last_blockhash()),
+            None,
         )
         .unwrap();
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (bank_forks, _leader_schedule) =
-            process_blockstore_from_root(&genesis_config, &blockstore, bank1, &opts, &recyclers)
-                .unwrap();
+        let (bank_forks, _leader_schedule) = process_blockstore_from_root(
+            &genesis_config,
+            &blockstore,
+            bank1,
+            &opts,
+            &recyclers,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![5, 6]);
         assert_eq!(bank_forks.working_bank().slot(), 6);

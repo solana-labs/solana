@@ -680,6 +680,7 @@ fn load_bank_forks(
         account_paths,
         snapshot_config.as_ref(),
         process_options,
+        None,
     )
 }
 
