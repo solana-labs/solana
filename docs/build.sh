@@ -31,6 +31,4 @@ if [[ -n $CI ]]; then
   if [[ -z $CI_PULL_REQUEST ]]; then
     ./publish-docs.sh
   fi
-else
-  echo "Build complete. To run a local instance of the docs, run `npm run start`"
 fi
