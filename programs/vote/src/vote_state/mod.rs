@@ -259,6 +259,11 @@ impl VoteState {
             100 => (on, 0, false),
             split => {
                 let on = u128::from(on);
+                // Calculate mine and theirs independently and symmetrically instead of
+                // using the remainder of the other to treat them strictly equally.
+                // This is also to cancel the rewarding if either of the parties
+                // should receive only fractional lamports, resulting in not being rewarded at all.
+                // Thus, note that we intentionally discard any residual fractional lamports.
                 let mine = on * u128::from(split) / 100u128;
                 let theirs = on * u128::from(100 - split) / 100u128;
 
