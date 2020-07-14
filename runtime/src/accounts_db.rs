@@ -565,38 +565,6 @@ impl AccountsDB {
             .extend(previous_roots);
     }
 
-    fn inc_store_counts(
-        no_delete_id: AppendVecId,
-        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
-        store_counts: &mut HashMap<AppendVecId, usize>,
-        already_counted: &mut HashSet<AppendVecId>,
-    ) {
-        if already_counted.contains(&no_delete_id) {
-            return;
-        }
-        *store_counts.get_mut(&no_delete_id).unwrap() += 1;
-        already_counted.insert(no_delete_id);
-        let mut affected_pubkeys = HashSet::new();
-        for (key, (account_infos, _ref_count)) in purges {
-            for (_slot, account_info) in account_infos {
-                if account_info.store_id == no_delete_id {
-                    affected_pubkeys.insert(key);
-                    break;
-                }
-            }
-        }
-        for key in affected_pubkeys {
-            for (_slot, account_info) in &purges.get(&key).unwrap().0 {
-                Self::inc_store_counts(
-                    account_info.store_id,
-                    purges,
-                    store_counts,
-                    already_counted,
-                );
-            }
-        }
-    }
-
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
         store_counts: &mut HashMap<AppendVecId, usize>,
@@ -619,13 +587,37 @@ impl AccountsDB {
                 no_delete
             };
             if no_delete {
+                let mut pending_store_ids: HashSet<usize> = HashSet::new();
                 for (_slot_id, account_info) in account_infos {
-                    Self::inc_store_counts(
-                        account_info.store_id,
-                        &purges,
-                        store_counts,
-                        &mut already_counted,
-                    );
+                    if !already_counted.contains(&account_info.store_id) {
+                        pending_store_ids.insert(account_info.store_id);
+                    }
+                }
+                while !pending_store_ids.is_empty() {
+                    let id = pending_store_ids.iter().next().cloned().unwrap();
+                    pending_store_ids.remove(&id);
+                    if already_counted.contains(&id) {
+                        continue;
+                    }
+                    *store_counts.get_mut(&id).unwrap() += 1;
+                    already_counted.insert(id);
+
+                    let mut affected_pubkeys = HashSet::new();
+                    for (key, (account_infos, _ref_count)) in purges {
+                        for (_slot, account_info) in account_infos {
+                            if account_info.store_id == id {
+                                affected_pubkeys.insert(key);
+                                break;
+                            }
+                        }
+                    }
+                    for key in affected_pubkeys {
+                        for (_slot, account_info) in &purges.get(&key).unwrap().0 {
+                            if !already_counted.contains(&account_info.store_id) {
+                                pending_store_ids.insert(account_info.store_id);
+                            }
+                        }
+                    }
                 }
             }
         }
