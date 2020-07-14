@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.1"
 log = "0.4.8"
-humantime = "2.0.0"
+humantime = "2.0.1"
 solana-clap-utils = { path = "../clap-utils", version = "1.3.0" }
 solana-cli-config = { path = "../cli-config", version = "1.3.0" }
 solana-cli = { path = "../cli", version = "1.3.0" }
