@@ -58,8 +58,9 @@ macro_rules! declare_name {
                 // `declare_name(foo)`
                 //
                 // See the `respan!` macro for more details.
-                // This should use `crate::respan!` once https://github.com/rust-lang/rust/pull/72121
-                // is merged: see https://github.com/solana-labs/solana/issues/10933.
+                // This should use `crate::respan!` once
+                // https://github.com/rust-lang/rust/pull/72121 is merged:
+                // see https://github.com/solana-labs/solana/issues/10933.
                 // For now, we need to use `::solana_sdk`
                 //
                 // `respan!` respans the path `$crate::id`, which we then call (hence the extra
