@@ -9,6 +9,7 @@
 .cache-loader
 .vercel
 /static/img/*.svg
+vercel.json
 
 # Misc
 .DS_Store
