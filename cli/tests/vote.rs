@@ -125,6 +125,7 @@ fn test_vote_authorize_and_withdraw() {
     config.command = CliCommand::VoteUpdateValidator {
         vote_account_pubkey,
         new_identity_account: 2,
+        withdraw_authority: 1,
     };
     process_command(&config).unwrap();
 
