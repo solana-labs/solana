@@ -9,7 +9,7 @@ use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
     bank_forks_utils,
-    blockstore::Blockstore,
+    blockstore::{Blockstore, PurgeType},
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
     rooted_slot_iterator::RootedSlotIterator,
@@ -1033,6 +1033,13 @@ fn main() {
                     .required(true)
                     .help("Ending slot to stop purging (inclusive)"),
             )
+            .arg(
+                Arg::with_name("no_compaction")
+                    .long("no-compaction")
+                    .required(false)
+                    .takes_value(false)
+                    .help("Skip ledger compaction after purge")
+            )
         )
         .subcommand(
             SubCommand::with_name("list-roots")
@@ -1606,9 +1613,14 @@ fn main() {
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
+            let no_compaction = arg_matches.is_present("no-compaction");
             let blockstore =
                 open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
-            blockstore.purge_and_compact_slots(start_slot, end_slot);
+            if no_compaction {
+                blockstore.purge_and_compact_slots(start_slot, end_slot);
+            } else {
+                blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+            }
             blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
