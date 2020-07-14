@@ -366,7 +366,8 @@ pub fn parse_vote_update_commission(
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
-    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+    let (authorized_withdrawer, authorized_withdrawer_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
     let commission = value_t_or_exit!(matches, "commission", u8);
 
     let payer_provided = None;
@@ -381,6 +382,7 @@ pub fn parse_vote_update_commission(
         command: CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
+            withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -597,8 +599,9 @@ pub fn process_vote_update_commission(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     commission: u8,
+    withdraw_authority: SignerIndex,
 ) -> ProcessResult {
-    let authorized_withdrawer = config.signers[1];
+    let authorized_withdrawer = config.signers[withdraw_authority];
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
@@ -953,6 +956,7 @@ mod tests {
                 command: CliCommand::VoteUpdateCommission {
                     vote_account_pubkey: pubkey,
                     commission: 42,
+                    withdraw_authority: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
