@@ -26,20 +26,9 @@ source ../ci/rust-version.sh
 # Build from /src into /build
 npm run build
 
-# Deploy the /build content using vercel
-if [[ -d .vercel ]]; then
-  rm -r .vercel
-fi
-./set-vercel-project-name.sh
-
+# Publish only from merge commits and release tags
 if [[ -n $CI ]]; then
   if [[ -z $CI_PULL_REQUEST ]]; then
-    [[ -n $VERCEL_TOKEN ]] || {
-      echo "VERCEL_TOKEN is undefined.  Needed for Vercel authentication."
-      exit 1
-    }
-    vercel deploy . --local-config=vercel.json --confirm --token "$VERCEL_TOKEN" --prod
+    ./publish-docs.sh
   fi
-else
-  vercel deploy . --local-config=vercel.json
 fi
