@@ -2,6 +2,7 @@ use crate::{
     blockstore::Blockstore,
     blockstore_processor::{
         self, BlockstoreProcessorError, BlockstoreProcessorResult, ProcessOptions,
+        TransactionStatusSender,
     },
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
@@ -34,6 +35,7 @@ pub fn load(
     account_paths: Vec<PathBuf>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -86,6 +88,7 @@ pub fn load(
                         Arc::new(deserialized_bank),
                         &process_options,
                         &VerifyRecyclers::default(),
+                        transaction_status_sender,
                     ),
                     Some(deserialized_snapshot_hash),
                 );
