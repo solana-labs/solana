@@ -28,14 +28,9 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
-<<<<<<< HEAD
-    blockstore_processor, create_new_tmp_ledger,
-    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-=======
-    blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
     create_new_tmp_ledger,
->>>>>>> 9a80e31ba... Expose tss to the other blockstore_processor path (#11070)
+    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -211,16 +206,13 @@ impl Validator {
             cleanup_accounts_path(accounts_path);
         }
 
-<<<<<<< HEAD
         info!("creating bank...");
-=======
         let mut validator_exit = ValidatorExit::default();
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
->>>>>>> 9a80e31ba... Expose tss to the other blockstore_processor path (#11070)
         let (
             genesis_config,
             bank_forks,
@@ -229,20 +221,15 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             snapshot_hash,
-<<<<<<< HEAD
-        ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
-=======
             TransactionHistoryServices {
                 transaction_status_sender,
                 transaction_status_service,
                 rewards_recorder_sender,
                 rewards_recorder_service,
             },
-        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
->>>>>>> 9a80e31ba... Expose tss to the other blockstore_processor path (#11070)
+        ) = new_banks_from_blockstore(config, ledger_path, poh_verify, &exit);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let exit = Arc::new(AtomicBool::new(false));
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
@@ -253,11 +240,6 @@ impl Validator {
                 info!("Hard forks: {:?}", hard_forks);
             }
         }
-
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
@@ -277,14 +259,9 @@ impl Validator {
         }
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
-<<<<<<< HEAD
-        let blockstore = Arc::new(blockstore);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
-=======
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
->>>>>>> 9a80e31ba... Expose tss to the other blockstore_processor path (#11070)
 
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,

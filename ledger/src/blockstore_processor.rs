@@ -632,13 +632,8 @@ fn process_bank_0(
 ) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
-<<<<<<< HEAD
-    confirm_full_slot(blockstore, bank0, opts, recyclers, &mut progress)
-        .expect("processing for bank 0 must succceed");
-=======
     confirm_full_slot(blockstore, bank0, opts, recyclers, &mut progress, None)
         .expect("processing for bank 0 must succeed");
->>>>>>> 9a80e31ba... Expose tss to the other blockstore_processor path (#11070)
     bank0.freeze();
     Ok(())
 }
