@@ -103,7 +103,7 @@ impl UnverifiedBlocks {
             return;
         }
 
-        info!("all_blocks: set_root {}", new_root);
+        info!("unverified_blocks::set_root {}", new_root);
         let purge_slots = self.subtree_diff(self.root, new_root);
         for slot in purge_slots {
             self.all_blocks
@@ -120,7 +120,8 @@ impl UnverifiedBlocks {
     }
 
     // Mark everything descended from the given `slot` as dead
-    pub fn mark_branch_dead(&mut self, slot: Slot) -> Vec<Slot> {
+    pub fn mark_branch_dead(&mut self, slot: Slot) -> HashSet<Slot> {
+        assert!(slot != self.root);
         let slots_to_remove = self.subtree_diff(slot, 0);
         for slot in self.subtree_diff(slot, 0) {
             let dead_block = self
@@ -161,23 +162,23 @@ mod tests {
     #[test]
     fn test_add_unverified_block() {
         // Initialize, check the root exists
-        let mut all_blocks = UnverifiedBlocks::new(8);
-        assert!(all_blocks.all_blocks.get(&8).is_some());
-
         let slot = 9;
-        let parent = 8;
+        let root: Slot = 8;
+        let root_hash = hash(&[root as u8]);
         let entries = entry::create_ticks(4, 5, Hash::default());
-        let parent_hash = hash(&[8]);
+        let mut unverified_blocks = UnverifiedBlocks::new(root);
+        assert!(unverified_blocks.all_blocks.get(&root).is_some());
+        assert!(!unverified_blocks.is_dead(root));
 
         // Add a slot
-        all_blocks.add_unverified_block(slot, parent, entries.clone(), parent_hash);
+        unverified_blocks.add_unverified_block(slot, root, entries.clone(), root_hash);
 
         // Add a child
         let child_slot = 10;
         let child_parent = slot;
         let child_entries = entry::create_ticks(4, 5, hash(&[9]));
         let child_parent_hash = hash(&[9]);
-        all_blocks.add_unverified_block(
+        unverified_blocks.add_unverified_block(
             child_slot,
             child_parent,
             child_entries.clone(),
@@ -185,14 +186,14 @@ mod tests {
         );
 
         // Verify slot 9
-        let block_info = all_blocks.all_blocks.get(&slot).unwrap();
-        assert_eq!(block_info.parent, Some(parent));
+        let block_info = unverified_blocks.all_blocks.get(&slot).unwrap();
+        assert_eq!(block_info.parent, Some(root));
         assert_eq!(block_info.children, vec![child_slot]);
-        assert_eq!(block_info.parent_hash, parent_hash);
+        assert_eq!(block_info.parent_hash, root_hash);
         assert_eq!(block_info.entries, Some(entries));
 
         // Verify slot 10
-        let block_info = all_blocks.all_blocks.get(&child_slot).unwrap();
+        let block_info = unverified_blocks.all_blocks.get(&child_slot).unwrap();
         assert_eq!(block_info.parent, Some(child_parent));
         assert!(block_info.children.is_empty());
         assert_eq!(block_info.parent_hash, child_parent_hash);
@@ -200,60 +201,144 @@ mod tests {
     }
 
     #[test]
-    fn test_get_heaviest_block() {
-        /*
-            Build fork structure:
-                 slot 0
-                 /    \
-            slot 1    slot 2
-                        \
-                        slot 3
-        */
-        let forks = tr(0) / (tr(1)) / (tr(2) / tr(3));
-        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 1);
+    fn test_add_unverified_dead_block() {
+        // Initialize
+        let root = 8;
+        let mut unverified_blocks = UnverifiedBlocks::new(root);
+
+        // Add a slot, mark it as dead
+        let dead_slot = 9;
+        let entries = entry::create_ticks(4, 5, Hash::default());
+        unverified_blocks.add_unverified_block(dead_slot, root, entries.clone(), Hash::default());
+        unverified_blocks.mark_branch_dead(dead_slot);
+
+        // Adding another slot descended from this block should also be dead
+        unverified_blocks.add_unverified_block(
+            dead_slot + 1,
+            dead_slot,
+            entries.clone(),
+            Hash::default(),
+        );
+        assert!(unverified_blocks.is_dead(dead_slot + 1));
+
+        // Adding another slot not descended from dead block should be fine
+        unverified_blocks.add_unverified_block(dead_slot + 2, root, entries, Hash::default());
+        assert!(!unverified_blocks.is_dead(dead_slot + 2));
+    }
+
+    #[test]
+    fn test_mark_branch_dead() {
+        // Initialize
+        let (heaviest_subtree_fork_choice, mut unverified_blocks) = setup_forks();
+        let entries = entry::create_ticks(4, 5, Hash::default());
+        unverified_blocks.add_unverified_block(4, 1, entries, Hash::default());
+
+        // Mark branch with slot 1 as dead
+        unverified_blocks.mark_branch_dead(1);
+        assert!(unverified_blocks.is_dead(1));
+        assert!(unverified_blocks
+            .all_blocks
+            .get(&1)
+            .unwrap()
+            .entries
+            .is_none());
+        assert!(unverified_blocks.is_dead(4));
+        assert!(unverified_blocks
+            .all_blocks
+            .get(&4)
+            .unwrap()
+            .entries
+            .is_none());
+
+        // Other branch is still alive
+        assert!(!unverified_blocks.is_dead(0));
+        assert!(!unverified_blocks.is_dead(2));
+        assert!(!unverified_blocks.is_dead(3));
+
+        // Check dead branch is not picked by `get_heaviest_block`, even if it was the heaviest
         let weighted_traversal = RepairWeightTraversal::new(&heaviest_subtree_fork_choice);
-        let mut all_blocks = UnverifiedBlocks::new(0);
+        // Make sure slot 1 is the best path
+        assert_eq!(
+            weighted_traversal
+                .clone()
+                .take(2)
+                .map(|s| s.slot())
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        assert_eq!(
+            unverified_blocks
+                .get_heaviest_block(weighted_traversal.clone())
+                .unwrap()
+                .0,
+            2
+        );
+        assert_eq!(
+            unverified_blocks
+                .get_heaviest_block(weighted_traversal.clone())
+                .unwrap()
+                .0,
+            3
+        );
+        assert!(unverified_blocks
+            .get_heaviest_block(weighted_traversal)
+            .is_none());
+    }
+
+    #[test]
+    fn test_get_heaviest_block() {
+        let (heaviest_subtree_fork_choice, _) = setup_forks();
+        let weighted_traversal = RepairWeightTraversal::new(&heaviest_subtree_fork_choice);
+        // Make sure slot 1 is the best path
+        assert_eq!(
+            weighted_traversal
+                .clone()
+                .take(2)
+                .map(|s| s.slot())
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        let mut unverified_blocks = UnverifiedBlocks::new(0);
 
         // No non-empty block of entries has been added yet, should return nothing
-        assert!(all_blocks
+        assert!(unverified_blocks
             .get_heaviest_block(weighted_traversal.clone())
             .is_none());
 
         // Add entries for a slot that's not the best slot. Since the best slot is
         // missing, should return that one
         let hash2 = hash(&[2]);
-        all_blocks.add_unverified_block(2, 0, vec![Entry::default()], hash2);
+        unverified_blocks.add_unverified_block(2, 0, vec![Entry::default()], hash2);
         assert_eq!(
-            all_blocks
+            unverified_blocks
                 .get_heaviest_block(weighted_traversal.clone())
                 .unwrap(),
             (2, hash2, vec![Entry::default()])
         );
 
         // Calling again should return nothing, since we've already verified everything
-        assert!(all_blocks
+        assert!(unverified_blocks
             .get_heaviest_block(weighted_traversal.clone())
             .is_none());
 
         // Add entries for slot 1 and 3, should prefer 1 then 3.
         let hash1 = hash(&[1]);
-        all_blocks.add_unverified_block(1, 0, vec![Entry::default()], hash1);
+        unverified_blocks.add_unverified_block(1, 0, vec![Entry::default()], hash1);
         let hash3 = hash(&[3]);
-        all_blocks.add_unverified_block(3, 2, vec![Entry::default()], hash3);
+        unverified_blocks.add_unverified_block(3, 2, vec![Entry::default()], hash3);
         assert_eq!(
-            all_blocks
+            unverified_blocks
                 .get_heaviest_block(weighted_traversal.clone())
                 .unwrap(),
             (1, hash1, vec![Entry::default()])
         );
         assert_eq!(
-            all_blocks
+            unverified_blocks
                 .get_heaviest_block(weighted_traversal.clone())
                 .unwrap(),
             (3, hash3, vec![Entry::default()])
         );
-        assert!(all_blocks
+        assert!(unverified_blocks
             .get_heaviest_block(weighted_traversal.clone())
             .is_none());
     }
@@ -268,28 +353,46 @@ mod tests {
                         \
                         slot 3
         */
-        let mut all_blocks = UnverifiedBlocks::new(0);
-        all_blocks.add_unverified_block(1, 0, vec![], Hash::default());
-        all_blocks.add_unverified_block(2, 0, vec![], Hash::default());
-        all_blocks.add_unverified_block(3, 2, vec![], Hash::default());
+        let (_, mut unverified_blocks) = setup_forks();
 
         // Set existing root, nothing should change
-        all_blocks.set_root(0);
-        assert_eq!(all_blocks.root, 0);
+        unverified_blocks.set_root(0);
+        assert_eq!(unverified_blocks.root, 0);
         for i in 1..=3 {
-            assert!(all_blocks.all_blocks.contains_key(&i));
+            assert!(unverified_blocks.all_blocks.contains_key(&i));
         }
 
         // Set a root to 2, slot 1 should be purged
-        all_blocks.set_root(2);
-        assert!(!all_blocks.all_blocks.contains_key(&1));
+        unverified_blocks.set_root(2);
+        assert!(!unverified_blocks.all_blocks.contains_key(&1));
         for i in 2..=3 {
-            assert!(all_blocks.all_blocks.contains_key(&i));
+            assert!(unverified_blocks.all_blocks.contains_key(&i));
         }
 
         // Set a root to 3, slot 2 should be purged
-        all_blocks.set_root(3);
-        assert!(!all_blocks.all_blocks.contains_key(&2));
-        assert!(all_blocks.all_blocks.contains_key(&3));
+        unverified_blocks.set_root(3);
+        assert!(!unverified_blocks.all_blocks.contains_key(&2));
+        assert!(unverified_blocks.all_blocks.contains_key(&3));
+    }
+
+    fn setup_forks() -> (HeaviestSubtreeForkChoice, UnverifiedBlocks) {
+        /*
+            Build fork structure:
+                 slot 0
+                 /    \
+            slot 1    slot 2
+                        \
+                        slot 3
+        */
+        let forks = tr(0) / (tr(1)) / (tr(2) / tr(3));
+        let mut unverified_blocks = UnverifiedBlocks::new(0);
+        let entries = entry::create_ticks(4, 5, Hash::default());
+        unverified_blocks.add_unverified_block(1, 0, entries.clone(), Hash::default());
+        unverified_blocks.add_unverified_block(2, 0, entries.clone(), Hash::default());
+        unverified_blocks.add_unverified_block(3, 2, entries, Hash::default());
+        (
+            HeaviestSubtreeForkChoice::new_from_tree(forks),
+            unverified_blocks,
+        )
     }
 }
