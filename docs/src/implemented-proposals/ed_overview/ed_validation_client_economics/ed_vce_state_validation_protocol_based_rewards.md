@@ -13,7 +13,7 @@ Validator-client rewards for these services are to be distributed at the end of 
 
 The effective protocol-based annual interest rate \(%\) per epoch received by validation-clients is to be a function of:
 
-- the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](README.md)\)
+- the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
 - the fraction of staked SOLs out of the current total circulating supply,
 - the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
 
