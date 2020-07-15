@@ -52,13 +52,21 @@ pub fn prepare_if_nonce_account(
     tx_result: &transaction::Result<()>,
     maybe_nonce: Option<(&Pubkey, &Account)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+    fix_recent_blockhashes_sysvar_delay: bool,
 ) {
     if let Some((nonce_key, nonce_acc)) = maybe_nonce {
         if account_pubkey == nonce_key {
-            // Nonce TX failed with an InstructionError. Roll back
-            // its account state
-            if tx_result.is_err() {
+            let overwrite = if tx_result.is_err() {
+                // Nonce TX failed with an InstructionError. Roll back
+                // its account state
                 *account = nonce_acc.clone();
+                true
+            } else {
+                // Retain overwrite on successful transactions until
+                // recent_blockhashes_sysvar_delay fix is activated
+                !fix_recent_blockhashes_sysvar_delay
+            };
+            if overwrite {
                 // Since hash_age_kind is DurableNonce, unwrap is safe here
                 let state = StateMut::<Versions>::state(nonce_acc)
                     .unwrap()
@@ -294,6 +302,7 @@ mod tests {
             tx_result,
             maybe_nonce,
             last_blockhash_with_fee_calculator,
+            true,
         );
         expect_account == account
     }
