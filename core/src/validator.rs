@@ -9,7 +9,7 @@ use crate::{
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     poh_service::PohService,
-    rewards_recorder_service::RewardsRecorderService,
+    rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     rpc::JsonRpcConfig,
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
@@ -28,7 +28,8 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
-    blockstore_processor, create_new_tmp_ledger,
+    blockstore_processor::{self, TransactionStatusSender},
+    create_new_tmp_ledger,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -129,6 +130,14 @@ impl ValidatorExit {
     }
 }
 
+#[derive(Default)]
+struct TransactionHistoryServices {
+    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_service: Option<TransactionStatusService>,
+    rewards_recorder_sender: Option<RewardsRecorderSender>,
+    rewards_recorder_service: Option<RewardsRecorderService>,
+}
+
 pub struct Validator {
     pub id: Pubkey,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -198,6 +207,12 @@ impl Validator {
         }
 
         info!("creating bank...");
+        let mut validator_exit = ValidatorExit::default();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
+
         let (
             genesis_config,
             bank_forks,
@@ -206,10 +221,15 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             snapshot_hash,
-        ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
+            TransactionHistoryServices {
+                transaction_status_sender,
+                transaction_status_service,
+                rewards_recorder_sender,
+                rewards_recorder_service,
+            },
+        ) = new_banks_from_blockstore(config, ledger_path, poh_verify, &exit);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let exit = Arc::new(AtomicBool::new(false));
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
@@ -220,11 +240,6 @@ impl Validator {
                 info!("Hard forks: {:?}", hard_forks);
             }
         }
-
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
@@ -244,7 +259,6 @@ impl Validator {
         }
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
-        let blockstore = Arc::new(blockstore);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -286,36 +300,6 @@ impl Validator {
                 ),
             )
         });
-
-        let (transaction_status_sender, transaction_status_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
-                let (transaction_status_sender, transaction_status_receiver) = unbounded();
-                (
-                    Some(transaction_status_sender),
-                    Some(TransactionStatusService::new(
-                        transaction_status_receiver,
-                        blockstore.clone(),
-                        &exit,
-                    )),
-                )
-            } else {
-                (None, None)
-            };
-
-        let (rewards_recorder_sender, rewards_recorder_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
-                let (rewards_recorder_sender, rewards_receiver) = unbounded();
-                (
-                    Some(rewards_recorder_sender),
-                    Some(RewardsRecorderService::new(
-                        rewards_receiver,
-                        blockstore.clone(),
-                        &exit,
-                    )),
-                )
-            } else {
-                (None, None)
-            };
 
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
@@ -575,14 +559,16 @@ fn new_banks_from_blockstore(
     config: &ValidatorConfig,
     blockstore_path: &Path,
     poh_verify: bool,
+    exit: &Arc<AtomicBool>,
 ) -> (
     GenesisConfig,
     BankForks,
-    Blockstore,
+    Arc<Blockstore>,
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
+    TransactionHistoryServices,
 ) {
     let genesis_config =
         open_genesis_config(blockstore_path, config.max_genesis_archive_unpacked_size);
@@ -620,12 +606,23 @@ fn new_banks_from_blockstore(
         ..blockstore_processor::ProcessOptions::default()
     };
 
+    let blockstore = Arc::new(blockstore);
+    let transaction_history_services =
+        if config.rpc_ports.is_some() && config.rpc_config.enable_rpc_transaction_history {
+            initialize_rpc_transaction_history_services(blockstore.clone(), exit)
+        } else {
+            TransactionHistoryServices::default()
+        };
+
     let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
         &genesis_config,
         &blockstore,
         config.account_paths.clone(),
         config.snapshot_config.as_ref(),
         process_options,
+        transaction_history_services
+            .transaction_status_sender
+            .clone(),
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
@@ -645,6 +642,7 @@ fn new_banks_from_blockstore(
         completed_slots_receiver,
         leader_schedule_cache,
         snapshot_hash,
+        transaction_history_services,
     )
 }
 
@@ -706,6 +704,33 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
         info!("done");
     }
     drop(blockstore);
+}
+
+fn initialize_rpc_transaction_history_services(
+    blockstore: Arc<Blockstore>,
+    exit: &Arc<AtomicBool>,
+) -> TransactionHistoryServices {
+    let (transaction_status_sender, transaction_status_receiver) = unbounded();
+    let transaction_status_sender = Some(transaction_status_sender);
+    let transaction_status_service = Some(TransactionStatusService::new(
+        transaction_status_receiver,
+        blockstore.clone(),
+        exit,
+    ));
+
+    let (rewards_recorder_sender, rewards_receiver) = unbounded();
+    let rewards_recorder_sender = Some(rewards_recorder_sender);
+    let rewards_recorder_service = Some(RewardsRecorderService::new(
+        rewards_receiver,
+        blockstore,
+        exit,
+    ));
+    TransactionHistoryServices {
+        transaction_status_sender,
+        transaction_status_service,
+        rewards_recorder_sender,
+        rewards_recorder_service,
+    }
 }
 
 // Return true on error, indicating the validator should exit.
