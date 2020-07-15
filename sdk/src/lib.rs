@@ -1,3 +1,5 @@
+#![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
+
 // Allows macro expansion of `use ::solana_sdk::*` to work within this crate
 extern crate self as solana_sdk;
 
@@ -60,6 +62,8 @@ pub mod timing;
 /// ```
 pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkeys;
+#[rustversion::since(1.46.0)]
+pub use solana_sdk_macro::respan;
 
 // On-chain program specific modules
 pub mod account_info;
