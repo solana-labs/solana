@@ -32,6 +32,10 @@ module.exports = {
       },
       "wallet-guide/support",
     ],
+    "Staking Guide": [
+      "staking/README",
+      "staking/stake-accounts",
+    ],
     "Command Line Guide": [
       "cli/README",
       "cli/install-solana-cli-tools",

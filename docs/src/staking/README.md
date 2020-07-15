@@ -1,8 +1,10 @@
+---
+title: Staking on Solana
+---
+
 *Note before reading: All references to increases in values are in absolute
 terms with regards to balance of SOL.
 This document makes no suggestion as to the monetary value of SOL at any time.*
-
-# Staking on Solana
 
 Staking your SOL tokens on Solana is the best way you can help secure the world's
 highest-performing blockchain network, and
