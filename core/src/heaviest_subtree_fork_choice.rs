@@ -173,6 +173,34 @@ impl HeaviestSubtreeForkChoice {
         self.best_overall_slot()
     }
 
+    pub fn remove_branch(&mut self, slot_to_remove: Slot) -> HashSet<Slot> {
+        if !self.contains_slot(slot_to_remove) {
+            return HashSet::new();
+        }
+
+        let remove_stake = self
+            .stake_voted_subtree(slot_to_remove)
+            .expect("Passed contains_slot() check, must exist");
+        let parent = self
+            .parent(slot_to_remove)
+            .expect("Passed contains_slot() check, must exist");
+        let mut update_operations: BTreeMap<(Slot, UpdateLabel), UpdateOperation> = vec![(
+            (parent, UpdateLabel::Subtract),
+            UpdateOperation::Subtract(remove_stake),
+        )]
+        .into_iter()
+        .collect();
+        self.insert_aggregate_operations(&mut update_operations, slot_to_remove);
+        self.process_update_operations(update_operations);
+
+        let slots_to_remove = self.subtree_diff(slot_to_remove, 0);
+        for slot in &slots_to_remove {
+            self.fork_infos.remove(slot);
+        }
+
+        slots_to_remove
+    }
+
     pub fn set_root(&mut self, new_root: Slot) {
         // Remove everything reachable from `self.root` but not `new_root`,
         // as those are now unrooted.
