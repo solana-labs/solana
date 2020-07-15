@@ -83,6 +83,9 @@ pub enum TransactionError {
     /// not be unlocked.
     #[error("Transaction failed to sanitize accounts offsets correctly")]
     SanitizeFailure,
+
+    #[error("Transactions are currently disabled due to cluster maintenance")]
+    ClusterMaintenance,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
