@@ -101,8 +101,6 @@ module.exports = {
           // It is recommended to set document id as docs home page (`docs/` path).
           homePageId: "introduction",
           sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
-          editUrl: "https://github.com/solana-labs/solana/edit/master/docs/",
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
