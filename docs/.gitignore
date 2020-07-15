@@ -9,6 +9,7 @@
 .cache-loader
 .vercel
 /static/img/*.svg
+/static/img/*.png
 vercel.json
 
 # Misc
