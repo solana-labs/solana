@@ -24,7 +24,22 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
                 None
             }
         }
-        OperatingMode::Stable | OperatingMode::Preview => {
+        OperatingMode::Preview => {
+            if epoch == 0 {
+                // No inflation at epoch 0
+                Some(Inflation::new_disabled())
+            } else if epoch == 44 {
+                // testnet enabled inflation at epoch 44:
+                // https://github.com/solana-labs/solana/blob/d8e885f4259e6c7db420cce513cb34ebf961073d
+                Some(Inflation::default())
+            } else if epoch == 68 {
+                // Completely disable inflation prior to ship the inflation fix at epoch 68
+                Some(Inflation::new_disabled())
+            } else {
+                None
+            }
+        }
+        OperatingMode::Stable => {
             if epoch == 0 {
                 // No inflation at epoch 0
                 Some(Inflation::new_disabled())
@@ -92,6 +107,7 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
             operating_mode
         );
         if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
+            info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
         if let Some(new_programs) = get_programs(operating_mode, bank.epoch()) {
