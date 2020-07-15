@@ -9,17 +9,17 @@ import styles from "./styles.module.css";
 const features = [
   {
     title: <>Run a Validator</>,
-    imageUrl: "docs/running-validator/README",
+    imageUrl: "running-validator",
     description: <>Learn how to start a validator on the Solana cluster.</>,
   },
   {
     title: <>Launch an Application</>,
-    imageUrl: "docs/apps/README",
+    imageUrl: "apps",
     description: <>Build superfast applications with one API.</>,
   },
   {
     title: <>Participate in Tour de SOL</>,
-    imageUrl: "docs/tour-de-sol/README",
+    imageUrl: "tour-de-sol",
     description: (
       <>
         Participate in our incentivised testnet and earn rewards by finding
@@ -29,7 +29,7 @@ const features = [
   },
   {
     title: <>Integrate the SOL token into your Exchange</>,
-    imageUrl: "docs/integrations/exchange",
+    imageUrl: "integrations/exchange",
     description: (
       <>
         Follow our extensive integration guide to ensure a seamless user
@@ -39,7 +39,7 @@ const features = [
   },
   {
     title: <>Create or Configure a Solana Wallet</>,
-    imageUrl: "docs/wallet-guide/README",
+    imageUrl: "wallet-guide",
     description: (
       <>
         Whether you need to create a wallet, check the balance of your funds, or
@@ -49,7 +49,7 @@ const features = [
   },
   {
     title: <>Learn About Solana's Architecture</>,
-    imageUrl: "docs/cluster/README",
+    imageUrl: "cluster/overview",
     description: (
       <>
         Familiarize yourself with the high level architecture of a Solana
@@ -59,7 +59,7 @@ const features = [
   }, //
   // {
   //   title: <>Understand Our Economic Design</>,
-  //   imageUrl: "docs/implemented-proposals/ed_overview/README",
+  //   imageUrl: "implemented-proposals/ed_overview/ed_cluster_economics",
   //   description: (
   //     <>
   //       Solana's Economic Design provides a scalable blueprint for long term

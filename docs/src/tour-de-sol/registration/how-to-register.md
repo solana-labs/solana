@@ -22,7 +22,7 @@ communication channel: https://discord.gg/N3mqAfa
 ### Next Steps
 
 - Check out our documentation to start getting familiar with how to
-  [Run a Validator](../../running-validator/README.md)
+  [Run a Validator](../../running-validator.md)
 
 - After you've finished the registration and KYC, you will receive an email
   with instructions to finish your on-boarding process.

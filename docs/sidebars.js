@@ -1,8 +1,8 @@
 module.exports = {
   docs: {
-    Introduction: ["introduction"],
+    "Introduction": ["introduction"],
     "Wallet Guide": [
-      "wallet-guide/README",
+      "wallet-guide",
       {
         type: "category",
         label: "App Wallets",
@@ -17,34 +17,34 @@ module.exports = {
         label: "Command-line Wallets",
         items: [
           "wallet-guide/cli",
-          {
-            type: "category",
-            label: "Paper Wallets",
-            items: ["paper-wallet/README", "paper-wallet/paper-wallet-usage"],
-          },
+          "wallet-guide/paper-wallet",
           {
             type: "category",
             label: "Hardware Wallets",
-            items: ["hardware-wallets/README", "hardware-wallets/ledger"],
+            items: ["wallet-guide/hardware-wallets", "wallet-guide/hardware-wallets/ledger"],
           },
-          "file-system-wallet/README",
+          "wallet-guide/file-system-wallet",
         ],
       },
       "wallet-guide/support",
     ],
+    "Staking Guide": [
+      "staking",
+      "staking/stake-accounts",
+    ],
     "Command Line Guide": [
-      "cli/README",
+      "cli",
       "cli/install-solana-cli-tools",
       "cli/conventions",
       "cli/choose-a-cluster",
       "cli/transfer-tokens",
       "cli/manage-stake-accounts",
-      "offline-signing/README",
+      "offline-signing",
       "offline-signing/durable-nonce",
     ],
     "Solana Clusters": ["clusters"],
     "Develop Applications": [
-      "apps/README",
+      "apps",
       "apps/rent",
       "apps/webwallet",
       "apps/tictactoe",
@@ -52,11 +52,11 @@ module.exports = {
       "transaction",
       "apps/jsonrpc-api",
       "apps/javascript-api",
-      "apps/builtins/README",
+      "apps/builtins",
     ],
     "Integration Guides": ["integrations/exchange"],
     "Run a Validator": [
-      "running-validator/README",
+      "running-validator",
       "running-validator/validator-reqs",
       "running-validator/validator-start",
       "running-validator/validator-stake",
@@ -65,8 +65,7 @@ module.exports = {
       "running-validator/validator-troubleshoot",
     ],
     "Tour de SOL": [
-      "tour-de-sol/README",
-      "tour-de-sol/useful-links",
+      "tour-de-sol",
       {
         type: "category",
         label: "Registration",
@@ -87,11 +86,12 @@ module.exports = {
           "tour-de-sol/participation/steps-to-create-a-validator",
         ],
       },
+      "tour-de-sol/useful-links",
       "tour-de-sol/submitting-bugs",
     ],
     "Benchmark a Cluster": ["cluster/bench-tps", "cluster/performance-metrics"],
     "Solana's Architecture": [
-      "cluster/README",
+      "cluster/overview",
       "cluster/synchronization",
       "cluster/leader-rotation",
       "cluster/fork-generation",
@@ -101,7 +101,7 @@ module.exports = {
       "cluster/stake-delegation-and-rewards",
     ],
     "Anatomy of a Validator": [
-      "validator/README",
+      "validator/anatomy",
       "validator/tpu",
       "validator/tvu",
       "validator/blockstore",
@@ -115,12 +115,12 @@ module.exports = {
         type: "category",
         label: "Economic Design",
         items: [
-          "implemented-proposals/ed_overview/README",
+          "implemented-proposals/ed_overview/ed_cluster_economics",
           {
             type: "category",
             label: "Validation Client Economics",
             items: [
-              "implemented-proposals/ed_overview/ed_validation_client_economics/README",
+              "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_overview",
               "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_protocol_based_rewards",
               "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_transaction_fees",
               "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_validation_stake_delegation",
@@ -153,7 +153,7 @@ module.exports = {
       "implemented-proposals/abi-management",
     ],
     "Accepted Design Proposals": [
-      "proposals/README",
+      "proposals/accepted_design_proposals",
       "proposals/ledger-replication-to-implement",
       "proposals/optimistic-confirmation-and-slashing",
       "proposals/vote-signing-to-implement",

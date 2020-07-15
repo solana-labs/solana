@@ -3,9 +3,9 @@ title: Send and Receive Tokens
 ---
 
 This page decribes how to receive and send SOL tokens using the command line
-tools with a command line wallet such as a [paper wallet](../paper-wallet/README.md),
-a [file system wallet](../file-system-wallet/README.md), or a
-[hardware wallet](../hardware-wallets/README.md). Before you begin, make sure
+tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
+a [file system wallet](../wallet-guide/file-system-wallet.md), or a
+[hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
 you have created a wallet and have access to its address (pubkey) and the
 signing keypair. Check out our
 [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
@@ -60,8 +60,8 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 
 You can also create a second (or more) wallet of any type:
 [paper](../paper-wallet/paper-wallet-usage.md#creating-multiple-paper-wallet-addresses),
-[file system](../file-system-wallet/README.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../hardware-wallets/README.md#multiple-addresses-on-a-single-hardware-wallet).
+[file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
+or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 
 #### Transfer tokens from your first wallet to the second address
 
