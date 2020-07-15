@@ -16,28 +16,25 @@ use log::*;
 use solana_runtime::bank::{Bank, EnteredEpochCallback};
 
 pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Inflation> {
-    let past_epoch_inflation = get_inflation_for_epoch(operating_mode, epoch.saturating_sub(1));
-    let epoch_inflation = get_inflation_for_epoch(operating_mode, epoch);
-
-    if epoch_inflation != past_epoch_inflation || epoch == 0 {
-        Some(epoch_inflation)
-    } else {
-        None
-    }
-}
-
-pub fn get_inflation_for_epoch(operating_mode: OperatingMode, epoch: Epoch) -> Inflation {
     match operating_mode {
-        OperatingMode::Development => Inflation::default(),
+        OperatingMode::Development => {
+            if epoch == 0 {
+                Some(Inflation::default())
+            } else {
+                None
+            }
+        }
         OperatingMode::Stable | OperatingMode::Preview => {
-            if epoch == std::u64::MAX {
+            if epoch == 0 {
+                // No inflation at epoch 0
+                Some(Inflation::new_disabled())
+            } else if epoch == std::u64::MAX {
                 // Inflation starts
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in
                 // a future hard fork.
-                Inflation::default()
+                Some(Inflation::default())
             } else {
-                // No inflation from epoch 0
-                Inflation::new_disabled()
+                None
             }
         }
     }
