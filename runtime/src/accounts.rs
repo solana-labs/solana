@@ -1703,4 +1703,26 @@ mod tests {
         assert!(!Accounts::has_duplicates(&[1, 2]));
         assert!(Accounts::has_duplicates(&[1, 2, 1]));
     }
+
+    #[test]
+    fn huge_clean() {
+        solana_logger::setup();
+        let accounts = Accounts::new(Vec::new());
+        let mut old_pubkey = Pubkey::default();
+        let zero_account = Account::new(0, 0, &Account::default().owner);
+        info!("storing..");
+        for i in 0..2_000 {
+            let pubkey = Pubkey::new_rand();
+            let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
+            accounts.store_slow(i, &pubkey, &account);
+            accounts.store_slow(i, &old_pubkey, &zero_account);
+            old_pubkey = pubkey;
+            accounts.add_root(i);
+            if i % 1_000 == 0 {
+                info!("  store {}", i);
+            }
+        }
+        info!("done..cleaning..");
+        accounts.accounts_db.clean_accounts();
+    }
 }
