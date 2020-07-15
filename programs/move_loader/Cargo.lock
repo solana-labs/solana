@@ -2597,11 +2597,8 @@ dependencies = [
  "pbkdf2",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
-<<<<<<< HEAD
-=======
  "rustc_version",
  "rustversion",
->>>>>>> 42f88484f... Update lock files
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -2618,27 +2615,10 @@ name = "solana-sdk-macro"
 version = "1.2.11"
 dependencies = [
  "bs58 0.3.1",
-<<<<<<< HEAD
  "proc-macro2 1.0.18",
  "quote 1.0.7",
- "syn 1.0.33",
-=======
- "proc-macro2 1.0.17",
- "quote 1.0.6",
  "rustversion",
- "syn 1.0.27",
-]
-
-[[package]]
-name = "solana-sdk-macro-frozen-abi"
-version = "1.3.0"
-dependencies = [
- "lazy_static",
- "proc-macro2 1.0.17",
- "quote 1.0.6",
- "rustc_version",
- "syn 1.0.27",
->>>>>>> 42f88484f... Update lock files
+ "syn 1.0.33",
 ]
 
 [[package]]
