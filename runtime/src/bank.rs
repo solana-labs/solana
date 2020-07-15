@@ -1776,6 +1776,7 @@ impl Bank {
             loaded_accounts,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
+            self.fix_recent_blockhashes_sysvar_delay(),
         );
         self.collect_rent(executed, loaded_accounts);
 
