@@ -49,7 +49,7 @@ wallets are used in conjunction with
 Paper wallets and custody services are an excellent way to secure a large number
 of tokens for a long period of time.
 
-[Paper Wallets](../paper-wallet/README.md)
+[Paper Wallets](paper-wallet.md)
 
 ## Hardware Wallet
 

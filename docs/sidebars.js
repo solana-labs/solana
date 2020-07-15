@@ -1,8 +1,8 @@
 module.exports = {
   docs: {
-    Introduction: ["introduction"],
+    "Introduction": ["introduction"],
     "Wallet Guide": [
-      "wallet-guide/README",
+      "wallet-guide",
       {
         type: "category",
         label: "App Wallets",
@@ -17,17 +17,13 @@ module.exports = {
         label: "Command-line Wallets",
         items: [
           "wallet-guide/cli",
-          {
-            type: "category",
-            label: "Paper Wallets",
-            items: ["paper-wallet/README", "paper-wallet/paper-wallet-usage"],
-          },
+          "wallet-guide/paper-wallet",
           {
             type: "category",
             label: "Hardware Wallets",
-            items: ["hardware-wallets/README", "hardware-wallets/ledger"],
+            items: ["wallet-guide/hardware-wallets", "wallet-guide/hardware-wallets/ledger"],
           },
-          "file-system-wallet/README",
+          "wallet-guide/file-system-wallet",
         ],
       },
       "wallet-guide/support",
