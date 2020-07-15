@@ -61,3 +61,6 @@ tiny-bip39 = "0.7.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = "0.2"
