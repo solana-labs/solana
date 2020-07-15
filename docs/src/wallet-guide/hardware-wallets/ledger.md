@@ -8,8 +8,8 @@ secure transaction signing.
 
 ## Before You Begin
 
-- [Set up a Ledger Nano S with the Solana App](../wallet-guide/ledger-live.md)
-- [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
+- [Set up a Ledger Nano S with the Solana App](../ledger-live.md)
+- [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
 ## Use Ledger Nano S with Solana CLI
 
@@ -40,7 +40,7 @@ using the wallet ID to use a specific Ledger, see
 
 Your Nano S supports an arbitrary number of valid wallet addresses and signers.
 To view any address, use the `solana-keygen pubkey` command, as shown below,
-followed by a valid [keypair URL](README.md#specify-a-keypair-url).
+followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
 
 Multiple wallet addresses can be useful if you want to transfer tokens between
 your own accounts for different purposes, or use different keypairs on the
@@ -264,9 +264,9 @@ solana-keygen pubkey usb://ledger\?key=0
 
 ## Support
 
-Check out our [Wallet Support Page](../wallet-guide/support.md)
+Check out our [Wallet Support Page](../support.md)
 for ways to get help.
 
-Read more about [sending and receiving tokens](../cli/transfer-tokens.md) and
-[delegating stake](../cli/delegate-stake.md). You can use your Ledger keypair URL
+Read more about [sending and receiving tokens](../../cli/transfer-tokens.md) and
+[delegating stake](../../cli/delegate-stake.md). You can use your Ledger keypair URL
 anywhere you see an option or argument that accepts a `<KEYPAIR>`.

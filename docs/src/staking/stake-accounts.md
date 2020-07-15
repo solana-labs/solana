@@ -1,4 +1,7 @@
-## Stake Account Structure
+---
+title: Stake Account Structure
+---
+
 A stake account on Solana can be used to delegate tokens to validators on
 the network to potentially earn rewards for the owner of the stake account.
 Stake accounts are created and managed differently than a traditional wallet

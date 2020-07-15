@@ -19,7 +19,7 @@ hardware wallet.
 
 The Solana CLI supports the following hardware wallets:
 
-- [Ledger Nano S](ledger.md)
+- [Ledger Nano S](hardware-wallets/ledger.md)
 
 ## Specify a Keypair URL
 

@@ -72,7 +72,7 @@ solana-keygen pubkey /home/solana/my_wallet.json
 #### Hardware Wallet
 
 If you chose a hardware wallet, use your
-[keypair URL](../hardware-wallets/README.md#specify-a-hardware-wallet-key),
+[keypair URL](../wallet-guide/hardware-wallets.md#specify-a-hardware-wallet-key),
 such as `usb://ledger?key=0`.
 
 ```bash
