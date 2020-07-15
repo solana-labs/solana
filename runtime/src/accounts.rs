@@ -650,6 +650,7 @@ impl Accounts {
         loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        fix_recent_blockhashes_sysvar_delay: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -658,6 +659,7 @@ impl Accounts {
             loaded,
             rent_collector,
             last_blockhash_with_fee_calculator,
+            fix_recent_blockhashes_sysvar_delay,
         );
         self.accounts_db.store(slot, &accounts_to_store);
     }
@@ -684,6 +686,7 @@ impl Accounts {
         loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        fix_recent_blockhashes_sysvar_delay: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), tx)) in loaded
@@ -720,6 +723,7 @@ impl Accounts {
                     res,
                     maybe_nonce,
                     last_blockhash_with_fee_calculator,
+                    fix_recent_blockhashes_sysvar_delay,
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
@@ -1675,6 +1679,7 @@ mod tests {
             &mut loaded,
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
+            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
