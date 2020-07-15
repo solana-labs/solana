@@ -16,30 +16,30 @@ use log::*;
 use solana_runtime::bank::{Bank, EnteredEpochCallback};
 
 pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Inflation> {
-    let past_epoch_inflation = get_inflation_for_epoch(operating_mode, epoch.saturating_sub(1));
-    let epoch_inflation = get_inflation_for_epoch(operating_mode, epoch);
-
-    if epoch_inflation != past_epoch_inflation || epoch == 0 {
-        Some(epoch_inflation)
-    } else {
-        None
-    }
-}
-
-pub fn get_inflation_for_epoch(operating_mode: OperatingMode, epoch: Epoch) -> Inflation {
     match operating_mode {
-        OperatingMode::Development => Inflation::default(),
-        OperatingMode::Stable | OperatingMode::Preview => {
-            if epoch == std::u64::MAX {
-                // Inflation starts
-                // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in
-                // a future hard fork.
-                Inflation::default()
-            } else {
-                // No inflation from epoch 0
-                Inflation::new_disabled()
-            }
-        }
+        OperatingMode::Development => match epoch {
+            0 => Some(Inflation::default()),
+            _ => None,
+        },
+        OperatingMode::Preview => match epoch {
+            // No inflation at epoch 0
+            0 => Some(Inflation::new_disabled()),
+            // testnet enabled inflation at epoch 44:
+            // https://github.com/solana-labs/solana/blob/d8e885f4259e6c7db420cce513cb34ebf961073d
+            44 => Some(Inflation::default()),
+            // Completely disable inflation prior to ship the inflation fix at epoch 68
+            68 => Some(Inflation::new_disabled()),
+            _ => None,
+        },
+        OperatingMode::Stable => match epoch {
+            // No inflation at epoch 0
+            0 => Some(Inflation::new_disabled()),
+            // Inflation starts
+            // The epoch of Epoch::MAX is a placeholder and is expected to be reduced in
+            // a future hard fork.
+            Epoch::MAX => Some(Inflation::default()),
+            _ => None,
+        },
     }
 }
 
@@ -95,6 +95,7 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
             operating_mode
         );
         if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
+            info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
         if let Some(new_programs) = get_programs(operating_mode, bank.epoch()) {
