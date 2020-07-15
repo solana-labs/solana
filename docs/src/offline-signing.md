@@ -7,7 +7,7 @@ process, separated from transaction creation and network broadcast. Examples
 include:
 
 - Collecting signatures from geographically disparate signers in a
-  [multi-signature scheme](../cli/usage.md#multiple-witnesses)
+  [multi-signature scheme](cli/usage.md#multiple-witnesses)
 - Signing transactions using an [airgapped](<https://en.wikipedia.org/wiki/Air_gap_(networking)>)
   signing device
 
@@ -18,14 +18,14 @@ transaction.
 
 At present, the following commands support offline signing:
 
-- [`create-stake-account`](../cli/usage.md#solana-create-stake-account)
-- [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
-- [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
-- [`split-stake`](../cli/usage.md#solana-split-stake)
-- [`stake-authorize`](../cli/usage.md#solana-stake-authorize)
-- [`stake-set-lockup`](../cli/usage.md#solana-stake-set-lockup)
-- [`transfer`](../cli/usage.md#solana-transfer)
-- [`withdraw-stake`](../cli/usage.md#solana-withdraw-stake)
+- [`create-stake-account`](cli/usage.md#solana-create-stake-account)
+- [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
+- [`delegate-stake`](cli/usage.md#solana-delegate-stake)
+- [`split-stake`](cli/usage.md#solana-split-stake)
+- [`stake-authorize`](cli/usage.md#solana-stake-authorize)
+- [`stake-set-lockup`](cli/usage.md#solana-stake-set-lockup)
+- [`transfer`](cli/usage.md#solana-transfer)
+- [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
 
 ## Signing Transactions Offline
 
@@ -158,5 +158,5 @@ ohGKvpRC46jAduwU9NW8tP91JkCT5r8Mo67Ysnid4zc76tiiV1Ho6jv3BKFSbBcr2NcPPCarmfTLSkTH
 Typically a Solana transaction must be signed and accepted by the network within
 a number of slots from the blockhash in its `recent_blockhash` field (~2min at
 the time of this writing). If your signing procedure takes longer than this, a
-[Durable Transaction Nonce](durable-nonce.md) can give you the extra time you
+[Durable Transaction Nonce](offline-signing/durable-nonce.md) can give you the extra time you
 need.

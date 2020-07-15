@@ -93,7 +93,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 You may wish to keep the keys for one or more collection accounts offline for
 greater security. If so, you will need to move SOL to hot accounts using our
-[offline methods](../offline-signing/README.md).
+[offline methods](../offline-signing.md).
 
 ## Listening for Deposits
 

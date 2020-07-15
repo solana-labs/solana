@@ -13,7 +13,7 @@ Integration with Ledger Live to use Solana wallet accounts on Ledger Live
 will be available in the future.**
 
 Users may [use a Ledger Nano S with the Solana command
-line tools](../hardware-wallets/ledger.md).
+line tools](hardware-wallets/ledger.md).
 
 ## Set up a Ledger Nano S
 
@@ -70,7 +70,7 @@ of the Solana App, please upgrade to version v0.2.2 by following these steps.
 
 - To interact with your Ledger wallet on our live network, please see our
   instructions on how to
-  [use a Ledger Nano S with the Solana command line tools](../hardware-wallets/ledger.md).
+  [use a Ledger Nano S with the Solana command line tools](hardware-wallets/ledger.md).
 
 ## Support
 

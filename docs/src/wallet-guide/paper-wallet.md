@@ -1,6 +1,22 @@
 ---
-title: Paper Wallet Usage
+title: Paper Wallet
 ---
+
+This document describes how to create and use a paper wallet with the Solana CLI
+tools.
+
+> We do not intend to advise on how to _securely_ create or manage paper wallets. Please research the security concerns carefully.
+
+## Overview
+
+Solana provides a key generation tool to derive keys from BIP39 compliant seed
+phrases. Solana CLI commands for running a validator and staking tokens all
+support keypair input via seed phrases.
+
+To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
+[here](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
+
+## Paper Wallet Usage
 
 Solana commands can be run without ever saving a keypair to disk on a machine.
 If avoiding writing a private key to disk is a security concern of yours, you've
@@ -45,7 +61,7 @@ have not made any errors.
 solana-keygen new --no-outfile
 ```
 
-> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](../file-system-wallet/README.md)
+> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](file-system-wallet.md)
 
 The output of this command will display a line like this:
 
@@ -150,4 +166,4 @@ your own accounts for different purposes.
 
 ## Support
 
-Check out our [Wallet Support Page](../wallet-guide/support.md) for ways to get help.
+Check out our [Wallet Support Page](support.md) for ways to get help.

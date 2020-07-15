@@ -142,7 +142,7 @@ solana airdrop 10
 ```
 
 Note that airdrops are only available on Devnet. Testnet SOL can be obtained by
-participating in the [Tour de SOL](../tour-de-sol/README.md) program.
+participating in the [Tour de SOL](../tour-de-sol.md) program.
 
 To view your current balance:
 

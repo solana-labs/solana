@@ -16,20 +16,17 @@ module.exports = {
       },
       links: [
         {
-          to: "docs/",
-          activeBasePath: "docs",
+          to: "introduction",
           label: "Docs",
           position: "left",
         },
         {
-          to: "docs/apps/README",
-          activeBasePath: "docs2",
+          to: "apps/README",
           label: "Developers",
           position: "left",
         },
         {
-          to: "docs/running-validator/README",
-          activeBasePath: "docs2",
+          to: "running-validator/README",
           label: "Validators",
           position: "left",
         },
@@ -54,11 +51,11 @@ module.exports = {
           items: [
             {
               label: "Introduction",
-              to: "docs/introduction",
+              to: "introduction",
             },
             {
               label: "Tour de SOL",
-              to: "docs/tour-de-sol/README",
+              to: "tour-de-sol/README",
             },
           ],
         },
@@ -98,11 +95,8 @@ module.exports = {
       {
         docs: {
           path: "src",
-          // It is recommended to set document id as docs home page (`docs/` path).
-          homePageId: "introduction",
+          routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
-          editUrl: "https://github.com/solana-labs/solana/edit/master/docs/",
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),

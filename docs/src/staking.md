@@ -1,12 +1,14 @@
+---
+title: Staking on Solana
+---
+
 *Note before reading: All references to increases in values are in absolute
 terms with regards to balance of SOL.
 This document makes no suggestion as to the monetary value of SOL at any time.*
 
-# Staking on Solana
-
 Staking your SOL tokens on Solana is the best way you can help secure the world's
 highest-performing blockchain network, and
-[earn rewards](../implemented-proposals/staking-rewards.md) for doing so!
+[earn rewards](implemented-proposals/staking-rewards.md) for doing so!
 Inflation and network rewards are *NOT* presently enabled on Solana's
 Mainnet Beta network, but may be enabled in the future.
 
@@ -65,7 +67,7 @@ description is below.
 Currently, staking operation are only supported by wallets that can interact
 with the Solana command line tools, including Ledger Nano S and paper wallet.
 
-[Staking commands using the Solana Command Line Tools](../cli/delegate-stake.md)
+[Staking commands using the Solana Command Line Tools](cli/delegate-stake.md)
 
 #### Create a Stake Account
 A stake account is a different type of account from a wallet address
@@ -108,4 +110,4 @@ account address.
 
 ## Stake Account Details
 For more information about the operations and permissions associated with a
-stake account, please see [Stake Accounts](stake-accounts.md)
+stake account, please see [Stake Accounts](staking/stake-accounts.md)
