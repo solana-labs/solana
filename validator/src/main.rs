@@ -1216,18 +1216,21 @@ pub fn main() {
             exit(1);
         }
         if !no_genesis_fetch || !no_snapshot_fetch {
-            let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
-                &identity_keypair,
-                &cluster_entrypoint.gossip,
-                &node.info.gossip,
-                node.sockets.gossip.try_clone().unwrap(),
-                validator_config.expected_shred_version,
-            );
-
             let mut blacklisted_rpc_nodes = HashSet::new();
+            let mut gossip = None;
             loop {
+                if gossip.is_none() {
+                    gossip = Some(start_gossip_node(
+                        &identity_keypair,
+                        &cluster_entrypoint.gossip,
+                        &node.info.gossip,
+                        node.sockets.gossip.try_clone().unwrap(),
+                        validator_config.expected_shred_version,
+                    ));
+                }
+
                 let (rpc_contact_info, snapshot_hash) = get_rpc_node(
-                    &cluster_info,
+                    &gossip.as_ref().unwrap().0,
                     &validator_config,
                     &mut blacklisted_rpc_nodes,
                     no_snapshot_fetch,
@@ -1284,7 +1287,11 @@ pub fn main() {
                             .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                             .and_then(|slot| {
                                info!("RPC node root slot: {}", slot);
-                               download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash)
+                               let (_cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
+                               gossip_exit_flag.store(true, Ordering::Relaxed);
+                               let ret = download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash);
+                               gossip_service.join().unwrap();
+                               ret
                             })
                     } else {
                         Ok(())
@@ -1328,8 +1335,10 @@ pub fn main() {
                 );
                 blacklisted_rpc_nodes.insert(rpc_contact_info.id);
             }
-            gossip_exit_flag.store(true, Ordering::Relaxed);
-            gossip_service.join().unwrap();
+            if let Some((_cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
+                gossip_exit_flag.store(true, Ordering::Relaxed);
+                gossip_service.join().unwrap();
+            }
         }
     }
 
