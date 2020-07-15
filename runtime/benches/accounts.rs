@@ -95,3 +95,22 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
         accounts.accounts_db.get_accounts_delta_hash(0);
     });
 }
+
+#[bench]
+fn bench_delete_dependencies(bencher: &mut Bencher) {
+    solana_logger::setup();
+    let accounts = Accounts::new(vec![PathBuf::from("accounts_delete_deps")]);
+    let mut old_pubkey = Pubkey::default();
+    let zero_account = Account::new(0, 0, &Account::default().owner);
+    for i in 0..1000 {
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
+        accounts.store_slow(i, &pubkey, &account);
+        accounts.store_slow(i, &old_pubkey, &zero_account);
+        old_pubkey = pubkey;
+        accounts.add_root(i);
+    }
+    bencher.iter(|| {
+        accounts.accounts_db.clean_accounts();
+    });
+}
