@@ -3,6 +3,11 @@
 # Check if files in the commit range match one or more prefixes
 #
 
+# Always run the job if we are on a tagged release
+if [[ -n "$TRAVIS_TAG" ]]; then
+  exit 0
+fi
+
 (
   set -x
   git diff --name-only "$TRAVIS_COMMIT_RANGE"
