@@ -147,19 +147,5 @@ appearing.  To check for progress:
 [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.  This can take 2-3 hours, and sometimes fails in the `solana-secondary` job.
 If this happens and the error is non-fatal, click "Retry" on the "publish crate" job
 
-### Update documentation
-
-After the release automation completes, to add the new release to the list of releases on docs.solana.com:
-1. Go to  https://www.gitbook.com/ and click on "Go To Dashboard"
-1. Find the "Solana Docs" project
-1. Under "Integrations" -> "Github", "Edit configuration". Add the new release to the "Select branches to sync" input box, tclick "Next ->" and then "Go live"
-1. Now find the new version in the drop down of imported releases and
-   toggle "Set as main variant" if `X.Y.Z` is now the latest release on the beta
-   channel.
-1. Consider deleting older `X.Y.Z-1` patch releases since they are no longer relevant
-1. "Save" the edits.
-2. "Merge" the edits
-
-
 ### Update software on devnet.solana.com/testnet.solama.com/mainnet-beta.solana.com
 See the documentation at https://github.com/solana-labs/cluster-ops/
