@@ -43,6 +43,7 @@ pub struct SlotInfo {
     pub root: Slot,
 }
 
+/// Commitment-cache slot information, a subset of `BlockCommitmentCache` data
 #[derive(Default)]
 pub struct CacheSlotInfo {
     pub current_slot: Slot,

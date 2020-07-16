@@ -35,14 +35,28 @@ impl BlockCommitment {
     }
 }
 
+/// A node's view of cluster commitment as per a particular bank
 #[derive(Default)]
 pub struct BlockCommitmentCache {
+    /// Map of all commitment levels of current ancestor slots, aggregated from the vote account
+    /// data in the bank
     block_commitment: HashMap<Slot, BlockCommitment>,
+
+    /// Highest cluster-confirmed root, calculated from the block_commitment map.
+    /// This value is cached in the struct to avoid the expense of recalculating on every call.
     highest_confirmed_root: Slot,
+
+    /// Total stake active during the bank's epoch
     total_stake: u64,
+
     /// The slot of the bank from which all other slots were calculated.
     slot: Slot,
+
+    /// The node root when this cache was aggregated
     root: Slot,
+
+    /// Highest cluster-confirmed slot, calculated from the block_commitment map.
+    /// This value is cached in the struct to avoid the expense of recalculating on every call.
     pub highest_confirmed_slot: Slot,
 }
 

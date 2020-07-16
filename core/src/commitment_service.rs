@@ -136,6 +136,9 @@ impl AggregateCommitmentService {
                 )
             );
 
+            // Triggers rpc_subscription notifications as soon as new commitment data is available,
+            // sending just the commitment cache slot information that the notifications thread
+            // needs
             subscriptions.notify_subscribers(CacheSlotInfo {
                 current_slot: w_block_commitment_cache.slot(),
                 node_root: w_block_commitment_cache.root(),
