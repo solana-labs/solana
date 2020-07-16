@@ -737,6 +737,14 @@ pub fn main() {
                 .help("Require the genesis have this hash"),
         )
         .arg(
+            Arg::with_name("expected_bank_hash")
+                .long("expected-bank-hash")
+                .value_name("HASH")
+                .takes_value(true)
+                .validator(hash_validator)
+                .hidden(true) // This is a stub implementation for v1.2 command-line compatibility
+        )
+        .arg(
             Arg::with_name("expected_shred_version")
                 .long("expected-shred-version")
                 .value_name("VERSION")
