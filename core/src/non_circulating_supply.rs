@@ -77,6 +77,7 @@ solana_sdk::pubkeys!(
         "5q54XjQ7vDx4y6KphPeE97LUNiYGtP55spjvXAWPGBuf",
         "3o6xgkJ9sTmDeQWyfj3sxwon18fXJB9PV5LDc8sfgR4a",
         "GumSE5HsMV5HCwBTv2D2D81yy9x17aDkvobkqAfTRgmo",
+        "AzVV9ZZDxTgW4wWfJmsG6ytaHpQGSe1yz76Nyy84VbQF",
     ]
 );
 
