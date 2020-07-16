@@ -176,6 +176,20 @@ impl BankForks {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
 
+    /// Return the slot of the highest descendant of the bank with the given slot.
+    pub fn highest_descendant(&self, slot: Slot) -> Option<Slot> {
+        self.banks
+            .values()
+            .filter_map(|bank| {
+                if bank.slot() != slot && bank.ancestors.contains_key(&slot) {
+                    Some(bank.slot())
+                } else {
+                    None
+                }
+            })
+            .max()
+    }
+
     pub fn working_bank(&self) -> Arc<Bank> {
         self[self.highest_slot()].clone()
     }
@@ -415,6 +429,9 @@ mod tests {
         assert_eq!(children, *descendants.get(&0).unwrap());
         assert!(descendants[&1].is_empty());
         assert!(descendants[&2].is_empty());
+        assert_eq!(bank_forks.highest_descendant(0), Some(2));
+        assert_eq!(bank_forks.highest_descendant(1), None);
+        assert_eq!(bank_forks.highest_descendant(2), None);
     }
 
     #[test]
