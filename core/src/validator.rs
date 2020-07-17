@@ -401,6 +401,7 @@ impl Validator {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (replay_votes_sender, replay_votes_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -446,6 +447,7 @@ impl Validator {
             vote_tracker.clone(),
             retransmit_slots_sender,
             verified_vote_receiver,
+            replay_votes_sender,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -473,6 +475,7 @@ impl Validator {
             vote_tracker,
             bank_forks,
             verified_vote_sender,
+            replay_votes_receiver,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

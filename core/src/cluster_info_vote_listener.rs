@@ -1,9 +1,11 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
     commitment::VOTE_THRESHOLD_SIZE,
+    consensus::PubkeyVotes,
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
+    replay_stage::ReplayVotesReceiver,
     result::{Error, Result},
     rpc_subscriptions::RpcSubscriptions,
     sigverify,
@@ -210,6 +212,7 @@ impl ClusterInfoVoteListener {
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
         verified_vote_sender: VerifiedVoteSender,
+        replay_votes_receiver: ReplayVotesReceiver,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -253,6 +256,7 @@ impl ClusterInfoVoteListener {
                     &bank_forks,
                     subscriptions,
                     verified_vote_sender,
+                    replay_votes_receiver,
                 );
             })
             .unwrap();
@@ -378,6 +382,7 @@ impl ClusterInfoVoteListener {
         bank_forks: &RwLock<BankForks>,
         subscriptions: Arc<RpcSubscriptions>,
         verified_vote_sender: VerifiedVoteSender,
+        replay_votes_receiver: ReplayVotesReceiver,
     ) -> Result<()> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -395,6 +400,7 @@ impl ClusterInfoVoteListener {
                 subscriptions.clone(),
                 epoch_stakes,
                 &verified_vote_sender,
+                &replay_votes_receiver,
             ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -416,6 +422,7 @@ impl ClusterInfoVoteListener {
         last_root: Slot,
         subscriptions: Arc<RpcSubscriptions>,
         verified_vote_sender: &VerifiedVoteSender,
+        replay_votes_receiver: &ReplayVotesReceiver,
     ) -> Result<()> {
         Self::get_and_process_votes(
             vote_txs_receiver,
@@ -424,6 +431,7 @@ impl ClusterInfoVoteListener {
             subscriptions,
             None,
             verified_vote_sender,
+            replay_votes_receiver,
         )
     }
 
@@ -434,12 +442,14 @@ impl ClusterInfoVoteListener {
         subscriptions: Arc<RpcSubscriptions>,
         epoch_stakes: Option<&EpochStakes>,
         verified_vote_sender: &VerifiedVoteSender,
+        replay_votes_receiver: &ReplayVotesReceiver,
     ) -> Result<()> {
-        let timer = Duration::from_millis(200);
+        let timer = Duration::from_millis(100);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
         while let Ok(new_txs) = vote_txs_receiver.try_recv() {
             vote_txs.extend(new_txs);
         }
+        let replay_votes: Vec<_> = replay_votes_receiver.try_iter().collect();
         Self::process_votes(
             vote_tracker,
             vote_txs,
@@ -447,6 +457,7 @@ impl ClusterInfoVoteListener {
             subscriptions,
             epoch_stakes,
             verified_vote_sender,
+            &replay_votes,
         );
         Ok(())
     }
@@ -458,10 +469,10 @@ impl ClusterInfoVoteListener {
         subscriptions: Arc<RpcSubscriptions>,
         epoch_stakes: Option<&EpochStakes>,
         verified_vote_sender: &VerifiedVoteSender,
+        replay_votes: &[Arc<PubkeyVotes>],
     ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
-            let all_slot_trackers = &vote_tracker.slot_vote_trackers;
             for tx in vote_txs {
                 if let (Some(vote_pubkey), Some(vote_instruction)) = tx
                     .message
@@ -515,15 +526,6 @@ impl ClusterInfoVoteListener {
                             continue;
                         }
 
-                        // Don't insert if we already have marked down this pubkey
-                        // voting for this slot
-                        let maybe_slot_tracker =
-                            all_slot_trackers.read().unwrap().get(&slot).cloned();
-                        if let Some(slot_tracker) = maybe_slot_tracker {
-                            if slot_tracker.read().unwrap().voted.contains(vote_pubkey) {
-                                continue;
-                            }
-                        }
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
                         diff.entry(slot).or_default().insert(unduplicated_pubkey);
                     }
@@ -534,7 +536,17 @@ impl ClusterInfoVoteListener {
             }
         }
 
-        for (slot, slot_diff) in diff {
+        for votes in replay_votes {
+            for (pubkey, slot) in votes.iter() {
+                if *slot <= root {
+                    continue;
+                }
+                let unduplicated_pubkey = vote_tracker.keys.get_or_insert(pubkey);
+                diff.entry(*slot).or_default().insert(unduplicated_pubkey);
+            }
+        }
+
+        for (slot, mut slot_diff) in diff {
             let slot_tracker = vote_tracker
                 .slot_vote_trackers
                 .read()
@@ -542,6 +554,11 @@ impl ClusterInfoVoteListener {
                 .get(&slot)
                 .cloned();
             if let Some(slot_tracker) = slot_tracker {
+                {
+                    let r_slot_tracker = slot_tracker.read().unwrap();
+                    // Only keep the pubkeys we haven't seen voting for this slot
+                    slot_diff.retain(|pubkey| !r_slot_tracker.voted.contains(pubkey));
+                }
                 let mut w_slot_tracker = slot_tracker.write().unwrap();
                 if w_slot_tracker.updates.is_none() {
                     w_slot_tracker.updates = Some(vec![]);
@@ -798,6 +815,7 @@ mod tests {
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
 
         let vote_slots = vec![1, 2];
         validator_voting_keypairs.iter().for_each(|keypairs| {
@@ -822,6 +840,7 @@ mod tests {
             subscriptions,
             None,
             &verified_vote_sender,
+            &replay_votes_receiver,
         )
         .unwrap();
 
@@ -857,6 +876,7 @@ mod tests {
         // Send some votes to process
         let (votes_txs_sender, votes_txs_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
 
         let mut expected_votes = vec![];
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
@@ -887,6 +907,7 @@ mod tests {
             subscriptions,
             None,
             &verified_vote_sender,
+            &replay_votes_receiver,
         )
         .unwrap();
 
@@ -1028,6 +1049,7 @@ mod tests {
             subscriptions.clone(),
             None,
             &verified_vote_sender,
+            &[],
         );
         let ref_count = Arc::strong_count(
             &vote_tracker
@@ -1086,6 +1108,7 @@ mod tests {
             subscriptions,
             None,
             &verified_vote_sender,
+            &[],
         );
 
         let ref_count = Arc::strong_count(
