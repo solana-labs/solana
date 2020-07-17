@@ -61,6 +61,7 @@ pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
 
 pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
+pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
@@ -69,7 +70,7 @@ pub(crate) struct ComputedBankState {
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
-    pub pubkey_votes: Vec<(Pubkey, Slot)>,
+    pub pubkey_votes: Arc<PubkeyVotes>,
 }
 
 #[frozen_abi(digest = "2ZUeCLMVQxmHYbeqMH7M97ifVSKoVErGvRHzyxcQRjgU")]
@@ -250,7 +251,7 @@ impl Tower {
             total_stake,
             bank_weight,
             lockout_intervals,
-            pubkey_votes,
+            pubkey_votes: Arc::new(pubkey_votes),
         }
     }
 
@@ -665,6 +666,7 @@ pub mod test {
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
+    use crossbeam_channel::unbounded;
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -784,6 +786,7 @@ pub mod test {
                 .cloned()
                 .collect();
 
+            let (replay_slot_sender, _replay_slot_receiver) = unbounded();
             let _ = ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
@@ -796,6 +799,7 @@ pub mod test {
                 &mut PubkeyReferences::default(),
                 &mut self.heaviest_subtree_fork_choice,
                 &mut BankWeightForkChoice::default(),
+                &replay_slot_sender,
             );
 
             let vote_bank = self
@@ -1356,7 +1360,7 @@ pub mod test {
         //two accounts voting for slot 0 with 1 token staked
         let mut accounts = gen_stakes(&[(1, &[0]), (1, &[0])]);
         accounts.sort_by_key(|(pk, _)| *pk);
-        let account_latest_votes: Vec<(Pubkey, Slot)> =
+        let account_latest_votes: PubkeyVotes =
             accounts.iter().map(|(pubkey, _)| (*pubkey, 0)).collect();
 
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
@@ -1366,7 +1370,7 @@ pub mod test {
             voted_stakes,
             total_stake,
             bank_weight,
-            mut pubkey_votes,
+            pubkey_votes,
             ..
         } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
@@ -1377,6 +1381,7 @@ pub mod test {
         );
         assert_eq!(voted_stakes[&0], 2);
         assert_eq!(total_stake, 2);
+        let mut pubkey_votes = Arc::try_unwrap(pubkey_votes).unwrap();
         pubkey_votes.sort();
         assert_eq!(pubkey_votes, account_latest_votes);
 
@@ -1391,7 +1396,7 @@ pub mod test {
         //two accounts voting for slots 0..MAX_LOCKOUT_HISTORY with 1 token staked
         let mut accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
         accounts.sort_by_key(|(pk, _)| *pk);
-        let account_latest_votes: Vec<(Pubkey, Slot)> = accounts
+        let account_latest_votes: PubkeyVotes = accounts
             .iter()
             .map(|(pubkey, _)| (*pubkey, (MAX_LOCKOUT_HISTORY - 1) as Slot))
             .collect();
@@ -1418,7 +1423,7 @@ pub mod test {
         let ComputedBankState {
             voted_stakes,
             bank_weight,
-            mut pubkey_votes,
+            pubkey_votes,
             ..
         } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
@@ -1433,6 +1438,7 @@ pub mod test {
 
         // should be the sum of all the weights for root
         assert_eq!(bank_weight, expected_bank_weight);
+        let mut pubkey_votes = Arc::try_unwrap(pubkey_votes).unwrap();
         pubkey_votes.sort();
         assert_eq!(pubkey_votes, account_latest_votes);
     }

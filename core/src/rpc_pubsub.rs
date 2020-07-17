@@ -877,12 +877,14 @@ mod tests {
 
         // Process votes and check they were notified.
         let (s, _r) = unbounded();
+        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
             0,
             &rpc.subscriptions,
             &s,
+            &replay_votes_receiver,
         )
         .unwrap();
 

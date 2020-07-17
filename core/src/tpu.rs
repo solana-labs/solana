@@ -8,6 +8,7 @@ use crate::{
     cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
+    replay_stage::ReplayVotesReceiver,
     rpc_subscriptions::RpcSubscriptions,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
@@ -52,6 +53,7 @@ impl Tpu {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         verified_vote_sender: VerifiedVoteSender,
+        replay_votes_receiver: ReplayVotesReceiver,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -78,6 +80,7 @@ impl Tpu {
             bank_forks,
             subscriptions.clone(),
             verified_vote_sender,
+            replay_votes_receiver,
         );
 
         let banking_stage = BankingStage::new(
