@@ -24,7 +24,7 @@
     "react-router-dom": "^5.2.0",
     "react-scripts": "3.4.1",
     "solana-sdk-wasm": "file:wasm/pkg",
-    "typescript": "^3.9.6",
+    "typescript": "^3.9.7",
     "wasm-loader": "^1.3.0"
   },
   "scripts": {
