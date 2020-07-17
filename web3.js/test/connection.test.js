@@ -443,6 +443,33 @@ test('get epoch schedule', async () => {
   }
 });
 
+test('get leader schedule', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getLeaderSchedule',
+      params: [],
+    },
+    {
+      error: null,
+      result: {
+        '123vij84ecQEKUvQ7gYMKxKwKF6PbYSzCzzURYA4xULY': [0, 1, 2, 3],
+        '8PTjAikKoAybKXcEPnDSoy8wSNNikUBJ1iKawJKQwXnB': [4, 5, 6, 7],
+      },
+    },
+  ]);
+
+  const leaderSchedule = await connection.getLeaderSchedule();
+  expect(Object.keys(leaderSchedule).length).toBeGreaterThanOrEqual(1);
+  for (const key in leaderSchedule) {
+    const slots = leaderSchedule[key];
+    expect(Array.isArray(slots)).toBe(true);
+    expect(slots.length).toBeGreaterThanOrEqual(4);
+  }
+});
+
 test('get slot', async () => {
   const connection = new Connection(url);
 
