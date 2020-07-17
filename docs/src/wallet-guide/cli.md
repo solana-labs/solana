@@ -30,7 +30,7 @@ keypairs are stored on your computer as files, a skilled hacker with physical
 access to your computer may be able to access it. Using an encrypted hard
 drive, such as FileVault on MacOS, minimizes that risk.
 
-[File System Wallet](../file-system-wallet/README.md")
+[File System Wallet](file-system-wallet.md)
 
 ## Paper Wallet
 
@@ -64,4 +64,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of a file
 system wallet.
 
-[Hardware Wallets]("../hardware-wallet/README.md")
+[Hardware Wallets](hardware-wallets.md)
