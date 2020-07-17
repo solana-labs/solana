@@ -14,7 +14,7 @@ use solana_client::rpc_response::{
 use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
-    commitment::{BlockCommitmentCache, CacheSlotInfo},
+    commitment::{BlockCommitmentCache, CommitmentSlots},
 };
 use solana_sdk::{
     account::Account,
@@ -60,7 +60,7 @@ enum NotificationEntry {
     Vote(Vote),
     Root(Slot),
     Frozen(Slot),
-    Bank(CacheSlotInfo),
+    Bank(CommitmentSlots),
     Gossip(Slot),
 }
 
@@ -71,8 +71,8 @@ impl std::fmt::Debug for NotificationEntry {
             NotificationEntry::Frozen(slot) => write!(f, "Frozen({})", slot),
             NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
-            NotificationEntry::Bank(cache_slot_info) => {
-                write!(f, "Bank({{slot: {:?}}})", cache_slot_info.slot)
+            NotificationEntry::Bank(commitment_slots) => {
+                write!(f, "Bank({{slot: {:?}}})", commitment_slots.slot)
             }
             NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
         }
@@ -149,7 +149,7 @@ fn check_commitment_and_notify<K, S, B, F, X>(
     subscriptions: &HashMap<K, HashMap<SubscriptionId, SubscriptionData<Response<S>>>>,
     hashmap_key: &K,
     bank_forks: &Arc<RwLock<BankForks>>,
-    cache_slot_info: &CacheSlotInfo,
+    commitment_slots: &CommitmentSlots,
     bank_method: B,
     filter_results: F,
     notifier: &RpcNotifier,
@@ -173,11 +173,11 @@ where
         ) in hashmap.iter()
         {
             let slot = match commitment.commitment {
-                CommitmentLevel::Max => cache_slot_info.highest_confirmed_root,
-                CommitmentLevel::Recent => cache_slot_info.slot,
-                CommitmentLevel::Root => cache_slot_info.root,
+                CommitmentLevel::Max => commitment_slots.highest_confirmed_root,
+                CommitmentLevel::Recent => commitment_slots.slot,
+                CommitmentLevel::Root => commitment_slots.root,
                 CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
-                    cache_slot_info.highest_confirmed_slot
+                    commitment_slots.highest_confirmed_slot
                 }
             };
             let results = {
@@ -387,14 +387,14 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
         account_subscriptions: Arc<RpcAccountSubscriptions>,
         notifier: &RpcNotifier,
-        cache_slot_info: &CacheSlotInfo,
+        commitment_slots: &CommitmentSlots,
     ) {
         let subscriptions = account_subscriptions.read().unwrap();
         check_commitment_and_notify(
             &subscriptions,
             pubkey,
             bank_forks,
-            cache_slot_info,
+            commitment_slots,
             Bank::get_account_modified_slot,
             filter_account_result,
             notifier,
@@ -406,14 +406,14 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
         program_subscriptions: Arc<RpcProgramSubscriptions>,
         notifier: &RpcNotifier,
-        cache_slot_info: &CacheSlotInfo,
+        commitment_slots: &CommitmentSlots,
     ) {
         let subscriptions = program_subscriptions.read().unwrap();
         check_commitment_and_notify(
             &subscriptions,
             program_id,
             bank_forks,
-            cache_slot_info,
+            commitment_slots,
             Bank::get_program_accounts_modified_since_parent,
             filter_program_results,
             notifier,
@@ -425,14 +425,14 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
         notifier: &RpcNotifier,
-        cache_slot_info: &CacheSlotInfo,
+        commitment_slots: &CommitmentSlots,
     ) {
         let mut subscriptions = signature_subscriptions.write().unwrap();
         let notified_ids = check_commitment_and_notify(
             &subscriptions,
             signature,
             bank_forks,
-            cache_slot_info,
+            commitment_slots,
             Bank::get_signature_status_processed_since_parent,
             filter_signature_result,
             notifier,
@@ -605,8 +605,8 @@ impl RpcSubscriptions {
 
     /// Notify subscribers of changes to any accounts or new signatures since
     /// the bank's last checkpoint.
-    pub fn notify_subscribers(&self, cache_slot_info: CacheSlotInfo) {
-        self.enqueue_notification(NotificationEntry::Bank(cache_slot_info));
+    pub fn notify_subscribers(&self, commitment_slots: CommitmentSlots) {
+        self.enqueue_notification(NotificationEntry::Bank(commitment_slots));
     }
 
     /// Notify SingleGossip commitment-level subscribers of changes to any accounts or new
@@ -730,13 +730,13 @@ impl RpcSubscriptions {
                             .filter(|&s| s > root)
                             .collect();
                     }
-                    NotificationEntry::Bank(cache_slot_info) => {
+                    NotificationEntry::Bank(commitment_slots) => {
                         RpcSubscriptions::notify_accounts_programs_signatures(
                             &subscriptions.account_subscriptions,
                             &subscriptions.program_subscriptions,
                             &subscriptions.signature_subscriptions,
                             &bank_forks,
-                            &cache_slot_info,
+                            &commitment_slots,
                             &notifier,
                         )
                     }
@@ -805,16 +805,16 @@ impl RpcSubscriptions {
 
         drop(last_checked_slots_lock);
 
-        let cache_slot_info = CacheSlotInfo {
+        let commitment_slots = CommitmentSlots {
             highest_confirmed_slot: slot,
-            ..CacheSlotInfo::default()
+            ..CommitmentSlots::default()
         };
         RpcSubscriptions::notify_accounts_programs_signatures(
             &subscriptions.gossip_account_subscriptions,
             &subscriptions.gossip_program_subscriptions,
             &subscriptions.gossip_signature_subscriptions,
             &bank_forks,
-            &cache_slot_info,
+            &commitment_slots,
             &notifier,
         );
     }
@@ -824,7 +824,7 @@ impl RpcSubscriptions {
         program_subscriptions: &Arc<RpcProgramSubscriptions>,
         signature_subscriptions: &Arc<RpcSignatureSubscriptions>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        cache_slot_info: &CacheSlotInfo,
+        commitment_slots: &CommitmentSlots,
         notifier: &RpcNotifier,
     ) {
         let pubkeys: Vec<_> = {
@@ -837,7 +837,7 @@ impl RpcSubscriptions {
                 &bank_forks,
                 account_subscriptions.clone(),
                 &notifier,
-                &cache_slot_info,
+                &commitment_slots,
             );
         }
 
@@ -851,7 +851,7 @@ impl RpcSubscriptions {
                 &bank_forks,
                 program_subscriptions.clone(),
                 &notifier,
-                &cache_slot_info,
+                &commitment_slots,
             );
         }
 
@@ -865,7 +865,7 @@ impl RpcSubscriptions {
                 &bank_forks,
                 signature_subscriptions.clone(),
                 &notifier,
-                &cache_slot_info,
+                &commitment_slots,
             );
         }
     }
@@ -988,9 +988,9 @@ pub(crate) mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.slot = 1;
-        subscriptions.notify_subscribers(cache_slot_info);
+        let mut commitment_slots = CommitmentSlots::default();
+        commitment_slots.slot = 1;
+        subscriptions.notify_subscribers(commitment_slots);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
@@ -1071,7 +1071,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&solana_budget_program::id()));
 
-        subscriptions.notify_subscribers(CacheSlotInfo::default());
+        subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
@@ -1153,7 +1153,7 @@ pub(crate) mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             10,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank1.slot(),
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -1210,9 +1210,9 @@ pub(crate) mod tests {
             assert!(sig_subs.contains_key(&unprocessed_tx.signatures[0]));
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
-        let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.slot = 1;
-        subscriptions.notify_subscribers(cache_slot_info);
+        let mut commitment_slots = CommitmentSlots::default();
+        commitment_slots.slot = 1;
+        subscriptions.notify_subscribers(commitment_slots);
         let expected_res = RpcSignatureResult { err: None };
 
         struct Notification {

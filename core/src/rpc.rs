@@ -27,7 +27,7 @@ use solana_runtime::{
     accounts::AccountAddressFilter,
     bank::Bank,
     bank_forks::BankForks,
-    commitment::{BlockCommitmentArray, BlockCommitmentCache, CacheSlotInfo},
+    commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
     log_collector::LogCollector,
     send_transaction_service::{SendTransactionService, TransactionInfo},
 };
@@ -192,7 +192,7 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                CacheSlotInfo {
+                CommitmentSlots {
                     slot: bank.slot(),
                     root: 0,
                     highest_confirmed_slot: 0,
@@ -1819,7 +1819,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             10,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank.slot(),
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -3334,7 +3334,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             42,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_forks.read().unwrap().highest_slot(),
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -3863,7 +3863,7 @@ pub mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             50,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank.slot(),
                 root: 0,
                 highest_confirmed_slot: 0,

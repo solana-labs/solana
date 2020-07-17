@@ -359,7 +359,7 @@ mod tests {
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
-        commitment::{BlockCommitmentCache, CacheSlotInfo},
+        commitment::{BlockCommitmentCache, CommitmentSlots},
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
             ValidatorVoteKeypairs,
@@ -392,9 +392,9 @@ mod tests {
             .get(current_slot)
             .unwrap()
             .process_transaction(tx)?;
-        let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.slot = current_slot;
-        subscriptions.notify_subscribers(cache_slot_info);
+        let mut commitment_slots = CommitmentSlots::default();
+        commitment_slots.slot = current_slot;
+        subscriptions.notify_subscribers(commitment_slots);
         Ok(())
     }
 
@@ -687,7 +687,7 @@ mod tests {
             .process_transaction(&tx)
             .unwrap();
         rpc.subscriptions
-            .notify_subscribers(CacheSlotInfo::default());
+            .notify_subscribers(CommitmentSlots::default());
         // allow 200ms for notification thread to wake
         std::thread::sleep(Duration::from_millis(200));
         let _panic = robust_poll_or_panic(receiver);
@@ -732,17 +732,17 @@ mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.slot = 1;
-        rpc.subscriptions.notify_subscribers(cache_slot_info);
+        let mut commitment_slots = CommitmentSlots::default();
+        commitment_slots.slot = 1;
+        rpc.subscriptions.notify_subscribers(commitment_slots);
 
-        let cache_slot_info = CacheSlotInfo {
+        let commitment_slots = CommitmentSlots {
             slot: 2,
             root: 1,
             highest_confirmed_slot: 1,
             highest_confirmed_root: 1,
         };
-        rpc.subscriptions.notify_subscribers(cache_slot_info);
+        rpc.subscriptions.notify_subscribers(commitment_slots);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
