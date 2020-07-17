@@ -112,7 +112,7 @@ impl JsonRpcRequestProcessor {
             Some(config) => config.commitment,
         };
 
-        let mut slot = self
+        let slot = self
             .block_commitment_cache
             .read()
             .unwrap()
@@ -120,15 +120,7 @@ impl JsonRpcRequestProcessor {
 
         match commitment_level {
             CommitmentLevel::Recent => {
-                if let Some(descendant_slot) = r_bank_forks.highest_descendant(slot) {
-                    debug!(
-                        "RPC using highest descendant of the last-voted-on slot ({:?}): {:?}",
-                        slot, descendant_slot
-                    );
-                    slot = descendant_slot;
-                } else {
-                    debug!("RPC using the last-voted-on slot: {:?}", slot);
-                }
+                debug!("RPC using the heaviest slot: {:?}", slot);
             }
             CommitmentLevel::Root => {
                 debug!("RPC using node root: {:?}", slot);
