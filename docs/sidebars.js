@@ -46,6 +46,7 @@ module.exports = {
     "Develop Applications": [
       "apps",
       "apps/rent",
+      "apps/hello-world",
       "apps/break",
       "apps/webwallet",
       "apps/drones",
