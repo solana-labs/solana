@@ -43,7 +43,7 @@ pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     /// Cache slot details. Cluster data is calculated from the block_commitment map, and cached in
     /// the struct to avoid the expense of recalculating on every call.
-    slot_info: CacheSlotInfo,
+    commitment_slots: CommitmentSlots,
     /// Total stake active during the bank's epoch
     total_stake: u64,
 }
@@ -55,9 +55,9 @@ impl std::fmt::Debug for BlockCommitmentCache {
             .field("total_stake", &self.total_stake)
             .field(
                 "bank",
-                &format_args!("Bank({{current_slot: {:?}}})", self.slot_info.slot),
+                &format_args!("Bank({{current_slot: {:?}}})", self.commitment_slots.slot),
             )
-            .field("root", &self.slot_info.root)
+            .field("root", &self.commitment_slots.root)
             .finish()
     }
 }
@@ -66,12 +66,12 @@ impl BlockCommitmentCache {
     pub fn new(
         block_commitment: HashMap<Slot, BlockCommitment>,
         total_stake: u64,
-        slot_info: CacheSlotInfo,
+        commitment_slots: CommitmentSlots,
     ) -> Self {
         Self {
             block_commitment,
             total_stake,
-            slot_info,
+            commitment_slots,
         }
     }
 
@@ -84,23 +84,23 @@ impl BlockCommitmentCache {
     }
 
     pub fn slot(&self) -> Slot {
-        self.slot_info.slot
+        self.commitment_slots.slot
     }
 
     pub fn root(&self) -> Slot {
-        self.slot_info.root
+        self.commitment_slots.root
     }
 
     pub fn highest_confirmed_slot(&self) -> Slot {
-        self.slot_info.highest_confirmed_slot
+        self.commitment_slots.highest_confirmed_slot
     }
 
     pub fn highest_confirmed_root(&self) -> Slot {
-        self.slot_info.highest_confirmed_root
+        self.commitment_slots.highest_confirmed_root
     }
 
-    pub fn slot_info(&self) -> CacheSlotInfo {
-        self.slot_info
+    pub fn commitment_slots(&self) -> CommitmentSlots {
+        self.commitment_slots
     }
 
     fn highest_slot_with_confirmation_count(&self, confirmation_count: usize) -> Slot {
@@ -112,7 +112,7 @@ impl BlockCommitmentCache {
                 }
             }
         }
-        self.slot_info.root
+        self.commitment_slots.root
     }
 
     pub fn calculate_highest_confirmed_slot(&self) -> Slot {
@@ -155,7 +155,7 @@ impl BlockCommitmentCache {
         Self {
             block_commitment,
             total_stake: 42,
-            slot_info: CacheSlotInfo {
+            commitment_slots: CommitmentSlots {
                 slot,
                 root,
                 highest_confirmed_slot: root,
@@ -165,16 +165,16 @@ impl BlockCommitmentCache {
     }
 
     pub fn set_highest_confirmed_slot(&mut self, slot: Slot) {
-        self.slot_info.highest_confirmed_slot = slot;
+        self.commitment_slots.highest_confirmed_slot = slot;
     }
 
     pub fn set_highest_confirmed_root(&mut self, root: Slot) {
-        self.slot_info.highest_confirmed_root = root;
+        self.commitment_slots.highest_confirmed_root = root;
     }
 }
 
 #[derive(Default, Clone, Copy)]
-pub struct CacheSlotInfo {
+pub struct CommitmentSlots {
     /// The slot of the bank from which all other slots were calculated.
     pub slot: Slot,
     /// The current node root
@@ -257,7 +257,7 @@ mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             total_stake,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_slot_5,
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -275,7 +275,7 @@ mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             total_stake,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_slot_5,
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -293,7 +293,7 @@ mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             total_stake,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_slot_5,
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -311,7 +311,7 @@ mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             total_stake,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_slot_5,
                 root: 0,
                 highest_confirmed_slot: 0,
@@ -329,7 +329,7 @@ mod tests {
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
             total_stake,
-            CacheSlotInfo {
+            CommitmentSlots {
                 slot: bank_slot_5,
                 root: 0,
                 highest_confirmed_slot: 0,
