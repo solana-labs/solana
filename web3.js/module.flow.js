@@ -210,6 +210,10 @@ declare module '@solana/web3.js' {
     absoluteSlot: number,
   };
 
+  declare export type LeaderSchedule = {
+    [address: string]: number[],
+  };
+
   declare export type Supply = {
     total: number,
     circulating: number,
@@ -283,6 +287,7 @@ declare module '@solana/web3.js' {
     getTotalSupply(commitment: ?Commitment): Promise<number>;
     getVersion(): Promise<Version>;
     getInflationGovernor(commitment: ?Commitment): Promise<InflationGovernor>;
+    getLeaderSchedule(): Promise<LeaderSchedule>;
     getEpochSchedule(): Promise<EpochSchedule>;
     getEpochInfo(commitment: ?Commitment): Promise<EpochInfo>;
     getRecentBlockhashAndContext(

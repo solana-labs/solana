@@ -289,6 +289,21 @@ const GetEpochScheduleResult = struct({
 });
 
 /**
+ * Leader schedule
+ * (see https://docs.solana.com/terminology#leader-schedule)
+ *
+ * @typedef {Object} LeaderSchedule
+ */
+type LeaderSchedule = {
+  [address: string]: number[],
+};
+
+const GetLeaderScheduleResult = struct.record([
+  'string',
+  struct.array(['number']),
+]);
+
+/**
  * Transaction error or null
  */
 const TransactionErrorResult = struct.union(['null', 'object']);
@@ -423,6 +438,13 @@ const GetEpochScheduleRpcResult = struct({
   error: 'any?',
   result: GetEpochScheduleResult,
 });
+
+/**
+ * Expected JSON RPC response for the "getLeaderSchedule" message
+ */
+const GetLeaderScheduleRpcResult = jsonRpcResult(
+  GetLeaderScheduleResult,
+);
 
 /**
  * Expected JSON RPC response for the "getBalance" message
@@ -1474,6 +1496,20 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return GetEpochScheduleResult(res.result);
+  }
+
+  /**
+   * Fetch the leader schedule for the current epoch
+   * @return {Promise<RpcResponseAndContext<LeaderSchedule>>}
+   */
+  async getLeaderSchedule(): Promise<LeaderSchedule> {
+    const unsafeRes = await this._rpcRequest('getLeaderSchedule', []);
+    const res = GetLeaderScheduleRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get leader schedule: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
   }
 
   /**
