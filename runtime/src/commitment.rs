@@ -35,15 +35,17 @@ impl BlockCommitment {
     }
 }
 
+/// A node's view of cluster commitment as per a particular bank
 #[derive(Default)]
 pub struct BlockCommitmentCache {
+    /// Map of all commitment levels of current ancestor slots, aggregated from the vote account
+    /// data in the bank
     block_commitment: HashMap<Slot, BlockCommitment>,
-    highest_confirmed_root: Slot,
+    /// Cache slot details. Cluster data is calculated from the block_commitment map, and cached in
+    /// the struct to avoid the expense of recalculating on every call.
+    slot_info: CacheSlotInfo,
+    /// Total stake active during the bank's epoch
     total_stake: u64,
-    /// The slot of the bank from which all other slots were calculated.
-    slot: Slot,
-    root: Slot,
-    pub highest_confirmed_slot: Slot,
 }
 
 impl std::fmt::Debug for BlockCommitmentCache {
@@ -53,9 +55,9 @@ impl std::fmt::Debug for BlockCommitmentCache {
             .field("total_stake", &self.total_stake)
             .field(
                 "bank",
-                &format_args!("Bank({{current_slot: {:?}}})", self.slot),
+                &format_args!("Bank({{current_slot: {:?}}})", self.slot_info.slot),
             )
-            .field("root", &self.root)
+            .field("root", &self.slot_info.root)
             .finish()
     }
 }
@@ -63,19 +65,13 @@ impl std::fmt::Debug for BlockCommitmentCache {
 impl BlockCommitmentCache {
     pub fn new(
         block_commitment: HashMap<Slot, BlockCommitment>,
-        highest_confirmed_root: Slot,
         total_stake: u64,
-        slot: Slot,
-        root: Slot,
-        highest_confirmed_slot: Slot,
+        slot_info: CacheSlotInfo,
     ) -> Self {
         Self {
             block_commitment,
-            highest_confirmed_root,
             total_stake,
-            slot,
-            root,
-            highest_confirmed_slot,
+            slot_info,
         }
     }
 
@@ -83,24 +79,28 @@ impl BlockCommitmentCache {
         self.block_commitment.get(&slot)
     }
 
-    pub fn highest_confirmed_root(&self) -> Slot {
-        self.highest_confirmed_root
-    }
-
     pub fn total_stake(&self) -> u64 {
         self.total_stake
     }
 
     pub fn slot(&self) -> Slot {
-        self.slot
+        self.slot_info.slot
     }
 
     pub fn root(&self) -> Slot {
-        self.root
+        self.slot_info.root
     }
 
     pub fn highest_confirmed_slot(&self) -> Slot {
-        self.highest_confirmed_slot
+        self.slot_info.highest_confirmed_slot
+    }
+
+    pub fn highest_confirmed_root(&self) -> Slot {
+        self.slot_info.highest_confirmed_root
+    }
+
+    pub fn slot_info(&self) -> CacheSlotInfo {
+        self.slot_info
     }
 
     fn highest_slot_with_confirmation_count(&self, confirmation_count: usize) -> Slot {
@@ -112,7 +112,7 @@ impl BlockCommitmentCache {
                 }
             }
         }
-        self.root
+        self.slot_info.root
     }
 
     pub fn calculate_highest_confirmed_slot(&self) -> Slot {
@@ -155,16 +155,34 @@ impl BlockCommitmentCache {
         Self {
             block_commitment,
             total_stake: 42,
-            highest_confirmed_root: root,
-            slot,
-            root,
-            highest_confirmed_slot: root,
+            slot_info: CacheSlotInfo {
+                slot,
+                root,
+                highest_confirmed_slot: root,
+                highest_confirmed_root: root,
+            },
         }
     }
 
-    pub fn set_highest_confirmed_root(&mut self, root: Slot) {
-        self.highest_confirmed_root = root;
+    pub fn set_highest_confirmed_slot(&mut self, slot: Slot) {
+        self.slot_info.highest_confirmed_slot = slot;
     }
+
+    pub fn set_highest_confirmed_root(&mut self, root: Slot) {
+        self.slot_info.highest_confirmed_root = root;
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct CacheSlotInfo {
+    /// The slot of the bank from which all other slots were calculated.
+    pub slot: Slot,
+    /// The current node root
+    pub root: Slot,
+    /// Highest cluster-confirmed slot
+    pub highest_confirmed_slot: Slot,
+    /// Highest cluster-confirmed root
+    pub highest_confirmed_root: Slot,
 }
 
 #[cfg(test)]
@@ -200,7 +218,11 @@ mod tests {
         block_commitment.entry(0).or_insert(cache0);
         block_commitment.entry(1).or_insert(cache1);
         block_commitment.entry(2).or_insert(cache2);
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 0, 50, 0, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache {
+            block_commitment,
+            total_stake: 50,
+            ..BlockCommitmentCache::default()
+        };
 
         assert_eq!(block_commitment_cache.get_confirmation_count(0), Some(2));
         assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
@@ -232,8 +254,16 @@ mod tests {
         block_commitment.entry(1).or_insert_with(|| cache0.clone()); // Slot 1, conf 2
         block_commitment.entry(2).or_insert_with(|| cache1.clone()); // Slot 2, conf 1
         block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, total_stake, bank_slot_5, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            total_stake,
+            CacheSlotInfo {
+                slot: bank_slot_5,
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 2);
 
@@ -242,8 +272,16 @@ mod tests {
         block_commitment.entry(1).or_insert_with(|| cache1.clone()); // Slot 1, conf 1
         block_commitment.entry(2).or_insert_with(|| cache1.clone()); // Slot 2, conf 1
         block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, total_stake, bank_slot_5, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            total_stake,
+            CacheSlotInfo {
+                slot: bank_slot_5,
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 2);
 
@@ -252,8 +290,16 @@ mod tests {
         block_commitment.entry(1).or_insert_with(|| cache1.clone()); // Slot 1, conf 1
         block_commitment.entry(3).or_insert(cache1); // Slot 3, conf 1
         block_commitment.entry(5).or_insert_with(|| cache2.clone()); // Slot 5, conf 0
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, total_stake, bank_slot_5, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            total_stake,
+            CacheSlotInfo {
+                slot: bank_slot_5,
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 3);
 
@@ -262,8 +308,16 @@ mod tests {
         block_commitment.entry(1).or_insert(cache0); // Slot 1, conf 2
         block_commitment.entry(2).or_insert_with(|| cache2.clone()); // Slot 2, conf 0
         block_commitment.entry(3).or_insert_with(|| cache2.clone()); // Slot 3, conf 0
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, total_stake, bank_slot_5, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            total_stake,
+            CacheSlotInfo {
+                slot: bank_slot_5,
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 1);
 
@@ -272,8 +326,16 @@ mod tests {
         block_commitment.entry(1).or_insert_with(|| cache2.clone()); // Slot 1, conf 0
         block_commitment.entry(2).or_insert_with(|| cache2.clone()); // Slot 2, conf 0
         block_commitment.entry(3).or_insert(cache2); // Slot 3, conf 0
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, total_stake, bank_slot_5, 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            total_stake,
+            CacheSlotInfo {
+                slot: bank_slot_5,
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         assert_eq!(block_commitment_cache.calculate_highest_confirmed_slot(), 0);
     }

@@ -1,12 +1,9 @@
-use crate::{
-    consensus::Stake,
-    rpc_subscriptions::{CacheSlotInfo, RpcSubscriptions},
-};
+use crate::{consensus::Stake, rpc_subscriptions::RpcSubscriptions};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::{
     bank::Bank,
-    commitment::{BlockCommitment, BlockCommitmentCache, VOTE_THRESHOLD_SIZE},
+    commitment::{BlockCommitment, BlockCommitmentCache, CacheSlotInfo, VOTE_THRESHOLD_SIZE},
 };
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::VoteState;
@@ -114,14 +111,16 @@ impl AggregateCommitmentService {
 
             let mut new_block_commitment = BlockCommitmentCache::new(
                 block_commitment,
-                highest_confirmed_root,
                 aggregation_data.total_stake,
-                aggregation_data.bank.slot(),
-                aggregation_data.root,
-                aggregation_data.root,
+                CacheSlotInfo {
+                    slot: aggregation_data.bank.slot(),
+                    root: aggregation_data.root,
+                    highest_confirmed_slot: aggregation_data.root,
+                    highest_confirmed_root,
+                },
             );
-            new_block_commitment.highest_confirmed_slot =
-                new_block_commitment.calculate_highest_confirmed_slot();
+            let highest_confirmed_slot = new_block_commitment.calculate_highest_confirmed_slot();
+            new_block_commitment.set_highest_confirmed_slot(highest_confirmed_slot);
 
             let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
 
@@ -136,12 +135,10 @@ impl AggregateCommitmentService {
                 )
             );
 
-            subscriptions.notify_subscribers(CacheSlotInfo {
-                current_slot: w_block_commitment_cache.slot(),
-                node_root: w_block_commitment_cache.root(),
-                highest_confirmed_root: w_block_commitment_cache.highest_confirmed_root(),
-                highest_confirmed_slot: w_block_commitment_cache.highest_confirmed_slot(),
-            });
+            // Triggers rpc_subscription notifications as soon as new commitment data is available,
+            // sending just the commitment cache slot information that the notifications thread
+            // needs
+            subscriptions.notify_subscribers(w_block_commitment_cache.slot_info());
         }
     }
 

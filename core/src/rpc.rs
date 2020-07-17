@@ -27,7 +27,7 @@ use solana_runtime::{
     accounts::AccountAddressFilter,
     bank::Bank,
     bank_forks::BankForks,
-    commitment::{BlockCommitmentArray, BlockCommitmentCache},
+    commitment::{BlockCommitmentArray, BlockCommitmentCache, CacheSlotInfo},
     log_collector::LogCollector,
     send_transaction_service::{SendTransactionService, TransactionInfo},
 };
@@ -192,10 +192,12 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                0,
-                bank.slot(),
-                0,
-                0,
+                CacheSlotInfo {
+                    slot: bank.slot(),
+                    root: 0,
+                    highest_confirmed_slot: 0,
+                    highest_confirmed_root: 0,
+                },
             ))),
             blockstore,
             validator_exit: create_validator_exit(&exit),
@@ -1816,11 +1818,13 @@ pub mod tests {
         block_commitment.entry(1).or_insert(commitment_slot1);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
-            0,
             10,
-            bank.slot(),
-            0,
-            0,
+            CacheSlotInfo {
+                slot: bank.slot(),
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
         )));
 
         // Add timestamp vote to blockstore
@@ -3329,11 +3333,13 @@ pub mod tests {
             .or_insert_with(|| commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
-            0,
             42,
-            bank_forks.read().unwrap().highest_slot(),
-            0,
-            0,
+            CacheSlotInfo {
+                slot: bank_forks.read().unwrap().highest_slot(),
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
         )));
 
         let mut config = JsonRpcConfig::default();
@@ -3856,11 +3862,13 @@ pub mod tests {
         let highest_confirmed_root = 1;
         let block_commitment_cache = BlockCommitmentCache::new(
             block_commitment,
-            highest_confirmed_root,
             50,
-            bank.slot(),
-            0,
-            0,
+            CacheSlotInfo {
+                slot: bank.slot(),
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root,
+            },
         );
 
         assert!(is_confirmed_rooted(
