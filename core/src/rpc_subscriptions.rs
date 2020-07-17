@@ -36,7 +36,9 @@ use std::{
     iter,
     sync::{Arc, Mutex, RwLock},
 };
-use tokio::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
+
+// Stuck on tokio 0.1 until the jsonrpc-pubsub crate upgrades to tokio 0.2
+use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
@@ -965,7 +967,7 @@ pub(crate) mod tests {
         system_transaction,
     };
     use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
-    use tokio::{prelude::FutureExt, runtime::Runtime, timer::Delay};
+    use tokio_01::{prelude::FutureExt, runtime::Runtime, timer::Delay};
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
         receiver: futures::sync::mpsc::Receiver<T>,

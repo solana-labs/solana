@@ -7,7 +7,7 @@ source multinode-demo/common.sh
 
 rm -rf config/run/init-completed config/ledger config/snapshot-ledger
 
-timeout 15 ./run.sh &
+timeout 120 ./run.sh &
 pid=$!
 
 attempts=20
