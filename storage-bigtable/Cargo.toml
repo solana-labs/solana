@@ -9,9 +9,10 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-log = "0.4.8"
 goauth = "0.7.1"
+log = "0.4.8"
 smpl_jwt = "0.5.0"
+tonic = {version="0.3.0", features = ["tls", "transport"]}
 
 [lib]
 crate-type = ["lib"]
