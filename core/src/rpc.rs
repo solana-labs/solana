@@ -3659,6 +3659,22 @@ pub mod tests {
         assert_eq!(expected, result);
     }
 
+    fn advance_block_commitment_cache(
+        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
+        let mut new_block_commitment = BlockCommitmentCache::new(
+            HashMap::new(),
+            0,
+            0,
+            bank_forks.read().unwrap().highest_slot(),
+            0,
+            0,
+        );
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+    }
+
     #[test]
     fn test_get_vote_accounts() {
         let RpcHandler {
@@ -3668,6 +3684,7 @@ pub mod tests {
             bank_forks,
             alice,
             leader_vote_keypair,
+            block_commitment_cache,
             ..
         } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
@@ -3746,6 +3763,7 @@ pub mod tests {
                 &Pubkey::default(),
                 bank.slot() + 1,
             ));
+            advance_block_commitment_cache(&block_commitment_cache, &bank_forks);
 
             let transaction = Transaction::new_signed_with_payer(
                 &instructions,
@@ -3799,6 +3817,7 @@ pub mod tests {
             &Pubkey::default(),
             bank.slot() + TEST_SLOTS_PER_EPOCH,
         ));
+        advance_block_commitment_cache(&block_commitment_cache, &bank_forks);
 
         // The leader vote account should now be delinquent, and the other vote account disappears
         // because it's inactive with no stake
