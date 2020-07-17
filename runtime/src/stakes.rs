@@ -88,10 +88,15 @@ impl Stakes {
     }
 
     pub fn vote_balance_and_staked(&self) -> u64 {
-        self.vote_accounts
+        self.stake_delegations
             .iter()
-            .map(|(_pubkey, (staked, account))| staked + account.lamports)
-            .sum()
+            .map(|(_, stake_delegation)| stake_delegation.stake)
+            .sum::<u64>()
+            + self
+                .vote_accounts
+                .iter()
+                .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports)
+                .sum::<u64>()
     }
 
     pub fn is_stake(account: &Account) -> bool {
