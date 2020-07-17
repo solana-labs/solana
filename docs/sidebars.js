@@ -111,11 +111,12 @@ module.exports = {
     Terminology: ["terminology"],
     History: ["history"],
     "Implemented Design Proposals": [
+      "implemented-proposals/implemented-proposals",
       {
         type: "category",
         label: "Economic Design",
         items: [
-          "implemented-proposals/ed_overview/ed_cluster_economics",
+          "implemented-proposals/ed_overview/ed_overview",
           {
             type: "category",
             label: "Validation Client Economics",
@@ -153,7 +154,7 @@ module.exports = {
       "implemented-proposals/abi-management",
     ],
     "Accepted Design Proposals": [
-      "proposals/accepted_design_proposals",
+      "proposals/accepted-design-proposals",
       "proposals/ledger-replication-to-implement",
       "proposals/optimistic-confirmation-and-slashing",
       "proposals/vote-signing-to-implement",

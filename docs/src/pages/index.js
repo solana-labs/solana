@@ -59,7 +59,7 @@ const features = [
   }, //
   // {
   //   title: <>Understand Our Economic Design</>,
-  //   imageUrl: "implemented-proposals/ed_overview/ed_cluster_economics",
+  //   imageUrl: "implemented-proposals/ed_overview/ed_overview",
   //   description: (
   //     <>
   //       Solana's Economic Design provides a scalable blueprint for long term
