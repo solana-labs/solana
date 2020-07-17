@@ -70,7 +70,7 @@ pub enum TransactionError {
     /// not be unlocked.
     SanitizeFailure,
 
-    #[error("Transactions are currently disabled due to cluster maintenance")]
+    /// Transactions are currently disabled due to cluster maintenance
     ClusterMaintenance,
 }
 

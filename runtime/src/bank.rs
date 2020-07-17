@@ -79,10 +79,6 @@ pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-<<<<<<< HEAD
-=======
-#[frozen_abi(digest = "BHtoJzwGJ1seQ2gZmtPSLLgdvq3gRZMj5mpUJsX4wGHT")]
->>>>>>> e5d8c4383... Add Bank support for "upgrade epochs" where all non-vote transactions will be rejected
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
@@ -1282,12 +1278,8 @@ impl Bank {
                             if let Ok(vote_instruction) =
                                 limited_deserialize::<VoteInstruction>(&instruction.data)
                             {
-                                match vote_instruction {
-                                    VoteInstruction::Vote(_)
-                                    | VoteInstruction::VoteSwitch(_, _) => {
-                                        return lock_res;
-                                    }
-                                    _ => {}
+                                if let VoteInstruction::Vote(_) = vote_instruction {
+                                    return lock_res;
                                 }
                             }
                         }
@@ -7380,139 +7372,6 @@ mod tests {
         }
         info!("results: {:?}", results);
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_bank_hash_consistency() {
-        let mut genesis_config = GenesisConfig::new(
-            &[(
-                Pubkey::new(&[42; 32]),
-                Account::new(1_000_000_000_000, 0, &system_program::id()),
-            )],
-            &[],
-        );
-        genesis_config.creation_time = 0;
-        let mut bank = Arc::new(Bank::new(&genesis_config));
-        // Check a few slots, cross an epoch boundary
-        assert_eq!(bank.get_slots_in_epoch(0), 32);
-        loop {
-            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
-            if bank.slot == 0 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "DJ5664svVgjZ8sRLZSrdYAjaAzJe3aEGVBDpZEeoZJ5u"
-                );
-            }
-            if bank.slot == 32 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "5yZDar5HaXypoeNnE9mEfVwJEEyDCP5W1pLwhuouPjqN"
-                );
-            }
-            if bank.slot == 64 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "FmPBRC6AAZgXu1QiqZ445FhLYZXun9KTtjMMKqCim9Hd"
-                );
-            }
-            if bank.slot == 128 {
-                assert_eq!(
-                    bank.hash().to_string(),
-                    "Aqi2QcSoxaYu2QJHKaMHi9G8J2vNEtjpuKzjj5rHP9wr"
-                );
-                break;
-            }
-            bank = Arc::new(new_from_parent(&bank));
-        }
-    }
-
-    #[test]
-    fn test_same_program_id_uses_unqiue_executable_accounts() {
-        fn nested_processor(
-            _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
-            _data: &[u8],
-        ) -> result::Result<(), InstructionError> {
-            assert_eq!(42, keyed_accounts[0].lamports().unwrap());
-            let mut account = keyed_accounts[0].try_account_ref_mut()?;
-            account.lamports += 1;
-            Ok(())
-        }
-
-        let (genesis_config, mint_keypair) = create_genesis_config(50000);
-        let mut bank = Bank::new(&genesis_config);
-
-        // Add a new program
-        let program1_pubkey = Pubkey::new_rand();
-        bank.add_builtin_program("program", program1_pubkey, nested_processor);
-
-        // Add a new program owned by the first
-        let program2_pubkey = Pubkey::new_rand();
-        let mut program2_account = Account::new(42, 1, &program1_pubkey);
-        program2_account.executable = true;
-        bank.store_account(&program2_pubkey, &program2_account);
-
-        let instruction = Instruction::new(program2_pubkey, &10, vec![]);
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction.clone(), instruction],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair],
-            bank.last_blockhash(),
-        );
-        assert!(bank.process_transaction(&tx).is_ok());
-        assert_eq!(1, bank.get_balance(&program1_pubkey));
-        assert_eq!(42, bank.get_balance(&program2_pubkey));
-    }
-
-    #[test]
-    fn test_process_stale_slot_with_budget() {
-        solana_logger::setup();
-
-        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
-
-        let mut bank = Arc::new(Bank::new(&genesis_config));
-        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
-        assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
-
-        assert_eq!(bank.process_stale_slot_with_budget(0, 100), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(33, 100), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(133, 100), 33);
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        bank.squash();
-
-        let some_lamports = 123;
-        let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports);
-        bank.deposit(&pubkey2, some_lamports);
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports);
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        bank.squash();
-        bank.clean_accounts();
-        let force_to_return_alive_account = 0;
-        assert_eq!(
-            bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
-            22
-        );
-
-        let mut consumed_budgets = (0..3)
-            .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
-            .collect::<Vec<_>>();
-        consumed_budgets.sort();
-        assert_eq!(consumed_budgets, vec![0, 1, 8]);
-    }
-
     #[test]
     fn test_upgrade_epoch() {
         let GenesisConfigInfo {
@@ -7547,7 +7406,7 @@ mod tests {
         // VoteInstruction::Vote is allowed.  The transaction fails with a vote program instruction
         // error because the vote account is not actually setup
         let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote(
+            vec![vote_instruction::vote(
                 &vote_pubkey,
                 &authorized_voter.pubkey(),
                 Vote::new(vec![1], Hash::default()),
@@ -7565,31 +7424,9 @@ mod tests {
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 498); // transaction fee charged
 
-        // VoteInstruction::VoteSwitch is allowed.  The transaction fails with a vote program
-        // instruction error because the vote account is not actually setup
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote_switch(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                Vote::new(vec![1], Hash::default()),
-                Hash::default(),
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidAccountData
-            ))
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // transaction fee charged
-
         // Other vote program instructions, like VoteInstruction::UpdateCommission are not allowed
         let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::update_commission(
+            vec![vote_instruction::update_commission(
                 &vote_pubkey,
                 &authorized_voter.pubkey(),
                 123,
@@ -7602,7 +7439,6 @@ mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::ClusterMaintenance)
         );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 498); // no transaction fee charged
     }
->>>>>>> e5d8c4383... Add Bank support for "upgrade epochs" where all non-vote transactions will be rejected
 }
