@@ -21,12 +21,12 @@ module.exports = {
           position: "left",
         },
         {
-          to: "apps/README",
+          to: "apps",
           label: "Developers",
           position: "left",
         },
         {
-          to: "running-validator/README",
+          to: "running-validator",
           label: "Validators",
           position: "left",
         },
@@ -55,7 +55,7 @@ module.exports = {
             },
             {
               label: "Tour de SOL",
-              to: "tour-de-sol/README",
+              to: "tour-de-sol",
             },
           ],
         },
