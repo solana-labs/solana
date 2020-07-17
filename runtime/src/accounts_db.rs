@@ -74,6 +74,7 @@ pub struct ErrorCounters {
     pub invalid_account_for_fee: usize,
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
+    pub not_allowed_during_cluster_maintenance: usize,
 }
 
 #[derive(Default, Debug, PartialEq, Clone)]
