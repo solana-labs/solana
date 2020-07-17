@@ -117,7 +117,7 @@ impl AggregateCommitmentService {
                     root: aggregation_data.root,
                     highest_confirmed_slot: aggregation_data.root,
                     highest_confirmed_root,
-                }
+                },
             );
             let highest_confirmed_slot = new_block_commitment.calculate_highest_confirmed_slot();
             new_block_commitment.set_highest_confirmed_slot(highest_confirmed_slot);
