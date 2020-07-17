@@ -69,6 +69,9 @@ pub enum TransactionError {
     /// implies that account locks are not taken for this TX, and should
     /// not be unlocked.
     SanitizeFailure,
+
+    /// Transactions are currently disabled due to cluster maintenance
+    ClusterMaintenance,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
