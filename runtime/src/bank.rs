@@ -44,7 +44,9 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    native_loader, nonce,
+    native_loader,
+    native_token::Sol,
+    nonce,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
@@ -60,6 +62,7 @@ use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteSta
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     mem,
     ops::RangeInclusive,
     path::PathBuf,
@@ -2687,9 +2690,8 @@ impl Bank {
         }
     }
 
-    pub fn assert_capitalization(&self) {
-        let computed_capitalization: u64 = self
-            .get_program_accounts(None)
+    pub fn calculate_capitalization(&self) -> u64 {
+        self.get_program_accounts(None)
             .into_iter()
             .filter_map(|(_pubkey, account)| {
                 if account.lamports == u64::max_value() {
@@ -2708,12 +2710,26 @@ impl Bank {
                     Some(account.lamports)
                 }
             })
-            .sum();
+            .sum()
+    }
 
+    pub fn reset_with_recalculated_capitalization(&self) -> u64 {
+        let old = self.capitalization();
+        self.capitalization
+            .store(self.calculate_capitalization(), Ordering::Relaxed);
+        old
+    }
+
+    pub fn assert_capitalization(&self) {
+        let calculated_capitalization = self.calculate_capitalization();
         assert_eq!(
             self.capitalization(),
-            computed_capitalization,
-            "Capitalization mismatch!?",
+            calculated_capitalization,
+            "Capitalization mismatch!?: +/-{}",
+            Sol(u64::try_from(
+                (i128::from(calculated_capitalization) - i128::from(self.capitalization())).abs()
+            )
+            .unwrap()),
         );
     }
 

@@ -10,3 +10,28 @@ pub fn lamports_to_sol(lamports: u64) -> f64 {
 pub fn sol_to_lamports(sol: f64) -> u64 {
     (sol * LAMPORTS_PER_SOL as f64) as u64
 }
+
+use std::fmt::{Debug, Display, Formatter, Result};
+pub struct Sol(pub u64);
+
+impl Display for Sol {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(
+            f,
+            "{}.{:09} SOL",
+            self.0 / LAMPORTS_PER_SOL,
+            self.0 % LAMPORTS_PER_SOL
+        )
+    }
+}
+
+impl Debug for Sol {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(
+            f,
+            "{}.{:09} SOL",
+            self.0 / LAMPORTS_PER_SOL,
+            self.0 % LAMPORTS_PER_SOL
+        )
+    }
+}

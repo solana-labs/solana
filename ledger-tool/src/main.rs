@@ -26,7 +26,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::Hash,
     inflation::Inflation,
-    native_token::lamports_to_sol,
+    native_token::{lamports_to_sol, Sol},
     pubkey::Pubkey,
     shred_version::compute_shred_version,
 };
@@ -1037,6 +1037,13 @@ fn main() {
                     .takes_value(false)
                     .help("Force inflation"),
             )
+            .arg(
+                Arg::with_name("reset_capitalization")
+                    .required(false)
+                    .long("reset-capitalization")
+                    .takes_value(false)
+                    .help("Reset capitalization"),
+            )
         ).subcommand(
             SubCommand::with_name("purge")
             .about("Delete a range of slots from the ledger.")
@@ -1579,18 +1586,11 @@ fn main() {
                         exit(1);
                     });
 
-                    use solana_sdk::native_token::LAMPORTS_PER_SOL;
-                    use std::fmt::{Display, Formatter, Result};
-                    pub struct Sol(u64);
-
-                    impl Display for Sol {
-                        fn fmt(&self, f: &mut Formatter) -> Result {
-                            write!(
-                                f,
-                                "{}.{:09} SOL",
-                                self.0 / LAMPORTS_PER_SOL,
-                                self.0 % LAMPORTS_PER_SOL
-                            )
+                    if arg_matches.is_present("reset_capitalization") {
+                        println!("Resetting capitalization");
+                        let old_capitalization = bank.reset_with_recalculated_capitalization();
+                        if old_capitalization == bank.capitalization() {
+                            eprintln!("Capitalization was identical: {}", Sol(old_capitalization));
                         }
                     }
 
@@ -1614,8 +1614,12 @@ fn main() {
 
                         if arg_matches.is_present("force_inflation") {
                             let inflation = Inflation::default();
-                            println!("Forcing inflation: {:?}", inflation);
-                            bank.set_inflation(inflation);
+                            println!(
+                                "Forcing to: {:?} (was: {:?})",
+                                inflation,
+                                base_bank.inflation()
+                            );
+                            base_bank.set_inflation(inflation);
                         }
 
                         let next_epoch = base_bank
@@ -1623,33 +1627,51 @@ fn main() {
                             .get_first_slot_in_epoch(warp_epoch);
                         let warped_bank =
                             Bank::new_from_parent(&base_bank, base_bank.collector_id(), next_epoch);
-                        base_bank.assert_capitalization();
-                        warped_bank.assert_capitalization();
 
                         println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
+                        base_bank.assert_capitalization();
+                        warped_bank.assert_capitalization();
                         println!(
-                            "Capitalization: {} => {}",
+                            "Capitalization: {} => {} (+{} {}%)",
                             Sol(base_bank.capitalization()),
-                            Sol(warped_bank.capitalization())
+                            Sol(warped_bank.capitalization()),
+                            Sol(warped_bank.capitalization() - base_bank.capitalization()),
+                            ((warped_bank.capitalization() as f64)
+                                / (base_bank.capitalization() as f64)
+                                * 100_f64),
                         );
 
+                        let mut overall_delta = 0;
                         for (pubkey, warped_account) in
                             warped_bank.get_all_accounts_modified_since_parent()
                         {
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
                                 if base_account.lamports != warped_account.lamports {
+                                    let delta = warped_account.lamports - base_account.lamports;
                                     println!(
-                                        "{}({}): {} => {}",
+                                        "{}({}): {} => {} (+{})",
                                         pubkey,
                                         base_account.owner,
                                         Sol(base_account.lamports),
-                                        Sol(warped_account.lamports)
+                                        Sol(warped_account.lamports),
+                                        Sol(delta),
                                     );
+                                    overall_delta += delta;
                                 }
                             }
                         }
+                        println!("Sum of lamports changes: {}", Sol(overall_delta));
                     } else {
+                        if arg_matches.is_present("reset_capitalization") {
+                            eprintln!("Capitalization isn't verified because it's reset");
+                        }
+                        if arg_matches.is_present("force_inflation") {
+                            eprintln!(
+                                "Forcing inflation isn't meaningful because bank isn't warping"
+                            );
+                        }
+
                         bank.assert_capitalization();
                         println!("Capitalization: {}", Sol(bank.capitalization()));
                     }
