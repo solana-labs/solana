@@ -46,8 +46,8 @@ module.exports = {
     "Develop Applications": [
       "apps",
       "apps/rent",
+      "apps/break",
       "apps/webwallet",
-      "apps/tictactoe",
       "apps/drones",
       "transaction",
       "apps/jsonrpc-api",
