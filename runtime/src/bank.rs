@@ -74,10 +74,6 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-<<<<<<< HEAD
-=======
-#[frozen_abi(digest = "BHtoJzwGJ1seQ2gZmtPSLLgdvq3gRZMj5mpUJsX4wGHT")]
->>>>>>> e5d8c4383... Add Bank support for "upgrade epochs" where all non-vote transactions will be rejected
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
