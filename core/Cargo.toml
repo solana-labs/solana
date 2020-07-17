@@ -59,20 +59,21 @@ solana-perf = { path = "../perf", version = "1.2.20" }
 solana-runtime = { path = "../runtime", version = "1.2.20" }
 solana-sdk = { path = "../sdk", version = "1.2.20" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.20" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "1.2.20" }
 solana-streamer = { path = "../streamer", version = "1.2.20" }
 solana-sys-tuner = { path = "../sys-tuner", version = "1.2.20" }
 solana-transaction-status = { path = "../transaction-status", version = "1.2.20" }
 solana-version = { path = "../version", version = "1.2.20" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.20" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.20" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.2.20" }
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
-tokio = "0.1"
-tokio-codec = "0.1"
-tokio-fs = "0.1"
-tokio-io = "0.1"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.2.20" }
+tokio = { version = "0.2.22", features = ["full"] }
+tokio_01 = { version = "0.1", package = "tokio" }
+tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
+tokio_io_01 = { version = "0.1", package = "tokio-io" }
 trees = "0.2.1"
 
 [dev-dependencies]
