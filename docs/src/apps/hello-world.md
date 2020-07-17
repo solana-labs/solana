@@ -10,7 +10,7 @@ The project comprises of:
  - A client that can send a "hello" to an account and get back the number of
  times "hello" has been sent
 
-## Build and run Hello World program 
+## Build and run Hello World program
 
 First fetch the latest version of the example code:
 
