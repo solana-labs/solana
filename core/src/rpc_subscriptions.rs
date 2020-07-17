@@ -11,7 +11,11 @@ use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::rpc_response::{
     Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
-use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
+use solana_runtime::{
+    bank::Bank,
+    bank_forks::BankForks,
+    commitment::{BlockCommitmentCache, CacheSlotInfo},
+};
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
@@ -43,14 +47,6 @@ pub struct SlotInfo {
     pub root: Slot,
 }
 
-#[derive(Default)]
-pub struct CacheSlotInfo {
-    pub current_slot: Slot,
-    pub node_root: Slot,
-    pub highest_confirmed_root: Slot,
-    pub highest_confirmed_slot: Slot,
-}
-
 // A more human-friendly version of Vote, with the bank state signature base58 encoded.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RpcVote {
@@ -75,11 +71,9 @@ impl std::fmt::Debug for NotificationEntry {
             NotificationEntry::Frozen(slot) => write!(f, "Frozen({})", slot),
             NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
-            NotificationEntry::Bank(cache_slot_info) => write!(
-                f,
-                "Bank({{current_slot: {:?}}})",
-                cache_slot_info.current_slot
-            ),
+            NotificationEntry::Bank(cache_slot_info) => {
+                write!(f, "Bank({{slot: {:?}}})", cache_slot_info.slot)
+            }
             NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
         }
     }
@@ -180,8 +174,8 @@ where
         {
             let slot = match commitment.commitment {
                 CommitmentLevel::Max => cache_slot_info.highest_confirmed_root,
-                CommitmentLevel::Recent => cache_slot_info.current_slot,
-                CommitmentLevel::Root => cache_slot_info.node_root,
+                CommitmentLevel::Recent => cache_slot_info.slot,
+                CommitmentLevel::Root => cache_slot_info.root,
                 CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
                     cache_slot_info.highest_confirmed_slot
                 }
@@ -995,7 +989,7 @@ pub(crate) mod tests {
             .process_transaction(&tx)
             .unwrap();
         let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.current_slot = 1;
+        cache_slot_info.slot = 1;
         subscriptions.notify_subscribers(cache_slot_info);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
@@ -1156,8 +1150,16 @@ pub(crate) mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0);
         block_commitment.entry(1).or_insert(cache1);
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, 0, 10, bank1.slot(), 0, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            10,
+            CacheSlotInfo {
+                slot: bank1.slot(),
+                root: 0,
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
+        );
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
@@ -1209,7 +1211,7 @@ pub(crate) mod tests {
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
         let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.current_slot = 1;
+        cache_slot_info.slot = 1;
         subscriptions.notify_subscribers(cache_slot_info);
         let expected_res = RpcSignatureResult { err: None };
 

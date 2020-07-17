@@ -349,7 +349,7 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        rpc_subscriptions::{tests::robust_poll_or_panic, CacheSlotInfo},
+        rpc_subscriptions::tests::robust_poll_or_panic,
     };
     use crossbeam_channel::unbounded;
     use jsonrpc_core::{futures::sync::mpsc, Response};
@@ -359,7 +359,7 @@ mod tests {
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
+        commitment::{BlockCommitmentCache, CacheSlotInfo},
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
             ValidatorVoteKeypairs,
@@ -393,7 +393,7 @@ mod tests {
             .unwrap()
             .process_transaction(tx)?;
         let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.current_slot = current_slot;
+        cache_slot_info.slot = current_slot;
         subscriptions.notify_subscribers(cache_slot_info);
         Ok(())
     }
@@ -733,14 +733,14 @@ mod tests {
             .process_transaction(&tx)
             .unwrap();
         let mut cache_slot_info = CacheSlotInfo::default();
-        cache_slot_info.current_slot = 1;
+        cache_slot_info.slot = 1;
         rpc.subscriptions.notify_subscribers(cache_slot_info);
 
         let cache_slot_info = CacheSlotInfo {
-            current_slot: 2,
-            node_root: 1,
-            highest_confirmed_root: 1,
+            slot: 2,
+            root: 1,
             highest_confirmed_slot: 1,
+            highest_confirmed_root: 1,
         };
         rpc.subscriptions.notify_subscribers(cache_slot_info);
         let expected = json!({
