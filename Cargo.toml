@@ -27,6 +27,7 @@ members = [
     "logger",
     "log-analyzer",
     "merkle-tree",
+    "storage-bigtable",
     "streamer",
     "measure",
     "metrics",
