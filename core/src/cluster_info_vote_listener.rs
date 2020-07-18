@@ -657,6 +657,7 @@ mod tests {
     use solana_sdk::signature::Signature;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::vote_transaction;
+    use std::collections::BTreeSet;
 
     #[test]
     fn test_max_vote_tx_fits() {
@@ -847,6 +848,10 @@ mod tests {
             );
             votes_sender.send(vec![vote_tx]).unwrap();
             for vote_slot in &replay_vote_slots {
+                // Send twice, should only expect to be notified once later
+                replay_votes_sender
+                    .send(Arc::new(vec![(vote_keypair.pubkey(), *vote_slot)]))
+                    .unwrap();
                 replay_votes_sender
                     .send(Arc::new(vec![(vote_keypair.pubkey(), *vote_slot)]))
                     .unwrap();
@@ -866,19 +871,30 @@ mod tests {
         .unwrap();
 
         // Check that the received votes were pushed to other commponents
-        // subscribing via a channel
-        let all_expected_slots: Vec<_> = vote_slots
+        // subscribing via `verified_vote_receiver`
+        let all_expected_slots: BTreeSet<_> = vote_slots
             .into_iter()
             .chain(replay_vote_slots.into_iter())
             .collect();
-        let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
-        assert_eq!(received_votes.len(), validator_voting_keypairs.len());
-        for (voting_keypair, (received_pubkey, pubkey_received_votes)) in
-            validator_voting_keypairs.iter().zip(received_votes.iter())
-        {
-            assert_eq!(voting_keypair.vote_keypair.pubkey(), *received_pubkey);
-            assert_eq!(*pubkey_received_votes, all_expected_slots);
+        let mut pubkey_to_votes: HashMap<Pubkey, BTreeSet<Slot>> = HashMap::new();
+        for (received_pubkey, new_votes) in verified_vote_receiver.try_iter() {
+            let already_received_votes = pubkey_to_votes.entry(received_pubkey).or_default();
+            for new_vote in new_votes {
+                // `new_vote` should only be received once
+                assert!(already_received_votes.insert(new_vote));
+            }
         }
+        assert_eq!(pubkey_to_votes.len(), validator_voting_keypairs.len());
+        for keypairs in &validator_voting_keypairs {
+            assert_eq!(
+                *pubkey_to_votes
+                    .get(&keypairs.vote_keypair.pubkey())
+                    .unwrap(),
+                all_expected_slots
+            );
+        }
+
+        // Check the vote trackers were updated correctly
         for vote_slot in all_expected_slots {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();
