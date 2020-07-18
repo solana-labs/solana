@@ -1,6 +1,10 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
+<<<<<<< HEAD
 FROM rust:1.43.0
+=======
+FROM rust:1.45.0
+>>>>>>> 83cc92f3f... Upgade to Rust 1.45.0
 
 # Add Google Protocol Buffers for Libra's metrics library.
 ENV PROTOC_VERSION 3.8.0
