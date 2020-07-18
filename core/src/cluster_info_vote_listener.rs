@@ -54,6 +54,7 @@ pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
     updates: Option<Vec<Arc<Pubkey>>>,
     total_stake: u64,
+    gossip_only_stake: u64,
 }
 
 impl SlotVoteTracker {
@@ -563,9 +564,9 @@ impl ClusterInfoVoteListener {
                 {
                     let r_slot_tracker = slot_tracker.read().unwrap();
                     // Only keep the pubkeys we haven't seen voting for this slot
-                    slot_diff.retain(|pubkey, did_notify| {
+                    slot_diff.retain(|pubkey, is_from_gossip| {
                         let is_new = !r_slot_tracker.voted.contains(pubkey);
-                        if is_new && !*did_notify {
+                        if is_new && !*is_from_gossip {
                             let _ = verified_vote_sender.send((**pubkey, vec![slot]));
                         }
                         is_new
@@ -576,8 +577,15 @@ impl ClusterInfoVoteListener {
                     w_slot_tracker.updates = Some(vec![]);
                 }
                 let mut current_stake = 0;
-                for (pubkey, _) in slot_diff {
-                    Self::sum_stake(&mut current_stake, epoch_stakes, &pubkey);
+                let mut gossip_only_stake = 0;
+                for (pubkey, is_from_gossip) in slot_diff {
+                    Self::sum_stake(
+                        &mut current_stake,
+                        &mut gossip_only_stake,
+                        epoch_stakes,
+                        &pubkey,
+                        is_from_gossip,
+                    );
 
                     w_slot_tracker.voted.insert(pubkey.clone());
                     w_slot_tracker.updates.as_mut().unwrap().push(pubkey);
@@ -590,15 +598,23 @@ impl ClusterInfoVoteListener {
                     slot,
                 );
                 w_slot_tracker.total_stake += current_stake;
+                w_slot_tracker.gossip_only_stake += gossip_only_stake
             } else {
                 let mut total_stake = 0;
+                let mut gossip_only_stake = 0;
                 let voted: HashSet<_> = slot_diff
                     .into_iter()
-                    .map(|(pubkey, did_notify)| {
-                        if !did_notify {
+                    .map(|(pubkey, is_from_gossip)| {
+                        if !is_from_gossip {
                             let _ = verified_vote_sender.send((*pubkey, vec![slot]));
                         }
-                        Self::sum_stake(&mut total_stake, epoch_stakes, &pubkey);
+                        Self::sum_stake(
+                            &mut total_stake,
+                            &mut gossip_only_stake,
+                            epoch_stakes,
+                            &pubkey,
+                            is_from_gossip,
+                        );
                         pubkey
                     })
                     .collect();
@@ -607,6 +623,7 @@ impl ClusterInfoVoteListener {
                     voted: voted.clone(),
                     updates: Some(voted.into_iter().collect()),
                     total_stake,
+                    gossip_only_stake,
                 };
                 vote_tracker
                     .slot_vote_trackers
@@ -634,10 +651,19 @@ impl ClusterInfoVoteListener {
         }
     }
 
-    fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
+    fn sum_stake(
+        sum: &mut u64,
+        gossip_only_stake: &mut u64,
+        epoch_stakes: Option<&EpochStakes>,
+        pubkey: &Pubkey,
+        is_from_gossip: bool,
+    ) {
         if let Some(stakes) = epoch_stakes {
             if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
                 *sum += vote_account.0;
+                if is_from_gossip {
+                    *gossip_only_stake += vote_account.0;
+                }
             }
         }
     }
