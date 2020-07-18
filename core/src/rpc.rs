@@ -112,27 +112,36 @@ impl JsonRpcRequestProcessor {
             Some(config) => config.commitment,
         };
 
-        let slot = self
-            .block_commitment_cache
-            .read()
-            .unwrap()
-            .slot_with_commitment(commitment_level);
-
-        match commitment_level {
+        let slot = match commitment_level {
             CommitmentLevel::Recent => {
-                debug!("RPC using the heaviest slot: {:?}", slot);
+                let slot = r_bank_forks.highest_slot();
+                debug!("RPC using working_bank: {:?}", slot);
+                slot
             }
             CommitmentLevel::Root => {
+                let slot = r_bank_forks.root();
                 debug!("RPC using node root: {:?}", slot);
+                slot
             }
             CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
+                let slot = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .highest_confirmed_slot();
                 debug!("RPC using confirmed slot: {:?}", slot);
+                slot
             }
             CommitmentLevel::Max => {
+                let slot = self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .highest_confirmed_root();
                 debug!("RPC using block: {:?}", slot);
+                slot
             }
         };
-
         r_bank_forks.get(slot).cloned().unwrap()
     }
 
@@ -3665,22 +3674,6 @@ pub mod tests {
         assert_eq!(expected, result);
     }
 
-    fn advance_block_commitment_cache(
-        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
-        bank_forks: &Arc<RwLock<BankForks>>,
-    ) {
-        let mut new_block_commitment = BlockCommitmentCache::new(
-            HashMap::new(),
-            0,
-            0,
-            bank_forks.read().unwrap().highest_slot(),
-            0,
-            0,
-        );
-        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
-        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
-    }
-
     #[test]
     fn test_get_vote_accounts() {
         let RpcHandler {
@@ -3690,7 +3683,6 @@ pub mod tests {
             bank_forks,
             alice,
             leader_vote_keypair,
-            block_commitment_cache,
             ..
         } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
@@ -3769,7 +3761,6 @@ pub mod tests {
                 &Pubkey::default(),
                 bank.slot() + 1,
             ));
-            advance_block_commitment_cache(&block_commitment_cache, &bank_forks);
 
             let transaction = Transaction::new_signed_with_payer(
                 &instructions,
@@ -3823,7 +3814,6 @@ pub mod tests {
             &Pubkey::default(),
             bank.slot() + TEST_SLOTS_PER_EPOCH,
         ));
-        advance_block_commitment_cache(&block_commitment_cache, &bank_forks);
 
         // The leader vote account should now be delinquent, and the other vote account disappears
         // because it's inactive with no stake

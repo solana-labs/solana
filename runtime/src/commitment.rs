@@ -1,4 +1,4 @@
-use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel};
+use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::collections::HashMap;
 
@@ -101,22 +101,6 @@ impl BlockCommitmentCache {
 
     pub fn commitment_slots(&self) -> CommitmentSlots {
         self.commitment_slots
-    }
-
-    pub fn highest_gossip_confirmed_slot(&self) -> Slot {
-        // TODO: see solana_core::RpcSubscriptions:
-        //self.last_checked_slots.get(&CommitmentLevel::SingleGossip).unwrap_or(&0)
-        self.highest_confirmed_slot
-    }
-
-    pub fn slot_with_commitment(&self, commitment_level: CommitmentLevel) -> Slot {
-        match commitment_level {
-            CommitmentLevel::Recent => self.slot(),
-            CommitmentLevel::Root => self.root(),
-            CommitmentLevel::Single => self.highest_confirmed_slot(),
-            CommitmentLevel::SingleGossip => self.highest_gossip_confirmed_slot(),
-            CommitmentLevel::Max => self.highest_confirmed_root(),
-        }
     }
 
     fn highest_slot_with_confirmation_count(&self, confirmation_count: usize) -> Slot {
