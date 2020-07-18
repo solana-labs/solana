@@ -162,9 +162,9 @@ declare module '@solana/web3.js' {
   };
 
   declare export type SlotInfo = {
-    parent: 'number',
-    slot: 'number',
-    root: 'number',
+    parent: number,
+    slot: number,
+    root: number,
   };
 
   declare type AccountChangeCallback = (
