@@ -30,7 +30,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote};
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -46,8 +46,8 @@ pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, P
 pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
-pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vote)>;
-pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vote)>;
+pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
+pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -471,7 +471,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes: &[Arc<PubkeyVotes>],
     ) {
-        let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
+        let mut diff: HashMap<Slot, HashMap<Arc<Pubkey>, bool>> = HashMap::new();
         {
             for tx in vote_txs {
                 if let (Some(vote_pubkey), Some(vote_instruction)) = tx
@@ -527,22 +527,28 @@ impl ClusterInfoVoteListener {
                         }
 
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(vote_pubkey);
-                        diff.entry(slot).or_default().insert(unduplicated_pubkey);
+                        diff.entry(slot)
+                            .or_default()
+                            .insert(unduplicated_pubkey, true);
                     }
 
                     subscriptions.notify_vote(&vote);
-                    let _ = verified_vote_sender.send((*vote_pubkey, vote));
+                    let _ = verified_vote_sender.send((*vote_pubkey, vote.slots));
                 }
             }
         }
 
+        // Process the replay votes
         for votes in replay_votes {
             for (pubkey, slot) in votes.iter() {
                 if *slot <= root {
                     continue;
                 }
                 let unduplicated_pubkey = vote_tracker.keys.get_or_insert(pubkey);
-                diff.entry(*slot).or_default().insert(unduplicated_pubkey);
+                diff.entry(*slot)
+                    .or_default()
+                    .entry(unduplicated_pubkey)
+                    .or_default();
             }
         }
 
@@ -557,14 +563,20 @@ impl ClusterInfoVoteListener {
                 {
                     let r_slot_tracker = slot_tracker.read().unwrap();
                     // Only keep the pubkeys we haven't seen voting for this slot
-                    slot_diff.retain(|pubkey| !r_slot_tracker.voted.contains(pubkey));
+                    slot_diff.retain(|pubkey, did_notify| {
+                        let is_new = !r_slot_tracker.voted.contains(pubkey);
+                        if is_new && !*did_notify {
+                            let _ = verified_vote_sender.send((**pubkey, vec![slot]));
+                        }
+                        is_new
+                    });
                 }
                 let mut w_slot_tracker = slot_tracker.write().unwrap();
                 if w_slot_tracker.updates.is_none() {
                     w_slot_tracker.updates = Some(vec![]);
                 }
                 let mut current_stake = 0;
-                for pubkey in slot_diff {
+                for (pubkey, _) in slot_diff {
                     Self::sum_stake(&mut current_stake, epoch_stakes, &pubkey);
 
                     w_slot_tracker.voted.insert(pubkey.clone());
@@ -582,7 +594,10 @@ impl ClusterInfoVoteListener {
                 let mut total_stake = 0;
                 let voted: HashSet<_> = slot_diff
                     .into_iter()
-                    .map(|pubkey| {
+                    .map(|(pubkey, did_notify)| {
+                        if !did_notify {
+                            let _ = verified_vote_sender.send((*pubkey, vec![slot]));
+                        }
                         Self::sum_stake(&mut total_stake, epoch_stakes, &pubkey);
                         pubkey
                     })
@@ -815,9 +830,10 @@ mod tests {
         let (vote_tracker, _, validator_voting_keypairs, subscriptions) = setup();
         let (votes_sender, votes_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
-        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
+        let (replay_votes_sender, replay_votes_receiver) = unbounded();
 
         let vote_slots = vec![1, 2];
+        let replay_vote_slots = vec![3, 4];
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
@@ -830,6 +846,11 @@ mod tests {
                 vote_keypair,
             );
             votes_sender.send(vec![vote_tx]).unwrap();
+            for vote_slot in &replay_vote_slots {
+                replay_votes_sender
+                    .send(Arc::new(vec![(vote_keypair.pubkey(), *vote_slot)]))
+                    .unwrap();
+            }
         });
 
         // Check that all the votes were registered for each validator correctly
@@ -846,15 +867,19 @@ mod tests {
 
         // Check that the received votes were pushed to other commponents
         // subscribing via a channel
+        let all_expected_slots: Vec<_> = vote_slots
+            .into_iter()
+            .chain(replay_vote_slots.into_iter())
+            .collect();
         let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
         assert_eq!(received_votes.len(), validator_voting_keypairs.len());
-        for (voting_keypair, (received_pubkey, received_vote)) in
+        for (voting_keypair, (received_pubkey, pubkey_received_votes)) in
             validator_voting_keypairs.iter().zip(received_votes.iter())
         {
             assert_eq!(voting_keypair.vote_keypair.pubkey(), *received_pubkey);
-            assert_eq!(received_vote.slots, vote_slots);
+            assert_eq!(*pubkey_received_votes, all_expected_slots);
         }
-        for vote_slot in vote_slots {
+        for vote_slot in all_expected_slots {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();
             for voting_keypairs in &validator_voting_keypairs {
@@ -913,10 +938,7 @@ mod tests {
 
         // Check that the received votes were pushed to other commponents
         // subscribing via a channel
-        let received_votes: Vec<_> = verified_vote_receiver
-            .try_iter()
-            .map(|(pubkey, vote)| (pubkey, vote.slots))
-            .collect();
+        let received_votes: Vec<_> = verified_vote_receiver.try_iter().collect();
         assert_eq!(received_votes.len(), validator_voting_keypairs.len());
         for (expected_pubkey_vote, received_pubkey_vote) in
             expected_votes.iter().zip(received_votes.iter())
@@ -1003,14 +1025,14 @@ mod tests {
         let ref_count_per_vote = 2;
 
         // Create some voters at genesis
-        let validator_voting_keypairs: Vec<_> = (0..2)
+        let validator_keypairs: Vec<_> = (0..2)
             .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
             .collect();
 
         let GenesisConfigInfo { genesis_config, .. } =
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
-                &validator_voting_keypairs,
+                &validator_keypairs,
                 100,
             );
         let bank = Bank::new(&genesis_config);
@@ -1030,10 +1052,11 @@ mod tests {
 
         // Send a vote to process, should add a reference to the pubkey for that voter
         // in the tracker
-        let validator0_keypairs = &validator_voting_keypairs[0];
+        let validator0_keypairs = &validator_keypairs[0];
+        let voted_slot = bank.slot() + 1;
         let vote_tx = vec![vote_transaction::new_vote_transaction(
             // Must vote > root to be processed
-            vec![bank.slot() + 1],
+            vec![voted_slot],
             Hash::default(),
             Hash::default(),
             &validator0_keypairs.node_keypair,
@@ -1049,7 +1072,11 @@ mod tests {
             subscriptions.clone(),
             None,
             &verified_vote_sender,
-            &[],
+            // Add vote for same slot, should not affect outcome
+            &[Arc::new(vec![(
+                validator0_keypairs.vote_keypair.pubkey(),
+                voted_slot,
+            )])],
         );
         let ref_count = Arc::strong_count(
             &vote_tracker
@@ -1084,8 +1111,9 @@ mod tests {
         // Test with votes across two epochs
         let first_slot_in_new_epoch = bank.epoch_schedule().get_first_slot_in_epoch(new_epoch);
 
-        // Make 2 new votes in two different epochs, ref count should go up
-        // by 2 * ref_count_per_vote
+        // Make 2 new votes in two different epochs for the same pubkey,
+        // the ref count should go up by 3 * ref_count_per_vote
+        // Add 1 vote through the replay channel, ref count should
         let vote_txs: Vec<_> = [bank.slot() + 2, first_slot_in_new_epoch]
             .iter()
             .map(|slot| {
@@ -1108,9 +1136,25 @@ mod tests {
             subscriptions,
             None,
             &verified_vote_sender,
-            &[],
+            &[Arc::new(vec![(
+                validator_keypairs[1].vote_keypair.pubkey(),
+                first_slot_in_new_epoch,
+            )])],
         );
 
+        // Check new replay vote pubkey first
+        let ref_count = Arc::strong_count(
+            &vote_tracker
+                .keys
+                .0
+                .read()
+                .unwrap()
+                .get(&validator_keypairs[1].vote_keypair.pubkey())
+                .unwrap(),
+        );
+        assert_eq!(ref_count, current_ref_count);
+
+        // Check the existing pubkey
         let ref_count = Arc::strong_count(
             &vote_tracker
                 .keys
