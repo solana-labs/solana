@@ -12,7 +12,7 @@ use crate::{
     verified_vote_packets::VerifiedVotePackets,
 };
 use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select, Sender as CrossbeamSender,
 };
 use itertools::izip;
 use log::*;
@@ -393,7 +393,6 @@ impl ClusterInfoVoteListener {
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
             vote_tracker.process_new_root_bank(&root_bank);
             let epoch_stakes = root_bank.epoch_stakes(root_bank.epoch());
-
             if let Err(e) = Self::get_and_process_votes(
                 &vote_txs_receiver,
                 &vote_tracker,
@@ -404,10 +403,8 @@ impl ClusterInfoVoteListener {
                 &replay_votes_receiver,
             ) {
                 match e {
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                        return Ok(());
-                    }
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)
+                    | Error::ReadyTimeoutError => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -445,21 +442,38 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVotesReceiver,
     ) -> Result<()> {
-        let timer = Duration::from_millis(100);
-        let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
-        while let Ok(new_txs) = vote_txs_receiver.try_recv() {
-            vote_txs.extend(new_txs);
+        let mut sel = Select::new();
+        sel.recv(vote_txs_receiver);
+        sel.recv(replay_votes_receiver);
+        let mut remaining_wait_time = 200;
+        loop {
+            if remaining_wait_time == 0 {
+                break;
+            }
+            let start = Instant::now();
+            // Wait for one of the receivers to be ready. Select will
+            // return if channels either have something, or are
+            // disconnected. `ready_timeout` can wake up spuriously,
+            // hence the loop
+            let _ = sel.ready_timeout(Duration::from_millis(remaining_wait_time))?;
+            let vote_txs: Vec<_> = vote_txs_receiver.try_iter().flatten().collect();
+            let replay_votes: Vec<_> = replay_votes_receiver.try_iter().collect();
+            if !vote_txs.is_empty() || !replay_votes.is_empty() {
+                Self::process_votes(
+                    vote_tracker,
+                    vote_txs,
+                    last_root,
+                    subscriptions,
+                    epoch_stakes,
+                    verified_vote_sender,
+                    &replay_votes,
+                );
+                break;
+            } else {
+                remaining_wait_time = remaining_wait_time
+                    .saturating_sub(std::cmp::max(start.elapsed().as_millis() as u64, 1));
+            }
         }
-        let replay_votes: Vec<_> = replay_votes_receiver.try_iter().collect();
-        Self::process_votes(
-            vote_tracker,
-            vote_txs,
-            last_root,
-            subscriptions,
-            epoch_stakes,
-            verified_vote_sender,
-            &replay_votes,
-        );
         Ok(())
     }
 
