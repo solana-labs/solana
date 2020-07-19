@@ -32,7 +32,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         {Arc, Mutex, RwLock},
@@ -51,7 +51,10 @@ pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
-    voted: HashSet<Arc<Pubkey>>,
+    // Maps pubkeys that have voted for this slot
+    // to whether or not we've seen the vote on gossip.
+    // True if seen on gossip, false if only seen in replay.
+    voted: HashMap<Arc<Pubkey>, bool>,
     updates: Option<Vec<Arc<Pubkey>>>,
     total_stake: u64,
     gossip_only_stake: u64,
@@ -131,7 +134,7 @@ impl VoteTracker {
 
         let mut w_slot_vote_tracker = slot_vote_tracker.write().unwrap();
 
-        w_slot_vote_tracker.voted.insert(pubkey.clone());
+        w_slot_vote_tracker.voted.insert(pubkey.clone(), true);
         if let Some(ref mut updates) = w_slot_vote_tracker.updates {
             updates.push(pubkey.clone())
         } else {
@@ -451,8 +454,8 @@ impl ClusterInfoVoteListener {
                 break;
             }
             let start = Instant::now();
-            // Wait for one of the receivers to be ready. Select will
-            // return if channels either have something, or are
+            // Wait for one of the receivers to be ready. `ready_timeout`
+            // will return if channels either have something, or are
             // disconnected. `ready_timeout` can wake up spuriously,
             // hence the loop
             let _ = sel.ready_timeout(Duration::from_millis(remaining_wait_time))?;
@@ -578,12 +581,22 @@ impl ClusterInfoVoteListener {
                 {
                     let r_slot_tracker = slot_tracker.read().unwrap();
                     // Only keep the pubkeys we haven't seen voting for this slot
-                    slot_diff.retain(|pubkey, is_from_gossip| {
-                        let is_new = !r_slot_tracker.voted.contains(pubkey);
-                        if is_new && !*is_from_gossip {
+                    slot_diff.retain(|pubkey, seen_in_gossip_above| {
+                        let seen_in_gossip_previously = r_slot_tracker.voted.get(pubkey);
+                        let is_new = seen_in_gossip_previously.is_none();
+                        if is_new && !*seen_in_gossip_above {
+                            // If this vote wasn't seen in gossip, then it must be a
+                            // replay vote, and we haven't sent a notification for
+                            // those yet
                             let _ = verified_vote_sender.send((**pubkey, vec![slot]));
                         }
-                        is_new
+
+                        // `is_new_from_gossip` means we observed a vote for this slot
+                        // for the first time in gossip
+                        let is_new_from_gossip =
+                            !seen_in_gossip_previously.cloned().unwrap_or(false)
+                                && *seen_in_gossip_above;
+                        is_new || is_new_from_gossip
                     });
                 }
                 let mut w_slot_tracker = slot_tracker.write().unwrap();
@@ -592,16 +605,28 @@ impl ClusterInfoVoteListener {
                 }
                 let mut current_stake = 0;
                 let mut gossip_only_stake = 0;
-                for (pubkey, is_from_gossip) in slot_diff {
+                for (pubkey, seen_in_gossip_above) in slot_diff {
+                    let is_new = !w_slot_tracker.voted.contains_key(&pubkey);
                     Self::sum_stake(
                         &mut current_stake,
                         &mut gossip_only_stake,
                         epoch_stakes,
                         &pubkey,
-                        is_from_gossip,
+                        // By this point we know if the vote was seen in gossip above,
+                        // it was not seen in gossip at any point in the past, so it's
+                        // safe to pass this in here as an overall indicator of whether
+                        // this vote is new
+                        seen_in_gossip_above,
+                        is_new,
                     );
 
-                    w_slot_tracker.voted.insert(pubkey.clone());
+                    // From the `slot_diff.retain` earlier, we know because there are
+                    // no other writers to `slot_vote_tracker` that
+                    // `is_new || is_new_from_gossip`. In both cases we want to record
+                    // `is_new_from_gossip` for the `pubkey` entry.
+                    w_slot_tracker
+                        .voted
+                        .insert(pubkey.clone(), seen_in_gossip_above);
                     w_slot_tracker.updates.as_mut().unwrap().push(pubkey);
                 }
                 Self::notify_for_stake_change(
@@ -616,10 +641,10 @@ impl ClusterInfoVoteListener {
             } else {
                 let mut total_stake = 0;
                 let mut gossip_only_stake = 0;
-                let voted: HashSet<_> = slot_diff
+                let voted: HashMap<_, _> = slot_diff
                     .into_iter()
-                    .map(|(pubkey, is_from_gossip)| {
-                        if !is_from_gossip {
+                    .map(|(pubkey, seen_in_gossip_above)| {
+                        if !seen_in_gossip_above {
                             let _ = verified_vote_sender.send((*pubkey, vec![slot]));
                         }
                         Self::sum_stake(
@@ -627,15 +652,16 @@ impl ClusterInfoVoteListener {
                             &mut gossip_only_stake,
                             epoch_stakes,
                             &pubkey,
-                            is_from_gossip,
+                            seen_in_gossip_above,
+                            true,
                         );
-                        pubkey
+                        (pubkey, seen_in_gossip_above)
                     })
                     .collect();
                 Self::notify_for_stake_change(total_stake, 0, &subscriptions, epoch_stakes, slot);
                 let new_slot_tracker = SlotVoteTracker {
-                    voted: voted.clone(),
-                    updates: Some(voted.into_iter().collect()),
+                    updates: Some(voted.keys().cloned().collect()),
+                    voted,
                     total_stake,
                     gossip_only_stake,
                 };
@@ -670,12 +696,19 @@ impl ClusterInfoVoteListener {
         gossip_only_stake: &mut u64,
         epoch_stakes: Option<&EpochStakes>,
         pubkey: &Pubkey,
-        is_from_gossip: bool,
+        is_new_from_gossip: bool,
+        is_new: bool,
     ) {
+        if !is_new_from_gossip && !is_new {
+            return;
+        }
+
         if let Some(stakes) = epoch_stakes {
             if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
-                *sum += vote_account.0;
-                if is_from_gossip {
+                if is_new {
+                    *sum += vote_account.0;
+                }
+                if is_new_from_gossip {
                     *gossip_only_stake += vote_account.0;
                 }
             }
@@ -940,7 +973,7 @@ mod tests {
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();
             for voting_keypairs in &validator_voting_keypairs {
                 let pubkey = voting_keypairs.vote_keypair.pubkey();
-                assert!(r_slot_vote_tracker.voted.contains(&pubkey));
+                assert!(r_slot_vote_tracker.voted.contains_key(&pubkey));
                 assert!(r_slot_vote_tracker
                     .updates
                     .as_ref()
@@ -1008,12 +1041,85 @@ mod tests {
             let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
             for voting_keypairs in keyset {
                 let pubkey = voting_keypairs.vote_keypair.pubkey();
-                assert!(r_slot_vote_tracker.voted.contains(&pubkey));
+                assert!(r_slot_vote_tracker.voted.contains_key(&pubkey));
                 assert!(r_slot_vote_tracker
                     .updates
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
+            }
+        }
+    }
+
+    #[test]
+    fn test_process_votes3() {
+        let (votes_sender, votes_receiver) = unbounded();
+        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
+        let (replay_votes_sender, replay_votes_receiver) = unbounded();
+
+        let vote_slot = 1;
+
+        // Events:
+        // 0: Send gossip vote
+        // 1: Send replay vote
+        // 2: Send both
+        let ordered_events = vec![
+            vec![0],
+            vec![1],
+            vec![0, 1],
+            vec![1, 0],
+            vec![2],
+            vec![0, 1, 2],
+            vec![1, 0, 2],
+        ];
+        for events in ordered_events {
+            let (vote_tracker, bank, validator_voting_keypairs, subscriptions) = setup();
+            let node_keypair = &validator_voting_keypairs[0].node_keypair;
+            let vote_keypair = &validator_voting_keypairs[0].vote_keypair;
+            for &e in &events {
+                if e == 0 || e == 2 {
+                    // Create vote transaction
+                    let vote_tx = vote_transaction::new_vote_transaction(
+                        vec![vote_slot],
+                        Hash::default(),
+                        Hash::default(),
+                        node_keypair,
+                        vote_keypair,
+                        vote_keypair,
+                    );
+                    votes_sender.send(vec![vote_tx.clone()]).unwrap();
+                }
+                if e == 1 || e == 2 {
+                    replay_votes_sender
+                        .send(Arc::new(vec![(vote_keypair.pubkey(), vote_slot)]))
+                        .unwrap();
+                }
+                let _ = ClusterInfoVoteListener::get_and_process_votes(
+                    &votes_receiver,
+                    &vote_tracker,
+                    0,
+                    subscriptions.clone(),
+                    Some(
+                        // Make sure `epoch_stakes` exists for this slot by unwrapping
+                        bank.epoch_stakes(bank.epoch_schedule().get_epoch(vote_slot))
+                            .unwrap(),
+                    ),
+                    &verified_vote_sender,
+                    &replay_votes_receiver,
+                );
+            }
+            let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
+            let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
+
+            if events == vec![1] {
+                // Check `gossip_only_stake` is not incremented
+                assert_eq!(r_slot_vote_tracker.total_stake, 100);
+                assert_eq!(r_slot_vote_tracker.gossip_only_stake, 0);
+            } else {
+                // Check that both the `gossip_only_stake` and `total_stake` both
+                // increased
+                assert_eq!(r_slot_vote_tracker.total_stake, 100);
+                assert_eq!(r_slot_vote_tracker.gossip_only_stake, 100);
             }
         }
     }
@@ -1102,7 +1208,7 @@ mod tests {
             &exit,
             Arc::new(RwLock::new(bank_forks)),
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                blockstore.clone(),
+                blockstore,
             ))),
         ));
 
@@ -1250,7 +1356,7 @@ mod tests {
             &exit,
             Arc::new(RwLock::new(bank_forks)),
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                blockstore.clone(),
+                blockstore,
             ))),
         ));
 
@@ -1335,5 +1441,79 @@ mod tests {
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);
         verify_packets_len(&packets, 2);
+    }
+
+    #[test]
+    fn test_sum_stake() {
+        let (_, bank, validator_voting_keypairs, _) = setup();
+        let vote_keypair = &validator_voting_keypairs[0].vote_keypair;
+        let epoch_stakes = bank.epoch_stakes(bank.epoch()).unwrap();
+
+        // If `is_new_from_gossip` and `is_new` are both true, both fields
+        // should increase
+        let mut total_stake = 0;
+        let mut gossip_only_stake = 0;
+        let is_new_from_gossip = true;
+        let is_new = true;
+        ClusterInfoVoteListener::sum_stake(
+            &mut total_stake,
+            &mut gossip_only_stake,
+            Some(epoch_stakes),
+            &vote_keypair.pubkey(),
+            is_new_from_gossip,
+            is_new,
+        );
+        assert_eq!(total_stake, 100);
+        assert_eq!(gossip_only_stake, 100);
+
+        // If `is_new_from_gossip` and `is_new` are both false, none should increase
+        let mut total_stake = 0;
+        let mut gossip_only_stake = 0;
+        let is_new_from_gossip = false;
+        let is_new = false;
+        ClusterInfoVoteListener::sum_stake(
+            &mut total_stake,
+            &mut gossip_only_stake,
+            Some(epoch_stakes),
+            &vote_keypair.pubkey(),
+            is_new_from_gossip,
+            is_new,
+        );
+        assert_eq!(total_stake, 0);
+        assert_eq!(gossip_only_stake, 0);
+
+        // If only `is_new`, but not `is_new_from_gossip` then
+        // `total_stake` will increase, but `gossip_only_stake` won't
+        let mut total_stake = 0;
+        let mut gossip_only_stake = 0;
+        let is_new_from_gossip = false;
+        let is_new = true;
+        ClusterInfoVoteListener::sum_stake(
+            &mut total_stake,
+            &mut gossip_only_stake,
+            Some(epoch_stakes),
+            &vote_keypair.pubkey(),
+            is_new_from_gossip,
+            is_new,
+        );
+        assert_eq!(total_stake, 100);
+        assert_eq!(gossip_only_stake, 0);
+
+        // If only `is_new_from_gossip`, but not `is_new` then
+        // `gossip_only_stake` will increase, but `total_stake` won't
+        let mut total_stake = 0;
+        let mut gossip_only_stake = 0;
+        let is_new_from_gossip = true;
+        let is_new = false;
+        ClusterInfoVoteListener::sum_stake(
+            &mut total_stake,
+            &mut gossip_only_stake,
+            Some(epoch_stakes),
+            &vote_keypair.pubkey(),
+            is_new_from_gossip,
+            is_new,
+        );
+        assert_eq!(total_stake, 0);
+        assert_eq!(gossip_only_stake, 100);
     }
 }
