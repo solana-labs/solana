@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-FROM solanalabs/rust:1.43.0
-=======
 FROM solanalabs/rust:1.45.0
->>>>>>> 83cc92f3f... Upgade to Rust 1.45.0
 ARG date
 
 RUN set -x \
