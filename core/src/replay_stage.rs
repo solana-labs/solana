@@ -2802,7 +2802,7 @@ pub(crate) mod tests {
             &replay_votes_sender,
         );
         // No new stats should have been computed
-        assert_eq!(replay_votes_receiver.try_recv().unwrap(), Arc::new(vec![]));
+        assert!(replay_votes_receiver.try_iter().next().is_none());
         assert!(newly_computed.is_empty());
     }
 
