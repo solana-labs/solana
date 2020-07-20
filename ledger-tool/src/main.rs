@@ -22,13 +22,18 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, hash::Hash, native_token::lamports_to_sol,
-    pubkey::Pubkey, shred_version::compute_shred_version,
+    clock::{Epoch, Slot},
+    genesis_config::GenesisConfig,
+    hash::Hash,
+    inflation::Inflation,
+    native_token::{lamports_to_sol, Sol},
+    pubkey::Pubkey,
+    shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, BufRead, BufReader, Write},
@@ -690,6 +695,19 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
+fn assert_capitalization(bank: &Bank) {
+    let calculated_capitalization = bank.calculate_capitalization();
+    assert_eq!(
+        bank.capitalization(),
+        calculated_capitalization,
+        "Capitalization mismatch!?: +/-{}",
+        Sol(u64::try_from(
+            (i128::from(calculated_capitalization) - i128::from(bank.capitalization())).abs()
+        )
+        .unwrap()),
+    );
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     // Ignore SIGUSR1 to prevent long-running calls being killed by logrotate
@@ -1010,12 +1028,36 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
-            .about("Print capitalization (aka, total suppy)")
+            .about("Print capitalization (aka, total suppy) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(
+                Arg::with_name("warp_epoch")
+                    .required(false)
+                    .long("warp-epoch")
+                    .takes_value(true)
+                    .value_name("WARP_EPOCH")
+                    .help("After loading the snapshot warp the ledger to WARP_EPOCH, \
+                           which could be an epoch in a galaxy far far away"),
+            )
+            .arg(
+                Arg::with_name("enable_inflation")
+                    .required(false)
+                    .long("enable-inflation")
+                    .takes_value(false)
+                    .help("Always enable inflation when warping even if it's disabled"),
+            )
+            .arg(
+                Arg::with_name("recalculate_capitalization")
+                    .required(false)
+                    .long("recalculate-capitalization")
+                    .takes_value(false)
+                    .help("Recalculate capitalization before warping; circumvents \
+                          bank's out-of-sync capitalization"),
+            )
         ).subcommand(
             SubCommand::with_name("purge")
             .about("Delete a range of slots from the ledger.")
@@ -1558,52 +1600,97 @@ fn main() {
                         exit(1);
                     });
 
-                    use solana_sdk::native_token::LAMPORTS_PER_SOL;
-                    use std::fmt::{Display, Formatter, Result};
-                    pub struct Sol(u64);
-
-                    impl Display for Sol {
-                        fn fmt(&self, f: &mut Formatter) -> Result {
-                            write!(
-                                f,
-                                "{}.{:09} SOL",
-                                self.0 / LAMPORTS_PER_SOL,
-                                self.0 % LAMPORTS_PER_SOL
-                            )
+                    if arg_matches.is_present("recalculate_capitalization") {
+                        println!("Recalculating capitalization");
+                        let old_capitalization = bank.set_capitalization();
+                        if old_capitalization == bank.capitalization() {
+                            eprintln!("Capitalization was identical: {}", Sol(old_capitalization));
                         }
                     }
 
-                    let computed_capitalization: u64 = bank
-                        .get_program_accounts(None)
-                        .into_iter()
-                        .filter_map(|(_pubkey, account)| {
-                            if account.lamports == u64::max_value() {
-                                return None;
-                            }
+                    if arg_matches.is_present("warp_epoch") {
+                        let base_bank = bank;
 
-                            let is_specially_retained =
-                                solana_sdk::native_loader::check_id(&account.owner)
-                                    || solana_sdk::sysvar::check_id(&account.owner);
+                        let raw_warp_epoch = value_t!(arg_matches, "warp_epoch", String).unwrap();
+                        let warp_epoch = if raw_warp_epoch.starts_with('+') {
+                            base_bank.epoch() + value_t!(arg_matches, "warp_epoch", Epoch).unwrap()
+                        } else {
+                            value_t!(arg_matches, "warp_epoch", Epoch).unwrap()
+                        };
+                        if warp_epoch < base_bank.epoch() {
+                            eprintln!(
+                                "Error: can't warp epoch backwards: {} => {}",
+                                base_bank.epoch(),
+                                warp_epoch
+                            );
+                            exit(1);
+                        }
 
-                            if is_specially_retained {
-                                // specially retained accounts are ensured to exist by
-                                // alwaysing having a balance of 1 lamports, which is
-                                // outside the capitalization calculation.
-                                Some(account.lamports - 1)
-                            } else {
-                                Some(account.lamports)
-                            }
-                        })
-                        .sum();
+                        if arg_matches.is_present("enable_inflation") {
+                            let inflation = Inflation::default();
+                            println!(
+                                "Forcing to: {:?} (was: {:?})",
+                                inflation,
+                                base_bank.inflation()
+                            );
+                            base_bank.set_inflation(inflation);
+                        }
 
-                    if bank.capitalization() != computed_capitalization {
-                        panic!(
-                            "Capitalization mismatch!?: {} != {}",
-                            bank.capitalization(),
-                            computed_capitalization
+                        let next_epoch = base_bank
+                            .epoch_schedule()
+                            .get_first_slot_in_epoch(warp_epoch);
+                        let warped_bank =
+                            Bank::new_from_parent(&base_bank, base_bank.collector_id(), next_epoch);
+
+                        println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
+                        println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
+                        assert_capitalization(&base_bank);
+                        assert_capitalization(&warped_bank);
+                        println!(
+                            "Capitalization: {} => {} (+{} {}%)",
+                            Sol(base_bank.capitalization()),
+                            Sol(warped_bank.capitalization()),
+                            Sol(warped_bank.capitalization() - base_bank.capitalization()),
+                            ((warped_bank.capitalization() as f64)
+                                / (base_bank.capitalization() as f64)
+                                * 100_f64),
                         );
+
+                        let mut overall_delta = 0;
+                        for (pubkey, warped_account) in
+                            warped_bank.get_all_accounts_modified_since_parent()
+                        {
+                            if let Some(base_account) = base_bank.get_account(&pubkey) {
+                                if base_account.lamports != warped_account.lamports {
+                                    let delta = warped_account.lamports - base_account.lamports;
+                                    println!(
+                                        "{}({}): {} => {} (+{})",
+                                        pubkey,
+                                        base_account.owner,
+                                        Sol(base_account.lamports),
+                                        Sol(warped_account.lamports),
+                                        Sol(delta),
+                                    );
+                                    overall_delta += delta;
+                                }
+                            }
+                        }
+                        if overall_delta > 0 {
+                            println!("Sum of lamports changes: {}", Sol(overall_delta));
+                        }
+                    } else {
+                        if arg_matches.is_present("recalculate_capitalization") {
+                            eprintln!("Capitalization isn't verified because it's recalculated");
+                        }
+                        if arg_matches.is_present("enable_inflation") {
+                            eprintln!(
+                                "Forcing inflation isn't meaningful because bank isn't warping"
+                            );
+                        }
+
+                        assert_capitalization(&bank);
+                        println!("Capitalization: {}", Sol(bank.capitalization()));
                     }
-                    println!("Capitalization: {}", Sol(bank.capitalization()));
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);

@@ -2538,7 +2538,11 @@ impl Bank {
     ) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
-            .load_by_program_slot(self.slot(), program_id)
+            .load_by_program_slot(self.slot(), Some(program_id))
+    }
+
+    pub fn get_all_accounts_modified_since_parent(&self) -> Vec<(Pubkey, Account)> {
+        self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
@@ -2681,6 +2685,34 @@ impl Bank {
             );
             false
         }
+    }
+
+    pub fn calculate_capitalization(&self) -> u64 {
+        self.get_program_accounts(None)
+            .into_iter()
+            .map(|(_pubkey, account)| {
+                let is_specially_retained = solana_sdk::native_loader::check_id(&account.owner)
+                    || solana_sdk::sysvar::check_id(&account.owner);
+
+                if is_specially_retained {
+                    // specially retained accounts are ensured to exist by
+                    // always having a balance of 1 lamports, which is
+                    // outside the capitalization calculation.
+                    account.lamports - 1
+                } else {
+                    account.lamports
+                }
+            })
+            .sum()
+    }
+
+    /// Forcibly overwrites current capitalization by actually recalculating accounts' balances.
+    /// This should only be used for developing purposes.
+    pub fn set_capitalization(&self) -> u64 {
+        let old = self.capitalization();
+        self.capitalization
+            .store(self.calculate_capitalization(), Ordering::Relaxed);
+        old
     }
 
     pub fn get_accounts_hash(&self) -> Hash {

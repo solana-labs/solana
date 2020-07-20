@@ -377,9 +377,18 @@ impl Accounts {
             .collect()
     }
 
-    pub fn load_by_program_slot(&self, slot: Slot, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+    pub fn load_by_program_slot(
+        &self,
+        slot: Slot,
+        program_id: Option<&Pubkey>,
+    ) -> Vec<(Pubkey, Account)> {
         self.scan_slot(slot, |stored_account| {
-            if stored_account.account_meta.owner == *program_id {
+            let hit = match program_id {
+                None => true,
+                Some(program_id) => stored_account.account_meta.owner == *program_id,
+            };
+
+            if hit {
                 Some((stored_account.meta.pubkey, stored_account.clone_account()))
             } else {
                 None
@@ -1371,11 +1380,11 @@ mod tests {
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
-        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[2; 32]));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[2; 32])));
         assert_eq!(loaded.len(), 2);
-        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[3; 32]));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[3; 32])));
         assert_eq!(loaded, vec![(pubkey2, account2)]);
-        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[4; 32]));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[4; 32])));
         assert_eq!(loaded, vec![]);
     }
 
