@@ -18,17 +18,13 @@
 if [[ -n $RUST_STABLE_VERSION ]]; then
   stable_version="$RUST_STABLE_VERSION"
 else
-<<<<<<< HEAD
-  stable_version=1.43.0
-=======
   stable_version=1.45.0
->>>>>>> 83cc92f3f... Upgade to Rust 1.45.0
 fi
 
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
   nightly_version="$RUST_NIGHTLY_VERSION"
 else
-  nightly_version=2020-04-23
+  nightly_version=2020-07-12
 fi
 
 
