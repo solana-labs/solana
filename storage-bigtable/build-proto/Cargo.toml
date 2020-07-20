@@ -1,0 +1,15 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+description = "Blockchain, Rebuilt for Scale"
+edition = "2018"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+name = "proto"
+publish = false
+repository = "https://github.com/solana-labs/solana"
+version = "1.1.20"
+
+[workspace]
+
+[dependencies]
+tonic-build = "0.2.0"
