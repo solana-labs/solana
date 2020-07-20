@@ -37,11 +37,11 @@ impl Source {
             Self::NonceAccount(ref pubkey) => {
                 let res = nonce::get_account(rpc_client, pubkey)
                     .and_then(|ref a| nonce::data_from_account(a))
-                    .and_then(|d| {
+                    .map(|d| {
                         if d.blockhash == *blockhash {
-                            Ok(Some(d.fee_calculator))
+                            Some(d.fee_calculator)
                         } else {
-                            Ok(None)
+                            None
                         }
                     })?;
                 Ok(res)

@@ -255,7 +255,7 @@ pub fn main() -> Result<(), String> {
             let program_arguments = matches
                 .values_of("program_arguments")
                 .map(Iterator::collect)
-                .unwrap_or_else(|| vec![]);
+                .unwrap_or_else(Vec::new);
 
             command::run(config_file, program_name, program_arguments)
         }

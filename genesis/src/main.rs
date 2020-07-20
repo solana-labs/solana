@@ -452,7 +452,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let native_instruction_processors =
-        solana_genesis_programs::get_programs(operating_mode, 0).unwrap_or_else(|| vec![]);
+        solana_genesis_programs::get_programs(operating_mode, 0).unwrap_or_else(Vec::new);
     let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
 
     let mut genesis_config = GenesisConfig {

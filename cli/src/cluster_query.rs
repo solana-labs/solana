@@ -659,7 +659,7 @@ pub fn process_get_epoch_info(
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let epoch_info: CliEpochInfo = rpc_client
-        .get_epoch_info_with_commitment(commitment_config.clone())?
+        .get_epoch_info_with_commitment(commitment_config)?
         .into();
     Ok(config.output_format.formatted_string(&epoch_info))
 }
@@ -673,7 +673,7 @@ pub fn process_get_slot(
     rpc_client: &RpcClient,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let slot = rpc_client.get_slot_with_commitment(commitment_config.clone())?;
+    let slot = rpc_client.get_slot_with_commitment(commitment_config)?;
     Ok(slot.to_string())
 }
 
@@ -681,7 +681,7 @@ pub fn process_get_epoch(
     rpc_client: &RpcClient,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config)?;
     Ok(epoch_info.epoch.to_string())
 }
 
@@ -868,7 +868,7 @@ pub fn process_supply(
     commitment_config: CommitmentConfig,
     print_accounts: bool,
 ) -> ProcessResult {
-    let supply_response = rpc_client.supply_with_commitment(commitment_config.clone())?;
+    let supply_response = rpc_client.supply_with_commitment(commitment_config)?;
     let mut supply: CliSupply = supply_response.value.into();
     supply.print_accounts = print_accounts;
     Ok(config.output_format.formatted_string(&supply))
@@ -878,7 +878,7 @@ pub fn process_total_supply(
     rpc_client: &RpcClient,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let total_supply = rpc_client.total_supply_with_commitment(commitment_config.clone())?;
+    let total_supply = rpc_client.total_supply_with_commitment(commitment_config)?;
     Ok(format!("{} SOL", lamports_to_sol(total_supply)))
 }
 
@@ -887,7 +887,7 @@ pub fn process_get_transaction_count(
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let transaction_count =
-        rpc_client.get_transaction_count_with_commitment(commitment_config.clone())?;
+        rpc_client.get_transaction_count_with_commitment(commitment_config)?;
     Ok(transaction_count.to_string())
 }
 
@@ -954,7 +954,7 @@ pub fn process_ping(
                 loop {
                     let signature_status = rpc_client.get_signature_status_with_commitment(
                         &signature,
-                        commitment_config.clone(),
+                        commitment_config,
                     )?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
