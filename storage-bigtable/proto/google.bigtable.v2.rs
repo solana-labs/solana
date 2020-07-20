@@ -259,7 +259,7 @@ pub mod row_filter {
         /// If multiple cells are produced with the same column and timestamp,
         /// they will all appear in the output row in an unspecified mutual order.
         /// Consider the following example, with three filters:
-        ///
+        ///```ignore
         ///                                  input row
         ///                                      |
         ///            -----------------------------------------------------
@@ -325,7 +325,7 @@ pub mod row_filter {
         /// Hook for introspection into the RowFilter. Outputs all cells directly to
         /// the output of the read rather than to any parent filter. Consider the
         /// following example:
-        ///
+        ///```ignore
         ///     Chain(
         ///       FamilyRegex("A"),
         ///       Interleave(
