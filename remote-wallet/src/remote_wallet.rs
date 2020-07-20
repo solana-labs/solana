@@ -345,12 +345,13 @@ impl FromStr for DerivationPathComponent {
     type Err = RemoteWalletError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Replace str::splitn() with str::strip_suffix() once stabilized
-        let parts: Vec<_> = s.splitn(2, '\'').collect();
-        if parts.len() == 2 {
+        let index_str = if let Some(stripped) = s.strip_suffix('\'') {
             eprintln!("all path components are promoted to hardened representation");
-        }
-        parts[0].parse::<u32>().map(|ki| ki.into()).map_err(|_| {
+            stripped
+        } else {
+            s
+        };
+        index_str.parse::<u32>().map(|ki| ki.into()).map_err(|_| {
             RemoteWalletError::InvalidDerivationPath(format!(
                 "failed to parse path component: {:?}",
                 s
