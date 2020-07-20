@@ -9,10 +9,19 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-goauth = "0.7.1"
+bincode = "1.2.1"
+goauth = "0.7.2"
 log = "0.4.8"
 smpl_jwt = "0.5.0"
 tonic = {version="0.3.0", features = ["tls", "transport"]}
+prost = "0.6.1"
+prost-types = "0.6.1"
+enum-iterator = "0.6.0"
+bzip2 = "0.3.3"
+flate2 = "1.0.14"
+serde = "1.0.112"
+serde_derive = "1.0.103"
+zstd = "0.5.1"
 
 [lib]
 crate-type = ["lib"]
