@@ -1600,7 +1600,7 @@ fn main() {
                         exit(1);
                     });
 
-                    if arg_matches.is_present("recaculate_capitalization") {
+                    if arg_matches.is_present("recalculate_capitalization") {
                         println!("Recalculating capitalization");
                         let old_capitalization = bank.set_capitalization();
                         if old_capitalization == bank.capitalization() {
@@ -1679,10 +1679,10 @@ fn main() {
                             println!("Sum of lamports changes: {}", Sol(overall_delta));
                         }
                     } else {
-                        if arg_matches.is_present("recaculate_capitalization") {
-                            eprintln!("Capitalization isn't verified because it's reset");
+                        if arg_matches.is_present("recalculate_capitalization") {
+                            eprintln!("Capitalization isn't verified because it's recalculated");
                         }
-                        if arg_matches.is_present("force_inflation") {
+                        if arg_matches.is_present("enable_inflation") {
                             eprintln!(
                                 "Forcing inflation isn't meaningful because bank isn't warping"
                             );
