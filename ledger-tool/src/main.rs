@@ -33,7 +33,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, BufRead, BufReader, Write},
@@ -695,6 +695,19 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
+fn assert_capitalization(bank: &Bank) {
+    let calculated_capitalization = bank.calculate_capitalization();
+    assert_eq!(
+        bank.capitalization(),
+        calculated_capitalization,
+        "Capitalization mismatch!?: +/-{}",
+        Sol(u64::try_from(
+            (i128::from(calculated_capitalization) - i128::from(bank.capitalization())).abs()
+        )
+        .unwrap()),
+    );
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     // Ignore SIGUSR1 to prevent long-running calls being killed by logrotate
@@ -1015,7 +1028,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
-            .about("Print capitalization (aka, total suppy)")
+            .about("Print capitalization (aka, total suppy) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
@@ -1027,22 +1040,23 @@ fn main() {
                     .long("warp-epoch")
                     .takes_value(true)
                     .value_name("WARP_EPOCH")
-                    .help("After loading the snapshot epoch warp the ledger to EPOCH_SLOT, \
+                    .help("After loading the snapshot warp the ledger to WARP_EPOCH, \
                            which could be an epoch in a galaxy far far away"),
             )
             .arg(
-                Arg::with_name("force_inflation")
+                Arg::with_name("enable_inflation")
                     .required(false)
-                    .long("force-inflation")
+                    .long("enable-inflation")
                     .takes_value(false)
-                    .help("Force inflation"),
+                    .help("Always enable inflation when warping even if it's disabled"),
             )
             .arg(
-                Arg::with_name("reset_capitalization")
+                Arg::with_name("recalculate_capitalization")
                     .required(false)
-                    .long("reset-capitalization")
+                    .long("recalculate-capitalization")
                     .takes_value(false)
-                    .help("Reset capitalization"),
+                    .help("Recalculate capitalization before warping; circumvents \
+                          bank's out-of-sync capitalization"),
             )
         ).subcommand(
             SubCommand::with_name("purge")
@@ -1586,9 +1600,9 @@ fn main() {
                         exit(1);
                     });
 
-                    if arg_matches.is_present("reset_capitalization") {
+                    if arg_matches.is_present("recaculate_capitalization") {
                         println!("Resetting capitalization");
-                        let old_capitalization = bank.reset_with_recalculated_capitalization();
+                        let old_capitalization = bank.set_capitalization();
                         if old_capitalization == bank.capitalization() {
                             eprintln!("Capitalization was identical: {}", Sol(old_capitalization));
                         }
@@ -1612,7 +1626,7 @@ fn main() {
                             exit(1);
                         }
 
-                        if arg_matches.is_present("force_inflation") {
+                        if arg_matches.is_present("enable_inflation") {
                             let inflation = Inflation::default();
                             println!(
                                 "Forcing to: {:?} (was: {:?})",
@@ -1630,8 +1644,8 @@ fn main() {
 
                         println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
-                        base_bank.assert_capitalization();
-                        warped_bank.assert_capitalization();
+                        assert_capitalization(&base_bank);
+                        assert_capitalization(&warped_bank);
                         println!(
                             "Capitalization: {} => {} (+{} {}%)",
                             Sol(base_bank.capitalization()),
@@ -1661,9 +1675,11 @@ fn main() {
                                 }
                             }
                         }
-                        println!("Sum of lamports changes: {}", Sol(overall_delta));
+                        if overall_delta > 0 {
+                            println!("Sum of lamports changes: {}", Sol(overall_delta));
+                        }
                     } else {
-                        if arg_matches.is_present("reset_capitalization") {
+                        if arg_matches.is_present("recaculate_capitalization") {
                             eprintln!("Capitalization isn't verified because it's reset");
                         }
                         if arg_matches.is_present("force_inflation") {
@@ -1672,7 +1688,7 @@ fn main() {
                             );
                         }
 
-                        bank.assert_capitalization();
+                        assert_capitalization(&bank);
                         println!("Capitalization: {}", Sol(bank.capitalization()));
                     }
                 }

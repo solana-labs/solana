@@ -44,9 +44,7 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    native_loader,
-    native_token::Sol,
-    nonce,
+    native_loader, nonce,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
@@ -62,7 +60,6 @@ use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteSta
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
     mem,
     ops::RangeInclusive,
     path::PathBuf,
@@ -2693,44 +2690,29 @@ impl Bank {
     pub fn calculate_capitalization(&self) -> u64 {
         self.get_program_accounts(None)
             .into_iter()
-            .filter_map(|(_pubkey, account)| {
-                if account.lamports == u64::max_value() {
-                    return None;
-                }
-
+            .map(|(_pubkey, account)| {
                 let is_specially_retained = solana_sdk::native_loader::check_id(&account.owner)
                     || solana_sdk::sysvar::check_id(&account.owner);
 
                 if is_specially_retained {
                     // specially retained accounts are ensured to exist by
-                    // alwaysing having a balance of 1 lamports, which is
+                    // always having a balance of 1 lamports, which is
                     // outside the capitalization calculation.
-                    Some(account.lamports - 1)
+                    account.lamports - 1
                 } else {
-                    Some(account.lamports)
+                    account.lamports
                 }
             })
             .sum()
     }
 
-    pub fn reset_with_recalculated_capitalization(&self) -> u64 {
+    /// Forcibly overwrites current capitalization by actually recalculating accounts' balances.
+    /// This should only be used for developing purposes.
+    pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
         self.capitalization
             .store(self.calculate_capitalization(), Ordering::Relaxed);
         old
-    }
-
-    pub fn assert_capitalization(&self) {
-        let calculated_capitalization = self.calculate_capitalization();
-        assert_eq!(
-            self.capitalization(),
-            calculated_capitalization,
-            "Capitalization mismatch!?: +/-{}",
-            Sol(u64::try_from(
-                (i128::from(calculated_capitalization) - i128::from(self.capitalization())).abs()
-            )
-            .unwrap()),
-        );
     }
 
     pub fn get_accounts_hash(&self) -> Hash {
