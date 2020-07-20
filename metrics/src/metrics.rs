@@ -333,7 +333,7 @@ lazy_static! {
 
 pub fn set_host_id(host_id: String) {
     info!("host id: {}", host_id);
-   *HOST_ID.write().unwrap() = host_id;
+    *HOST_ID.write().unwrap() = host_id;
 }
 
 /// Submits a new point from any thread.  Note that points are internally queued

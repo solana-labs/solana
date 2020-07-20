@@ -1961,19 +1961,18 @@ impl ClusterInfo {
             .into_iter()
             .filter_map(|(from, prune_set)| {
                 inc_new_counter_debug!("cluster_info-push_message-prunes", prune_set.len());
-                self.lookup_contact_info(&from, |ci| ci.clone())
-                    .map(|ci| {
-                        let mut prune_msg = PruneData {
-                            pubkey: self_id,
-                            prunes: prune_set.into_iter().collect(),
-                            signature: Signature::default(),
-                            destination: from,
-                            wallclock: timestamp(),
-                        };
-                        prune_msg.sign(&self.keypair);
-                        let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                        (ci.gossip, rsp)
-                    })
+                self.lookup_contact_info(&from, |ci| ci.clone()).map(|ci| {
+                    let mut prune_msg = PruneData {
+                        pubkey: self_id,
+                        prunes: prune_set.into_iter().collect(),
+                        signature: Signature::default(),
+                        destination: from,
+                        wallclock: timestamp(),
+                    };
+                    prune_msg.sign(&self.keypair);
+                    let rsp = Protocol::PruneMessage(self_id, prune_msg);
+                    (ci.gossip, rsp)
+                })
             })
             .collect();
         if rsp.is_empty() {

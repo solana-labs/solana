@@ -154,12 +154,7 @@ fn start_gossip_node(
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
-    let gossip_service = GossipService::new(
-        &cluster_info,
-        None,
-        gossip_socket,
-        &gossip_exit_flag,
-    );
+    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &gossip_exit_flag);
     (cluster_info, gossip_exit_flag, gossip_service)
 }
 

@@ -712,8 +712,7 @@ impl RpcClient {
     ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
-            let balance_result =
-                self.poll_get_balance_with_commitment(pubkey, commitment_config);
+            let balance_result = self.poll_get_balance_with_commitment(pubkey, commitment_config);
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
