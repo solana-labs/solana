@@ -765,19 +765,11 @@ pub fn parse_command(
                 .value_of("faucet_port")
                 .unwrap()
                 .parse()
-                .map_err(|err| {
-                    CliError::BadParameter(format!(
-                        "Invalid faucet port: {}",
-                        err
-                    ))
-                })?;
+                .map_err(|err| CliError::BadParameter(format!("Invalid faucet port: {}", err)))?;
 
             let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
                 Some(solana_net_utils::parse_host(faucet_host).map_err(|err| {
-                    CliError::BadParameter(format!(
-                        "Invalid faucet host: {}",
-                        err
-                    ))
+                    CliError::BadParameter(format!("Invalid faucet host: {}", err))
                 })?)
             } else {
                 None

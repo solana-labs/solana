@@ -886,8 +886,7 @@ pub fn process_get_transaction_count(
     rpc_client: &RpcClient,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let transaction_count =
-        rpc_client.get_transaction_count_with_commitment(commitment_config)?;
+    let transaction_count = rpc_client.get_transaction_count_with_commitment(commitment_config)?;
     Ok(transaction_count.to_string())
 }
 
@@ -952,10 +951,8 @@ pub fn process_ping(
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {
-                    let signature_status = rpc_client.get_signature_status_with_commitment(
-                        &signature,
-                        commitment_config,
-                    )?;
+                    let signature_status = rpc_client
+                        .get_signature_status_with_commitment(&signature, commitment_config)?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
                         match transaction_status {
