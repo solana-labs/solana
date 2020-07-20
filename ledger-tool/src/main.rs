@@ -20,16 +20,11 @@ use solana_ledger::{
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-<<<<<<< HEAD
-    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
-=======
     clock::{Epoch, Slot},
     genesis_config::GenesisConfig,
-    hash::Hash,
     inflation::Inflation,
     native_token::{lamports_to_sol, Sol},
     pubkey::Pubkey,
->>>>>>> 3db246f59... Add --warp-epoch and --force-inflation to ledger-tool cap. (#11107)
     shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
