@@ -212,6 +212,38 @@ pub mod tests {
         )
     }
 
+    pub fn create_warming_staked_node_accounts(
+        stake: u64,
+        epoch: Epoch,
+    ) -> ((Pubkey, Account), (Pubkey, Account)) {
+        let vote_pubkey = Pubkey::new_rand();
+        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
+        (
+            (vote_pubkey, vote_account),
+            create_warming_stake_account(stake, epoch, &vote_pubkey),
+        )
+    }
+
+    //   add stake to a vote_pubkey                               (   stake    )
+    pub fn create_warming_stake_account(
+        stake: u64,
+        epoch: Epoch,
+        vote_pubkey: &Pubkey,
+    ) -> (Pubkey, Account) {
+        let stake_pubkey = Pubkey::new_rand();
+        (
+            stake_pubkey,
+            stake_state::create_account_with_activation_epoch(
+                &stake_pubkey,
+                &vote_pubkey,
+                &vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1),
+                &Rent::free(),
+                stake,
+                epoch,
+            ),
+        )
+    }
+
     #[test]
     fn test_stakes_basic() {
         for i in 0..4 {
@@ -444,6 +476,45 @@ pub mod tests {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
+        }
+    }
+
+    #[test]
+    fn test_vote_balance_and_staked_empty() {
+        let stakes = Stakes::default();
+        assert_eq!(stakes.vote_balance_and_staked(), 0);
+    }
+
+    #[test]
+    fn test_vote_balance_and_staked_normal() {
+        let mut stakes = Stakes::default();
+        impl Stakes {
+            pub fn vote_balance_and_warmed_staked(&self) -> u64 {
+                self.vote_accounts
+                    .iter()
+                    .map(|(_pubkey, (staked, account))| staked + account.lamports)
+                    .sum()
+            }
+        }
+
+        let genesis_epoch = 0;
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_warming_staked_node_accounts(10, genesis_epoch);
+        stakes.store(&vote_pubkey, &vote_account);
+        stakes.store(&stake_pubkey, &stake_account);
+
+        assert_eq!(stakes.vote_balance_and_staked(), 11);
+        assert_eq!(stakes.vote_balance_and_warmed_staked(), 1);
+
+        for (epoch, expected_warmed_stake) in ((genesis_epoch + 1)..=3).zip(&[2, 3, 4]) {
+            stakes = stakes.clone_with_epoch(epoch);
+            // vote_balance_and_staked() always remain to return same lamports
+            // while vote_balance_and_warmed_staked() gradually increases
+            assert_eq!(stakes.vote_balance_and_staked(), 11);
+            assert_eq!(
+                stakes.vote_balance_and_warmed_staked(),
+                *expected_warmed_stake
+            );
         }
     }
 }

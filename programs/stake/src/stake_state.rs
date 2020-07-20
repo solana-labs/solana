@@ -982,6 +982,43 @@ pub fn create_account(
     rent: &Rent,
     lamports: u64,
 ) -> Account {
+    do_create_account(
+        authorized,
+        voter_pubkey,
+        vote_account,
+        rent,
+        lamports,
+        Epoch::MAX,
+    )
+}
+
+// utility function, used by tests
+pub fn create_account_with_activation_epoch(
+    authorized: &Pubkey,
+    voter_pubkey: &Pubkey,
+    vote_account: &Account,
+    rent: &Rent,
+    lamports: u64,
+    activation_epoch: Epoch,
+) -> Account {
+    do_create_account(
+        authorized,
+        voter_pubkey,
+        vote_account,
+        rent,
+        lamports,
+        activation_epoch,
+    )
+}
+
+fn do_create_account(
+    authorized: &Pubkey,
+    voter_pubkey: &Pubkey,
+    vote_account: &Account,
+    rent: &Rent,
+    lamports: u64,
+    activation_epoch: Epoch,
+) -> Account {
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     let vote_state = VoteState::from(vote_account).expect("vote_state");
@@ -999,7 +1036,7 @@ pub fn create_account(
                 lamports - rent_exempt_reserve, // underflow is an error, is basically: assert!(lamports > rent_exempt_reserve);
                 voter_pubkey,
                 &vote_state,
-                std::u64::MAX,
+                activation_epoch,
                 &Config::default(),
             ),
         ))
