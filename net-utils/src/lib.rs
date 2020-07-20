@@ -441,7 +441,7 @@ pub fn bind_to(ip_addr: IpAddr, port: u16, reuseaddr: bool) -> io::Result<UdpSoc
     let addr = SocketAddr::new(ip_addr, port);
 
     sock.bind(&SockAddr::from(addr))
-        .and_then(|_| Result::Ok(sock.into_udp_socket()))
+        .map(|_| sock.into_udp_socket())
 }
 
 // binds both a UdpSocket and a TcpListener
@@ -455,7 +455,7 @@ pub fn bind_common(
     let addr = SocketAddr::new(ip_addr, port);
     let sock_addr = SockAddr::from(addr);
     sock.bind(&sock_addr).and_then(|_| {
-        TcpListener::bind(&addr).and_then(|listener| Result::Ok((sock.into_udp_socket(), listener)))
+        TcpListener::bind(&addr).map(|listener| (sock.into_udp_socket(), listener))
     })
 }
 

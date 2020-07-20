@@ -1269,7 +1269,7 @@ impl RpcSol for RpcSolImpl {
                         leader_schedule.get_slot_leaders().iter().enumerate()
                     {
                         let pubkey = pubkey.to_string();
-                        map.entry(pubkey).or_insert_with(|| vec![]).push(slot_index);
+                        map.entry(pubkey).or_insert_with(Vec::new).push(slot_index);
                     }
                     map
                 },

@@ -262,7 +262,7 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(cluster_info);
-    let gossip_service = GossipService::new(&cluster_info.clone(), None, gossip_socket, &exit);
+    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &exit);
     (gossip_service, ip_echo, cluster_info)
 }
 

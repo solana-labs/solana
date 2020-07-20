@@ -151,7 +151,7 @@ impl StatusCacheRc {
     }
 }
 
-pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) -> () + Sync + Send>;
+pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) + Sync + Send>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {

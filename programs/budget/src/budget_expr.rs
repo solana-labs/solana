@@ -7,7 +7,6 @@ use chrono::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use std::mem;
 
 /// The types of events a payment plan can process.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -256,7 +255,7 @@ impl BudgetExpr {
             _ => None,
         };
         if let Some(expr) = new_expr {
-            mem::replace(self, *expr);
+            *self = *expr;
         }
     }
 }

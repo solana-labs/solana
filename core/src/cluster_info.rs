@@ -442,7 +442,7 @@ impl ClusterInfo {
 
     pub fn update_contact_info<F>(&self, modify: F)
     where
-        F: FnOnce(&mut ContactInfo) -> (),
+        F: FnOnce(&mut ContactInfo),
     {
         let my_id = self.id();
         modify(&mut self.my_contact_info.write().unwrap());
@@ -1962,7 +1962,7 @@ impl ClusterInfo {
             .filter_map(|(from, prune_set)| {
                 inc_new_counter_debug!("cluster_info-push_message-prunes", prune_set.len());
                 self.lookup_contact_info(&from, |ci| ci.clone())
-                    .and_then(|ci| {
+                    .map(|ci| {
                         let mut prune_msg = PruneData {
                             pubkey: self_id,
                             prunes: prune_set.into_iter().collect(),
@@ -1972,7 +1972,7 @@ impl ClusterInfo {
                         };
                         prune_msg.sign(&self.keypair);
                         let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                        Some((ci.gossip, rsp))
+                        (ci.gossip, rsp)
                     })
             })
             .collect();

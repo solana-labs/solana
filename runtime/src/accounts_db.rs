@@ -654,7 +654,7 @@ impl AccountsDB {
                 |m1, m2| {
                     // Collapse down the hashmaps/vecs into one.
                     let x = m2.0.iter().fold(m1.0, |mut acc, (k, vs)| {
-                        acc.insert(k.clone(), vs.clone());
+                        acc.insert(*k, vs.clone());
                         acc
                     });
                     let mut y = vec![];
@@ -995,7 +995,7 @@ impl AccountsDB {
 
     pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
     {
         let mut collector = A::default();
@@ -1014,7 +1014,7 @@ impl AccountsDB {
 
     pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
         R: RangeBounds<Pubkey>,
     {
@@ -1036,7 +1036,7 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
+        F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
         B: Send + Default,
     {
         let storage_maps: Vec<Arc<AccountStorageEntry>> = self
@@ -1925,7 +1925,7 @@ impl AccountsDB {
                         };
                         let entry = accum
                             .entry(stored_account.meta.pubkey)
-                            .or_insert_with(|| vec![]);
+                            .or_insert_with(Vec::new);
                         entry.push((stored_account.meta.write_version, account_info));
                     },
                 );
@@ -1933,7 +1933,7 @@ impl AccountsDB {
             let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
             for accumulator_entry in accumulator.iter() {
                 for (pubkey, storage_entry) in accumulator_entry {
-                    let entry = accounts_map.entry(*pubkey).or_insert_with(|| vec![]);
+                    let entry = accounts_map.entry(*pubkey).or_insert_with(Vec::new);
                     entry.extend(storage_entry.iter().cloned());
                 }
             }

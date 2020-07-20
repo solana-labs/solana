@@ -125,7 +125,7 @@ fn get_config() -> Config {
     let json_rpc_url =
         value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url);
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
-        .unwrap_or_else(|| vec![])
+        .unwrap_or_else(Vec::new)
         .into_iter()
         .map(|i| i.to_string())
         .collect();

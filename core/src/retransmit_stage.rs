@@ -433,7 +433,7 @@ impl RetransmitStage {
             epoch_schedule,
             duplicate_slots_reset_sender,
         };
-        let leader_schedule_cache = leader_schedule_cache.clone();
+        let leader_schedule_cache_clone = leader_schedule_cache.clone();
         let window_service = WindowService::new(
             blockstore,
             cluster_info.clone(),
@@ -442,7 +442,7 @@ impl RetransmitStage {
             repair_socket,
             exit,
             repair_info,
-            &leader_schedule_cache.clone(),
+            &leader_schedule_cache,
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg
                     .as_ref()
@@ -451,7 +451,7 @@ impl RetransmitStage {
                 let rv = should_retransmit_and_persist(
                     shred,
                     working_bank,
-                    &leader_schedule_cache,
+                    &leader_schedule_cache_clone,
                     id,
                     last_root,
                     shred_version,
