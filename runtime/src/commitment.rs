@@ -106,7 +106,7 @@ impl BlockCommitmentCache {
     pub fn highest_gossip_confirmed_slot(&self) -> Slot {
         // TODO: see solana_core::RpcSubscriptions:
         //self.last_checked_slots.get(&CommitmentLevel::SingleGossip).unwrap_or(&0)
-        self.highest_confirmed_slot
+        self.highest_confirmed_slot()
     }
 
     pub fn slot_with_commitment(&self, commitment_level: CommitmentLevel) -> Slot {

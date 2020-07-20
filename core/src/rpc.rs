@@ -3672,10 +3672,12 @@ pub mod tests {
         let mut new_block_commitment = BlockCommitmentCache::new(
             HashMap::new(),
             0,
-            0,
-            bank_forks.read().unwrap().highest_slot(),
-            0,
-            0,
+            CommitmentSlots {
+                root: 0,
+                slot: bank_forks.read().unwrap().highest_slot(),
+                highest_confirmed_slot: 0,
+                highest_confirmed_root: 0,
+            },
         );
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
