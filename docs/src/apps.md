@@ -22,7 +22,7 @@ Each instruction specifies a single program account \(which must be marked execu
 
 ![SDK tools](/img/sdk-tools.svg)
 
-As shown in the diagram above, a program author creates a program and compiles it to an ELF shared object containing BPF bytecode and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is a _address_ specified when deploying and is used to reference the program in subsequent transactions.
+As shown in the diagram above, a program author creates a program and compiles it to an ELF shared object containing BPF bytecode and uploads it to the Solana cluster with a special _deploy_ transaction. The cluster makes it available to clients via a _program ID_. The program ID is an _address_ specified when deploying and is used to reference the program in subsequent transactions.
 
 A program may be written in any programming language that can target the Berkley Packet Filter \(BPF\) safe execution environment. The Solana SDK offers the best support for C/C++ and Rust programs, which are compiled to BPF using the [LLVM compiler infrastructure](https://llvm.org).
 
