@@ -1601,7 +1601,7 @@ fn main() {
                     });
 
                     if arg_matches.is_present("recaculate_capitalization") {
-                        println!("Resetting capitalization");
+                        println!("Recalculating capitalization");
                         let old_capitalization = bank.set_capitalization();
                         if old_capitalization == bank.capitalization() {
                             eprintln!("Capitalization was identical: {}", Sol(old_capitalization));
