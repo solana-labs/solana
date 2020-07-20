@@ -4827,6 +4827,89 @@ mod tests {
         );
     }
 
+    fn do_test_bank_update_rewards_determinism() -> u64 {
+        // create a bank that ticks really slowly...
+        let bank = Arc::new(Bank::new(&GenesisConfig {
+            accounts: (0..42)
+                .map(|_| {
+                    (
+                        Pubkey::new_rand(),
+                        Account::new(1_000_000_000, 0, &Pubkey::default()),
+                    )
+                })
+                .collect(),
+            // set it up so the first epoch is a full year long
+            poh_config: PohConfig {
+                target_tick_duration: Duration::from_secs(
+                    SECONDS_PER_YEAR as u64
+                        / MINIMUM_SLOTS_PER_EPOCH as u64
+                        / DEFAULT_TICKS_PER_SLOT,
+                ),
+                hashes_per_tick: None,
+                target_tick_count: None,
+            },
+
+            ..GenesisConfig::default()
+        }));
+
+        // enable lazy rent collection because this test depends on rent-due accounts
+        // not being eagerly-collected for exact rewards calculation
+        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+
+        assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
+        assert_eq!(bank.rewards, None);
+
+        let vote_id = Pubkey::new_rand();
+        let mut vote_account = vote_state::create_account(&vote_id, &Pubkey::new_rand(), 50, 100);
+        let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
+        let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
+
+        // set up accounts
+        bank.store_account(&stake_id1, &stake_account1);
+        bank.store_account(&stake_id2, &stake_account2);
+
+        // generate some rewards
+        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            if let Some(v) = vote_state.as_mut() {
+                v.process_slot_vote_unchecked(i as u64)
+            }
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            VoteState::to(&versioned, &mut vote_account).unwrap();
+            bank.store_account(&vote_id, &vote_account);
+            match versioned {
+                VoteStateVersions::Current(v) => {
+                    vote_state = Some(*v);
+                }
+                _ => panic!("Has to be of type Current"),
+            };
+        }
+        bank.store_account(&vote_id, &vote_account);
+
+        // put a child bank in epoch 1, which calls update_rewards()...
+        let bank1 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.get_slots_in_epoch(bank.epoch()) + 1,
+        );
+        // verify that there's inflation
+        assert_ne!(bank1.capitalization(), bank.capitalization());
+
+        bank1.capitalization()
+    }
+
+    #[test]
+    fn test_bank_update_rewards_determinism() {
+        // The same reward should be distributed given same credits
+        let expected_capitalization = do_test_bank_update_rewards_determinism();
+        // Repeat somewhat large number of iterations to expose possible different behavior
+        // depending on the randamly-seeded HashMap ordering
+        for _ in 0..30 {
+            let actual_capitalization = do_test_bank_update_rewards_determinism();
+            assert_eq!(actual_capitalization, expected_capitalization);
+        }
+    }
+
     // Test that purging 0 lamports accounts works.
     #[test]
     fn test_purge_empty_accounts() {
