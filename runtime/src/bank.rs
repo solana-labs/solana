@@ -930,28 +930,33 @@ impl Bank {
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
-    ///  returns a vector (has to be copied) of loaded
-    ///   ( (staker info) (voter info) )
+    ///  returns a map (has to be copied) of loaded
+    ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
     ///
-    fn stake_delegation_accounts(&self) -> Vec<((Pubkey, Account), (Pubkey, Account))> {
+    fn stake_delegation_accounts(&self) -> HashMap<Pubkey, (Vec<(Pubkey, Account)>, Account)> {
+        let mut accounts = HashMap::new();
+
         self.stakes
             .read()
             .unwrap()
             .stake_delegations()
             .iter()
-            .filter_map(|(stake_pubkey, delegation)| {
+            .for_each(|(stake_pubkey, delegation)| {
                 match (
                     self.get_account(&stake_pubkey),
                     self.get_account(&delegation.voter_pubkey),
                 ) {
-                    (Some(stake_account), Some(vote_account)) => Some((
-                        (*stake_pubkey, stake_account),
-                        (delegation.voter_pubkey, vote_account),
-                    )),
-                    (_, _) => None,
+                    (Some(stake_account), Some(vote_account)) => {
+                        let entry = accounts
+                            .entry(delegation.voter_pubkey)
+                            .or_insert((Vec::new(), vote_account));
+                        entry.0.push((*stake_pubkey, stake_account));
+                    }
+                    (_, _) => {}
                 }
-            })
-            .collect()
+            });
+
+        accounts
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
@@ -963,16 +968,15 @@ impl Bank {
 
         let points: u128 = stake_delegation_accounts
             .iter()
-            .map(
-                |((_stake_pubkey, stake_account), (_vote_pubkey, vote_account))| {
-                    stake_state::calculate_points(
-                        &stake_account,
-                        &vote_account,
-                        Some(&stake_history),
-                    )
+            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
+                stake_group
+                    .iter()
+                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
+            })
+            .map(|(stake_account, vote_account)| {
+                stake_state::calculate_points(&stake_account, &vote_account, Some(&stake_history))
                     .unwrap_or(0)
-                },
-            )
+            })
             .sum();
 
         if points == 0 {
@@ -984,8 +988,9 @@ impl Bank {
         let mut rewards = HashMap::new();
 
         // pay according to point value
-        stake_delegation_accounts.iter_mut().for_each(
-            |((stake_pubkey, stake_account), (vote_pubkey, vote_account))| {
+        for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
+            let mut vote_account_changed = false;
+            for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 let redeemed = stake_state::redeem_rewards(
                     stake_account,
                     vote_account,
@@ -994,7 +999,7 @@ impl Bank {
                 );
                 if let Ok((stakers_reward, voters_reward)) = redeemed {
                     self.store_account(&stake_pubkey, &stake_account);
-                    self.store_account(&vote_pubkey, &vote_account);
+                    vote_account_changed = true;
 
                     if voters_reward > 0 {
                         *rewards.entry(*vote_pubkey).or_insert(0i64) += voters_reward as i64;
@@ -1009,8 +1014,12 @@ impl Bank {
                         stake_pubkey, redeemed
                     );
                 }
-            },
-        );
+            }
+
+            if vote_account_changed {
+                self.store_account(&vote_pubkey, &vote_account);
+            }
+        }
 
         assert_eq!(self.rewards, None);
         self.rewards = Some(rewards.drain().collect());
@@ -4764,11 +4773,14 @@ mod tests {
         let validator_points: u128 = bank
             .stake_delegation_accounts()
             .iter()
-            .map(
-                |((_stake_pubkey, stake_account), (_vote_pubkey, vote_account))| {
-                    stake_state::calculate_points(&stake_account, &vote_account, None).unwrap_or(0)
-                },
-            )
+            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
+                stake_group
+                    .iter()
+                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
+            })
+            .map(|(stake_account, vote_account)| {
+                stake_state::calculate_points(&stake_account, &vote_account, None).unwrap_or(0)
+            })
             .sum();
 
         // put a child bank in epoch 1, which calls update_rewards()...
