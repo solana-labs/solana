@@ -549,6 +549,7 @@ impl BankingStage {
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
+                    batch.iteration_order_vec(),
                     transaction_statuses,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     sender,
