@@ -246,12 +246,14 @@ const GetInflationGovernorResult = struct({
  * @property {number} slotIndex
  * @property {number} slotsInEpoch
  * @property {number} absoluteSlot
+ * @property {number} blockHeight
  */
 type EpochInfo = {
   epoch: number,
   slotIndex: number,
   slotsInEpoch: number,
   absoluteSlot: number,
+  blockHeight: number | null,
 };
 
 const GetEpochInfoResult = struct({
@@ -259,6 +261,7 @@ const GetEpochInfoResult = struct({
   slotIndex: 'number',
   slotsInEpoch: 'number',
   absoluteSlot: 'number',
+  blockHeight: 'number?',
 });
 
 /**
@@ -442,9 +445,7 @@ const GetEpochScheduleRpcResult = struct({
 /**
  * Expected JSON RPC response for the "getLeaderSchedule" message
  */
-const GetLeaderScheduleRpcResult = jsonRpcResult(
-  GetLeaderScheduleResult,
-);
+const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
 
 /**
  * Expected JSON RPC response for the "getBalance" message
