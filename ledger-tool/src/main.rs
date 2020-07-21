@@ -2,6 +2,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
     ArgMatches, SubCommand,
 };
+use log::*;
 use serde_json::json;
 use solana_clap_utils::input_validators::is_slot;
 use solana_ledger::{
@@ -32,7 +33,8 @@ use std::{
     sync::Arc,
 };
 
-use log::*;
+mod bigtable;
+use bigtable::*;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -498,7 +500,7 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
     Ok(())
 }
 
-fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
+pub fn open_blockstore(ledger_path: &Path, access_type: AccessType) -> Blockstore {
     match Blockstore::open_with_access_type(ledger_path, access_type) {
         Ok(blockstore) => blockstore,
         Err(err) => {
@@ -646,6 +648,7 @@ fn main() {
                 .global(true)
                 .help("Use DIR for ledger location"),
         )
+        .bigtable_subcommand()
         .subcommand(
             SubCommand::with_name("print")
             .about("Print the ledger")
@@ -862,6 +865,7 @@ fn main() {
     });
 
     match matches.subcommand() {
+        ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             output_ledger(
