@@ -25,10 +25,13 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
             // No inflation at epoch 0
             0 => Some(Inflation::new_disabled()),
             // testnet enabled inflation at epoch 44:
-            // https://github.com/solana-labs/solana/blob/d8e885f4259e6c7db420cce513cb34ebf961073d
+            // https://github.com/solana-labs/solana/commit/d8e885f4259e6c7db420cce513cb34ebf961073d
             44 => Some(Inflation::default()),
             // Completely disable inflation prior to ship the inflation fix at epoch 68
             68 => Some(Inflation::new_disabled()),
+            // Enable again after the inflation fix has landed:
+            // https://github.com/solana-labs/solana/commit/7cc2a6801bed29a816ef509cfc26a6f2522e46ff
+            72 => Some(Inflation::default()),
             _ => None,
         },
         OperatingMode::Stable => match epoch {
