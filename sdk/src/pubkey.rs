@@ -1,6 +1,6 @@
 use crate::{
     decode_error::DecodeError,
-    hash::{hash, hashv, Hasher},
+    hash::{hashv, Hasher},
 };
 use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(feature = "program"))]
@@ -87,6 +87,7 @@ impl Pubkey {
         ))
     }
 
+    #[cfg(not(feature = "program"))]
     pub fn create_program_address(
         seeds: &[&[u8]],
         program_id: &Pubkey,
@@ -99,8 +100,13 @@ impl Pubkey {
             hasher.hash(seed);
         }
         hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
-
-        Ok(Pubkey::new(hash(hasher.result().as_ref()).as_ref()))
+        let hash = hasher.result();
+        Ok(Pubkey::new(
+            ed25519_dalek::PublicKey::from(
+                &ed25519_dalek::SecretKey::from_bytes(hash.as_ref()).unwrap(),
+            )
+            .as_ref(),
+        ))
     }
 
     #[cfg(not(feature = "program"))]
@@ -262,25 +268,25 @@ mod tests {
         assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand()).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[b""], &program_id),
-            Ok("CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc"
+            Ok("5tBXxxgLT1ifJMkhKhzyWk7Ae1arcuvUbDYCXU21M7mT"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉".as_ref()], &program_id),
-            Ok("A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF"
+            Ok("GYwayiKYqdx6wHiCYy5qgRAuYA36aea4DGrr2sGYJATX"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id),
-            Ok("CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu"
+            Ok("88uGaCBukUMBY3SREDfvQMNDdCQLyK4zJqwgG8XQXoe9"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[public_key.as_ref()], &program_id),
-            Ok("4ak7qJacCKMAGP8xJtDkg2VYZh5QKExa71ijMDjZGQyb"
+            Ok("CuWGnxTxnbDjUrLt3QLjDQXN5obQgwnYgsPaptVTeRh5"
                 .parse()
                 .unwrap())
         );
@@ -288,6 +294,30 @@ mod tests {
             Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id),
             Pubkey::create_program_address(&[b"Talking"], &program_id),
         );
+    }
+
+    #[test]
+    fn test_pubkey_on_curve() {
+        // try a bunch of random input, all the generated program addresses should land on the curve
+        // and should be unique
+        let mut addresses = vec![];
+        for _ in 0..1000 {
+            let program_id = Pubkey::new_rand();
+            let bytes1 = rand::random::<[u8; 10]>();
+            let bytes2 = rand::random::<[u8; 32]>();
+            let program_address =
+                Pubkey::create_program_address(&[&bytes1, &bytes2], &program_id).unwrap();
+            let is_on_curve = curve25519_dalek::edwards::CompressedEdwardsY::from_slice(
+                &program_address.to_bytes(),
+            )
+            .decompress()
+            .is_some();
+            assert!(is_on_curve);
+            addresses.push(program_address);
+        }
+        for i in 1..addresses.len() {
+            assert!(!addresses[i..].contains(&addresses[i - 1]))
+        }
     }
 
     #[test]

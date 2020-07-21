@@ -2,6 +2,7 @@
 
 import BN from 'bn.js';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
 
 /**
@@ -95,7 +96,7 @@ export class PublicKey {
   }
 
   /**
-   * Derive a program address from seeds and a program ID.
+   * Derive a program address from seed bytes and a program ID.
    */
   static async createProgramAddress(
     seeds: Array<Buffer | Uint8Array>,
@@ -111,7 +112,8 @@ export class PublicKey {
       Buffer.from('ProgramDerivedAddress'),
     ]);
     let hash = await sha256(new Uint8Array(buffer));
-    hash = await sha256(new Uint8Array(new BN(hash, 16).toBuffer()));
-    return new PublicKey('0x' + hash);
+    let seed = new BN(hash, 16).toBuffer();
+    let bytes = nacl.sign.keyPair.fromSeed(seed).publicKey;
+    return new PublicKey(bytes);
   }
 }
