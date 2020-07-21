@@ -2,7 +2,11 @@
 
 import BN from 'bn.js';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
+
+//$FlowFixMe
+let naclLowLevel = nacl.lowlevel;
 
 /**
  * A public key
@@ -95,7 +99,7 @@ export class PublicKey {
   }
 
   /**
-   * Derive a program address from seeds and a program ID.
+   * Derive a program address from seed bytes and a program ID.
    */
   static async createProgramAddress(
     seeds: Array<Buffer | Uint8Array>,
@@ -111,7 +115,50 @@ export class PublicKey {
       Buffer.from('ProgramDerivedAddress'),
     ]);
     let hash = await sha256(new Uint8Array(buffer));
-    hash = await sha256(new Uint8Array(new BN(hash, 16).toBuffer()));
-    return new PublicKey('0x' + hash);
+    let seed = new BN(hash, 16).toBuffer();
+
+    seed[0] &= 248;
+    seed[31] &= 127;
+    seed[31] |= 64;
+
+    var p = [
+      naclLowLevel.gf(),
+      naclLowLevel.gf(),
+      naclLowLevel.gf(),
+      naclLowLevel.gf(),
+    ];
+    naclLowLevel.scalarbase(p, seed);
+    var pk = new Uint8Array(naclLowLevel.crypto_sign_PUBLICKEYBYTES);
+    pack(pk, p);
+
+    return new PublicKey(pk);
   }
+}
+
+function inv25519(o, i) {
+  var c = naclLowLevel.gf();
+  var a;
+  for (a = 0; a < 16; a++) c[a] = i[a];
+  for (a = 253; a >= 0; a--) {
+    naclLowLevel.S(c, c);
+    if (a !== 2 && a !== 4) naclLowLevel.M(c, c, i);
+  }
+  for (a = 0; a < 16; a++) o[a] = c[a];
+}
+
+function par25519(a) {
+  var d = new Uint8Array(32);
+  naclLowLevel.pack25519(d, a);
+  return d[0] & 1;
+}
+
+function pack(r, p) {
+  var tx = naclLowLevel.gf(),
+    ty = naclLowLevel.gf(),
+    zi = naclLowLevel.gf();
+  inv25519(zi, p[2]);
+  naclLowLevel.M(tx, p[0], zi);
+  naclLowLevel.M(ty, p[1], zi);
+  naclLowLevel.pack25519(r, ty);
+  r[31] ^= par25519(tx) << 7;
 }

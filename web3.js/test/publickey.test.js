@@ -253,7 +253,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc'),
+      new PublicKey('Gv1heG5PQhTNevViduUvVBv8XmcEo6AHcoyA2wXrCsAa'),
     ),
   ).toBe(true);
 
@@ -263,7 +263,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF'),
+      new PublicKey('GzVDzHSMACepN7FVPhPJG3DkG2WkEWgRHWanefxvaZq6'),
     ),
   ).toBe(true);
 
@@ -273,7 +273,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu'),
+      new PublicKey('BBstFkvRCCbzQKgdTqypWN1bZmfEmRc9d5sNGYZtEicM'),
     ),
   ).toBe(true);
 
@@ -283,7 +283,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('4ak7qJacCKMAGP8xJtDkg2VYZh5QKExa71ijMDjZGQyb'),
+      new PublicKey('6f2a73BjEZKguMpgdmzvSz6qNtmzomCkJgoK21F1yPQK'),
     ),
   ).toBe(true);
 
