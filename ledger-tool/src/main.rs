@@ -1641,6 +1641,7 @@ fn main() {
                             .get_first_slot_in_epoch(warp_epoch);
                         let warped_bank =
                             Bank::new_from_parent(&base_bank, base_bank.collector_id(), next_epoch);
+                        warped_bank.freeze();
 
                         println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
