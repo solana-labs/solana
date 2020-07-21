@@ -169,6 +169,9 @@ pub struct RpcEpochInfo {
 
     /// The absolute current slot
     pub absolute_slot: Slot,
+
+    /// The current block height
+    pub block_height: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
