@@ -394,13 +394,19 @@ test('get epoch info', async () => {
         slotIndex: 1,
         slotsInEpoch: 8192,
         absoluteSlot: 1,
+        blockHeight: 1,
       },
     },
   ]);
 
   const epochInfo = await connection.getEpochInfo();
 
-  for (const key of ['epoch', 'slotIndex', 'slotsInEpoch', 'absoluteSlot']) {
+  for (const key of [
+    'epoch',
+    'slotIndex',
+    'slotsInEpoch',
+    'absoluteSlot' /*, 'blockHeight'*/, // Uncomment blockHeight after 1.1.20 ships
+  ]) {
     expect(epochInfo).toHaveProperty(key);
     expect(epochInfo[key]).toBeGreaterThanOrEqual(0);
   }

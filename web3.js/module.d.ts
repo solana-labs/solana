@@ -183,6 +183,7 @@ declare module '@solana/web3.js' {
     slotIndex: number;
     slotsInEpoch: number;
     absoluteSlot: number;
+    blockHeight?: number;
   };
 
   export type EpochSchedule = {
