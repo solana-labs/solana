@@ -8,6 +8,7 @@ use solana_runtime::{
 use solana_sdk::clock::Slot;
 use solana_vote_program::vote_state::VoteState;
 use std::{
+    cmp::max,
     collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
@@ -147,6 +148,12 @@ impl AggregateCommitmentService {
         new_block_commitment.set_highest_confirmed_slot(highest_confirmed_slot);
 
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+
+        let highest_confirmed_root = max(
+            new_block_commitment.highest_confirmed_root(),
+            w_block_commitment_cache.highest_confirmed_root(),
+        );
+        new_block_commitment.set_highest_confirmed_root(highest_confirmed_root);
 
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         w_block_commitment_cache.commitment_slots()
@@ -582,6 +589,44 @@ mod tests {
             .read()
             .unwrap()
             .highest_confirmed_root();
+        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
+        assert!(highest_confirmed_root_bank.is_some());
+
+        // Add additional banks beyond lockout built on the new fork to ensure that behavior
+        // continues normally
+        for x in 35..=37 {
+            let previous_bank = bank_forks.get(x).unwrap();
+            let bank = Bank::new_from_parent(previous_bank, &Pubkey::default(), x + 1);
+            let vote = vote_transaction::new_vote_transaction(
+                vec![x],
+                previous_bank.hash(),
+                previous_bank.last_blockhash(),
+                &node_keypair,
+                &vote_keypair,
+                &vote_keypair,
+                None,
+            );
+            bank.process_transaction(&vote).unwrap();
+            bank_forks.insert(bank);
+        }
+
+        let working_bank = bank_forks.working_bank();
+        let root = get_vote_account_root_slot(vote_keypair.pubkey(), &working_bank);
+        let ancestors = working_bank.status_cache_ancestors();
+        let _ = AggregateCommitmentService::update_commitment_cache(
+            &block_commitment_cache,
+            CommitmentAggregationData {
+                bank: working_bank,
+                root: 0,
+                total_stake: 100,
+            },
+            ancestors,
+        );
+        let highest_confirmed_root = block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+        bank_forks.set_root(root, &None, Some(highest_confirmed_root));
         let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
         assert!(highest_confirmed_root_bank.is_some());
     }
