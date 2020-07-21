@@ -1188,12 +1188,14 @@ impl RpcSol for RpcSolImpl {
         let epoch_schedule = bank.epoch_schedule();
 
         let slot = bank.slot();
+        let block_height = bank.block_height();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(slot);
         Ok(RpcEpochInfo {
             epoch,
             slot_index,
             slots_in_epoch: epoch_schedule.get_slots_in_epoch(epoch),
             absolute_slot: slot,
+            block_height,
         })
     }
 
