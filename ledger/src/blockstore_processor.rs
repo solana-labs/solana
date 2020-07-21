@@ -24,7 +24,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
-    signature::Keypair,
+    signature::{Keypair, Signature},
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -57,6 +57,34 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
+// Includes transaction signature for unit-testing
+fn get_first_error(
+    batch: &TransactionBatch,
+    fee_collection_results: Vec<Result<()>>,
+) -> Option<(Result<()>, Signature)> {
+    let mut first_err = None;
+    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
+        if let Err(ref err) = result {
+            if first_err.is_none() {
+                first_err = Some((result.clone(), transaction.signatures[0]));
+            }
+            warn!(
+                "Unexpected validator error: {:?}, transaction: {:?}",
+                err, transaction
+            );
+            datapoint_error!(
+                "validator_process_entry_error",
+                (
+                    "error",
+                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    String
+                )
+            );
+        }
+    }
+    first_err
+}
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
@@ -84,27 +112,8 @@ fn execute_batch(
         );
     }
 
-    let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
-        if let Err(ref err) = result {
-            if first_err.is_none() {
-                first_err = Some(result.clone());
-            }
-            warn!(
-                "Unexpected validator error: {:?}, transaction: {:?}",
-                err, transaction
-            );
-            datapoint_error!(
-                "validator_process_entry_error",
-                (
-                    "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
-                    String
-                )
-            );
-        }
-    }
-    first_err.unwrap_or(Ok(()))
+    let first_err = get_first_error(batch, fee_collection_results);
+    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
 
 fn execute_batches(
