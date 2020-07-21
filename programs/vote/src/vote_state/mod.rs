@@ -253,13 +253,21 @@ impl VoteState {
     ///
     ///  if commission calculation is 100% one way or other,
     ///   indicate with false for was_split
-    pub fn commission_split(&self, on: f64) -> (f64, f64, bool) {
+    pub fn commission_split(&self, on: u64) -> (u64, u64, bool) {
         match self.commission.min(100) {
-            0 => (0.0, on, false),
-            100 => (on, 0.0, false),
+            0 => (0, on, false),
+            100 => (on, 0, false),
             split => {
-                let mine = on * f64::from(split) / f64::from(100);
-                (mine, on - mine, true)
+                let on = u128::from(on);
+                // Calculate mine and theirs independently and symmetrically instead of
+                // using the remainder of the other to treat them strictly equally.
+                // This is also to cancel the rewarding if either of the parties
+                // should receive only fractional lamports, resulting in not being rewarded at all.
+                // Thus, note that we intentionally discard any residual fractional lamports.
+                let mine = on * u128::from(split) / 100u128;
+                let theirs = on * u128::from(100 - split) / 100u128;
+
+                (mine as u64, theirs as u64, true)
             }
         }
     }
@@ -1562,19 +1570,22 @@ mod tests {
     fn test_vote_state_commission_split() {
         let vote_state = VoteState::default();
 
-        assert_eq!(vote_state.commission_split(1.0), (0.0, 1.0, false));
+        assert_eq!(vote_state.commission_split(1), (0, 1, false));
 
         let mut vote_state = VoteState::default();
         vote_state.commission = std::u8::MAX;
-        assert_eq!(vote_state.commission_split(1.0), (1.0, 0.0, false));
+        assert_eq!(vote_state.commission_split(1), (1, 0, false));
+
+        vote_state.commission = 99;
+        assert_eq!(vote_state.commission_split(10), (9, 0, true));
+
+        vote_state.commission = 1;
+        assert_eq!(vote_state.commission_split(10), (0, 9, true));
 
         vote_state.commission = 50;
-        let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10.0);
+        let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10);
 
-        assert_eq!(
-            (voter_portion.round(), staker_portion.round(), was_split),
-            (5.0, 5.0, true)
-        );
+        assert_eq!((voter_portion, staker_portion, was_split), (5, 5, true));
     }
 
     #[test]

@@ -55,11 +55,12 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{self, Delegation};
+use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     mem,
     ops::RangeInclusive,
     path::PathBuf,
@@ -898,11 +899,13 @@ impl Bank {
             let inflation = self.inflation.read().unwrap();
 
             (*inflation).validator(year) * self.capitalization() as f64 * period
-        };
+        } as u64;
 
-        let validator_points = self.stakes.write().unwrap().claim_points();
-        let validator_point_value =
-            self.check_point_value(validator_rewards / validator_points as f64);
+        let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+
+        let validator_point_value = self.pay_validator_rewards(validator_rewards);
+
+        // this sysvar could be retired...
         self.update_sysvar_account(&sysvar::rewards::id(), |account| {
             sysvar::rewards::create_account(
                 self.inherit_sysvar_account_balance(account),
@@ -910,65 +913,117 @@ impl Bank {
             )
         });
 
-        let validator_rewards = self.pay_validator_rewards(validator_point_value);
+        let validator_rewards_paid =
+            self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
+        if let Some(rewards) = self.rewards.as_ref() {
+            assert_eq!(
+                validator_rewards_paid,
+                u64::try_from(rewards.iter().map(|(_pubkey, reward)| reward).sum::<i64>()).unwrap()
+            );
+        }
+
+        // verify that we didn't pay any more than we expected to
+        assert!(validator_rewards >= validator_rewards_paid);
 
         self.capitalization
-            .fetch_add(validator_rewards as u64, Ordering::Relaxed);
+            .fetch_add(validator_rewards_paid, Ordering::Relaxed);
     }
 
-    /// iterate over all stakes, redeem vote credits for each stake we can
-    ///   successfully load and parse, return total payout
-    fn pay_validator_rewards(&mut self, point_value: f64) -> u64 {
-        let stake_history = self.stakes.read().unwrap().history().clone();
-        let mut validator_rewards = HashMap::new();
+    /// map stake delegations into resolved (pubkey, account) pairs
+    ///  returns a map (has to be copied) of loaded
+    ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
+    ///
+    fn stake_delegation_accounts(&self) -> HashMap<Pubkey, (Vec<(Pubkey, Account)>, Account)> {
+        let mut accounts = HashMap::new();
 
-        let total_validator_rewards = self
+        self.stakes
+            .read()
+            .unwrap()
             .stake_delegations()
             .iter()
-            .map(|(stake_pubkey, delegation)| {
+            .for_each(|(stake_pubkey, delegation)| {
                 match (
                     self.get_account(&stake_pubkey),
                     self.get_account(&delegation.voter_pubkey),
                 ) {
-                    (Some(mut stake_account), Some(mut vote_account)) => {
-                        let rewards = stake_state::redeem_rewards(
-                            &mut stake_account,
-                            &mut vote_account,
-                            point_value,
-                            Some(&stake_history),
-                        );
-                        if let Ok((stakers_reward, voters_reward)) = rewards {
-                            self.store_account(&stake_pubkey, &stake_account);
-                            self.store_account(&delegation.voter_pubkey, &vote_account);
-
-                            if voters_reward > 0 {
-                                *validator_rewards
-                                    .entry(delegation.voter_pubkey)
-                                    .or_insert(0i64) += voters_reward as i64;
-                            }
-
-                            if stakers_reward > 0 {
-                                *validator_rewards.entry(*stake_pubkey).or_insert(0i64) +=
-                                    stakers_reward as i64;
-                            }
-
-                            stakers_reward + voters_reward
-                        } else {
-                            debug!(
-                                "stake_state::redeem_rewards() failed for {}: {:?}",
-                                stake_pubkey, rewards
-                            );
-                            0
-                        }
+                    (Some(stake_account), Some(vote_account)) => {
+                        let entry = accounts
+                            .entry(delegation.voter_pubkey)
+                            .or_insert((Vec::new(), vote_account));
+                        entry.0.push((*stake_pubkey, stake_account));
                     }
-                    (_, _) => 0,
+                    (_, _) => {}
                 }
+            });
+
+        accounts
+    }
+
+    /// iterate over all stakes, redeem vote credits for each stake we can
+    ///   successfully load and parse, return total payout
+    fn pay_validator_rewards(&mut self, rewards: u64) -> f64 {
+        let stake_history = self.stakes.read().unwrap().history().clone();
+
+        let mut stake_delegation_accounts = self.stake_delegation_accounts();
+
+        let points: u128 = stake_delegation_accounts
+            .iter()
+            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
+                stake_group
+                    .iter()
+                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
+            })
+            .map(|(stake_account, vote_account)| {
+                stake_state::calculate_points(&stake_account, &vote_account, Some(&stake_history))
+                    .unwrap_or(0)
             })
             .sum();
 
+        if points == 0 {
+            return 0.0;
+        }
+
+        let point_value = PointValue { rewards, points };
+
+        let mut rewards = HashMap::new();
+
+        // pay according to point value
+        for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
+            let mut vote_account_changed = false;
+            for (stake_pubkey, stake_account) in stake_group.iter_mut() {
+                let redeemed = stake_state::redeem_rewards(
+                    stake_account,
+                    vote_account,
+                    &point_value,
+                    Some(&stake_history),
+                );
+                if let Ok((stakers_reward, voters_reward)) = redeemed {
+                    self.store_account(&stake_pubkey, &stake_account);
+                    vote_account_changed = true;
+
+                    if voters_reward > 0 {
+                        *rewards.entry(*vote_pubkey).or_insert(0i64) += voters_reward as i64;
+                    }
+
+                    if stakers_reward > 0 {
+                        *rewards.entry(*stake_pubkey).or_insert(0i64) += stakers_reward as i64;
+                    }
+                } else {
+                    debug!(
+                        "stake_state::redeem_rewards() failed for {}: {:?}",
+                        stake_pubkey, redeemed
+                    );
+                }
+            }
+
+            if vote_account_changed {
+                self.store_account(&vote_pubkey, &vote_account);
+            }
+        }
+
         assert_eq!(self.rewards, None);
-        self.rewards = Some(validator_rewards.drain().collect());
-        total_validator_rewards
+        self.rewards = Some(rewards.drain().collect());
+        point_value.rewards as f64 / point_value.points as f64
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
@@ -984,21 +1039,6 @@ impl Bank {
     pub fn update_recent_blockhashes(&self) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         self.update_recent_blockhashes_locked(&blockhash_queue);
-    }
-
-    // If the point values are not `normal`, bring them back into range and
-    // set them to the last value or 0.
-    fn check_point_value(&self, mut validator_point_value: f64) -> f64 {
-        let rewards = sysvar::rewards::Rewards::from_account(
-            &self
-                .get_account(&sysvar::rewards::id())
-                .unwrap_or_else(|| sysvar::rewards::create_account(1, 0.0)),
-        )
-        .unwrap_or_else(Default::default);
-        if !validator_point_value.is_normal() {
-            validator_point_value = rewards.validator_point_value;
-        }
-        validator_point_value
     }
 
     fn collect_fees(&self) {
@@ -4730,7 +4770,18 @@ mod tests {
         }
         bank.store_account(&vote_id, &vote_account);
 
-        let validator_points = bank.stakes.read().unwrap().points();
+        let validator_points: u128 = bank
+            .stake_delegation_accounts()
+            .iter()
+            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
+                stake_group
+                    .iter()
+                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
+            })
+            .map(|(stake_account, vote_account)| {
+                stake_state::calculate_points(&stake_account, &vote_account, None).unwrap_or(0)
+            })
+            .sum();
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -4772,6 +4823,89 @@ mod tests {
                 (rewards.validator_point_value * validator_points as f64) as i64
             )])
         );
+    }
+
+    fn do_test_bank_update_rewards_determinism() -> u64 {
+        // create a bank that ticks really slowly...
+        let bank = Arc::new(Bank::new(&GenesisConfig {
+            accounts: (0..42)
+                .map(|_| {
+                    (
+                        Pubkey::new_rand(),
+                        Account::new(1_000_000_000, 0, &Pubkey::default()),
+                    )
+                })
+                .collect(),
+            // set it up so the first epoch is a full year long
+            poh_config: PohConfig {
+                target_tick_duration: Duration::from_secs(
+                    SECONDS_PER_YEAR as u64
+                        / MINIMUM_SLOTS_PER_EPOCH as u64
+                        / DEFAULT_TICKS_PER_SLOT,
+                ),
+                hashes_per_tick: None,
+                target_tick_count: None,
+            },
+
+            ..GenesisConfig::default()
+        }));
+
+        // enable lazy rent collection because this test depends on rent-due accounts
+        // not being eagerly-collected for exact rewards calculation
+        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+
+        assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
+        assert_eq!(bank.rewards, None);
+
+        let vote_id = Pubkey::new_rand();
+        let mut vote_account = vote_state::create_account(&vote_id, &Pubkey::new_rand(), 50, 100);
+        let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
+        let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
+
+        // set up accounts
+        bank.store_account(&stake_id1, &stake_account1);
+        bank.store_account(&stake_id2, &stake_account2);
+
+        // generate some rewards
+        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
+        for i in 0..MAX_LOCKOUT_HISTORY + 42 {
+            if let Some(v) = vote_state.as_mut() {
+                v.process_slot_vote_unchecked(i as u64)
+            }
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            VoteState::to(&versioned, &mut vote_account).unwrap();
+            bank.store_account(&vote_id, &vote_account);
+            match versioned {
+                VoteStateVersions::Current(v) => {
+                    vote_state = Some(*v);
+                }
+                _ => panic!("Has to be of type Current"),
+            };
+        }
+        bank.store_account(&vote_id, &vote_account);
+
+        // put a child bank in epoch 1, which calls update_rewards()...
+        let bank1 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.get_slots_in_epoch(bank.epoch()) + 1,
+        );
+        // verify that there's inflation
+        assert_ne!(bank1.capitalization(), bank.capitalization());
+
+        bank1.capitalization()
+    }
+
+    #[test]
+    fn test_bank_update_rewards_determinism() {
+        // The same reward should be distributed given same credits
+        let expected_capitalization = do_test_bank_update_rewards_determinism();
+        // Repeat somewhat large number of iterations to expose possible different behavior
+        // depending on the randamly-seeded HashMap ordering
+        for _ in 0..30 {
+            let actual_capitalization = do_test_bank_update_rewards_determinism();
+            assert_eq!(actual_capitalization, expected_capitalization);
+        }
     }
 
     // Test that purging 0 lamports accounts works.
@@ -6362,23 +6496,6 @@ mod tests {
         );
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn test_check_point_value() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let bank = Arc::new(Bank::new(&genesis_config));
-
-        // check that point values are 0 if no previous value was known and current values are not normal
-        assert_eq!(bank.check_point_value(std::f64::INFINITY), 0.0);
-
-        bank.store_account(
-            &sysvar::rewards::id(),
-            &sysvar::rewards::create_account(1, 1.0),
-        );
-        // check that point values are the previous value if current values are not normal
-        assert_eq!(bank.check_point_value(std::f64::INFINITY), 1.0);
     }
 
     #[test]
