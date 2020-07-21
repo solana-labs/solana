@@ -3,6 +3,7 @@ use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionSta
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
     nonce_utils,
+    transaction_utils::OrderedIterator,
 };
 use solana_transaction_status::TransactionStatusMeta;
 use std::{
@@ -50,16 +51,17 @@ impl TransactionStatusService {
         let TransactionStatusBatch {
             bank,
             transactions,
+            iteration_order,
             statuses,
             balances,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
-        for (((transaction, (status, hash_age_kind)), pre_balances), post_balances) in transactions
-            .iter()
-            .zip(statuses)
-            .zip(balances.pre_balances)
-            .zip(balances.post_balances)
+        for (((transaction, (status, hash_age_kind)), pre_balances), post_balances) in
+            OrderedIterator::new(&transactions, iteration_order.as_deref())
+                .zip(statuses)
+                .zip(balances.pre_balances)
+                .zip(balances.post_balances)
         {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = match hash_age_kind {

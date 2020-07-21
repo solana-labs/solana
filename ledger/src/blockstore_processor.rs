@@ -18,6 +18,7 @@ use solana_runtime::{
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
     bank_forks::BankForks,
     transaction_batch::TransactionBatch,
+    transaction_utils::OrderedIterator,
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE},
@@ -63,7 +64,10 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
+    for (result, transaction) in fee_collection_results.iter().zip(OrderedIterator::new(
+        batch.transactions(),
+        batch.iteration_order(),
+    )) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some((result.clone(), transaction.signatures[0]));
@@ -106,6 +110,7 @@ fn execute_batch(
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
+            batch.iteration_order_vec(),
             processing_results,
             balances,
             sender,
@@ -834,6 +839,7 @@ fn process_single_slot(
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
+    pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
 }
@@ -842,6 +848,7 @@ pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
+    iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
     transaction_status_sender: TransactionStatusSender,
@@ -850,6 +857,7 @@ pub fn send_transaction_status_batch(
     if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
         bank,
         transactions: transactions.to_vec(),
+        iteration_order,
         statuses,
         balances,
     }) {
