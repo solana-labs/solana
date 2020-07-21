@@ -18,13 +18,14 @@ use solana_runtime::{
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
     bank_forks::BankForks,
     transaction_batch::TransactionBatch,
+    transaction_utils::OrderedIterator,
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE},
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
-    signature::Keypair,
+    signature::{Keypair, Signature},
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -57,6 +58,37 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
+// Includes transaction signature for unit-testing
+fn get_first_error(
+    batch: &TransactionBatch,
+    fee_collection_results: Vec<Result<()>>,
+) -> Option<(Result<()>, Signature)> {
+    let mut first_err = None;
+    for (result, transaction) in fee_collection_results.iter().zip(OrderedIterator::new(
+        batch.transactions(),
+        batch.iteration_order(),
+    )) {
+        if let Err(ref err) = result {
+            if first_err.is_none() {
+                first_err = Some((result.clone(), transaction.signatures[0]));
+            }
+            warn!(
+                "Unexpected validator error: {:?}, transaction: {:?}",
+                err, transaction
+            );
+            datapoint_error!(
+                "validator_process_entry_error",
+                (
+                    "error",
+                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    String
+                )
+            );
+        }
+    }
+    first_err
+}
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
@@ -78,33 +110,15 @@ fn execute_batch(
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
+            batch.iteration_order_vec(),
             processing_results,
             balances,
             sender,
         );
     }
 
-    let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
-        if let Err(ref err) = result {
-            if first_err.is_none() {
-                first_err = Some(result.clone());
-            }
-            warn!(
-                "Unexpected validator error: {:?}, transaction: {:?}",
-                err, transaction
-            );
-            datapoint_error!(
-                "validator_process_entry_error",
-                (
-                    "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
-                    String
-                )
-            );
-        }
-    }
-    first_err.unwrap_or(Ok(()))
+    let first_err = get_first_error(batch, fee_collection_results);
+    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
 
 fn execute_batches(
@@ -825,6 +839,7 @@ fn process_single_slot(
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
+    pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
 }
@@ -833,6 +848,7 @@ pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
+    iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
     transaction_status_sender: TransactionStatusSender,
@@ -841,6 +857,7 @@ pub fn send_transaction_status_batch(
     if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
         bank,
         transactions: transactions.to_vec(),
+        iteration_order,
         statuses,
         balances,
     }) {
@@ -2634,5 +2651,52 @@ pub mod tests {
                 assert!(parent_bank.is_frozen());
             }
         }
+    }
+
+    #[test]
+    fn test_get_first_error() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1_000_000_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let present_account_key = Keypair::new();
+        let present_account = Account::new(1, 10, &Pubkey::default());
+        bank.store_account(&present_account_key.pubkey(), &present_account);
+
+        let keypair = Keypair::new();
+
+        // Create array of two transactions which throw different errors
+        let account_not_found_tx =
+            system_transaction::transfer(&keypair, &Pubkey::new_rand(), 42, bank.last_blockhash());
+        let account_not_found_sig = account_not_found_tx.signatures[0];
+        let mut account_loaded_twice = system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_rand(),
+            42,
+            bank.last_blockhash(),
+        );
+        account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
+        let transactions = [account_loaded_twice, account_not_found_tx];
+
+        // Use inverted iteration_order
+        let iteration_order: Vec<usize> = vec![1, 0];
+
+        let batch = bank.prepare_batch(&transactions, Some(iteration_order));
+        let (
+            TransactionResults {
+                fee_collection_results,
+                processing_results: _,
+            },
+            _balances,
+        ) = batch
+            .bank()
+            .load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false);
+        let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
+        // First error found should be for the 2nd transaction, due to iteration_order
+        assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
+        assert_eq!(signature, account_not_found_sig);
     }
 }

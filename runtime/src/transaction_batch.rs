@@ -41,6 +41,11 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn iteration_order(&self) -> Option<&[usize]> {
         self.iteration_order.as_deref()
     }
+
+    pub fn iteration_order_vec(&self) -> Option<Vec<usize>> {
+        self.iteration_order.clone()
+    }
+
     pub fn bank(&self) -> &Bank {
         self.bank
     }
