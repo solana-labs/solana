@@ -2938,6 +2938,7 @@ impl Bank {
 
     pub fn get_epoch_info(&self) -> EpochInfo {
         let absolute_slot = self.slot();
+        let block_height = self.block_height();
         let (epoch, slot_index) = self.get_epoch_and_slot_index(absolute_slot);
         let slots_in_epoch = self.get_slots_in_epoch(epoch);
         EpochInfo {
@@ -2945,6 +2946,7 @@ impl Bank {
             slot_index,
             slots_in_epoch,
             absolute_slot,
+            block_height,
         }
     }
 
