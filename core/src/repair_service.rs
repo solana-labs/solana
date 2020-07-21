@@ -217,8 +217,8 @@ impl RepairService {
                 let mut slot_to_vote_pubkeys: HashMap<Slot, Vec<Pubkey>> = HashMap::new();
                 verified_vote_receiver
                     .try_iter()
-                    .for_each(|(vote_pubkey, vote)| {
-                        for slot in vote.slots {
+                    .for_each(|(vote_pubkey, vote_slots)| {
+                        for slot in vote_slots {
                             slot_to_vote_pubkeys
                                 .entry(slot)
                                 .or_default()

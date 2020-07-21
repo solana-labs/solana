@@ -10,7 +10,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
-    replay_stage::{ReplayStage, ReplayStageConfig},
+    replay_stage::{ReplayStage, ReplayStageConfig, ReplayVotesSender},
     retransmit_stage::RetransmitStage,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -98,6 +98,7 @@ impl Tvu {
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         verified_vote_receiver: VerifiedVoteReceiver,
+        replay_votes_sender: ReplayVotesSender,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
@@ -198,6 +199,7 @@ impl Tvu {
             cluster_slots,
             retransmit_slots_sender,
             duplicate_slots_reset_receiver,
+            replay_votes_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -283,6 +285,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (replay_votes_sender, _replay_votes_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -316,6 +319,7 @@ pub mod tests {
             Arc::new(VoteTracker::new(&bank)),
             retransmit_slots_sender,
             verified_vote_receiver,
+            replay_votes_sender,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);

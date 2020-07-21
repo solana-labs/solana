@@ -705,6 +705,9 @@ impl RpcSubscriptions {
                             notifier.notify(slot_info, sink);
                         }
                     }
+                    // These notifications are only triggered by votes observed on gossip,
+                    // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
+                    // in VoteState's from bank states built in ReplayStage.
                     NotificationEntry::Vote(ref vote_info) => {
                         let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {

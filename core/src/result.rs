@@ -17,6 +17,7 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     TryCrossbeamRecvError(crossbeam_channel::TryRecvError),
     CrossbeamRecvTimeoutError(crossbeam_channel::RecvTimeoutError),
+    ReadyTimeoutError,
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     CrossbeamSendError,
     TryRecvError(std::sync::mpsc::TryRecvError),
@@ -59,6 +60,11 @@ impl std::convert::From<std::sync::mpsc::TryRecvError> for Error {
 impl std::convert::From<crossbeam_channel::RecvTimeoutError> for Error {
     fn from(e: crossbeam_channel::RecvTimeoutError) -> Error {
         Error::CrossbeamRecvTimeoutError(e)
+    }
+}
+impl std::convert::From<crossbeam_channel::ReadyTimeoutError> for Error {
+    fn from(_e: crossbeam_channel::ReadyTimeoutError) -> Error {
+        Error::ReadyTimeoutError
     }
 }
 impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
