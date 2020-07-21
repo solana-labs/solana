@@ -2,7 +2,7 @@
 
 #![cfg(feature = "program")]
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(all(not(target_arch = "bpf"), not(feature = "skip-no-mangle")))]
 fn print_line_to_stdout(_message: &str) {
     #[cfg(not(feature = "program"))]
     {
@@ -14,7 +14,7 @@ fn print_line_to_stdout(_message: &str) {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(all(not(target_arch = "bpf"), not(feature = "skip-no-mangle")))]
 #[no_mangle]
 /// # Safety
 pub unsafe fn sol_log_(message: *const u8, length: u64) {
@@ -23,13 +23,13 @@ pub unsafe fn sol_log_(message: *const u8, length: u64) {
     print_line_to_stdout(string);
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(all(not(target_arch = "bpf"), not(feature = "skip-no-mangle")))]
 #[no_mangle]
 pub fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     print_line_to_stdout(&format!("{} {} {} {} {}", arg1, arg2, arg3, arg4, arg5));
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(all(not(target_arch = "bpf"), not(feature = "skip-no-mangle")))]
 #[no_mangle]
 pub fn sol_invoke_signed_rust() {
     print_line_to_stdout("sol_invoke_signed_rust()");
@@ -38,7 +38,7 @@ pub fn sol_invoke_signed_rust() {
 #[macro_export]
 macro_rules! program_stubs {
     () => {
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(all(not(target_arch = "bpf"), not(feature = "skip-no-mangle")))]
         #[test]
         fn pull_in_externs() {
             use solana_sdk::program_stubs::{sol_invoke_signed_rust, sol_log_, sol_log_64_};

@@ -11,6 +11,10 @@ edition = "2018"
 [features]
 # On-chain program specific dependencies
 program = []
+# No-mangle objects cannot be declared multiple times by certain linkers; use
+# this feature to skip these object when they are already declared, eg. in
+# another version of solana-sdk
+skip-no-mangle = []
 # Dependencies that are not compatible or needed for on-chain programs
 default = [
     "assert_matches",
