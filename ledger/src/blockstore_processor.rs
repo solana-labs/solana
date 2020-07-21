@@ -2644,4 +2644,51 @@ pub mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_first_error() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1_000_000_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let present_account_key = Keypair::new();
+        let present_account = Account::new(1, 10, &Pubkey::default());
+        bank.store_account(&present_account_key.pubkey(), &present_account);
+
+        let keypair = Keypair::new();
+
+        // Create array of two transactions which throw different errors
+        let account_not_found_tx =
+            system_transaction::transfer(&keypair, &Pubkey::new_rand(), 42, bank.last_blockhash());
+        let account_not_found_sig = account_not_found_tx.signatures[0];
+        let mut account_loaded_twice = system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_rand(),
+            42,
+            bank.last_blockhash(),
+        );
+        account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
+        let transactions = [account_loaded_twice, account_not_found_tx];
+
+        // Use inverted iteration_order
+        let iteration_order: Vec<usize> = vec![1, 0];
+
+        let batch = bank.prepare_batch(&transactions, Some(iteration_order));
+        let (
+            TransactionResults {
+                fee_collection_results,
+                processing_results: _,
+            },
+            _balances,
+        ) = batch
+            .bank()
+            .load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false);
+        let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
+        // First error found should be for the 2nd transaction, due to iteration_order
+        assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
+        assert_eq!(signature, account_not_found_sig);
+    }
 }
