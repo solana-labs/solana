@@ -2832,7 +2832,7 @@ impl Bank {
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
         let activation_slot = match self.operating_mode() {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => Slot::MAX / 2,
+            OperatingMode::Stable => 25_580_256, // Epoch 72
             OperatingMode::Preview => Slot::MAX / 2,
         };
 
