@@ -30,7 +30,7 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
             68 => Some(Inflation::new_disabled()),
             // Enable again after the inflation fix has landed:
             // https://github.com/solana-labs/solana/commit/7cc2a6801bed29a816ef509cfc26a6f2522e46ff
-            72 => Some(Inflation::default()),
+            74 => Some(Inflation::default()),
             _ => None,
         },
         OperatingMode::Stable => match epoch {
