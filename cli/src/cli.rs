@@ -198,6 +198,7 @@ pub enum CliCommand {
     GetEpochInfo,
     GetGenesisHash,
     GetSlot,
+    GetBlockHeight,
     GetTransactionCount,
     LargestAccounts {
         filter: Option<RpcLargestAccountsFilter>,
@@ -638,6 +639,7 @@ pub fn parse_command(
         }),
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
+        ("block-height", Some(matches)) => parse_get_block_height(matches),
         ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
         ("supply", Some(matches)) => parse_supply(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
@@ -1829,6 +1831,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client, config),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetSlot => process_get_slot(&rpc_client, config),
+        CliCommand::GetBlockHeight => process_get_block_height(&rpc_client, config),
         CliCommand::LargestAccounts { filter } => {
             process_largest_accounts(&rpc_client, config, filter.clone())
         }

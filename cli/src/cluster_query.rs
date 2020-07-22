@@ -116,6 +116,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             .arg(commitment_arg()),
         )
         .subcommand(
+            SubCommand::with_name("block-height").about("Get current block height")
+            .arg(commitment_arg()),
+        )
+        .subcommand(
             SubCommand::with_name("epoch").about("Get current epoch")
             .arg(commitment_arg()),
         )
@@ -358,6 +362,13 @@ pub fn parse_get_epoch_info(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
 pub fn parse_get_slot(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot,
+        signers: vec![],
+    })
+}
+
+pub fn parse_get_block_height(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    Ok(CliCommandInfo {
+        command: CliCommand::GetBlockHeight,
         signers: vec![],
     })
 }
@@ -649,6 +660,13 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
 pub fn process_get_slot(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let slot = rpc_client.get_slot_with_commitment(config.commitment)?;
     Ok(slot.to_string())
+}
+
+pub fn process_get_block_height(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let epoch_info: CliEpochInfo = rpc_client
+        .get_epoch_info_with_commitment(config.commitment)?
+        .into();
+    Ok(epoch_info.epoch_info.block_height.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
