@@ -1477,7 +1477,12 @@ test('transaction failure', async () => {
       },
     },
   ]);
-  await connection.requestAirdrop(account.publicKey, minimumAmount + 100010);
+  const airdropSignature = await connection.requestAirdrop(
+    account.publicKey,
+    minimumAmount + 100010,
+  );
+  mockConfirmTransaction(airdropSignature);
+  await connection.confirmTransaction(airdropSignature, 0);
   expect(await connection.getBalance(account.publicKey)).toBe(
     minimumAmount + 100010,
   );
