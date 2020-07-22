@@ -509,7 +509,7 @@ impl BankingStage {
         // expires.
         let txs = batch.transactions();
         let pre_balances = if transaction_status_sender.is_some() {
-            bank.collect_balances(txs)
+            bank.collect_balances(batch)
         } else {
             vec![]
         };
@@ -545,7 +545,7 @@ impl BankingStage {
                 .processing_results;
 
             if let Some(sender) = transaction_status_sender {
-                let post_balances = bank.collect_balances(txs);
+                let post_balances = bank.collect_balances(batch);
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
