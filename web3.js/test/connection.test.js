@@ -1461,6 +1461,14 @@ test('transaction failure', async () => {
         '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
+  const airdropSignature = await connection.requestAirdrop(
+    account.publicKey,
+    minimumAmount + 100010,
+  );
+
+  mockConfirmTransaction(airdropSignature);
+  await connection.confirmTransaction(airdropSignature, 0);
+
   mockRpc.push([
     url,
     {
@@ -1477,7 +1485,6 @@ test('transaction failure', async () => {
       },
     },
   ]);
-  await connection.requestAirdrop(account.publicKey, minimumAmount + 100010);
   expect(await connection.getBalance(account.publicKey)).toBe(
     minimumAmount + 100010,
   );
