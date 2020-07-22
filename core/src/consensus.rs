@@ -405,6 +405,7 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
+        let root = self.lockouts.root_slot.unwrap_or(0);
         self.last_voted_slot()
             .map(|last_voted_slot| {
                 let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap();
@@ -427,12 +428,22 @@ impl Tower {
                 let mut locked_out_stake = 0;
                 let mut locked_out_vote_accounts = HashSet::new();
                 for (candidate_slot, descendants) in descendants.iter() {
-                    // 1) Only consider lockouts a tips of forks as that
-                    //    includes all ancestors of that fork.
-                    // 2) Don't consider lockouts on the `last_vote` itself
-                    // 3) Don't consider lockouts on any descendants of
+                    // 1) Don't consider any banks that haven't been frozen yet
+                    //    because the needed stats are unavailable
+                    // 2) Only consider lockouts at the latest `frozen` bank
+                    //    on each fork, as that bank will contain all the
+                    //    lockout intervals for ancestors on that fork as well.
+                    // 3) Don't consider lockouts on the `last_vote` itself
+                    // 4) Don't consider lockouts on any descendants of
                     //    `last_vote`
-                    if !descendants.is_empty()
+                    // 5) Don't consider any banks before the root because
+                    //    all lockouts must be ancestors of `last_vote`
+                    if !progress.get_fork_stats(*candidate_slot).map(|stats| stats.computed).unwrap_or(false)
+                        // If any of the descendants have the `computed` flag set, then there must be a more
+                        // recent frozen bank on this fork to use, so we can ignore this one. Otherwise,
+                        // even if this bank has descendants, if they have not yet been frozen / stats computed,
+                        // then use this bank as a representative for the fork.
+                        || descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
                         || *candidate_slot == last_voted_slot
                         || ancestors
                             .get(&candidate_slot)
@@ -441,6 +452,7 @@ impl Tower {
                                 exist in the ancestors map",
                             )
                             .contains(&last_voted_slot)
+                        || *candidate_slot <= root
                     {
                         continue;
                     }
@@ -461,17 +473,18 @@ impl Tower {
                         .lockout_intervals;
                     // Find any locked out intervals in this bank with endpoint >= last_vote,
                     // implies they are locked out at last_vote
-                    for (_lockout_ineterval_end, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
+                    for (_lockout_interval_end, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
                         for (lockout_interval_start, vote_account_pubkey) in value {
                             // Only count lockouts on slots that are:
                             // 1) Not ancestors of `last_vote`
                             // 2) Not from before the current root as we can't determine if
                             // anything before the root was an ancestor of `last_vote` or not
                             if !last_vote_ancestors.contains(lockout_interval_start)
-                                // The check if the key exists in the ancestors map
-                                // is equivalent to checking if the key is above the
-                                // current root.
-                                && ancestors.contains_key(lockout_interval_start)
+                                // Given a `lockout_interval_start` < root that appears in a
+                                // bank for a `candidate_slot`, it must be that `lockout_interval_start`
+                                // is an ancestor of the current root, because `candidate_slot` is a
+                                // descendant of the current root
+                                && *lockout_interval_start > root
                                 && !locked_out_vote_accounts.contains(vote_account_pubkey)
                             {
                                 let stake = epoch_vote_accounts
@@ -1107,8 +1120,11 @@ pub mod test {
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         let mut tower = Tower::new_with_key(&my_pubkey);
 
         // Last vote is 47
@@ -1186,8 +1202,41 @@ pub mod test {
         );
 
         // Adding another validator lockout on a different fork, and the lockout
+        // covers the last vote would count towards the switch threshold,
+        // unless the bank is not the most recent frozen bank on the fork (14 is a
+        // frozen/computed bank > 13 on the same fork in this case)
+        vote_simulator.simulate_lockout_interval(13, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::FailedSwitchThreshold
+        );
+
+        // Adding another validator lockout on a different fork, and the lockout
         // covers the last vote, should satisfy the switch threshold
         vote_simulator.simulate_lockout_interval(14, (12, 47), &other_vote_account);
+        assert_eq!(
+            tower.check_switch_threshold(
+                110,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::SwitchProof(Hash::default())
+        );
+
+        // Adding another unfrozen descendant of the tip of 14 should not remove
+        // slot 14 from consideration because it is still the most recent frozen
+        // bank on its fork
+        descendants.get_mut(&14).unwrap().insert(10000);
         assert_eq!(
             tower.check_switch_threshold(
                 110,
@@ -1203,7 +1252,7 @@ pub mod test {
         // If we set a root, then any lockout intervals below the root shouldn't
         // count toward the switch threshold. This means the other validator's
         // vote lockout no longer counts
-        vote_simulator.set_root(43);
+        tower.lockouts.root_slot = Some(43);
         // Refresh ancestors and descendants for new root.
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
