@@ -206,6 +206,7 @@ impl From<EpochInfo> for CliEpochInfo {
 impl fmt::Display for CliEpochInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
+        writeln_name_value(f, "Block height:", &self.epoch_info.block_height.to_string())?;
         writeln_name_value(f, "Slot:", &self.epoch_info.absolute_slot.to_string())?;
         writeln_name_value(f, "Epoch:", &self.epoch_info.epoch.to_string())?;
         let start_slot = self.epoch_info.absolute_slot - self.epoch_info.slot_index;
