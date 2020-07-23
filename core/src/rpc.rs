@@ -91,6 +91,7 @@ pub struct JsonRpcConfig {
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
+    pub enable_bigtable_ledger_storage: bool,
 }
 
 #[derive(Clone)]
@@ -105,6 +106,7 @@ pub struct JsonRpcRequestProcessor {
     genesis_hash: Hash,
     transaction_sender: Arc<Mutex<Sender<TransactionInfo>>>,
     runtime_handle: runtime::Handle,
+    bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -159,6 +161,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -169,6 +172,7 @@ impl JsonRpcRequestProcessor {
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
         runtime: &runtime::Runtime,
+        bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -182,6 +186,8 @@ impl JsonRpcRequestProcessor {
                 cluster_info,
                 genesis_hash,
                 transaction_sender: Arc::new(Mutex::new(sender)),
+                runtime_handle: runtime.handle().clone(),
+                bigtable_ledger_storage,
             },
             receiver,
         )
@@ -220,7 +226,8 @@ impl JsonRpcRequestProcessor {
             cluster_info,
             genesis_hash,
             transaction_sender: Arc::new(Mutex::new(sender)),
-            runtime_handle: runtime.handle().clone(),
+            runtime_handle: runtime::Runtime::new().unwrap().handle().clone(),
+            bigtable_ledger_storage: None,
         }
     }
 
@@ -560,6 +567,7 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
+        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -568,7 +576,15 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .highest_confirmed_root()
         {
-            let result = self.blockstore.get_confirmed_block(slot, encoding);
+            let result = self.blockstore.get_confirmed_block(slot, Some(encoding));
+            if result.is_err() {
+                if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                    return Ok(self
+                        .runtime_handle
+                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot, encoding))
+                        .ok());
+                }
+            }
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok())
         } else {
@@ -597,9 +613,25 @@ impl JsonRpcRequestProcessor {
                 MAX_GET_CONFIRMED_BLOCKS_RANGE
             )));
         }
+
+        let lowest_slot = self.blockstore.lowest_slot();
+        if start_slot < lowest_slot {
+            // If the starting slot is lower than what's available in blockstore assume the entire
+            // [start_slot..end_slot] can be fetched from BigTable.
+            if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                return Ok(self
+                    .runtime_handle
+                    .block_on(
+                        bigtable_ledger_storage
+                            .get_confirmed_blocks(start_slot, (end_slot - start_slot) as usize),
+                    )
+                    .unwrap_or_else(|_| vec![]));
+            }
+        }
+
         Ok(self
             .blockstore
-            .rooted_slot_iterator(max(start_slot, self.blockstore.lowest_slot()))
+            .rooted_slot_iterator(max(start_slot, lowest_slot))
             .map_err(|_| Error::internal_error())?
             .filter(|&slot| slot <= end_slot)
             .collect())
@@ -693,6 +725,16 @@ impl JsonRpcRequestProcessor {
                             err,
                         }
                     })
+                    .or_else(|| {
+                        if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                            self.runtime_handle
+                                .block_on(bigtable_ledger_storage.get_signature_status(&signature))
+                                .map(Some)
+                                .unwrap_or(None)
+                        } else {
+                            None
+                        }
+                    })
             } else {
                 None
             };
@@ -735,21 +777,38 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         encoding: Option<UiTransactionEncoding>,
     ) -> Option<ConfirmedTransaction> {
+        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history {
-            self.blockstore
-                .get_confirmed_transaction(signature, encoding)
+            match self
+                .blockstore
+                .get_confirmed_transaction(signature, Some(encoding))
                 .unwrap_or(None)
-                .filter(|confirmed_transaction| {
-                    confirmed_transaction.slot
+            {
+                Some(confirmed_transaction) => {
+                    if confirmed_transaction.slot
                         <= self
                             .block_commitment_cache
                             .read()
                             .unwrap()
                             .highest_confirmed_root()
-                })
-        } else {
-            None
+                    {
+                        return Some(confirmed_transaction);
+                    }
+                }
+                None => {
+                    if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                        return self
+                            .runtime_handle
+                            .block_on(
+                                bigtable_ledger_storage
+                                    .get_confirmed_transaction(&signature, encoding),
+                            )
+                            .unwrap_or(None);
+                    }
+                }
+            }
         }
+        None
     }
 
     pub fn get_confirmed_signatures_for_address(
@@ -759,6 +818,8 @@ impl JsonRpcRequestProcessor {
         end_slot: Slot,
     ) -> Vec<Signature> {
         if self.config.enable_rpc_transaction_history {
+            // TODO: Add bigtable_ledger_storage support as a part of
+            // https://github.com/solana-labs/solana/pull/10928
             let end_slot = min(
                 end_slot,
                 self.block_commitment_cache
@@ -775,9 +836,23 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_first_available_block(&self) -> Slot {
-        self.blockstore
+        let slot = self
+            .blockstore
             .get_first_available_block()
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+            let bigtable_slot = self
+                .runtime_handle
+                .block_on(bigtable_ledger_storage.get_first_available_block())
+                .unwrap_or(None)
+                .unwrap_or(slot);
+
+            if bigtable_slot < slot {
+                return bigtable_slot;
+            }
+        }
+        slot
     }
 
     pub fn get_stake_activation(
@@ -2348,6 +2423,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info.clone(),
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
@@ -3490,6 +3567,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
@@ -3529,6 +3608,8 @@ pub mod tests {
             health.clone(),
             cluster_info,
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
@@ -3709,6 +3790,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(request_processor.validator_exit(), false);
@@ -3736,6 +3819,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(request_processor.validator_exit(), true);
@@ -3825,6 +3910,8 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
         assert_eq!(
