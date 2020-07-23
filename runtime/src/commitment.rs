@@ -187,6 +187,11 @@ impl BlockCommitmentCache {
     pub fn set_highest_confirmed_root(&mut self, root: Slot) {
         self.commitment_slots.highest_confirmed_root = root;
     }
+
+    pub fn initialize_slots(&mut self, slot: Slot) {
+        self.commitment_slots.slot = slot;
+        self.commitment_slots.root = slot;
+    }
 }
 
 #[derive(Default, Clone, Copy)]
