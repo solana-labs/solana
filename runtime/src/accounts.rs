@@ -141,7 +141,7 @@ impl Accounts {
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
-                                            .from_existing_account(&key, &mut account);
+                                            .collect_from_existing_account(&key, &mut account);
                                         (account, rent_due)
                                     } else {
                                         (account, 0)
@@ -737,7 +737,7 @@ impl Accounts {
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
-                        acc.2 += rent_collector.from_created_account(&key, account);
+                        acc.2 += rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));
                 }

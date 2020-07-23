@@ -36,7 +36,7 @@ impl RentCollector {
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
-    pub fn from_existing_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
+    pub fn collect_from_existing_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
         if account.executable
             || account.rent_epoch > self.epoch
             || sysvar::check_id(&account.owner)
@@ -76,18 +76,18 @@ impl RentCollector {
         }
     }
 
-    pub fn from_created_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
+    pub fn collect_from_created_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
         // initialize rent_epoch as created at this epoch
         account.rent_epoch = self.epoch;
-        self.from_existing_account(address, account)
+        self.collect_from_existing_account(address, account)
     }
 
-    pub fn from_account(&self, address: &Pubkey, account: &mut Option<Account>) -> u64 {
+    pub fn collect_from_account(&self, address: &Pubkey, account: &mut Option<Account>) -> u64 {
         if let Some(account) = account {
-            self.from_existing_account(address, account)
+            self.collect_from_existing_account(address, account)
         } else {
             *account = Some(Account::default());
-            self.from_created_account(address, &mut account.as_mut().unwrap())
+            self.collect_from_created_account(address, &mut account.as_mut().unwrap())
         }
     }
 }

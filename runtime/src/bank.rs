@@ -2066,7 +2066,7 @@ impl Bank {
         for (pubkey, mut account) in accounts {
             rent += self
                 .rent_collector
-                .from_existing_account(&pubkey, &mut account);
+                .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -2504,7 +2504,8 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey);
         self.collected_rent.fetch_add(
-            self.rent_collector.from_account(pubkey, &mut account),
+            self.rent_collector
+                .collect_from_account(pubkey, &mut account),
             Ordering::Relaxed,
         );
         // at this point, account is ensured to be Some
