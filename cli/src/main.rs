@@ -9,14 +9,17 @@ use solana_clap_utils::{
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
 };
 use solana_cli::{
-    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
+    cli::{
+        app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners,
+        DEFAULT_RPC_TIMEOUT_SECONDS,
+    },
     cli_output::OutputFormat,
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use std::{collections::HashMap, error, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
@@ -126,6 +129,10 @@ pub fn parse_args<'a>(
         matches.value_of("json_rpc_url").unwrap_or(""),
         &config.json_rpc_url,
     );
+
+    let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
+    let rpc_timeout = Duration::from_secs(rpc_timeout);
+
     let (_, websocket_url) = CliConfig::compute_websocket_url_setting(
         matches.value_of("websocket_url").unwrap_or(""),
         &config.websocket_url,
@@ -169,6 +176,7 @@ pub fn parse_args<'a>(
             signers: vec![],
             keypair_path: default_signer_path,
             rpc_client: None,
+            rpc_timeout,
             verbose: matches.is_present("verbose"),
             output_format,
             commitment,
@@ -255,6 +263,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
             .global(true)
             .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+    )
+    .arg(
+        Arg::with_name("rpc_timeout")
+            .long("rpc-timeout")
+            .value_name("SECONDS")
+            .takes_value(true)
+            .default_value(DEFAULT_RPC_TIMEOUT_SECONDS)
+            .global(true)
+            .hidden(true)
+            .help("Timeout value for RPC requests"),
     )
     .subcommand(
         SubCommand::with_name("config")

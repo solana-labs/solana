@@ -63,6 +63,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
+    str::FromStr,
     sync::Arc,
     thread::sleep,
     time::Duration,
@@ -116,6 +117,7 @@ pub(crate) fn generate_unique_signers(
 }
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",
@@ -495,6 +497,7 @@ pub struct CliConfig<'a> {
     pub signers: Vec<&'a dyn Signer>,
     pub keypair_path: String,
     pub rpc_client: Option<RpcClient>,
+    pub rpc_timeout: Duration,
     pub verbose: bool,
     pub output_format: OutputFormat,
     pub commitment: CommitmentConfig,
@@ -599,6 +602,7 @@ impl Default for CliConfig<'_> {
             signers: Vec::new(),
             keypair_path: Self::default_keypair_path(),
             rpc_client: None,
+            rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
             commitment: CommitmentConfig::default(),
@@ -1800,7 +1804,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
-        _rpc_client = RpcClient::new(config.json_rpc_url.to_string());
+        _rpc_client =
+            RpcClient::new_with_timeout(config.json_rpc_url.to_string(), config.rpc_timeout);
         &_rpc_client
     } else {
         // Primarily for testing
