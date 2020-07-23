@@ -62,6 +62,7 @@ pub struct ClusterConfig {
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
+    pub skip_warmup_slots: bool,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub operating_mode: OperatingMode,
     pub poh_config: PohConfig,
@@ -81,6 +82,7 @@ impl Default for ClusterConfig {
             native_instruction_processors: vec![],
             operating_mode: OperatingMode::Development,
             poh_config: PohConfig::default(),
+            skip_warmup_slots: false,
         }
     }
 }
@@ -157,8 +159,11 @@ impl LocalCluster {
             stakes_in_genesis,
         );
         genesis_config.ticks_per_slot = config.ticks_per_slot;
-        genesis_config.epoch_schedule =
-            EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
+        genesis_config.epoch_schedule = EpochSchedule::custom(
+            config.slots_per_epoch,
+            config.stakers_slot_offset,
+            !config.skip_warmup_slots,
+        );
         genesis_config.operating_mode = config.operating_mode;
         genesis_config.poh_config = config.poh_config.clone();
 

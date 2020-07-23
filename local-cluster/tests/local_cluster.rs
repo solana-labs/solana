@@ -229,7 +229,6 @@ fn run_cluster_partition<E, F>(
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-    let partition_start_epoch = 2;
     let enable_partition = Arc::new(AtomicBool::new(true));
     let mut validator_config = ValidatorConfig::default();
     validator_config.enable_partition = Some(enable_partition.clone());
@@ -243,7 +242,7 @@ fn run_cluster_partition<E, F>(
             assert_eq!(validator_keys.len(), num_nodes);
             let num_slots_per_rotation = leader_schedule.num_slots() as u64;
             let fixed_schedule = FixedSchedule {
-                start_epoch: partition_start_epoch,
+                start_epoch: 0,
                 leader_schedule: Arc::new(leader_schedule),
             };
             validator_config.fixed_leader_schedule = Some(fixed_schedule);
@@ -271,6 +270,9 @@ fn run_cluster_partition<E, F>(
                 .zip(iter::repeat_with(|| true))
                 .collect(),
         ),
+        slots_per_epoch: 2048,
+        stakers_slot_offset: 2048,
+        skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
 
@@ -279,6 +281,14 @@ fn run_cluster_partition<E, F>(
         partitions, config.slots_per_epoch,
     );
     let mut cluster = LocalCluster::new(&config);
+
+    info!("PARTITION_TEST spend_and_verify_all_nodes(), ensure all nodes are caught up");
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+    );
 
     let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
 
