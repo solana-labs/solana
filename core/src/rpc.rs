@@ -29,12 +29,8 @@ use solana_ledger::{
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
-<<<<<<< HEAD
-    clock::{Epoch, Slot, UnixTimestamp},
-=======
     account_utils::StateMut,
-    clock::{Slot, UnixTimestamp},
->>>>>>> 4de0713aa... Rpc: Add getStakeActivation endpoint (#10902)
+    clock::{Epoch, Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
     hash::Hash,
@@ -763,7 +759,7 @@ impl JsonRpcRequestProcessor {
         config: Option<RpcStakeConfig>,
     ) -> Result<RpcStakeActivation> {
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.commitment);
+        let bank = self.bank(config.commitment)?;
         let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
         if bank.epoch().saturating_sub(epoch) > solana_sdk::stake_history::MAX_ENTRIES as u64 {
             return Err(Error::invalid_params(format!(
