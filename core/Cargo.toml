@@ -61,6 +61,7 @@ solana-runtime = { path = "../runtime", version = "1.1.22" }
 solana-sdk = { path = "../sdk", version = "1.1.22" }
 solana-stake-program = { path = "../programs/stake", version = "1.1.22" }
 solana-storage-program = { path = "../programs/storage", version = "1.1.22" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "1.1.22" }
 solana-streamer = { path = "../streamer", version = "1.1.22" }
 solana-version = { path = "../version", version = "1.1.22" }
 solana-vote-program = { path = "../programs/vote", version = "1.1.22" }
