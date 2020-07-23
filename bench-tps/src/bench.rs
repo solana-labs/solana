@@ -4,8 +4,6 @@ use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_faucet::faucet::request_airdrop_transaction;
-#[cfg(feature = "move")]
-use solana_librapay::{create_genesis, upload_mint_script, upload_payment_script};
 use solana_measure::measure::Measure;
 use solana_metrics::{self, datapoint_info};
 use solana_sdk::{
@@ -37,9 +35,6 @@ use std::{
 const MAX_TX_QUEUE_AGE: u64 =
     MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
-#[cfg(feature = "move")]
-use solana_librapay::librapay_transaction;
-
 pub const MAX_SPENDS_PER_TX: u64 = 4;
 
 #[derive(Debug)]
@@ -50,8 +45,6 @@ pub enum BenchTpsError {
 pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
-
-type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 
 fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
     loop {
@@ -122,7 +115,6 @@ fn generate_chunked_transfers(
     threads: usize,
     duration: Duration,
     sustained: bool,
-    libra_args: Option<LibraKeys>,
 ) {
     // generate and send transactions for the specified duration
     let start = Instant::now();
@@ -137,7 +129,6 @@ fn generate_chunked_transfers(
             &dest_keypair_chunks[chunk_index],
             threads,
             reclaim_lamports_back_to_source_account,
-            &libra_args,
         );
 
         // In sustained mode, overlap the transfers with generation. This has higher average
@@ -205,12 +196,7 @@ where
         .collect()
 }
 
-pub fn do_bench_tps<T>(
-    client: Arc<T>,
-    config: Config,
-    gen_keypairs: Vec<Keypair>,
-    libra_args: Option<LibraKeys>,
-) -> u64
+pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
 where
     T: 'static + Client + Send + Sync,
 {
@@ -294,7 +280,6 @@ where
         threads,
         duration,
         sustained,
-        libra_args,
     );
 
     // Stop the sampling threads so it will collect the stats
@@ -340,52 +325,6 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
     );
 }
 
-#[cfg(feature = "move")]
-fn generate_move_txs(
-    source: &[&Keypair],
-    dest: &VecDeque<&Keypair>,
-    reclaim: bool,
-    move_keypairs: &[Keypair],
-    libra_pay_program_id: &Pubkey,
-    libra_mint_id: &Pubkey,
-    blockhash: &Hash,
-) -> Vec<(Transaction, u64)> {
-    let count = move_keypairs.len() / 2;
-    let source_move = &move_keypairs[..count];
-    let dest_move = &move_keypairs[count..];
-    let pairs: Vec<_> = if !reclaim {
-        source_move
-            .iter()
-            .zip(dest_move.iter())
-            .zip(source.iter())
-            .collect()
-    } else {
-        dest_move
-            .iter()
-            .zip(source_move.iter())
-            .zip(dest.iter())
-            .collect()
-    };
-
-    pairs
-        .par_iter()
-        .map(|((from, to), payer)| {
-            (
-                librapay_transaction::transfer(
-                    libra_pay_program_id,
-                    libra_mint_id,
-                    &payer,
-                    &from,
-                    &to.pubkey(),
-                    1,
-                    *blockhash,
-                ),
-                timestamp(),
-            )
-        })
-        .collect()
-}
-
 fn generate_system_txs(
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
@@ -416,7 +355,6 @@ fn generate_txs(
     dest: &VecDeque<&Keypair>,
     threads: usize,
     reclaim: bool,
-    libra_args: &Option<LibraKeys>,
 ) {
     let blockhash = *blockhash.read().unwrap();
     let tx_count = source.len();
@@ -426,33 +364,7 @@ fn generate_txs(
     );
     let signing_start = Instant::now();
 
-    let transactions = if let Some((
-        _libra_genesis_keypair,
-        _libra_pay_program_id,
-        _libra_mint_program_id,
-        _libra_keys,
-    )) = libra_args
-    {
-        #[cfg(not(feature = "move"))]
-        {
-            return;
-        }
-
-        #[cfg(feature = "move")]
-        {
-            generate_move_txs(
-                source,
-                dest,
-                reclaim,
-                &_libra_keys,
-                _libra_pay_program_id,
-                &_libra_genesis_keypair.pubkey(),
-                &blockhash,
-            )
-        }
-    } else {
-        generate_system_txs(source, dest, reclaim, &blockhash)
-    };
+    let transactions = generate_system_txs(source, dest, reclaim, &blockhash);
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -954,181 +866,13 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
     (rnd.gen_n_keypairs(total_keys), extra)
 }
 
-#[cfg(feature = "move")]
-fn fund_move_keys<T: Client>(
-    client: &T,
-    funding_key: &Keypair,
-    keypairs: &[Keypair],
-    total: u64,
-    libra_pay_program_id: &Pubkey,
-    libra_mint_program_id: &Pubkey,
-    libra_genesis_key: &Keypair,
-) {
-    let (mut blockhash, _fee_calculator) = get_recent_blockhash(client);
-
-    info!("creating the libra funding account..");
-    let libra_funding_key = Keypair::new();
-    let tx = librapay_transaction::create_account(funding_key, &libra_funding_key, 1, blockhash);
-    client
-        .send_and_confirm_message(&[funding_key, &libra_funding_key], tx.message)
-        .unwrap();
-
-    info!("minting to funding keypair");
-    let tx = librapay_transaction::mint_tokens(
-        &libra_mint_program_id,
-        funding_key,
-        libra_genesis_key,
-        &libra_funding_key.pubkey(),
-        total,
-        blockhash,
-    );
-    client
-        .send_and_confirm_message(&[funding_key, libra_genesis_key], tx.message)
-        .unwrap();
-
-    info!("creating {} move accounts...", keypairs.len());
-    let total_len = keypairs.len();
-    let create_len = 5;
-    let mut funding_time = Measure::start("funding_time");
-    for (i, keys) in keypairs.chunks(create_len).enumerate() {
-        if client
-            .get_balance_with_commitment(&keys[0].pubkey(), CommitmentConfig::recent())
-            .unwrap_or(0)
-            > 0
-        {
-            // already created these accounts.
-            break;
-        }
-
-        let keypairs: Vec<_> = keys.iter().map(|k| k).collect();
-        let tx = librapay_transaction::create_accounts(funding_key, &keypairs, 1, blockhash);
-        let ser_size = bincode::serialized_size(&tx).unwrap();
-        let mut keys = vec![funding_key];
-        keys.extend(&keypairs);
-        client.send_and_confirm_message(&keys, tx.message).unwrap();
-
-        if i % 10 == 0 {
-            info!(
-                "created {} accounts of {} (size {})",
-                i,
-                total_len / create_len,
-                ser_size,
-            );
-        }
-    }
-
-    const NUM_FUNDING_KEYS: usize = 10;
-    let funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
-    let pubkey_amounts: Vec<_> = funding_keys
-        .iter()
-        .map(|key| (key.pubkey(), total / NUM_FUNDING_KEYS as u64))
-        .collect();
-    let instructions = system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts);
-    let message = Message::new(&instructions, Some(&funding_key.pubkey()));
-    let tx = Transaction::new(&[funding_key], message, blockhash);
-    client
-        .send_and_confirm_message(&[funding_key], tx.message)
-        .unwrap();
-    let mut balance = 0;
-    for _ in 0..20 {
-        if let Ok(balance_) = client
-            .get_balance_with_commitment(&funding_keys[0].pubkey(), CommitmentConfig::recent())
-        {
-            if balance_ > 0 {
-                balance = balance_;
-                break;
-            }
-        }
-        sleep(Duration::from_millis(100));
-    }
-    assert!(balance > 0);
-    info!(
-        "funded multiple funding accounts with {:?} lanports",
-        balance
-    );
-
-    let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
-    for (i, key) in libra_funding_keys.iter().enumerate() {
-        let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
-        client
-            .send_and_confirm_message(&[&funding_keys[i], &key], tx.message)
-            .unwrap();
-
-        let tx = librapay_transaction::transfer(
-            libra_pay_program_id,
-            &libra_genesis_key.pubkey(),
-            &funding_keys[i],
-            &libra_funding_key,
-            &key.pubkey(),
-            total / NUM_FUNDING_KEYS as u64,
-            blockhash,
-        );
-        client
-            .send_and_confirm_message(&[&funding_keys[i], &libra_funding_key], tx.message)
-            .unwrap();
-
-        info!("funded libra funding key {}", i);
-    }
-
-    let keypair_count = keypairs.len();
-    let amount = total / (keypair_count as u64);
-    for (i, keys) in keypairs[..keypair_count]
-        .chunks(NUM_FUNDING_KEYS)
-        .enumerate()
-    {
-        for (j, key) in keys.iter().enumerate() {
-            let tx = librapay_transaction::transfer(
-                libra_pay_program_id,
-                &libra_genesis_key.pubkey(),
-                &funding_keys[j],
-                &libra_funding_keys[j],
-                &key.pubkey(),
-                amount,
-                blockhash,
-            );
-
-            let _sig = client
-                .async_send_transaction(tx.clone())
-                .expect("create_account in generate_and_fund_keypairs");
-        }
-
-        for (j, key) in keys.iter().enumerate() {
-            let mut times = 0;
-            loop {
-                let balance =
-                    librapay_transaction::get_libra_balance(client, &key.pubkey()).unwrap();
-                if balance >= amount {
-                    break;
-                } else if times > 20 {
-                    info!("timed out.. {} key: {} balance: {}", i, j, balance);
-                    break;
-                } else {
-                    times += 1;
-                    sleep(Duration::from_millis(100));
-                }
-            }
-        }
-
-        info!(
-            "funded group {} of {}",
-            i + 1,
-            keypairs.len() / NUM_FUNDING_KEYS
-        );
-        blockhash = get_recent_blockhash(client).0;
-    }
-
-    funding_time.stop();
-    info!("done funding keys, took {} ms", funding_time.as_ms());
-}
-
 pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     client: Arc<T>,
     faucet_addr: Option<SocketAddr>,
     funding_key: &Keypair,
     keypair_count: usize,
     lamports_per_account: u64,
-    use_move: bool,
-) -> Result<(Vec<Keypair>, Option<LibraKeys>)> {
+) -> Result<Vec<Keypair>> {
     info!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
     info!("Get lamports...");
@@ -1141,12 +885,6 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     let last_key = keypairs[keypair_count - 1].pubkey();
     let last_keypair_balance = client.get_balance(&last_key).unwrap_or(0);
 
-    #[cfg(feature = "move")]
-    let mut move_keypairs_ret = None;
-
-    #[cfg(not(feature = "move"))]
-    let move_keypairs_ret = None;
-
     // Repeated runs will eat up keypair balances from transaction fees. In order to quickly
     //   start another bench-tps run without re-funding all of the keypairs, check if the
     //   keypairs still have at least 80% of the expected funds. That should be enough to
@@ -1157,10 +895,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
         let max_fee = fee_rate_governor.max_lamports_per_signature;
         let extra_fees = extra * max_fee;
         let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair
-        let mut total = lamports_per_account * total_keypairs + extra_fees;
-        if use_move {
-            total *= 3;
-        }
+        let total = lamports_per_account * total_keypairs + extra_fees;
 
         let funding_key_balance = client.get_balance(&funding_key.pubkey()).unwrap_or(0);
         info!(
@@ -1170,40 +905,6 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
 
         if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client.as_ref(), &faucet_addr.unwrap(), funding_key, total)?;
-        }
-
-        #[cfg(feature = "move")]
-        {
-            if use_move {
-                let libra_genesis_keypair =
-                    create_genesis(&funding_key, client.as_ref(), 10_000_000);
-                let libra_mint_program_id = upload_mint_script(&funding_key, client.as_ref());
-                let libra_pay_program_id = upload_payment_script(&funding_key, client.as_ref());
-
-                // Generate another set of keypairs for move accounts.
-                // Still fund the solana ones which will be used for fees.
-                let seed = [0u8; 32];
-                let mut rnd = GenKeys::new(seed);
-                let move_keypairs = rnd.gen_n_keypairs(keypair_count as u64);
-                fund_move_keys(
-                    client.as_ref(),
-                    funding_key,
-                    &move_keypairs,
-                    total / 3,
-                    &libra_pay_program_id,
-                    &libra_mint_program_id,
-                    &libra_genesis_keypair,
-                );
-                move_keypairs_ret = Some((
-                    libra_genesis_keypair,
-                    libra_pay_program_id,
-                    libra_mint_program_id,
-                    move_keypairs,
-                ));
-
-                // Give solana keys 1/3 and move keys 1/3 the lamports. Keep 1/3 for fees.
-                total /= 3;
-            }
         }
 
         fund_keys(
@@ -1219,7 +920,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(keypair_count);
 
-    Ok((keypairs, move_keypairs_ret))
+    Ok(keypairs)
 }
 
 #[cfg(test)]
@@ -1243,11 +944,11 @@ mod tests {
         config.duration = Duration::from_secs(5);
 
         let keypair_count = config.tx_count * config.keypair_multiplier;
-        let (keypairs, _move_keypairs) =
-            generate_and_fund_keypairs(client.clone(), None, &config.id, keypair_count, 20, false)
+        let keypairs =
+            generate_and_fund_keypairs(client.clone(), None, &config.id, keypair_count, 20)
                 .unwrap();
 
-        do_bench_tps(client, config, keypairs, None);
+        do_bench_tps(client, config, keypairs);
     }
 
     #[test]
@@ -1258,9 +959,8 @@ mod tests {
         let keypair_count = 20;
         let lamports = 20;
 
-        let (keypairs, _move_keypairs) =
-            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports, false)
-                .unwrap();
+        let keypairs =
+            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports).unwrap();
 
         for kp in &keypairs {
             assert_eq!(
@@ -1282,9 +982,8 @@ mod tests {
         let keypair_count = 20;
         let lamports = 20;
 
-        let (keypairs, _move_keypairs) =
-            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports, false)
-                .unwrap();
+        let keypairs =
+            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports).unwrap();
 
         for kp in &keypairs {
             assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);

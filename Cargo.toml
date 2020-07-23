@@ -66,6 +66,4 @@ members = [
 
 exclude = [
     "programs/bpf",
-    "programs/move_loader",
-    "programs/librapay",
 ]

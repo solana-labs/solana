@@ -29,7 +29,6 @@ fn main() {
         write_to_client_file,
         read_from_client_file,
         target_lamports_per_signature,
-        use_move,
         multi_client,
         num_lamports_per_account,
         target_node,
@@ -100,7 +99,7 @@ fn main() {
         Arc::new(get_client(&nodes))
     };
 
-    let (keypairs, move_keypairs) = if *read_from_client_file && !use_move {
+    let keypairs = if *read_from_client_file {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -130,7 +129,7 @@ fn main() {
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
         keypairs.sort_by_key(|x| x.pubkey().to_string());
-        (keypairs, None)
+        keypairs
     } else {
         generate_and_fund_keypairs(
             client.clone(),
@@ -138,7 +137,6 @@ fn main() {
             &id,
             keypair_count,
             *num_lamports_per_account,
-            *use_move,
         )
         .unwrap_or_else(|e| {
             eprintln!("Error could not fund keys: {:?}", e);
@@ -146,5 +144,5 @@ fn main() {
         })
     };
 
-    do_bench_tps(client, cli_config, keypairs, move_keypairs);
+    do_bench_tps(client, cli_config, keypairs);
 }
