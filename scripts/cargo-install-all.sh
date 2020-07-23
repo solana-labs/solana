@@ -11,23 +11,19 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [+<cargo version>] [--use-move] [--debug] <install directory>
+usage: $0 [+<cargo version>] [--debug] <install directory>
 EOF
   exit $exitcode
 }
 
 maybeRustVersion=
-useMove=false
 installDir=
 buildVariant=release
 maybeReleaseFlag=--release
 
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
-    if [[ $1 = --use-move ]]; then
-      useMove=true
-      shift
-    elif [[ $1 = --debug ]]; then
+    if [[ $1 = --debug ]]; then
       maybeReleaseFlag=
       buildVariant=debug
       shift
@@ -75,13 +71,6 @@ else
     set -x
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
     $cargo $maybeRustVersion build $maybeReleaseFlag
-
-    if $useMove; then
-      moveLoaderDir=programs/move_loader
-      # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-      $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
-      cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
-    fi
   )
 
 

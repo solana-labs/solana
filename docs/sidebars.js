@@ -146,7 +146,6 @@ module.exports = {
       "implemented-proposals/repair-service",
       "implemented-proposals/testing-programs",
       "implemented-proposals/readonly-accounts",
-      "implemented-proposals/embedding-move",
       "implemented-proposals/staking-rewards",
       "implemented-proposals/rent",
       "implemented-proposals/durable-tx-nonces",
@@ -172,7 +171,6 @@ module.exports = {
       "proposals/block-confirmation",
       "proposals/rust-clients",
       "proposals/optimistic_confirmation",
-      "proposals/abi-management",
     ],
   },
 };
