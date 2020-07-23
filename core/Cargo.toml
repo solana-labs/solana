@@ -70,10 +70,9 @@ solana-vote-signer = { path = "../vote-signer", version = "1.4.0" }
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
-tokio = "0.1"
-tokio-codec = "0.1"
-tokio-fs = "0.1"
-tokio-io = "0.1"
+tokio_01 = { version = "0.1", package = "tokio" }
+tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
+tokio_io_01 = { version = "0.1", package = "tokio-io" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.4.0" }
 trees = "0.2.1"
 
