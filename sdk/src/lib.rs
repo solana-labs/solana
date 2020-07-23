@@ -25,7 +25,6 @@ pub mod inflation;
 pub mod instruction;
 pub mod loader_instruction;
 pub mod message;
-pub mod move_loader;
 pub mod native_loader;
 pub mod native_token;
 pub mod nonce;

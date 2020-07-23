@@ -1,6 +1,5 @@
 use solana_sdk::{
-    clock::Epoch, genesis_config::OperatingMode, inflation::Inflation,
-    move_loader::solana_move_loader_program, pubkey::Pubkey,
+    clock::Epoch, genesis_config::OperatingMode, inflation::Inflation, pubkey::Pubkey,
 };
 
 #[macro_use]
@@ -57,7 +56,6 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
                     // Programs that are only available in Development mode
                     solana_budget_program!(),
                     solana_exchange_program!(),
-                    solana_move_loader_program(),
                 ])
             } else {
                 None
@@ -135,7 +133,7 @@ mod tests {
     fn test_development_programs() {
         assert_eq!(
             get_programs(OperatingMode::Development, 0).unwrap().len(),
-            5
+            4
         );
         assert_eq!(get_programs(OperatingMode::Development, 1), None);
     }
