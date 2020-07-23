@@ -1,7 +1,6 @@
-use crate::{
-    decode_error::DecodeError,
-    hash::{hashv, Hasher},
-};
+#[cfg(not(feature = "program"))]
+use crate::hash::Hasher;
+use crate::{decode_error::DecodeError, hash::hashv};
 use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(feature = "program"))]
 use std::error;
