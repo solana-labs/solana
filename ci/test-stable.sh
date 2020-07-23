@@ -38,7 +38,6 @@ echo "Executing $testName"
 case $testName in
 test-stable)
   _ cargo +"$rust_stable" test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path bench-tps/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
   ;;
 test-stable-perf)
   # BPF program tests
