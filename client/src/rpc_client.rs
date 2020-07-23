@@ -52,6 +52,10 @@ impl RpcClient {
         Self::new_sender(HttpSender::new(url))
     }
 
+    pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
+        Self::new_sender(HttpSender::new_with_timeout(url, timeout))
+    }
+
     pub fn new_mock(url: String) -> Self {
         Self::new_sender(MockSender::new(url))
     }
@@ -66,7 +70,7 @@ impl RpcClient {
 
     pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
         let url = get_rpc_request_str(addr, false);
-        Self::new_sender(HttpSender::new_with_timeout(url, timeout))
+        Self::new_with_timeout(url, timeout)
     }
 
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
