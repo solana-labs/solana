@@ -147,12 +147,13 @@ impl LocalCluster {
                 })
                 .unzip();
         let leader_keypair = &keys_in_genesis[0].node_keypair;
+        let leader_vote_keypair = &keys_in_genesis[0].vote_keypair;
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey);
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
-            voting_keypair,
+            ..
         } = create_genesis_config_with_vote_accounts(
             config.cluster_lamports,
             &keys_in_genesis,
@@ -197,7 +198,6 @@ impl LocalCluster {
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
-        let leader_voting_keypair = Arc::new(voting_keypair);
         let mut leader_config = config.validator_configs[0].clone();
         leader_config.rpc_ports = Some((
             leader_node.info.rpc.port(),
@@ -206,10 +206,10 @@ impl LocalCluster {
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_server = Validator::new(
             leader_node,
-            &leader_keypair,
+            leader_keypair,
             &leader_ledger_path,
-            &leader_voting_keypair.pubkey(),
-            vec![leader_voting_keypair.clone()],
+            &leader_vote_keypair.pubkey(),
+            vec![leader_vote_keypair.clone()],
             None,
             true,
             &leader_config,
@@ -218,7 +218,7 @@ impl LocalCluster {
         let mut validators = HashMap::new();
         let leader_info = ValidatorInfo {
             keypair: leader_keypair.clone(),
-            voting_keypair: leader_voting_keypair,
+            voting_keypair: leader_vote_keypair.clone(),
             ledger_path: leader_ledger_path,
             contact_info: leader_contact_info.clone(),
         };
