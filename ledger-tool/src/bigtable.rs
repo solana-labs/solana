@@ -10,7 +10,13 @@ use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::UiTransactionEncoding;
-use std::{collections::HashSet, path::Path, process::exit, result::Result, time::Duration};
+use std::{
+    collections::HashSet,
+    path::Path,
+    process::exit,
+    result::Result,
+    time::{Duration, Instant},
+};
 use tokio::time::delay_for;
 
 // Attempt to upload this many blocks in parallel
@@ -131,7 +137,8 @@ async fn upload(
         (
             std::thread::spawn(move || {
                 let mut measure = Measure::start("block loader thread");
-                for slot in &blocks_to_upload {
+                let mut last_status_update = Instant::now();
+                for (i, slot) in blocks_to_upload.iter().enumerate() {
                     let _ = match blockstore.get_confirmed_block(
                         *slot,
                         Some(solana_transaction_status::UiTransactionEncoding::Binary),
@@ -145,6 +152,16 @@ async fn upload(
                             sender.send((*slot, None))
                         }
                     };
+
+                    if Instant::now().duration_since(last_status_update).as_secs() >= 60 {
+                        info!(
+                            "{}% of blocks processed ({}/{})",
+                            i * 100 / blocks_to_upload.len(),
+                            i,
+                            blocks_to_upload.len()
+                        );
+                        last_status_update = Instant::now();
+                    }
                 }
                 measure.stop();
                 info!("{} to load {} blocks", measure, blocks_to_upload.len());
@@ -160,8 +177,9 @@ async fn upload(
         tokio::stream::iter(receiver.into_iter()).chunks(NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL);
 
     while let Some(blocks) = stream.next().await {
-        let mut measure_upload = Measure::start("upload");
+        let mut measure_upload = Measure::start("Upload");
         let mut num_blocks = blocks.len();
+        info!("Preparing the next {} blocks for upload", num_blocks);
 
         let uploads = blocks.into_iter().filter_map(|(slot, block)| match block {
             None => {

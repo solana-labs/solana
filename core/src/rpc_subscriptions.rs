@@ -952,7 +952,7 @@ pub(crate) mod tests {
         system_transaction,
     };
     use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
-    use tokio::{prelude::FutureExt, runtime::Runtime, timer::Delay};
+    use tokio_01::{prelude::FutureExt, runtime::Runtime, timer::Delay};
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
         receiver: futures::sync::mpsc::Receiver<T>,
