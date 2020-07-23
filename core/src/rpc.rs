@@ -53,6 +53,7 @@ use std::{
     str::FromStr,
     sync::{Arc, RwLock},
 };
+use tokio::runtime;
 
 type RpcResponse<T> = Result<Response<T>>;
 
@@ -83,6 +84,7 @@ pub struct JsonRpcRequestProcessor {
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
     send_transaction_service: Arc<SendTransactionService>,
+    runtime_handle: runtime::Handle,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -144,6 +146,7 @@ impl JsonRpcRequestProcessor {
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
         send_transaction_service: Arc<SendTransactionService>,
+        runtime: &runtime::Runtime,
     ) -> Self {
         Self {
             config,
@@ -156,6 +159,7 @@ impl JsonRpcRequestProcessor {
             cluster_info,
             genesis_hash,
             send_transaction_service,
+            runtime_handle: runtime.handle().clone(),
         }
     }
 

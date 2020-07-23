@@ -68,6 +68,7 @@ solana-vote-signer = { path = "../vote-signer", version = "1.1.22" }
 solana-sys-tuner = { path = "../sys-tuner", version = "1.1.22" }
 tempfile = "3.1.0"
 thiserror = "1.0"
+tokio = { version = "0.2.22", features = ["full"] }
 tokio_01 = { version = "0.1", package = "tokio" }
 tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
 tokio_io_01 = { version = "0.1", package = "tokio-io" }
