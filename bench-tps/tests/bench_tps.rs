@@ -6,17 +6,11 @@ use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_core::validator::ValidatorConfig;
 use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
-#[cfg(feature = "move")]
-use solana_sdk::move_loader::solana_move_loader_program;
 use solana_sdk::signature::{Keypair, Signer};
 use std::sync::{mpsc::channel, Arc};
 use std::time::Duration;
 
 fn test_bench_tps_local_cluster(config: Config) {
-    #[cfg(feature = "move")]
-    let native_instruction_processors = vec![solana_move_loader_program()];
-
-    #[cfg(not(feature = "move"))]
     let native_instruction_processors = vec![];
 
     solana_logger::setup();
@@ -48,17 +42,16 @@ fn test_bench_tps_local_cluster(config: Config) {
     let lamports_per_account = 100;
 
     let keypair_count = config.tx_count * config.keypair_multiplier;
-    let (keypairs, move_keypairs) = generate_and_fund_keypairs(
+    let keypairs = generate_and_fund_keypairs(
         client.clone(),
         Some(faucet_addr),
         &config.id,
         keypair_count,
         lamports_per_account,
-        config.use_move,
     )
     .unwrap();
 
-    let _total = do_bench_tps(client, config, keypairs, move_keypairs);
+    let _total = do_bench_tps(client, config, keypairs);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
@@ -70,17 +63,6 @@ fn test_bench_tps_local_cluster_solana() {
     let mut config = Config::default();
     config.tx_count = 100;
     config.duration = Duration::from_secs(10);
-
-    test_bench_tps_local_cluster(config);
-}
-
-#[test]
-#[serial]
-fn test_bench_tps_local_cluster_move() {
-    let mut config = Config::default();
-    config.tx_count = 100;
-    config.duration = Duration::from_secs(10);
-    config.use_move = true;
 
     test_bench_tps_local_cluster(config);
 }

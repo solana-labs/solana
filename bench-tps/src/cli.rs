@@ -26,7 +26,6 @@ pub struct Config {
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
     pub multi_client: bool,
-    pub use_move: bool,
     pub num_lamports_per_account: u64,
     pub target_slots_per_epoch: u64,
     pub target_node: Option<Pubkey>,
@@ -50,7 +49,6 @@ impl Default for Config {
             read_from_client_file: false,
             target_lamports_per_signature: FeeRateGovernor::default().target_lamports_per_signature,
             multi_client: true,
-            use_move: false,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
             target_slots_per_epoch: 0,
             target_node: None,
@@ -113,11 +111,6 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
             Arg::with_name("sustained")
                 .long("sustained")
                 .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
-        )
-        .arg(
-            Arg::with_name("use-move")
-                .long("use-move")
-                .help("Use Move language transactions to perform transfers."),
         )
         .arg(
             Arg::with_name("no-multi-client")
@@ -276,7 +269,6 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
         args.target_lamports_per_signature = v.to_string().parse().expect("can't parse lamports");
     }
 
-    args.use_move = matches.is_present("use-move");
     args.multi_client = !matches.is_present("no-multi-client");
     args.target_node = matches
         .value_of("target_node")

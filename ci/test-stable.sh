@@ -38,7 +38,6 @@ echo "Executing $testName"
 case $testName in
 test-stable)
   _ cargo +"$rust_stable" test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path bench-tps/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
   ;;
 test-stable-perf)
   # BPF program tests
@@ -66,27 +65,6 @@ test-stable-perf)
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
-  ;;
-test-move)
-  #ci/affects-files.sh \
-  #  Cargo.lock$ \
-  #  Cargo.toml$ \
-  #  ^ci/rust-version.sh \
-  #  ^ci/test-stable.sh \
-  #  ^ci/test-move.sh \
-  #  ^programs/move_loader \
-  #  ^programs/librapay \
-  #  ^logger/ \
-  #  ^runtime/ \
-  #  ^sdk/ \
-  #|| {
-  #  annotate --style info \
-  #    "Skipped $testName as no relevant files were modified"
-  #  exit 0
-  #}
-  _ cargo +"$rust_stable" test --manifest-path programs/move_loader/Cargo.toml ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/librapay/Cargo.toml ${V:+--verbose} -- --nocapture
-  exit 0
   ;;
 test-local-cluster)
   _ cargo +"$rust_stable" build --release --bins ${V:+--verbose}
