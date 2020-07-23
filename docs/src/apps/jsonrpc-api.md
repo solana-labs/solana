@@ -1256,7 +1256,10 @@ Subscribe to an account to receive notifications when the lamports or data for a
 #### Parameters:
 
 - `<string>` - account Pubkey, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
 
@@ -1270,13 +1273,16 @@ Subscribe to an account to receive notifications when the lamports or data for a
 
 {"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"commitment": "single"}]}
 
+{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"encoding":"jsonParsed"}]}
+
 // Result
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{"jsonrpc": "2.0","result": 23784,"id": 1}
 ```
 
 #### Notification Format:
 
 ```bash
+// Binary encoding
 {
   "jsonrpc": "2.0",
   "method": "accountNotification",
@@ -1286,10 +1292,41 @@ Subscribe to an account to receive notifications when the lamports or data for a
         "slot": 5199307
       },
       "value": {
-        "data": "9qRxMDwy1ntDhBBoiy4Na9uDLbRTSzUS989mpwz",
+        "data": "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
         "executable": false,
         "lamports": 33594,
-        "owner": "H9oaJujXETwkmjyweuqKPFtk2no4SumoU9A3hi3dC8U6",
+        "owner": "11111111111111111111111111111111",
+        "rentEpoch": 635
+      }
+    },
+    "subscription": 23784
+  }
+}
+
+// Parsed-JSON encoding
+{
+  "jsonrpc": "2.0",
+  "method": "accountNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5199307
+      },
+      "value": {
+        "data": {
+           "nonce": {
+              "initialized": {
+                 "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                 "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                 "feeCalculator": {
+                    "lamportsPerSignature": 5000
+                 }
+              }
+           }
+        },
+        "executable": false,
+        "lamports": 33594,
+        "owner": "11111111111111111111111111111111",
         "rentEpoch": 635
       }
     },
@@ -1327,7 +1364,11 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 #### Parameters:
 
 - `<string>` - program_id Pubkey, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+  - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 #### Results:
 
@@ -1337,17 +1378,22 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 ```bash
 // Request
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq"]}
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111"]}
 
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq", {"commitment": "single"}]}
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"commitment": "single"}]}
+
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"encoding":"jsonParsed"}]}
+
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"filters":[{"dataSize":80}]}]}
 
 // Result
-{"jsonrpc": "2.0","result": 0,"id": 1}
+{"jsonrpc": "2.0","result": 24040,"id": 1}
 ```
 
 #### Notification Format:
 
 ```bash
+// Binary encoding
 {
   "jsonrpc": "2.0",
   "method": "programNotification",
@@ -1359,10 +1405,44 @@ Subscribe to a program to receive notifications when the lamports or data for a 
       "value": {
         "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq"
         "account": {
-          "data": "9qRxMDwy1ntDhBBoiy4Na9uDLbRTSzUS989m",
+          "data": "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
           "executable": false,
           "lamports": 33594,
-          "owner": "7BwE8yitxiWkD8jVPFvPmV7rs2Znzi4NHzJGLu2dzpUq",
+          "owner": "11111111111111111111111111111111",
+          "rentEpoch": 636
+        },
+      }
+    },
+    "subscription": 24040
+  }
+}
+
+// Parsed-JSON encoding
+{
+  "jsonrpc": "2.0",
+  "method": "programNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5208469
+      },
+      "value": {
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq"
+        "account": {
+          "data": {
+             "nonce": {
+                "initialized": {
+                   "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                   "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                   "feeCalculator": {
+                      "lamportsPerSignature": 5000
+                   }
+                }
+             }
+          },
+          "executable": false,
+          "lamports": 33594,
+          "owner": "11111111111111111111111111111111",
           "rentEpoch": 636
         },
       }
