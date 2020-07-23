@@ -11,6 +11,8 @@ edition = "2018"
 [features]
 # On-chain program specific dependencies
 program = []
+# Program elements to optionally skip
+skip-no-mangle = []
 # Dependencies that are not compatible or needed for on-chain programs
 default = [
     "assert_matches",
