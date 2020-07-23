@@ -507,7 +507,7 @@ fn test_kill_partition_switch_threshold_no_progress() {
 #[test]
 #[ignore]
 #[serial]
-fn test_kill_partition_switch_threshold2() {
+fn test_kill_partition_switch_threshold_progress() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
     let total_stake = 10_000;
 

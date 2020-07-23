@@ -168,7 +168,7 @@ impl ForkProgress {
         num_dropped_blocks_on_fork: u64,
     ) -> Self {
         let validator_fork_info = {
-            if bank.collector_id() == my_pubkey {
+            if bank.collector_id() == my_pubkey && bank.slot() > 0 {
                 let stake = bank.epoch_vote_account_stake(voting_pubkey);
                 Some(ValidatorStakeInfo::new(
                     *voting_pubkey,
