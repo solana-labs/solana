@@ -23,6 +23,7 @@ use std::{
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
+use tokio::runtime;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -31,6 +32,7 @@ pub struct JsonRpcService {
     pub request_processor: JsonRpcRequestProcessor, // Used only by test_rpc_new()...
 
     close_handle: Option<CloseHandle>,
+    runtime: runtime::Runtime,
 }
 
 struct RpcRequestMiddleware {
@@ -251,6 +253,12 @@ impl JsonRpcService {
         ));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
+        let runtime = runtime::Builder::new()
+            .threaded_scheduler()
+            .thread_name("rpc-runtime")
+            .enable_all()
+            .build()
+            .expect("Runtime");
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
@@ -260,6 +268,7 @@ impl JsonRpcService {
             health.clone(),
             cluster_info,
             genesis_hash,
+            &runtime,
         );
 
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
@@ -327,6 +336,7 @@ impl JsonRpcService {
             .register_exit(Box::new(move || close_handle_.close()));
         Self {
             thread_hdl,
+            runtime,
             #[cfg(test)]
             request_processor: test_request_processor,
             close_handle: Some(close_handle),
@@ -340,6 +350,7 @@ impl JsonRpcService {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        self.runtime.shutdown_background();
         self.thread_hdl.join()
     }
 }
