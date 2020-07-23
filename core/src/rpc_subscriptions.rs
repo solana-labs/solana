@@ -38,7 +38,9 @@ use std::{
     iter,
     sync::{Arc, Mutex, RwLock},
 };
-use tokio::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
+
+// Stuck on tokio 0.1 until the jsonrpc-pubsub crate upgrades to tokio 0.2
+use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
