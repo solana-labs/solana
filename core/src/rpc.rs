@@ -137,7 +137,7 @@ impl JsonRpcRequestProcessor {
             // We log an error instead of returning an error, because all known error cases
             // are due to known bugs that should be fixed instead.
             //
-            // The slot may not be found a result of a known bug in snapshot creation, where
+            // The slot may not be found as a result of a known bug in snapshot creation, where
             // the bank at the given slot was not included in the snapshot.
             // Also, it may occur after an old bank has been purged from BankForks and a new
             // BlockCommitmentCache has not yet arrived. To make this case impossible,
