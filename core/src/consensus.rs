@@ -687,12 +687,7 @@ pub mod test {
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
     };
-    use solana_sdk::{
-        clock::Slot,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    };
+    use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer};
     use solana_vote_program::{
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
@@ -947,14 +942,8 @@ pub mod test {
             HeaviestSubtreeForkChoice,
         ) {
             let keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
-                let node_keypair = Keypair::new();
-                let vote_keypair = Keypair::new();
-                let stake_keypair = Keypair::new();
-                let node_pubkey = node_keypair.pubkey();
-                (
-                    node_pubkey,
-                    ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-                )
+                let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+                (vote_keypairs.node_keypair.pubkey(), vote_keypairs)
             })
             .take(num_keypairs)
             .collect();
@@ -990,7 +979,11 @@ pub mod test {
             genesis_config,
             mint_keypair,
             voting_keypair: _,
-        } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, stake);
+        } = create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &validator_keypairs,
+            vec![stake; validator_keypairs.len()],
+        );
 
         let bank0 = Bank::new(&genesis_config);
 

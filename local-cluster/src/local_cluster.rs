@@ -11,9 +11,9 @@ use solana_core::{
     gossip_service::discover_cluster,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::{
-    create_new_tmp_ledger,
-    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+use solana_ledger::create_new_tmp_ledger;
+use solana_runtime::genesis_utils::{
+    create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
 };
 use solana_sdk::{
     client::SyncClient,
@@ -49,8 +49,12 @@ pub struct ClusterConfig {
     pub validator_configs: Vec<ValidatorConfig>,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
-    /// The specific pubkeys of each node if specified
-    pub validator_keys: Option<Vec<Arc<Keypair>>>,
+    /// List of tuples (pubkeys, in_genesis) of each node if specified. If
+    /// `in_genesis` == true, the validator's vote and stake accounts
+    //  will be inserted into the genesis block instead of warming up through
+    // creating the vote accounts. The first validator (bootstrap leader) automatically
+    // is assumed to be `in_genesis` == true.
+    pub validator_keys: Option<Vec<(Arc<Keypair>, bool)>>,
     /// The stakes of each node
     pub node_stakes: Vec<u64>,
     /// The total lamports available to the cluster
@@ -108,28 +112,49 @@ impl LocalCluster {
 
     pub fn new(config: &ClusterConfig) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
-        let validator_keys = {
+        let mut validator_keys = {
             if let Some(ref keys) = config.validator_keys {
                 assert_eq!(config.validator_configs.len(), keys.len());
                 keys.clone()
             } else {
-                iter::repeat_with(|| Arc::new(Keypair::new()))
+                iter::repeat_with(|| (Arc::new(Keypair::new()), false))
                     .take(config.validator_configs.len())
                     .collect()
             }
         };
 
-        let leader_keypair = &validator_keys[0];
+        // Bootstrap leader should always be in genesis block
+        validator_keys[0].1 = true;
+        let (keys_in_genesis, stakes_in_genesis): (Vec<ValidatorVoteKeypairs>, Vec<u64>) =
+            validator_keys
+                .iter()
+                .zip(&config.node_stakes)
+                .filter_map(|((node_keypair, in_genesis), stake)| {
+                    if *in_genesis {
+                        Some((
+                            ValidatorVoteKeypairs {
+                                node_keypair: node_keypair.clone(),
+                                vote_keypair: Arc::new(Keypair::new()),
+                                stake_keypair: Arc::new(Keypair::new()),
+                            },
+                            stake,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .unzip();
+        let leader_keypair = &keys_in_genesis[0].node_keypair;
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey);
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
             voting_keypair,
-        } = create_genesis_config_with_leader(
+        } = create_genesis_config_with_vote_accounts(
             config.cluster_lamports,
-            &leader_pubkey,
-            config.node_stakes[0],
+            &keys_in_genesis,
+            stakes_in_genesis,
         );
         genesis_config.ticks_per_slot = config.ticks_per_slot;
         genesis_config.epoch_schedule =
@@ -208,12 +233,21 @@ impl LocalCluster {
             genesis_config,
         };
 
-        for (stake, validator_config, key) in izip!(
+        let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
+            .into_iter()
+            .map(|keypairs| (keypairs.node_keypair.pubkey(), keypairs.vote_keypair))
+            .collect();
+        for (stake, validator_config, (key, _)) in izip!(
             (&config.node_stakes[1..]).iter(),
             config.validator_configs[1..].iter(),
             validator_keys[1..].iter(),
         ) {
-            cluster.add_validator(validator_config, *stake, key.clone());
+            cluster.add_validator(
+                validator_config,
+                *stake,
+                key.clone(),
+                node_pubkey_to_vote_key.get(&key.pubkey()).cloned(),
+            );
         }
 
         let listener_config = ValidatorConfig {
@@ -221,7 +255,7 @@ impl LocalCluster {
             ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()));
+            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()), None);
         });
 
         discover_cluster(
@@ -257,6 +291,7 @@ impl LocalCluster {
         validator_config: &ValidatorConfig,
         stake: u64,
         validator_keypair: Arc<Keypair>,
+        mut voting_keypair: Option<Arc<Keypair>>,
     ) -> Pubkey {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
@@ -264,7 +299,10 @@ impl LocalCluster {
         );
 
         // Must have enough tokens to fund vote account and set delegate
-        let voting_keypair = Keypair::new();
+        let should_create_vote_pubkey = voting_keypair.is_none();
+        if voting_keypair.is_none() {
+            voting_keypair = Some(Arc::new(Keypair::new()));
+        }
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
@@ -285,14 +323,15 @@ impl LocalCluster {
                 "validator {} balance {}",
                 validator_pubkey, validator_balance
             );
-
-            Self::setup_vote_and_stake_accounts(
-                &client,
-                &voting_keypair,
-                &validator_keypair,
-                stake,
-            )
-            .unwrap();
+            if should_create_vote_pubkey {
+                Self::setup_vote_and_stake_accounts(
+                    &client,
+                    voting_keypair.as_ref().unwrap(),
+                    &validator_keypair,
+                    stake,
+                )
+                .unwrap();
+            }
         }
 
         let mut config = validator_config.clone();
@@ -300,8 +339,8 @@ impl LocalCluster {
             validator_node.info.rpc.port(),
             validator_node.info.rpc_pubsub.port(),
         ));
-        let voting_keypair = Arc::new(voting_keypair);
         config.account_paths = vec![ledger_path.join("accounts")];
+        let voting_keypair = voting_keypair.unwrap();
         let validator_server = Validator::new(
             validator_node,
             &validator_keypair,

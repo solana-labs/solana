@@ -29,13 +29,12 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
 }
 
 fn test_node_with_bank(
-    node_keypair: Keypair,
+    node_keypair: Arc<Keypair>,
     exit: &Arc<AtomicBool>,
     bank_forks: Arc<RwLock<BankForks>>,
 ) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
-    let keypair = Arc::new(node_keypair);
-    let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
+    let mut test_node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
+    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), node_keypair));
     let gossip_service = GossipService::new(
         &cluster_info,
         Some(bank_forks),
@@ -224,7 +223,11 @@ pub fn cluster_info_scale() {
     let vote_keypairs: Vec<_> = (0..num_nodes)
         .map(|_| ValidatorVoteKeypairs::new_rand())
         .collect();
-    let genesis_config_info = create_genesis_config_with_vote_accounts(10_000, &vote_keypairs, 100);
+    let genesis_config_info = create_genesis_config_with_vote_accounts(
+        10_000,
+        &vote_keypairs,
+        vec![100; vote_keypairs.len()],
+    );
     let bank0 = Bank::new(&genesis_config_info.genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 

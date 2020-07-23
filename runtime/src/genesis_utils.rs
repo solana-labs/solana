@@ -9,19 +9,23 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, sync::Arc};
 
 // The default stake placed with the bootstrap validator
 pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
 
 pub struct ValidatorVoteKeypairs {
-    pub node_keypair: Keypair,
-    pub vote_keypair: Keypair,
-    pub stake_keypair: Keypair,
+    pub node_keypair: Arc<Keypair>,
+    pub vote_keypair: Arc<Keypair>,
+    pub stake_keypair: Arc<Keypair>,
 }
 
 impl ValidatorVoteKeypairs {
-    pub fn new(node_keypair: Keypair, vote_keypair: Keypair, stake_keypair: Keypair) -> Self {
+    pub fn new(
+        node_keypair: Arc<Keypair>,
+        vote_keypair: Arc<Keypair>,
+        stake_keypair: Arc<Keypair>,
+    ) -> Self {
         Self {
             node_keypair,
             vote_keypair,
@@ -31,9 +35,9 @@ impl ValidatorVoteKeypairs {
 
     pub fn new_rand() -> Self {
         Self {
-            node_keypair: Keypair::new(),
-            vote_keypair: Keypair::new(),
-            stake_keypair: Keypair::new(),
+            node_keypair: Arc::new(Keypair::new()),
+            vote_keypair: Arc::new(Keypair::new()),
+            stake_keypair: Arc::new(Keypair::new()),
         }
     }
 }
@@ -51,10 +55,11 @@ pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
 pub fn create_genesis_config_with_vote_accounts(
     mint_lamports: u64,
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
-    stake: u64,
+    stakes: Vec<u64>,
 ) -> GenesisConfigInfo {
+    assert_eq!(voting_keypairs.len(), stakes.len());
     let mut genesis_config_info = create_genesis_config(mint_lamports);
-    for validator_voting_keypairs in voting_keypairs {
+    for (validator_voting_keypairs, stake) in voting_keypairs.iter().zip(stakes) {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
         let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();

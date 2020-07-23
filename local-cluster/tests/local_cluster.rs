@@ -265,7 +265,12 @@ fn run_cluster_partition<E, F>(
         cluster_lamports,
         node_stakes,
         validator_configs: vec![validator_config; num_nodes],
-        validator_keys: Some(validator_keys),
+        validator_keys: Some(
+            validator_keys
+                .into_iter()
+                .zip(iter::repeat_with(|| true))
+                .collect(),
+        ),
         ..ClusterConfig::default()
     };
 
@@ -760,7 +765,7 @@ fn test_frozen_account_from_genesis() {
         Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), true)]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![
@@ -788,7 +793,7 @@ fn test_frozen_account_from_snapshot() {
     snapshot_test_config.validator_config.frozen_accounts = vec![validator_identity.pubkey()];
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), true)]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![snapshot_test_config.validator_config.clone()],
@@ -864,6 +869,7 @@ fn test_consistency_halt() {
         &validator_snapshot_test_config.validator_config,
         validator_stake as u64,
         Arc::new(Keypair::new()),
+        None,
     );
     let num_nodes = 2;
     assert_eq!(
@@ -958,6 +964,7 @@ fn test_snapshot_download() {
         &validator_snapshot_test_config.validator_config,
         stake,
         Arc::new(Keypair::new()),
+        None,
     );
 }
 
@@ -1095,6 +1102,7 @@ fn test_snapshots_blockstore_floor() {
         &validator_snapshot_test_config.validator_config,
         validator_stake,
         Arc::new(Keypair::new()),
+        None,
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
