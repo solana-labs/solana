@@ -108,14 +108,12 @@ impl NativeLoader {
                             Ok(entrypoint)
                         }
                         Err(e) => {
-                            warn!("Unable to find program entrypoint in {:?}: {:?})", name, e);
-                            Err(NativeLoaderError::EntrypointNotFound.into())
+                            panic!("Unable to find program entrypoint in {:?}: {:?})", name, e);
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to load: {:?}", e);
-                    Err(NativeLoaderError::FailedToLoad.into())
+                    panic!("Failed to load: {:?}", e);
                 }
             }
         }
@@ -135,8 +133,7 @@ impl NativeLoader {
         let name = match str::from_utf8(name_vec) {
             Ok(v) => v,
             Err(e) => {
-                warn!("Invalid UTF-8 sequence: {}", e);
-                return Err(NativeLoaderError::InvalidEntrypointName.into());
+                panic!("Invalid UTF-8 sequence: {}", e);
             }
         };
         trace!("Call native {:?}", name);
