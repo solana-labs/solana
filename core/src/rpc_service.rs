@@ -253,12 +253,28 @@ impl JsonRpcService {
         ));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let runtime = runtime::Builder::new()
+        let mut runtime = runtime::Builder::new()
             .threaded_scheduler()
             .thread_name("rpc-runtime")
             .enable_all()
             .build()
             .expect("Runtime");
+
+        let bigtable_ledger_storage = if config.enable_bigtable_ledger_storage {
+            runtime
+                .block_on(solana_storage_bigtable::LedgerStorage::new(false))
+                .map(|x| {
+                    info!("BigTable ledger storage initialized");
+                    Some(x)
+                })
+                .unwrap_or_else(|err| {
+                    error!("Failed to initialize BigTable ledger storage: {:?}", err);
+                    None
+                })
+        } else {
+            None
+        };
+
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
@@ -269,6 +285,7 @@ impl JsonRpcService {
             cluster_info,
             genesis_hash,
             &runtime,
+            bigtable_ledger_storage,
         );
 
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));

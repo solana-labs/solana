@@ -627,7 +627,15 @@ pub fn main() {
                 .takes_value(false)
                 .help("Enable historical transaction info over JSON RPC, \
                        including the 'getConfirmedBlock' API.  \
-                       This will cause an increase in disk usage  and IOPS"),
+                       This will cause an increase in disk usage and IOPS"),
+        )
+        .arg(
+            Arg::with_name("enable_rpc_bigtable_ledger_storage")
+                .long("enable-rpc-bigtable-ledger-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Fetch historical transaction info from a BigTable instance \
+                       as a fallback to local ledger data"),
         )
         .arg(
             Arg::with_name("health_check_slot_distance")
@@ -938,6 +946,8 @@ pub fn main() {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
+            enable_bigtable_ledger_storage: matches
+                .is_present("enable_rpc_bigtable_ledger_storage"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
