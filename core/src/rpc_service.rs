@@ -23,7 +23,6 @@ use std::{
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::prelude::Future;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -97,6 +96,9 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
+        // Stuck on tokio 0.1 until the jsonrpc-http-server crate upgrades to tokio 0.2
+        use tokio_01::prelude::*;
+
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
@@ -115,10 +117,10 @@ impl RpcRequestMiddleware {
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
             response: Box::new(
-                tokio_fs::file::File::open(filename)
+                tokio_fs_01::file::File::open(filename)
                     .and_then(|file| {
                         let buf: Vec<u8> = Vec::new();
-                        tokio_io::io::read_to_end(file, buf)
+                        tokio_io_01::io::read_to_end(file, buf)
                             .and_then(|item| Ok(hyper::Response::new(item.1.into())))
                             .or_else(|_| Ok(RpcRequestMiddleware::internal_server_error()))
                     })
