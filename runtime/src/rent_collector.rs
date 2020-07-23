@@ -1,15 +1,27 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, incinerator, pubkey::Pubkey,
-    rent::Rent, sysvar,
+    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, genesis_config::GenesisConfig,
+    incinerator, pubkey::Pubkey, rent::Rent, sysvar,
 };
 
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
+}
+
+impl Default for RentCollector {
+    fn default() -> Self {
+        Self {
+            epoch: Epoch::default(),
+            epoch_schedule: EpochSchedule::default(),
+            // derive default value using GenesisConfig::default()
+            slots_per_year: GenesisConfig::default().slots_per_year(),
+            rent: Rent::default(),
+        }
+    }
 }
 
 impl RentCollector {
@@ -36,6 +48,7 @@ impl RentCollector {
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
+    #[must_use = "add to Bank::collected_rent"]
     pub fn collect_from_existing_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
         if account.executable
             || account.rent_epoch > self.epoch
@@ -89,5 +102,28 @@ impl RentCollector {
             *account = Some(Account::default());
             self.collect_from_created_account(address, &mut account.as_mut().unwrap())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_from_account_existing() {
+        let old_lamports = 1000;
+        let old_epoch = 1;
+        let new_epoch = 3;
+
+        let mut existing_account = Account::default();
+        existing_account.lamports = old_lamports;
+        existing_account.rent_epoch = old_epoch;
+
+        let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
+        let collected = rent_collector
+            .collect_from_existing_account(&Pubkey::new_rand(), &mut existing_account);
+        assert_ne!(collected, 0);
+        assert_ne!(existing_account.lamports, old_lamports);
+        assert_ne!(existing_account.rent_epoch, old_epoch);
     }
 }
