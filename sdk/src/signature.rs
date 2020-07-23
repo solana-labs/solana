@@ -1,12 +1,14 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use crate::{pubkey::Pubkey, transaction::TransactionError};
+use ed25519_dalek::Signer as DalekSigner;
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
 use itertools::Itertools;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use std::{
     borrow::{Borrow, Cow},
+    convert::TryInto,
     error, fmt,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -16,7 +18,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {
@@ -61,7 +63,7 @@ impl Signature {
 
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
-        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice());
+        let signature = self.0.as_slice().try_into();
         if pubkey.is_err() || signature.is_err() {
             return false;
         }

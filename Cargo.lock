@@ -421,15 +421,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clear_on_drop"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97276801e127ffb46b66ce23f35cc96bd454fa311294bced4bbace7baa8b1d17"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -726,16 +717,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4358a9e11b9a09cf52383b451b49a169e8d797b68aa02301ff586d70d9661ea3"
 
 [[package]]
-name = "ed25519-dalek"
-version = "1.0.0-pre.3"
+name = "ed25519"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978710b352437433c97b2bff193f2fb1dfd58a093f863dd95e225a19baa599a2"
+checksum = "bf038a7b6fd7ef78ad3348b63f3a17550877b0e28f8d68bcc94894d1412158bc"
 dependencies = [
- "clear_on_drop",
+ "serde",
+ "signature",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "1.0.0-pre.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21a8a37f4e8b35af971e6db5e3897e7a6344caa3f92f6544f88125a1f5f0035a"
+dependencies = [
  "curve25519-dalek",
+ "ed25519",
  "rand 0.7.3",
  "serde",
  "sha2",
+ "zeroize",
 ]
 
 [[package]]
@@ -2859,6 +2861,12 @@ dependencies = [
  "arc-swap",
  "libc",
 ]
+
+[[package]]
+name = "signature"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65211b7b6fc3f14ff9fc7a2011a434e3e6880585bd2e9e9396315ae24cbf7852"
 
 [[package]]
 name = "slab"
@@ -5193,6 +5201,21 @@ name = "zeroize"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cbac2ed2ba24cc90f5e06485ac8c7c1e5449fe8911aef4d8877218af021a5b8"
+dependencies = [
+ "zeroize_derive",
+]
+
+[[package]]
+name = "zeroize_derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de251eec69fc7c1bc3923403d18ececb929380e016afe103da75f396704f8ca2"
+dependencies = [
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "syn 1.0.27",
+ "synstructure",
+]
 
 [[package]]
 name = "zstd"
