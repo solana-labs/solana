@@ -1544,9 +1544,9 @@ impl Bank {
         }
     }
 
-    pub fn collect_balances(&self, batch: &[Transaction]) -> TransactionBalances {
+    pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
-        for transaction in batch.iter() {
+        for transaction in OrderedIterator::new(batch.transactions(), batch.iteration_order()) {
             let mut transaction_balances: Vec<u64> = vec![];
             for account_key in transaction.message.account_keys.iter() {
                 transaction_balances.push(self.get_balance(account_key));
@@ -2403,7 +2403,7 @@ impl Bank {
         collect_balances: bool,
     ) -> (TransactionResults, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
-            self.collect_balances(batch.transactions())
+            self.collect_balances(batch)
         } else {
             vec![]
         };
@@ -2419,7 +2419,7 @@ impl Bank {
             signature_count,
         );
         let post_balances = if collect_balances {
-            self.collect_balances(batch.transactions())
+            self.collect_balances(batch)
         } else {
             vec![]
         };
@@ -7251,10 +7251,20 @@ mod tests {
             vec![program_id],
             instructions,
         );
-        let balances = bank0.collect_balances(&[tx0, tx1]);
+        let txs = vec![tx0, tx1];
+        let iteration_order: Vec<usize> = vec![0, 1];
+        let batch = bank0.prepare_batch(&txs, Some(iteration_order));
+        let balances = bank0.collect_balances(&batch);
         assert_eq!(balances.len(), 2);
         assert_eq!(balances[0], vec![8, 11, 1]);
         assert_eq!(balances[1], vec![8, 0, 1]);
+
+        let iteration_order: Vec<usize> = vec![1, 0];
+        let batch = bank0.prepare_batch(&txs, Some(iteration_order));
+        let balances = bank0.collect_balances(&batch);
+        assert_eq!(balances.len(), 2);
+        assert_eq!(balances[0], vec![8, 0, 1]);
+        assert_eq!(balances[1], vec![8, 11, 1]);
     }
 
     #[test]
