@@ -318,17 +318,17 @@ impl LocalCluster {
             info!("listener {} ", validator_pubkey,);
         } else {
             // Give the validator some lamports to setup vote accounts
-            let validator_balance = Self::transfer_with_client(
-                &client,
-                &self.funding_keypair,
-                &validator_pubkey,
-                stake * 2 + 2,
-            );
-            info!(
-                "validator {} balance {}",
-                validator_pubkey, validator_balance
-            );
             if should_create_vote_pubkey {
+                let validator_balance = Self::transfer_with_client(
+                    &client,
+                    &self.funding_keypair,
+                    &validator_pubkey,
+                    stake * 2 + 2,
+                );
+                info!(
+                    "validator {} balance {}",
+                    validator_pubkey, validator_balance
+                );
                 Self::setup_vote_and_stake_accounts(
                     &client,
                     voting_keypair.as_ref().unwrap(),
@@ -461,6 +461,10 @@ impl LocalCluster {
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
         let node_pubkey = from_account.pubkey();
+        info!(
+            "setup_vote_and_stake_accounts: {}, {}",
+            node_pubkey, vote_account_pubkey
+        );
         let stake_account_keypair = Keypair::new();
         let stake_account_pubkey = stake_account_keypair.pubkey();
 
