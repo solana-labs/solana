@@ -651,14 +651,20 @@ mod tests {
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
                 bank_forks.clone(),
-                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
-                    1, 1,
-                ))),
+                Arc::new(RwLock::new(
+                    BlockCommitmentCache::new_for_tests_with_blockstore_bank(
+                        blockstore,
+                        bank_forks.read().unwrap().get(1).unwrap().clone(),
+                        1,
+                    ),
+                )),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
         };
