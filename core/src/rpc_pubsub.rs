@@ -5,7 +5,10 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_account_decoder::UiAccount;
-use solana_client::rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult};
+use solana_client::{
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult},
+};
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{
@@ -38,7 +41,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -62,7 +65,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -173,7 +176,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
@@ -181,7 +184,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
                 self.subscriptions
-                    .add_account_subscription(pubkey, commitment, sub_id, subscriber)
+                    .add_account_subscription(pubkey, config, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -209,7 +212,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
@@ -217,7 +220,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
                 self.subscriptions
-                    .add_program_subscription(pubkey, commitment, sub_id, subscriber)
+                    .add_program_subscription(pubkey, config, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -355,6 +358,7 @@ mod tests {
     use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
+    use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
     use solana_budget_program::{self, budget_instruction};
     use solana_runtime::{
         bank::Bank,
@@ -370,7 +374,7 @@ mod tests {
         message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_program, system_transaction,
+        system_instruction, system_program, system_transaction,
         transaction::{self, Transaction},
     };
     use solana_vote_program::vote_transaction;
@@ -537,7 +541,10 @@ mod tests {
             session,
             subscriber,
             contract_state.pubkey().to_string(),
-            Some(CommitmentConfig::recent()),
+            Some(RpcAccountInfoConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                encoding: None,
+            }),
         );
 
         let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
@@ -612,6 +619,88 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_account_subscribe_with_encoding() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair: alice,
+            ..
+        } = create_genesis_config(10_000);
+
+        let nonce_account = Keypair::new();
+        let bank = Bank::new(&genesis_config);
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+
+        let rpc = RpcSolPubSubImpl {
+            subscriptions: Arc::new(RpcSubscriptions::new(
+                &Arc::new(AtomicBool::new(false)),
+                bank_forks.clone(),
+                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                    1, 1,
+                ))),
+            )),
+            uid: Arc::new(atomic::AtomicUsize::default()),
+        };
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            nonce_account.pubkey().to_string(),
+            Some(RpcAccountInfoConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                encoding: Some(UiAccountEncoding::JsonParsed),
+            }),
+        );
+
+        let ixs = system_instruction::create_nonce_account(
+            &alice.pubkey(),
+            &nonce_account.pubkey(),
+            &alice.pubkey(),
+            100,
+        );
+        let message = Message::new(&ixs, Some(&alice.pubkey()));
+        let tx = Transaction::new(&[&alice, &nonce_account], message, blockhash);
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
+        sleep(Duration::from_millis(200));
+
+        // Test signature confirmation notification #1
+        let expected_data = bank_forks
+            .read()
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .get_account(&nonce_account.pubkey())
+            .unwrap()
+            .data;
+        let expected_data = parse_account_data(&system_program::id(), &expected_data).unwrap();
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 1 },
+                   "value": {
+                       "owner": system_program::id().to_string(),
+                       "lamports": 100,
+                       "data": expected_data,
+                       "executable": false,
+                       "rentEpoch": 1,
+                   },
+               },
+               "subscription": 0,
+           }
+        });
+
+        let (response, _) = robust_poll_or_panic(receiver);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+    }
+
+    #[test]
+    #[serial]
     fn test_account_unsubscribe() {
         let bob_pubkey = Pubkey::new_rand();
         let session = create_session();
@@ -675,7 +764,10 @@ mod tests {
             session,
             subscriber,
             bob.pubkey().to_string(),
-            Some(CommitmentConfig::root()),
+            Some(RpcAccountInfoConfig {
+                commitment: Some(CommitmentConfig::root()),
+                encoding: None,
+            }),
         );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
@@ -721,7 +813,10 @@ mod tests {
             session,
             subscriber,
             bob.pubkey().to_string(),
-            Some(CommitmentConfig::root()),
+            Some(RpcAccountInfoConfig {
+                commitment: Some(CommitmentConfig::root()),
+                encoding: None,
+            }),
         );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
