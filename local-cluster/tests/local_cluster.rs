@@ -260,6 +260,7 @@ fn run_cluster_partition<E, F>(
         }
     };
 
+    let slots_per_epoch = 2048;
     let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
@@ -270,8 +271,8 @@ fn run_cluster_partition<E, F>(
                 .zip(iter::repeat_with(|| true))
                 .collect(),
         ),
-        slots_per_epoch: 2048,
-        stakers_slot_offset: 2048,
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
         skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
@@ -292,31 +293,19 @@ fn run_cluster_partition<E, F>(
 
     let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
 
+    // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
-    loop {
-        let mut reached_epoch = true;
-        for node in &cluster_nodes {
-            let node_client = RpcClient::new_socket(node.rpc);
-            if let Ok(epoch_info) = node_client.get_epoch_info() {
-                info!("slots_per_epoch: {:?}", epoch_info);
-                if epoch_info.slots_in_epoch <= (1 << VOTE_THRESHOLD_DEPTH) {
-                    reached_epoch = false;
-                    break;
-                }
-            } else {
-                reached_epoch = false;
-            }
-        }
-
-        if reached_epoch {
-            info!("PARTITION_TEST start partition");
-            enable_partition.store(false, Ordering::Relaxed);
-            on_partition_start(&mut cluster);
-            break;
-        } else {
-            sleep(Duration::from_millis(100));
-        }
+    for node in &cluster_nodes {
+        let node_client = RpcClient::new_socket(node.rpc);
+        let epoch_info = node_client.get_epoch_info().unwrap();
+        info!("slots_per_epoch: {:?}", epoch_info);
+        assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
     }
+
+    info!("PARTITION_TEST start partition");
+    enable_partition.store(false, Ordering::Relaxed);
+    on_partition_start(&mut cluster);
+
     sleep(Duration::from_millis(leader_schedule_time));
 
     info!("PARTITION_TEST remove partition");
@@ -518,7 +507,7 @@ fn test_kill_partition_switch_threshold_no_progress() {
 #[test]
 #[ignore]
 #[serial]
-fn test_kill_partition_switch_threshold() {
+fn test_kill_partition_switch_threshold2() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
     let total_stake = 10_000;
 

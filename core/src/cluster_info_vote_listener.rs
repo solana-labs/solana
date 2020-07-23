@@ -705,6 +705,7 @@ impl ClusterInfoVoteListener {
 
         if let Some(stakes) = epoch_stakes {
             if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
+                info!("stake of pubkey: {}, {}", pubkey, vote_account.0);
                 if is_new {
                     *sum += vote_account.0;
                 }
