@@ -270,7 +270,9 @@ impl Validator {
         }
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let mut block_commitment_cache = BlockCommitmentCache::default();
+        block_commitment_cache.initialize_slots(bank.slot());
+        let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
