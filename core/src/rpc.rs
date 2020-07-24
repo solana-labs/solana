@@ -1786,7 +1786,7 @@ pub mod tests {
         blockhash: Hash,
         alice: Keypair,
         leader_pubkey: Pubkey,
-        leader_vote_keypair: Keypair,
+        leader_vote_keypair: Arc<Keypair>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         confirmed_block_signatures: Vec<Signature>,
     }
@@ -1847,7 +1847,7 @@ pub mod tests {
             vote,
         );
         let vote_msg = Message::new(&[vote_ix], Some(&leader_vote_keypair.pubkey()));
-        let vote_tx = Transaction::new(&[&leader_vote_keypair], vote_msg, Hash::default());
+        let vote_tx = Transaction::new(&[&*leader_vote_keypair], vote_msg, Hash::default());
         let shreds = entries_to_test_shreds(
             vec![next_entry_mut(&mut Hash::default(), 0, vec![vote_tx])],
             1,
@@ -3208,7 +3208,7 @@ pub mod tests {
         );
     }
 
-    fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair, Keypair) {
+    fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair, Arc<Keypair>) {
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,

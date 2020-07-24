@@ -229,7 +229,6 @@ fn run_cluster_partition<E, F>(
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-    let partition_start_epoch = 2;
     let enable_partition = Arc::new(AtomicBool::new(true));
     let mut validator_config = ValidatorConfig::default();
     validator_config.enable_partition = Some(enable_partition.clone());
@@ -243,7 +242,7 @@ fn run_cluster_partition<E, F>(
             assert_eq!(validator_keys.len(), num_nodes);
             let num_slots_per_rotation = leader_schedule.num_slots() as u64;
             let fixed_schedule = FixedSchedule {
-                start_epoch: partition_start_epoch,
+                start_epoch: 0,
                 leader_schedule: Arc::new(leader_schedule),
             };
             validator_config.fixed_leader_schedule = Some(fixed_schedule);
@@ -261,11 +260,20 @@ fn run_cluster_partition<E, F>(
         }
     };
 
+    let slots_per_epoch = 2048;
     let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
         validator_configs: vec![validator_config; num_nodes],
-        validator_keys: Some(validator_keys),
+        validator_keys: Some(
+            validator_keys
+                .into_iter()
+                .zip(iter::repeat_with(|| true))
+                .collect(),
+        ),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
 
@@ -275,33 +283,29 @@ fn run_cluster_partition<E, F>(
     );
     let mut cluster = LocalCluster::new(&config);
 
+    info!("PARTITION_TEST spend_and_verify_all_nodes(), ensure all nodes are caught up");
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+    );
+
     let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
 
+    // Check epochs have correct number of slots
     info!("PARTITION_TEST sleeping until partition starting condition",);
-    loop {
-        let mut reached_epoch = true;
-        for node in &cluster_nodes {
-            let node_client = RpcClient::new_socket(node.rpc);
-            if let Ok(epoch_info) = node_client.get_epoch_info() {
-                info!("slots_per_epoch: {:?}", epoch_info);
-                if epoch_info.slots_in_epoch <= (1 << VOTE_THRESHOLD_DEPTH) {
-                    reached_epoch = false;
-                    break;
-                }
-            } else {
-                reached_epoch = false;
-            }
-        }
-
-        if reached_epoch {
-            info!("PARTITION_TEST start partition");
-            enable_partition.store(false, Ordering::Relaxed);
-            on_partition_start(&mut cluster);
-            break;
-        } else {
-            sleep(Duration::from_millis(100));
-        }
+    for node in &cluster_nodes {
+        let node_client = RpcClient::new_socket(node.rpc);
+        let epoch_info = node_client.get_epoch_info().unwrap();
+        info!("slots_per_epoch: {:?}", epoch_info);
+        assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
     }
+
+    info!("PARTITION_TEST start partition");
+    enable_partition.store(false, Ordering::Relaxed);
+    on_partition_start(&mut cluster);
+
     sleep(Duration::from_millis(leader_schedule_time));
 
     info!("PARTITION_TEST remove partition");
@@ -472,7 +476,6 @@ fn run_kill_partition_switch_threshold<F>(
 }
 
 #[test]
-#[ignore]
 #[serial]
 fn test_kill_partition_switch_threshold_no_progress() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
@@ -501,9 +504,8 @@ fn test_kill_partition_switch_threshold_no_progress() {
 }
 
 #[test]
-#[ignore]
 #[serial]
-fn test_kill_partition_switch_threshold() {
+fn test_kill_partition_switch_threshold_progress() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
     let total_stake = 10_000;
 
@@ -760,7 +762,7 @@ fn test_frozen_account_from_genesis() {
         Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), true)]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![
@@ -788,7 +790,7 @@ fn test_frozen_account_from_snapshot() {
     snapshot_test_config.validator_config.frozen_accounts = vec![validator_identity.pubkey()];
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), true)]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![snapshot_test_config.validator_config.clone()],
@@ -864,6 +866,7 @@ fn test_consistency_halt() {
         &validator_snapshot_test_config.validator_config,
         validator_stake as u64,
         Arc::new(Keypair::new()),
+        None,
     );
     let num_nodes = 2;
     assert_eq!(
@@ -958,6 +961,7 @@ fn test_snapshot_download() {
         &validator_snapshot_test_config.validator_config,
         stake,
         Arc::new(Keypair::new()),
+        None,
     );
 }
 
@@ -1095,6 +1099,7 @@ fn test_snapshots_blockstore_floor() {
         &validator_snapshot_test_config.validator_config,
         validator_stake,
         Arc::new(Keypair::new()),
+        None,
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys

@@ -1145,9 +1145,7 @@ mod tests {
         // Create the set of relevant voters for the next epoch
         let new_epoch = last_known_epoch + 1;
         let first_slot_in_new_epoch = bank.epoch_schedule().get_first_slot_in_epoch(new_epoch);
-        let new_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
+        let new_keypairs: Vec<_> = (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
         let new_epoch_authorized_voters: HashMap<_, _> = new_keypairs
             .iter()
             .chain(validator_voting_keypairs[0..5].iter())
@@ -1186,15 +1184,14 @@ mod tests {
         let ref_count_per_vote = 2;
 
         // Create some voters at genesis
-        let validator_keypairs: Vec<_> = (0..2)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
+        let validator_keypairs: Vec<_> =
+            (0..2).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
 
         let GenesisConfigInfo { genesis_config, .. } =
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_keypairs,
-                100,
+                vec![100; validator_keypairs.len()],
             );
         let bank = Bank::new(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
@@ -1331,14 +1328,13 @@ mod tests {
         Vec<ValidatorVoteKeypairs>,
         Arc<RpcSubscriptions>,
     ) {
-        let validator_voting_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
+        let validator_voting_keypairs: Vec<_> =
+            (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
         let GenesisConfigInfo { genesis_config, .. } =
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
-                100,
+                vec![100; validator_voting_keypairs.len()],
             );
         let bank = Bank::new(&genesis_config);
         let vote_tracker = VoteTracker::new(&bank);
