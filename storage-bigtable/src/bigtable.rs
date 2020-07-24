@@ -4,7 +4,6 @@ use crate::access_token::{AccessToken, Scope};
 use crate::compression::{compress_best, decompress};
 use crate::root_ca_certificate;
 use log::*;
-use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
 
@@ -86,7 +85,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
 pub struct BigTableConnection {
-    access_token: Option<Arc<RwLock<AccessToken>>>,
+    access_token: Option<AccessToken>,
     channel: tonic::transport::Channel,
     table_prefix: String,
 }
@@ -115,14 +114,14 @@ impl BigTableConnection {
             }
 
             Err(_) => {
-                let mut access_token = AccessToken::new(if read_only {
-                    &Scope::BigTableDataReadOnly
+                let access_token = AccessToken::new(if read_only {
+                    Scope::BigTableDataReadOnly
                 } else {
-                    &Scope::BigTableData
+                    Scope::BigTableData
                 })
+                .await
                 .map_err(Error::AccessTokenError)?;
 
-                access_token.refresh().await;
                 let table_prefix = format!(
                     "projects/{}/instances/{}/tables/",
                     access_token.project(),
@@ -130,7 +129,7 @@ impl BigTableConnection {
                 );
 
                 Ok(Self {
-                    access_token: Some(Arc::new(RwLock::new(access_token))),
+                    access_token: Some(access_token),
                     channel: tonic::transport::Channel::from_static(
                         "https://bigtable.googleapis.com",
                     )
@@ -153,28 +152,25 @@ impl BigTableConnection {
     /// Clients require `&mut self`, due to `Tonic::transport::Channel` limitations, however
     /// creating new clients is cheap and thus can be used as a work around for ease of use.
     pub fn client(&self) -> BigTable {
-        let client = {
-            if let Some(ref access_token) = self.access_token {
-                let access_token = access_token.clone();
-                bigtable_client::BigtableClient::with_interceptor(
-                    self.channel.clone(),
-                    move |mut req: Request<()>| {
-                        match access_token.read().unwrap().get() {
-                            Ok(access_token) => match MetadataValue::from_str(&access_token) {
-                                Ok(authorization_header) => {
-                                    req.metadata_mut()
-                                        .insert("authorization", authorization_header);
-                                }
-                                Err(err) => warn!("Failed to set authorization header: {}", err),
-                            },
-                            Err(err) => warn!("{}", err),
+        let client = if let Some(access_token) = &self.access_token {
+            let access_token = access_token.clone();
+            bigtable_client::BigtableClient::with_interceptor(
+                self.channel.clone(),
+                move |mut req: Request<()>| {
+                    match MetadataValue::from_str(&access_token.get()) {
+                        Ok(authorization_header) => {
+                            req.metadata_mut()
+                                .insert("authorization", authorization_header);
                         }
-                        Ok(req)
-                    },
-                )
-            } else {
-                bigtable_client::BigtableClient::new(self.channel.clone())
-            }
+                        Err(err) => {
+                            warn!("Failed to set authorization header: {}", err);
+                        }
+                    }
+                    Ok(req)
+                },
+            )
+        } else {
+            bigtable_client::BigtableClient::new(self.channel.clone())
         };
         BigTable {
             access_token: self.access_token.clone(),
@@ -202,7 +198,7 @@ impl BigTableConnection {
 }
 
 pub struct BigTable {
-    access_token: Option<Arc<RwLock<AccessToken>>>,
+    access_token: Option<AccessToken>,
     client: bigtable_client::BigtableClient<tonic::transport::Channel>,
     table_prefix: String,
 }
@@ -283,7 +279,7 @@ impl BigTable {
 
     async fn refresh_access_token(&self) {
         if let Some(ref access_token) = self.access_token {
-            access_token.write().unwrap().refresh().await;
+            access_token.refresh().await;
         }
     }
 
@@ -298,7 +294,6 @@ impl BigTable {
         rows_limit: i64,
     ) -> Result<Vec<RowKey>> {
         self.refresh_access_token().await;
-
         let response = self
             .client
             .read_rows(ReadRowsRequest {
