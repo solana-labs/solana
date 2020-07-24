@@ -127,7 +127,7 @@ pub struct TransactionWithStatusMeta {
     pub meta: Option<RpcTransactionStatusMeta>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionEncoding {
     Binary,
