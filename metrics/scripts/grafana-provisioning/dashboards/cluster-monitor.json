@@ -1561,117 +1561,6 @@
       }
     },
     {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "#299c46",
-        "rgba(237, 129, 40, 0.89)",
-        "#d44a3a"
-      ],
-      "datasource": "$datasource",
-      "format": "ms",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 5,
-        "x": 0,
-        "y": 6
-      },
-      "id": 65,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": false
-      },
-      "tableColumn": "",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"average_elapsed_ms\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_elapsed\" WHERE $timeFilter",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": "",
-      "title": "Average Optimistic Confirmation Elapsed",
-      "type": "singlestat",
-      "valueFontSize": "70%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "N/A",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
       "aliasColors": {},
       "bars": true,
       "dashLength": 10,
@@ -1682,11 +1571,7 @@
         "h": 9,
         "w": 14,
         "x": 0,
-<<<<<<< HEAD
         "y": 7
-=======
-        "y": 8
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 15,
       "legend": {
@@ -2064,11 +1949,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-<<<<<<< HEAD
         "y": 16
-=======
-        "y": 17
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 17,
       "panels": [],
@@ -2086,11 +1967,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 17
-=======
-        "y": 18
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 18,
       "legend": {
@@ -2246,11 +2123,7 @@
         "h": 6,
         "w": 7,
         "x": 8,
-<<<<<<< HEAD
         "y": 17
-=======
-        "y": 18
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 19,
       "legend": {
@@ -2486,11 +2359,7 @@
         "h": 2,
         "w": 4,
         "x": 15,
-<<<<<<< HEAD
         "y": 17
-=======
-        "y": 18
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 20,
       "interval": null,
@@ -2601,11 +2470,7 @@
         "h": 2,
         "w": 3,
         "x": 19,
-<<<<<<< HEAD
         "y": 17
-=======
-        "y": 18
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 21,
       "interval": null,
@@ -2716,11 +2581,7 @@
         "h": 2,
         "w": 2,
         "x": 22,
-<<<<<<< HEAD
         "y": 17
-=======
-        "y": 18
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 22,
       "interval": null,
@@ -2820,11 +2681,7 @@
         "h": 4,
         "w": 5,
         "x": 15,
-<<<<<<< HEAD
         "y": 19
-=======
-        "y": 20
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 23,
       "legend": {
@@ -2942,11 +2799,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-<<<<<<< HEAD
         "y": 19
-=======
-        "y": 20
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 24,
       "legend": {
@@ -3064,11 +2917,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 20
-=======
-        "y": 21
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 25,
       "legend": {
@@ -3221,11 +3070,7 @@
         "h": 6,
         "w": 15,
         "x": 0,
-<<<<<<< HEAD
         "y": 23
-=======
-        "y": 24
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 26,
       "links": [],
@@ -3313,11 +3158,7 @@
         "h": 6,
         "w": 9,
         "x": 15,
-<<<<<<< HEAD
         "y": 23
-=======
-        "y": 24
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 27,
       "legend": {
@@ -3798,11 +3639,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 29
-=======
-        "y": 30
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 28,
       "links": [],
@@ -3887,11 +3724,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-<<<<<<< HEAD
         "y": 29
-=======
-        "y": 30
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 29,
       "links": [],
@@ -3976,11 +3809,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-<<<<<<< HEAD
         "y": 29
-=======
-        "y": 30
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 30,
       "links": [],
@@ -4063,11 +3892,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-<<<<<<< HEAD
         "y": 35
-=======
-        "y": 36
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 31,
       "panels": [],
@@ -4085,11 +3910,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 36
-=======
-        "y": 37
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 32,
       "legend": {
@@ -4328,11 +4149,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-<<<<<<< HEAD
         "y": 36
-=======
-        "y": 37
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 33,
       "legend": {
@@ -4614,11 +4431,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-<<<<<<< HEAD
         "y": 36
-=======
-        "y": 37
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 34,
       "legend": {
@@ -4829,11 +4642,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 42
-=======
-        "y": 43
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 35,
       "legend": {
@@ -5239,11 +5048,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-<<<<<<< HEAD
         "y": 42
-=======
-        "y": 43
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 36,
       "legend": {
@@ -5415,11 +5220,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-<<<<<<< HEAD
         "y": 42
-=======
-        "y": 43
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 37,
       "legend": {
@@ -5740,11 +5541,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 48
-=======
-        "y": 49
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 38,
       "legend": {
@@ -6174,11 +5971,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-<<<<<<< HEAD
         "y": 48
-=======
-        "y": 49
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 39,
       "legend": {
@@ -6411,11 +6204,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-<<<<<<< HEAD
         "y": 48
-=======
-        "y": 49
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 73,
       "legend": {
@@ -6867,11 +6656,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-<<<<<<< HEAD
         "y": 54
-=======
-        "y": 55
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 41,
       "legend": {
@@ -7173,11 +6958,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-<<<<<<< HEAD
         "y": 54
-=======
-        "y": 55
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 42,
       "legend": {
@@ -7337,11 +7118,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-<<<<<<< HEAD
         "y": 54
-=======
-        "y": 55
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 40,
       "legend": {
@@ -7407,63 +7184,6 @@
           "tags": []
         },
         {
-<<<<<<< HEAD
-=======
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 0,
-        "y": 60
-      },
-      "id": 43,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "hideEmpty": true,
-        "hideZero": true,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null as zero",
-      "percentage": false,
-      "pointradius": 1,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
           "groupBy": [
             {
               "params": [
@@ -7709,13 +7429,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 0,
         "y": 59
-=======
-        "x": 8,
-        "y": 60
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 44,
       "legend": {
@@ -7873,13 +7588,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 8,
         "y": 59
-=======
-        "x": 16,
-        "y": 60
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 45,
       "legend": {
@@ -7985,29 +7695,7 @@
       }
     },
     {
-<<<<<<< HEAD
       "aliasColors": {},
-=======
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 66
-      },
-      "id": 46,
-      "panels": [],
-      "title": "Tower Consensus",
-      "type": "row"
-    },
-    {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "replay_stage-new_leader.last": "#00ffbb",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -8016,13 +7704,8 @@
       "gridPos": {
         "h": 5,
         "w": 8,
-<<<<<<< HEAD
         "x": 16,
         "y": 60
-=======
-        "x": 0,
-        "y": 67
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 43,
       "legend": {
@@ -8178,13 +7861,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 0,
         "y": 65
-=======
-        "x": 8,
-        "y": 67
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 47,
       "legend": {
@@ -8385,13 +8063,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 8,
         "y": 65
-=======
-        "x": 16,
-        "y": 67
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 48,
       "legend": {
@@ -8540,321 +8213,6 @@
           "tags": []
         },
         {
-<<<<<<< HEAD
-=======
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "replay_stage-new_leader.last": "#00ffbb",
-        "tower-vote.last": "#00ffbb",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 0,
-        "y": 72
-      },
-      "id": 68,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Optimistic Slots ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "none",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "replay_stage-new_leader.last": "#00ffbb",
-        "tower-vote.last": "#00ffbb",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 8,
-        "y": 72
-      },
-      "id": 69,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_not_rooted\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Unrooted Optimistic Slots ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "none",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 77
-      },
-      "id": 50,
-      "panels": [],
-      "repeat": null,
-      "title": "IP Network",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 0,
-        "y": 78
-      },
-      "id": 51,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null as zero",
-      "percentage": false,
-      "pointradius": 1,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
           "groupBy": [
             {
               "params": [
@@ -10305,11 +9663,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-<<<<<<< HEAD
         "y": 84
-=======
-        "y": 78
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 56,
       "legend": {
@@ -10462,11 +9816,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-<<<<<<< HEAD
         "y": 89
-=======
-        "y": 83
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 57,
       "panels": [],
@@ -10484,11 +9834,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-<<<<<<< HEAD
         "y": 90
-=======
-        "y": 84
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 58,
       "legend": {
@@ -10690,11 +10036,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-<<<<<<< HEAD
         "y": 90
-=======
-        "y": 84
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 59,
       "legend": {
@@ -11043,22 +10385,6 @@
       }
     },
     {
-<<<<<<< HEAD
-=======
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 89
-      },
-      "id": 56,
-      "panels": [],
-      "title": "Snapshots",
-      "type": "row"
-    },
-    {
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -11068,13 +10394,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 8,
         "y": 96
-=======
-        "x": 0,
-        "y": 90
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 62,
       "legend": {
@@ -11341,13 +10662,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-<<<<<<< HEAD
         "x": 16,
         "y": 96
-=======
-        "x": 8,
-        "y": 90
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 63,
       "legend": {
@@ -11748,15 +11064,9 @@
       "fill": 1,
       "gridPos": {
         "h": 6,
-<<<<<<< HEAD
         "w": 12,
         "x": 0,
         "y": 109
-=======
-        "w": 8,
-        "x": 16,
-        "y": 90
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
       },
       "id": 66,
       "legend": {

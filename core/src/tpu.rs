@@ -79,12 +79,9 @@ impl Tpu {
             vote_tracker,
             bank_forks,
             subscriptions.clone(),
-<<<<<<< HEAD
             verified_vote_sender,
             replay_votes_receiver,
-=======
             blockstore.clone(),
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
         );
 
         let banking_stage = BankingStage::new(

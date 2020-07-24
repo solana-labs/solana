@@ -1,4 +1,4 @@
-use crate::consensus::VOTE_THRESHOLD_SIZE;
+use solana_runtime::commitment::VOTE_THRESHOLD_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
 
