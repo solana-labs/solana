@@ -94,8 +94,6 @@ Operate a configured testnet
    --deploy-if-newer                  - Only deploy if newer software is
                                         available (requires -t or -T)
 
-   --use-move                         - Build the move-loader-program and add it to the cluster
-
    --operating-mode development|softlaunch
                                       - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
                                         or "softlaunch" mode with some features disabled at epoch 0 (default: development)
@@ -188,7 +186,7 @@ build() {
 
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$buildVariant\" \"$maybeUseMove\"
+      scripts/cargo-install-all.sh farf \"$buildVariant\"
     "
   )
   echo "Build took $SECONDS seconds"
@@ -755,7 +753,6 @@ maybeWaitForSupermajority=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
-maybeUseMove=""
 netemPartition=""
 netemConfig=""
 netemConfigFile=""
@@ -834,9 +831,6 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --debug ]]; then
       debugBuild=true
-      shift 1
-    elif [[ $1 = --use-move ]]; then
-      maybeUseMove=$1
       shift 1
     elif [[ $1 = --partition ]]; then
       netemPartition=$2
