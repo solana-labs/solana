@@ -135,9 +135,10 @@ impl LocalCluster {
                     if *in_genesis {
                         Some((
                             ValidatorVoteKeypairs {
-                                node_keypair: node_keypair.clone(),
-                                vote_keypair: Arc::new(Keypair::new()),
-                                stake_keypair: Arc::new(Keypair::new()),
+                                node_keypair: Keypair::from_bytes(&node_keypair.to_bytes())
+                                    .unwrap(),
+                                vote_keypair: Keypair::new(),
+                                stake_keypair: Keypair::new(),
                             },
                             stake,
                         ))
@@ -205,9 +206,12 @@ impl LocalCluster {
             leader_node.info.rpc_banks.port(),
         ));
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
+        let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
+        let leader_vote_keypair =
+            Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
         let leader_server = Validator::new(
             leader_node,
-            leader_keypair,
+            &leader_keypair,
             &leader_ledger_path,
             &leader_vote_keypair.pubkey(),
             vec![leader_vote_keypair.clone()],
@@ -218,8 +222,8 @@ impl LocalCluster {
 
         let mut validators = HashMap::new();
         let leader_info = ValidatorInfo {
-            keypair: leader_keypair.clone(),
-            voting_keypair: leader_vote_keypair.clone(),
+            keypair: leader_keypair,
+            voting_keypair: leader_vote_keypair,
             ledger_path: leader_ledger_path,
             contact_info: leader_contact_info.clone(),
         };
@@ -241,7 +245,12 @@ impl LocalCluster {
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
             .into_iter()
-            .map(|keypairs| (keypairs.node_keypair.pubkey(), keypairs.vote_keypair))
+            .map(|keypairs| {
+                (
+                    keypairs.node_keypair.pubkey(),
+                    Arc::new(Keypair::from_bytes(&keypairs.vote_keypair.to_bytes()).unwrap()),
+                )
+            })
             .collect();
         for (stake, validator_config, (key, _)) in izip!(
             (&config.node_stakes[1..]).iter(),
