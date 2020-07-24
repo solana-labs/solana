@@ -5,6 +5,7 @@ extern crate serde_derive;
 
 pub mod parse_account_data;
 pub mod parse_nonce;
+pub mod parse_token;
 pub mod parse_vote;
 
 use crate::parse_account_data::parse_account_data;

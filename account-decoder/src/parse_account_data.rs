@@ -1,4 +1,4 @@
-use crate::{parse_nonce::parse_nonce, parse_vote::parse_vote};
+use crate::{parse_nonce::parse_nonce, parse_token::parse_token, parse_vote::parse_vote};
 use inflector::Inflector;
 use serde_json::{json, Value};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program};
@@ -8,11 +8,13 @@ use thiserror::Error;
 lazy_static! {
     static ref SYSTEM_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&system_program::id().to_string()).unwrap();
+    static ref TOKEN_PROGRAM_ID: Pubkey = Pubkey::from_str(&spl_token::id().to_string()).unwrap();
     static ref VOTE_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&solana_vote_program::id().to_string()).unwrap();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
+        m.insert(*TOKEN_PROGRAM_ID, ParsableAccount::Token);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);
         m
     };
@@ -20,6 +22,9 @@ lazy_static! {
 
 #[derive(Error, Debug)]
 pub enum ParseAccountError {
+    #[error("{0:?} account not parsable")]
+    AccountNotParsable(ParsableAccount),
+
     #[error("Program not parsable")]
     ProgramNotParsable,
 
@@ -34,6 +39,7 @@ pub enum ParseAccountError {
 #[serde(rename_all = "camelCase")]
 pub enum ParsableAccount {
     Nonce,
+    Token,
     Vote,
 }
 
@@ -43,6 +49,7 @@ pub fn parse_account_data(program_id: &Pubkey, data: &[u8]) -> Result<Value, Par
         .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
     let parsed_json = match program_name {
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
+        ParsableAccount::Token => serde_json::to_value(parse_token(data)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(json!({
