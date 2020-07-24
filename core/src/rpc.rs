@@ -133,7 +133,24 @@ impl JsonRpcRequestProcessor {
             }
         };
 
-        r_bank_forks.get(slot).cloned().unwrap()
+        r_bank_forks.get(slot).cloned().unwrap_or_else(|| {
+            // We log an error instead of returning an error, because all known error cases
+            // are due to known bugs that should be fixed instead.
+            //
+            // The slot may not be found as a result of a known bug in snapshot creation, where
+            // the bank at the given slot was not included in the snapshot.
+            // Also, it may occur after an old bank has been purged from BankForks and a new
+            // BlockCommitmentCache has not yet arrived. To make this case impossible,
+            // BlockCommitmentCache should hold an `Arc<Bank>` everywhere it currently holds
+            // a slot.
+            //
+            // For more information, see https://github.com/solana-labs/solana/issues/11078
+            error!(
+                "Bank with {:?} not found at slot: {:?}",
+                commitment_level, slot
+            );
+            r_bank_forks.root_bank().clone()
+        })
     }
 
     pub fn new(
