@@ -445,9 +445,7 @@ const GetEpochScheduleRpcResult = struct({
 /**
  * Expected JSON RPC response for the "getLeaderSchedule" message
  */
-const GetLeaderScheduleRpcResult = jsonRpcResult(
-  GetLeaderScheduleResult,
-);
+const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
 
 /**
  * Expected JSON RPC response for the "getBalance" message
