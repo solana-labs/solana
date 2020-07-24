@@ -413,6 +413,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cbindgen"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "104ca409bbff8293739438c71820a2606111b5f8f81835536dc673dfd807369e"
+dependencies = [
+ "clap",
+ "heck",
+ "log 0.4.8",
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "serde",
+ "serde_json",
+ "syn 1.0.27",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3150,9 +3168,15 @@ checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
 
 [[package]]
 name = "remove_dir_all"
+<<<<<<< HEAD
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
+=======
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfc5b3ce5d5ea144bb04ebd093a9e14e9765bcfec866aecda9b6dec43b3d1e24"
+>>>>>>> 32fea0496... Add token account decoding (#11136)
 dependencies = [
  "winapi 0.3.8",
 ]
@@ -3714,8 +3738,13 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-sdk 1.2.13",
+<<<<<<< HEAD
+=======
+ "solana-sdk 1.3.0",
+>>>>>>> 32fea0496... Add token account decoding (#11136)
  "solana-vote-program",
  "spl-memo",
+ "spl-token",
  "thiserror",
 ]
 
@@ -4635,9 +4664,15 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
+<<<<<<< HEAD
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b628fa500e0b83df3e96f7cc21dc998d8841a994f1c2109475273e6448afd4"
+=======
+version = "1.2.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cae779f912f1cbe2fe91df656ecc5ccdda9dd3378c0934f4390b7ba33501b3dc"
+>>>>>>> 32fea0496... Add token account decoding (#11136)
 dependencies = [
  "bincode",
  "bs58 0.3.1",
@@ -4649,11 +4684,17 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "pbkdf2",
+ "rustc_version",
+ "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
  "sha2",
+<<<<<<< HEAD
  "solana-sdk-macro 1.2.4",
+=======
+ "solana-sdk-macro 1.2.13",
+>>>>>>> 32fea0496... Add token account decoding (#11136)
  "thiserror",
 ]
 
@@ -4694,10 +4735,24 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-sdk-bpf-test"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1e668937b3fc2ecb13ad0285f318b0f81ba06c1b923d4cbc4d9868fb09d39d8"
+=======
+name = "solana-sdk-macro"
+version = "1.2.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8924af69f2685287988a530014c3268d78d6ce3fe4a1a61f87537c545afa8427"
+dependencies = [
+ "bs58",
+ "proc-macro2 1.0.17",
+ "quote 1.0.6",
+ "rustversion",
+ "syn 1.0.27",
+]
+>>>>>>> 32fea0496... Add token account decoding (#11136)
 
 [[package]]
 name = "solana-sdk-macro"
@@ -5351,12 +5406,34 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spl-memo"
+<<<<<<< HEAD
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db4ebc6a6d50b55cbe7c84c7f6cd0259f4f82a169eb49ef65ca62b9c69a76a1f"
 dependencies = [
  "solana-sdk 1.2.4",
  "solana-sdk-bpf-test",
+=======
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "451acd972c0ed2d114c42f8fffdd9a6007840e51fe7791f250d183e72c8ff7b5"
+dependencies = [
+ "solana-sdk 1.2.13",
+]
+
+[[package]]
+name = "spl-token"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a21aa023866f97c2644f932c2562d3c20e23a817e8abb0702625e0601cf9af80"
+dependencies = [
+ "cbindgen",
+ "num-derive 0.2.5",
+ "num-traits",
+ "remove_dir_all",
+ "solana-sdk 1.2.13",
+ "thiserror",
+>>>>>>> 32fea0496... Add token account decoding (#11136)
 ]
 
 [[package]]
