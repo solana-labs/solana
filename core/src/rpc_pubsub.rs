@@ -986,11 +986,13 @@ mod tests {
             BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
         ));
 
-        let validator_voting_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
-        let GenesisConfigInfo { genesis_config, .. } =
-            create_genesis_config_with_vote_accounts(10_000, &validator_voting_keypairs, 100);
+        let validator_voting_keypairs: Vec<_> =
+            (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
+            10_000,
+            &validator_voting_keypairs,
+            vec![100; validator_voting_keypairs.len()],
+        );
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_config);
         let bank_forks = BankForks::new(bank);

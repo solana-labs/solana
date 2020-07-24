@@ -51,31 +51,34 @@ pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
 pub fn create_genesis_config_with_vote_accounts(
     mint_lamports: u64,
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
-    stake: u64,
+    stakes: Vec<u64>,
 ) -> GenesisConfigInfo {
     assert!(!voting_keypairs.is_empty());
+    assert_eq!(voting_keypairs.len(), stakes.len());
+
     let mut genesis_config_info = create_genesis_config_with_leader_ex(
         mint_lamports,
         &voting_keypairs[0].borrow().node_keypair.pubkey(),
         &voting_keypairs[0].borrow().vote_keypair,
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
-        stake,
+        stakes[0],
         BOOTSTRAP_VALIDATOR_LAMPORTS,
     );
-    for validator_voting_keypairs in &voting_keypairs[1..] {
+
+    for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
         let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
         let node_account = Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id());
-        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, stake);
+        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
             &vote_pubkey,
             &vote_account,
             &genesis_config_info.genesis_config.rent,
-            stake,
+            *stake,
         );
 
         // Put newly created accounts into genesis
@@ -113,7 +116,6 @@ pub fn create_genesis_config_with_leader_ex(
     bootstrap_validator_lamports: u64,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
-
     let bootstrap_validator_vote_account = vote_state::create_account(
         &bootstrap_validator_voting_keypair.pubkey(),
         &bootstrap_validator_pubkey,

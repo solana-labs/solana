@@ -1976,7 +1976,7 @@ pub(crate) mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_authorized_voter_keypairs,
-                100,
+                vec![100; validator_authorized_voter_keypairs.len()],
             );
 
         let bank0 = Bank::new(&genesis_config);
@@ -2702,15 +2702,9 @@ pub(crate) mod tests {
 
     #[test]
     fn test_compute_bank_stats_confirmed() {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let stake_keypair = Keypair::new();
-        let node_pubkey = node_keypair.pubkey();
-        let mut keypairs = HashMap::new();
-        keypairs.insert(
-            node_pubkey,
-            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-        );
+        let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+        let node_pubkey = vote_keypairs.node_keypair.pubkey();
+        let keypairs: HashMap<_, _> = vec![(node_pubkey, vote_keypairs)].into_iter().collect();
 
         let (bank_forks, mut progress, mut heaviest_subtree_fork_choice) =
             initialize_state(&keypairs, 10_000);
@@ -3029,14 +3023,8 @@ pub(crate) mod tests {
     #[test]
     fn test_update_slot_propagated_threshold_from_votes() {
         let keypairs: HashMap<_, _> = iter::repeat_with(|| {
-            let node_keypair = Keypair::new();
-            let vote_keypair = Keypair::new();
-            let stake_keypair = Keypair::new();
-            let node_pubkey = node_keypair.pubkey();
-            (
-                node_pubkey,
-                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-            )
+            let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+            (vote_keypairs.node_keypair.pubkey(), vote_keypairs)
         })
         .take(10)
         .collect();
@@ -3209,17 +3197,10 @@ pub(crate) mod tests {
     #[test]
     fn test_update_propagation_status() {
         // Create genesis stakers
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let stake_keypair = Keypair::new();
-        let vote_pubkey = Arc::new(vote_keypair.pubkey());
-        let mut keypairs = HashMap::new();
-
-        keypairs.insert(
-            node_keypair.pubkey(),
-            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-        );
-
+        let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+        let node_pubkey = vote_keypairs.node_keypair.pubkey();
+        let vote_pubkey = Arc::new(vote_keypairs.vote_keypair.pubkey());
+        let keypairs: HashMap<_, _> = vec![(node_pubkey, vote_keypairs)].into_iter().collect();
         let stake = 10_000;
         let (mut bank_forks, mut progress_map, _) = initialize_state(&keypairs, stake);
 
@@ -3301,14 +3282,8 @@ pub(crate) mod tests {
     #[test]
     fn test_chain_update_propagation_status() {
         let keypairs: HashMap<_, _> = iter::repeat_with(|| {
-            let node_keypair = Keypair::new();
-            let vote_keypair = Keypair::new();
-            let stake_keypair = Keypair::new();
-            let node_pubkey = node_keypair.pubkey();
-            (
-                node_pubkey,
-                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-            )
+            let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+            (vote_keypairs.node_keypair.pubkey(), vote_keypairs)
         })
         .take(10)
         .collect();
@@ -3384,14 +3359,8 @@ pub(crate) mod tests {
     fn test_chain_update_propagation_status2() {
         let num_validators = 6;
         let keypairs: HashMap<_, _> = iter::repeat_with(|| {
-            let node_keypair = Keypair::new();
-            let vote_keypair = Keypair::new();
-            let stake_keypair = Keypair::new();
-            let node_pubkey = node_keypair.pubkey();
-            (
-                node_pubkey,
-                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-            )
+            let vote_keypairs = ValidatorVoteKeypairs::new_rand();
+            (vote_keypairs.node_keypair.pubkey(), vote_keypairs)
         })
         .take(num_validators)
         .collect();

@@ -16,11 +16,10 @@ use solana_ledger::{
 use solana_sdk::{
     client::SyncClient,
     clock::{
-        self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
-        NUM_CONSECUTIVE_LEADER_SLOTS,
+        self, Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS,
     },
     commitment_config::CommitmentConfig,
-    epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -170,11 +169,6 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
                 .map(|child_slot| (child_slot, slot, last_id)),
         );
     }
-}
-
-pub fn time_until_nth_epoch(epoch: u64, slots_per_epoch: u64, stakers_slot_offset: u64) -> u64 {
-    let epoch_schedule = EpochSchedule::custom(slots_per_epoch, stakers_slot_offset, true);
-    epoch_schedule.get_last_slot_in_epoch(epoch) * DEFAULT_MS_PER_SLOT
 }
 
 pub fn sleep_n_epochs(
