@@ -38,6 +38,7 @@ module.exports = {
       "cli/conventions",
       "cli/choose-a-cluster",
       "cli/transfer-tokens",
+      "cli/delegate-stake",
       "cli/manage-stake-accounts",
       "offline-signing",
       "offline-signing/durable-nonce",
