@@ -246,10 +246,7 @@ mod tests {
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
     };
-    use solana_sdk::{
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    };
+    use solana_sdk::{pubkey::Pubkey, signature::Signer};
     use solana_stake_program::stake_state;
     use solana_vote_program::{
         vote_state::{self, VoteStateVersions},
@@ -488,14 +485,8 @@ mod tests {
 
         let block_commitment_cache = RwLock::new(BlockCommitmentCache::new_for_tests());
 
-        let node_keypair = Arc::new(Keypair::new());
-        let vote_keypair = Arc::new(Keypair::new());
-        let stake_keypair = Arc::new(Keypair::new());
-        let validator_keypairs = vec![ValidatorVoteKeypairs {
-            node_keypair: node_keypair.clone(),
-            vote_keypair: vote_keypair.clone(),
-            stake_keypair,
-        }];
+        let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
+        let validator_keypairs = vec![&validator_vote_keypairs];
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair: _,
@@ -518,9 +509,9 @@ mod tests {
                 vec![x],
                 previous_bank.hash(),
                 previous_bank.last_blockhash(),
-                &node_keypair,
-                &vote_keypair,
-                &vote_keypair,
+                &validator_vote_keypairs.node_keypair,
+                &validator_vote_keypairs.vote_keypair,
+                &validator_vote_keypairs.vote_keypair,
                 None,
             );
             bank.process_transaction(&vote).unwrap();
@@ -528,7 +519,10 @@ mod tests {
         }
 
         let working_bank = bank_forks.working_bank();
-        let root = get_vote_account_root_slot(vote_keypair.pubkey(), &working_bank);
+        let root = get_vote_account_root_slot(
+            validator_vote_keypairs.vote_keypair.pubkey(),
+            &working_bank,
+        );
         for x in 0..root {
             bank_forks.set_root(x, &None, None);
         }
@@ -540,16 +534,19 @@ mod tests {
             vec![33],
             bank33.hash(),
             bank33.last_blockhash(),
-            &node_keypair,
-            &vote_keypair,
-            &vote_keypair,
+            &validator_vote_keypairs.node_keypair,
+            &validator_vote_keypairs.vote_keypair,
+            &validator_vote_keypairs.vote_keypair,
             None,
         );
         bank34.process_transaction(&vote33).unwrap();
         bank_forks.insert(bank34);
 
         let working_bank = bank_forks.working_bank();
-        let root = get_vote_account_root_slot(vote_keypair.pubkey(), &working_bank);
+        let root = get_vote_account_root_slot(
+            validator_vote_keypairs.vote_keypair.pubkey(),
+            &working_bank,
+        );
         let ancestors = working_bank.status_cache_ancestors();
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
@@ -601,9 +598,9 @@ mod tests {
                 vec![x],
                 previous_bank.hash(),
                 previous_bank.last_blockhash(),
-                &node_keypair,
-                &vote_keypair,
-                &vote_keypair,
+                &validator_vote_keypairs.node_keypair,
+                &validator_vote_keypairs.vote_keypair,
+                &validator_vote_keypairs.vote_keypair,
                 None,
             );
             bank.process_transaction(&vote).unwrap();
@@ -611,7 +608,10 @@ mod tests {
         }
 
         let working_bank = bank_forks.working_bank();
-        let root = get_vote_account_root_slot(vote_keypair.pubkey(), &working_bank);
+        let root = get_vote_account_root_slot(
+            validator_vote_keypairs.vote_keypair.pubkey(),
+            &working_bank,
+        );
         let ancestors = working_bank.status_cache_ancestors();
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
