@@ -620,39 +620,31 @@ impl ClusterInfoVoteListener {
                             None
                         };
 
-                        // 1) If this vote for this slot qualifies for optimistic confirmation or
-                        // 2) the (slot, unduplicated_pubkey) combination wasn't already inserted
-                        // then process that the `unduplicated_pubkey` voted for the slot.
-                        if update_switch_info.is_some() {
+                        // If this vote for this slot qualifies for optimistic confirmation
+                        if let Some(stake, hash) = update_switch_info {
+                            // Fast track processing of non-switch votes so that 
+                            // notifications for optimistic confirmation can be sent
+                            // asap
                             if !switch_counted.contains(*slot) &&
-                            Self::add_vote(
+                            Self::add_non_switch_vote(
                                 vote_tracker,
                                 *slot,
+                                hash,
                                 unduplicated_pubkey,
-                                should_update_switch,
+                                stake,
                                 total_epoch_stake,
                             )
                         {
                             switch_counted.insert(*slot);
                             new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
-                            // Notify?
+                            // Notify about new optimistic confirmation
                         }
 
-                        diff
-                            .entry(*slot)
-                            .or_default()
-                            .insert((unduplicated_pubkey.clone()), true).is_none())
-                            // Add vote and send notificatin as soon as possible for
-                            // optimistic confirmation
-                            && Self::add_vote(
-                                vote_tracker,
-                                *slot,
-                                unduplicated_pubkey,
-                                should_update_switch,
-                                total_epoch_stake,
-                            )
-                        {
-                            new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
+                        if !switch_counted.contains(slot) {
+                            diff
+                                .entry(*slot)
+                                .or_default()
+                                .insert((unduplicated_pubkey.clone()), true).is_none())
                         }
                     }
 
@@ -665,7 +657,7 @@ impl ClusterInfoVoteListener {
         // Process the replay votes
         for votes in replay_votes {
             for (pubkey, slot) in votes.iter() {
-                if *slot <= root {
+                if *slot <= root || switch_counted.contains(slot) {
                     continue;
                 }
                 let unduplicated_pubkey = vote_tracker.keys.get_or_insert(pubkey);
@@ -675,7 +667,6 @@ impl ClusterInfoVoteListener {
                     .or_default();
             }
         }
-<<<<<<< HEAD
         for (slot, mut slot_diff) in diff {
             let slot_tracker = vote_tracker
                 .slot_vote_trackers
@@ -758,18 +749,16 @@ impl ClusterInfoVoteListener {
             w_slot_tracker.total_stake += current_stake;
             w_slot_tracker.gossip_only_stake += gossip_only_stake
         }
-=======
         new_optimistic_confirmed_slots
->>>>>>> e5def650e... Add check in cluster_info_vote_listenere to see if optimstic conf was achieved
     }
 
     // Returns if the slot was optimistically confirmed
-    fn add_votes(
+    fn add_non_switch_vote(
         vote_tracker: &VoteTracker,
         slot: Slot,
-        pubkeys: Vec<(Arc<Pubkey>, bool)>,
-        verified_vote_sender: &VerifiedVoteSender,
-        should_update_switch: Option<(u64, Hash)>,
+        hash: Hash,
+        pubkey: Pubkey,
+        stake: u64,
         total_epoch_stake: u64,
     ) -> bool {
         let mut slot_tracker = vote_tracker
@@ -808,13 +797,9 @@ impl ClusterInfoVoteListener {
 
         // If this was a no-switching vote, check for optimistic
         // confirmation
-        should_update_switch
-            .map(|(stake, hash)| {
-                w_slot_tracker
-                    .get_or_insert_optimistic_votes_tracker(hash)
-                    .add_vote_pubkey(pubkey.clone(), stake, total_epoch_stake)
-            })
-            .unwrap_or(false)
+        w_slot_tracker
+            .get_or_insert_optimistic_votes_tracker(hash)
+            .add_vote_pubkey(pubkey.clone(), stake, total_epoch_stake)
     }
 
     fn sum_stake(
