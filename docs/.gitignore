@@ -11,7 +11,6 @@
 /static/img/*.svg
 /static/img/*.png
 vercel.json
-package-lock.json
 
 # Misc
 .DS_Store
