@@ -45,7 +45,7 @@ linux)
   TARGET=x86_64-unknown-linux-gnu
   ;;
 windows)
-  TARGET=x86_64-pc-windows-gnu
+  TARGET=x86_64-pc-windows-msvc
   # Enable symlinks used by some build.rs files
   # source: https://stackoverflow.com/a/52097145/10242004
   (
