@@ -1296,7 +1296,7 @@ impl Bank {
             #[cfg(not(test))]
             OperatingMode::Development => false,
             OperatingMode::Preview => false,
-            OperatingMode::Stable => self.epoch == Epoch::max_value(),
+            OperatingMode::Stable => self.epoch == 61,
         }
     }
 
