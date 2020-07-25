@@ -251,17 +251,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "btc_spv_bin"
-version = "1.3.0"
-dependencies = [
- "clap",
- "hex",
- "reqwest",
- "serde",
- "serde_derive",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3065,20 +3054,6 @@ dependencies = [
  "solana-sdk 1.3.0",
  "solana_rbpf",
  "thiserror",
-]
-
-[[package]]
-name = "solana-btc-spv-program"
-version = "1.3.0"
-dependencies = [
- "bincode",
- "hex",
- "log 0.4.8",
- "num-derive 0.3.0",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-sdk 1.3.0",
 ]
 
 [[package]]

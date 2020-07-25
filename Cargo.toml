@@ -34,8 +34,6 @@ members = [
     "poh-bench",
     "programs/bpf_loader",
     "programs/budget",
-    "programs/btc_spv",
-    "programs/btc_spv_bin",
     "programs/config",
     "programs/exchange",
     "programs/failure",
