@@ -59,8 +59,7 @@ impl OptimisticConfirmationVerifier {
             "optimistic_slot_elapsed",
             (
                 "average_elapsed_ms",
-                self.last_optimistic_slot_ts.elapsed().as_millis() as i64
-                    / new_optimistic_slots.len() as i64,
+                self.last_optimistic_slot_ts.elapsed().as_millis() as i64,
                 i64
             ),
         );

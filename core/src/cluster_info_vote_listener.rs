@@ -468,9 +468,6 @@ impl ClusterInfoVoteListener {
                 }
             } else {
                 let optimistic_confirmed_slots = optimistic_confirmed_slots.unwrap();
-                for (slot, _) in optimistic_confirmed_slots.iter() {
-                    subscriptions.notify_gossip_subscribers(*slot);
-                }
                 optimistic_confirmation_verifier
                     .add_new_optimistic_confirmed_slots(optimistic_confirmed_slots);
             }
@@ -656,7 +653,7 @@ impl ClusterInfoVoteListener {
                             {
                                 switch_counted.insert((*slot, *unduplicated_pubkey));
                                 new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
-                                // Notify about new optimistic confirmation
+                                // TODO: Notify subscribers about new optimistic confirmation
                             }
                         }
 
