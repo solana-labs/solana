@@ -1014,7 +1014,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
-                stake_per_validator,
+                vec![stake_per_validator; validator_voting_keypairs.len()],
             );
 
         let bank0 = Bank::new(&genesis_config);
@@ -1120,7 +1120,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
-                stake_per_validator,
+                vec![stake_per_validator; validator_voting_keypairs.len()],
             );
         let bank0 = Bank::new(&genesis_config);
 
@@ -1219,7 +1219,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
-                stake_per_validator,
+                vec![stake_per_validator; validator_voting_keypairs.len()],
             );
         let bank0 = Bank::new(&genesis_config);
 
