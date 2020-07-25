@@ -72,7 +72,7 @@ solana --version
   installer into a temporary directory:
 
 ```bash
-curl http://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-gnu.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
+curl http://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
 ```
 
 - Copy and paste the following command, then press Enter to install the latest
@@ -107,7 +107,7 @@ manually download and install the binaries.
 
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-download **solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the
+download **solana-release-x86_64-unknown-linux-msvc.tar.bz2**, then extract the
 archive:
 
 ```bash
@@ -133,7 +133,7 @@ export PATH=$PWD/bin:$PATH
 
 - Download the binaries by navigating to
   [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
-  download **solana-release-x86_64-pc-windows-gnu.tar.bz2**, then extract the
+  download **solana-release-x86_64-pc-windows-msvc.tar.bz2**, then extract the
   archive using WinZip or similar.
 
 - Open a Command Prompt and navigate to the directory into which you extracted
