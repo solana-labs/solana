@@ -6206,7 +6206,7 @@
         "x": 16,
         "y": 48
       },
-      "id": 73,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7120,7 +7120,7 @@
         "x": 16,
         "y": 54
       },
-      "id": 40,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7707,7 +7707,7 @@
         "x": 16,
         "y": 60
       },
-      "id": 43,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8495,7 +8495,7 @@
         "x": 16,
         "y": 65
       },
-      "id": 46,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8613,7 +8613,7 @@
         "x": 16,
         "y": 71
       },
-      "id": 49,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8885,7 +8885,7 @@
         "x": 0,
         "y": 77
       },
-      "id": 50,
+      "id": 51,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -8908,7 +8908,7 @@
         "x": 0,
         "y": 78
       },
-      "id": 51,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9068,7 +9068,7 @@
         "x": 8,
         "y": 78
       },
-      "id": 52,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9228,7 +9228,7 @@
         "x": 16,
         "y": 78
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9406,14 +9406,383 @@
       }
     },
     {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 83
+      },
+      "id": 74,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Optimistic Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 83
+      },
+      "id": 75,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"slot\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_not_rooted\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Unrooted Optimistic Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 83
+      },
+      "id": 76,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"average_elapsed_ms\") FROM \"$testnet\".\"autogen\".\"optimistic_slot_elapsed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Average Time Between Optimistic Confirmations ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 88
       },
-      "id": 54,
+      "id": 55,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -9430,9 +9799,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 89
       },
-      "id": 55,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9663,9 +10032,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 89
       },
-      "id": 56,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9816,9 +10185,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 94
       },
-      "id": 57,
+      "id": 58,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -9834,9 +10203,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 90
+        "y": 95
       },
-      "id": 58,
+      "id": 59,
       "legend": {
         "avg": false,
         "current": false,
@@ -10036,9 +10405,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 90
+        "y": 95
       },
-      "id": 59,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10185,9 +10554,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 95
+        "y": 100
       },
-      "id": 60,
+      "id": 61,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -10203,9 +10572,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 96
+        "y": 101
       },
-      "id": 61,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -10395,9 +10764,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 96
+        "y": 101
       },
-      "id": 62,
+      "id": 63,
       "legend": {
         "avg": false,
         "current": false,
@@ -10663,9 +11032,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 96
+        "y": 101
       },
-      "id": 63,
+      "id": 64,
       "legend": {
         "avg": false,
         "current": false,
@@ -10857,9 +11226,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 102
+        "y": 107
       },
-      "id": 64,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -11048,9 +11417,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 108
+        "y": 113
       },
-      "id": 65,
+      "id": 66,
       "panels": [],
       "title": "RPC Send Transaction Service",
       "type": "row"
@@ -11066,9 +11435,9 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 109
+        "y": 114
       },
-      "id": 66,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -11184,9 +11553,9 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 109
+        "y": 114
       },
-      "id": 67,
+      "id": 68,
       "legend": {
         "avg": false,
         "current": false,
@@ -11447,9 +11816,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 120
       },
-      "id": 68,
+      "id": 69,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -11465,9 +11834,9 @@
         "h": 5,
         "w": 7,
         "x": 0,
-        "y": 116
+        "y": 121
       },
-      "id": 69,
+      "id": 70,
       "legend": {
         "avg": false,
         "current": false,
@@ -11580,9 +11949,9 @@
         "h": 5,
         "w": 7,
         "x": 7,
-        "y": 116
+        "y": 121
       },
-      "id": 70,
+      "id": 71,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -11805,9 +12174,9 @@
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 116
+        "y": 121
       },
-      "id": 71,
+      "id": 72,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -11893,9 +12262,9 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 121
+        "y": 126
       },
-      "id": 72,
+      "id": 73,
       "legend": {
         "avg": false,
         "current": false,
@@ -11998,7 +12367,7 @@
       }
     }
   ],
-  "refresh": "1m",
+  "refresh": "60s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
