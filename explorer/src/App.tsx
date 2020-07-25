@@ -13,6 +13,7 @@ import TabbedPage from "components/TabbedPage";
 import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
 import { pickCluster } from "utils/url";
+import Banner from "components/Banner";
 
 function App() {
   return (
@@ -35,6 +36,8 @@ function App() {
             </div>
           </div>
         </nav>
+
+        <Banner />
 
         <Switch>
           <Route exact path="/supply">

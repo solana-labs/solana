@@ -27,7 +27,7 @@ export function StakeAccountCards({
 function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   const unixTimestamp = stakeAccount.meta?.lockup.unixTimestamp;
   if (unixTimestamp && unixTimestamp > 0) {
-    const prettyTimestamp = displayTimestamp(unixTimestamp);
+    const prettyTimestamp = displayTimestamp(unixTimestamp * 1000);
     return (
       <div className="alert alert-warning text-center">
         <strong>Account is locked!</strong> Lockup expires on {prettyTimestamp}
