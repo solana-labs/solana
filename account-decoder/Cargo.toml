@@ -13,9 +13,11 @@ bincode = "1.2.1"
 bs58 = "0.3.1"
 Inflector = "0.11.4"
 lazy_static = "1.4.0"
-solana-sdk = { path = "../sdk", version = "1.2.13" }
+solana-sdk = { path = "../sdk", version = "1.2.13"  }
 solana-vote-program = { path = "../programs/vote", version = "1.2.13" }
-spl-memo = "1.0.1"
+spl-memo = { version = "1.0.4", features = ["skip-no-mangle"] }
+spl-sdk = { package = "solana-sdk", version = "=1.2.13", default-features = false }
+spl-token = { version = "1.0.2", features = ["skip-no-mangle"] }
 serde = "1.0.112"
 serde_derive = "1.0.103"
 serde_json = "1.0.54"
