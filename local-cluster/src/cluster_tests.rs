@@ -324,20 +324,27 @@ pub fn check_no_new_roots(
     let end_slot = max_slot + num_slots_to_wait as u64;
     let mut current_slot;
     let mut last_print = Instant::now();
-    let client = create_client(contact_infos[0].client_facing_addr(), VALIDATOR_PORT_RANGE);
+    let mut reached_end_slot = false;
     loop {
-        current_slot = client
-            .get_slot_with_commitment(CommitmentConfig::recent())
-            .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
-        if current_slot > end_slot {
-            break;
+        for contact_info in contact_infos {
+            let client = create_client(contact_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
+            current_slot = client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
+            if current_slot > end_slot {
+                reached_end_slot = true;
+                break;
+            }
+            if last_print.elapsed().as_secs() > 3 {
+                info!(
+                    "{} current slot: {} on validator: {}, waiting for any validator with slot: {}",
+                    test_name, current_slot, contact_info.id, end_slot
+                );
+                last_print = Instant::now();
+            }
         }
-        if last_print.elapsed().as_secs() > 3 {
-            info!(
-                "{} current slot: {}, waiting for slot: {}",
-                test_name, current_slot, end_slot
-            );
-            last_print = Instant::now();
+        if reached_end_slot {
+            break;
         }
     }
 
