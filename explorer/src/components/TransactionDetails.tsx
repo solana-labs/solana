@@ -168,7 +168,7 @@ function StatusCard({ signature }: Props) {
           <td>Timestamp</td>
           <td className="text-right">
             {info.timestamp !== "unavailable" ? (
-              displayTimestamp(info.timestamp)
+              displayTimestamp(info.timestamp * 1000)
             ) : (
               <InfoTooltip
                 bottom

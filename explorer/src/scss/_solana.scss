@@ -57,10 +57,6 @@ code {
   cursor: pointer;
 }
 
-.b-white {
-  background: $white;
-}
-
 .dropdown-exit {
   position: absolute;
   z-index: 100;
@@ -70,10 +66,8 @@ code {
   bottom: 0;
 }
 
-.btn-outline-warning:hover {
-  .spinner-grow {
-    color: $dark !important;
-  }
+.opacity-50 {
+  opacity: 0.5;
 }
 
 .btn.input-group {

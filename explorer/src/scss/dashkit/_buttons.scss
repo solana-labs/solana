@@ -1,4 +1,4 @@
-// 
+//
 // buttons.scss
 // Extended from Bootstrap
 //
@@ -19,7 +19,7 @@
   }
 }
 
-.btn-group-toggle .btn-white:not(:disabled):not(.disabled):active, 
+.btn-group-toggle .btn-white:not(:disabled):not(.disabled):active,
 .btn-group-toggle .btn-white:not(:disabled):not(.disabled).active {
   background-color: $input-bg;
   border-color: $input-focus-border-color;

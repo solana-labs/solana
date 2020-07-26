@@ -33,7 +33,7 @@ $border-sizing: map-merge((
 
   .border-left-#{$size} {
     border-left-width: $border-width * $value !important;
-  } 
+  }
 }
 
 

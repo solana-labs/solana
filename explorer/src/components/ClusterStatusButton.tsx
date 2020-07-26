@@ -27,10 +27,7 @@ function Button({ expand }: { expand?: boolean }) {
     }
   };
 
-  let spinnerClasses = "spinner-grow spinner-grow-sm mr-2";
-  if (!expand) {
-    spinnerClasses += " text-warning";
-  }
+  const spinnerClasses = "spinner-grow spinner-grow-sm mr-2";
 
   switch (status) {
     case ClusterStatus.Connected:

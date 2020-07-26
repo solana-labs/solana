@@ -1,9 +1,9 @@
-// 
+//
 // nav.scss
 // Extended from Bootstrap
 //
 
-// 
+//
 // Bootstrap Overrides =====================================
 //
 
@@ -22,7 +22,7 @@
     border-left-width: 0;
     border-right-width: 0;
     border-top-width: 0;
-    
+
     &:not(.active) {
       color: $gray-600;
 
@@ -49,7 +49,7 @@
 }
 
 
-// 
+//
 // Dashkit =====================================
 //
 
@@ -80,7 +80,7 @@
     margin-left: $nav-tabs-sm-link-margin-x;
     margin-right: $nav-tabs-sm-link-margin-x;
   }
-  
+
   .nav-link {
     // Calculates the exact padding necessary to vertically fill the .card-header
     padding-top: (($font-size-base / $nav-tabs-sm-font-size) * $nav-tabs-link-padding-y);

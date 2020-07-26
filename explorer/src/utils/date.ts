@@ -1,5 +1,5 @@
 export function displayTimestamp(unixTimestamp: number): string {
-  const expireDate = new Date(unixTimestamp * 1000);
+  const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
