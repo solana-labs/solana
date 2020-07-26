@@ -59,7 +59,7 @@ solana --version
 
 ---
 
-###Windows
+### Windows
 
 - Open a Command Prompt (`cmd.exe`) as an Administrator
 
