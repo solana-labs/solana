@@ -10,13 +10,7 @@ use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::UiTransactionEncoding;
-use std::{
-    collections::HashSet,
-    path::Path,
-    process::exit,
-    result::Result,
-    time::{Duration, Instant},
-};
+use std::{collections::HashSet, path::Path, process::exit, result::Result, time::Duration};
 use tokio::time::delay_for;
 
 // Attempt to upload this many blocks in parallel
@@ -137,7 +131,6 @@ async fn upload(
         (
             std::thread::spawn(move || {
                 let mut measure = Measure::start("block loader thread");
-                let mut last_status_update = Instant::now();
                 for (i, slot) in blocks_to_upload.iter().enumerate() {
                     let _ = match blockstore.get_confirmed_block(
                         *slot,
@@ -153,14 +146,13 @@ async fn upload(
                         }
                     };
 
-                    if Instant::now().duration_since(last_status_update).as_secs() >= 60 {
+                    if i % NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL == 0 {
                         info!(
                             "{}% of blocks processed ({}/{})",
                             i * 100 / blocks_to_upload.len(),
                             i,
                             blocks_to_upload.len()
                         );
-                        last_status_update = Instant::now();
                     }
                 }
                 measure.stop();
