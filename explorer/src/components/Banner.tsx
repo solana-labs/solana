@@ -15,11 +15,11 @@ const announcements = new Map<Cluster, Announcement>();
 //   start: new Date("July 25, 2020 18:00:00 GMT+8:00"),
 //   estimate: "2 hours",
 // });
-announcements.set(Cluster.MainnetBeta, {
-  message: "Mainnet Beta upgrade in progress. Transactions are disabled",
-  start: new Date("August 1, 2020 00:00:00 GMT+0:00"),
-  end: new Date("August 3, 2020 00:00:00 GMT+0:00"),
-});
+// announcements.set(Cluster.MainnetBeta, {
+//   message: "Mainnet Beta upgrade in progress. Transactions are disabled",
+//   start: new Date("August 1, 2020 00:00:00 GMT+0:00"),
+//   end: new Date("August 3, 2020 00:00:00 GMT+0:00"),
+// });
 
 export default function Banner() {
   const cluster = useCluster().cluster;
