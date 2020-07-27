@@ -17,6 +17,7 @@ use solana_sdk::{
     instruction::CompiledInstruction,
     message::MessageHeader,
     pubkey::Pubkey,
+    signature::Signature,
     transaction::{Result, Transaction, TransactionError},
 };
 
@@ -125,7 +126,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
-    pub status: Result<()>,
+    pub status: Result<()>,           // legacy field
     pub err: Option<TransactionError>,
 }
 
@@ -134,6 +135,15 @@ impl TransactionStatus {
         (commitment_config == CommitmentConfig::default() && self.confirmations.is_none())
             || commitment_config == CommitmentConfig::recent()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmedTransactionStatusWithSignature {
+    pub signature: Signature,
+    pub slot: Slot,
+    pub err: Option<TransactionError>,
+    pub memo: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
