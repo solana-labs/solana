@@ -8,10 +8,13 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
+use solana_account_decoder::{
+    parse_token::{parse_token, spl_token_id_v1_0, TokenAccountType},
+    UiAccount, UiAccountEncoding,
+};
 use solana_client::{
     rpc_config::*,
-    rpc_filter::RpcFilterType,
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::{
         DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
@@ -32,6 +35,7 @@ use solana_runtime::{
     send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_sdk::{
+    account::Account,
     account_utils::StateMut,
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -50,9 +54,11 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
+use spl_token_v1_0::state::{Account as TokenAccount, State as TokenState};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
+    mem::size_of,
     net::SocketAddr,
     rc::Rc,
     str::FromStr,
@@ -249,14 +255,7 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        bank.get_program_accounts(Some(&program_id))
-            .into_iter()
-            .filter(|(_, account)| {
-                filters.iter().all(|filter_type| match filter_type {
-                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-                })
-            })
+        get_filtered_program_accounts(&bank, program_id, filters)
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
                 account: UiAccount::encode(account, encoding.clone()),
@@ -839,6 +838,30 @@ impl JsonRpcRequestProcessor {
             inactive: inactive_stake,
         })
     }
+
+    pub fn get_token_account_balance(
+        &self,
+        pubkey: &Pubkey,
+        token_program_id: &Pubkey,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<u64> {
+        let bank = self.bank(commitment);
+        let balance = bank
+            .get_account(pubkey)
+            .and_then(|account| {
+                if token_program_id == &spl_token_id_v1_0() {
+                    parse_token(&account.data).ok()
+                } else {
+                    None
+                }
+            })
+            .and_then(|token_type| match token_type {
+                TokenAccountType::Account(account) => Some(account.amount),
+                _ => None,
+            })
+            .unwrap_or(0);
+        new_response(&bank, balance)
+    }
 }
 
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
@@ -880,6 +903,22 @@ fn run_transaction_simulation(
         executed[0].0.clone().map(|_| ()),
         Rc::try_unwrap(log_collector).unwrap_or_default().into(),
     )
+}
+
+/// Use a set of filters to get an iterator of keyed program accounts from a bank
+fn get_filtered_program_accounts(
+    bank: &Arc<Bank>,
+    program_id: &Pubkey,
+    filters: Vec<RpcFilterType>,
+) -> impl Iterator<Item = (Pubkey, Account)> {
+    bank.get_program_accounts(Some(&program_id))
+        .into_iter()
+        .filter(move |(_, account)| {
+            filters.iter().all(|filter_type| match filter_type {
+                RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+            })
+        })
 }
 
 #[rpc]
@@ -1154,6 +1193,19 @@ pub trait RpcSol {
         pubkey_str: String,
         config: Option<RpcStakeConfig>,
     ) -> Result<RpcStakeActivation>;
+
+    // SPL Token-specific RPC endpoints
+    // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v1.0.0 for
+    // program details
+
+    #[rpc(meta, name = "getTokenAccountBalance")]
+    fn get_token_account_balance(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        token_program_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<u64>>;
 }
 
 pub struct RpcSolImpl;
@@ -1703,6 +1755,22 @@ impl RpcSol for RpcSolImpl {
         let pubkey = verify_pubkey(pubkey_str)?;
         meta.get_stake_activation(&pubkey, config)
     }
+
+    fn get_token_account_balance(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        token_program_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<u64>> {
+        debug!(
+            "get_token_account_balance rpc request received: {:?}",
+            pubkey_str
+        );
+        let pubkey = verify_pubkey(pubkey_str)?;
+        let token_program_id = verify_pubkey(token_program_str)?;
+        Ok(meta.get_token_account_balance(&pubkey, &token_program_id, commitment))
+    }
 }
 
 fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
@@ -1773,6 +1841,8 @@ pub mod tests {
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
+    use spl_sdk::pubkey::Pubkey as SplPubkey;
+    use spl_token_v1_0::option::COption;
     use std::collections::HashMap;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
@@ -3924,5 +3994,68 @@ pub mod tests {
             &blockstore,
             3
         ));
+    }
+
+    #[test]
+    fn test_token_rpcs() {
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
+
+        let mut account_data = [0; size_of::<TokenAccount>()];
+        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        let mint = SplPubkey::new(&[2; 32]);
+        let owner = SplPubkey::new(&[3; 32]);
+        let delegate = SplPubkey::new(&[4; 32]);
+        *account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 42,
+            is_initialized: true,
+            is_native: false,
+            delegated_amount: 30,
+        };
+        let token_account = Account {
+            lamports: 111,
+            data: account_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        let token_account_pubkey = Pubkey::new_rand();
+        bank.store_account(&token_account_pubkey, &token_account);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
+            token_account_pubkey,
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(balance, 42);
+
+        // Test non-existent token account
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
+            Pubkey::new_rand(),
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(balance, 0);
+
+        // Test incorrect token program id
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
+            token_account_pubkey,
+            Pubkey::new_rand(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(balance, 0);
     }
 }
