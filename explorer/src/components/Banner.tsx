@@ -20,6 +20,11 @@ const announcements = new Map<Cluster, Announcement>();
 //   start: new Date("August 1, 2020 00:00:00 GMT+0:00"),
 //   end: new Date("August 3, 2020 00:00:00 GMT+0:00"),
 // });
+announcements.set(Cluster.MainnetBeta, {
+  message:
+    "Mainnet Beta upgrade over the weekend of August 1, 2020. " +
+    "TRANSACTIONS DISABLED DURING THE UPGRADE",
+});
 
 export default function Banner() {
   const cluster = useCluster().cluster;
@@ -31,6 +36,33 @@ export default function Banner() {
   if (end && now > end) return null;
   if (start && now < start) return null;
 
+  let timeframe;
+  if (estimate || start || end) {
+    timeframe = (
+      <div>
+        <hr className="text-gray-500 w-100 mt-0 mb-3 opacity-50" />
+        {estimate && (
+          <h5 className="font-sm text-gray-200">
+            <span className="text-uppercase">Estimated Duration: </span>
+            {estimate}
+          </h5>
+        )}
+        {start && (
+          <h5 className="font-sm text-gray-200">
+            <span className="text-uppercase">Started at: </span>
+            {displayTimestamp(start.getTime())}
+          </h5>
+        )}
+        {end && (
+          <h5 className="font-sm text-gray-200">
+            <span className="text-uppercase">End: </span>
+            {displayTimestamp(end.getTime())}
+          </h5>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-danger text-white">
       <div className="container">
@@ -39,25 +71,7 @@ export default function Banner() {
             <span className="fe fe-alert-circle mr-2"></span>
             {message}
           </h3>
-          <hr className="text-gray-500 w-100 mt-0 mb-3 opacity-50" />
-          {estimate && (
-            <h5 className="font-sm text-gray-200">
-              <span className="text-uppercase">Estimated Duration: </span>
-              {estimate}
-            </h5>
-          )}
-          {start && (
-            <h5 className="font-sm text-gray-200">
-              <span className="text-uppercase">Started at: </span>
-              {displayTimestamp(start.getTime())}
-            </h5>
-          )}
-          {end && (
-            <h5 className="font-sm text-gray-200">
-              <span className="text-uppercase">End: </span>
-              {displayTimestamp(end.getTime())}
-            </h5>
-          )}
+          {timeframe}
         </div>
       </div>
     </div>
