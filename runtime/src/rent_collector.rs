@@ -89,12 +89,14 @@ impl RentCollector {
         }
     }
 
+    #[must_use = "add to Bank::collected_rent"]
     pub fn collect_from_created_account(&self, address: &Pubkey, account: &mut Account) -> u64 {
         // initialize rent_epoch as created at this epoch
         account.rent_epoch = self.epoch;
         self.collect_from_existing_account(address, account)
     }
 
+    #[must_use = "add to Bank::collected_rent"]
     pub fn collect_from_account(&self, address: &Pubkey, account: &mut Option<Account>) -> u64 {
         if let Some(account) = account {
             self.collect_from_existing_account(address, account)
@@ -110,20 +112,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_collect_from_account_existing() {
+    fn test_collect_from_account_created_and_existing() {
         let old_lamports = 1000;
         let old_epoch = 1;
         let new_epoch = 3;
 
-        let mut existing_account = Account::default();
-        existing_account.lamports = old_lamports;
-        existing_account.rent_epoch = old_epoch;
+        let (mut created_account, mut existing_account) = {
+            let mut account = Account::default();
+            account.lamports = old_lamports;
+            account.rent_epoch = old_epoch;
+
+            (account.clone(), account)
+        };
 
         let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
+
+        let collected =
+            rent_collector.collect_from_created_account(&Pubkey::new_rand(), &mut created_account);
+        assert!(created_account.lamports < old_lamports);
+        assert_eq!(created_account.lamports + collected, old_lamports);
+        assert_ne!(created_account.rent_epoch, old_epoch);
+
         let collected = rent_collector
             .collect_from_existing_account(&Pubkey::new_rand(), &mut existing_account);
-        assert_ne!(collected, 0);
-        assert_ne!(existing_account.lamports, old_lamports);
+        assert!(existing_account.lamports < old_lamports);
+        assert_eq!(existing_account.lamports + collected, old_lamports);
         assert_ne!(existing_account.rent_epoch, old_epoch);
+
+        assert!(created_account.lamports > existing_account.lamports);
+        assert_eq!(created_account.rent_epoch, existing_account.rent_epoch);
     }
 }
