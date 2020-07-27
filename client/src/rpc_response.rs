@@ -6,6 +6,7 @@ use solana_sdk::{
     inflation::Inflation,
     transaction::{Result, TransactionError},
 };
+use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
 use std::{collections::HashMap, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
@@ -235,4 +236,30 @@ pub struct RpcTokenAccountBalance {
     pub address: String,
     #[serde(flatten)]
     pub amount: RpcTokenAmount,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcConfirmedTransactionStatusWithSignature {
+    pub signature: String,
+    pub slot: Slot,
+    pub err: Option<TransactionError>,
+    pub memo: Option<String>,
+}
+
+impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
+    fn from(value: ConfirmedTransactionStatusWithSignature) -> Self {
+        let ConfirmedTransactionStatusWithSignature {
+            signature,
+            slot,
+            err,
+            memo,
+        } = value;
+        Self {
+            signature: signature.to_string(),
+            slot,
+            err,
+            memo,
+        }
+    }
 }

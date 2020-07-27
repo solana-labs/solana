@@ -24,6 +24,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 - [getConfirmedSignaturesForAddress](jsonrpc-api.md#getconfirmedsignaturesforaddress)
+- [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
 - [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 - [getEpochInfo](jsonrpc-api.md#getepochinfo)
 - [getEpochSchedule](jsonrpc-api.md#getepochschedule)
@@ -389,6 +390,8 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ### getConfirmedSignaturesForAddress
 
+**DEPRECATED: Please use getConfirmedSignaturesForAddress2 instead**
+
 Returns a list of all the confirmed signatures for transactions involving an
 address, within a specified Slot range. Max range allowed is 10,000 Slots
 
@@ -414,6 +417,39 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 // Result
 {"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"]},"id":1}
+```
+
+
+### getConfirmedSignaturesForAddress2
+
+Returns confirmed signatures for transactions involving an
+address backwards in time from the provided signature or most recent confirmed block
+
+#### Parameters:
+* `<string>` - account address as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following fields:
+  * `startAfter: <string>` - (optional) start searching backwards from this transaction signature,
+                             which must be a confirmed signature for the account
+                             address.  If not provided the search starts from
+                             the highest max confirmed block.
+  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+
+#### Results:
+The result field will be an array of transaction signature information, ordered
+from newest to oldest transaction:
+* `<object>`
+  * `signature: <string>` - transaction signature as base-58 encoded string
+  * `slot: <u64>` - The slot that contains the block with the transaction
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+
+#### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["Vote111111111111111111111111111111111111111", {"limit": 1}]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"err":null,"memo":null,"signature":"5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv","slot":114}],"id":1}
 ```
 
 ### getConfirmedTransaction
