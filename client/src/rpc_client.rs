@@ -2,7 +2,10 @@ use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     http_sender::HttpSender,
     mock_sender::{MockSender, Mocks},
-    rpc_config::{RpcLargestAccountsConfig, RpcSendTransactionConfig, RpcTokenAccountsFilter},
+    rpc_config::{
+        RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
+        RpcSendTransactionConfig, RpcTokenAccountsFilter,
+    },
     rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
     rpc_response::*,
     rpc_sender::RpcSender,
@@ -287,6 +290,32 @@ impl RpcClient {
             );
         }
         Ok(signatures)
+    }
+
+    pub fn get_confirmed_signatures_for_address2(
+        &self,
+        address: &Pubkey,
+    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        self.get_confirmed_signatures_for_address2_with_config(address, None, None)
+    }
+
+    pub fn get_confirmed_signatures_for_address2_with_config(
+        &self,
+        address: &Pubkey,
+        start_after: Option<Signature>,
+        limit: Option<usize>,
+    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let config = RpcGetConfirmedSignaturesForAddress2Config {
+            start_after: start_after.map(|signature| signature.to_string()),
+            limit,
+        };
+
+        let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
+            RpcRequest::GetConfirmedSignaturesForAddress2,
+            json!([address.to_string(), config]),
+        )?;
+
+        Ok(result)
     }
 
     pub fn get_confirmed_transaction(
