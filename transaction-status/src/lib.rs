@@ -204,7 +204,7 @@ pub struct TransactionWithStatusMeta {
     pub meta: Option<UiTransactionStatusMeta>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary,
