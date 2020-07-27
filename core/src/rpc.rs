@@ -894,6 +894,94 @@ impl JsonRpcRequestProcessor {
             .sum();
         Ok(new_response(&bank, supply))
     }
+
+    pub fn get_token_accounts_by_owner(
+        &self,
+        owner: &Pubkey,
+        token_program_id: &Pubkey,
+        mint: Option<Pubkey>,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Vec<RpcKeyedAccount>> {
+        let bank = self.bank(commitment);
+        let filters = if token_program_id == &spl_token_id_v1_0() {
+            let mut filters = vec![
+                // Filter on Owner address
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 32,
+                    bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
+                    encoding: None,
+                }),
+                // Filter on Token Account state
+                RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+            ];
+            if let Some(mint) = mint {
+                // Optional filter on Mint address
+                filters.push(RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
+                    encoding: None,
+                }));
+            }
+            filters
+        } else {
+            vec![]
+        };
+        let accounts = get_filtered_program_accounts(&bank, token_program_id, filters)
+            .map(|(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
+            })
+            .collect();
+        new_response(&bank, accounts)
+    }
+
+    pub fn get_token_accounts_by_delegate(
+        &self,
+        delegate: &Pubkey,
+        token_program_id: &Pubkey,
+        mint: Option<Pubkey>,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Vec<RpcKeyedAccount>> {
+        let bank = self.bank(commitment);
+        let filters = if token_program_id == &spl_token_id_v1_0() {
+            let mut filters = vec![
+                // Filter on Delegate is_some()
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 72,
+                    bytes: MemcmpEncodedBytes::Binary(
+                        bs58::encode(bincode::serialize(&1u32).unwrap()).into_string(),
+                    ),
+                    encoding: None,
+                }),
+                // Filter on Delegate address
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 76,
+                    bytes: MemcmpEncodedBytes::Binary(delegate.to_string()),
+                    encoding: None,
+                }),
+                // Filter on Token Account state
+                RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+            ];
+            if let Some(mint) = mint {
+                // Optional filter on Mint address
+                filters.push(RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
+                    encoding: None,
+                }));
+            }
+            filters
+        } else {
+            vec![]
+        };
+        let accounts = get_filtered_program_accounts(&bank, token_program_id, filters)
+            .map(|(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
+            })
+            .collect();
+        new_response(&bank, accounts)
+    }
 }
 
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
@@ -1245,6 +1333,24 @@ pub trait RpcSol {
         mint_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>>;
+
+    #[rpc(meta, name = "getTokenAccountsByOwner")]
+    fn get_token_accounts_by_owner(
+        &self,
+        meta: Self::Metadata,
+        owner_str: String,
+        token_program_str: String,
+        config: Option<RpcTokenAccountsConfig>,
+    ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
+
+    #[rpc(meta, name = "getTokenAccountsByDelegate")]
+    fn get_token_accounts_by_delegate(
+        &self,
+        meta: Self::Metadata,
+        delegate_str: String,
+        token_program_str: String,
+        config: Option<RpcTokenAccountsConfig>,
+    ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 }
 
 pub struct RpcSolImpl;
@@ -1818,6 +1924,55 @@ impl RpcSol for RpcSolImpl {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
+    }
+
+    fn get_token_accounts_by_owner(
+        &self,
+        meta: Self::Metadata,
+        owner_str: String,
+        token_program_str: String,
+        config: Option<RpcTokenAccountsConfig>,
+    ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
+        debug!(
+            "get_token_accounts_by_owner rpc request received: {:?}",
+            owner_str
+        );
+        let owner = verify_pubkey(owner_str)?;
+        let token_program_id = verify_pubkey(token_program_str)?;
+        let config = config.unwrap_or_default();
+        let mint = if let Some(mint_str) = config.mint {
+            Some(verify_pubkey(mint_str)?)
+        } else {
+            None
+        };
+        Ok(meta.get_token_accounts_by_owner(&owner, &token_program_id, mint, config.commitment))
+    }
+
+    fn get_token_accounts_by_delegate(
+        &self,
+        meta: Self::Metadata,
+        delegate_str: String,
+        token_program_str: String,
+        config: Option<RpcTokenAccountsConfig>,
+    ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
+        debug!(
+            "get_token_accounts_by_delegate rpc request received: {:?}",
+            delegate_str
+        );
+        let delegate = verify_pubkey(delegate_str)?;
+        let token_program_id = verify_pubkey(token_program_str)?;
+        let config = config.unwrap_or_default();
+        let mint = if let Some(mint_str) = config.mint {
+            Some(verify_pubkey(mint_str)?)
+        } else {
+            None
+        };
+        Ok(meta.get_token_accounts_by_delegate(
+            &delegate,
+            &token_program_id,
+            mint,
+            config.commitment,
+        ))
     }
 }
 
@@ -4128,5 +4283,117 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert!(result.get("error").is_some());
+
+        // Add another token account with the same owner and delegate but different token id
+        let mut account_data = [0; size_of::<TokenAccount>()];
+        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        let new_mint = SplPubkey::new(&[5; 32]);
+        *account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 42,
+            is_initialized: true,
+            is_native: false,
+            delegated_amount: 30,
+        };
+        let token_account = Account {
+            lamports: 111,
+            data: account_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        let token_with_different_mint_pubkey = Pubkey::new_rand();
+        bank.store_account(&token_with_different_mint_pubkey, &token_account);
+
+        // Test getTokenAccountsByOwner returns all accounts, regardless of Mint address
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            owner,
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(accounts.len(), 3);
+
+        // Test returns only new_mint account
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", "{}", {{"mint": "{}"}}]
+            }}"#,
+            owner,
+            spl_token_id_v1_0(),
+            new_mint,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(accounts.len(), 1);
+
+        // Test non-existent Owner
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            Pubkey::new_rand(),
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert!(accounts.is_empty());
+
+        // Test getTokenAccountsByDelegate returns all accounts, regardless of Mint address
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            delegate,
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(accounts.len(), 3);
+
+        // Test returns only new_mint account
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByDelegate",
+                "params":["{}", "{}", {{"mint": "{}"}}]
+            }}"#,
+            delegate,
+            spl_token_id_v1_0(),
+            new_mint,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(accounts.len(), 1);
+
+        // Test non-existent Owner
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            Pubkey::new_rand(),
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert!(accounts.is_empty());
     }
 }

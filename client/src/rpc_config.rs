@@ -58,3 +58,11 @@ pub struct RpcProgramAccountsConfig {
     #[serde(flatten)]
     pub account_config: RpcAccountInfoConfig,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTokenAccountsConfig {
+    pub mint: Option<String>,
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+}
