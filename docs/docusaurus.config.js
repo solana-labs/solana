@@ -43,6 +43,10 @@ module.exports = {
         },
       ],
     },
+    algolia: {
+      apiKey: "d58e0d68c875346d52645d68b13f3ac0",
+      indexName: "solana",
+    },
     footer: {
       style: "dark",
       links: [
