@@ -96,12 +96,13 @@ extern uint64_t entrypoint(const uint8_t *input) {
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
-      char seed1[] = "You pass butter";
-      char seed2[] = "Lil'";
-      char seed3[] = "Bits";
-      const SolSignerSeed seeds1[] = {{seed1, sol_strlen(seed1)}};
-      const SolSignerSeed seeds2[] = {{seed2, sol_strlen(seed2)},
-                                      {seed3, sol_strlen(seed3)}};
+      uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
+                         ' ', 'b', 'u', 't', 't', 'e', 'r'};
+      uint8_t seed2[] = {'L', 'i', 'l', '\''};
+      uint8_t seed3[] = {'B', 'i', 't', 's'};
+      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)}};
+      const SolSignerSeed seeds2[] = {{seed2, SOL_ARRAY_SIZE(seed2)},
+                                      {seed3, SOL_ARRAY_SIZE(seed3)}};
       const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                               {seeds2, SOL_ARRAY_SIZE(seeds2)}};
       sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,

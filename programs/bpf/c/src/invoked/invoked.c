@@ -77,7 +77,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
   case TEST_RETURN_ERROR: {
-    sol_log("reutrn error");
+    sol_log("return error");
     return 42;
   }
   case TEST_DERIVED_SIGNERS: {
@@ -100,12 +100,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
-    char seed1[] = "Lil'";
-    char seed2[] = "Bits";
-    char seed3[] = "Gar Ma Nar Nar";
-    const SolSignerSeed seeds1[] = {{seed1, sol_strlen(seed1)},
-                                    {seed2, sol_strlen(seed2)}};
-    const SolSignerSeed seeds2[] = {{seed3, sol_strlen(seed3)}};
+    uint8_t seed1[] = {'L', 'i', 'l', '\''};
+    uint8_t seed2[] = {'B', 'i', 't', 's'};
+    const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+                                    {seed2, SOL_ARRAY_SIZE(seed2)}};
+    const SolSignerSeed seeds2[] = {
+        {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY}};
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
 

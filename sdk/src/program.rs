@@ -14,7 +14,7 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
 pub fn invoke_signed(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
-    signers_seeds: &[&[&str]],
+    signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
     let result = unsafe {
         sol_invoke_signed_rust(
