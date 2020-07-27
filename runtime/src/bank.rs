@@ -1155,18 +1155,13 @@ impl Bank {
             .unwrap()
             .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
 
-        self.hashes_per_tick = genesis_config.poh_config.hashes_per_tick;
-        self.ticks_per_slot = genesis_config.ticks_per_slot;
-        self.ns_per_slot = genesis_config.poh_config.target_tick_duration.as_nanos()
-            * genesis_config.ticks_per_slot as u128;
+        self.hashes_per_tick = genesis_config.hashes_per_tick();
+        self.ticks_per_slot = genesis_config.ticks_per_slot();
+        self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
         self.unused = genesis_config.unused;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
-        self.slots_per_year = years_as_slots(
-            1.0,
-            &genesis_config.poh_config.target_tick_duration,
-            self.ticks_per_slot,
-        );
+        self.slots_per_year = genesis_config.slots_per_year();
 
         self.epoch_schedule = genesis_config.epoch_schedule;
 
