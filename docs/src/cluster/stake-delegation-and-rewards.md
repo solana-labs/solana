@@ -43,7 +43,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 
 ### VoteInstruction::Authorize\(Pubkey, VoteAuthorize\)
 
-Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be by signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
+Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
 
 - `account[0]` - RW - The VoteState
   `VoteState::authorized_voter` or `authorized_withdrawer` is set to to `Pubkey`.
@@ -88,7 +88,7 @@ The Stake account is moved from Initialized to StakeState::Stake form, or from a
 - `account[1]` - R - The VoteState instance.
 - `account[2]` - R - sysvar::clock account, carries information about current Bank epoch
 - `account[3]` - R - sysvar::stakehistory account, carries information about stake history
-- `account[4]` - R - stake::Config accoount, carries warmup, cooldown, and slashing configuration
+- `account[4]` - R - stake::Config account, carries warmup, cooldown, and slashing configuration
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
@@ -170,7 +170,7 @@ Rewards are paid against the "effective" portion of the stake for that epoch.
 
 Consider the situation of a single stake of 1,000 activated at epoch N, with network warmup rate of 20%, and a quiescent total network stake at epoch N of 2,000.
 
-At epoch N+1, the amount available to be activated for the network is 400 \(20% of 200\), and at epoch N, this example stake is the only stake activating, and so is entitled to all of the warmup room available.
+At epoch N+1, the amount available to be activated for the network is 400 \(20% of 2000\), and at epoch N, this example stake is the only stake activating, and so is entitled to all of the warmup room available.
 
 | epoch | effective | activating | total effective | total activating |
 | :---- | --------: | ---------: | --------------: | ---------------: |
