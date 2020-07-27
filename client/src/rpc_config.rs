@@ -65,3 +65,10 @@ pub enum RpcTokenAccountsFilter {
     Mint(String),
     ProgramId(String),
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcGetConfirmedSignaturesForAddress2Config {
+    pub start_after: Option<String>, // Signature as base-58 string
+    pub limit: Option<usize>,
+}

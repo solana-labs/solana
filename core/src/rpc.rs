@@ -17,6 +17,7 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
@@ -835,6 +836,35 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+    pub fn get_confirmed_signatures_for_address2(
+        &self,
+        address: Pubkey,
+        start_after: Option<Signature>,
+        limit: usize,
+    ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        if self.config.enable_rpc_transaction_history {
+            let highest_confirmed_root = self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .highest_confirmed_root();
+
+            let results = self
+                .blockstore
+                .get_confirmed_signatures_for_address2(
+                    address,
+                    highest_confirmed_root,
+                    start_after,
+                    limit,
+                )
+                .map_err(|err| Error::invalid_params(format!("{}", err)))?;
+
+            Ok(results.into_iter().map(|x| x.into()).collect())
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub fn get_first_available_block(&self) -> Slot {
         let slot = self
             .blockstore
@@ -1485,6 +1515,14 @@ pub trait RpcSol {
         end_slot: Slot,
     ) -> Result<Vec<String>>;
 
+    #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
+    fn get_confirmed_signatures_for_address2(
+        &self,
+        meta: Self::Metadata,
+        address: String,
+        config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+    ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+
     #[rpc(meta, name = "getFirstAvailableBlock")]
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
 
@@ -2113,6 +2151,39 @@ impl RpcSol for RpcSolImpl {
             .iter()
             .map(|signature| signature.to_string())
             .collect())
+    }
+
+    fn get_confirmed_signatures_for_address2(
+        &self,
+        meta: Self::Metadata,
+        address: String,
+        config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+    ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let address = verify_pubkey(address)?;
+
+        let (start_after, limit) =
+            if let Some(RpcGetConfirmedSignaturesForAddress2Config { start_after, limit }) = config
+            {
+                (
+                    if let Some(start_after) = start_after {
+                        Some(verify_signature(&start_after)?)
+                    } else {
+                        None
+                    },
+                    limit.unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT),
+                )
+            } else {
+                (None, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT)
+            };
+
+        if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
+            return Err(Error::invalid_params(format!(
+                "Invalid limit; max {}",
+                MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
+            )));
+        }
+
+        meta.get_confirmed_signatures_for_address2(address, start_after, limit)
     }
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
