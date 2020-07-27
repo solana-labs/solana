@@ -1658,7 +1658,7 @@ impl Blockstore {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
-                let encoded_transaction = EncodedTransaction::encode(transaction, encoding.clone());
+                let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
                 TransactionWithStatusMeta {
                     transaction: encoded_transaction,
                     meta: self
