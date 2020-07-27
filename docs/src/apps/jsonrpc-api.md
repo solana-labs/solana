@@ -46,6 +46,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -1037,6 +1038,29 @@ Returns the token balance of an SPL Token account.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":9864,"id":1}
+```
+
+### getTokenSupply
+
+Returns the total supply of an SPL Token type.
+
+#### Parameters:
+
+- `<string>` - Pubkey of token Mint to query, as base-58 encoded string
+- `<string>` - Pubkey of Token program ID that owns the accounts, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the total token supply
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E", "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":100000,"id":1}
 ```
 
 ### getTransactionCount
