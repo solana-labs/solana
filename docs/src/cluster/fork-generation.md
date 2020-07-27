@@ -14,34 +14,16 @@ Nodes take turns being leader and generating the PoH that encodes state changes.
 2. Leader filters valid transactions.
 3. Leader executes valid transactions updating its state.
 4. Leader packages transactions into entries based off its current PoH slot.
-5. Leader transmits the entries to validator nodes \(in signed shreds\) 1. The PoH stream includes ticks; empty entries that indicate liveness of
-
-   the leader and the passage of time on the cluster.
-
-   1. A leader's stream begins with the tick entries necessary complete the PoH
-
-      back to the leaders most recently observed prior leader slot.
-
-6. Validators retransmit entries to peers in their set and to further
-
-   downstream nodes.
-
+5. Leader transmits the entries to validator nodes \(in signed shreds\) 
+   1. The PoH stream includes ticks; empty entries that indicate liveness of the leader and the passage of time on the cluster.
+   2. A leader's stream begins with the tick entries necessary to complete PoH back to the leader's most recently observed prior leader slot.
+6. Validators retransmit entries to peers in their set and to further downstream nodes.
 7. Validators validate the transactions and execute them on their state.
 8. Validators compute the hash of the state.
-9. At specific times, i.e. specific PoH tick counts, validators transmit votes
-
-   to the leader.
-
-   1. Votes are signatures of the hash of the computed state at that PoH tick
-
-      count
-
-   2. Votes are also propagated via gossip
-
-10. Leader executes the votes as any other transaction and broadcasts them to
-
-    the cluster.
-
+9. At specific times, i.e. specific PoH tick counts, validators transmit votes to the leader.
+   1. Votes are signatures of the hash of the computed state at that PoH tick count.
+   2. Votes are also propagated via gossip.
+10. Leader executes the votes, the same as any other transaction, and broadcasts them to the cluster.
 11. Validators observe their votes and all the votes from the cluster.
 
 ## Partitions, Forks
@@ -62,7 +44,7 @@ The diagram below represents a validator's view of the PoH stream with possible 
 
 ![Fork generation](/img/fork-generation.svg)
 
-Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot. Once a validator commits to a forks, other forks can be discarded below that tick count. For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader. But multiple virtual entries may overlap as they link back to the a previous slot.
+Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot. Once a validator commits to a fork, other forks can be discarded below that tick count. For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader. But multiple virtual entries may overlap as they link back to the a previous slot.
 
 #### Time Division
 
