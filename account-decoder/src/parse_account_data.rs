@@ -1,16 +1,18 @@
-use crate::{parse_nonce::parse_nonce, parse_token::parse_token, parse_vote::parse_vote};
+use crate::{
+    parse_nonce::parse_nonce,
+    parse_token::{parse_token, spl_token_id_v1_0},
+    parse_vote::parse_vote,
+};
 use inflector::Inflector;
 use serde_json::{json, Value};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program};
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 use thiserror::Error;
 
 lazy_static! {
-    static ref SYSTEM_PROGRAM_ID: Pubkey =
-        Pubkey::from_str(&system_program::id().to_string()).unwrap();
-    static ref TOKEN_PROGRAM_ID: Pubkey = Pubkey::from_str(&spl_token::id().to_string()).unwrap();
-    static ref VOTE_PROGRAM_ID: Pubkey =
-        Pubkey::from_str(&solana_vote_program::id().to_string()).unwrap();
+    static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
+    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v1_0();
+    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
