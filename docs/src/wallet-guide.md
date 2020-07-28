@@ -49,7 +49,7 @@ you first will need to create a wallet.**
 
 ## Supported Wallets
 
-Solana supports supports several types of wallets in the Solana native
+Solana supports several types of wallets in the Solana native
 command-line app as well as wallets from third-parties.
 
 For the majority of users, we recommend using one of the
