@@ -12,12 +12,13 @@ Solana explorer. The original design only supported minutes of history, so we
 changed it to instead store transaction statuses in a local RocksDB instance
 and offer days of history. We then extended that to 6 months via BigTable.
 
-With each modification, the API became more suitable for explorers and less
-appealing for transaction processing. The clients poll for transaction status
-instead of being notified, giving the false impression of higher confirmation
-times. Furthermore, what clients can poll for is limited, preventing them from
-making reasonable real-time decisions, such as recognizing a transaction is
-confirmed as soon as particular, trusted validators vote on it.
+With each modification, the API became more suitable for applications serving
+static content and less appealing for transaction processing. The clients poll
+for transaction status instead of being notified, giving the false impression
+of higher confirmation times. Furthermore, what clients can poll for is
+limited, preventing them from making reasonable real-time decisions, such as
+recognizing a transaction is confirmed as soon as particular, trusted
+validators vote on it.
 
 ## Proposed Solution
 
@@ -26,10 +27,9 @@ validator's ReplayStage.
 
 Improved client experience:
 
-* Support connections directly from JavaScript apps.
-* Clients can be notified of confirmation in optimal time.
-* Clients can be notified in real-time of details such as votes and the voter's
-  stake weight.
+* Support connections directly from WebAssembly apps.
+* Clients can be notified of confirmation progress in real-time, including votes
+  and voter stake weight.
 * Clients can be notified when the heaviest fork changes, if it affects the
   transactions confirmation count.
 
