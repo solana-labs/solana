@@ -35,6 +35,7 @@ pub mod heaviest_subtree_fork_choice;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod non_circulating_supply;
+pub mod optimistic_confirmation_verifier;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;
@@ -66,6 +67,7 @@ pub mod tree_diff;
 pub mod tvu;
 pub mod validator;
 pub mod verified_vote_packets;
+pub mod vote_stake_tracker;
 pub mod weighted_shuffle;
 pub mod window_service;
 

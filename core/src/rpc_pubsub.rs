@@ -968,6 +968,7 @@ mod tests {
                 node_keypair,
                 vote_keypair,
                 vote_keypair,
+                None,
             );
             votes_sender.send(vec![vote_tx]).unwrap();
         });
@@ -978,7 +979,7 @@ mod tests {
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
-            0,
+            &bank,
             &rpc.subscriptions,
             &s,
             &replay_votes_receiver,
