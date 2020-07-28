@@ -1,5 +1,10 @@
-use crate::{decode_error::DecodeError, hash::hashv};
+use crate::{
+    decode_error::DecodeError,
+    hash::{hash, hashv, Hasher},
+};
 use num_derive::{FromPrimitive, ToPrimitive};
+#[cfg(not(feature = "program"))]
+use std::error;
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
@@ -82,14 +87,11 @@ impl Pubkey {
         ))
     }
 
-    #[cfg(not(feature = "program"))]
     pub fn create_program_address(
         seeds: &[&[u8]],
         program_id: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
-        use std::convert::TryInto;
-
-        let mut hasher = crate::hash::Hasher::default();
+        let mut hasher = Hasher::default();
         for seed in seeds.iter() {
             if seed.len() > MAX_SEED_LEN {
                 return Err(PubkeyError::MaxSeedLengthExceeded);
@@ -97,20 +99,8 @@ impl Pubkey {
             hasher.hash(seed);
         }
         hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
-        let mut hashed_bits: [u8; 32] = hasher.result().as_ref().try_into().unwrap();
 
-        // clamp
-        hashed_bits[0] &= 248;
-        hashed_bits[31] &= 127;
-        hashed_bits[31] |= 64;
-
-        // point multiply
-        Ok(Pubkey::new(
-            (&curve25519_dalek::scalar::Scalar::from_bits(hashed_bits)
-                * &curve25519_dalek::constants::ED25519_BASEPOINT_TABLE)
-                .compress()
-                .as_bytes(),
-        ))
+        Ok(Pubkey::new(hash(hasher.result().as_ref()).as_ref()))
     }
 
     #[cfg(not(feature = "program"))]
@@ -142,7 +132,7 @@ impl fmt::Display for Pubkey {
 }
 
 #[cfg(not(feature = "program"))]
-pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn std::error::Error>> {
+pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
     use std::io::Write;
 
     let printable = format!("{}", pubkey);
@@ -158,7 +148,7 @@ pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn st
 }
 
 #[cfg(not(feature = "program"))]
-pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Error>> {
+pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     let f = std::fs::File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
@@ -272,25 +262,25 @@ mod tests {
         assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand()).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[b""], &program_id),
-            Ok("Gv1heG5PQhTNevViduUvVBv8XmcEo6AHcoyA2wXrCsAa"
+            Ok("CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉".as_ref()], &program_id),
-            Ok("GzVDzHSMACepN7FVPhPJG3DkG2WkEWgRHWanefxvaZq6"
+            Ok("A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id),
-            Ok("BBstFkvRCCbzQKgdTqypWN1bZmfEmRc9d5sNGYZtEicM"
+            Ok("CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[public_key.as_ref()], &program_id),
-            Ok("6f2a73BjEZKguMpgdmzvSz6qNtmzomCkJgoK21F1yPQK"
+            Ok("4ak7qJacCKMAGP8xJtDkg2VYZh5QKExa71ijMDjZGQyb"
                 .parse()
                 .unwrap())
         );
@@ -301,29 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pubkey_on_curve() {
-        // try a bunch of random input, all the generated program addresses should land on the curve
-        // and should be unique
-        let mut addresses = vec![];
-        for _ in 0..1_000 {
-            let program_id = Pubkey::new_rand();
-            let bytes1 = rand::random::<[u8; 10]>();
-            let bytes2 = rand::random::<[u8; 32]>();
-            let program_address =
-                Pubkey::create_program_address(&[&bytes1, &bytes2], &program_id).unwrap();
-            let is_on_curve = curve25519_dalek::edwards::CompressedEdwardsY::from_slice(
-                &program_address.to_bytes(),
-            )
-            .decompress()
-            .is_some();
-            assert!(is_on_curve);
-            assert!(!addresses.contains(&program_address));
-            addresses.push(program_address);
-        }
-    }
-
-    #[test]
-    fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_read_write_pubkey() -> Result<(), Box<dyn error::Error>> {
         let filename = "test_pubkey.json";
         let pubkey = Pubkey::new_rand();
         write_pubkey_file(filename, pubkey)?;
