@@ -437,7 +437,7 @@ impl ClusterInfoVoteListener {
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
             if last_process_root.elapsed().as_millis() > 400 {
                 let unrooted_optimistic_slots = optimistic_confirmation_verifier
-                    .check_optimistic_slots_rooted(&root_bank, &blockstore);
+                    .get_unrooted_optimistic_slots(&root_bank, &blockstore);
                 // SlotVoteTracker's for all `slots` in `unrooted_optimistic_slots`
                 // should still be available because we haven't purged in
                 // `process_new_root_bank()` yet, which is called below
