@@ -40,7 +40,7 @@ export default function Banner() {
   if (estimate || start || end) {
     timeframe = (
       <div>
-        <hr className="text-gray-500 w-100 mt-0 mb-3 opacity-50" />
+        <hr className="text-gray-500 w-100 my-3 opacity-50" />
         {estimate && (
           <h5 className="font-sm text-gray-200">
             <span className="text-uppercase">Estimated Duration: </span>
@@ -67,7 +67,7 @@ export default function Banner() {
     <div className="bg-danger text-white">
       <div className="container">
         <div className="d-flex flex-column align-items-center justify-content-center text-center py-3">
-          <h3 className="mb-3">
+          <h3 className="mb-0 line-height-md">
             <span className="fe fe-alert-circle mr-2"></span>
             {message}
           </h3>
