@@ -574,16 +574,13 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes: &[Arc<PubkeyVotes>],
     ) -> Vec<(Slot, Hash)> {
-        let mut switch_counted: HashSet<(Slot, Pubkey)> = HashSet::new();
+        let mut optimistic_confirmation_counted: HashSet<(Slot, Pubkey)> = HashSet::new();
         let mut diff: HashMap<Slot, HashMap<Arc<Pubkey>, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
         let root = root_bank.slot();
         {
             for tx in vote_txs {
-                if let Some((vote_pubkey, vote, switch_proof_hash)) =
-                    Self::parse_vote_transaction(&tx)
-                {
-                    let is_switch_vote = switch_proof_hash.is_some();
+                if let Some((vote_pubkey, vote, _)) = Self::parse_vote_transaction(&tx) {
                     if vote.slots.is_empty() {
                         continue;
                     }
@@ -624,9 +621,9 @@ impl ClusterInfoVoteListener {
 
                         let unduplicated_pubkey = vote_tracker.keys.get_or_insert(&vote_pubkey);
 
-                        // The vote for the greatest slot in the stack of votes in a non-switching vote
-                        // qualifies for optimistic confirmation.
-                        let update_switch_info = if (slot == last_vote_slot) && !is_switch_vote {
+                        // The last vote slot , which is the greatest slot in the stack
+                        // of votes in a vote transaction, qualifies for optimistic confirmation.
+                        let update_optimistic_confirmation_info = if slot == last_vote_slot {
                             let stake = epoch_vote_accounts
                                 .get(&vote_pubkey)
                                 .map(|(stake, _)| *stake)
@@ -637,12 +634,13 @@ impl ClusterInfoVoteListener {
                         };
 
                         // If this vote for this slot qualifies for optimistic confirmation
-                        if let Some((stake, hash)) = update_switch_info {
-                            // Fast track processing of non-switch votes so that
-                            // notifications for optimistic confirmation can be sent
+                        if let Some((stake, hash)) = update_optimistic_confirmation_info {
+                            // Fast track processing of the last slot in a vote transactions
+                            // so that notifications for optimistic confirmation can be sent
                             // as soon as possible.
-                            if !switch_counted.contains(&(*slot, *unduplicated_pubkey))
-                                && Self::add_non_switch_vote(
+                            if !optimistic_confirmation_counted
+                                .contains(&(*slot, *unduplicated_pubkey))
+                                && Self::add_optimistic_confirmation_vote(
                                     vote_tracker,
                                     *slot,
                                     hash,
@@ -651,7 +649,8 @@ impl ClusterInfoVoteListener {
                                     total_epoch_stake,
                                 )
                             {
-                                switch_counted.insert((*slot, *unduplicated_pubkey));
+                                optimistic_confirmation_counted
+                                    .insert((*slot, *unduplicated_pubkey));
                                 new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
                                 // TODO: Notify subscribers about new optimistic confirmation
                             }
@@ -752,7 +751,7 @@ impl ClusterInfoVoteListener {
     }
 
     // Returns if the slot was optimistically confirmed
-    fn add_non_switch_vote(
+    fn add_optimistic_confirmation_vote(
         vote_tracker: &VoteTracker,
         slot: Slot,
         hash: Hash,
@@ -1182,13 +1181,11 @@ mod tests {
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
-                // 1) Only the last vote in the stack of `gossip_votes` should count towards
-                // the `no_switching` vote set.
-                // 2) Should only count toward the `no_switching` vote set if the
-                // vote was a `no-switching` vote
+                // Only the last vote in the stack of `gossip_votes` should count towards
+                // the `optimistic` vote set.
                 let optimistic_votes_tracker =
                     r_slot_vote_tracker.optimistic_votes_tracker(&Hash::default());
-                if vote_slot == 2 && hash.is_none() {
+                if vote_slot == 2 {
                     let optimistic_votes_tracker = optimistic_votes_tracker.unwrap();
                     assert!(optimistic_votes_tracker.voted().contains(&pubkey));
                     assert_eq!(
@@ -1289,7 +1286,7 @@ mod tests {
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
                 // All the votes were single votes, so they should all count towards
-                // the non-switching vote set
+                // the optimistic confirmation vote set
                 let optimistic_votes_tracker = r_slot_vote_tracker
                     .optimistic_votes_tracker(&bank_hash)
                     .unwrap();
@@ -1432,10 +1429,13 @@ mod tests {
     #[test]
     fn test_vote_tracker_references() {
         // The number of references that get stored for a pubkey every time
-        // a non-switch vote is made. One stored in the SlotVoteTracker.voted, one in
-        // SlotVoteTracker.updates, one in SlotVoteTracker.optimistic_votes_tracker
-        let ref_count_per_optimistic_vote = 3;
-        let ref_count_per_replay_vote = ref_count_per_optimistic_vote - 1;
+        // a vote is added to the tracking set via a transaction. One stored in the
+        // SlotVoteTracker.voted, one in SlotVoteTracker.updates, one in
+        // SlotVoteTracker.optimistic_votes_tracker
+        let ref_count_per_vote = 3;
+        // Replay votes don't get added to `SlotVoteTracker.optimistic_votes_tracker`,
+        // so there's one less
+        let ref_count_per_replay_vote = ref_count_per_vote - 1;
         let ref_count_per_new_key = 1;
 
         // Create some voters at genesis
@@ -1497,11 +1497,11 @@ mod tests {
                 .unwrap(),
         );
 
-        // This new pubkey submitted a non-swith vote for a slot, so ref count is
-        // `ref_count_per_optimistic_vote + ref_count_per_new_key`.
+        // This new pubkey submitted a vote for a slot, so ref count is
+        // `ref_count_per_vote + ref_count_per_new_key`.
         // +ref_count_per_new_key for the new pubkey  in `vote_tracker.keys` and
-        // +ref_count_per_optimistic_vote for the one new vote
-        let mut current_ref_count = ref_count_per_optimistic_vote + ref_count_per_new_key;
+        // +ref_count_per_vote for the one new vote
+        let mut current_ref_count = ref_count_per_vote + ref_count_per_new_key;
         assert_eq!(ref_count, current_ref_count);
 
         // Setup next epoch
@@ -1582,7 +1582,7 @@ mod tests {
                 .get(&validator0_keypairs.vote_keypair.pubkey())
                 .unwrap(),
         );
-        current_ref_count += 2 * ref_count_per_optimistic_vote;
+        current_ref_count += 2 * ref_count_per_vote;
         assert_eq!(ref_count, current_ref_count);
     }
 
