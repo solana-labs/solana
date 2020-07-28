@@ -4192,20 +4192,18 @@ pub mod tests {
                 accounts_for_shrink.process_stale_slot();
             });
 
-            let mut current_slot = 0;
             let mut alive_accounts = vec![];
             let owner = Pubkey::default();
 
             // populate the AccountsDB with plenty of food for slot shrinking
             // also this simulates realistic some heavy spike account updates in the wild
-            for _ in 0..1000 {
+            for current_slot in 0..1000 {
                 while alive_accounts.len() <= 10 {
                     alive_accounts.push((
                         Pubkey::new_rand(),
                         Account::new(thread_rng().gen_range(0, 50), 0, &owner),
                     ));
                 }
-                current_slot += 1;
 
                 alive_accounts.retain(|(_pubkey, account)| account.lamports >= 1);
 
