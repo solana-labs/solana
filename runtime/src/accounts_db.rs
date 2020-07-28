@@ -825,16 +825,20 @@ impl AccountsDB {
         );
     }
 
+    fn do_shrink_stale_slot(&self, slot: Slot) -> usize {
+        self.do_shrink_slot(slot, false)
+    }
+
+    fn do_shrink_slot_forced(&self, slot: Slot) {
+        self.do_shrink_slot(slot, true);
+    }
+
     fn shrink_stale_slot(&self, candidates: &mut MutexGuard<Vec<Slot>>) -> usize {
         if let Some(slot) = self.do_next_shrink_slot(candidates) {
-            self.do_shrink_slot(slot, false)
+            self.do_shrink_stale_slot(slot)
         } else {
             0
         }
-    }
-
-    fn shrink_slot_forced(&self, slot: Slot) {
-        self.do_shrink_slot(slot, true);
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -1014,13 +1018,13 @@ impl AccountsDB {
     #[cfg(test)]
     fn shrink_all_stale_slots(&self) {
         for slot in self.all_slots_in_storage() {
-            self.do_shrink_slot(slot, false);
+            self.do_shrink_stale_slot(slot);
         }
     }
 
     pub fn shrink_all_slots(&self) {
         for slot in self.all_slots_in_storage() {
-            self.shrink_slot_forced(slot);
+            self.do_shrink_slot_forced(slot);
         }
     }
 
