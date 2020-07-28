@@ -795,7 +795,9 @@ impl AccountsDB {
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self) {
-        // hold lock to prevent slot shrining from running because bla bla...
+        // hold a lock to prevent slot shrinking from running because it might modify some rooted
+        // slot storages which can not happen as long as we're cleaning accounts because we're also
+        // modifying the rooted slot storages!
         let _candidates = self.shrink_candidate_slots.lock().unwrap();
 
         self.report_store_stats();
@@ -1097,15 +1099,17 @@ impl AccountsDB {
 
     pub fn process_stale_slot(&self) -> usize {
         let mut measure = Measure::start("stale_slot_shrink-ms");
-        // skip if locked by clean_accounts();
-        // and hold this lock as long as the shrinking process is running due to avoid conflicts
-        // with clean_accoutns().. bla bla
         let candidates = self.shrink_candidate_slots.try_lock();
-        let count = if let Ok(mut candidates) = candidates {
-            self.shrink_stale_slot(&mut candidates)
-        } else {
-            0
-        };
+        if candidates.is_err() {
+            // skip and return immediately if locked by clean_accounts()
+            // the calling background thread will just retry later.
+            return 0;
+        }
+        // hold this lock as long as this shrinking process is running to avoid conflicts
+        // with clean_accounts().
+        let mut candidates = candidates.unwrap();
+
+        let count = self.shrink_stale_slot(&mut candidates);
         measure.stop();
         inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);
         count
