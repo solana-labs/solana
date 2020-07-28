@@ -863,37 +863,36 @@ impl JsonRpcRequestProcessor {
     pub fn get_token_supply(
         &self,
         mint: &Pubkey,
-        token_program_id: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<u64> {
+    ) -> Result<RpcResponse<u64>> {
         let bank = self.bank(commitment);
-        let filters = if token_program_id == &spl_token_id_v1_0() {
-            vec![
-                // Filter on Mint address
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 0,
-                    bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                    encoding: None,
-                }),
-                // Filter on Token Account state
-                RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
-            ]
-        } else {
-            vec![]
-        };
-        let supply = get_filtered_program_accounts(&bank, &token_program_id, filters)
+        let mint_account = bank.get_account(mint).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find mint".to_string())
+        })?;
+        if mint_account.owner != spl_token_id_v1_0() {
+            return Err(Error::invalid_params(
+                "Invalid param: not a v1.0 Token mint".to_string(),
+            ));
+        }
+        let filters = vec![
+            // Filter on Mint address
+            RpcFilterType::Memcmp(Memcmp {
+                offset: 0,
+                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
+                encoding: None,
+            }),
+            // Filter on Token Account state
+            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+        ];
+        let supply = get_filtered_program_accounts(&bank, &mint_account.owner, filters)
             .map(|(_pubkey, account)| {
-                if token_program_id == &spl_token_id_v1_0() {
-                    let mut data = account.data.to_vec();
-                    TokenState::unpack(&mut data)
-                        .map(|account: &mut TokenAccount| account.amount)
-                        .unwrap_or(0)
-                } else {
-                    0
-                }
+                let mut data = account.data.to_vec();
+                TokenState::unpack(&mut data)
+                    .map(|account: &mut TokenAccount| account.amount)
+                    .unwrap_or(0)
             })
             .sum();
-        new_response(&bank, supply)
+        Ok(new_response(&bank, supply))
     }
 }
 
@@ -1244,7 +1243,6 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         mint_str: String,
-        token_program_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>>;
 }
@@ -1815,13 +1813,11 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         mint_str: String,
-        token_program_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
-        let token_program_id = verify_pubkey(token_program_str)?;
-        Ok(meta.get_token_supply(&mint, &token_program_id, commitment))
+        meta.get_token_supply(&mint, commitment)
     }
 }
 
@@ -1894,7 +1890,7 @@ pub mod tests {
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
     use spl_sdk::pubkey::Pubkey as SplPubkey;
-    use spl_token_v1_0::option::COption;
+    use spl_token_v1_0::{option::COption, state::Mint};
     use std::collections::HashMap;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
@@ -4095,26 +4091,27 @@ pub mod tests {
             .expect("actual response deserialization");
         assert!(result.get("error").is_some());
 
-        // Test incorrect token program id
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
-            token_account_pubkey,
-            Pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(balance, 0);
-
-        // Add another token account to ensure getTokenSupply sums all mint accounts
+        // Add the mint, plus another token account to ensure getTokenSupply sums all mint accounts
+        let mut mint_data = [0; size_of::<Mint>()];
+        let mint_state: &mut Mint = TokenState::unpack_unchecked(&mut mint_data).unwrap();
+        *mint_state = Mint {
+            owner: COption::Some(owner),
+            decimals: 2,
+            is_initialized: true,
+        };
+        let mint_account = Account {
+            lamports: 111,
+            data: mint_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
         let other_token_account_pubkey = Pubkey::new_rand();
         bank.store_account(&other_token_account_pubkey, &token_account);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}", "{}"]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
             mint,
-            spl_token_id_v1_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -4124,26 +4121,12 @@ pub mod tests {
 
         // Test non-existent mint address
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}", "{}"]}}"#,
-            Pubkey::new_rand(),
-            spl_token_id_v1_0(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let supply: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(supply, 0);
-
-        // Test incorrect token program id
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}", "{}"]}}"#,
-            mint,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
             Pubkey::new_rand(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let supply: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(supply, 0);
+        assert!(result.get("error").is_some());
     }
 }

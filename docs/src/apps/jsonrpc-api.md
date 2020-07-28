@@ -1047,7 +1047,6 @@ Returns the total supply of an SPL Token type.
 #### Parameters:
 
 - `<string>` - Pubkey of token Mint to query, as base-58 encoded string
-- `<string>` - Pubkey of Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
@@ -1058,7 +1057,7 @@ Returns the total supply of an SPL Token type.
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E", "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":100000,"id":1}
 ```
