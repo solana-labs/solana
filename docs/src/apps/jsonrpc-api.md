@@ -1024,7 +1024,6 @@ Returns the token balance of an SPL Token account.
 #### Parameters:
 
 - `<string>` - Pubkey of Token account to query, as base-58 encoded string
-- `<string>` - Pubkey of Token program ID that owns the account, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
@@ -1035,7 +1034,7 @@ Returns the token balance of an SPL Token account.
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7", "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":9864,"id":1}
 ```

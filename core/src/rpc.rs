@@ -8,10 +8,7 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_account_decoder::{
-    parse_token::{parse_token, spl_token_id_v1_0, TokenAccountType},
-    UiAccount, UiAccountEncoding,
-};
+use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::*,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -842,25 +839,25 @@ impl JsonRpcRequestProcessor {
     pub fn get_token_account_balance(
         &self,
         pubkey: &Pubkey,
-        token_program_id: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<u64> {
+    ) -> Result<RpcResponse<u64>> {
         let bank = self.bank(commitment);
-        let balance = bank
-            .get_account(pubkey)
-            .and_then(|account| {
-                if token_program_id == &spl_token_id_v1_0() {
-                    parse_token(&account.data).ok()
-                } else {
-                    None
-                }
+        let account = bank.get_account(pubkey).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find account".to_string())
+        })?;
+
+        if account.owner != spl_token_id_v1_0() {
+            return Err(Error::invalid_params(
+                "Invalid param: not a v1.0 Token account".to_string(),
+            ));
+        }
+        let mut data = account.data.to_vec();
+        let balance = TokenState::unpack(&mut data)
+            .map_err(|_| {
+                Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
             })
-            .and_then(|token_type| match token_type {
-                TokenAccountType::Account(account) => Some(account.amount),
-                _ => None,
-            })
-            .unwrap_or(0);
-        new_response(&bank, balance)
+            .map(|account: &mut TokenAccount| account.amount)?;
+        Ok(new_response(&bank, balance))
     }
 }
 
@@ -1203,7 +1200,6 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        token_program_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>>;
 }
@@ -1760,7 +1756,6 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        token_program_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
         debug!(
@@ -1768,8 +1763,7 @@ impl RpcSol for RpcSolImpl {
             pubkey_str
         );
         let pubkey = verify_pubkey(pubkey_str)?;
-        let token_program_id = verify_pubkey(token_program_str)?;
-        Ok(meta.get_token_account_balance(&pubkey, &token_program_id, commitment))
+        meta.get_token_account_balance(&pubkey, commitment)
     }
 }
 
@@ -4024,9 +4018,8 @@ pub mod tests {
         bank.store_account(&token_account_pubkey, &token_account);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
             token_account_pubkey,
-            spl_token_id_v1_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -4036,26 +4029,12 @@ pub mod tests {
 
         // Test non-existent token account
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
-            Pubkey::new_rand(),
-            spl_token_id_v1_0(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(balance, 0);
-
-        // Test incorrect token program id
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}", "{}"]}}"#,
-            token_account_pubkey,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
             Pubkey::new_rand(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(balance, 0);
+        assert!(result.get("error").is_some());
     }
 }
