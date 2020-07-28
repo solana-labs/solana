@@ -31,7 +31,13 @@ impl AccountsBackgroundService {
                 bank.process_dead_slots();
 
                 // Currently, given INTERVAL_MS, we process 1 slot/100 ms
-                bank.process_stale_slot();
+                let shrunken_account_count = bank.process_stale_slot();
+                if shrunken_account_count > 0 {
+                    datapoint_info!(
+                        "stale_slot_shrink",
+                        ("accounts", shrunken_account_count, i64)
+                    );
+                }
 
                 sleep(Duration::from_millis(INTERVAL_MS));
             })

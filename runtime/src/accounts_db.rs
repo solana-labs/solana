@@ -50,7 +50,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, MutexGuard, RwLock},
 };
 use tempfile::TempDir;
 
@@ -795,6 +795,9 @@ impl AccountsDB {
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self) {
+        // hold lock to prevent slot shrining from running because bla bla...
+        let _candidates = self.shrink_candidate_slots.lock().unwrap();
+
         self.report_store_stats();
 
         let no_ancestors = HashMap::new();
@@ -951,7 +954,7 @@ impl AccountsDB {
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
     // then create a minimum AppendVed filled with the alive.
-    fn shrink_stale_slot(&self, slot: Slot) {
+    fn do_shrink_stale_slot(&self, slot: Slot) -> usize {
         trace!("shrink_stale_slot: slot: {}", slot);
 
         let mut stored_accounts = vec![];
@@ -979,7 +982,7 @@ impl AccountsDB {
                         alive_count,
                         stored_accounts.len()
                     );
-                    return;
+                    return 0;
                 }
             }
         }
@@ -1022,7 +1025,7 @@ impl AccountsDB {
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, account, _size, _location, write_version) in alive_accounts {
+            for (pubkey, account, _size, _location, write_version) in &alive_accounts {
                 accounts.push((pubkey, account));
                 hashes.push(account.hash);
                 write_versions.push(*write_version);
@@ -1049,26 +1052,37 @@ impl AccountsDB {
                 slot_storage.retain(|_key, store| store.count() > 0);
             }
         }
+
+        alive_accounts.len()
+    }
+
+    fn shrink_stale_slot(&self, candidates: &mut MutexGuard<Vec<Slot>>) -> usize {
+        if let Some(slot) = self.do_next_shrink_slot(candidates) {
+            self.do_shrink_stale_slot(slot)
+        } else {
+            0
+        }
     }
 
     // Infinitely returns rooted roots in cyclic order
-    fn next_shrink_slot(&self) -> Option<Slot> {
-        let next = {
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            candidates.pop()
-        };
+    fn do_next_shrink_slot(&self, candidates: &mut MutexGuard<Vec<Slot>>) -> Option<Slot> {
+        let next = candidates.pop();
 
         if next.is_some() {
             next
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
-
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            *candidates = new_all_slots;
+            **candidates = new_all_slots;
 
             next
         }
+    }
+
+    #[cfg(test)]
+    fn next_shrink_slot(&self) -> Option<Slot> {
+        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+        self.do_next_shrink_slot(&mut candidates)
     }
 
     fn all_root_slots_in_index(&self) -> Vec<Slot> {
@@ -1081,15 +1095,25 @@ impl AccountsDB {
         storage.0.keys().cloned().collect()
     }
 
-    pub fn process_stale_slot(&self) {
-        if let Some(slot) = self.next_shrink_slot() {
-            self.shrink_stale_slot(slot);
-        }
+    pub fn process_stale_slot(&self) -> usize {
+        let mut measure = Measure::start("stale_slot_shrink-ms");
+        // skip if locked by clean_accounts();
+        // and hold this lock as long as the shrinking process is running due to avoid conflicts
+        // with clean_accoutns().. bla bla
+        let candidates = self.shrink_candidate_slots.try_lock();
+        let count = if let Ok(mut candidates) = candidates {
+            self.shrink_stale_slot(&mut candidates)
+        } else {
+            0
+        };
+        measure.stop();
+        inc_new_counter_info!("stale_slot_shrink-ms", measure.as_ms() as usize);
+        count
     }
 
     pub fn shrink_all_stale_slots(&self) {
         for slot in self.all_slots_in_storage() {
-            self.shrink_stale_slot(slot);
+            self.do_shrink_stale_slot(slot);
         }
     }
 
@@ -4014,6 +4038,61 @@ pub mod tests {
         }
         for x in 0..3 {
             assert!(store_counts[&x] >= 1);
+        }
+    }
+
+    #[test]
+    fn test_shrink_and_clean() {
+        solana_logger::setup();
+
+        // repeat the whole test scenario
+        for _ in 0..5 {
+            let accounts = Arc::new(AccountsDB::new_single());
+            let accounts_for_shrink = accounts.clone();
+
+            // spawn the slot shrinking background thread
+            let exit = Arc::new(AtomicBool::default());
+            let exit_for_shrink = exit.clone();
+            let shrink_thread = std::thread::spawn(move || loop {
+                if exit_for_shrink.load(Ordering::Relaxed) {
+                    break;
+                }
+                accounts_for_shrink.process_stale_slot();
+            });
+
+            let mut current_slot = 0;
+            let mut alive_accounts = vec![];
+            let owner = Pubkey::default();
+
+            // populate the AccountsDB with plenty of food for slot shrinking
+            // also this simulates realistic some heavy spike account updates in the wild
+            for _ in 0..1000 {
+                while alive_accounts.len() <= 10 {
+                    alive_accounts.push((
+                        Pubkey::new_rand(),
+                        Account::new(thread_rng().gen_range(0, 50), 0, &owner),
+                    ));
+                }
+                current_slot += 1;
+
+                alive_accounts.retain(|(_pubkey, account)| account.lamports >= 1);
+
+                for (pubkey, account) in alive_accounts.iter_mut() {
+                    account.lamports -= 1;
+                    accounts.store(current_slot, &[(&pubkey, &account)]);
+                }
+                accounts.add_root(current_slot);
+            }
+
+            // let's dance.
+            for _ in 0..10 {
+                accounts.clean_accounts();
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+
+            // cleanup
+            exit.store(true, Ordering::Relaxed);
+            shrink_thread.join().unwrap();
         }
     }
 }
