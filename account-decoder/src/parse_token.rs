@@ -1,15 +1,15 @@
 use crate::parse_account_data::{ParsableAccount, ParseAccountError};
 use solana_sdk::pubkey::Pubkey;
 use spl_sdk::pubkey::Pubkey as SplPubkey;
-use spl_token::{
+use spl_token_v1_0::{
     option::COption,
     state::{Account, Mint, Multisig, State},
 };
 use std::{mem::size_of, str::FromStr};
 
-// A helper function to convert spl_token::id() as spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
 pub fn spl_token_id_v1_0() -> Pubkey {
-    Pubkey::from_str(&spl_token::id().to_string()).unwrap()
+    Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
 }
 
 pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {

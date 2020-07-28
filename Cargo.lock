@@ -2931,7 +2931,6 @@ dependencies = [
  "solana-sdk 1.2.13",
  "solana-sdk 1.3.0",
  "solana-vote-program",
- "spl-memo",
  "spl-token",
  "thiserror",
 ]
