@@ -686,6 +686,7 @@ fn load_bank_forks(
         snapshot_config.as_ref(),
         process_options,
         None,
+        None,
     )
 }
 
