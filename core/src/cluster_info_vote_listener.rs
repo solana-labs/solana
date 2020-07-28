@@ -31,11 +31,10 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
     hash::Hash,
-    program_utils::limited_deserialize,
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote};
+use solana_vote_program::{self, vote_transaction};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -537,35 +536,6 @@ impl ClusterInfoVoteListener {
         Ok(vec![])
     }
 
-    fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<Hash>)> {
-        // Check first instruction for a vote
-        tx.message
-            .instructions
-            .first()
-            .and_then(|first_instruction| {
-                first_instruction
-                    .accounts
-                    .first()
-                    .and_then(|first_account| {
-                        tx.message
-                            .account_keys
-                            .get(*first_account as usize)
-                            .and_then(|key| {
-                                let vote_instruction =
-                                    limited_deserialize(&first_instruction.data).ok();
-                                vote_instruction.and_then(|vote_instruction| match vote_instruction
-                                {
-                                    VoteInstruction::Vote(vote) => Some((*key, vote, None)),
-                                    VoteInstruction::VoteSwitch(vote, hash) => {
-                                        Some((*key, vote, Some(hash)))
-                                    }
-                                    _ => None,
-                                })
-                            })
-                    })
-            })
-    }
-
     fn process_votes(
         vote_tracker: &VoteTracker,
         vote_txs: Vec<Transaction>,
@@ -580,7 +550,8 @@ impl ClusterInfoVoteListener {
         let root = root_bank.slot();
         {
             for tx in vote_txs {
-                if let Some((vote_pubkey, vote, _)) = Self::parse_vote_transaction(&tx) {
+                if let Some((vote_pubkey, vote, _)) = vote_transaction::parse_vote_transaction(&tx)
+                {
                     if vote.slots.is_empty() {
                         continue;
                     }
@@ -820,10 +791,9 @@ mod tests {
         commitment::BlockCommitmentCache,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     };
-    use solana_sdk::hash::{self, Hash};
+    use solana_sdk::hash::Hash;
     use solana_sdk::signature::Signature;
     use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::vote_transaction;
     use std::collections::BTreeSet;
 
     #[test]
@@ -1777,31 +1747,5 @@ mod tests {
     fn test_bad_vote() {
         run_test_bad_vote(None);
         run_test_bad_vote(Some(Hash::default()));
-    }
-
-    fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let auth_voter_keypair = Keypair::new();
-        let bank_hash = Hash::default();
-        let vote_tx = vote_transaction::new_vote_transaction(
-            vec![42],
-            bank_hash,
-            Hash::default(),
-            &node_keypair,
-            &vote_keypair,
-            &auth_voter_keypair,
-            input_hash,
-        );
-        let (key, vote, hash) = ClusterInfoVoteListener::parse_vote_transaction(&vote_tx).unwrap();
-        assert_eq!(hash, input_hash);
-        assert_eq!(vote, Vote::new(vec![42], bank_hash));
-        assert_eq!(key, vote_keypair.pubkey());
-    }
-
-    #[test]
-    fn test_parse_vote_transaction() {
-        run_test_parse_vote_transaction(None);
-        run_test_parse_vote_transaction(Some(hash::hash(&[42u8])));
     }
 }
