@@ -959,8 +959,9 @@ impl AccountsDB {
 
     // Infinitely returns rooted roots in cyclic order
     fn do_next_shrink_slot(&self, candidates: &mut MutexGuard<Vec<Slot>>) -> Option<Slot> {
-        // a lock (candidates) is held to keep reset_uncleaned_roots() from updating candidates;
-        // we might update it in this fn if it's empty
+        // At this point, a lock (= candidates) is ensured to be held to keep
+        // do_reset_uncleaned_roots() (in clean_accounts()) from updating candidates.
+        // Also, candidates in the lock may be swapped here if it's empty.
         let next = candidates.pop();
 
         if next.is_some() {
@@ -968,7 +969,7 @@ impl AccountsDB {
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
-            // update candidates under the lock finally!
+            // refresh candidates for later calls!
             **candidates = new_all_slots;
 
             next
