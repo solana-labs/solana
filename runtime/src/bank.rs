@@ -2714,8 +2714,8 @@ impl Bank {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
 
-    pub fn process_stale_slot(&self) {
-        self.rc.accounts.accounts_db.process_stale_slot();
+    pub fn process_stale_slot(&self) -> usize {
+        self.rc.accounts.accounts_db.process_stale_slot()
     }
 
     pub fn shrink_all_stale_slots(&self) {
