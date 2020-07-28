@@ -966,7 +966,6 @@ impl AccountsDB {
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
-
             // update candidates under the lock finally!
             **candidates = new_all_slots;
 
