@@ -14,36 +14,27 @@ When a validator receives multiple blocks for the same slot, it tracks all possi
 
 A vote signer evaluates the vote proposed by the validator and signs the vote only if it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. It doesn't need to process a full set of transactions.
 
-A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
+A stakeholder is an identity that has control of the staked capital. The stakeholder can delegate its stake to the vote signer. Once a stake is delegated, the vote signer's votes represent the voting weight of all the delegated stakes, and produce rewards for all the delegated stakes.
 
 Currently, there is a 1:1 relationship between validators and vote signers, and stakeholders delegate their entire stake to a single vote signer.
 
 ## Signing service
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests: 1. Register a new validator node
+The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests: 
+
+1. Register a new validator node
 
 - The request must contain validator's identity \(public key\)
 - The request must be signed with the validator's private key
-- The service drops the request if signature of the request cannot be
+- The service drops the request if signature of the request cannot be verified
+- The service creates a new voting asymmetric key for the validator, and returns the public key as a response
+- If a validator tries to register again, the service returns the public key from the pre-existing keypair
 
-  verified
-
-- The service creates a new voting asymmetric key for the validator, and
-
-  returns the public key as a response
-
-- If a validator tries to register again, the service returns the public key
-
-  from the pre-existing keypair
-
-  1. Sign a vote
+  2. Sign a vote
 
 - The request must contain a voting transaction and all verification data
 - The request must be signed with the validator's private key
-- The service drops the request if signature of the request cannot be
-
-  verified
-
+- The service drops the request if signature of the request cannot be verified
 - The service verifies the voting data
 - The service returns a signature for the transaction
 
