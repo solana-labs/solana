@@ -898,11 +898,11 @@ impl JsonRpcRequestProcessor {
     pub fn get_token_accounts_by_owner(
         &self,
         owner: &Pubkey,
-        mint_or_token_program: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         let bank = self.bank(commitment);
-        let (token_program_id, mint) = get_token_program_id_and_mint(&bank, mint_or_token_program)?;
+        let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
             // Filter on Owner address
@@ -934,11 +934,11 @@ impl JsonRpcRequestProcessor {
     pub fn get_token_accounts_by_delegate(
         &self,
         delegate: &Pubkey,
-        mint_or_token_program: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         let bank = self.bank(commitment);
-        let (token_program_id, mint) = get_token_program_id_and_mint(&bank, mint_or_token_program)?;
+        let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
             // Filter on Delegate is_some()
@@ -994,6 +994,26 @@ fn verify_signature(input: &str) -> Result<Signature> {
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
+pub enum TokenAccountsFilter {
+    Mint(Pubkey),
+    ProgramId(Pubkey),
+}
+
+fn verify_token_account_filter(
+    token_account_filter: RpcTokenAccountsFilter,
+) -> Result<TokenAccountsFilter> {
+    match token_account_filter {
+        RpcTokenAccountsFilter::Mint(mint_str) => {
+            let mint = verify_pubkey(mint_str)?;
+            Ok(TokenAccountsFilter::Mint(mint))
+        }
+        RpcTokenAccountsFilter::ProgramId(program_id_str) => {
+            let program_id = verify_pubkey(program_id_str)?;
+            Ok(TokenAccountsFilter::ProgramId(program_id))
+        }
+    }
+}
+
 /// Run transactions against a frozen bank without committing the results
 fn run_transaction_simulation(
     bank: &Bank,
@@ -1037,20 +1057,29 @@ fn get_filtered_program_accounts(
 /// id and optional Mint
 fn get_token_program_id_and_mint(
     bank: &Arc<Bank>,
-    mint_or_token_program: &Pubkey,
+    token_account_filter: TokenAccountsFilter,
 ) -> Result<(Pubkey, Option<Pubkey>)> {
-    if mint_or_token_program == &spl_token_id_v1_0() {
-        Ok((*mint_or_token_program, None))
-    } else {
-        let mint_account = bank.get_account(mint_or_token_program).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
-            return Err(Error::invalid_params(
-                "Invalid param: not a v1.0 Token mint".to_string(),
-            ));
+    match token_account_filter {
+        TokenAccountsFilter::Mint(mint) => {
+            let mint_account = bank.get_account(&mint).ok_or_else(|| {
+                Error::invalid_params("Invalid param: could not find mint".to_string())
+            })?;
+            if mint_account.owner != spl_token_id_v1_0() {
+                return Err(Error::invalid_params(
+                    "Invalid param: not a v1.0 Token mint".to_string(),
+                ));
+            }
+            Ok((mint_account.owner, Some(mint)))
         }
-        Ok((mint_account.owner, Some(*mint_or_token_program)))
+        TokenAccountsFilter::ProgramId(program_id) => {
+            if program_id == spl_token_id_v1_0() {
+                Ok((program_id, None))
+            } else {
+                Err(Error::invalid_params(
+                    "Invalid param: unrecognized Token program id".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -1352,7 +1381,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         owner_str: String,
-        mint_or_token_program_str: String,
+        token_account_filter: RpcTokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 
@@ -1361,7 +1390,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         delegate_str: String,
-        mint_or_token_program_str: String,
+        token_account_filter: RpcTokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 }
@@ -1943,7 +1972,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         owner_str: String,
-        mint_or_token_program_str: String,
+        token_account_filter: RpcTokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         debug!(
@@ -1951,15 +1980,15 @@ impl RpcSol for RpcSolImpl {
             owner_str
         );
         let owner = verify_pubkey(owner_str)?;
-        let mint_or_token_program = verify_pubkey(mint_or_token_program_str)?;
-        meta.get_token_accounts_by_owner(&owner, &mint_or_token_program, commitment)
+        let token_account_filter = verify_token_account_filter(token_account_filter)?;
+        meta.get_token_accounts_by_owner(&owner, token_account_filter, commitment)
     }
 
     fn get_token_accounts_by_delegate(
         &self,
         meta: Self::Metadata,
         delegate_str: String,
-        mint_or_token_program_str: String,
+        token_account_filter: RpcTokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         debug!(
@@ -1967,8 +1996,8 @@ impl RpcSol for RpcSolImpl {
             delegate_str
         );
         let delegate = verify_pubkey(delegate_str)?;
-        let mint_or_token_program = verify_pubkey(mint_or_token_program_str)?;
-        meta.get_token_accounts_by_delegate(&delegate, &mint_or_token_program, commitment)
+        let token_account_filter = verify_token_account_filter(token_account_filter)?;
+        meta.get_token_accounts_by_delegate(&delegate, token_account_filter, commitment)
     }
 }
 
@@ -4304,7 +4333,12 @@ pub mod tests {
 
         // Test getTokenAccountsByOwner with Token program id returns all accounts, regardless of Mint address
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
             owner,
             spl_token_id_v1_0(),
         );
@@ -4317,7 +4351,11 @@ pub mod tests {
 
         // Test returns only mint accounts
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,"method":"getTokenAccountsByOwner",
+                "params":["{}", {{"mint": "{}"}}]
+            }}"#,
             owner, mint,
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -4329,7 +4367,26 @@ pub mod tests {
 
         // Test non-existent Mint/program id
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
+            owner,
+            Pubkey::new_rand(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert!(result.get("error").is_some());
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", {{"mint": "{}"}}]
+            }}"#,
             owner,
             Pubkey::new_rand(),
         );
@@ -4340,7 +4397,12 @@ pub mod tests {
 
         // Test non-existent Owner
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
             Pubkey::new_rand(),
             spl_token_id_v1_0(),
         );
@@ -4353,7 +4415,12 @@ pub mod tests {
 
         // Test getTokenAccountsByDelegate with Token program id returns all accounts, regardless of Mint address
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByDelegate",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
             delegate,
             spl_token_id_v1_0(),
         );
@@ -4366,7 +4433,12 @@ pub mod tests {
 
         // Test returns only mint accounts
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,"method":
+                "getTokenAccountsByDelegate",
+                "params":["{}", {{"mint": "{}"}}]
+            }}"#,
             delegate, mint,
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -4378,7 +4450,26 @@ pub mod tests {
 
         // Test non-existent Mint/program id
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByDelegate",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
+            delegate,
+            Pubkey::new_rand(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert!(result.get("error").is_some());
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByDelegate",
+                "params":["{}", {{"mint": "{}"}}]
+            }}"#,
             delegate,
             Pubkey::new_rand(),
         );
@@ -4389,7 +4480,12 @@ pub mod tests {
 
         // Test non-existent Owner
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByDelegate","params":["{}", "{}"]}}"#,
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByDelegate",
+                "params":["{}", {{"programId": "{}"}}]
+            }}"#,
             Pubkey::new_rand(),
             spl_token_id_v1_0(),
         );
