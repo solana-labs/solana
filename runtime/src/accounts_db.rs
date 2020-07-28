@@ -43,11 +43,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-<<<<<<< HEAD
-    sync::{Arc, Mutex, RwLock, RwLockWriteGuard},
-=======
-    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard},
->>>>>>> 3e4f49f9c... Fix race condition between shrinking and cleaning (#11235)
+    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     time::Instant,
 };
 use tempfile::TempDir;
