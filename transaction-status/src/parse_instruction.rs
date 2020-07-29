@@ -7,7 +7,8 @@ use std::{
 };
 
 lazy_static! {
-    static ref MEMO_PROGRAM_ID: Pubkey = Pubkey::from_str(&spl_memo::id().to_string()).unwrap();
+    static ref MEMO_PROGRAM_ID: Pubkey =
+        Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(*MEMO_PROGRAM_ID, ParsableProgram::SplMemo);

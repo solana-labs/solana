@@ -1,10 +1,16 @@
 use crate::parse_account_data::{ParsableAccount, ParseAccountError};
-use spl_sdk::pubkey::Pubkey;
-use spl_token::{
+use solana_sdk::pubkey::Pubkey;
+use spl_sdk::pubkey::Pubkey as SplPubkey;
+use spl_token_v1_0::{
     option::COption,
     state::{Account, Mint, Multisig, State},
 };
-use std::mem::size_of;
+use std::{mem::size_of, str::FromStr};
+
+// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+pub fn spl_token_id_v1_0() -> Pubkey {
+    Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
+}
 
 pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
     let mut data = data.to_vec();
@@ -45,7 +51,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
                 .signers
                 .iter()
                 .filter_map(|pubkey| {
-                    if pubkey != &Pubkey::default() {
+                    if pubkey != &SplPubkey::default() {
                         Some(pubkey.to_string())
                     } else {
                         None
@@ -103,8 +109,8 @@ mod test {
 
     #[test]
     fn test_parse_token() {
-        let mint_pubkey = Pubkey::new(&[2; 32]);
-        let owner_pubkey = Pubkey::new(&[3; 32]);
+        let mint_pubkey = SplPubkey::new(&[2; 32]);
+        let owner_pubkey = SplPubkey::new(&[3; 32]);
         let mut account_data = [0; size_of::<Account>()];
         let mut account: &mut Account = State::unpack_unchecked(&mut account_data).unwrap();
         account.mint = mint_pubkey;
@@ -138,12 +144,12 @@ mod test {
             }),
         );
 
-        let signer1 = Pubkey::new(&[1; 32]);
-        let signer2 = Pubkey::new(&[2; 32]);
-        let signer3 = Pubkey::new(&[3; 32]);
+        let signer1 = SplPubkey::new(&[1; 32]);
+        let signer2 = SplPubkey::new(&[2; 32]);
+        let signer3 = SplPubkey::new(&[3; 32]);
         let mut multisig_data = [0; size_of::<Multisig>()];
         let mut multisig: &mut Multisig = State::unpack_unchecked(&mut multisig_data).unwrap();
-        let mut signers = [Pubkey::default(); 11];
+        let mut signers = [SplPubkey::default(); 11];
         signers[0] = signer1;
         signers[1] = signer2;
         signers[2] = signer3;
