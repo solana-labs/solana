@@ -155,6 +155,21 @@ impl InvokeContext for MockInvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &[]
     }
+<<<<<<< HEAD
+=======
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        Rc::new(RefCell::new(self.mock_logger.clone()))
+    }
+    fn is_cross_program_supported(&self) -> bool {
+        true
+    }
+}
+#[derive(Debug, Default, Clone)]
+pub struct MockLogger {
+    pub log: Rc<RefCell<Vec<String>>>,
+}
+impl Logger for MockLogger {
+>>>>>>> 2dbed80e4... Disable cross-program invocations for OperatingMode::Stable (#11272)
     fn log_enabled(&self) -> bool {
         false
     }
