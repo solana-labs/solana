@@ -1251,6 +1251,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
+        debug!("get_cluster_nodes rpc request received");
         let cluster_info = &meta.cluster_info;
         fn valid_address_or_none(addr: &SocketAddr) -> Option<SocketAddr> {
             if ContactInfo::is_valid_address(addr) {
@@ -1288,6 +1289,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<EpochInfo> {
+        debug!("get_epoch_info rpc request received");
         let bank = meta.bank(commitment);
         Ok(bank.get_epoch_info())
     }
@@ -1297,6 +1299,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         block: Slot,
     ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
+        debug!("get_block_commitment rpc request received");
         Ok(meta.get_block_commitment(block))
     }
 
@@ -1314,6 +1317,8 @@ impl RpcSol for RpcSolImpl {
         let bank = meta.bank(commitment);
         let slot = slot.unwrap_or_else(|| bank.slot());
         let epoch = bank.epoch_schedule().get_epoch(slot);
+
+        debug!("get_leader_schedule rpc request received: {:?}", slot);
 
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(epoch, &bank).map(
@@ -1390,6 +1395,10 @@ impl RpcSol for RpcSolImpl {
         signature_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<transaction::Result<()>>> {
+        debug!(
+            "get_signature_status rpc request received: {:?}",
+            signature_str
+        );
         let signature = verify_signature(&signature_str)?;
         Ok(meta.get_signature_status(signature, commitment))
     }
@@ -1400,6 +1409,10 @@ impl RpcSol for RpcSolImpl {
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
+        debug!(
+            "get_signature_statuses rpc request received: {:?}",
+            signature_strs.len()
+        );
         if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
@@ -1414,6 +1427,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
+        debug!("get_slot rpc request received");
         Ok(meta.get_slot(commitment))
     }
 
@@ -1460,6 +1474,7 @@ impl RpcSol for RpcSolImpl {
         lamports: u64,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String> {
+        debug!("request_airdrop rpc request received");
         trace!(
             "request_airdrop id={} lamports={} commitment: {:?}",
             pubkey_str,
@@ -1508,6 +1523,7 @@ impl RpcSol for RpcSolImpl {
         data: String,
         config: Option<RpcSendTransactionConfig>,
     ) -> Result<String> {
+        debug!("send_transaction rpc request received");
         let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
         let signature = transaction.signatures[0];
@@ -1559,6 +1575,7 @@ impl RpcSol for RpcSolImpl {
         data: String,
         config: Option<RpcSimulateTransactionConfig>,
     ) -> Result<RpcResponse<RpcSimulateTransactionResult>> {
+        debug!("simulate_transaction rpc request received");
         let (_, transaction) = deserialize_bs58_transaction(data)?;
         let config = config.unwrap_or_default();
 
@@ -1591,10 +1608,12 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String> {
+        debug!("get_slot_leader rpc request received");
         Ok(meta.get_slot_leader(commitment))
     }
 
     fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+        debug!("minimum_ledger_slot rpc request received");
         meta.minimum_ledger_slot()
     }
 
@@ -1603,26 +1622,31 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcVoteAccountStatus> {
+        debug!("get_vote_accounts rpc request received");
         meta.get_vote_accounts(commitment)
     }
 
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
+        debug!("validator_exit rpc request received");
         Ok(meta.validator_exit())
     }
 
     fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity> {
+        debug!("get_identity rpc request received");
         Ok(RpcIdentity {
             identity: meta.config.identity_pubkey.to_string(),
         })
     }
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
+        debug!("get_version rpc request received");
         Ok(RpcVersionInfo {
             solana_core: solana_version::Version::default().to_string(),
         })
     }
 
     fn set_log_filter(&self, meta: Self::Metadata, filter: String) -> Result<()> {
+        debug!("set_log_filter rpc request received");
         meta.set_log_filter(filter);
         Ok(())
     }
@@ -1633,6 +1657,7 @@ impl RpcSol for RpcSolImpl {
         slot: Slot,
         encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
+        debug!("get_confirmed_block rpc request received: {:?}", slot);
         meta.get_confirmed_block(slot, encoding)
     }
 
@@ -1642,6 +1667,10 @@ impl RpcSol for RpcSolImpl {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
+        debug!(
+            "get_confirmed_blocks rpc request received: {:?}-{:?}",
+            start_slot, end_slot
+        );
         meta.get_confirmed_blocks(start_slot, end_slot)
     }
 
@@ -1655,6 +1684,10 @@ impl RpcSol for RpcSolImpl {
         signature_str: String,
         encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
+        debug!(
+            "get_confirmed_transaction rpc request received: {:?}",
+            signature_str
+        );
         let signature = verify_signature(&signature_str)?;
         Ok(meta.get_confirmed_transaction(signature, encoding))
     }
@@ -1666,6 +1699,10 @@ impl RpcSol for RpcSolImpl {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<String>> {
+        debug!(
+            "get_confirmed_signatures_for_address rpc request received: {:?} {:?}-{:?}",
+            pubkey_str, start_slot, end_slot
+        );
         let pubkey = verify_pubkey(pubkey_str)?;
         if end_slot < start_slot {
             return Err(Error::invalid_params(format!(
@@ -1687,6 +1724,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
+        debug!("get_first_available_block rpc request received");
         Ok(meta.get_first_available_block())
     }
 
