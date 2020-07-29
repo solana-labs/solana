@@ -231,8 +231,8 @@ pub enum CliCommand {
     TotalSupply,
     TransactionHistory {
         address: Pubkey,
-        end_slot: Option<Slot>,  // None == latest slot
-        slot_limit: Option<u64>, // None == search full history
+        start_after: Option<Signature>,
+        limit: usize,
     },
     // Nonce commands
     AuthorizeNonceAccount {
@@ -1871,9 +1871,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::TotalSupply => process_total_supply(&rpc_client, config),
         CliCommand::TransactionHistory {
             address,
-            end_slot,
-            slot_limit,
-        } => process_transaction_history(&rpc_client, address, *end_slot, *slot_limit),
+            start_after,
+            limit,
+        } => process_transaction_history(&rpc_client, config, address, *start_after, *limit),
 
         // Nonce Commands
 

@@ -13,7 +13,6 @@ use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
-    rpc_request::MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -24,6 +23,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
+    signature::Signature,
     system_instruction, system_program,
     sysvar::{
         self,
@@ -268,25 +268,21 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         "Account address"),
                 )
                 .arg(
-                    Arg::with_name("end_slot")
-                        .takes_value(false)
-                        .value_name("SLOT")
-                        .index(2)
-                        .validator(is_slot)
-                        .help(
-                            "Slot to start from [default: latest slot at maximum commitment]"
-                        ),
-                )
-                .arg(
                     Arg::with_name("limit")
                         .long("limit")
                         .takes_value(true)
-                        .value_name("NUMBER OF SLOTS")
+                        .value_name("LIMIT")
                         .validator(is_slot)
-                        .help(
-                            "Limit the search to this many slots"
-                        ),
-                ),
+                        .default_value("1000")
+                        .help("Maximum number of transaction signatures to return"),
+                )
+                .arg(
+                    Arg::with_name("after")
+                        .long("after")
+                        .value_name("TRANSACTION_SIGNATURE")
+                        .takes_value(true)
+                        .help("Start with the first signature older than this one"),
+                )
         )
     }
 }
@@ -440,14 +436,22 @@ pub fn parse_transaction_history(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
-    let end_slot = value_t!(matches, "end_slot", Slot).ok();
-    let slot_limit = value_t!(matches, "limit", u64).ok();
+
+    let start_after = match matches.value_of("after") {
+        Some(signature) => Some(
+            signature
+                .parse()
+                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {}", err)))?,
+        ),
+        None => None,
+    };
+    let limit = value_t_or_exit!(matches, "limit", usize);
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
             address,
-            end_slot,
-            slot_limit,
+            start_after,
+            limit,
         },
         signers: vec![],
     })
@@ -1305,41 +1309,36 @@ pub fn process_show_validators(
 
 pub fn process_transaction_history(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     address: &Pubkey,
-    end_slot: Option<Slot>, // None == use latest slot
-    slot_limit: Option<u64>,
+    start_after: Option<Signature>,
+    limit: usize,
 ) -> ProcessResult {
-    let end_slot = {
-        if let Some(end_slot) = end_slot {
-            end_slot
+    let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
+        address,
+        start_after,
+        Some(limit),
+    )?;
+
+    let transactions_found = format!("{} transactions found", results.len());
+
+    for result in results {
+        if config.verbose {
+            println!(
+                "{} [slot={} status={}] {}",
+                result.signature,
+                result.slot,
+                match result.err {
+                    None => "Confirmed".to_string(),
+                    Some(err) => format!("Failed: {:?}", err),
+                },
+                result.memo.unwrap_or_else(|| "".to_string()),
+            );
         } else {
-            rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
+            println!("{}", result.signature);
         }
-    };
-    let mut start_slot = match slot_limit {
-        Some(slot_limit) => end_slot.saturating_sub(slot_limit),
-        None => rpc_client.minimum_ledger_slot()?,
-    };
-
-    println!(
-        "Transactions affecting {} within slots [{},{}]",
-        address, start_slot, end_slot
-    );
-
-    let mut transaction_count = 0;
-    while start_slot < end_slot {
-        let signatures = rpc_client.get_confirmed_signatures_for_address(
-            address,
-            start_slot,
-            (start_slot + MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE).min(end_slot),
-        )?;
-        for signature in &signatures {
-            println!("{}", signature);
-        }
-        transaction_count += signatures.len();
-        start_slot += MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE;
     }
-    Ok(format!("{} transactions found", transaction_count))
+    Ok(transactions_found)
 }
 
 #[cfg(test)]
