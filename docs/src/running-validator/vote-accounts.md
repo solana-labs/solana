@@ -1,5 +1,5 @@
 ---
-title: Vote Account Structure and Configuration
+title: Vote Account Management
 ---
 
 This page describes how to set up an on-chain _vote account_.   Creating a vote
