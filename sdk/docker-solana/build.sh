@@ -24,6 +24,11 @@ rm -rf usr/
   scripts/cargo-install-all.sh sdk/docker-solana/usr
 
 cp -f ../../run.sh usr/bin/solana-run.sh
+cp -f ../../fetch-spl usr/bin/
+(
+  cd usr/bin
+  ./fetch-spl.sh
+)
 
 docker build -t solanalabs/solana:"$CHANNEL_OR_TAG" .
 
