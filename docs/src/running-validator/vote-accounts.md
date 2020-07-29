@@ -2,7 +2,7 @@
 title: Vote Account Structure and Configuration
 ---
 
-This page describes how to set up an on-chain vote account.   Creating a vote
+This page describes how to set up an on-chain _vote account_.   Creating a vote
 account is needed if you plan to run a validator node on Solana.
 
 All settings for a vote account can be configured at the time the account is
@@ -25,76 +25,77 @@ to whom the token-holder wants to delegate.
 
 ### Validator Identity
 
-The Validator Identity is a system account that pays for all the vote transaction
+The _validator identity_ is a system account that pays for all the vote transaction
 fees submitted by the vote account.  Because the vote account is expected to vote
-on most valid blocks it receives, the Validator Identity account is frequently
+on most valid blocks it receives, the validator identity account is frequently
 (as often as once per slot, or roughly every 400ms) signing transactions and
-paying fees.  For this reason the Validator Identity account must be stored as
+paying fees.  For this reason the validator identity account must be stored as
 a "hot wallet" as a keypair file on the same system the validator process is
 running.
 
 Because a hot wallet is generally less secure than an offline or "cold" wallet,
 we only recommend storing enough SOL on the Identity keypair to cover voting fees
 for some amount of time (perhaps a few weeks or months) and periodically topping
-off your Validator Identity account from a more secure wallet.
+off your validator identity account from a more secure wallet.
 
-The Validator Identity is required to be provided when a vote account is created.
-The Validator Identity can also be changed after an account is created by using
+The validator identity is required to be provided when a vote account is created.
+The validator identity can also be changed after an account is created by using
 the `vote-update-validator` command.
 
-### Authorized Voter
+### Vote Authority
 
-The Authorized Voter keypair is used to sign each vote transaction the validator
+The _vote authority_ keypair is used to sign each vote transaction the validator
 node wants to submit to the cluster.  This can be the same keypair used as the
-Validator Identity for the same vote account, or a different keypair.  Because
-the Authorized Voter, like the Validator Identity, is signing transactions
+validator identity for the same vote account, or a different keypair.  Because
+the vote authority, like the validator identity, is signing transactions
 frequently, this also must be a hot keypair on the same file system as the
 validator process.
 
-It is recommended to set the Authorized Voter to the same address as the Validator
-Identity.  If the Validator Identity is also the Authorized Voter, only one
+It is recommended to set the vote authority to the same address as the validator
+identity.  If the validator identity is also the vote authority, only one
 signature per vote transaction is needed in order to both sign the vote and pay
 the transaction fee.  Because transaction fees on Solana are assessed
 per-signature, having one signer instead of two will result in half the transaction
-fee paid compared to setting the Voter and Identity to two different accounts.
+fee paid compared to setting the vote authority and validator identity to two
+different accounts.
 
-The Authorized Voter can be set when the vote account is created.  If it is not
-provided, the vote account with set the Validator Identity as the Authorized
-Voter by default.  The Authorized Voter can be changed later with the
+The vote authority can be set when the vote account is created.  If it is not
+provided, the vote account with set the Validator Identity as the vote authority
+by default.  The vote authority can be changed later with the
 `vote-authorize-voter` command.
 
-The Authorized Voter can be changed at most once per epoch.  If the Voter is
+The vote authority can be changed at most once per epoch.  If the authority is
 changed with `vote-authorize-voter`, this will not take effect until the end of
 the current epoch.  To support a smooth transition of the vote signing,
 `solana-validator` allows the `--authorized-voter` argument to be specified
 multiple times.  This allows the validator process to keep voting successfully
-when the network reaches an epoch boundary at with the validator's authorized
-voter account changes.
+when the network reaches an epoch boundary at with the validator's vote authority
+account changes.
 
-### Authorized Withdrawer
+### Withdraw Authority
 
-The Authorized Withdrawer keypair is used to withdraw funds from a vote account
+The _withdraw authority_ keypair is used to withdraw funds from a vote account
 using the `withdraw-from-vote-account` command.  Any network rewards a validator
 earns are deposited into the vote account and are only retrievable by signing
-with the Authorized Withdrawer keypair.
+with the withdraw authority keypair.
 
-The Authorized Withdrawer is also required to sign any transaction to change
-a vote account's commission.
+The withdraw authority is also required to sign any transaction to change
+a vote account's [commission](#commission).
 
 Because the vote account could accrue a significant balance, it is recommended
-to keep the Authorized Withdrawer keypair in an offline/cold wallet, as it is
+to keep the withdraw authority keypair in an offline/cold wallet, as it is
 not needed to sign frequent transactions.
 
-The Authorized Withdrawer can be set at vote account creation with the
-`--authorized-withdrawer` option.  If this is not provided, the Validator
-Identity will be set as the Authorized Withdrawer by default.
+The withdraw authority can be set at vote account creation with the
+`--authorized-withdrawer` option.  If this is not provided, the validator
+identity will be set as the withdraw authority by default.
 
-The Authorized Withdrawer can be changed later with the `vote-authorize-withdrawer`
+The withdraw authority can be changed later with the `vote-authorize-withdrawer`
 command.
 
 ### Commission
 
-Commission is the percent of network rewards earned by a validator that are
+_Commission_ is the percent of network rewards earned by a validator that are
 deposited into the validator's vote account.  The remainder of the rewards
 are distributed to all of the stake accounts delegated to that vote account,
 proportional to the active stake weight of each stake account.
