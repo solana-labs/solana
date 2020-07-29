@@ -17,7 +17,7 @@ module.exports = {
       links: [
         {
           to: "introduction",
-          label: "Docs",
+          label: "Introduction",
           position: "left",
         },
         {
@@ -28,6 +28,11 @@ module.exports = {
         {
           to: "running-validator",
           label: "Validators",
+          position: "left",
+        },
+        {
+          to: "clusters",
+          label: "Clusters",
           position: "left",
         },
         {
