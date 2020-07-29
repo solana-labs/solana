@@ -623,8 +623,14 @@ mod tests {
                 true,
             ))
         }
-        let mut invoke_context =
-            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts, vec![], None, true);
+        let mut invoke_context = ThisInvokeContext::new(
+            &program_ids[0],
+            Rent::default(),
+            pre_accounts,
+            vec![],
+            None,
+            true,
+        );
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
