@@ -12,7 +12,7 @@ use solana_ledger::{
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
     account::Account,
-    clock,
+    bpf_loader, clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
     genesis_config::{GenesisConfig, OperatingMode},
@@ -26,7 +26,14 @@ use solana_sdk::{
 use solana_stake_program::stake_state::{self, StakeState};
 use solana_vote_program::vote_state::{self, VoteState};
 use std::{
-    collections::HashMap, error, fs::File, io, path::PathBuf, process, str::FromStr, time::Duration,
+    collections::HashMap,
+    error,
+    fs::File,
+    io::{self, Read},
+    path::PathBuf,
+    process,
+    str::FromStr,
+    time::Duration,
 };
 
 pub enum AccountFileFormat {
@@ -341,6 +348,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     "maximum total uncompressed file size of created genesis archive",
                 ),
         )
+        .arg(
+            Arg::with_name("bpf_program")
+                .long("bpf-program")
+                .value_name("ADDRESS BPF_PROGRAM.SO")
+                .takes_value(true)
+                .number_of_values(2)
+                .multiple(true)
+                .help("Install a BPF program at the given address"),
+        )
         .get_matches();
 
     let faucet_lamports = value_t!(matches, "faucet_lamports", u64).unwrap_or(0);
@@ -534,6 +550,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .sum::<u64>();
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
+
+    if let Some(values) = matches.values_of("bpf_program") {
+        let values: Vec<&str> = values.collect::<Vec<_>>();
+        for address_program in values.chunks(2) {
+            match address_program {
+                [address, program] => {
+                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
+                        eprintln!("Error: invalid address {}: {}", address, err);
+                        process::exit(1);
+                    });
+
+                    let mut program_data = vec![];
+                    File::open(program)
+                        .and_then(|mut file| file.read_to_end(&mut program_data))
+                        .unwrap_or_else(|err| {
+                            eprintln!("Error: failed to read {}: {}", program, err);
+                            process::exit(1);
+                        });
+                    genesis_config.add_account(
+                        address,
+                        Account {
+                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                            data: program_data,
+                            executable: true,
+                            owner: bpf_loader::id(),
+                            rent_epoch: 0,
+                        },
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 
     solana_logger::setup();
     create_new_ledger(
