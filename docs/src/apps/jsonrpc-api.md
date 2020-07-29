@@ -45,6 +45,10 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
+- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
+- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -1014,6 +1018,116 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSupply"}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"circulating":16000,"nonCirculating":1000000,"nonCirculatingAccounts":["FEy8pTbP5fEoqMV1GdTz83byuA8EKByqYat1PKDgVAq5","9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA","3mi1GmwEE3zo2jmfDuzvjSX9ovRXsDUKHvsntpkhuLJ9","BYxEJTDerkaRWBem3XgnVcdhppktBXa2HbkHPKj2Ui4Z],total:1016000}},"id":1}
+```
+
+### getTokenAccountBalance
+
+Returns the token balance of an SPL Token account.
+
+#### Parameters:
+
+- `<string>` - Pubkey of Token account to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the balance
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":9864,"id":1}
+```
+
+### getTokenAccountsByDelegate
+
+Returns all SPL Token accounts by approved Delegate.
+
+#### Parameters:
+
+- `<string>` - Pubkey of account delegate to query, as base-58 encoded string
+- `<object>` - Either:
+  * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
+
+- `pubkey: <string>` - the account Pubkey as base-58 encoded string
+- `account: <object>` - a JSON object, with the following sub fields:
+   - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+   `data: <object>`, Token state data associated with the account, in JSON format `{<program>: <state>}`
+   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByDelegate", "params": ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"}]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+```
+
+### getTokenAccountsByOwner
+
+Returns all SPL Token accounts by token owner.
+
+#### Parameters:
+
+- `<string>` - Pubkey of account owner to query, as base-58 encoded string
+- `<object>` - Either:
+  * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
+  * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects, which will contain:
+
+- `pubkey: <string>` - the account Pubkey as base-58 encoded string
+- `account: <object>` - a JSON object, with the following sub fields:
+   - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+   - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+   `data: <object>`, Token state data associated with the account, in JSON format `{<program>: <state>}`
+   - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+   - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+```
+
+### getTokenSupply
+
+Returns the total supply of an SPL Token type.
+
+#### Parameters:
+
+- `<string>` - Pubkey of token Mint to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the total token supply
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":100000,"id":1}
 ```
 
 ### getTransactionCount
