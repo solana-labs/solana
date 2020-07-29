@@ -58,3 +58,10 @@ pub struct RpcProgramAccountsConfig {
     #[serde(flatten)]
     pub account_config: RpcAccountInfoConfig,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcTokenAccountsFilter {
+    Mint(String),
+    ProgramId(String),
+}

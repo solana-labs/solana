@@ -3734,7 +3734,6 @@ dependencies = [
  "solana-sdk 1.2.13",
  "solana-sdk 1.2.15",
  "solana-vote-program",
- "spl-memo",
  "spl-token",
  "thiserror",
 ]
@@ -4056,6 +4055,7 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
+ "solana-sdk 1.2.13",
  "solana-sdk 1.2.15",
  "solana-stake-program",
  "solana-streamer",
@@ -4064,6 +4064,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
+ "spl-token",
  "systemstat",
  "tempfile",
  "thiserror",
