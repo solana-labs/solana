@@ -794,6 +794,7 @@ fn call<'a>(
         message_processor.add_program(*program_id, *process_instruction);
     }
     message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
+    message_processor.set_cross_program_support(invoke_context.is_cross_program_supported());
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(

@@ -449,6 +449,9 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        if bank.operating_mode == Some(OperatingMode::Stable) {
+            bank.message_processor.set_cross_program_support(false);
+        }
         bank
     }
 
@@ -1189,6 +1192,11 @@ impl Bank {
         let account = native_loader::create_loadable_account(name);
         self.store_account(program_id, &account);
         debug!("Added native program {} under {:?}", name, program_id);
+    }
+
+    pub fn set_cross_program_support(&mut self, is_supported: bool) {
+        self.message_processor
+            .set_cross_program_support(is_supported);
     }
 
     /// Return the last block hash registered.
