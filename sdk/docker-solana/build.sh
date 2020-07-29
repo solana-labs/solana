@@ -24,7 +24,7 @@ rm -rf usr/
   scripts/cargo-install-all.sh sdk/docker-solana/usr
 
 cp -f ../../run.sh usr/bin/solana-run.sh
-cp -f ../../fetch-spl usr/bin/
+cp -f ../../fetch-spl.sh usr/bin/
 (
   cd usr/bin
   ./fetch-spl.sh
