@@ -2516,7 +2516,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.2.14"
+version = "1.2.15"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -2539,7 +2539,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.2.14"
+version = "1.2.15"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -2548,7 +2548,7 @@ dependencies = [
 
 [[package]]
 name = "solana-move-loader-program"
-version = "1.2.14"
+version = "1.2.15"
 dependencies = [
  "bincode",
  "indexmap",
@@ -2577,7 +2577,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.14"
+version = "1.2.15"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.2.14"
+version = "1.2.15"
 dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.18",
