@@ -789,7 +789,7 @@ impl JsonRpcRequestProcessor {
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
@@ -805,7 +805,7 @@ impl JsonRpcRequestProcessor {
                 Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
             })
             .map(|account: &mut TokenAccount| account.amount)?;
-        Ok(new_response(&bank, balance))
+        new_response(&bank, balance)
     }
 
     pub fn get_token_supply(
@@ -813,7 +813,7 @@ impl JsonRpcRequestProcessor {
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
         })?;
@@ -840,7 +840,7 @@ impl JsonRpcRequestProcessor {
                     .unwrap_or(0)
             })
             .sum();
-        Ok(new_response(&bank, supply))
+        new_response(&bank, supply)
     }
 
     pub fn get_token_accounts_by_owner(
@@ -849,7 +849,7 @@ impl JsonRpcRequestProcessor {
         token_account_filter: TokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -876,7 +876,7 @@ impl JsonRpcRequestProcessor {
                 account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
             })
             .collect();
-        Ok(new_response(&bank, accounts))
+        new_response(&bank, accounts)
     }
 
     pub fn get_token_accounts_by_delegate(
@@ -885,7 +885,7 @@ impl JsonRpcRequestProcessor {
         token_account_filter: TokenAccountsFilter,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -920,7 +920,7 @@ impl JsonRpcRequestProcessor {
                 account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
             })
             .collect();
-        Ok(new_response(&bank, accounts))
+        new_response(&bank, accounts)
     }
 }
 
