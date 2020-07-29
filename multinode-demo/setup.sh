@@ -33,9 +33,19 @@ args=(
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-account.json
 )
+
+"$SOLANA_ROOT"/fetch-spl.sh
+if [[ -r spl-genesis-args.sh ]]; then
+  SPL_GENESIS_ARGS=$(cat "$SOLANA_ROOT"/spl-genesis-args.sh)
+  #shellcheck disable=SC2207
+  #shellcheck disable=SC2206
+  args+=($SPL_GENESIS_ARGS)
+fi
+
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator
 default_arg --faucet-pubkey "$SOLANA_CONFIG_DIR"/faucet.json
 default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --operating-mode development
+
 $solana_genesis "${args[@]}"
