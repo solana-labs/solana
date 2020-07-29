@@ -117,7 +117,7 @@ fn execute_batch(
             OrderedIterator::new(batch.transactions(), batch.iteration_order())
                 .zip(&processing_results)
         {
-            if Bank::can_commit(processing_result) && !transaction.signatures.is_empty() {
+            if processing_result.is_ok() {
                 if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
                     let _ = replay_votes_sender.send(parsed_vote);
                 }
@@ -971,8 +971,12 @@ pub mod tests {
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
         },
     };
+    use crossbeam_channel::unbounded;
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
+    use solana_runtime::genesis_utils::{
+        create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+    };
     use solana_sdk::account::Account;
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
@@ -983,7 +987,7 @@ pub mod tests {
         system_transaction,
         transaction::{Transaction, TransactionError},
     };
-    use std::sync::RwLock;
+    use std::{collections::BTreeSet, sync::RwLock};
 
     #[test]
     fn test_process_blockstore_with_missing_hashes() {
@@ -2514,6 +2518,8 @@ pub mod tests {
             &opts,
             &recyclers,
             &mut ConfirmationProgress::new(bank0.last_blockhash()),
+            None,
+            None,
         )
         .unwrap();
         bank1.squash();
@@ -2525,6 +2531,7 @@ pub mod tests {
             bank1,
             &opts,
             &recyclers,
+            None,
             None,
         )
         .unwrap();
@@ -2763,5 +2770,82 @@ pub mod tests {
         // First error found should be for the 2nd transaction, due to iteration_order
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
         assert_eq!(signature, account_not_found_sig);
+    }
+
+    #[test]
+    fn test_replay_vote_sender() {
+        let validator_keypairs: Vec<_> =
+            (0..10).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
+        let GenesisConfigInfo {
+            genesis_config,
+            voting_keypair: _,
+            ..
+        } = create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &validator_keypairs,
+            vec![100; validator_keypairs.len()],
+        );
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        bank0.freeze();
+
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 1));
+
+        // The new blockhash is going to be the hash of the last tick in the block
+        let bank_1_blockhash = bank1.last_blockhash();
+
+        // Create an transaction that references the new blockhash, should still
+        // be able to find the blockhash if we process transactions all in the same
+        // batch
+        let mut expected_successful_voter_pubkeys = BTreeSet::new();
+        let vote_txs: Vec<_> = validator_keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, validator_keypairs)| {
+                if i % 3 == 0 {
+                    // These votes are correct
+                    expected_successful_voter_pubkeys
+                        .insert(validator_keypairs.vote_keypair.pubkey());
+                    vote_transaction::new_vote_transaction(
+                        vec![0],
+                        bank0.hash(),
+                        bank_1_blockhash,
+                        &validator_keypairs.node_keypair,
+                        &validator_keypairs.vote_keypair,
+                        &validator_keypairs.vote_keypair,
+                        None,
+                    )
+                } else if i % 3 == 1 {
+                    // These have the wrong authorized voter
+                    vote_transaction::new_vote_transaction(
+                        vec![0],
+                        bank0.hash(),
+                        bank_1_blockhash,
+                        &validator_keypairs.node_keypair,
+                        &validator_keypairs.vote_keypair,
+                        &Keypair::new(),
+                        None,
+                    )
+                } else {
+                    // These have an invalid vote for non-existent bank 2
+                    vote_transaction::new_vote_transaction(
+                        vec![bank1.slot() + 1],
+                        bank0.hash(),
+                        bank_1_blockhash,
+                        &validator_keypairs.node_keypair,
+                        &validator_keypairs.vote_keypair,
+                        &validator_keypairs.vote_keypair,
+                        None,
+                    )
+                }
+            })
+            .collect();
+        let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
+        let (replay_votes_sender, replay_votes_receiver) = unbounded();
+        let _ = process_entries(&bank1, &[entry], true, None, Some(&replay_votes_sender));
+        let successes: BTreeSet<Pubkey> = replay_votes_receiver
+            .try_iter()
+            .map(|(vote_pubkey, _, _)| vote_pubkey)
+            .collect();
+        assert_eq!(successes, expected_successful_voter_pubkeys);
     }
 }
