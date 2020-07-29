@@ -1,5 +1,5 @@
 ---
-title: Configuring a Vote Account
+title: Vote Account Structure and Configuration
 ---
 
 This page describes how to set up an on-chain vote account.   Creating a vote
@@ -8,8 +8,6 @@ account is needed if you plan to run a validator node on Solana.
 All settings for a vote account can be configured at the time the account is
 created, or they can be set after the account is created while the corresponding
 validator is running.
-
-## Vote Account Structure
 
 ### Vote Account Address
 
@@ -75,19 +73,42 @@ voter account changes.
 
 ### Authorized Withdrawer
 
+The Authorized Withdrawer keypair is used to withdraw funds from a vote account
+using the `withdraw-from-vote-account` command.  Any network rewards a validator
+earns are deposited into the vote account and are only retrievable by signing
+with the Authorized Withdrawer keypair.
+
+The Authorized Withdrawer is also required to sign any transaction to change
+a vote account's commission.
+
+Because the vote account could accrue a significant balance, it is recommended
+to keep the Authorized Withdrawer keypair in an offline/cold wallet, as it is
+not needed to sign frequent transactions.
+
+The Authorized Withdrawer can be set at vote account creation with the 
+`--authorized-withdrawer` option.  If this is not provided, the Validator
+Identity will be set as the Authorized Withdrawer by default.
+
+The Authorized Withdrawer can be changed later with the `vote-authorize-withdrawer`
+command.
+
 ### Commission
 
-## Vote Account Operations
-```bash
-    create-vote-account            Create a vote account
-    vote-account                   Show the contents of a vote account
-    vote-authorize-voter           Authorize a new vote signing keypair for the given vote account
-    vote-authorize-withdrawer      Authorize a new withdraw signing keypair for the given vote account
-    vote-update-commission         Update the vote account's commission
-    vote-update-validator          Update the vote account's validator identity
-    withdraw-from-vote-account     Withdraw lamports from a vote account into a specified account
-```
+Commission is the percent of network rewards earned by a validator that are
+deposited into the validator's vote account.  The remainder of the rewards
+are distributed to all of the stake accounts delegated to that vote account,
+proportional to the active stake weight of each stake account.
 
-## Credits
+For example, if a vote account has a commission of 10%, for all rewards earned
+by that validator in a given epoch, 10% of these rewards will be deposited into
+the vote account in the first block of the following epoch. The remaining 90%
+will be deposited into delegated stake accounts as immediately active stake.
 
-## Commission/Inflation/Delegation
+Commission can be set upon vote account creation with the `--commission` option.
+If it is not provided, it will default to 100%.
+
+Commission can also be changed later with the `vote-update-commission` command.
+
+When setting the commission, only integer values in the set [0-100] are accepted.
+The integer represent the number of percentage points for the commission, so
+creating an account with `--commission 10` will set a 10% commission.

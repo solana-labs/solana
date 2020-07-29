@@ -61,6 +61,7 @@ module.exports = {
       "running-validator",
       "running-validator/validator-reqs",
       "running-validator/validator-start",
+      "running-validator/vote-accounts",
       "running-validator/validator-stake",
       "running-validator/validator-monitor",
       "running-validator/validator-info",
