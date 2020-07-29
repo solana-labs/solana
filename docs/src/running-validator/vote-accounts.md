@@ -85,7 +85,7 @@ Because the vote account could accrue a significant balance, it is recommended
 to keep the Authorized Withdrawer keypair in an offline/cold wallet, as it is
 not needed to sign frequent transactions.
 
-The Authorized Withdrawer can be set at vote account creation with the 
+The Authorized Withdrawer can be set at vote account creation with the
 `--authorized-withdrawer` option.  If this is not provided, the Validator
 Identity will be set as the Authorized Withdrawer by default.
 
