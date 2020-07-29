@@ -2161,20 +2161,15 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         let address = verify_pubkey(address)?;
 
-        let (start_after, limit) =
-            if let Some(RpcGetConfirmedSignaturesForAddress2Config { start_after, limit }) = config
-            {
-                (
-                    if let Some(start_after) = start_after {
-                        Some(verify_signature(&start_after)?)
-                    } else {
-                        None
-                    },
-                    limit.unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT),
-                )
-            } else {
-                (None, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT)
-            };
+        let config = config.unwrap_or_default();
+        let start_after = if let Some(start_after) = config.start_after {
+            Some(verify_signature(&start_after)?)
+        } else {
+            None
+        };
+        let limit = config
+            .limit
+            .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
 
         if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
             return Err(Error::invalid_params(format!(
