@@ -95,16 +95,6 @@ impl RentCollector {
         account.rent_epoch = self.epoch;
         self.collect_from_existing_account(address, account)
     }
-
-    #[must_use = "add to Bank::collected_rent"]
-    pub fn collect_from_account(&self, address: &Pubkey, account: &mut Option<Account>) -> u64 {
-        if let Some(account) = account {
-            self.collect_from_existing_account(address, account)
-        } else {
-            *account = Some(Account::default());
-            self.collect_from_created_account(address, &mut account.as_mut().unwrap())
-        }
-    }
 }
 
 #[cfg(test)]

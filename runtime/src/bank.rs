@@ -2497,15 +2497,28 @@ impl Bank {
     }
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
-        let mut account = self.get_account(pubkey);
-        self.collected_rent.fetch_add(
-            self.rent_collector
-                .collect_from_account(pubkey, &mut account),
-            Ordering::Relaxed,
-        );
-        // at this point, account is ensured to be Some
-        let mut account = account.unwrap();
+        let account = self.get_account(pubkey);
+        let created = account.is_none();
+
+        let mut account = account.unwrap_or_default();
         account.lamports += lamports;
+
+        let should_be_in_new_behavior = match self.operating_mode() {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => self.epoch() >= Epoch::max_value(),
+            OperatingMode::Stable => self.epoch() >= Epoch::max_value(),
+        };
+
+        // previously we're too much collecting rents as if rent duration is since epoch 0...
+        let rent = if created && should_be_in_new_behavior {
+            self.rent_collector
+                .collect_from_created_account(pubkey, &mut account)
+        } else {
+            self.rent_collector
+                .collect_from_existing_account(pubkey, &mut account)
+        };
+        self.collected_rent.fetch_add(rent, Ordering::Relaxed);
+
         self.store_account(pubkey, &account);
     }
 
@@ -5163,6 +5176,67 @@ mod tests {
         // Existing account
         bank.deposit(&key.pubkey(), 3);
         assert_eq!(bank.get_balance(&key.pubkey()), 13);
+    }
+
+    #[test]
+    fn test_bank_deposit_with_rent() {
+        impl Bank {
+            fn get_rent_epoch(&self, pubkey: &Pubkey) -> Epoch {
+                self.get_account(pubkey).unwrap().rent_epoch
+            }
+
+            fn collected_rent(&self) -> Epoch {
+                self.collected_rent.load(Ordering::Relaxed)
+            }
+        }
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(100);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let leader = Pubkey::default();
+        // forward time somewhat to induce rent
+        let bank = Arc::new(Bank::new_from_parent(&bank, &leader, bank.slot() + 100));
+
+        let pubkey = Pubkey::new_rand();
+
+        let new_account_tester = |bank: &Arc<Bank>, deposit_amount: u64, rent_amount: u64| {
+            bank.deposit(&pubkey, deposit_amount);
+
+            let existing_balance = bank.get_balance(&pubkey);
+            assert_eq!(existing_balance, deposit_amount - rent_amount);
+            assert_eq!(bank.get_rent_epoch(&pubkey), bank.epoch() + 1);
+        };
+
+        // Test as new account
+        new_account_tester(&bank, 10, 1);
+        let existing_balance = bank.get_balance(&pubkey);
+
+        // Test as existing account
+        bank.deposit(&pubkey, 3);
+        assert_eq!(bank.get_balance(&pubkey), existing_balance + 3);
+        let existing_balance = bank.get_balance(&pubkey);
+        assert_eq!(bank.get_rent_epoch(&pubkey), bank.epoch() + 1);
+
+        // further forward time to induce another rent
+        let bank = Arc::new(Bank::new_from_parent(&bank, &leader, bank.slot() + 300));
+
+        let collected_rent_before = bank.collected_rent();
+        bank.deposit(&pubkey, 3);
+        let collected_rent_after = bank.collected_rent();
+
+        let rent_delta = collected_rent_after - collected_rent_before;
+        assert!(rent_delta > 0);
+        assert_eq!(bank.get_balance(&pubkey), existing_balance + 3 - rent_delta);
+        let existing_balance = bank.get_balance(&pubkey);
+        assert_eq!(bank.get_rent_epoch(&pubkey), bank.epoch() + 1);
+
+        // even further forward time to cause rent-deliquent
+        let bank = Arc::new(Bank::new_from_parent(&bank, &leader, bank.slot() + 30000));
+        bank.deposit(&pubkey, 7);
+        assert_eq!(bank.get_account(&pubkey), None);
+        assert_eq!(bank.collected_rent(), existing_balance + 7);
+
+        // Test as new account again (the rent amount should be for an epoch worth)
+        new_account_tester(&bank, 300, 185);
     }
 
     #[test]
