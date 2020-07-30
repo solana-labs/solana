@@ -53,10 +53,10 @@ Solana supports several types of wallets in the Solana native
 command-line app as well as wallets from third-parties.
 
 For the majority of users, we recommend using one of the
-[app wallets](apps.md), which will provide a more familiar user
+[app wallets](wallet-guide/apps.md), which will provide a more familiar user
 experience rather than needing to learn command line tools.
 
-For advanced users or developers, the [command-line wallets](cli.md)
+For advanced users or developers, the [command-line wallets](wallet-guide/cli.md)
 may be more appropriate, as new features on the Solana blockchain will always be
 supported on the command line first before being integrated into third-party
 solutions.
