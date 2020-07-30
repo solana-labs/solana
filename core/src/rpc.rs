@@ -1401,6 +1401,9 @@ fn _send_transaction(
     wire_transaction: Vec<u8>,
     last_valid_slot: Slot,
 ) -> Result<String> {
+    if transaction.signatures.is_empty() {
+        return Err(RpcCustomError::SendTransactionIsNotSigned.into());
+    }
     let signature = transaction.signatures[0];
     let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
     meta.transaction_sender
