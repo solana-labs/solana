@@ -65,6 +65,20 @@ export type ConfirmOptions = {
 };
 
 /**
+ * Options for getConfirmedSignaturesForAddress2
+ *
+ * @typedef {Object} ConfirmedSignaturesForAddress2Options
+ * @property {TransactionSignature | undefined} before start searching backwards from this transaction signature.
+ *               If not provided the search starts from the highest max confirmed block.
+ * @property {number | undefined} limit maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+ *
+ */
+export type ConfirmedSignaturesForAddress2Options = {
+  before?: TransactionSignature,
+  limit?: number,
+};
+
+/**
  * RPC Response with extra contextual information
  *
  * @typedef {Object} RpcResponseAndContext
@@ -604,10 +618,25 @@ const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
 );
 
 /**
- * @private
+ * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
  */
 const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
   struct.array(['string']),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
+ */
+
+const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
+  struct.array([
+    struct({
+      signature: 'string',
+      slot: 'number',
+      err: TransactionErrorResult,
+      memo: struct.union(['null', 'string']),
+    }),
+  ]),
 );
 
 /***
@@ -1039,6 +1068,22 @@ export type SignatureStatus = {
   slot: number,
   confirmations: number | null,
   err: TransactionError | null,
+};
+
+/**
+ * A confirmed signature with its status
+ *
+ * @typedef {Object} ConfirmedSignatureInfo
+ * @property {string} signature the transaction signature
+ * @property {number} slot when the transaction was processed
+ * @property {TransactionError | null} err error, if any
+ * @property {string | null} memo memo associated with the transaction, if any
+ */
+export type ConfirmedSignatureInfo = {
+  signature: string,
+  slot: number,
+  err: TransactionError | null,
+  memo: string | null,
 };
 
 /**
@@ -1826,6 +1871,33 @@ export class Connection {
       [address.toBase58(), startSlot, endSlot],
     );
     const result = GetConfirmedSignaturesForAddressRpcResult(unsafeRes);
+    if (result.error) {
+      throw new Error(
+        'failed to get confirmed signatures for address: ' +
+          result.error.message,
+      );
+    }
+    assert(typeof result.result !== 'undefined');
+    return result.result;
+  }
+
+  /**
+   * Returns confirmed signatures for transactions involving an
+   * address backwards in time from the provided signature or most recent confirmed block
+   *
+   *
+   * @param address queried address
+   * @param options
+   */
+  async getConfirmedSignaturesForAddress2(
+    address: PublicKey,
+    options: ?ConfirmedSignaturesForAddress2Options,
+  ): Promise<Array<ConfirmedSignatureInfo>> {
+    const unsafeRes = await this._rpcRequest(
+      'getConfirmedSignaturesForAddress2',
+      [address.toBase58(), options],
+    );
+    const result = GetConfirmedSignaturesForAddress2RpcResult(unsafeRes);
     if (result.error) {
       throw new Error(
         'failed to get confirmed signatures for address: ' +

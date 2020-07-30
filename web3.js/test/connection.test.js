@@ -756,6 +756,7 @@ test('get confirmed signatures for address', async () => {
     }
   }
 
+  // getConfirmedSignaturesForAddress tests...
   mockRpc.push([
     url,
     {
@@ -794,6 +795,38 @@ test('get confirmed signatures for address', async () => {
     badSlot + 1,
   );
   expect(emptySignatures.length).toBe(0);
+
+  // getConfirmedSignaturesForAddress2 tests...
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedSignaturesForAddress2',
+      params: [address.toBase58(), {limit: 1}],
+    },
+    {
+      error: null,
+      result: [
+        {
+          signature: expectedSignature,
+          slot,
+          err: null,
+          memo: null,
+        },
+      ],
+    },
+  ]);
+
+  const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
+    address,
+    {limit: 1},
+  );
+  expect(confirmedSignatures2.length).toBe(1);
+  if (mockRpcEnabled) {
+    expect(confirmedSignatures2[0].signature).toBe(expectedSignature);
+    expect(confirmedSignatures2[0].slot).toBe(slot);
+    expect(confirmedSignatures2[0].err).toBeNull();
+    expect(confirmedSignatures2[0].memo).toBeNull();
+  }
 });
 
 test('get confirmed transaction', async () => {
