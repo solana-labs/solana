@@ -1354,6 +1354,29 @@ impl Bank {
         batch
     }
 
+    /// Run transactions against a frozen bank without committing the results
+    pub fn simulate_transaction(&self, transaction: Transaction) -> (Result<()>, Vec<String>) {
+        assert!(self.is_frozen(), "simulation bank must be frozen");
+
+        let txs = &[transaction];
+        let batch = self.prepare_simulation_batch(txs);
+        let log_collector = Rc::new(LogCollector::default());
+        let (
+            _loaded_accounts,
+            executed,
+            _retryable_transactions,
+            _transaction_count,
+            _signature_count,
+        ) = self.load_and_execute_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            Some(log_collector.clone()),
+        );
+        let transaction_result = executed[0].0.clone().map(|_| ());
+        let log_messages = Rc::try_unwrap(log_collector).unwrap_or_default().into();
+        (transaction_result, log_messages)
+    }
+
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
