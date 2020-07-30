@@ -28,7 +28,6 @@ use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
-    log_collector::LogCollector,
     send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_sdk::{
@@ -57,7 +56,6 @@ use std::{
     collections::{HashMap, HashSet},
     mem::size_of,
     net::SocketAddr,
-    rc::Rc,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1014,29 +1012,6 @@ fn verify_token_account_filter(
     }
 }
 
-/// Run transactions against a frozen bank without committing the results
-fn run_transaction_simulation(
-    bank: &Bank,
-    transaction: Transaction,
-) -> (transaction::Result<()>, Vec<String>) {
-    assert!(bank.is_frozen(), "simulation bank must be frozen");
-
-    let txs = &[transaction];
-    let batch = bank.prepare_simulation_batch(txs);
-    let log_collector = Rc::new(LogCollector::default());
-    let (_loaded_accounts, executed, _retryable_transactions, _transaction_count, _signature_count) = {
-        bank.load_and_execute_transactions(
-            &batch,
-            solana_sdk::clock::MAX_PROCESSING_AGE,
-            Some(log_collector.clone()),
-        )
-    };
-    (
-        executed[0].0.clone().map(|_| ()),
-        Rc::try_unwrap(log_collector).unwrap_or_default().into(),
-    )
-}
-
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
 fn get_filtered_program_accounts(
     bank: &Arc<Bank>,
@@ -1797,8 +1772,7 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction.clone())
-            {
+            if let (Err(err), _log_output) = bank.simulate_transaction(transaction.clone()) {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -1832,9 +1806,9 @@ impl RpcSol for RpcSolImpl {
 
         let bank = &*meta.bank(None);
         let logs = if result.is_ok() {
-            let sim_result = run_transaction_simulation(&bank, transaction);
-            result = sim_result.0;
-            Some(sim_result.1)
+            let (transaction_result, log_messages) = bank.simulate_transaction(transaction);
+            result = transaction_result;
+            Some(log_messages)
         } else {
             None
         };
