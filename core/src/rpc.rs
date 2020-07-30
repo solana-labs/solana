@@ -3439,7 +3439,7 @@ pub mod tests {
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
-        let mut bad_transaction =
+        let bad_transaction =
             system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
 
         // sendTransaction will fail because the blockhash is invalid
@@ -3454,6 +3454,10 @@ pub mod tests {
                 r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found"},"id":1}"#.to_string(),
             )
         );
+
+        let recent_blockhash = bank_forks.read().unwrap().root_bank().last_blockhash();
+        let mut bad_transaction =
+            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, recent_blockhash);
 
         // sendTransaction will fail due to poor node health
         health.stub_set_health_status(Some(RpcHealthStatus::Behind));
@@ -3491,11 +3495,26 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
             bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         assert_eq!(
             res,
             Some(
                 r#"{"jsonrpc":"2.0","result":"1111111111111111111111111111111111111111111111111111111111111111","id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will fail due to no signer. Skip preflight so signature verification
+        // doesn't catch it
+        bad_transaction.signatures.clear();
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction is not signed"},"id":1}"#.to_string(),
             )
         );
     }
