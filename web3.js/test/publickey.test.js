@@ -103,14 +103,6 @@ test('equals', () => {
   expect(arrayKey.equals(base56Key)).toBe(true);
 });
 
-test('isPublicKey', () => {
-  const key = new PublicKey(
-    '0x100000000000000000000000000000000000000000000000000000000000000',
-  );
-  expect(PublicKey.isPublicKey(key)).toBe(true);
-  expect(PublicKey.isPublicKey({})).toBe(false);
-});
-
 test('toBase58', () => {
   const key = new PublicKey(
     '0x300000000000000000000000000000000000000000000000000000000000000',

@@ -19,7 +19,6 @@ declare module '@solana/web3.js' {
     constructor(
       value: number | string | Buffer | Uint8Array | Array<number>,
     ): PublicKey;
-    static isPublicKey(o: {}): boolean;
     static createWithSeed(
       fromPublicKey: PublicKey,
       seed: string,

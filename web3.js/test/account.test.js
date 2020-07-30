@@ -1,10 +1,8 @@
 // @flow
 import {Account} from '../src/account';
-import {PublicKey} from '../src/publickey';
 
 test('generate new account', () => {
   const account = new Account();
-  expect(PublicKey.isPublicKey(account.publicKey)).toBeTruthy();
   expect(account.secretKey).toHaveLength(64);
 });
 

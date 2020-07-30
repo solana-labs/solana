@@ -36,13 +36,6 @@ export class PublicKey {
   }
 
   /**
-   * Checks if the provided object is a PublicKey
-   */
-  static isPublicKey(o: Object): boolean {
-    return o instanceof PublicKey;
-  }
-
-  /**
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
