@@ -40,6 +40,6 @@ export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
 export RUST_COMPILER_RT_ROOT="$bpf_sdk/dependencies/rust-bpf-sysroot/src/compiler-rt"
 
 cd "$1"
-xargo build --target bpfel-unknown-unknown --release
+xargo build --target bpfel-unknown-unknown --release --no-default-features --features program
 
 { { set +x; } 2>/dev/null; echo Success; }
