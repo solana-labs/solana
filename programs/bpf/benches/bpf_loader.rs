@@ -159,4 +159,7 @@ impl InvokeContext for MockInvokeContext {
         false
     }
     fn log(&mut self, _message: &str) {}
+    fn is_cross_program_supported(&self) -> bool {
+        true
+    }
 }

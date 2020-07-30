@@ -209,4 +209,6 @@ pub trait InvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
     fn log_enabled(&self) -> bool;
     fn log(&mut self, message: &str);
+    /// Are cross program invocations supported
+    fn is_cross_program_supported(&self) -> bool;
 }

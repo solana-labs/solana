@@ -161,6 +161,7 @@ pub struct ThisInvokeContext<'a> {
     pub pre_accounts: Vec<PreAccount>,
     pub programs: Vec<(Pubkey, ProcessInstruction)>,
     pub log_collector: Option<&'a LogCollector>,
+    is_cross_program_supported: bool,
 }
 
 impl<'a> ThisInvokeContext<'a> {
@@ -171,6 +172,7 @@ impl<'a> ThisInvokeContext<'a> {
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
         log_collector: Option<&'a LogCollector>,
+        is_cross_program_supported: bool,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
@@ -180,6 +182,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             programs,
             log_collector,
+            is_cross_program_supported,
         }
     }
 }
@@ -226,7 +229,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &self.programs
     }
-
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
@@ -237,12 +239,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             log_collector.log(message);
         }
     }
+    fn is_cross_program_supported(&self) -> bool {
+        self.is_cross_program_supported
+    }
 }
 
 pub type ProcessInstructionWithContext =
     fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
     programs: Vec<(Pubkey, ProcessInstruction)>,
@@ -250,6 +255,18 @@ pub struct MessageProcessor {
     loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
     native_loader: NativeLoader,
+    #[serde(skip)]
+    is_cross_program_supported: bool,
+}
+impl Default for MessageProcessor {
+    fn default() -> Self {
+        Self {
+            programs: vec![],
+            loaders: vec![],
+            native_loader: NativeLoader::default(),
+            is_cross_program_supported: true,
+        }
+    }
 }
 impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
@@ -257,6 +274,7 @@ impl Clone for MessageProcessor {
             programs: self.programs.clone(),
             loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
+            is_cross_program_supported: self.is_cross_program_supported,
         }
     }
 }
@@ -278,6 +296,10 @@ impl MessageProcessor {
             Some((_, processor)) => *processor = process_instruction,
             None => self.loaders.push((program_id, process_instruction)),
         }
+    }
+
+    pub fn set_cross_program_support(&mut self, is_supported: bool) {
+        self.is_cross_program_supported = is_supported;
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -357,6 +379,10 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        if !self.is_cross_program_supported {
+            return Err(InstructionError::ReentrancyNotAllowed);
+        }
+
         let instruction = &message.instructions[0];
 
         // Verify the calling program hasn't misbehaved
@@ -511,6 +537,7 @@ impl MessageProcessor {
             pre_accounts,
             self.programs.clone(),
             log_collector,
+            self.is_cross_program_supported,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -583,8 +610,14 @@ mod tests {
                 true,
             ))
         }
-        let mut invoke_context =
-            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts, vec![], None);
+        let mut invoke_context = ThisInvokeContext::new(
+            &program_ids[0],
+            Rent::default(),
+            pre_accounts,
+            vec![],
+            None,
+            true,
+        );
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
@@ -1352,6 +1385,7 @@ mod tests {
             vec![owned_preaccount, not_owned_preaccount],
             vec![],
             None,
+            true,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

@@ -295,6 +295,9 @@ mod tests {
             info!("[MockInvokeContext::log] {}", message);
             self.log.push(message.to_string());
         }
+        fn is_cross_program_supported(&self) -> bool {
+            true
+        }
     }
 
     #[rustversion::since(1.46.0)]
