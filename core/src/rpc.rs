@@ -1395,6 +1395,23 @@ pub trait RpcSol {
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 }
 
+fn _send_transaction(
+    meta: JsonRpcRequestProcessor,
+    transaction: Transaction,
+    wire_transaction: Vec<u8>,
+    last_valid_slot: Slot,
+) -> Result<String> {
+    let signature = transaction.signatures[0];
+    let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
+    meta.transaction_sender
+        .lock()
+        .unwrap()
+        .send(transaction_info)
+        .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
+
+    Ok(signature.to_string())
+}
+
 pub struct RpcSolImpl;
 impl RpcSol for RpcSolImpl {
     type Metadata = JsonRpcRequestProcessor;
@@ -1739,21 +1756,13 @@ impl RpcSol for RpcSolImpl {
             info!("request_airdrop_transaction failed: {:?}", err);
             Error::internal_error()
         })?;
-        let signature = transaction.signatures[0];
 
         let wire_transaction = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
             Error::internal_error()
         })?;
 
-        let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
-        meta.transaction_sender
-            .lock()
-            .unwrap()
-            .send(transaction_info)
-            .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
-
-        Ok(signature.to_string())
+        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
     }
 
     fn send_transaction(
@@ -1765,7 +1774,6 @@ impl RpcSol for RpcSolImpl {
         debug!("send_transaction rpc request received");
         let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
-        let signature = transaction.signatures[0];
         let bank = &*meta.bank(None);
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
@@ -1786,7 +1794,8 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction) {
+            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction.clone())
+            {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -1799,13 +1808,7 @@ impl RpcSol for RpcSolImpl {
             }
         }
 
-        let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
-        meta.transaction_sender
-            .lock()
-            .unwrap()
-            .send(transaction_info)
-            .unwrap_or_else(|err| warn!("Failed to enqueue transaction: {}", err));
-        Ok(signature.to_string())
+        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
     }
 
     fn simulate_transaction(
