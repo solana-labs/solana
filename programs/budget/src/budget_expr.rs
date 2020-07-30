@@ -256,7 +256,7 @@ impl BudgetExpr {
             _ => None,
         };
         if let Some(expr) = new_expr {
-            mem::replace(self, *expr);
+            let _ = mem::replace(self, *expr);
         }
     }
 }
