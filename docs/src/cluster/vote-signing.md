@@ -20,7 +20,7 @@ Currently, there is a 1:1 relationship between validators and vote signers, and 
 
 ## Signing service
 
-The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests: 
+The vote signing service consists of a JSON RPC server and a request processor. At startup, the service starts the RPC server at a configured port and waits for validator requests. It expects the following type of requests:
 
 1. Register a new validator node
 
