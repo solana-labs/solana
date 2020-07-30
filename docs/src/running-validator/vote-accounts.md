@@ -12,7 +12,8 @@ validator is running.
 ### Vote Account Address
 
 A vote account is created at an address that is either the public key of a
-keypair file, or at a derived address from the authorized voter's public key.
+keypair file, or at a derived address based on a keypair file's public key and
+a seed string.
 
 The address of a vote account does not need to have a stored corresponding
 private key, because the address (although it may be a valid public key) is never
@@ -25,16 +26,17 @@ to whom the token-holder wants to delegate.
 
 ### Validator Identity
 
-The _validator identity_ is a system account that pays for all the vote transaction
-fees submitted by the vote account.  Because the vote account is expected to vote
-on most valid blocks it receives, the validator identity account is frequently
-(as often as once per slot, or roughly every 400ms) signing transactions and
-paying fees.  For this reason the validator identity account must be stored as
-a "hot wallet" as a keypair file on the same system the validator process is
-running.
+The _validator identity_ is a system account that is used to pay for all the
+vote transaction fees submitted by the vote account.
+Because the vote account is expected to vote on most valid blocks it receives,
+the validator identity account is frequently
+(potentially multiple times per second) signing transactions and
+paying fees.  For this reason the validator identity account's keypair must be
+stored as a "hot wallet" in a keypair file on the same system the validator
+process is running.
 
 Because a hot wallet is generally less secure than an offline or "cold" wallet,
-we only recommend storing enough SOL on the Identity keypair to cover voting fees
+we only recommend storing enough SOL on the identity account to cover voting fees
 for some amount of time (perhaps a few weeks or months) and periodically topping
 off your validator identity account from a more secure wallet.
 
@@ -45,8 +47,8 @@ the `vote-update-validator` command.
 ### Vote Authority
 
 The _vote authority_ keypair is used to sign each vote transaction the validator
-node wants to submit to the cluster.  This can be the same keypair used as the
-validator identity for the same vote account, or a different keypair.  Because
+node wants to submit to the cluster.  This doesn't necessarily have to be unique
+from the validator identity, as you will see later in this document.  Because
 the vote authority, like the validator identity, is signing transactions
 frequently, this also must be a hot keypair on the same file system as the
 validator process.
@@ -60,13 +62,12 @@ fee paid compared to setting the vote authority and validator identity to two
 different accounts.
 
 The vote authority can be set when the vote account is created.  If it is not
-provided, the vote account with set the Validator Identity as the vote authority
-by default.  The vote authority can be changed later with the
-`vote-authorize-voter` command.
+provided, the default behavior is to assign it the same as the validator identity.
+The vote authority can be changed later with the `vote-authorize-voter` command.
 
 The vote authority can be changed at most once per epoch.  If the authority is
-changed with `vote-authorize-voter`, this will not take effect until the end of
-the current epoch.  To support a smooth transition of the vote signing,
+changed with `vote-authorize-voter`, this will not take effect until the
+beginning of the next epoch.  To support a smooth transition of the vote signing,
 `solana-validator` allows the `--authorized-voter` argument to be specified
 multiple times.  This allows the validator process to keep voting successfully
 when the network reaches an epoch boundary at with the validator's vote authority
@@ -80,7 +81,8 @@ earns are deposited into the vote account and are only retrievable by signing
 with the withdraw authority keypair.
 
 The withdraw authority is also required to sign any transaction to change
-a vote account's [commission](#commission).
+a vote account's [commission](#commission), and to change the validator
+identity on a vote account.
 
 Because the vote account could accrue a significant balance, it is recommended
 to keep the withdraw authority keypair in an offline/cold wallet, as it is
@@ -111,5 +113,5 @@ If it is not provided, it will default to 100%.
 Commission can also be changed later with the `vote-update-commission` command.
 
 When setting the commission, only integer values in the set [0-100] are accepted.
-The integer represent the number of percentage points for the commission, so
+The integer represents the number of percentage points for the commission, so
 creating an account with `--commission 10` will set a 10% commission.
