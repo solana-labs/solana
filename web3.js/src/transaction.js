@@ -177,10 +177,10 @@ export class Transaction {
       throw new Error('No instructions');
     }
 
-    items.forEach(item => {
-      if (item instanceof Transaction) {
+    items.forEach((item: any) => {
+      if ('instructions' in item) {
         this.instructions = this.instructions.concat(item.instructions);
-      } else if (item instanceof TransactionInstruction) {
+      } else if ('data' in item && 'programId' in item && 'keys' in item) {
         this.instructions.push(item);
       } else {
         this.instructions.push(new TransactionInstruction(item));
@@ -366,31 +366,39 @@ export class Transaction {
     if (partialSigners.length === 0) {
       throw new Error('No signers');
     }
+
+    function partialSignerPublicKey(accountOrPublicKey: any): PublicKey {
+      if ('publicKey' in accountOrPublicKey) {
+        return accountOrPublicKey.publicKey;
+      }
+      return accountOrPublicKey;
+    }
+
+    function signerAccount(accountOrPublicKey: any): ?Account {
+      if (
+        'publicKey' in accountOrPublicKey &&
+        'secretKey' in accountOrPublicKey
+      ) {
+        return accountOrPublicKey;
+      }
+    }
+
     const signatures: Array<SignaturePubkeyPair> = partialSigners.map(
-      accountOrPublicKey => {
-        const publicKey =
-          accountOrPublicKey instanceof Account
-            ? accountOrPublicKey.publicKey
-            : accountOrPublicKey;
-        return {
-          signature: null,
-          publicKey,
-        };
-      },
+      accountOrPublicKey => ({
+        signature: null,
+        publicKey: partialSignerPublicKey(accountOrPublicKey),
+      }),
     );
     this.signatures = signatures;
     const signData = this.serializeMessage();
 
     partialSigners.forEach((accountOrPublicKey, index) => {
-      if (accountOrPublicKey instanceof PublicKey) {
-        return;
+      const account = signerAccount(accountOrPublicKey);
+      if (account) {
+        const signature = nacl.sign.detached(signData, account.secretKey);
+        invariant(signature.length === 64);
+        signatures[index].signature = Buffer.from(signature);
       }
-      const signature = nacl.sign.detached(
-        signData,
-        accountOrPublicKey.secretKey,
-      );
-      invariant(signature.length === 64);
-      signatures[index].signature = Buffer.from(signature);
     });
   }
 
