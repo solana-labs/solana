@@ -22,12 +22,11 @@ impl VoteStakeTracker {
         let is_new = !self.voted.contains(&vote_pubkey);
         if is_new {
             self.voted.insert(vote_pubkey);
-            let ratio_before = self.stake as f64 / total_epoch_stake as f64;
+            let supermajority_stake = (total_epoch_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+            let previous_stake = self.stake;
             self.stake += stake;
-            let ratio_now = self.stake as f64 / total_epoch_stake as f64;
-
             (
-                ratio_before <= VOTE_THRESHOLD_SIZE && ratio_now > VOTE_THRESHOLD_SIZE,
+                previous_stake <= supermajority_stake && self.stake > supermajority_stake,
                 is_new,
             )
         } else {
@@ -66,7 +65,7 @@ mod test {
             assert!(!is_confirmed2);
             assert!(!is_new2);
 
-            // at i == 7, the voted stake is 70%, which is the first time crossing
+            // at i == 6, the voted stake is 70%, which is the first time crossing
             // the supermajority threshold
             if i == 6 {
                 assert!(is_confirmed);
