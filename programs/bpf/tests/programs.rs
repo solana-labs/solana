@@ -356,7 +356,8 @@ mod bpf {
             let derived_key2 =
                 Pubkey::create_program_address(&[b"Lil'", b"Bits"], &invoked_program_id).unwrap();
             let derived_key3 =
-                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id).unwrap();
+                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id)
+                    .unwrap();
 
             let mint_pubkey = mint_keypair.pubkey();
             let account_metas = vec![

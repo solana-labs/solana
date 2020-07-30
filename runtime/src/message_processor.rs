@@ -154,7 +154,6 @@ impl PreAccount {
     }
 }
 
-<<<<<<< HEAD
 #[derive(Default)]
 pub struct ThisInvokeContext<'a> {
     pub program_ids: Vec<Pubkey>,
@@ -162,15 +161,7 @@ pub struct ThisInvokeContext<'a> {
     pub pre_accounts: Vec<PreAccount>,
     pub programs: Vec<(Pubkey, ProcessInstruction)>,
     pub log_collector: Option<&'a LogCollector>,
-=======
-pub struct ThisInvokeContext {
-    program_ids: Vec<Pubkey>,
-    rent: Rent,
-    pre_accounts: Vec<PreAccount>,
-    programs: Vec<(Pubkey, ProcessInstruction)>,
-    logger: Rc<RefCell<dyn Logger>>,
     is_cross_program_supported: bool,
->>>>>>> 2dbed80e4... Disable cross-program invocations for OperatingMode::Stable (#11272)
 }
 
 impl<'a> ThisInvokeContext<'a> {
@@ -180,12 +171,8 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
-<<<<<<< HEAD
         log_collector: Option<&'a LogCollector>,
-=======
-        log_collector: Option<Rc<LogCollector>>,
         is_cross_program_supported: bool,
->>>>>>> 2dbed80e4... Disable cross-program invocations for OperatingMode::Stable (#11272)
     ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
@@ -194,12 +181,8 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             pre_accounts,
             programs,
-<<<<<<< HEAD
             log_collector,
-=======
-            logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             is_cross_program_supported,
->>>>>>> 2dbed80e4... Disable cross-program invocations for OperatingMode::Stable (#11272)
         }
     }
 }
@@ -246,21 +229,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &self.programs
     }
-<<<<<<< HEAD
-
-=======
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        self.logger.clone()
-    }
-    fn is_cross_program_supported(&self) -> bool {
-        self.is_cross_program_supported
-    }
-}
-pub struct ThisLogger {
-    log_collector: Option<Rc<LogCollector>>,
-}
-impl Logger for ThisLogger {
->>>>>>> 2dbed80e4... Disable cross-program invocations for OperatingMode::Stable (#11272)
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
@@ -270,6 +238,9 @@ impl Logger for ThisLogger {
         if let Some(log_collector) = self.log_collector {
             log_collector.log(message);
         }
+    }
+    fn is_cross_program_supported(&self) -> bool {
+        self.is_cross_program_supported
     }
 }
 
