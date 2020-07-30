@@ -8,8 +8,9 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, EncodedTransaction, Rewards, TransactionStatus,
-    TransactionWithStatusMeta, UiTransactionEncoding, UiTransactionStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
+    EncodedTransaction, Rewards, TransactionStatus, TransactionWithStatusMeta,
+    UiTransactionEncoding, UiTransactionStatusMeta,
 };
 use std::{
     collections::HashMap,
@@ -365,7 +366,7 @@ impl LedgerStorage {
         address: &Pubkey,
         before_signature: Option<&Signature>,
         limit: usize,
-    ) -> Result<Vec<(Signature, Slot, Option<String>, Option<TransactionError>)>> {
+    ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{}/", address);
 
@@ -414,12 +415,12 @@ impl LedgerStorage {
                 .into_iter()
                 .skip(first_transaction_index as usize)
             {
-                infos.push((
-                    tx_by_addr_info.signature,
+                infos.push(ConfirmedTransactionStatusWithSignature {
+                    signature: tx_by_addr_info.signature,
                     slot,
-                    tx_by_addr_info.memo,
-                    tx_by_addr_info.err,
-                ));
+                    err: tx_by_addr_info.err,
+                    memo: tx_by_addr_info.memo,
+                });
                 if infos.len() >= limit {
                     break 'outer;
                 }
