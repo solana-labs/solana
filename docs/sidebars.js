@@ -171,6 +171,7 @@ module.exports = {
       "proposals/rust-clients",
       "proposals/optimistic_confirmation",
       "proposals/embedding-move",
+      "proposals/rip-curl",
     ],
   },
 };
