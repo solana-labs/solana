@@ -308,30 +308,39 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
 
 pub async fn transaction_history(
     address: &Pubkey,
-    limit: usize,
-    before: Option<&Signature>,
+    mut limit: usize,
+    mut before: Option<Signature>,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
-    let results = bigtable
-        .get_confirmed_signatures_for_address(address, before, limit)
-        .await?;
+    while limit > 0 {
+        let results = bigtable
+            .get_confirmed_signatures_for_address(address, before.as_ref(), limit.min(1000))
+            .await?;
 
-    for (signature, slot, memo, err) in results {
-        if verbose {
-            println!(
-                "{}, slot={}, memo=\"{}\", status={}",
-                signature,
-                slot,
-                memo.unwrap_or_else(|| "".to_string()),
-                match err {
-                    None => "Confirmed".to_string(),
-                    Some(err) => format!("Failed: {:?}", err),
-                }
-            );
-        } else {
-            println!("{}", signature);
+        if results.is_empty() {
+            break;
+        }
+        before = Some(results.last().unwrap().signature);
+        assert!(limit >= results.len());
+        limit = limit.saturating_sub(results.len());
+
+        for result in results {
+            if verbose {
+                println!(
+                    "{}, slot={}, memo=\"{}\", status={}",
+                    result.signature,
+                    result.slot,
+                    result.memo.unwrap_or_else(|| "".to_string()),
+                    match result.err {
+                        None => "Confirmed".to_string(),
+                        Some(err) => format!("Failed: {:?}", err),
+                    }
+                );
+            } else {
+                println!("{}", result.signature);
+            }
         }
     }
     Ok(())
@@ -462,7 +471,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("LIMIT")
                                 .validator(is_slot)
                                 .index(2)
-                                .default_value("1000")
+                                .default_value("18446744073709551615")
                                 .help("Maximum number of transaction signatures to return"),
                         )
                         .arg(
@@ -531,12 +540,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 .map(|signature| signature.parse().expect("Invalid signature"));
             let verbose = arg_matches.is_present("verbose");
 
-            runtime.block_on(transaction_history(
-                &address,
-                limit,
-                before.as_ref(),
-                verbose,
-            ))
+            runtime.block_on(transaction_history(&address, limit, before, verbose))
         }
         _ => unreachable!(),
     };
