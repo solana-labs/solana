@@ -2928,7 +2928,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "solana-sdk 1.2.13",
  "solana-sdk 1.3.0",
  "solana-vote-program",
  "spl-token",
@@ -3236,7 +3235,6 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.2.13",
  "solana-sdk 1.3.0",
  "solana-sdk-macro-frozen-abi",
  "solana-stake-program",
@@ -4220,9 +4218,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21aa023866f97c2644f932c2562d3c20e23a817e8abb0702625e0601cf9af80"
+checksum = "e1088b10ccb61c5f4f770dd46f643e8e2e7c70aeeda4e298a10ccf2090841328"
 dependencies = [
  "cbindgen",
  "num-derive 0.2.5",

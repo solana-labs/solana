@@ -2087,8 +2087,9 @@ pub mod tests {
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
-    use spl_sdk::pubkey::Pubkey as SplPubkey;
-    use spl_token_v1_0::{option::COption, state::Mint};
+    use spl_token_v1_0::{
+        option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey, state::Mint,
+    };
     use std::collections::HashMap;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
@@ -4267,9 +4268,9 @@ pub mod tests {
 
         let mut account_data = [0; size_of::<TokenAccount>()];
         let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
-        let mint = SplPubkey::new(&[2; 32]);
-        let owner = SplPubkey::new(&[3; 32]);
-        let delegate = SplPubkey::new(&[4; 32]);
+        let mint = SplTokenPubkey::new(&[2; 32]);
+        let owner = SplTokenPubkey::new(&[3; 32]);
+        let delegate = SplTokenPubkey::new(&[4; 32]);
         *account = TokenAccount {
             mint,
             owner,
@@ -4349,7 +4350,7 @@ pub mod tests {
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = [0; size_of::<TokenAccount>()];
         let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
-        let new_mint = SplPubkey::new(&[5; 32]);
+        let new_mint = SplTokenPubkey::new(&[5; 32]);
         *account = TokenAccount {
             mint: new_mint,
             owner,
