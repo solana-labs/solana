@@ -1339,6 +1339,21 @@ pub trait RpcSol {
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 }
 
+fn _send_transaction(
+    meta: JsonRpcRequestProcessor,
+    transaction: Transaction,
+    wire_transaction: Vec<u8>,
+    last_valid_slot: Slot,
+) -> Result<String> {
+    if transaction.signatures.is_empty() {
+        return Err(RpcCustomError::SendTransactionIsNotSigned.into());
+    }
+    let signature = transaction.signatures[0];
+    meta.send_transaction_service
+        .send(signature, wire_transaction, last_valid_slot);
+    Ok(signature.to_string())
+}
+
 pub struct RpcSolImpl;
 impl RpcSol for RpcSolImpl {
     type Metadata = JsonRpcRequestProcessor;
@@ -1684,17 +1699,13 @@ impl RpcSol for RpcSolImpl {
             info!("request_airdrop_transaction failed: {:?}", err);
             Error::internal_error()
         })?;
-        let signature = transaction.signatures[0];
 
         let wire_transaction = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
             Error::internal_error()
         })?;
 
-        meta.send_transaction_service
-            .send(signature, wire_transaction, last_valid_slot);
-
-        Ok(signature.to_string())
+        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
     }
 
     fn send_transaction(
@@ -1706,7 +1717,6 @@ impl RpcSol for RpcSolImpl {
         debug!("send_transaction rpc request received");
         let config = config.unwrap_or_default();
         let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
-        let signature = transaction.signatures[0];
         let bank = &*meta.bank(None)?;
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
@@ -1727,7 +1737,8 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction) {
+            if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction.clone())
+            {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -1740,9 +1751,7 @@ impl RpcSol for RpcSolImpl {
             }
         }
 
-        meta.send_transaction_service
-            .send(signature, wire_transaction, last_valid_slot);
-        Ok(signature.to_string())
+        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
     }
 
     fn simulate_transaction(
@@ -3385,7 +3394,7 @@ pub mod tests {
             )),
         );
 
-        let mut bad_transaction =
+        let bad_transaction =
             system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
 
         // sendTransaction will fail because the blockhash is invalid
@@ -3400,6 +3409,10 @@ pub mod tests {
                 r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: TransactionError::BlockhashNotFound"},"id":1}"#.to_string(),
             )
         );
+
+        let recent_blockhash = bank_forks.read().unwrap().root_bank().last_blockhash();
+        let mut bad_transaction =
+            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, recent_blockhash);
 
         // sendTransaction will fail due to poor node health
         health.stub_set_health_status(Some(RpcHealthStatus::Behind));
@@ -3437,11 +3450,26 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
             bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         assert_eq!(
             res,
             Some(
                 r#"{"jsonrpc":"2.0","result":"1111111111111111111111111111111111111111111111111111111111111111","id":1}"#.to_string(),
+            )
+        );
+
+        // sendTransaction will fail due to no signer. Skip preflight so signature verification
+        // doesn't catch it
+        bad_transaction.signatures.clear();
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta);
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction is not signed"},"id":1}"#.to_string(),
             )
         );
     }
