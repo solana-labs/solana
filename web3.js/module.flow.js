@@ -66,6 +66,11 @@ declare module '@solana/web3.js' {
     skipPreflight: ?boolean,
   };
 
+  declare export type ConfirmedSignaturesForAddress2Options = {
+    before?: TransactionSignature,
+    limit?: number,
+  };
+
   declare export type TokenAccountsFilter =
     | {
         mint: PublicKey,
@@ -101,6 +106,13 @@ declare module '@solana/web3.js' {
     slot: number,
     err: TransactionError | null,
     confirmations: number | null,
+  };
+
+  declare export type ConfirmedSignatureInfo = {
+    signature: string,
+    slot: number,
+    err: TransactionError | null,
+    memo: string | null,
   };
 
   declare export type BlockhashAndFeeCalculator = {
