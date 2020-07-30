@@ -287,7 +287,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, &[entry], randomize_txs, None).unwrap();
+    process_entries(&bank, &[entry], randomize_txs, None, None).unwrap();
 }
 
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {

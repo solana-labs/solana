@@ -10,7 +10,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
-    replay_stage::{ReplayStage, ReplayStageConfig, ReplayVotesSender},
+    replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -21,7 +21,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::TransactionStatusSender,
+    blockstore_processor::{ReplayVotesSender, TransactionStatusSender},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{

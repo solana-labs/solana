@@ -27,7 +27,7 @@ use solana_ledger::{
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
-    blockstore_processor::{self, TransactionStatusSender},
+    blockstore_processor::{self, ReplayVotesSender, TransactionStatusSender},
     create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -223,6 +223,7 @@ impl Validator {
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
+        let (replay_votes_sender, replay_votes_receiver) = unbounded();
         let (
             genesis_config,
             bank_forks,
@@ -237,7 +238,7 @@ impl Validator {
                 rewards_recorder_sender,
                 rewards_recorder_service,
             },
-        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
+        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit, &replay_votes_sender);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -407,7 +408,6 @@ impl Validator {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
-        let (replay_votes_sender, replay_votes_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -574,6 +574,7 @@ fn new_banks_from_ledger(
     ledger_path: &Path,
     poh_verify: bool,
     exit: &Arc<AtomicBool>,
+    replay_votes_sender: &ReplayVotesSender,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -635,6 +636,7 @@ fn new_banks_from_ledger(
         transaction_history_services
             .transaction_status_sender
             .clone(),
+        Some(&replay_votes_sender),
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);

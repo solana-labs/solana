@@ -8,13 +8,15 @@ use crate::{
     cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
-    replay_stage::ReplayVotesReceiver,
     rpc_subscriptions::RpcSubscriptions,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_ledger::{
+    blockstore::Blockstore,
+    blockstore_processor::{ReplayVotesReceiver, TransactionStatusSender},
+};
 use solana_runtime::bank_forks::BankForks;
 use std::{
     net::UdpSocket,
