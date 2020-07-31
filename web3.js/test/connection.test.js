@@ -1,5 +1,6 @@
 // @flow
 import bs58 from 'bs58';
+import {Token, u64} from '@solana/spl-token';
 
 import {
   Account,
@@ -1259,6 +1260,129 @@ test('get supply', async () => {
   expect(supply.circulating).toBeGreaterThan(0);
   expect(supply.nonCirculating).toBeGreaterThan(0);
   expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
+});
+
+const TOKEN_PROGRAM_ID = new PublicKey(
+  'TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o',
+);
+
+test('token methods', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const payerAccount = new Account();
+  await connection.confirmTransaction(
+    await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
+    0,
+  );
+
+  const mintOwner = new Account();
+  const accountOwner = new Account();
+  const [token, tokenAccount] = await Token.createMint(
+    connection,
+    payerAccount,
+    mintOwner.publicKey,
+    accountOwner.publicKey,
+    new u64(10000),
+    2,
+    TOKEN_PROGRAM_ID,
+    false,
+  );
+
+  await Token.createMint(
+    connection,
+    payerAccount,
+    mintOwner.publicKey,
+    accountOwner.publicKey,
+    new u64(10000),
+    2,
+    TOKEN_PROGRAM_ID,
+    false,
+  );
+
+  const tokenAccountDest = await token.createAccount(accountOwner.publicKey);
+  await token.transfer(
+    tokenAccount,
+    tokenAccountDest,
+    accountOwner,
+    [],
+    new u64(1),
+  );
+
+  const supply = (await connection.getTokenSupply(token.publicKey, 'recent'))
+    .value;
+  expect(supply).toEqual(10000);
+
+  const newAccount = new Account();
+  await expect(
+    connection.getTokenSupply(newAccount.publicKey, 'recent'),
+  ).rejects.toThrow();
+
+  const balance = (
+    await connection.getTokenAccountBalance(tokenAccount, 'recent')
+  ).value;
+  expect(balance).toEqual(9999);
+
+  await expect(
+    connection.getTokenAccountBalance(newAccount.publicKey, 'recent'),
+  ).rejects.toThrow();
+
+  const accountsWithMintFilter = (
+    await connection.getTokenAccountsByOwner(
+      accountOwner.publicKey,
+      {mint: token.publicKey},
+      'recent',
+    )
+  ).value;
+  expect(accountsWithMintFilter.length).toEqual(2);
+  for (const {account} of accountsWithMintFilter) {
+    expect(account.data.mint.toBase58()).toEqual(token.publicKey.toBase58());
+    expect(account.data.owner.toBase58()).toEqual(
+      accountOwner.publicKey.toBase58(),
+    );
+  }
+
+  const accountsWithProgramFilter = (
+    await connection.getTokenAccountsByOwner(
+      accountOwner.publicKey,
+      {programId: TOKEN_PROGRAM_ID},
+      'recent',
+    )
+  ).value;
+  expect(accountsWithProgramFilter.length).toEqual(3);
+  for (const {account} of accountsWithProgramFilter) {
+    expect(account.data.owner.toBase58()).toEqual(
+      accountOwner.publicKey.toBase58(),
+    );
+  }
+
+  const noAccounts = (
+    await connection.getTokenAccountsByOwner(
+      newAccount.publicKey,
+      {mint: token.publicKey},
+      'recent',
+    )
+  ).value;
+  expect(noAccounts.length).toEqual(0);
+
+  await expect(
+    connection.getTokenAccountsByOwner(
+      accountOwner.publicKey,
+      {mint: newAccount.publicKey},
+      'recent',
+    ),
+  ).rejects.toThrow();
+
+  await expect(
+    connection.getTokenAccountsByOwner(
+      accountOwner.publicKey,
+      {programId: newAccount.publicKey},
+      'recent',
+    ),
+  ).rejects.toThrow();
 });
 
 test('get largest accounts', async () => {

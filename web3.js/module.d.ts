@@ -50,6 +50,14 @@ declare module '@solana/web3.js' {
     skipPreflight?: boolean;
   };
 
+  export type TokenAccountsFilter =
+    | {
+        mint: PublicKey;
+      }
+    | {
+        programId: PublicKey;
+      };
+
   export type RpcResponseAndContext<T> = {
     context: Context;
     value: T;
@@ -150,6 +158,23 @@ declare module '@solana/web3.js' {
     root: number;
   };
 
+  export type TokenAccountInfo = {
+    mint: PublicKey;
+    owner: PublicKey;
+    amount: number;
+    delegate: null | PublicKey;
+    delegatedAmount: number;
+    isInitialized: boolean;
+    isNative: boolean;
+  };
+
+  export type TokenAccount = {
+    executable: boolean;
+    owner: PublicKey;
+    lamports: number;
+    data: TokenAccountInfo;
+  };
+
   export type AccountChangeCallback = (
     accountInfo: AccountInfo,
     context: Context,
@@ -239,6 +264,21 @@ declare module '@solana/web3.js' {
     getMinimumLedgerSlot(): Promise<number>;
     getFirstAvailableBlock(): Promise<number>;
     getSupply(commitment?: Commitment): Promise<RpcResponseAndContext<Supply>>;
+    getTokenSupply(
+      tokenMintAddress: PublicKey,
+      commitment?: Commitment,
+    ): Promise<RpcResponseAndContext<number>>;
+    getTokenAccountBalance(
+      tokenAddress: PublicKey,
+      commitment?: Commitment,
+    ): Promise<RpcResponseAndContext<number>>;
+    getTokenAccountsByOwner(
+      ownerAddress: PublicKey,
+      filter: TokenAccountsFilter,
+      commitment?: Commitment,
+    ): Promise<
+      RpcResponseAndContext<Array<{pubkey: PublicKey; account: TokenAccount}>>
+    >;
     getLargestAccounts(
       config?: GetLargestAccountsConfig,
     ): Promise<RpcResponseAndContext<Array<AccountBalancePair>>>;

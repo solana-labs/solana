@@ -97,6 +97,7 @@
     "@babel/preset-flow": "^7.0.0",
     "@commitlint/config-conventional": "^9.0.1",
     "@commitlint/travis-cli": "^9.0.1",
+    "@solana/spl-token": "^0.0.4",
     "@typescript-eslint/eslint-plugin": "^2.18.0",
     "@typescript-eslint/parser": "^2.18.0",
     "acorn": "^7.0.0",
