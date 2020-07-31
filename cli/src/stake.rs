@@ -1441,6 +1441,14 @@ pub fn build_stake_state(
             let (active_stake, activating_stake, deactivating_stake) = stake
                 .delegation
                 .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+<<<<<<< HEAD
+=======
+            let lockup = if lockup.is_in_force(clock, None) {
+                Some(lockup.into())
+            } else {
+                None
+            };
+>>>>>>> 61d9d219f... Withdraw authority no longer implies a custodian (#11302)
             CliStakeState {
                 stake_type: CliStakeType::Stake,
                 account_balance,
@@ -1485,6 +1493,7 @@ pub fn build_stake_state(
             rent_exempt_reserve,
             authorized,
             lockup,
+<<<<<<< HEAD
         }) => CliStakeState {
             stake_type: CliStakeType::Initialized,
             account_balance,
@@ -1494,6 +1503,24 @@ pub fn build_stake_state(
             rent_exempt_reserve: Some(*rent_exempt_reserve),
             ..CliStakeState::default()
         },
+=======
+        }) => {
+            let lockup = if lockup.is_in_force(clock, None) {
+                Some(lockup.into())
+            } else {
+                None
+            };
+            CliStakeState {
+                stake_type: CliStakeType::Initialized,
+                account_balance,
+                authorized: Some(authorized.into()),
+                lockup,
+                use_lamports_unit,
+                rent_exempt_reserve: Some(*rent_exempt_reserve),
+                ..CliStakeState::default()
+            }
+        }
+>>>>>>> 61d9d219f... Withdraw authority no longer implies a custodian (#11302)
     }
 }
 

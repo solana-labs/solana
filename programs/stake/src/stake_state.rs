@@ -111,9 +111,11 @@ pub struct Lockup {
 }
 
 impl Lockup {
-    pub fn is_in_force(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> bool {
-        (self.unix_timestamp > clock.unix_timestamp || self.epoch > clock.epoch)
-            && !signers.contains(&self.custodian)
+    pub fn is_in_force(&self, clock: &Clock, custodian: Option<&Pubkey>) -> bool {
+        if custodian == Some(&self.custodian) {
+            return false;
+        }
+        self.unix_timestamp > clock.unix_timestamp || self.epoch > clock.epoch
     }
 }
 
@@ -591,7 +593,8 @@ pub trait StakeAccount {
         to: &KeyedAccount,
         clock: &Clock,
         stake_history: &StakeHistory,
-        signers: &HashSet<Pubkey>,
+        withdraw_authority: &KeyedAccount,
+        custodian: Option<&KeyedAccount>,
     ) -> Result<(), InstructionError>;
 }
 
@@ -819,11 +822,19 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         to: &KeyedAccount,
         clock: &Clock,
         stake_history: &StakeHistory,
-        signers: &HashSet<Pubkey>,
+        withdraw_authority: &KeyedAccount,
+        custodian: Option<&KeyedAccount>,
     ) -> Result<(), InstructionError> {
+        let mut signers = HashSet::new();
+        let withdraw_authority_pubkey = withdraw_authority
+            .signer_key()
+            .ok_or(InstructionError::MissingRequiredSignature)?;
+        signers.insert(*withdraw_authority_pubkey);
+
         let (lockup, reserve, is_staked) = match self.state()? {
             StakeState::Stake(meta, stake) => {
-                meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
+                meta.authorized
+                    .check(&signers, StakeAuthorize::Withdrawer)?;
                 // if we have a deactivation epoch and we're in cooldown
                 let staked = if clock.epoch >= stake.delegation.deactivation_epoch {
                     stake.delegation.stake(clock.epoch, Some(stake_history))
@@ -837,7 +848,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 (meta.lockup, staked + meta.rent_exempt_reserve, staked != 0)
             }
             StakeState::Initialized(meta) => {
-                meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
+                meta.authorized
+                    .check(&signers, StakeAuthorize::Withdrawer)?;
 
                 (meta.lockup, meta.rent_exempt_reserve, false)
             }
@@ -852,7 +864,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         // verify that lockup has expired or that the withdrawal is signed by
         //   the custodian, both epoch and unix_timestamp must have passed
-        if lockup.is_in_force(&clock, signers) {
+        let custodian_pubkey = custodian.and_then(|keyed_account| keyed_account.signer_key());
+        if lockup.is_in_force(&clock, custodian_pubkey) {
             return Err(StakeError::LockupInForce.into());
         }
 
@@ -1935,7 +1948,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &HashSet::default(),
+                &to_keyed_account, // unsigned account as withdraw authority
+                None,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1943,14 +1957,14 @@ mod tests {
         // signed keyed account and uninitialized should work
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
-        let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.withdraw(
                 stake_lamports,
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Ok(())
         );
@@ -1983,7 +1997,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -2000,6 +2015,7 @@ mod tests {
         vote_keyed_account
             .set_state(&VoteStateVersions::Current(Box::new(VoteState::default())))
             .unwrap();
+        let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.delegate(
                 &vote_keyed_account,
@@ -2022,7 +2038,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Ok(())
         );
@@ -2038,7 +2055,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers
+                &stake_keyed_account,
+                None,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -2056,7 +2074,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers
+                &stake_keyed_account,
+                None,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -2069,7 +2088,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers
+                &stake_keyed_account,
+                None,
             ),
             Ok(())
         );
@@ -2140,7 +2160,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &stake_history,
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Err(InstructionError::InsufficientFunds)
         );
@@ -2162,14 +2183,14 @@ mod tests {
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,
                 &to_keyed_account,
                 &Clock::default(),
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -2203,8 +2224,6 @@ mod tests {
 
         let mut clock = Clock::default();
 
-        let signers = vec![stake_pubkey].into_iter().collect();
-
         // lockup is still in force, can't withdraw
         assert_eq!(
             stake_keyed_account.withdraw(
@@ -2212,21 +2231,23 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Err(StakeError::LockupInForce.into())
         );
 
         {
-            let mut signers_with_custodian = signers.clone();
-            signers_with_custodian.insert(custodian);
+            let custodian_account = Account::new_ref(1, 0, &system_program::id());
+            let custodian_keyed_account = KeyedAccount::new(&custodian, true, &custodian_account);
             assert_eq!(
                 stake_keyed_account.withdraw(
                     total_lamports,
                     &to_keyed_account,
                     &clock,
                     &StakeHistory::default(),
-                    &signers_with_custodian,
+                    &stake_keyed_account,
+                    Some(&custodian_keyed_account),
                 ),
                 Ok(())
             );
@@ -2243,10 +2264,68 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers,
+                &stake_keyed_account,
+                None,
             ),
             Ok(())
         );
+    }
+
+    #[test]
+    fn test_withdraw_identical_authorities() {
+        let stake_pubkey = Pubkey::new_rand();
+        let custodian = stake_pubkey;
+        let total_lamports = 100;
+        let stake_account = Account::new_ref_data_with_space(
+            total_lamports,
+            &StakeState::Initialized(Meta {
+                lockup: Lockup {
+                    unix_timestamp: 0,
+                    epoch: 1,
+                    custodian,
+                },
+                ..Meta::auto(&stake_pubkey)
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let to = Pubkey::new_rand();
+        let to_account = Account::new_ref(1, 0, &system_program::id());
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+        let clock = Clock::default();
+
+        // lockup is still in force, even though custodian is the same as the withdraw authority
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                total_lamports,
+                &to_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &stake_keyed_account,
+                None,
+            ),
+            Err(StakeError::LockupInForce.into())
+        );
+
+        {
+            let custodian_keyed_account = KeyedAccount::new(&custodian, true, &stake_account);
+            assert_eq!(
+                stake_keyed_account.withdraw(
+                    total_lamports,
+                    &to_keyed_account,
+                    &clock,
+                    &StakeHistory::default(),
+                    &stake_keyed_account,
+                    Some(&custodian_keyed_account),
+                ),
+                Ok(())
+            );
+        }
     }
 
     #[test]
@@ -2568,8 +2647,6 @@ mod tests {
             assert_eq!(authorized.staker, stake_pubkey2);
         }
 
-        let signers2 = vec![stake_pubkey2].into_iter().collect();
-
         // Test that withdrawal to account fails without authorized withdrawer
         assert_eq!(
             stake_keyed_account.withdraw(
@@ -2577,10 +2654,13 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers, // old signer
+                &stake_keyed_account, // old signer
+                None,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
+
+        let stake_keyed_account2 = KeyedAccount::new(&stake_pubkey2, true, &stake_account);
 
         // Test a successful action by the currently authorized withdrawer
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
@@ -2590,7 +2670,8 @@ mod tests {
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
-                &signers2,
+                &stake_keyed_account2,
+                None,
             ),
             Ok(())
         );
@@ -3317,7 +3398,6 @@ mod tests {
     #[test]
     fn test_lockup_is_expired() {
         let custodian = Pubkey::new_rand();
-        let signers = [custodian].iter().cloned().collect::<HashSet<_>>();
         let lockup = Lockup {
             epoch: 1,
             unix_timestamp: 1,
@@ -3331,7 +3411,7 @@ mod tests {
                     unix_timestamp: 0,
                     ..Clock::default()
                 },
-                &HashSet::new()
+                None
             ),
             true
         );
@@ -3343,7 +3423,7 @@ mod tests {
                     unix_timestamp: 0,
                     ..Clock::default()
                 },
-                &HashSet::new()
+                None
             ),
             true
         );
@@ -3355,7 +3435,7 @@ mod tests {
                     unix_timestamp: 2,
                     ..Clock::default()
                 },
-                &HashSet::new()
+                None
             ),
             true
         );
@@ -3367,7 +3447,7 @@ mod tests {
                     unix_timestamp: 1,
                     ..Clock::default()
                 },
-                &HashSet::new()
+                None
             ),
             false
         );
@@ -3379,7 +3459,7 @@ mod tests {
                     unix_timestamp: 0,
                     ..Clock::default()
                 },
-                &signers,
+                Some(&custodian),
             ),
             false,
         );

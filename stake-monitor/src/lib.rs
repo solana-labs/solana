@@ -452,7 +452,7 @@ mod test {
         let instructions = stake_instruction::create_account(
             &payer.pubkey(),
             &stake3_keypair.pubkey(),
-            &Authorized::auto(&payer.pubkey()),
+            &Authorized::auto(&stake3_keypair.pubkey()),
             &Lockup::default(),
             one_sol,
         );
