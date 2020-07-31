@@ -210,18 +210,22 @@ fn parse_signers(
 mod test {
     use super::*;
     use solana_sdk::instruction::CompiledInstruction;
-    use spl_sdk::{
-        instruction::CompiledInstruction as SplCompiledInstruction, message::Message,
-        pubkey::Pubkey as SplPubkey,
+    use spl_token_v1_0::{
+        instruction::*,
+        solana_sdk::{
+            instruction::CompiledInstruction as SplTokenCompiledInstruction, message::Message,
+            pubkey::Pubkey as SplTokenPubkey,
+        },
     };
-    use spl_token_v1_0::instruction::*;
     use std::str::FromStr;
 
-    fn convert_pubkey(pubkey: Pubkey) -> SplPubkey {
-        SplPubkey::from_str(&pubkey.to_string()).unwrap()
+    fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
+        SplTokenPubkey::from_str(&pubkey.to_string()).unwrap()
     }
 
-    fn convert_compiled_instruction(instruction: &SplCompiledInstruction) -> CompiledInstruction {
+    fn convert_compiled_instruction(
+        instruction: &SplTokenCompiledInstruction,
+    ) -> CompiledInstruction {
         CompiledInstruction {
             program_id_index: instruction.program_id_index,
             accounts: instruction.accounts.clone(),
@@ -395,52 +399,50 @@ mod test {
         );
 
         // Test Approve, incl multisig
-        // There is a bug in spl_token. Uncomment the following cases when fixed
+        let approve_ix = approve(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[approve_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(&compiled_instruction, &keys).unwrap(),
+            json!({
+                "type": "approve",
+                "source": keys[1].to_string(),
+                "delegate": keys[2].to_string(),
+                "owner": keys[0].to_string(),
+                "amount": 42,
+            })
+        );
 
-        // let approve_ix = approve(
-        //     &spl_token_v1_0::id(),
-        //     &convert_pubkey(keys[1]),
-        //     &convert_pubkey(keys[2]),
-        //     &convert_pubkey(keys[0]),
-        //     &[],
-        //     42,
-        // )
-        // .unwrap();
-        // let message = Message::new(&[approve_ix], None);
-        // let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        // assert_eq!(
-        //     parse_token(&compiled_instruction, &keys).unwrap(),
-        //     json!({
-        //         "type": "approve",
-        //         "source": keys[1].to_string(),
-        //         "delegate": keys[2].to_string(),
-        //         "owner": keys[0].to_string(),
-        //         "amount": 42,
-        //     })
-        // );
-        //
-        // let approve_ix = approve(
-        //     &spl_token_v1_0::id(),
-        //     &convert_pubkey(keys[2]),
-        //     &convert_pubkey(keys[3]),
-        //     &convert_pubkey(keys[4]),
-        //     &[&convert_pubkey(keys[0]), &convert_pubkey(keys[1])],
-        //     42,
-        // )
-        // .unwrap();
-        // let message = Message::new(&[approve_ix], None);
-        // let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        // assert_eq!(
-        //     parse_token(&compiled_instruction, &keys).unwrap(),
-        //     json!({
-        //         "type": "approve",
-        //         "source": keys[2].to_string(),
-        //         "delegate": keys[3].to_string(),
-        //         "multisigOwner": keys[4].to_string(),
-        //         "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-        //         "amount": 42,
-        //     })
-        // );
+        let approve_ix = approve(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[3]),
+            &convert_pubkey(keys[4]),
+            &[&convert_pubkey(keys[0]), &convert_pubkey(keys[1])],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[approve_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(&compiled_instruction, &keys).unwrap(),
+            json!({
+                "type": "approve",
+                "source": keys[2].to_string(),
+                "delegate": keys[3].to_string(),
+                "multisigOwner": keys[4].to_string(),
+                "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                "amount": 42,
+            })
+        );
 
         // Test Revoke
         let revoke_ix = revoke(
