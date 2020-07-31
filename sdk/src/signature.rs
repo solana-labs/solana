@@ -57,16 +57,18 @@ impl Signature {
         Self(GenericArray::clone_from_slice(&signature_slice))
     }
 
+    pub(self) fn verify_verbose(
+        &self,
+        pubkey_bytes: &[u8],
+        message_bytes: &[u8],
+    ) -> Result<(), ed25519_dalek::SignatureError> {
+        let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice())?;
+        publickey.verify_strict(message_bytes, &signature)
+    }
+
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
-        let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
-        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice());
-        if pubkey.is_err() || signature.is_err() {
-            return false;
-        }
-        pubkey
-            .unwrap()
-            .verify_strict(message_bytes, &signature.unwrap())
-            .is_ok()
+        self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
     }
 }
 
