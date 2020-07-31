@@ -23,14 +23,14 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         let stake_account = StakeState::from(&account).unwrap_or_default();
         match stake_account {
             StakeState::Initialized(meta) => {
-                if meta.lockup.is_in_force(&clock, &HashSet::default())
+                if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
                 }
             }
             StakeState::Stake(meta, _stake) => {
-                if meta.lockup.is_in_force(&clock, &HashSet::default())
+                if meta.lockup.is_in_force(&clock, None)
                     || withdraw_authority_list.contains(&meta.authorized.withdrawer)
                 {
                     non_circulating_accounts_set.insert(*pubkey);
