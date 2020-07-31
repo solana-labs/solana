@@ -24,6 +24,14 @@ export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
+type TokenAccountsFilter =
+  | {
+      mint: PublicKey,
+    }
+  | {
+      programId: PublicKey,
+    };
+
 /**
  * Extra contextual information for RPC responses
  *
@@ -501,6 +509,77 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
 );
 
 /**
+ * Information describing a token account
+ */
+type TokenAccountInfo = {|
+  mint: PublicKey,
+  owner: PublicKey,
+  amount: number,
+  delegate: null | PublicKey,
+  delegatedAmount: number,
+  isInitialized: boolean,
+  isNative: boolean,
+|};
+
+/**
+ * Information describing an account with token account data
+ *
+ * @typedef {Object} TokenAccount
+ * @property {number} lamports Number of lamports assigned to the account
+ * @property {PublicKey} owner Identifier of the program that owns the account
+ * @property {TokenAccountInfo} data Token account data
+ * @property {boolean} executable `true` if this account's data contains a loaded program
+ */
+type TokenAccount = {
+  executable: boolean,
+  owner: PublicKey,
+  lamports: number,
+  data: TokenAccountInfo,
+};
+
+const TokenAccountResult = struct({
+  token: struct({
+    account: struct({
+      mint: 'string',
+      owner: 'string',
+      amount: 'number',
+      delegate: struct.union(['string', 'null']),
+      delegatedAmount: 'number',
+      isInitialized: 'boolean',
+      isNative: 'boolean',
+    }),
+  }),
+});
+
+/**
+ * Expected JSON RPC response for the "getTokenAccountBalance" message
+ */
+const GetTokenAccountBalance = jsonRpcResultAndContext('number');
+
+/**
+ * Expected JSON RPC response for the "getTokenSupply" message
+ */
+const GetTokenSupplyRpcResult = jsonRpcResultAndContext('number');
+
+/**
+ * Expected JSON RPC response for the "getTokenAccountsByOwner" message
+ */
+const GetTokenAccountsByOwner = jsonRpcResultAndContext(
+  struct.array([
+    struct({
+      pubkey: 'string',
+      account: struct({
+        executable: 'boolean',
+        owner: 'string',
+        lamports: 'number',
+        data: TokenAccountResult,
+        rentEpoch: 'number?',
+      }),
+    }),
+  ]),
+);
+
+/**
  * Pair of an account address and its balance
  *
  * @typedef {Object} AccountBalancePair
@@ -541,7 +620,7 @@ const AccountInfoResult = struct({
   executable: 'boolean',
   owner: 'string',
   lamports: 'number',
-  data: 'string',
+  data: 'any',
   rentEpoch: 'number?',
 });
 
@@ -1183,6 +1262,109 @@ export class Connection {
       account => new PublicKey(account),
     );
     return res.result;
+  }
+
+  /**
+   * Fetch the current supply of a token mint
+   */
+  async getTokenSupply(
+    tokenMintAddress: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<number>> {
+    const args = this._argsWithCommitment(
+      [tokenMintAddress.toBase58()],
+      commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getTokenSupply', args);
+    const res = GetTokenSupplyRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get token supply: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the current balance of a token account
+   */
+  async getTokenAccountBalance(
+    tokenAddress: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<number>> {
+    const args = this._argsWithCommitment(
+      [tokenAddress.toBase58()],
+      commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
+    const res = GetTokenAccountBalance(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get token account balance: ' + res.error.message,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch all the token accounts owned by the specified account
+   *
+   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>>}
+   */
+  async getTokenAccountsByOwner(
+    ownerAddress: PublicKey,
+    filter: TokenAccountsFilter,
+    commitment: ?Commitment,
+  ): Promise<
+    RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>,
+  > {
+    let _args = [ownerAddress.toBase58()];
+
+    // Strip flow types to make flow happy
+    ((filter: any) => {
+      if ('mint' in filter) {
+        _args.push({mint: filter.mint.toBase58()});
+      } else {
+        _args.push({programId: filter.programId.toBase58()});
+      }
+    })(filter);
+
+    const args = this._argsWithCommitment(_args, commitment);
+    const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
+    const res = GetTokenAccountsByOwner(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get token accounts owned by account ' +
+          ownerAddress.toBase58() +
+          ': ' +
+          res.error.message,
+      );
+    }
+
+    const {result} = res;
+    const {context, value} = result;
+    assert(typeof result !== 'undefined');
+
+    return {
+      context,
+      value: value.map(result => {
+        const data = result.account.data.token.account;
+        return {
+          pubkey: new PublicKey(result.pubkey),
+          account: {
+            executable: result.account.executable,
+            owner: new PublicKey(result.account.owner),
+            lamports: result.account.lamports,
+            data: {
+              ...data,
+              mint: new PublicKey(data.mint),
+              owner: new PublicKey(data.owner),
+              delegate: data.delegate ? new PublicKey(data.delegate) : null,
+            },
+          },
+        };
+      }),
+    };
   }
 
   /**
