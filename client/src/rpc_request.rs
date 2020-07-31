@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use thiserror::Error;
 
@@ -36,6 +37,10 @@ pub enum RpcRequest {
     GetSlotsPerSegment,
     GetStoragePubkeysForSlot,
     GetSupply,
+    GetTokenAccountBalance,
+    GetTokenAccountsByDelegate,
+    GetTokenAccountsByOwner,
+    GetTokenSupply,
     GetTotalSupply,
     GetTransactionCount,
     GetVersion,
@@ -83,6 +88,10 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetSlotsPerSegment => "getSlotsPerSegment",
             RpcRequest::GetStoragePubkeysForSlot => "getStoragePubkeysForSlot",
             RpcRequest::GetSupply => "getSupply",
+            RpcRequest::GetTokenAccountBalance => "getTokenAccountBalance",
+            RpcRequest::GetTokenAccountsByDelegate => "getTokenAccountsByDelegate",
+            RpcRequest::GetTokenAccountsByOwner => "getTokenAccountsByOwner",
+            RpcRequest::GetTokenSupply => "getTokenSupply",
             RpcRequest::GetTotalSupply => "getTotalSupply",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
@@ -131,9 +140,16 @@ pub enum RpcError {
     ForUser(String), /* "direct-to-user message" */
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum TokenAccountsFilter {
+    Mint(Pubkey),
+    ProgramId(Pubkey),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rpc_config::RpcTokenAccountsFilter;
     use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
     #[test]
@@ -197,5 +213,16 @@ mod tests {
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(1, json!([addr, commitment_config]));
         assert_eq!(request["params"], json!([addr, commitment_config]));
+
+        // Test request with CommitmentConfig and params
+        let test_request = RpcRequest::GetTokenAccountsByOwner;
+        let mint = Pubkey::new_rand();
+        let token_account_filter = RpcTokenAccountsFilter::Mint(mint.to_string());
+        let request = test_request
+            .build_request_json(1, json!([addr, token_account_filter, commitment_config]));
+        assert_eq!(
+            request["params"],
+            json!([addr, token_account_filter, commitment_config])
+        );
     }
 }

@@ -13,7 +13,7 @@ use solana_client::{
     rpc_config::*,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::{
-        DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
+        TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
@@ -990,11 +990,6 @@ fn verify_signature(input: &str) -> Result<Signature> {
     input
         .parse()
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
-}
-
-pub enum TokenAccountsFilter {
-    Mint(Pubkey),
-    ProgramId(Pubkey),
 }
 
 fn verify_token_account_filter(

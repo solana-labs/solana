@@ -2,8 +2,8 @@ use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     http_sender::HttpSender,
     mock_sender::{MockSender, Mocks},
-    rpc_config::{RpcLargestAccountsConfig, RpcSendTransactionConfig},
-    rpc_request::{RpcError, RpcRequest},
+    rpc_config::{RpcLargestAccountsConfig, RpcSendTransactionConfig, RpcTokenAccountsFilter},
+    rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
     rpc_response::*,
     rpc_sender::RpcSender,
 };
@@ -503,17 +503,7 @@ impl RpcClient {
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
         let accounts: Vec<RpcKeyedAccount> =
             self.send(RpcRequest::GetProgramAccounts, json!([pubkey.to_string()]))?;
-        let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
-        for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
-            let pubkey = pubkey.parse().map_err(|_| {
-                ClientError::new_with_request(
-                    RpcError::ParseError("Pubkey".to_string()).into(),
-                    RpcRequest::GetProgramAccounts,
-                )
-            })?;
-            pubkey_accounts.push((pubkey, account.decode().unwrap()));
-        }
-        Ok(pubkey_accounts)
+        parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts)
     }
 
     /// Request the transaction count.
@@ -658,6 +648,125 @@ impl RpcClient {
             )
         })?;
         Ok(hash)
+    }
+
+    pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
+        Ok(self
+            .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_account_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<u64> {
+        self.send(
+            RpcRequest::GetTokenAccountBalance,
+            json!([pubkey.to_string(), commitment_config]),
+        )
+    }
+
+    pub fn get_token_accounts_by_delegate(
+        &self,
+        delegate: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
+    ) -> ClientResult<Vec<(Pubkey, Account)>> {
+        Ok(self
+            .get_token_accounts_by_delegate_with_commitment(
+                delegate,
+                token_account_filter,
+                CommitmentConfig::default(),
+            )?
+            .value)
+    }
+
+    pub fn get_token_accounts_by_delegate_with_commitment(
+        &self,
+        delegate: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Vec<(Pubkey, Account)>> {
+        let token_account_filter = match token_account_filter {
+            TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
+            TokenAccountsFilter::ProgramId(program_id) => {
+                RpcTokenAccountsFilter::ProgramId(program_id.to_string())
+            }
+        };
+        let Response {
+            context,
+            value: accounts,
+        } = self.send(
+            RpcRequest::GetTokenAccountsByDelegate,
+            json!([
+                delegate.to_string(),
+                token_account_filter,
+                commitment_config
+            ]),
+        )?;
+        let pubkey_accounts =
+            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?;
+        Ok(Response {
+            context,
+            value: pubkey_accounts,
+        })
+    }
+
+    pub fn get_token_accounts_by_owner(
+        &self,
+        owner: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
+    ) -> ClientResult<Vec<(Pubkey, Account)>> {
+        Ok(self
+            .get_token_accounts_by_owner_with_commitment(
+                owner,
+                token_account_filter,
+                CommitmentConfig::default(),
+            )?
+            .value)
+    }
+
+    pub fn get_token_accounts_by_owner_with_commitment(
+        &self,
+        owner: &Pubkey,
+        token_account_filter: TokenAccountsFilter,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Vec<(Pubkey, Account)>> {
+        let token_account_filter = match token_account_filter {
+            TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
+            TokenAccountsFilter::ProgramId(program_id) => {
+                RpcTokenAccountsFilter::ProgramId(program_id.to_string())
+            }
+        };
+        let Response {
+            context,
+            value: accounts,
+        } = self.send(
+            RpcRequest::GetTokenAccountsByOwner,
+            json!([owner.to_string(), token_account_filter, commitment_config]),
+        )?;
+        let pubkey_accounts = parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByOwner)?;
+        Ok(Response {
+            context,
+            value: pubkey_accounts,
+        })
+    }
+
+    pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<u64> {
+        Ok(self
+            .get_token_supply_with_commitment(mint, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_supply_with_commitment(
+        &self,
+        mint: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<u64> {
+        self.send(
+            RpcRequest::GetTokenSupply,
+            json!([mint.to_string(), commitment_config]),
+        )
     }
 
     fn poll_balance_with_timeout_and_commitment(
@@ -997,6 +1106,23 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
     } else {
         format!("http://{}", rpc_addr)
     }
+}
+
+fn parse_keyed_accounts(
+    accounts: Vec<RpcKeyedAccount>,
+    request: RpcRequest,
+) -> ClientResult<Vec<(Pubkey, Account)>> {
+    let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
+    for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
+        let pubkey = pubkey.parse().map_err(|_| {
+            ClientError::new_with_request(
+                RpcError::ParseError("Pubkey".to_string()).into(),
+                request,
+            )
+        })?;
+        pubkey_accounts.push((pubkey, account.decode().unwrap()));
+    }
+    Ok(pubkey_accounts)
 }
 
 #[cfg(test)]
