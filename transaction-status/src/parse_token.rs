@@ -9,8 +9,19 @@ pub fn parse_token(
 ) -> Result<Value, ParseInstructionError> {
     let token_instruction = TokenInstruction::unpack(&instruction.data)
         .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken))?;
-    let result = match token_instruction {
+    if instruction.accounts.len() > account_keys.len() {
+        // Runtime should prevent this from ever happening
+        return Err(ParseInstructionError::InstructionKeyMismatch(
+            ParsableProgram::SplToken,
+        ));
+    }
+    match token_instruction {
         TokenInstruction::InitializeMint { amount, decimals } => {
+            if instruction.accounts.len() < 2 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "initializeMint",
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -35,27 +46,44 @@ pub fn parse_token(
                     );
                 }
             }
-            value
+            Ok(value)
         }
-        TokenInstruction::InitializeAccount => json!({
-            "type": "initializeAccount",
-            "account": account_keys[instruction.accounts[0] as usize].to_string(),
-            "mint": account_keys[instruction.accounts[1] as usize].to_string(),
-            "owner": account_keys[instruction.accounts[2] as usize].to_string(),
-        }),
+        TokenInstruction::InitializeAccount => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            Ok(json!({
+                "type": "initializeAccount",
+                "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                "mint": account_keys[instruction.accounts[1] as usize].to_string(),
+                "owner": account_keys[instruction.accounts[2] as usize].to_string(),
+            }))
+        }
         TokenInstruction::InitializeMultisig { m } => {
+            if instruction.accounts.len() < 2 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut signers: Vec<String> = vec![];
             for i in instruction.accounts[1..].iter() {
                 signers.push(account_keys[*i as usize].to_string());
             }
-            json!({
+            Ok(json!({
                 "type": "initializeMultisig",
                 "multisig": account_keys[instruction.accounts[0] as usize].to_string(),
                 "signers": signers,
                 "m": m,
-            })
+            }))
         }
         TokenInstruction::Transfer { amount } => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "transfer",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -71,9 +99,14 @@ pub fn parse_token(
                 "authority",
                 "multisigAuthority",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::Approve { amount } => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "approve",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -89,9 +122,14 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::Revoke => {
+            if instruction.accounts.len() < 2 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "revoke",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -105,9 +143,14 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::SetOwner => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "setOwner",
                 "owned": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -122,9 +165,14 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::MintTo { amount } => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "mintTo",
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -140,9 +188,14 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::Burn { amount } => {
+            if instruction.accounts.len() < 2 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "burn",
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -157,9 +210,14 @@ pub fn parse_token(
                 "authority",
                 "multisigAuthority",
             );
-            value
+            Ok(value)
         }
         TokenInstruction::CloseAccount => {
+            if instruction.accounts.len() < 3 {
+                return Err(ParseInstructionError::InstructionKeyMismatch(
+                    ParsableProgram::SplToken,
+                ));
+            }
             let mut value = json!({
                 "type": "closeAccount",
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
@@ -174,10 +232,9 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            value
+            Ok(value)
         }
-    };
-    Ok(result)
+    }
 }
 
 fn parse_signers(
@@ -253,7 +310,7 @@ mod test {
         let message = Message::new(&[initialize_mint_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys[0..3]).unwrap(),
+            parse_token(&compiled_instruction, &keys).unwrap(),
             json!({
                 "type": "initializeMint",
                 "mint": keys[0].to_string(),
@@ -276,7 +333,7 @@ mod test {
         let message = Message::new(&[initialize_mint_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys[0..2]).unwrap(),
+            parse_token(&compiled_instruction, &keys).unwrap(),
             json!({
                 "type": "initializeMint",
                 "mint": keys[0].to_string(),
@@ -298,7 +355,7 @@ mod test {
         let message = Message::new(&[initialize_mint_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys[0..2]).unwrap(),
+            parse_token(&compiled_instruction, &keys).unwrap(),
             json!({
                 "type": "initializeMint",
                 "mint": keys[0].to_string(),
@@ -319,7 +376,7 @@ mod test {
         let message = Message::new(&[initialize_account_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
-            parse_token(&compiled_instruction, &keys[0..3]).unwrap(),
+            parse_token(&compiled_instruction, &keys).unwrap(),
             json!({
                 "type": "initializeAccount",
                 "account": keys[0].to_string(),
@@ -548,5 +605,242 @@ mod test {
                 "owner": keys[0].to_string(),
             })
         );
+    }
+
+    #[test]
+    fn test_token_ix_not_enough_keys() {
+        let mut keys: Vec<Pubkey> = vec![];
+        for _ in 0..10 {
+            keys.push(Pubkey::new_rand());
+        }
+
+        // Test InitializeMint variations
+        let initialize_mint_ix = initialize_mint(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[0]),
+            Some(&convert_pubkey(keys[1])),
+            Some(&convert_pubkey(keys[2])),
+            42,
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_mint_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 2].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        let initialize_mint_ix = initialize_mint(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[0]),
+            Some(&convert_pubkey(keys[1])),
+            None,
+            42,
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_mint_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        let initialize_mint_ix = initialize_mint(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[0]),
+            None,
+            Some(&convert_pubkey(keys[1])),
+            0,
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_mint_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test InitializeAccount
+        let initialize_account_ix = initialize_account(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[0]),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_account_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test InitializeMultisig
+        let initialize_multisig_ix = initialize_multisig(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[0]),
+            &[
+                &convert_pubkey(keys[1]),
+                &convert_pubkey(keys[2]),
+                &convert_pubkey(keys[3]),
+            ],
+            2,
+        )
+        .unwrap();
+        let message = Message::new(&[initialize_multisig_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..3]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test Transfer, incl multisig
+        let transfer_ix = transfer(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[transfer_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        let transfer_ix = transfer(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[3]),
+            &convert_pubkey(keys[4]),
+            &[&convert_pubkey(keys[0]), &convert_pubkey(keys[1])],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[transfer_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..4]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test Approve, incl multisig
+        let approve_ix = approve(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[approve_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        let approve_ix = approve(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[3]),
+            &convert_pubkey(keys[4]),
+            &[&convert_pubkey(keys[0]), &convert_pubkey(keys[1])],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[approve_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..4]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test Revoke
+        let revoke_ix = revoke(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[0]),
+            &[],
+        )
+        .unwrap();
+        let message = Message::new(&[revoke_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test SetOwner
+        let set_owner_ix = set_owner(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+        )
+        .unwrap();
+        let message = Message::new(&[set_owner_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test MintTo
+        let mint_to_ix = mint_to(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[mint_to_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test Burn
+        let burn_ix = burn(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[0]),
+            &[],
+            42,
+        )
+        .unwrap();
+        let message = Message::new(&[burn_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..1]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
+
+        // Test CloseAccount
+        let close_account_ix = close_account(
+            &spl_token_v1_0::id(),
+            &convert_pubkey(keys[1]),
+            &convert_pubkey(keys[2]),
+            &convert_pubkey(keys[0]),
+            &[],
+        )
+        .unwrap();
+        let message = Message::new(&[close_account_ix], None);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &keys[0..2]).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &keys).is_err());
     }
 }

@@ -26,6 +26,9 @@ pub enum ParseInstructionError {
     #[error("{0:?} instruction not parsable")]
     InstructionNotParsable(ParsableProgram),
 
+    #[error("{0:?} instruction key mismatch")]
+    InstructionKeyMismatch(ParsableProgram),
+
     #[error("Program not parsable")]
     ProgramNotParsable,
 }
