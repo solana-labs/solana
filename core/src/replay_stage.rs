@@ -1863,7 +1863,8 @@ impl ReplayStage {
     pub fn get_unlock_switch_vote_slot(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => std::u64::MAX / 2,
+            // 400_000 slots into epoch 61
+            OperatingMode::Stable => 26_752_000,
             // Epoch 63
             OperatingMode::Preview => 21_692_256,
         }
@@ -1872,7 +1873,8 @@ impl ReplayStage {
     pub fn get_unlock_heaviest_subtree_fork_choice(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => std::u64::MAX / 2,
+            // 400_000 slots into epoch 61
+            OperatingMode::Stable => 26_752_000,
             // Epoch 63
             OperatingMode::Preview => 21_692_256,
         }
