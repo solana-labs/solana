@@ -579,4 +579,25 @@ mod tests {
             pubkeys(&[&alice, &bob])
         );
     }
+
+    #[test]
+    fn test_off_curve_pubkey_verify_fails() {
+        // Golden point off the ed25519 curve
+        let off_curve_bytes = bs58::decode("9z5nJyQar1FUxVJxpBXzon6kHehbomeYiDaLi9WAMhCq")
+            .into_vec()
+            .unwrap();
+
+        // Confirm golden's off-curvedness
+        let mut off_curve_bits = [0u8; 32];
+        off_curve_bits.copy_from_slice(&off_curve_bytes);
+        let off_curve_point = curve25519_dalek::edwards::CompressedEdwardsY(off_curve_bits);
+        assert_eq!(off_curve_point.decompress(), None);
+
+        let pubkey = Pubkey::new(&off_curve_bytes);
+        let signature = Signature::default();
+        // Unfortunately, ed25519-dalek doesn't surface the internal error types that we'd ideally
+        // `source()` out of the `SignatureError` returned by `verify_strict()`.  So the best we
+        // can do is `is_err()` here.
+        assert!(signature.verify_verbose(pubkey.as_ref(), &[0u8]).is_err());
+    }
 }
