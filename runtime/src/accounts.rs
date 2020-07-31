@@ -281,7 +281,7 @@ impl Accounts {
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, (Ok(()), hash_age_kind)) => {
+                ((_, tx), (Ok(()), hash_age_kind)) => {
                     let fee_calculator = match hash_age_kind.as_ref() {
                         Some(HashAgeKind::DurableNonce(_, account)) => {
                             nonce_utils::fee_calculator_of(account)
@@ -612,7 +612,7 @@ impl Accounts {
     ) -> Vec<Result<()>> {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = OrderedIterator::new(txs, txs_iteration_order)
-            .map(|tx| {
+            .map(|(_, tx)| {
                 tx.sanitize().map_err(TransactionError::from)?;
 
                 if Self::has_duplicates(&tx.message.account_keys) {
@@ -645,7 +645,7 @@ impl Accounts {
 
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(results.iter())
-            .for_each(|(tx, result)| self.unlock_account(tx, result, &mut account_locks));
+            .for_each(|((_, tx), result)| self.unlock_account(tx, result, &mut account_locks));
     }
 
     /// Store the accounts into the DB
@@ -697,7 +697,7 @@ impl Accounts {
         fix_recent_blockhashes_sysvar_delay: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
-        for (i, ((raccs, _hash_age_kind), tx)) in loaded
+        for (i, ((raccs, _hash_age_kind), (_, tx))) in loaded
             .iter_mut()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()

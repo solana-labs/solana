@@ -69,7 +69,7 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(OrderedIterator::new(
+    for (result, (_, transaction)) in fee_collection_results.iter().zip(OrderedIterator::new(
         batch.transactions(),
         batch.iteration_order(),
     )) {
@@ -104,6 +104,7 @@ fn execute_batch(
         TransactionResults {
             fee_collection_results,
             processing_results,
+            overwritten_vote_accounts,
         },
         balances,
     ) = batch.bank().load_execute_and_commit_transactions(
@@ -112,14 +113,20 @@ fn execute_batch(
         transaction_status_sender.is_some(),
     );
 
-    if let Some(replay_votes_sender) = replay_votes_sender {
-        for (transaction, (processing_result, _)) in
-            OrderedIterator::new(batch.transactions(), batch.iteration_order())
-                .zip(&processing_results)
-        {
-            if processing_result.is_ok() {
-                if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
-                    let _ = replay_votes_sender.send(parsed_vote);
+    if replay_vote_sender.is_some() || replay_transaction_sender.is_some() {
+        for old_account in overwritten_vote_accounts {
+            assert!(processing_results[old_account.transaction_result_index]
+                .0
+                .is_ok());
+            let transaction = &batch.transactions()[old_account.transaction_index];
+            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
+                if let Some(voted_slot) = parsed_vote.1.slots.last().copied() {
+                    if let Some(replay_vote_sender) = replay_vote_sender {
+                        let _ = replay_vote_sender.send(parsed_vote);
+                    }
+                    if let Some(replay_transaction_sender) = replay_transaction_sender {
+                        let _ = replay_transaction_sender.send((voted_slot, transaction.clone()));
+                    }
                 }
             }
         }
@@ -2760,7 +2767,7 @@ pub mod tests {
         let (
             TransactionResults {
                 fee_collection_results,
-                processing_results: _,
+                ..
             },
             _balances,
         ) = batch
