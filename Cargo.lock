@@ -4881,8 +4881,11 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-sdk 1.2.16",
  "spl-memo",
+ "spl-token",
+ "thiserror",
 ]
 
 [[package]]
@@ -5194,18 +5197,6 @@ checksum = "f8f40b8a06a508a618a23be932d07c2dc0a87a152f98dafc451d1bedb3a9c0c8"
 dependencies = [
  "proptest",
  "serde",
-<<<<<<< HEAD
-=======
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-sdk 1.3.0",
- "solana-stake-program",
- "solana-vote-program",
- "spl-memo",
- "spl-token",
- "thiserror",
->>>>>>> 0f551d4f7... Decode token instructions (#11281)
 ]
 
 [[package]]
