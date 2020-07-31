@@ -22,7 +22,7 @@ const announcements = new Map<Cluster, Announcement>();
 // });
 announcements.set(Cluster.MainnetBeta, {
   message:
-    "Mainnet Beta upgrade over the weekend of August 1, 2020. " +
+    "Mainnet Beta upgrade during epoch 61 (approximately August 2-4). " +
     "TRANSACTIONS DISABLED DURING THE UPGRADE",
 });
 
