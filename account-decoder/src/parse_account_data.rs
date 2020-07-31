@@ -16,7 +16,7 @@ lazy_static! {
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
-        m.insert(*TOKEN_PROGRAM_ID, ParsableAccount::Token);
+        m.insert(*TOKEN_PROGRAM_ID, ParsableAccount::SplToken);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);
         m
     };
@@ -41,7 +41,7 @@ pub enum ParseAccountError {
 #[serde(rename_all = "camelCase")]
 pub enum ParsableAccount {
     Nonce,
-    Token,
+    SplToken,
     Vote,
 }
 
@@ -51,7 +51,7 @@ pub fn parse_account_data(program_id: &Pubkey, data: &[u8]) -> Result<Value, Par
         .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
     let parsed_json = match program_name {
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
-        ParsableAccount::Token => serde_json::to_value(parse_token(data)?)?,
+        ParsableAccount::SplToken => serde_json::to_value(parse_token(data)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(json!({
