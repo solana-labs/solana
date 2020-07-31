@@ -16,7 +16,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
     let mut data = data.to_vec();
     if data.len() == size_of::<Account>() {
         let account: Account = *State::unpack(&mut data)
-            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::Token))?;
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Account(UiTokenAccount {
             mint: account.mint.to_string(),
             owner: account.owner.to_string(),
@@ -31,7 +31,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
         }))
     } else if data.len() == size_of::<Mint>() {
         let mint: Mint = *State::unpack(&mut data)
-            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::Token))?;
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Mint(UiMint {
             owner: match mint.owner {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
@@ -42,7 +42,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
         }))
     } else if data.len() == size_of::<Multisig>() {
         let multisig: Multisig = *State::unpack(&mut data)
-            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::Token))?;
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
             num_required_signers: multisig.m,
             num_valid_signers: multisig.n,
@@ -61,7 +61,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
         }))
     } else {
         Err(ParseAccountError::AccountNotParsable(
-            ParsableAccount::Token,
+            ParsableAccount::SplToken,
         ))
     }
 }

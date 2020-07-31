@@ -5,6 +5,7 @@ extern crate serde_derive;
 
 pub mod parse_accounts;
 pub mod parse_instruction;
+pub mod parse_token;
 
 use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
 use serde_json::Value;
@@ -220,7 +221,11 @@ impl EncodedTransaction {
                             .map(|instruction| {
                                 let program_id =
                                     instruction.program_id(&transaction.message.account_keys);
-                                if let Some(parsed_instruction) = parse(program_id, instruction) {
+                                if let Ok(parsed_instruction) = parse(
+                                    program_id,
+                                    instruction,
+                                    &transaction.message.account_keys,
+                                ) {
                                     UiInstruction::Parsed(parsed_instruction)
                                 } else {
                                     UiInstruction::Compiled(instruction.into())
