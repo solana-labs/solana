@@ -42,6 +42,7 @@ module.exports = {
       "cli/manage-stake-accounts",
       "offline-signing",
       "offline-signing/durable-nonce",
+      "cli/usage",
     ],
     "Solana Clusters": ["clusters"],
     "Develop Applications": [
@@ -61,6 +62,7 @@ module.exports = {
       "running-validator",
       "running-validator/validator-reqs",
       "running-validator/validator-start",
+      "running-validator/vote-accounts",
       "running-validator/validator-stake",
       "running-validator/validator-monitor",
       "running-validator/validator-info",
