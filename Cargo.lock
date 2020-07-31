@@ -4881,8 +4881,11 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-sdk 1.2.16",
  "spl-memo",
+ "spl-token",
+ "thiserror",
 ]
 
 [[package]]
