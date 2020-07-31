@@ -658,9 +658,6 @@ impl RpcClient {
         Ok(hash)
     }
 
-<<<<<<< HEAD
-    pub fn poll_balance_with_timeout_and_commitment(
-=======
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
         Ok(self
             .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
@@ -780,8 +777,7 @@ impl RpcClient {
         )
     }
 
-    fn poll_balance_with_timeout_and_commitment(
->>>>>>> 9bcfc51df... Add token rpc endpoints to rpc-client (#11315)
+    pub fn poll_balance_with_timeout_and_commitment(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
