@@ -16,7 +16,7 @@ $path-to-fonts: "../../fonts" !default;
 $white: #ffffff;
 $gray-100: #f9fdfc;
 $gray-200: #f1f8f6;
-$gray-300: #d9efe7;
+$gray-300: #e5ebe9;
 $gray-400: #c6e6de;
 $gray-500: #abd5c6;
 $gray-600: #86b8b6;
@@ -42,6 +42,7 @@ $danger: #43b5c5;
 $light: $gray-100;
 $dark: $gray-900;
 
+$card-border-color: $gray-300;
 $text-info-muted: $info-muted;
 $navbar-light-active-color: $primary;
 $theme-colors: (

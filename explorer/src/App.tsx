@@ -12,6 +12,7 @@ import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
 import TabbedPage from "components/TabbedPage";
 import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
+import StatsCard from "components/StatsCard";
 import { pickCluster } from "utils/url";
 import Banner from "components/Banner";
 
@@ -84,11 +85,11 @@ function App() {
               <AccountsCard />
             </TabbedPage>
           </Route>
-          <Route
-            render={({ location }) => (
-              <Redirect to={{ ...location, pathname: "/transactions" }} />
-            )}
-          ></Route>
+          <Route>
+            <TabbedPage tab="Stats">
+              <StatsCard />
+            </TabbedPage>
+          </Route>
         </Switch>
       </div>
     </>

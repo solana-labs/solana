@@ -4,7 +4,7 @@ import { useClusterModal } from "providers/cluster";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { pickCluster } from "utils/url";
 
-export type Tab = "Transactions" | "Accounts" | "Supply";
+export type Tab = "Transactions" | "Accounts" | "Supply" | "Stats";
 
 type Props = { children: React.ReactNode; tab: Tab };
 export default function TabbedPage({ children, tab }: Props) {
@@ -22,6 +22,9 @@ export default function TabbedPage({ children, tab }: Props) {
           <div className="row align-items-center">
             <div className="col">
               <ul className="nav nav-tabs nav-overflow header-tabs">
+                <li className="nav-item">
+                  <NavLink href="/" tab="Stats" current={tab} />
+                </li>
                 <li className="nav-item">
                   <NavLink
                     href="/transactions"
