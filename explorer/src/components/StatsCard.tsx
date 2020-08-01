@@ -8,6 +8,7 @@ import {
   useRootSlot,
   PERF_UPDATE_SEC,
   useSetActive,
+  PerformanceInfo,
 } from "providers/stats/solanaBeach";
 import { slotsToHumanString } from "utils";
 import { useCluster, Cluster } from "providers/cluster";
@@ -31,8 +32,6 @@ function StatsCardBody() {
   const rootSlot = useRootSlot();
   const dashboardInfo = useDashboardInfo();
   const performanceInfo = usePerformanceInfo();
-  const txTrackerRef = React.useRef({ old: 0, new: 0 });
-  const txTracker = txTrackerRef.current;
   const setSocketActive = useSetActive();
   const { cluster } = useCluster();
 
@@ -53,20 +52,6 @@ function StatsCardBody() {
     );
   }
 
-  if (performanceInfo) {
-    const { totalTransactionCount: txCount, avgTPS } = performanceInfo;
-
-    // Track last tx count to initialize count up
-    if (txCount !== txTracker.new) {
-      // If this is the first tx count value, estimate the previous one
-      // in order to have a starting point for our animation
-      txTracker.old = txTracker.new || txCount - PERF_UPDATE_SEC * avgTPS;
-      txTracker.new = txCount;
-    }
-  } else {
-    txTrackerRef.current = { old: 0, new: 0 };
-  }
-
   if (rootSlot === undefined || !dashboardInfo || !performanceInfo) {
     return (
       <div className="card-body text-center">
@@ -83,18 +68,8 @@ function StatsCardBody() {
   const currentEpoch = epochInfo.epoch.toString();
   const epochProgress = ((100 * slotIndex) / slotsInEpoch).toFixed(1) + "%";
   const epochTimeRemaining = slotsToHumanString(slotsInEpoch - slotIndex);
-  const transactionCount = (
-    <CountUp
-      start={txTracker.old}
-      end={txTracker.new}
-      duration={PERF_UPDATE_SEC + 2}
-      delay={0}
-      useEasing={false}
-      preserveValue={true}
-      separator=","
-    />
-  );
   const averageTps = Math.round(performanceInfo.avgTPS);
+  const transactionCount = <AnimatedTransactionCount info={performanceInfo} />;
 
   return (
     <TableCardBody>
@@ -127,5 +102,47 @@ function StatsCardBody() {
         <td className="text-right text-monospace">{averageTps} </td>
       </tr>
     </TableCardBody>
+  );
+}
+
+function AnimatedTransactionCount({ info }: { info: PerformanceInfo }) {
+  const txCountRef = React.useRef(0);
+  const countUpRef = React.useRef({ start: 0, period: 0, lastUpdate: 0 });
+  const countUp = countUpRef.current;
+
+  const { totalTransactionCount: txCount, avgTPS } = info;
+
+  // Track last tx count to reset count up options
+  if (txCount !== txCountRef.current) {
+    if (countUp.lastUpdate > 0) {
+      // Since we overshoot below, calculate the elapsed value
+      // and start from there.
+      const elapsed = Date.now() - countUp.lastUpdate;
+      const elapsedPeriods = elapsed / (PERF_UPDATE_SEC * 1000);
+      countUp.start = countUp.start + elapsedPeriods * countUp.period;
+      countUp.period = txCount - countUp.start;
+    } else {
+      // Since this is the first tx count value, estimate the previous
+      // tx count in order to have a starting point for our animation
+      countUp.period = PERF_UPDATE_SEC * avgTPS;
+      countUp.start = txCount - countUp.period;
+    }
+    countUp.lastUpdate = Date.now();
+    txCountRef.current = txCount;
+  }
+
+  // Overshoot the target tx count in case the next update is delayed
+  const COUNT_PERIODS = 3;
+  const countUpEnd = countUp.start + COUNT_PERIODS * countUp.period;
+  return (
+    <CountUp
+      start={countUp.start}
+      end={countUpEnd}
+      duration={PERF_UPDATE_SEC * COUNT_PERIODS}
+      delay={0}
+      useEasing={false}
+      preserveValue={true}
+      separator=","
+    />
   );
 }
