@@ -5,6 +5,7 @@ import NumberFormat from "react-number-format";
 import BlockHeight from "./BlockHeight";
 import LeaderWorldMap from "./LeaderWorldMap";
 import "moment-duration-format";
+import PerformanceHistory from "./PerformanceHistory";
 
 const moment = require("moment");
 const DROP = 1000000000;
@@ -25,7 +26,7 @@ export default class NetworkStats extends Component {
   }
 
   componentDidMount() {
-    const { socket, event } = this.props;
+    const { socket } = this.props;
     socket.on("dashboardInfo", (RPCdata) => this.handleRPCdata(RPCdata));
   }
 
@@ -144,8 +145,8 @@ export default class NetworkStats extends Component {
 
         {/* STAKE WARMUP */}
 
-        <div className="container pb-4">
-          <Card className="grey-card pl-2">
+        <div className="container b-4 p-0">
+          <Card className="grey-card l-2 p-9">
             <div className="card-indicator bg-palegreen"></div>
             <Row>
               {/* Isolate Block Height since it updates multiple times per second */}
@@ -156,7 +157,7 @@ export default class NetworkStats extends Component {
 
               {/* BLOCK TIMES */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0">
+                <div className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">
@@ -164,10 +165,6 @@ export default class NetworkStats extends Component {
                           <small className="ghostwhite mb-1 text-uppercase">
                             Block time
                           </small>
-
-                          {/*<span id="tooltipContent1" className="ml-2">
-                            <FontAwesomeIcon icon={['fa', 'question-circle']} className="palegreen"/>
-                        </span>*/}
                         </span>
                         <span className="font-size-xxl mt-1 palegreen">
                           <NumberFormat
@@ -179,14 +176,6 @@ export default class NetworkStats extends Component {
                             suffix={"s"}
                           />
                         </span>
-                      </div>
-                      <div className="ml-auto">
-                        <div className="border-grey-bg text-center text-primary font-size-xl d-50 rounded-circle">
-                          <FontAwesomeIcon
-                            icon={["fas", "hourglass-half"]}
-                            className="palegreen"
-                          />
-                        </div>
                       </div>
                     </div>
                     <div className="mt-3">
@@ -205,12 +194,12 @@ export default class NetworkStats extends Component {
                       </span>
                     </div>
                   </CardBody>
-                </Card>
+                </div>
               </Col>
 
               {/* EPOCH PROGRESS */}
               <Col md="12" lg="4">
-                <Card className="card-box border-0">
+                <div className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold w-100">
@@ -257,7 +246,7 @@ export default class NetworkStats extends Component {
                       </span>
                     </div>
                   </CardBody>
-                </Card>
+                </div>
               </Col>
             </Row>
 
@@ -265,14 +254,23 @@ export default class NetworkStats extends Component {
             <LeaderWorldMap socket={this.props.socket} />
           </Card>
         </div>
-
-        <div className="container pb-4">
-          <Card className="grey-card pl-2">
+        <PerformanceHistory socket={this.props.socket} />
+        <div className="hero-wrapper bg-composed-wrapper withOverflowingBackground">
+          <div className="card-header">
+            <div className="row align-items-center">
+              <div className="col">
+                <h4 className="card-header-title">SOL Statistics</h4>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="container p-0">
+          <Card className="grey-card pl-0">
             <div className="card-indicator primary-blue-bg"></div>
             <Row>
               {/* Circulating Supply Rate */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0">
+                <div className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">
@@ -289,14 +287,6 @@ export default class NetworkStats extends Component {
                           {" "}
                           /{this.nFormatter(this.state.RPCdata.totalSupply, 1)}
                         </span>
-                      </div>
-                      <div className="ml-auto">
-                        <div className="border-grey-bg text-center text-primary font-size-xl d-50 rounded-circle">
-                          <FontAwesomeIcon
-                            icon={["fas", "sync"]}
-                            className="primary-blue"
-                          />
-                        </div>
                       </div>
                     </div>
                     <div className="mt-3">
@@ -320,12 +310,12 @@ export default class NetworkStats extends Component {
                       </span>
                     </div>
                   </CardBody>
-                </Card>
+                </div>
               </Col>
 
               {/* Staked SOL */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0">
+                <div className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start justify-content-between">
                       <div className="font-weight-bold">
@@ -345,12 +335,6 @@ export default class NetworkStats extends Component {
                             {this.nFormatter(this.state.RPCdata.totalSupply, 1)}
                           </span>
                         </span>
-                      </div>
-                      <div className="border-grey-bg text-center text-success font-size-xl d-50 rounded-circle">
-                        <FontAwesomeIcon
-                          icon={["fas", "coins"]}
-                          className="primary-blue"
-                        />
                       </div>
                     </div>
                     <div className="mt-3">
@@ -384,12 +368,12 @@ export default class NetworkStats extends Component {
                       </span>
                     </div>
                   </CardBody>
-                </Card>
+                </div>
               </Col>
 
               {/* Price SOL */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0">
+                <div className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">
@@ -448,14 +432,6 @@ export default class NetworkStats extends Component {
                           </span>
                         )}
                       </div>
-                      <div className="ml-auto">
-                        <div className="border-grey-bg text-center text-primary font-size-xl d-50 rounded-circle">
-                          <FontAwesomeIcon
-                            icon={["fas", "dollar-sign"]}
-                            className="primary-blue"
-                          />
-                        </div>
-                      </div>
                     </div>
 
                     <div className="mt-3 font-size-sm ghostwhite">
@@ -474,7 +450,7 @@ export default class NetworkStats extends Component {
                       </span>
                     </div>
                   </CardBody>
-                </Card>
+                </div>
               </Col>
             </Row>
           </Card>

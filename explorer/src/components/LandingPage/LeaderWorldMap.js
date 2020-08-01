@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Row, Col, CardBody, Card } from "reactstrap";
 import HashFormat from "../../helpers/HashFormat";
 import solanaLogo from "../../assets/images/solana/logo.png";
+import questionmarkLogo from "../../assets/images/solana/questionmark.png";
 
 import {
   ZoomableGroup,
@@ -16,31 +17,30 @@ import {
 const geoUrl =
   "https://raw.githubusercontent.com/zcreativelabs/react-simple-maps/master/topojson-maps/world-110m.json";
 
-function renderAvatar(validator) {
+function renderAvatar(validator, leader) {
   if (validator == null) return;
 
+  let className = "avatar-icon rounded-circle";
+  if (leader) {
+    className += " avatar-icon-leader";
+  }
   if (validator.moniker) {
-    return <img src={validator.pictureURL} />;
+    return <img alt={""} className={className} src={validator.pictureURL} />;
   }
 
   switch (validator.nodePubkey) {
     case "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S":
-      return <img src={solanaLogo} />;
+      return <img alt={""} className={className} src={solanaLogo} />;
     case "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2":
-      return <img src={solanaLogo} />;
+      return <img alt={""} className={className} src={solanaLogo} />;
     case "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ":
-      return <img src={solanaLogo} />;
+      return <img alt={""} className={className} src={solanaLogo} />;
     case "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ":
-      return <img src={solanaLogo} />;
+      return <img alt={""} className={className} src={solanaLogo} />;
     case "5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on":
-      return <img src={solanaLogo} />;
+      return <img alt={""} className={className} src={solanaLogo} />;
     default:
-      return (
-        <FontAwesomeIcon
-          icon={["fas", "question-circle"]}
-          className="w-100 h-100 border-grey standard-grey-bg"
-        />
-      );
+      return <img alt={""} className={className} src={questionmarkLogo} />;
   }
 }
 
@@ -54,7 +54,6 @@ function renderMoniker(validator) {
           href={validator.website}
           className="font-weight-500 coralred"
           title="..."
-          target="_blank"
         >
           {validator.moniker}
         </a>
@@ -90,38 +89,25 @@ function renderMoniker(validator) {
 
   if (validator.moniker) {
     return (
-      <a
-        href={validator.website}
-        className="font-weight-500 ghostwhite"
-        title="..."
-        target="_blank"
-      >
+      <a href={validator.website} className="font-weight-500 " title="...">
         {validator.moniker}
       </a>
     );
   }
   switch (validator.nodePubkey) {
     case "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S":
-      return (
-        <div className="font-weight-500 ghostwhite">Solana Boot Node 1</div>
-      );
+      return <div className="font-weight-500 ">Solana Boot Node 1</div>;
     case "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2":
-      return (
-        <div className="font-weight-500 ghostwhite">Solana Boot Node 2</div>
-      );
+      return <div className="font-weight-500 ">Solana Boot Node 2</div>;
     case "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ":
-      return (
-        <div className="font-weight-500 ghostwhite">Solana Boot Node 3</div>
-      );
+      return <div className="font-weight-500 ">Solana Boot Node 3</div>;
     case "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ":
-      return (
-        <div className="font-weight-500 ghostwhite">Solana Boot Node 4</div>
-      );
+      return <div className="font-weight-500 ">Solana Boot Node 4</div>;
     case "5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on":
-      return <div className="font-weight-500 ghostwhite">Solana Boot Node</div>;
+      return <div className="font-weight-500 ">Solana Boot Node</div>;
     default:
       return (
-        <div className="font-weight-500 ghostwhite">
+        <div className="font-weight-500 ">
           <HashFormat hash={validator.nodePubkey} />
         </div>
       );
@@ -271,9 +257,7 @@ export default class LeaderWorldMap extends Component {
       markers[i].coordinates.reverse();
     }
 
-    this.state.mapInitialized = true;
-
-    this.setState({ markers });
+    this.setState({ markers, mapInitialized: true });
   }
 
   // helper to group nearby coordinates
@@ -294,17 +278,15 @@ export default class LeaderWorldMap extends Component {
       <Row style={{ minHeight: "200px" }}>
         <Col md="5" lg="5">
           <CardBody className="mb-xl-3 mt-xl-3">
-            <div className="align-box-row align-items-start">
+            <div className="d-flex flex-row align-items-start">
               <div className="mr-3">
                 <div className="text-center text-success font-size-xl d-50 rounded-circle">
-                  <div className="w-100 h-100 avatar-icon">
-                    {renderAvatar(currentLeader)}
-                  </div>
+                  {renderAvatar(currentLeader, true)}
                 </div>
               </div>
               <div>
                 <div className="font-weight-bold">
-                  <small className="ghostwhite d-block mb-1 text-uppercase">
+                  <small className=" d-block mb-1 text-uppercase">
                     Current Leader
                   </small>
                   <span className="mt-2">{renderMoniker(currentLeader)}</span>
@@ -329,15 +311,13 @@ export default class LeaderWorldMap extends Component {
           </CardBody>
 
           <CardBody className="pt-0 mb-2">
-            <small className="ghostwhite d-block mb-3 text-uppercase">
-              Next leaders
-            </small>
-            <div className="ml-auto d-flex align-items-center align-content-center">
-              <div className="avatar-wrapper-overlap">
+            <small className=" d-block mb-3 text-uppercase">Next leaders</small>
+            <div className="ml-auto d-flex flex-row align-items-center align-content-center">
+              <div className="avatar-wrapper-overlap d-flex flex-row">
                 {nextLeaders.map((item, i) => {
                   return (
-                    <div className="avatar-icon-wrapper" placement="top">
-                      <div className="avatar-icon">{renderAvatar(item)}</div>
+                    <div className="text-center text-success font-size-xl d-50 rounded-circle">
+                      {renderAvatar(item)}
                     </div>
                   );
                 })}
@@ -347,7 +327,7 @@ export default class LeaderWorldMap extends Component {
         </Col>
 
         <Col md="7" lg="7">
-          <Card className="card-box border-0 text-light">
+          <Card className="card-box border-0 pb-0 mb-0">
             <CardBody style={{ paddingTop: "1.25rem", padding: "0" }}>
               <ComposableMap
                 width={1100}
@@ -387,8 +367,8 @@ export default class LeaderWorldMap extends Component {
                       x="-8"
                       textAnchor="start"
                       alignmentBaseline="middle"
-                      fill="white"
-                      style={{ fontSize: "1.5rem", fontWeight: "500" }}
+                      fill="black"
+                      style={{ fontSize: "1.2rem", fontWeight: "500" }}
                     >
                       {renderMapLocationLabel(currentLeader)}
                     </text>
@@ -438,7 +418,6 @@ export default class LeaderWorldMap extends Component {
                             <path
                               stroke="black"
                               strokeWidth={1}
-                              id="svg_2"
                               fill="url(#Gradient2)"
                               id="svg_1"
                               d="m18.586387,0.332172c-10.248667,0 -18.586387,8.311892 -18.586387,18.528714c0,15.222386 16.736357,30.085726 17.449082,30.711171c0.324896,0.285129 0.731017,0.427945 1.137305,0.427945c0.406288,0 0.812409,-0.142648 1.137473,-0.427945c0.712389,-0.625277 17.448914,-15.488618 17.448914,-30.711171c0,-10.216822 -8.337719,-18.528714 -18.586387,-18.528714zm0,13.327155c2.846871,0 5.162932,2.333377 5.162932,5.201559c0,2.868182 -2.316061,5.201559 -5.162932,5.201559c-2.846871,0 -5.162932,-2.333377 -5.162932,-5.201559c0,-2.868182 2.316061,-5.201559 5.162932,-5.201559z"

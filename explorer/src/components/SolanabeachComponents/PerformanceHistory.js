@@ -283,13 +283,13 @@ export default class PerformanceHistory extends Component {
 
     return (
       <div className>
-        <Card className="grey-card">
+        <Card className="white-card">
           <Row>
             <Col sm="12" md="4">
               <Row>
                 {/* Current TPS */}
                 <Col md="12">
-                  <Card className="card-box border-0">
+                  <div className="card-box border-0 mb-2">
                     <CardBody className="pb-0">
                       <div className="align-box-row align-items-start">
                         <div className="font-weight-bold">
@@ -297,23 +297,27 @@ export default class PerformanceHistory extends Component {
                             Current TPS
                           </small>
                           <span className="font-size-xxl mt-1 orange">
-                            <NumberFormat
-                              className=""
-                              value={this.state.RPCdata.avgTPS}
-                              displayType={"text"}
-                              thousandSeparator={true}
-                              decimalScale={0}
-                            />
+                            {!this.state.RPCdata.avgTPS ? (
+                              "..."
+                            ) : (
+                              <NumberFormat
+                                className=""
+                                value={this.state.RPCdata.avgTPS}
+                                displayType={"text"}
+                                thousandSeparator={true}
+                                decimalScale={0}
+                              />
+                            )}
                           </span>
                         </div>
                       </div>
                     </CardBody>
-                  </Card>
+                  </div>
                 </Col>
 
                 {/* Total Transactions */}
                 <Col md="12">
-                  <Card className="card-box border-0">
+                  <div className="card-box border-0 mb-2">
                     <CardBody>
                       <div className="align-box-row align-items-start justify-content-between">
                         <div className="font-weight-bold">
@@ -321,25 +325,29 @@ export default class PerformanceHistory extends Component {
                             Total Transactions
                           </small>
                           <span className="font-size-xxl mt-1 orange">
-                            <NumberFormat
-                              className=""
-                              value={this.state.RPCdata.totalTransactionCount}
-                              displayType={"text"}
-                              thousandSeparator={true}
-                              decimalScale={0}
-                            />
+                            {!this.state.RPCdata.totalTransactionCount ? (
+                              "..."
+                            ) : (
+                              <NumberFormat
+                                className=""
+                                value={this.state.RPCdata.totalTransactionCount}
+                                displayType={"text"}
+                                thousandSeparator={true}
+                                decimalScale={0}
+                              />
+                            )}
                           </span>
                         </div>
                       </div>
                     </CardBody>
-                  </Card>
+                  </div>
                 </Col>
               </Row>
             </Col>
 
             {/* Bar Chart */}
             <Col sm="12" md="8" className="">
-              <Card id="perf-history" className="card-box border-0">
+              <div id="perf-history" className="card-box border-0 mb-2">
                 <CardBody className="pb-0 w-100">
                   <div className="align-box-row align-items-start justify-content-between">
                     <div className="font-weight-bold w-100">
@@ -474,7 +482,7 @@ export default class PerformanceHistory extends Component {
                     </div>
                   </div>
                 </CardBody>
-              </Card>
+              </div>
             </Col>
           </Row>
         </Card>

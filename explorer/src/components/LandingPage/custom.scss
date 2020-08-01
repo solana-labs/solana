@@ -26,7 +26,6 @@
   }
 }
 
-
 // Network stats
 .progress-bar {
   color: #2b2c2f;
@@ -40,3 +39,42 @@
   left: 0;
   right: 0;
 }
+
+.avatar-wrapper-overlap .avatar-icon-wrapper {
+  margin-left: -10px;
+}
+
+.avatar-icon {
+  box-shadow: 0 0 0 3px #403f45;
+  width: 36px;
+  height: 36px;
+}
+
+.avatar-icon-leader {
+  width: 50px;
+  height: 50px;
+}
+
+.avatar-icon-delinquent {
+  box-shadow: 0 0 0 3px #e76343;
+  width: 38px;
+  height: 38px;
+}
+
+.font-weight-500 {
+  font-weight: 500;
+}
+
+.standard-grey-bg {
+  background: #2b2c2f;
+}
+
+.border-grey {
+  color: #414046;
+}
+
+.palegreen {
+  color: #3f8d8f;
+}
+
+.fa { transform: scale(3,3); }

@@ -1,7 +1,6 @@
 import React, { Component, Fragment } from "react";
 import io from "socket.io-client";
 import NetworkStats from "./NetworkStats";
-import PerformanceHistory from "./PerformanceHistory";
 import { Cluster, useCluster } from "../../providers/cluster";
 
 class LandingPageInner extends Component {
@@ -36,8 +35,14 @@ class LandingPageInner extends Component {
     return (
       <Fragment>
         <div className="hero-wrapper bg-composed-wrapper withOverflowingBackground">
-          {/*<NetworkStats socket={this.socket} location={this.props.location} />*/}
-          <PerformanceHistory socket={this.socket} />
+          <div className="card-header">
+            <div className="row align-items-center">
+              <div className="col">
+                <h4 className="card-header-title">Live Network Statistics</h4>
+              </div>
+            </div>
+          </div>
+          <NetworkStats socket={this.socket} location={this.props.location} />
         </div>
       </Fragment>
     );
