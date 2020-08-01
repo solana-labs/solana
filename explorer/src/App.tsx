@@ -15,6 +15,7 @@ import SupplyCard from "components/SupplyCard";
 import StatsCard from "components/StatsCard";
 import { pickCluster } from "utils/url";
 import Banner from "components/Banner";
+import HomePageSplash from "./components/HomePageSplash";
 
 function App() {
   return (
@@ -66,6 +67,7 @@ function App() {
           <Route exact path={TX_ALIASES.map((tx) => `/${tx}s`)}>
             <TabbedPage tab="Transactions">
               <TransactionsCard />
+              <HomePageSplash />
             </TabbedPage>
           </Route>
           <Route
