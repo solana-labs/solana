@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import Chart from "react-apexcharts";
 import NumberFormat from "react-number-format";
 import { Row, Col, CardBody, Card } from "reactstrap";
+import "./custom.scss";
 
 export default class PerformanceHistory extends Component {
   constructor(props) {
@@ -197,7 +198,7 @@ export default class PerformanceHistory extends Component {
   }
 
   componentDidMount() {
-    const { socket, event } = this.props;
+    const { socket } = this.props;
     socket.on("performanceInfo", (RPCdata) => this.handleRPCdata(RPCdata));
   }
 
@@ -259,7 +260,13 @@ export default class PerformanceHistory extends Component {
         break;
       }
     }
-    return (num / si[i].value).toFixed(digits).replace(rx, "$1") + si[i].symbol;
+    var rtn =
+      (num / si[i].value).toFixed(digits).replace(rx, "$1") + si[i].symbol;
+    // Hack to prevent showing infinity in the Y axis of the TPS chart
+    if (rtn.includes("Infinity")) {
+      return null;
+    }
+    return rtn;
   }
 
   render() {
@@ -275,15 +282,15 @@ export default class PerformanceHistory extends Component {
     );
 
     return (
-      <div className="container pb-4">
-        <Card className="grey-card pl-2">
+      <div className>
+        <Card className="grey-card">
           <div className="card-indicator bg-orange"></div>
           <Row>
             <Col sm="12" md="4">
               <Row>
                 {/* Current TPS */}
                 <Col md="12">
-                  <Card className="card-box border-0 text-light">
+                  <Card className="card-box border-0">
                     <CardBody className="pb-0">
                       <div className="align-box-row align-items-start">
                         <div className="font-weight-bold">
@@ -307,7 +314,7 @@ export default class PerformanceHistory extends Component {
 
                 {/* Total Transactions */}
                 <Col md="12">
-                  <Card className="card-box border-0 text-light">
+                  <Card className="card-box border-0">
                     <CardBody>
                       <div className="align-box-row align-items-start justify-content-between">
                         <div className="font-weight-bold">
@@ -333,7 +340,7 @@ export default class PerformanceHistory extends Component {
 
             {/* Bar Chart */}
             <Col sm="12" md="8" className="">
-              <Card id="perf-history" className="card-box border-0 text-light">
+              <Card id="perf-history" className="card-box border-0">
                 <CardBody className="pb-0 w-100">
                   <div className="align-box-row align-items-start justify-content-between">
                     <div className="font-weight-bold w-100">
