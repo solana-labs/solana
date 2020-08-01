@@ -74,7 +74,7 @@ const DashboardContext = React.createContext<DashboardState | undefined>(
   undefined
 );
 
-type PerformanceInfo = StructType<typeof PerformanceInfo>;
+export type PerformanceInfo = StructType<typeof PerformanceInfo>;
 type PerformanceState = { info: PerformanceInfo | undefined };
 const PerformanceContext = React.createContext<PerformanceState | undefined>(
   undefined
