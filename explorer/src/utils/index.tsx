@@ -1,8 +1,10 @@
+import React from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   HumanizeDuration,
   HumanizeDurationLanguage,
 } from "humanize-duration-ts";
+import { ReactNode } from "react";
 
 export const NUM_TICKS_PER_SECOND = 160;
 export const DEFAULT_TICKS_PER_SLOT = 64;
@@ -17,10 +19,15 @@ export function assertUnreachable(x: never): never {
 export function lamportsToSolString(
   lamports: number,
   maximumFractionDigits: number = 9
-): string {
+): ReactNode {
   const sol = Math.abs(lamports) / LAMPORTS_PER_SOL;
   return (
-    "◎" + new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol)
+    <>
+      ◎
+      <span className="text-monospace">
+        {new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol)}
+      </span>
+    </>
   );
 }
 
