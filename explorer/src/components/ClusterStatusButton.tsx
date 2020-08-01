@@ -1,30 +1,39 @@
 import React from "react";
-import { useCluster, ClusterStatus, Cluster } from "../providers/cluster";
+import {
+  useCluster,
+  ClusterStatus,
+  Cluster,
+  useClusterModal,
+} from "../providers/cluster";
 
-function ClusterStatusButton({
-  onClick,
-  expand,
-}: {
-  onClick: () => void;
-  expand?: boolean;
-}) {
+export function ClusterStatusBanner() {
+  const [, setShow] = useClusterModal();
+
   return (
-    <div onClick={onClick}>
-      <Button expand={expand} />
+    <div className="container d-md-none my-4">
+      <div onClick={() => setShow(true)}>
+        <Button />
+      </div>
     </div>
   );
 }
 
-function Button({ expand }: { expand?: boolean }) {
+export function ClusterStatusButton() {
+  const [, setShow] = useClusterModal();
+
+  return (
+    <div onClick={() => setShow(true)}>
+      <Button />
+    </div>
+  );
+}
+
+function Button() {
   const { status, cluster, name, customUrl } = useCluster();
   const statusName = cluster !== Cluster.Custom ? `${name}` : `${customUrl}`;
 
   const btnClasses = (variant: string) => {
-    if (expand) {
-      return `btn lift d-block btn-${variant}`;
-    } else {
-      return `btn b-white lift btn-outline-${variant}`;
-    }
+    return `btn d-block btn-${variant}`;
   };
 
   const spinnerClasses = "spinner-grow spinner-grow-sm mr-2";
@@ -59,5 +68,3 @@ function Button({ expand }: { expand?: boolean }) {
       );
   }
 }
-
-export default ClusterStatusButton;

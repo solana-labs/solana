@@ -1,59 +1,33 @@
 import React from "react";
-import { Link, Switch, Route, Redirect } from "react-router-dom";
+import { Switch, Route, Redirect } from "react-router-dom";
 
-import AccountsCard from "./components/AccountsCard";
 import AccountDetails from "./components/AccountDetails";
-import TransactionsCard from "./components/TransactionsCard";
 import TransactionDetails from "./components/TransactionDetails";
 import ClusterModal from "./components/ClusterModal";
-import Logo from "./img/logos-solana/light-explorer-logo.svg";
 import { TX_ALIASES } from "./providers/transactions";
 import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
-import TabbedPage from "components/TabbedPage";
 import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
 import StatsCard from "components/StatsCard";
-import { pickCluster } from "utils/url";
-import Banner from "components/Banner";
+import MessageBanner from "components/MessageBanner";
+import Navbar from "components/Navbar";
+import { ClusterStatusBanner } from "components/ClusterStatusButton";
 
 function App() {
   return (
     <>
       <ClusterModal />
       <div className="main-content">
-        <nav className="navbar navbar-expand-xl navbar-light">
-          <div className="container">
-            <div className="row align-items-end">
-              <div className="col">
-                <Link
-                  to={(location) => ({
-                    ...pickCluster(location),
-                    pathname: "/",
-                  })}
-                >
-                  <img src={Logo} width="250" alt="Solana Explorer" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        <Banner />
-
+        <Navbar />
+        <MessageBanner />
+        <ClusterStatusBanner />
         <Switch>
-          <Route exact path="/supply">
-            <TabbedPage tab="Supply">
+          <Route exact path={["/supply", "/accounts", "accounts/top"]}>
+            <div className="container mt-4">
               <SupplyCard />
               <TopAccountsCard />
-            </TabbedPage>
+            </div>
           </Route>
-          <Route
-            exact
-            path="/accounts/top"
-            render={({ location }) => (
-              <Redirect to={{ ...location, pathname: "/supply" }} />
-            )}
-          ></Route>
           <Route
             exact
             path={TX_ALIASES.flatMap((tx) => [tx, tx + "s"]).map(
@@ -63,11 +37,6 @@ function App() {
               <TransactionDetails signature={match.params.signature} />
             )}
           />
-          <Route exact path={TX_ALIASES.map((tx) => `/${tx}s`)}>
-            <TabbedPage tab="Transactions">
-              <TransactionsCard />
-            </TabbedPage>
-          </Route>
           <Route
             exact
             path={ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(
@@ -77,19 +46,16 @@ function App() {
               <AccountDetails address={match.params.address} />
             )}
           />
-          <Route
-            exact
-            path={ACCOUNT_ALIASES_PLURAL.map((alias) => "/" + alias)}
-          >
-            <TabbedPage tab="Accounts">
-              <AccountsCard />
-            </TabbedPage>
-          </Route>
-          <Route>
-            <TabbedPage tab="Stats">
+          <Route exact path="/">
+            <div className="container mt-4">
               <StatsCard />
-            </TabbedPage>
+            </div>
           </Route>
+          <Route
+            render={({ location }) => (
+              <Redirect to={{ ...location, pathname: "/" }} />
+            )}
+          />
         </Switch>
       </div>
     </>

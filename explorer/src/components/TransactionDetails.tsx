@@ -6,18 +6,16 @@ import {
   FetchStatus,
 } from "../providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useCluster, useClusterModal } from "providers/cluster";
+import { useCluster } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
   StakeProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import Copyable from "./Copyable";
-import { useHistory, useLocation } from "react-router-dom";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
@@ -31,63 +29,20 @@ import { isCached } from "providers/transactions/cached";
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
   const fetchTransaction = useFetchTransactionStatus();
-  const [, setShow] = useClusterModal();
-  const [search, setSearch] = React.useState(signature);
-  const history = useHistory();
-  const location = useLocation();
-
-  const updateSignature = () => {
-    history.push({ ...location, pathname: "/tx/" + search });
-  };
 
   // Fetch transaction on load
   React.useEffect(() => {
     fetchTransaction(signature);
   }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const searchInput = (
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      onKeyUp={(e) => e.key === "Enter" && updateSignature()}
-      className="form-control form-control-prepended search text-monospace"
-      placeholder="Search for signature"
-    />
-  );
-
   return (
     <div className="container">
       <div className="header">
         <div className="header-body">
-          <div className="row align-items-center">
-            <div className="col">
-              <h6 className="header-pretitle">Details</h6>
-              <h3 className="header-title">Transaction</h3>
-            </div>
-            <div className="col-auto">
-              <ClusterStatusButton onClick={() => setShow(true)} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row mb-4 mt-n2 align-items-center">
-        <div className="col d-none d-md-block">
-          <div className="input-group input-group-merge">
-            {searchInput}
-            <div className="input-group-prepend">
-              <div className="input-group-text">
-                <span className="fe fe-search"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col d-block d-md-none">{searchInput}</div>
-        <div className="col-auto ml-n3 d-block d-md-none">
-          <button className="btn btn-white" onClick={updateSignature}>
-            <span className="fe fe-search"></span>
-          </button>
+          <h6 className="header-pretitle">Transaction</h6>
+          <h4 className="header-title text-monospace text-truncate font-weight-bold">
+            {signature}
+          </h4>
         </div>
       </div>
 
