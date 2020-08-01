@@ -90,8 +90,8 @@ export default function TopAccountsCard() {
               <tr>
                 <th className="text-muted">Rank</th>
                 <th className="text-muted">Address</th>
-                <th className="text-muted">Balance (SOL)</th>
-                <th className="text-muted">% of {header} Supply</th>
+                <th className="text-muted text-right">Balance (SOL)</th>
+                <th className="text-muted text-center">% of {header} Supply</th>
                 <th className="text-muted">Details</th>
               </tr>
             </thead>
@@ -123,8 +123,8 @@ const renderAccountRow = (
           <code>{base58AccountPubkey}</code>
         </Copyable>
       </td>
-      <td>{lamportsToSolString(account.lamports, 0)}</td>
-      <td>{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
+      <td className="text-right">{lamportsToSolString(account.lamports, 0)}</td>
+      <td className="text-center">{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
       <td>
         <Link
           to={(location) => ({

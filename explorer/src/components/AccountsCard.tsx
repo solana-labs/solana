@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   useAccounts,
@@ -140,7 +140,7 @@ const renderAccountRow = (account: Account) => {
     owner = displayAddress(account.details.owner.toBase58());
   }
 
-  let balance = "-";
+  let balance: ReactNode = "-";
   if (account.lamports !== undefined) {
     balance = lamportsToSolString(account.lamports);
   }

@@ -32,17 +32,23 @@ export default function SupplyCard() {
       <TableCardBody>
         <tr>
           <td className="w-100">Total Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.total)}</td>
+          <td className="text-right">
+            {lamportsToSolString(supply.total, 0)}
+          </td>
         </tr>
 
         <tr>
           <td className="w-100">Circulating Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.circulating)}</td>
+          <td className="text-right">
+            {lamportsToSolString(supply.circulating, 0)}
+          </td>
         </tr>
 
         <tr>
           <td className="w-100">Non-Circulating Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.nonCirculating)}</td>
+          <td className="text-right">
+            {lamportsToSolString(supply.nonCirculating, 0)}
+          </td>
         </tr>
       </TableCardBody>
     </div>
