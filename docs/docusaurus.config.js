@@ -16,23 +16,18 @@ module.exports = {
       },
       links: [
         {
-          to: "introduction",
-          label: "Introduction",
+          href: "https://spl.solana.com",
+          label: "Program Library »",
           position: "left",
         },
         {
           to: "apps",
-          label: "Developers",
+          label: "Develop",
           position: "left",
         },
         {
           to: "running-validator",
-          label: "Validators",
-          position: "left",
-        },
-        {
-          to: "clusters",
-          label: "Clusters",
+          label: "Validate",
           position: "left",
         },
         {
@@ -40,7 +35,6 @@ module.exports = {
           label: "Chat",
           position: "right",
         },
-
         {
           href: "https://github.com/solana-labs/solana",
           label: "GitHub",

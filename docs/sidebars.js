@@ -42,7 +42,6 @@ module.exports = {
       "cli/manage-stake-accounts",
       "offline-signing",
       "offline-signing/durable-nonce",
-      "cli/usage",
     ],
     "Solana Clusters": ["clusters"],
     "Develop Applications": [
