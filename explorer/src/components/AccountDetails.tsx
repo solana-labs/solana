@@ -1,7 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { PublicKey, StakeProgram } from "@solana/web3.js";
-import { useHistory, useLocation } from "react-router-dom";
 import {
   FetchStatus,
   useFetchAccountInfo,
@@ -21,9 +20,6 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
   const fetchAccount = useFetchAccountInfo();
-  const [search, setSearch] = React.useState(address);
-  const history = useHistory();
-  const location = useLocation();
 
   let pubkey: PublicKey | undefined;
   try {
@@ -33,35 +29,17 @@ export default function AccountDetails({ address }: Props) {
     // TODO handle bad addresses
   }
 
-  const updateAddress = () => {
-    history.push({ ...location, pathname: "/account/" + search });
-  };
-
   // Fetch account on load
   React.useEffect(() => {
-    setSearch(address);
     if (pubkey) fetchAccount(pubkey);
   }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const searchInput = (
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      onKeyUp={(e) => e.key === "Enter" && updateAddress()}
-      className="form-control form-control-prepended search text-monospace"
-      placeholder="Search for address"
-    />
-  );
-
   return (
-    <div className="container">
+    <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <h6 className="header-pretitle">Address</h6>
-          <h4 className="header-title text-monospace text-truncate font-weight-bold">
-            {address}
-          </h4>
+          <h6 className="header-pretitle">Details</h6>
+          <h4 className="header-title">Account</h4>
         </div>
       </div>
       {pubkey && <AccountCards pubkey={pubkey} />}
@@ -100,10 +78,18 @@ function UnknownAccountCard({ account }: { account: Account }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Account Overview</h3>
+        <h3 className="card-header-title">Overview</h3>
       </div>
 
       <TableCardBody>
+        <tr>
+          <td>Address</td>
+          <td className="text-right">
+            <Copyable text={account.pubkey.toBase58()} right bottom>
+              <code>{displayAddress(account.pubkey.toBase58())}</code>
+            </Copyable>
+          </td>
+        </tr>
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-right text-uppercase">

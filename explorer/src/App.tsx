@@ -12,6 +12,7 @@ import StatsCard from "components/StatsCard";
 import MessageBanner from "components/MessageBanner";
 import Navbar from "components/Navbar";
 import { ClusterStatusBanner } from "components/ClusterStatusButton";
+import { SearchBar } from "components/SearchBar";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Navbar />
         <MessageBanner />
         <ClusterStatusBanner />
+        <SearchBar />
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
             <div className="container mt-4">

@@ -150,3 +150,16 @@ h4.slot-pill {
 .line-height-md {
   line-height: 1.5rem;
 }
+
+.search-indicator {
+  color: hsl(0,0%,60%);
+  display: flex;
+  padding: 8px 10px;
+  transition: color 150ms;
+  box-sizing: border-box;
+  cursor: pointer;
+
+  &:hover {
+    color: hsl(0,0%,40%);
+  }
+}
