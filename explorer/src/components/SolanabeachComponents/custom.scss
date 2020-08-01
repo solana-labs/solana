@@ -1,0 +1,27 @@
+#perf-history {
+  .btn-active {
+    background-color: #ffa63f;
+    color: #2b2c2f !important;
+  }
+  .perf-history-btn {
+    border: 1px solid #ffa63f;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.83125rem;
+    color: #ffa63f;
+  }
+
+  .y-axis {
+    padding-left: 2rem;
+    margin-right: 0.5rem;
+    border-right: 2px solid #414046
+  }
+  .max-tick {
+    position: absolute;
+    left: 0;
+  }
+  .middle-tick {
+    position: absolute;
+    top: 50%;
+    left: 0;
+  }
+}
