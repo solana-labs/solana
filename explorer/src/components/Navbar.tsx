@@ -1,16 +1,8 @@
 import React from "react";
 import Logo from "img/logos-solana/light-explorer-logo.svg";
-import { Location } from "history";
-import { pickCluster } from "utils/url";
+import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
-
-const clusterPath = (pathname: string) => {
-  return (location: Location) => ({
-    ...pickCluster(location),
-    pathname,
-  });
-};
 
 export default function Navbar() {
   // TODO: use `collapsing` to animate collapsible navbar
@@ -31,11 +23,15 @@ export default function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
 
-        <div className={`collapse navbar-collapse ml-auto mr-4 ${collapse ? "show" : ""}`}>
+        <div
+          className={`collapse navbar-collapse ml-auto mr-4 ${
+            collapse ? "show" : ""
+          }`}
+        >
           <ul className="navbar-nav mr-auto">
             <li className="nav-item">
               <NavLink className="nav-link" to={clusterPath("/")} exact>
-                Cluster Status
+                Cluster Stats
               </NavLink>
             </li>
             <li className="nav-item">

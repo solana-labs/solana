@@ -1,15 +1,7 @@
 import React from "react";
 import io from "socket.io-client";
 
-import {
-  object,
-  number,
-  is,
-  StructType,
-  array,
-  nullable,
-  any,
-} from "superstruct";
+import { object, number, is, StructType, any } from "superstruct";
 import { useCluster, Cluster } from "providers/cluster";
 
 // TODO: use `partial` when it is fixed
@@ -51,11 +43,7 @@ export const PERF_UPDATE_SEC = 5;
 // https://github.com/ianstormtaylor/superstruct/issues/405
 const PerformanceInfo = object({
   avgTPS: number(),
-  perfHistory: object({
-    s: array(nullable(number())),
-    m: array(nullable(number())),
-    l: array(nullable(number())),
-  }),
+  perfHistory: any(),
   totalTransactionCount: number(),
 });
 

@@ -18,7 +18,7 @@ export default function StatsCard() {
       <div className="card-header">
         <div className="row align-items-center">
           <div className="col">
-            <h4 className="card-header-title">Live Cluster Status</h4>
+            <h4 className="card-header-title">Live Cluster Stats</h4>
           </div>
         </div>
       </div>

@@ -36,13 +36,11 @@ export default function TransactionDetails({ signature }: Props) {
   }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="container">
+    <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <h6 className="header-pretitle">Transaction</h6>
-          <h4 className="header-title text-monospace text-truncate font-weight-bold">
-            {signature}
-          </h4>
+          <h6 className="header-pretitle">Details</h6>
+          <h4 className="header-title">Transaction</h4>
         </div>
       </div>
 
@@ -103,7 +101,7 @@ function StatusCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Status</h3>
+        <h3 className="card-header-title">Overview</h3>
         <button
           className="btn btn-white btn-sm"
           onClick={() => refresh(signature)}
@@ -114,6 +112,15 @@ function StatusCard({ signature }: Props) {
       </div>
 
       <TableCardBody>
+        <tr>
+          <td>Signature</td>
+          <td className="text-right">
+            <Copyable text={signature} right bottom>
+              <code>{signature}</code>
+            </Copyable>
+          </td>
+        </tr>
+
         <tr>
           <td>Result</td>
           <td className="text-right">{renderResult()}</td>
