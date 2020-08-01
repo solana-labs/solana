@@ -28,7 +28,7 @@ export default class BlockHeight extends Component {
   render() {
     return (
       <Col md="6" lg="4">
-        <Card className="card-box border-0 text-light">
+        <Card className="card-box border-0">
           <CardBody>
             <div className="align-box-row align-items-start">
               <div className="font-weight-bold">

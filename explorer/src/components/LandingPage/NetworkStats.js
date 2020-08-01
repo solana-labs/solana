@@ -143,160 +143,6 @@ export default class NetworkStats extends Component {
         {/*<Tooltips/>*/}
 
         {/* STAKE WARMUP */}
-        <div className="container py-4 mt-4">
-          <Card className="grey-card pl-2 bg-beach-colors">
-            <Row>
-              {/* EXPLAINER */}
-              <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
-                  <CardBody>
-                    <div className="align-box-row align-items-start text-black">
-                      <span className="text-black d-block mb-1 text-uppercase font-weight-600">
-                        Road to staking rewards
-                      </span>
-                    </div>
-                    <div className="align-box-row align-items-start text-black">
-                      <span className="text-black font-size-sm">
-                        Active stake is limited to a 25% increase per epoch. As
-                        it will take time for your stake to warm up, now is the
-                        time to delegate. Once all stake is warmed up, staking
-                        rewards can be enabled!{" "}
-                      </span>
-                    </div>
-                  </CardBody>
-                </Card>
-              </Col>
-              {/* HELP SECTION */}
-              <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
-                  <CardBody>
-                    <div className="align-box-row align-items-start text-black">
-                      <span className="text-black d-block mb-1 text-uppercase font-weight-600">
-                        Resources & Help
-                      </span>
-                    </div>
-                    <div className="text-black">
-                      <div className="text-black font-size-sm my-1">
-                        <a
-                          className="resource-link"
-                          href="https://docs.solana.com/staking"
-                          target="_blank"
-                        >
-                          <FontAwesomeIcon
-                            icon={["fas", "book"]}
-                            className="text-black mr-2"
-                          />
-                          Official Staking Docs
-                        </a>
-                      </div>
-                      <div className="text-black font-size-sm my-1">
-                        <a
-                          className="resource-link"
-                          href="https://forums.solana.com/t/validator-information-thread"
-                          target="_blank"
-                        >
-                          <FontAwesomeIcon
-                            icon={["fa", "info-circle"]}
-                            className="text-black mr-2"
-                          />
-                          Official Validator Info Thread
-                        </a>
-                      </div>
-                      <div className="text-black font-size-sm my-1">
-                        <a
-                          className="resource-link"
-                          href="https://discordapp.com/invite/pquxPsq"
-                          target="_blank"
-                        >
-                          <FontAwesomeIcon
-                            icon={["fab", "discord"]}
-                            className="text-black mr-2"
-                          />
-                          Official Discord
-                        </a>
-                      </div>
-                      <div className="text-black font-size-sm my-1">
-                        <a
-                          className="resource-link"
-                          href="https://t.me/stakingfacilities"
-                          target="_blank"
-                        >
-                          <FontAwesomeIcon
-                            icon={["fab", "telegram"]}
-                            className="text-black mr-2"
-                          />
-                          Staking Facilities Telegram
-                        </a>
-                      </div>
-                    </div>
-                  </CardBody>
-                </Card>
-              </Col>
-
-              {/* WARMUP PROGRESS */}
-              <Col md="12" lg="4">
-                <Card className="card-box border-0 text-white">
-                  <CardBody>
-                    <div className="align-box-row align-items-start">
-                      <div className="font-weight-bold w-100">
-                        <small className="text-black d-flex justify-content-between mb-3 text-uppercase font-weight-500">
-                          <span>
-                            Delegated:{" "}
-                            <span className="text font-size-sm font-weight-bold palegreen">
-                              {this.nFormatter(
-                                this.state.RPCdata.totalDelegatedStake,
-                                1
-                              )}
-                              <span>&nbsp;SOL</span>
-                            </span>
-                          </span>
-                          <span>
-                            Warmed Up:{" "}
-                            <span className="text font-size-sm font-weight-bold palegreen">
-                              <NumberFormat
-                                className=""
-                                value={
-                                  this.state.RPCdata.stakeWarmup
-                                    .warmedUpStakePercentage
-                                }
-                                displayType={"text"}
-                                thousandSeparator={true}
-                                decimalScale={1}
-                                suffix={"%"}
-                              />
-                            </span>
-                          </span>
-                        </small>
-                        <Progress
-                          animated
-                          className="border-grey-bg grey-900 bg-coralred"
-                          value={
-                            this.state.RPCdata.stakeWarmup
-                              .warmedUpStakePercentage
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <span className="palegreen font-size-sm font-weight-bold px-1">
-                        {moment
-                          .duration(
-                            this.state.RPCdata.stakeWarmup.msUntilWarmup,
-                            "milliseconds"
-                          )
-                          .format("d[d]  h[h]  m[m]")}
-                      </span>
-                      <span className="text-black font-size-sm font-weight-500">
-                        {" "}
-                        until full warm up
-                      </span>
-                    </div>
-                  </CardBody>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
-        </div>
 
         <div className="container pb-4">
           <Card className="grey-card pl-2">
@@ -310,7 +156,7 @@ export default class NetworkStats extends Component {
 
               {/* BLOCK TIMES */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
+                <Card className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">
@@ -364,7 +210,7 @@ export default class NetworkStats extends Component {
 
               {/* EPOCH PROGRESS */}
               <Col md="12" lg="4">
-                <Card className="card-box border-0 text-white">
+                <Card className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold w-100">
@@ -426,7 +272,7 @@ export default class NetworkStats extends Component {
             <Row>
               {/* Circulating Supply Rate */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
+                <Card className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">
@@ -479,7 +325,7 @@ export default class NetworkStats extends Component {
 
               {/* Staked SOL */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
+                <Card className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start justify-content-between">
                       <div className="font-weight-bold">
@@ -543,7 +389,7 @@ export default class NetworkStats extends Component {
 
               {/* Price SOL */}
               <Col md="6" lg="4">
-                <Card className="card-box border-0 text-light">
+                <Card className="card-box border-0">
                   <CardBody>
                     <div className="align-box-row align-items-start">
                       <div className="font-weight-bold">

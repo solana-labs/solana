@@ -36,7 +36,7 @@ class LandingPageInner extends Component {
     return (
       <Fragment>
         <div className="hero-wrapper bg-composed-wrapper withOverflowingBackground">
-          {/*<NetworkStats socket={this.socket} location={this.props.location} />*/}
+          <NetworkStats socket={this.socket} location={this.props.location} />
           <PerformanceHistory socket={this.socket} />
         </div>
       </Fragment>
