@@ -1,8 +1,8 @@
-import React, { Component } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { Row, Col, CardBody, Card } from 'reactstrap';
-import HashFormat from '../../helpers/HashFormat'
-import solanaLogo from '../../assets/images/solana/logo.png';
+import React, { Component } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Row, Col, CardBody, Card } from "reactstrap";
+import HashFormat from "../../helpers/HashFormat";
+import solanaLogo from "../../assets/images/solana/logo.png";
 
 import {
   ZoomableGroup,
@@ -10,221 +10,274 @@ import {
   Geographies,
   Geography,
   Annotation,
-  Marker
+  Marker,
 } from "react-simple-maps";
 
-const geoUrl = "https://raw.githubusercontent.com/zcreativelabs/react-simple-maps/master/topojson-maps/world-110m.json";
+const geoUrl =
+  "https://raw.githubusercontent.com/zcreativelabs/react-simple-maps/master/topojson-maps/world-110m.json";
 
 function renderAvatar(validator) {
-
-  if (validator == null) return
+  if (validator == null) return;
 
   if (validator.moniker) {
-    return <img src={validator.pictureURL}/>
+    return <img src={validator.pictureURL} />;
   }
 
-  switch(validator.nodePubkey) {
-    case 'CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S':
-      return  <img src={solanaLogo}/>;
-    case '7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2':
-      return  <img src={solanaLogo}/>;
-    case 'GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ':
-      return  <img src={solanaLogo}/>;
-    case 'DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ':
-      return  <img src={solanaLogo}/>;
-    case '5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on':
-      return  <img src={solanaLogo}/>;
+  switch (validator.nodePubkey) {
+    case "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S":
+      return <img src={solanaLogo} />;
+    case "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2":
+      return <img src={solanaLogo} />;
+    case "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ":
+      return <img src={solanaLogo} />;
+    case "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ":
+      return <img src={solanaLogo} />;
+    case "5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on":
+      return <img src={solanaLogo} />;
     default:
-      return <FontAwesomeIcon icon={['fas', 'question-circle']} className="w-100 h-100 border-grey standard-grey-bg"/>;
+      return (
+        <FontAwesomeIcon
+          icon={["fas", "question-circle"]}
+          className="w-100 h-100 border-grey standard-grey-bg"
+        />
+      );
   }
 }
 
 function renderMoniker(validator) {
-
-  if (validator == null) return
+  if (validator == null) return;
 
   if (validator.delinquent) {
-
     if (validator.moniker) {
-      return <a href={validator.website} className="font-weight-500 coralred" title="..." target="_blank">{validator.moniker}</a>
+      return (
+        <a
+          href={validator.website}
+          className="font-weight-500 coralred"
+          title="..."
+          target="_blank"
+        >
+          {validator.moniker}
+        </a>
+      );
     }
     switch (validator.nodePubkey) {
-      case 'CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S':
-        return <div className="font-weight-500 coralred" >Solana Boot Node 1</div>;
-      case '7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2':
-        return <div className="font-weight-500 coralred" >Solana Boot Node 2</div>;
-      case 'GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ':
-        return <div className="font-weight-500 coralred" >Solana Boot Node 3</div>;
-      case 'DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ':
-        return <div className="font-weight-500 coralred" >Solana Boot Node 4</div>;
-      case '5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on':
-        return <div className="font-weight-500 coralred" >Solana Boot Node</div>;
+      case "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S":
+        return (
+          <div className="font-weight-500 coralred">Solana Boot Node 1</div>
+        );
+      case "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2":
+        return (
+          <div className="font-weight-500 coralred">Solana Boot Node 2</div>
+        );
+      case "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ":
+        return (
+          <div className="font-weight-500 coralred">Solana Boot Node 3</div>
+        );
+      case "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ":
+        return (
+          <div className="font-weight-500 coralred">Solana Boot Node 4</div>
+        );
+      case "5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on":
+        return <div className="font-weight-500 coralred">Solana Boot Node</div>;
       default:
-        return <div className="font-weight-500 coralred" ><HashFormat hash={validator.nodePubkey}/></div>
+        return (
+          <div className="font-weight-500 coralred">
+            <HashFormat hash={validator.nodePubkey} />
+          </div>
+        );
     }
   }
 
   if (validator.moniker) {
-    return <a href={validator.website} className="font-weight-500 ghostwhite" title="..." target="_blank">{validator.moniker}</a>
+    return (
+      <a
+        href={validator.website}
+        className="font-weight-500 ghostwhite"
+        title="..."
+        target="_blank"
+      >
+        {validator.moniker}
+      </a>
+    );
   }
   switch (validator.nodePubkey) {
-    case 'CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S':
-      return <div className="font-weight-500 ghostwhite" >Solana Boot Node 1</div>;
-    case '7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2':
-      return <div className="font-weight-500 ghostwhite" >Solana Boot Node 2</div>;
-    case 'GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ':
-      return <div className="font-weight-500 ghostwhite" >Solana Boot Node 3</div>;
-    case 'DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ':
-      return <div className="font-weight-500 ghostwhite" >Solana Boot Node 4</div>;
-    case '5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on':
-      return <div className="font-weight-500 ghostwhite" >Solana Boot Node</div>;
+    case "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S":
+      return (
+        <div className="font-weight-500 ghostwhite">Solana Boot Node 1</div>
+      );
+    case "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2":
+      return (
+        <div className="font-weight-500 ghostwhite">Solana Boot Node 2</div>
+      );
+    case "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ":
+      return (
+        <div className="font-weight-500 ghostwhite">Solana Boot Node 3</div>
+      );
+    case "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ":
+      return (
+        <div className="font-weight-500 ghostwhite">Solana Boot Node 4</div>
+      );
+    case "5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on":
+      return <div className="font-weight-500 ghostwhite">Solana Boot Node</div>;
     default:
-      return <div className="font-weight-500 ghostwhite" ><HashFormat hash={validator.nodePubkey}/></div>
+      return (
+        <div className="font-weight-500 ghostwhite">
+          <HashFormat hash={validator.nodePubkey} />
+        </div>
+      );
   }
-
 }
 
 function calcMarkerColor(nodeCount) {
-
-  if (nodeCount === 1) return "palegreen"
-  if (nodeCount < 5) return "yellowgreen"
-  if (nodeCount < 10) return "limegreen"
-  return "lime"
-
+  if (nodeCount === 1) return "palegreen";
+  if (nodeCount < 5) return "yellowgreen";
+  if (nodeCount < 10) return "limegreen";
+  return "lime";
 }
 
 function calcMarkerRadius(nodeCount) {
-
-  if (nodeCount === 1) return 10
-  if (nodeCount < 5) return 11
-  if (nodeCount < 10) return 12
-  return 14
-
+  if (nodeCount === 1) return 10;
+  if (nodeCount < 5) return 11;
+  if (nodeCount < 10) return 12;
+  return 14;
 }
 
 function renderMapLocationLabel(currentLeader) {
-
-  if (currentLeader == null) return
+  if (currentLeader == null) return;
 
   if (currentLeader.location) {
     if (currentLeader.location.country && currentLeader.location.city) {
-      return currentLeader.location.country + ", " + currentLeader.location.city
+      return (
+        currentLeader.location.country + ", " + currentLeader.location.city
+      );
     }
-    return currentLeader.location.country
+    return currentLeader.location.country;
   }
-  return ""
+  return "";
 }
 
 export default class LeaderWorldMap extends Component {
-
   constructor(props) {
-    super(props)
+    super(props);
 
     this.state = {
-        root: 0,
-        mapInitialized: false,
-        currentLeader: {location: {country: "", city: ""}},
-        servedSlots: [],
-        nextLeaders: [],
-        markers: [{coordinates: [100,100], nodeCount: 0, leader: false, pubkeys: []}],
-        }
-      }
+      root: 0,
+      mapInitialized: false,
+      currentLeader: { location: { country: "", city: "" } },
+      servedSlots: [],
+      nextLeaders: [],
+      markers: [
+        { coordinates: [100, 100], nodeCount: 0, leader: false, pubkeys: [] },
+      ],
+    };
+  }
 
   componentWillUnmount() {
     if (this.socket) {
-      this.socket.disconnect()
+      this.socket.disconnect();
     }
   }
 
   componentDidMount() {
-    const {socket} = this.props
-    socket.on('validatorInfo', RPCdata => this.handleRPCdata(RPCdata))
-    socket.on('rootNotification', data => this.handleNewRoot(data))
+    const { socket } = this.props;
+    socket.on("validatorInfo", (RPCdata) => this.handleRPCdata(RPCdata));
+    socket.on("rootNotification", (data) => this.handleNewRoot(data));
   }
 
   handleNewRoot(data) {
-
     if (data.currentLeader) {
-
-      let markers = this.state.markers
+      let markers = this.state.markers;
 
       // abort if there is no new leader
-      if (data.currentLeader.nodePubkey === this.state.currentLeader.nodePubkey) {
-        this.setState({servedSlots: data.servedSlots});
-        return
+      if (
+        data.currentLeader.nodePubkey === this.state.currentLeader.nodePubkey
+      ) {
+        this.setState({ servedSlots: data.servedSlots });
+        return;
       }
 
       // mark the new leader on the map
       for (let i = 0; i < markers.length; i++) {
-
         for (let j = 0; j < markers[i].pubkeys.length; j++) {
           if (markers[i].pubkeys[j] === data.currentLeader.nodePubkey) {
-               markers[i].leader = true;
-               break
+            markers[i].leader = true;
+            break;
           } else {
-               markers[i].leader = false
+            markers[i].leader = false;
           }
         }
       }
       // Place markers with high node counts on top
-      markers.sort((a, b) => (a.nodeCount > b.nodeCount) ? 1 : -1)
+      markers.sort((a, b) => (a.nodeCount > b.nodeCount ? 1 : -1));
 
-      this.setState({markers: markers, currentLeader: data.currentLeader, servedSlots: data.servedSlots, nextLeaders: data.nextLeaders})
-
+      this.setState({
+        markers: markers,
+        currentLeader: data.currentLeader,
+        servedSlots: data.servedSlots,
+        nextLeaders: data.nextLeaders,
+      });
     }
   }
 
-  handleRPCdata (data) {
+  handleRPCdata(data) {
+    if (this.state.mapInitialized) {
+      return;
+    }
 
-    if (this.state.mapInitialized) {return}
-
-    let markers = []
+    let markers = [];
 
     for (const key in data.validatorSet) {
-
       // we are not able to get location info for every validator
-      if (!data.validatorSet[key].location) {continue;}
+      if (!data.validatorSet[key].location) {
+        continue;
+      }
 
       // a marker holds location coordinates and the pubkeys of all validators residing in that location
-      let marker = {pubkeys: []}
-      let markerIsSet = false
+      let marker = { pubkeys: [] };
+      let markerIsSet = false;
 
       for (let i = 0; i < markers.length; i++) {
-
         // accumulate similar coordinates under one entry, increase node count
         // modify epsilon (approxeq) to increase/decrease location grouping precision
-        if (this.approxeq(markers[i].coordinates[0], data.validatorSet[key].location.ll[0]) &&
-            this.approxeq(markers[i].coordinates[1], data.validatorSet[key].location.ll[1])) {
-
-          markers[i].nodeCount = markers[i].nodeCount+1
-          markers[i].pubkeys.push(data.validatorSet[key].nodePubkey)
-          markerIsSet = true
+        if (
+          this.approxeq(
+            markers[i].coordinates[0],
+            data.validatorSet[key].location.ll[0]
+          ) &&
+          this.approxeq(
+            markers[i].coordinates[1],
+            data.validatorSet[key].location.ll[1]
+          )
+        ) {
+          markers[i].nodeCount = markers[i].nodeCount + 1;
+          markers[i].pubkeys.push(data.validatorSet[key].nodePubkey);
+          markerIsSet = true;
           break;
-          }
+        }
       }
 
       // create a new marker if there is no existing one in the current location
       if (!markerIsSet) {
-      marker.nodeCount = 1
-      marker.country = data.validatorSet[key].location.country
-      marker.coordinates = data.validatorSet[key].location.ll
-      marker.pubkeys.push(data.validatorSet[key].nodePubkey)
-      markers.push(marker)
+        marker.nodeCount = 1;
+        marker.country = data.validatorSet[key].location.country;
+        marker.coordinates = data.validatorSet[key].location.ll;
+        marker.pubkeys.push(data.validatorSet[key].nodePubkey);
+        markers.push(marker);
       }
     }
 
     // reverse all ll coordinates to display correctly with simple maps
     for (let i = 0; i < markers.length; i++) {
-      markers[i].coordinates.reverse()
+      markers[i].coordinates.reverse();
     }
 
-    this.state.mapInitialized = true
+    this.state.mapInitialized = true;
 
-    this.setState({markers})
+    this.setState({ markers });
   }
 
   // helper to group nearby coordinates
-  approxeq = function(v1, v2, epsilon) {
+  approxeq = function (v1, v2, epsilon) {
     if (epsilon == null) {
       epsilon = 1;
     }
@@ -232,17 +285,14 @@ export default class LeaderWorldMap extends Component {
   };
 
   render() {
-
-    let currentLeader = this.state.currentLeader
-    let servedSlots = this.state.servedSlots
-    let nextLeaders = this.state.nextLeaders
-    let markers = this.state.markers
+    let currentLeader = this.state.currentLeader;
+    let servedSlots = this.state.servedSlots;
+    let nextLeaders = this.state.nextLeaders;
+    let markers = this.state.markers;
 
     return (
-
-      <Row style={{minHeight: "200px"}}>
-
-      <Col md="5" lg="5">
+      <Row style={{ minHeight: "200px" }}>
+        <Col md="5" lg="5">
           <CardBody className="mb-xl-3 mt-xl-3">
             <div className="align-box-row align-items-start">
               <div className="mr-3">
@@ -260,24 +310,19 @@ export default class LeaderWorldMap extends Component {
                   <span className="mt-2">{renderMoniker(currentLeader)}</span>
                 </div>
                 <div className="mt-2">
-
-                  {servedSlots.map((item,i) => {
-
-                    return item===true ?
-
+                  {servedSlots.map((item, i) => {
+                    return item === true ? (
                       <FontAwesomeIcon
-                        icon={['fas', 'square']}
+                        icon={["fas", "square"]}
                         className="palegreen pr-1"
                       />
-
-                      :
-
+                    ) : (
                       <FontAwesomeIcon
-                        icon={['fas', 'square']}
+                        icon={["fas", "square"]}
                         className="border-grey pr-1"
                       />
+                    );
                   })}
-
                 </div>
               </div>
             </div>
@@ -289,48 +334,35 @@ export default class LeaderWorldMap extends Component {
             </small>
             <div className="ml-auto d-flex align-items-center align-content-center">
               <div className="avatar-wrapper-overlap">
-
-                {nextLeaders.map((item,i) => {
-
+                {nextLeaders.map((item, i) => {
                   return (
-                    <div
-                      className="avatar-icon-wrapper"
-                      placement="top">
-                      <div className="avatar-icon">
-                        {renderAvatar(item)}
-                      </div>
+                    <div className="avatar-icon-wrapper" placement="top">
+                      <div className="avatar-icon">{renderAvatar(item)}</div>
                     </div>
-
-                  )})}
-
+                  );
+                })}
               </div>
             </div>
           </CardBody>
+        </Col>
 
-      </Col>
-
-      <Col md="7" lg="7">
-        <Card className="card-box border-0 text-light">
-          <CardBody style={{paddingTop: '1.25rem', padding: '0'}}>
-
+        <Col md="7" lg="7">
+          <Card className="card-box border-0 text-light">
+            <CardBody style={{ paddingTop: "1.25rem", padding: "0" }}>
               <ComposableMap
                 width={1100}
                 height={450}
                 projection="geoMercator"
                 projectionConfig={{
                   yOffset: 150,
-                  rotate: [0,0, 0],
-                  scale: 150
+                  rotate: [0, 0, 0],
+                  scale: 150,
                 }}
               >
-                <ZoomableGroup
-                  zoom={1.175}
-                  center={[10, 25]}
-                >
-                <Geographies geography={geoUrl}>
-                  {({ geographies }) =>
-                    geographies
-                      .map(geo => (
+                <ZoomableGroup zoom={1.175} center={[10, 25]}>
+                  <Geographies geography={geoUrl}>
+                    {({ geographies }) =>
+                      geographies.map((geo) => (
                         <Geography
                           key={geo.rsmKey}
                           geography={geo}
@@ -338,81 +370,106 @@ export default class LeaderWorldMap extends Component {
                           stroke="#828282"
                         />
                       ))
-                  }
-                </Geographies>
+                    }
+                  </Geographies>
 
-                <Annotation
-                  subject={[-160.3522, -28.8566]}
-                  dx={0}
-                  dy={0}
-                  connectorProps={{
-                    stroke: "#FF5533",
-                    strokeWidth: 0,
-                    strokeLinecap: "round"
-                  }}
-                >
-                  <text x="-8" textAnchor="start" alignmentBaseline="middle" fill="white" style={{ fontSize: "1.5rem", fontWeight: "500" }}>
-                    {renderMapLocationLabel(currentLeader)}
-                  </text>
-                </Annotation>
+                  <Annotation
+                    subject={[-160.3522, -28.8566]}
+                    dx={0}
+                    dy={0}
+                    connectorProps={{
+                      stroke: "#FF5533",
+                      strokeWidth: 0,
+                      strokeLinecap: "round",
+                    }}
+                  >
+                    <text
+                      x="-8"
+                      textAnchor="start"
+                      alignmentBaseline="middle"
+                      fill="white"
+                      style={{ fontSize: "1.5rem", fontWeight: "500" }}
+                    >
+                      {renderMapLocationLabel(currentLeader)}
+                    </text>
+                  </Annotation>
 
-                {markers.map(({leader, nodeCount, country, coordinates }) => {
-
-                  return leader===true ?
-
-                    <Marker coordinates={coordinates} style={{zIndex: "1000"}}>
-
-                        <defs>
-                          <linearGradient id="Gradient1">
-                            <stop className="stop1" offset="0%"/>
-                            <stop className="stop2" offset="50%"/>
-                            <stop className="stop3" offset="100%"/>
-                          </linearGradient>
-                          <linearGradient id="Gradient2" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stop-color="#e4964e"/>
-                            <stop offset="50%" stop-color="#e66f62"/>
-                            <stop offset="100%" stop-color="#e5586d"/>
-                          </linearGradient>
-                        </defs>
-
-                      <circle r={calcMarkerRadius(nodeCount)} fill={calcMarkerColor(nodeCount)} stroke="#000000" strokeWidth={1} />
-                      <text
-                        textAnchor="middle"
-                        y={5}
-                        style={{ fontFamily: "system-ui", fill: "black" }}
-                      >
-                        {nodeCount}
-                      </text>
-
-                      <g transform="translate(-18, -58)">
-                        <path stroke="black" strokeWidth={1} id="svg_2" fill="url(#Gradient2)" id="svg_1" d="m18.586387,0.332172c-10.248667,0 -18.586387,8.311892 -18.586387,18.528714c0,15.222386 16.736357,30.085726 17.449082,30.711171c0.324896,0.285129 0.731017,0.427945 1.137305,0.427945c0.406288,0 0.812409,-0.142648 1.137473,-0.427945c0.712389,-0.625277 17.448914,-15.488618 17.448914,-30.711171c0,-10.216822 -8.337719,-18.528714 -18.586387,-18.528714zm0,13.327155c2.846871,0 5.162932,2.333377 5.162932,5.201559c0,2.868182 -2.316061,5.201559 -5.162932,5.201559c-2.846871,0 -5.162932,-2.333377 -5.162932,-5.201559c0,-2.868182 2.316061,-5.201559 5.162932,-5.201559z"/>
-                      </g>
-
-                    </Marker>
-
-                    :
-
-                    <Marker coordinates={coordinates}>
-                      <circle r={calcMarkerRadius(nodeCount)} fill={calcMarkerColor(nodeCount)} stroke="#000000" strokeWidth={1} />
-                        <text
-                        textAnchor="middle"
-                        y={5}
-                        style={{ fontFamily: "system-ui", fill: "black" }}
+                  {markers.map(
+                    ({ leader, nodeCount, country, coordinates }) => {
+                      return leader === true ? (
+                        <Marker
+                          coordinates={coordinates}
+                          style={{ zIndex: "1000" }}
                         >
-                      {nodeCount}
-                      </text>
-                    </Marker>
+                          <defs>
+                            <linearGradient id="Gradient1">
+                              <stop className="stop1" offset="0%" />
+                              <stop className="stop2" offset="50%" />
+                              <stop className="stop3" offset="100%" />
+                            </linearGradient>
+                            <linearGradient
+                              id="Gradient2"
+                              x1="0"
+                              x2="0"
+                              y1="0"
+                              y2="1"
+                            >
+                              <stop offset="0%" stop-color="#e4964e" />
+                              <stop offset="50%" stop-color="#e66f62" />
+                              <stop offset="100%" stop-color="#e5586d" />
+                            </linearGradient>
+                          </defs>
 
-                })}
+                          <circle
+                            r={calcMarkerRadius(nodeCount)}
+                            fill={calcMarkerColor(nodeCount)}
+                            stroke="#000000"
+                            strokeWidth={1}
+                          />
+                          <text
+                            textAnchor="middle"
+                            y={5}
+                            style={{ fontFamily: "system-ui", fill: "black" }}
+                          >
+                            {nodeCount}
+                          </text>
 
+                          <g transform="translate(-18, -58)">
+                            <path
+                              stroke="black"
+                              strokeWidth={1}
+                              id="svg_2"
+                              fill="url(#Gradient2)"
+                              id="svg_1"
+                              d="m18.586387,0.332172c-10.248667,0 -18.586387,8.311892 -18.586387,18.528714c0,15.222386 16.736357,30.085726 17.449082,30.711171c0.324896,0.285129 0.731017,0.427945 1.137305,0.427945c0.406288,0 0.812409,-0.142648 1.137473,-0.427945c0.712389,-0.625277 17.448914,-15.488618 17.448914,-30.711171c0,-10.216822 -8.337719,-18.528714 -18.586387,-18.528714zm0,13.327155c2.846871,0 5.162932,2.333377 5.162932,5.201559c0,2.868182 -2.316061,5.201559 -5.162932,5.201559c-2.846871,0 -5.162932,-2.333377 -5.162932,-5.201559c0,-2.868182 2.316061,-5.201559 5.162932,-5.201559z"
+                            />
+                          </g>
+                        </Marker>
+                      ) : (
+                        <Marker coordinates={coordinates}>
+                          <circle
+                            r={calcMarkerRadius(nodeCount)}
+                            fill={calcMarkerColor(nodeCount)}
+                            stroke="#000000"
+                            strokeWidth={1}
+                          />
+                          <text
+                            textAnchor="middle"
+                            y={5}
+                            style={{ fontFamily: "system-ui", fill: "black" }}
+                          >
+                            {nodeCount}
+                          </text>
+                        </Marker>
+                      );
+                    }
+                  )}
                 </ZoomableGroup>
               </ComposableMap>
-
-          </CardBody>
-        </Card>
-      </Col>
-
+            </CardBody>
+          </Card>
+        </Col>
       </Row>
-
-    );}
-};
+    );
+  }
+}
