@@ -160,7 +160,6 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
     let addrs: Vec<_> = nodes
         .iter()
         .filter_map(ContactInfo::valid_client_facing_addr)
-        .map(|addrs| addrs)
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();

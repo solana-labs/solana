@@ -58,10 +58,7 @@ impl<'a> Proof<'a> {
                 None
             }
         });
-        match result {
-            Some(_) => true,
-            _ => false,
-        }
+        matches!(result, Some(_))
     }
 }
 

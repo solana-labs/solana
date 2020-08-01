@@ -179,19 +179,13 @@ where
 
     info!("Generating {:?} account keys", total_keys);
     let mut account_keypairs = generate_keypairs(total_keys);
-    let src_keypairs: Vec<_> = account_keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair)
-        .collect();
+    let src_keypairs: Vec<_> = account_keypairs.drain(0..accounts_in_groups).collect();
     let src_pubkeys: Vec<Pubkey> = src_keypairs
         .iter()
         .map(|keypair| keypair.pubkey())
         .collect();
 
-    let profit_keypairs: Vec<_> = account_keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair)
-        .collect();
+    let profit_keypairs: Vec<_> = account_keypairs.drain(0..accounts_in_groups).collect();
     let profit_pubkeys: Vec<Pubkey> = profit_keypairs
         .iter()
         .map(|keypair| keypair.pubkey())

@@ -2170,11 +2170,7 @@ impl Blockstore {
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {
-        if let Ok(Some(true)) = self.db.get::<cf::Root>(slot) {
-            true
-        } else {
-            false
-        }
+        matches!(self.db.get::<cf::Root>(slot), Ok(Some(true)))
     }
 
     pub fn set_roots(&self, rooted_slots: &[u64]) -> Result<()> {
@@ -2194,15 +2190,12 @@ impl Blockstore {
     }
 
     pub fn is_dead(&self, slot: Slot) -> bool {
-        if let Some(true) = self
-            .db
-            .get::<cf::DeadSlots>(slot)
-            .expect("fetch from DeadSlots column family failed")
-        {
-            true
-        } else {
-            false
-        }
+        matches!(
+            self.db
+                .get::<cf::DeadSlots>(slot)
+                .expect("fetch from DeadSlots column family failed"),
+            Some(true)
+        )
     }
 
     pub fn set_dead_slot(&self, slot: Slot) -> Result<()> {
