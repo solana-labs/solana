@@ -198,10 +198,7 @@ pub enum HashAgeKind {
 
 impl HashAgeKind {
     pub fn is_durable_nonce(&self) -> bool {
-        match self {
-            HashAgeKind::DurableNonce(_, _) => true,
-            _ => false,
-        }
+        matches!(self, HashAgeKind::DurableNonce(_, _))
     }
 }
 

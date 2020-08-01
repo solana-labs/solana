@@ -202,7 +202,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
 #[test]
 #[serial]
 fn test_retransmit_small() {
-    let stakes: Vec<_> = (0..200).map(|i| i).collect();
+    let stakes: Vec<_> = (0..200).collect();
     run_simulation(&stakes, 200);
 }
 
@@ -211,7 +211,7 @@ fn test_retransmit_small() {
 #[serial]
 fn test_retransmit_medium() {
     let num_nodes = 2000;
-    let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
+    let stakes: Vec<_> = (0..num_nodes).collect();
     run_simulation(&stakes, 200);
 }
 
@@ -229,6 +229,6 @@ fn test_retransmit_medium_equal_stakes() {
 #[serial]
 fn test_retransmit_large() {
     let num_nodes = 4000;
-    let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
+    let stakes: Vec<_> = (0..num_nodes).collect();
     run_simulation(&stakes, 2);
 }
