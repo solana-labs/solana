@@ -124,7 +124,10 @@ const renderAccountRow = (
         </Copyable>
       </td>
       <td className="text-right">{lamportsToSolString(account.lamports, 0)}</td>
-      <td className="text-center">{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
+      <td className="text-center">{`${(
+        (100 * account.lamports) /
+        supply
+      ).toFixed(3)}%`}</td>
       <td>
         <Link
           to={(location) => ({

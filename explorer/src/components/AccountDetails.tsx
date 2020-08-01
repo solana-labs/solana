@@ -1,8 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useClusterModal } from "providers/cluster";
 import { PublicKey, StakeProgram } from "@solana/web3.js";
-import ClusterStatusButton from "components/ClusterStatusButton";
 import { useHistory, useLocation } from "react-router-dom";
 import {
   FetchStatus,
@@ -23,7 +21,6 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
   const fetchAccount = useFetchAccountInfo();
-  const [, setShow] = useClusterModal();
   const [search, setSearch] = React.useState(address);
   const history = useHistory();
   const location = useLocation();
@@ -61,34 +58,10 @@ export default function AccountDetails({ address }: Props) {
     <div className="container">
       <div className="header">
         <div className="header-body">
-          <div className="row align-items-center">
-            <div className="col">
-              <h6 className="header-pretitle">Details</h6>
-              <h3 className="header-title">Account</h3>
-            </div>
-            <div className="col-auto">
-              <ClusterStatusButton onClick={() => setShow(true)} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row mb-4 mt-n2 align-items-center">
-        <div className="col d-none d-md-block">
-          <div className="input-group input-group-merge">
-            {searchInput}
-            <div className="input-group-prepend">
-              <div className="input-group-text">
-                <span className="fe fe-search"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col d-block d-md-none">{searchInput}</div>
-        <div className="col-auto ml-n3 d-block d-md-none">
-          <button className="btn btn-white" onClick={updateAddress}>
-            <span className="fe fe-search"></span>
-          </button>
+          <h6 className="header-pretitle">Address</h6>
+          <h4 className="header-title text-monospace text-truncate font-weight-bold">
+            {address}
+          </h4>
         </div>
       </div>
       {pubkey && <AccountCards pubkey={pubkey} />}
