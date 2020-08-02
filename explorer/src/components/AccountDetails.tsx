@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { PublicKey, StakeProgram } from "@solana/web3.js";
+import { PublicKey, StakeProgram, TokenAccountInfo } from "@solana/web3.js";
 import {
   FetchStatus,
   useFetchAccountInfo,
@@ -16,6 +16,10 @@ import ErrorCard from "components/common/ErrorCard";
 import LoadingCard from "components/common/LoadingCard";
 import TableCardBody from "components/common/TableCardBody";
 import { useFetchAccountHistory } from "providers/accounts/history";
+import {
+  useFetchAccountOwnedTokens,
+  useAccountOwnedTokens,
+} from "providers/accounts/tokens";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
@@ -36,6 +40,7 @@ export default function AccountDetails({ address }: Props) {
         </div>
       </div>
       {pubkey && <AccountCards pubkey={pubkey} />}
+      {pubkey && <TokensCard pubkey={pubkey} />}
       {pubkey && <HistoryCard pubkey={pubkey} />}
     </div>
   );
@@ -125,6 +130,112 @@ function UnknownAccountCard({ account }: { account: Account }) {
   );
 }
 
+function TokensCard({ pubkey }: { pubkey: PublicKey }) {
+  const address = pubkey.toBase58();
+  const ownedTokens = useAccountOwnedTokens(address);
+  const fetchAccountTokens = useFetchAccountOwnedTokens();
+  const refresh = () => fetchAccountTokens(pubkey);
+
+  if (ownedTokens === undefined) {
+    return null;
+  }
+
+  const { status, tokens } = ownedTokens;
+  const fetching = status === FetchStatus.Fetching;
+  if (fetching && (tokens === undefined || tokens.length === 0)) {
+    return <LoadingCard message="Loading owned tokens" />;
+  } else if (tokens === undefined) {
+    return <ErrorCard retry={refresh} text="Failed to fetch owned tokens" />;
+  }
+
+  if (tokens.length === 0) {
+    return (
+      <ErrorCard
+        retry={refresh}
+        retryText="Try Again"
+        text={"No owned tokens found"}
+      />
+    );
+  }
+
+  const mappedTokens = new Map<string, TokenAccountInfo>();
+  for (const token of tokens) {
+    const mintAddress = token.mint.toBase58();
+    const tokenInfo = mappedTokens.get(mintAddress);
+    if (tokenInfo) {
+      tokenInfo.amount += token.amount;
+    } else {
+      mappedTokens.set(mintAddress, token);
+    }
+  }
+
+  const detailsList: React.ReactNode[] = [];
+  mappedTokens.forEach((tokenInfo, mintAddress) => {
+    const balance = tokenInfo.amount;
+    detailsList.push(
+      <tr key={mintAddress}>
+        <td>
+          <Copyable text={mintAddress}>
+            <code>{mintAddress}</code>
+          </Copyable>
+        </td>
+
+        <td>{balance}</td>
+
+        <td>
+          <Link
+            to={(location) => ({
+              ...location,
+              pathname: "/account/" + mintAddress,
+            })}
+            className="btn btn-rounded-circle btn-white btn-sm"
+          >
+            <span className="fe fe-arrow-right"></span>
+          </Link>
+        </td>
+      </tr>
+    );
+  });
+
+  return (
+    <div className="card">
+      <div className="card-header align-items-center">
+        <h3 className="card-header-title">Tokens</h3>
+        <button
+          className="btn btn-white btn-sm"
+          disabled={fetching}
+          onClick={refresh}
+        >
+          {fetching ? (
+            <>
+              <span className="spinner-grow spinner-grow-sm mr-2"></span>
+              Loading
+            </>
+          ) : (
+            <>
+              <span className="fe fe-refresh-cw mr-2"></span>
+              Refresh
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="table-responsive mb-0">
+        <table className="table table-sm table-nowrap card-table">
+          <thead>
+            <tr>
+              <th className="text-muted">Token Address</th>
+              <th className="text-muted">Balance</th>
+              <th className="text-muted">Details</th>
+            </tr>
+          </thead>
+          <tbody className="list">{detailsList}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
@@ -140,7 +251,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
     history.fetchedRange === undefined
   ) {
     if (history.status === FetchStatus.Fetching) {
-      return <LoadingCard />;
+      return <LoadingCard message="Loading history" />;
     }
 
     return (
@@ -150,7 +261,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
   if (history.fetched.length === 0) {
     if (history.status === FetchStatus.Fetching) {
-      return <LoadingCard />;
+      return <LoadingCard message="Loading history" />;
     }
     return (
       <ErrorCard

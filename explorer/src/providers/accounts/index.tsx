@@ -3,6 +3,7 @@ import { StakeAccount } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "../cluster";
 import { HistoryProvider } from "./history";
+import { TokensProvider } from "./tokens";
 export { useAccountHistory } from "./history";
 
 export enum FetchStatus {
@@ -137,7 +138,9 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        <HistoryProvider>{children}</HistoryProvider>
+        <TokensProvider>
+          <HistoryProvider>{children}</HistoryProvider>
+        </TokensProvider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
