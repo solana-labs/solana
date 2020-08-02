@@ -28,13 +28,6 @@ import { isCached } from "providers/transactions/cached";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
-  const fetchTransaction = useFetchTransactionStatus();
-
-  // Fetch transaction on load
-  React.useEffect(() => {
-    fetchTransaction(signature);
-  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <div className="container mt-n3">
       <div className="header">
@@ -52,10 +45,16 @@ export default function TransactionDetails({ signature }: Props) {
 }
 
 function StatusCard({ signature }: Props) {
+  const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const refresh = useFetchTransactionStatus();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock } = useCluster();
+
+  // Fetch transaction on load
+  React.useEffect(() => {
+    if (!status) fetchStatus(signature);
+  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
