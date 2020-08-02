@@ -921,7 +921,7 @@ impl JsonRpcRequestProcessor {
             get_filtered_program_accounts(&bank, &mint_account.owner, filters)
                 .map(|(address, account)| {
                     let mut data = account.data.to_vec();
-                    let amount = TokenState::unpack(&mut data)
+                    let amount = spl_token_v1_0::state::unpack(&mut data)
                         .map(|account: &mut TokenAccount| account.amount)
                         .unwrap_or(0);
                     RpcTokenAccountBalance {
@@ -4598,7 +4598,8 @@ pub mod tests {
 
         // Add new_mint, and another token account on new_mint with different balance
         let mut mint_data = [0; size_of::<Mint>()];
-        let mint_state: &mut Mint = TokenState::unpack_unchecked(&mut mint_data).unwrap();
+        let mint_state: &mut Mint =
+            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
         *mint_state = Mint {
             owner: COption::Some(owner),
             decimals: 2,
@@ -4615,7 +4616,8 @@ pub mod tests {
             &mint_account,
         );
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        let account: &mut TokenAccount =
+            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         *account = TokenAccount {
             mint: new_mint,
             owner,
