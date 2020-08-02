@@ -893,6 +893,48 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(&bank, supply))
     }
 
+    pub fn get_token_largest_accounts(
+        &self,
+        mint: &Pubkey,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
+        let bank = self.bank(commitment);
+        let mint_account = bank.get_account(mint).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find mint".to_string())
+        })?;
+        if mint_account.owner != spl_token_id_v1_0() {
+            return Err(Error::invalid_params(
+                "Invalid param: not a v1.0 Token mint".to_string(),
+            ));
+        }
+        let filters = vec![
+            // Filter on Mint address
+            RpcFilterType::Memcmp(Memcmp {
+                offset: 0,
+                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
+                encoding: None,
+            }),
+            // Filter on Token Account state
+            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+        ];
+        let mut token_balances: Vec<RpcTokenAccountBalance> =
+            get_filtered_program_accounts(&bank, &mint_account.owner, filters)
+                .map(|(address, account)| {
+                    let mut data = account.data.to_vec();
+                    let amount = TokenState::unpack(&mut data)
+                        .map(|account: &mut TokenAccount| account.amount)
+                        .unwrap_or(0);
+                    RpcTokenAccountBalance {
+                        address: address.to_string(),
+                        amount,
+                    }
+                })
+                .collect();
+        token_balances.sort_by(|a, b| a.amount.cmp(&b.amount).reverse());
+        token_balances.truncate(NUM_LARGEST_ACCOUNTS);
+        Ok(new_response(&bank, token_balances))
+    }
+
     pub fn get_token_accounts_by_owner(
         &self,
         owner: &Pubkey,
@@ -1345,6 +1387,14 @@ pub trait RpcSol {
         mint_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<u64>>;
+
+    #[rpc(meta, name = "getTokenLargestAccounts")]
+    fn get_token_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        mint_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>>;
 
     #[rpc(meta, name = "getTokenAccountsByOwner")]
     fn get_token_accounts_by_owner(
@@ -1979,6 +2029,20 @@ impl RpcSol for RpcSolImpl {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
+    }
+
+    fn get_token_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        mint_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
+        debug!(
+            "get_token_largest_accounts rpc request received: {:?}",
+            mint_str
+        );
+        let mint = verify_pubkey(mint_str)?;
+        meta.get_token_largest_accounts(&mint, commitment)
     }
 
     fn get_token_accounts_by_owner(
@@ -4514,7 +4578,7 @@ pub mod tests {
             .expect("actual response deserialization");
         assert!(result.get("error").is_some());
 
-        // Test non-existent Owner
+        // Test non-existent Delegate
         let req = format!(
             r#"{{
                 "jsonrpc":"2.0",
@@ -4525,11 +4589,73 @@ pub mod tests {
             Pubkey::new_rand(),
             spl_token_id_v1_0(),
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let accounts: Vec<RpcKeyedAccount> =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         assert!(accounts.is_empty());
+
+        // Add new_mint, and another token account on new_mint with different balance
+        let mut mint_data = [0; size_of::<Mint>()];
+        let mint_state: &mut Mint = TokenState::unpack_unchecked(&mut mint_data).unwrap();
+        *mint_state = Mint {
+            owner: COption::Some(owner),
+            decimals: 2,
+            is_initialized: true,
+        };
+        let mint_account = Account {
+            lamports: 111,
+            data: mint_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        bank.store_account(
+            &Pubkey::from_str(&new_mint.to_string()).unwrap(),
+            &mint_account,
+        );
+        let mut account_data = [0; size_of::<TokenAccount>()];
+        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        *account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 10,
+            is_initialized: true,
+            is_native: false,
+            delegated_amount: 30,
+        };
+        let token_account = Account {
+            lamports: 111,
+            data: account_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        let token_with_smaller_balance = Pubkey::new_rand();
+        bank.store_account(&token_with_smaller_balance, &token_account);
+
+        // Test largest token accounts
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenLargestAccounts","params":["{}"]}}"#,
+            new_mint,
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let largest_accounts: Vec<RpcTokenAccountBalance> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(
+            largest_accounts,
+            vec![
+                RpcTokenAccountBalance {
+                    address: token_with_different_mint_pubkey.to_string(),
+                    amount: 42,
+                },
+                RpcTokenAccountBalance {
+                    address: token_with_smaller_balance.to_string(),
+                    amount: 10,
+                }
+            ]
+        );
     }
 }
