@@ -50,7 +50,7 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use spl_token_v1_0::state::{Account as TokenAccount, State as TokenState};
+use spl_token_v1_0::state::Account as TokenAccount;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -850,7 +850,7 @@ impl JsonRpcRequestProcessor {
             ));
         }
         let mut data = account.data.to_vec();
-        let balance = TokenState::unpack(&mut data)
+        let balance = spl_token_v1_0::state::unpack(&mut data)
             .map_err(|_| {
                 Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
             })
@@ -885,7 +885,7 @@ impl JsonRpcRequestProcessor {
         let supply = get_filtered_program_accounts(&bank, &mint_account.owner, filters)
             .map(|(_pubkey, account)| {
                 let mut data = account.data.to_vec();
-                TokenState::unpack(&mut data)
+                spl_token_v1_0::state::unpack(&mut data)
                     .map(|account: &mut TokenAccount| account.amount)
                     .unwrap_or(0)
             })
@@ -4262,7 +4262,8 @@ pub mod tests {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        let account: &mut TokenAccount =
+            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
@@ -4306,7 +4307,8 @@ pub mod tests {
 
         // Add the mint, plus another token account to ensure getTokenSupply sums all mint accounts
         let mut mint_data = [0; size_of::<Mint>()];
-        let mint_state: &mut Mint = TokenState::unpack_unchecked(&mut mint_data).unwrap();
+        let mint_state: &mut Mint =
+            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
         *mint_state = Mint {
             owner: COption::Some(owner),
             decimals: 2,
@@ -4344,7 +4346,8 @@ pub mod tests {
 
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount = TokenState::unpack_unchecked(&mut account_data).unwrap();
+        let account: &mut TokenAccount =
+            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         let new_mint = SplTokenPubkey::new(&[5; 32]);
         *account = TokenAccount {
             mint: new_mint,
