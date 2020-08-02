@@ -6,10 +6,9 @@ import {
   StakeProgram,
   SystemProgram,
 } from "@solana/web3.js";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function InitializeDetailsCard(props: {
   ix: TransactionInstruction;
@@ -26,10 +25,6 @@ export function InitializeDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const stakerPubkey = params.authorized.staker.toBase58();
-  const withdrawerPubkey = params.authorized.withdrawer.toBase58();
-  const stakePubkey = params.stakePubkey.toBase58();
-
   return (
     <InstructionCard
       ix={ix}
@@ -40,36 +35,28 @@ export function InitializeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
-            <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
         <td className="text-right">
-          <Copyable right text={stakePubkey}>
-            <code>{stakePubkey}</code>
-          </Copyable>
+          <Address pubkey={params.stakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Authority Address</td>
         <td className="text-right">
-          <Copyable right text={stakerPubkey}>
-            <code>{stakerPubkey}</code>
-          </Copyable>
+          <Address pubkey={params.authorized.staker} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Withdraw Authority Address</td>
         <td className="text-right">
-          <Copyable right text={withdrawerPubkey}>
-            <code>{withdrawerPubkey}</code>
-          </Copyable>
+          <Address pubkey={params.authorized.withdrawer} alignRight link />
         </td>
       </tr>
 
@@ -93,9 +80,7 @@ export function InitializeDetailsCard(props: {
         <tr>
           <td>Lockup Custodian Address</td>
           <td className="text-right">
-            <Copyable right text={params.lockup.custodian.toBase58()}>
-              <code>{displayAddress(params.lockup.custodian.toBase58())}</code>
-            </Copyable>
+            <Address pubkey={params.lockup.custodian} alignRight link />
           </td>
         </tr>
       )}

@@ -5,10 +5,9 @@ import {
   StakeInstruction,
   StakeProgram,
 } from "@solana/web3.js";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function AuthorizeDetailsCard(props: {
   ix: TransactionInstruction;
@@ -24,10 +23,6 @@ export function AuthorizeDetailsCard(props: {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
-
-  const stakePubkey = params.stakePubkey.toBase58();
-  const authorizedPubkey = params.authorizedPubkey.toBase58();
-  const newAuthorizedPubkey = params.newAuthorizedPubkey.toBase58();
 
   let authorizationType;
   switch (params.stakeAuthorizationType.index) {
@@ -52,36 +47,28 @@ export function AuthorizeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
-            <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
         <td className="text-right">
-          <Copyable right text={stakePubkey}>
-            <code>{stakePubkey}</code>
-          </Copyable>
+          <Address pubkey={params.stakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Old Authority Address</td>
         <td className="text-right">
-          <Copyable right text={authorizedPubkey}>
-            <code>{authorizedPubkey}</code>
-          </Copyable>
+          <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Authority Address</td>
         <td className="text-right">
-          <Copyable right text={newAuthorizedPubkey}>
-            <code>{newAuthorizedPubkey}</code>
-          </Copyable>
+          <Address pubkey={params.newAuthorizedPubkey} alignRight link />
         </td>
       </tr>
 

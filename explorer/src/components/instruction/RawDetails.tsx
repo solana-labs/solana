@@ -1,8 +1,8 @@
 import React from "react";
 import bs58 from "bs58";
 import { TransactionInstruction } from "@solana/web3.js";
-import { displayAddress } from "utils/tx";
 import Copyable from "components/Copyable";
+import Address from "components/common/Address";
 
 function displayData(data: string) {
   if (data.length > 50) {
@@ -18,9 +18,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable text={ix.programId.toBase58()} bottom right>
-            <code>{displayAddress(ix.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={ix.programId} alignRight link />
         </td>
       </tr>
 
@@ -36,9 +34,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
             )}
           </td>
           <td className="text-right">
-            <Copyable text={pubkey.toBase58()} right>
-              <code>{pubkey.toBase58()}</code>
-            </Copyable>
+            <Address pubkey={pubkey} alignRight link />
           </td>
         </tr>
       ))}

@@ -14,8 +14,6 @@ import {
   SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
-import { displayAddress } from "utils/tx";
-import Copyable from "./Copyable";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
@@ -25,6 +23,8 @@ import TableCardBody from "./common/TableCardBody";
 import { displayTimestamp } from "utils/date";
 import InfoTooltip from "components/InfoTooltip";
 import { isCached } from "providers/transactions/cached";
+import Address from "./common/Address";
+import Signature from "./common/Signature";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -115,9 +115,7 @@ function StatusCard({ signature }: Props) {
         <tr>
           <td>Signature</td>
           <td className="text-right">
-            <Copyable text={signature} right bottom>
-              <code>{signature}</code>
-            </Copyable>
+            <Signature signature={signature} />
           </td>
         </tr>
 
@@ -239,9 +237,7 @@ function AccountsCard({ signature }: Props) {
     return (
       <tr key={key}>
         <td>
-          <Copyable text={key}>
-            <code>{displayAddress(pubkey.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={pubkey} link />
         </td>
         <td>{renderChange()}</td>
         <td>{lamportsToSolString(post)}</td>
