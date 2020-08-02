@@ -20,6 +20,7 @@ import {
   useFetchAccountOwnedTokens,
   useAccountOwnedTokens,
 } from "providers/accounts/tokens";
+import { useCluster, ClusterStatus } from "providers/cluster";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
@@ -51,11 +52,13 @@ function AccountCards({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
   const refresh = useFetchAccountInfo();
+  const { status } = useCluster();
 
   // Fetch account on load
   React.useEffect(() => {
-    if (pubkey && !info) fetchAccount(pubkey);
-  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (pubkey && !info && status === ClusterStatus.Connected)
+      fetchAccount(pubkey);
+  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;

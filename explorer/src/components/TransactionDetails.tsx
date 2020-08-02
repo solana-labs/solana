@@ -6,7 +6,7 @@ import {
   FetchStatus,
 } from "../providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useCluster } from "providers/cluster";
+import { useCluster, ClusterStatus } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
@@ -49,12 +49,13 @@ function StatusCard({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const refresh = useFetchTransactionStatus();
   const details = useTransactionDetails(signature);
-  const { firstAvailableBlock } = useCluster();
+  const { firstAvailableBlock, status: clusterStatus } = useCluster();
 
   // Fetch transaction on load
   React.useEffect(() => {
-    if (!status) fetchStatus(signature);
-  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!status && clusterStatus === ClusterStatus.Connected)
+      fetchStatus(signature);
+  }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -229,9 +230,9 @@ function AccountsCard({ signature }: Props) {
       if (change === 0) return "";
       const sols = lamportsToSolString(change);
       if (change > 0) {
-        return <span className="badge badge-soft-success">{"+" + sols}</span>;
+        return <span className="badge badge-soft-success">+{sols}</span>;
       } else {
-        return <span className="badge badge-soft-warning">{"-" + sols}</span>;
+        return <span className="badge badge-soft-warning">-{sols}</span>;
       }
     };
 
