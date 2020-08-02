@@ -219,3 +219,10 @@ pub struct RpcStakeActivation {
     pub active: u64,
     pub inactive: u64,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTokenAccountBalance {
+    pub address: String,
+    pub amount: u64,
+}
