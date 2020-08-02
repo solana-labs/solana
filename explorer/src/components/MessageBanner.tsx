@@ -16,13 +16,13 @@ const announcements = new Map<Cluster, Announcement>();
 //   estimate: "2 hours",
 // });
 // announcements.set(Cluster.MainnetBeta, {
-//   message: "Mainnet Beta upgrade in progress. Transactions are disabled",
-//   start: new Date("August 1, 2020 00:00:00 GMT+0:00"),
-//   end: new Date("August 3, 2020 00:00:00 GMT+0:00"),
+//   message: "Mainnet Beta upgrade in progress. Transactions disabled until epoch 62",
+//   start: new Date("August 2, 2020 00:00:00 GMT+0:00"),
+//   end: new Date("August 4, 2020 00:00:00 GMT+0:00"),
 // });
 announcements.set(Cluster.MainnetBeta, {
   message:
-    "Mainnet Beta upgrade during epoch 61 (approximately August 2-4). " +
+    "Mainnet Beta upgrade during epoch 61 (approximately August 3-4). " +
     "TRANSACTIONS DISABLED DURING THE UPGRADE",
 });
 
