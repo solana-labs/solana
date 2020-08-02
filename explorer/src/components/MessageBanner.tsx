@@ -22,8 +22,7 @@ const announcements = new Map<Cluster, Announcement>();
 // });
 announcements.set(Cluster.MainnetBeta, {
   message:
-    "Mainnet Beta upgrade during epoch 61 (approximately August 3-4). " +
-    "TRANSACTIONS DISABLED DURING THE UPGRADE",
+    "Mainnet Beta upgrade in progress. Transactions disabled until epoch 62",
 });
 
 export default function Banner() {
