@@ -230,9 +230,9 @@ function AccountsCard({ signature }: Props) {
       if (change === 0) return "";
       const sols = lamportsToSolString(change);
       if (change > 0) {
-        return <span className="badge badge-soft-success">{"+" + sols}</span>;
+        return <span className="badge badge-soft-success">+{sols}</span>;
       } else {
-        return <span className="badge badge-soft-warning">{"-" + sols}</span>;
+        return <span className="badge badge-soft-warning">-{sols}</span>;
       }
     };
 
