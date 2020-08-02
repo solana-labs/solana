@@ -2943,7 +2943,7 @@ dependencies = [
  "log 0.4.8",
  "rand 0.7.3",
  "rayon",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-runtime",
  "solana-sdk 1.3.0",
@@ -2961,7 +2961,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-core",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-perf",
  "solana-runtime",
@@ -2990,7 +2990,7 @@ dependencies = [
  "solana-faucet",
  "solana-genesis",
  "solana-local-cluster",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-net-utils",
  "solana-runtime",
@@ -3004,7 +3004,7 @@ version = "1.3.0"
 dependencies = [
  "clap",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-net-utils",
  "solana-streamer",
  "solana-version",
@@ -3028,7 +3028,7 @@ dependencies = [
  "solana-faucet",
  "solana-genesis",
  "solana-local-cluster",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
@@ -3114,7 +3114,7 @@ dependencies = [
  "solana-config-program",
  "solana-core",
  "solana-faucet",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-net-utils",
  "solana-remote-wallet",
  "solana-runtime",
@@ -3158,7 +3158,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-net-utils",
  "solana-sdk 1.3.0",
  "solana-transaction-status",
@@ -3177,7 +3177,7 @@ dependencies = [
  "log 0.4.8",
  "serde",
  "serde_derive",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-sdk 1.3.0",
 ]
 
@@ -3227,7 +3227,7 @@ dependencies = [
  "solana-faucet",
  "solana-genesis-programs",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
@@ -3253,6 +3253,31 @@ dependencies = [
  "tokio-fs",
  "tokio-io",
  "trees",
+]
+
+[[package]]
+name = "solana-crate-features"
+version = "1.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "610ba71932d0bf4abf88eabb081ee43fa1ee6bb5137c4fa6776ea9dd8630ca5c"
+dependencies = [
+ "backtrace",
+ "bytes 0.4.12",
+ "cc",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "either",
+ "failure",
+ "lazy_static",
+ "libc",
+ "rand_chacha 0.2.2",
+ "regex-syntax",
+ "reqwest",
+ "serde",
+ "syn 0.15.44",
+ "syn 1.0.27",
+ "tokio 0.1.22",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -3290,7 +3315,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-core",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-net-utils",
  "solana-runtime",
  "solana-sdk 1.3.0",
@@ -3321,7 +3346,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_derive",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk 1.3.0",
@@ -3348,7 +3373,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-sdk 1.3.0",
  "solana-version",
@@ -3369,7 +3394,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-genesis-programs",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-runtime",
  "solana-sdk 1.3.0",
  "solana-stake-program",
@@ -3399,7 +3424,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-core",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-net-utils",
  "solana-sdk 1.3.0",
  "solana-version",
@@ -3428,7 +3453,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-config-program",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-sdk 1.3.0",
  "solana-version",
  "tar",
@@ -3483,7 +3508,7 @@ dependencies = [
  "sha2",
  "solana-budget-program",
  "solana-genesis-programs",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
@@ -3516,7 +3541,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-runtime",
  "solana-sdk 1.3.0",
  "solana-stake-program",
@@ -3544,7 +3569,7 @@ dependencies = [
  "solana-faucet",
  "solana-genesis-programs",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk 1.3.0",
@@ -3563,8 +3588,19 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-version",
+]
+
+[[package]]
+name = "solana-logger"
+version = "1.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc703cb2807e9d713f70df32ac8c3a7a9c8af437dd0d468b1b77cfd8e8b4cbc8"
+dependencies = [
+ "env_logger",
+ "lazy_static",
+ "log 0.4.8",
 ]
 
 [[package]]
@@ -3620,7 +3656,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
 ]
 
 [[package]]
@@ -3637,7 +3673,7 @@ dependencies = [
  "serde_derive",
  "socket2",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
@@ -3649,7 +3685,7 @@ name = "solana-noop-program"
 version = "1.3.0"
 dependencies = [
  "log 0.4.8",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-sdk 1.3.0",
 ]
 
@@ -3689,7 +3725,7 @@ dependencies = [
  "rayon",
  "serde",
  "solana-budget-program",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk 1.3.0",
@@ -3705,7 +3741,7 @@ dependencies = [
  "rayon",
  "solana-clap-utils",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-perf",
  "solana-sdk 1.3.0",
@@ -3725,7 +3761,7 @@ dependencies = [
  "serde_yaml",
  "solana-client",
  "solana-core",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-net-utils",
  "solana-notifier",
@@ -3789,7 +3825,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-metrics",
  "solana-noop-program",
@@ -3815,27 +3851,38 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.13"
+version = "1.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cae779f912f1cbe2fe91df656ecc5ccdda9dd3378c0934f4390b7ba33501b3dc"
+checksum = "a556c1b456609b760ff47b933912f27563ea8a9a1692864cbc1014c02f5b981e"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bs58",
  "bv",
+ "byteorder",
+ "chrono",
+ "ed25519-dalek",
+ "generic-array 0.14.3",
  "hex",
  "hmac",
  "itertools",
  "log 0.4.8",
+ "memmap",
  "num-derive 0.3.0",
  "num-traits",
  "pbkdf2",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rustc_version",
  "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
+ "serde_json",
  "sha2",
- "solana-sdk-macro 1.2.13",
+ "solana-crate-features 1.2.17",
+ "solana-logger 1.2.17",
+ "solana-sdk-macro 1.2.17",
  "thiserror",
 ]
 
@@ -3869,8 +3916,8 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2",
- "solana-crate-features",
- "solana-logger",
+ "solana-crate-features 1.3.0",
+ "solana-logger 1.3.0",
  "solana-sdk-macro 1.3.0",
  "solana-sdk-macro-frozen-abi",
  "thiserror",
@@ -3879,9 +3926,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.2.13"
+version = "1.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8924af69f2685287988a530014c3268d78d6ce3fe4a1a61f87537c545afa8427"
+checksum = "38bc386020de692562a29c0696a71c14a3d94455a9a785a97c7b254c38d6a2c8"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.17",
@@ -3942,7 +3989,7 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-local-cluster",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-sdk 1.3.0",
  "solana-stake-program",
@@ -3962,7 +4009,7 @@ dependencies = [
  "solana-cli",
  "solana-cli-config",
  "solana-client",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-notifier",
  "solana-sdk 1.3.0",
@@ -3982,7 +4029,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-sdk 1.3.0",
  "solana-sdk-macro-frozen-abi",
@@ -3997,7 +4044,7 @@ dependencies = [
  "libc",
  "log 0.4.8",
  "nix",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
@@ -4014,7 +4061,7 @@ dependencies = [
  "log 0.4.8",
  "nix",
  "solana-clap-utils",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-version",
  "sysctl",
  "unix_socket2",
@@ -4093,7 +4140,7 @@ dependencies = [
  "solana-download-utils",
  "solana-faucet",
  "solana-ledger",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
@@ -4112,7 +4159,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-sdk 1.3.0",
  "solana-sdk-macro-frozen-abi",
 ]
@@ -4144,7 +4191,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-sdk 1.3.0",
  "solana-sdk-macro-frozen-abi",
@@ -4178,7 +4225,7 @@ dependencies = [
  "solana-cli",
  "solana-cli-config",
  "solana-client",
- "solana-logger",
+ "solana-logger 1.3.0",
  "solana-metrics",
  "solana-notifier",
  "solana-sdk 1.3.0",
@@ -4213,24 +4260,24 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spl-memo"
-version = "1.0.4"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "451acd972c0ed2d114c42f8fffdd9a6007840e51fe7791f250d183e72c8ff7b5"
+checksum = "b303bab17e0c696de6d7550ba6f05a5a6dbf5c5d1597e68a4592899072e1c07a"
 dependencies = [
- "solana-sdk 1.2.13",
+ "solana-sdk 1.2.17",
 ]
 
 [[package]]
 name = "spl-token"
-version = "1.0.3"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1088b10ccb61c5f4f770dd46f643e8e2e7c70aeeda4e298a10ccf2090841328"
+checksum = "07c8482ae4aac6bb7d73aef79df5fb403a16a0cfbe200442532cff6b98613383"
 dependencies = [
  "cbindgen",
  "num-derive 0.2.5",
  "num-traits",
  "remove_dir_all",
- "solana-sdk 1.2.13",
+ "solana-sdk 1.2.17",
  "thiserror",
 ]
 
