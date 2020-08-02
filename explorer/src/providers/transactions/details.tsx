@@ -18,7 +18,7 @@ type State = { [signature: string]: Details };
 export enum ActionType {
   Update,
   Add,
-  Remove,
+  Clear,
 }
 
 interface Update {
@@ -30,39 +30,27 @@ interface Update {
 
 interface Add {
   type: ActionType.Add;
-  signatures: TransactionSignature[];
+  signature: TransactionSignature;
 }
 
-interface Remove {
-  type: ActionType.Remove;
-  signatures: TransactionSignature[];
+interface Clear {
+  type: ActionType.Clear;
 }
 
-type Action = Update | Add | Remove;
+type Action = Update | Add | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case ActionType.Add: {
-      if (action.signatures.length === 0) return state;
       const details = { ...state };
-      action.signatures.forEach((signature) => {
-        if (!details[signature]) {
-          details[signature] = {
-            fetchStatus: FetchStatus.Fetching,
-            transaction: null,
-          };
-        }
-      });
-      return details;
-    }
-
-    case ActionType.Remove: {
-      if (action.signatures.length === 0) return state;
-      const details = { ...state };
-      action.signatures.forEach((signature) => {
-        delete details[signature];
-      });
+      const signature = action.signature;
+      if (!details[signature]) {
+        details[signature] = {
+          fetchStatus: FetchStatus.Fetching,
+          transaction: null,
+        };
+      }
       return details;
     }
 
@@ -81,6 +69,10 @@ function reducer(state: State, action: Action): State {
       }
       break;
     }
+
+    case ActionType.Clear: {
+      return {};
+    }
   }
   return state;
 }
@@ -93,32 +85,26 @@ export const DispatchContext = React.createContext<Dispatch | undefined>(
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {});
-
-  const { transactions } = useTransactions();
+  const { transactions, lastFetched } = useTransactions();
   const { url } = useCluster();
+
+  React.useEffect(() => {
+    dispatch({ type: ActionType.Clear });
+  }, [url]);
 
   // Filter blocks for current transaction slots
   React.useEffect(() => {
-    const removeSignatures = new Set<string>();
-    const fetchSignatures = new Set<string>();
-    transactions.forEach(({ signature, info }) => {
-      if (info?.confirmations === "max" && !state[signature])
-        fetchSignatures.add(signature);
-      else if (info?.confirmations !== "max" && state[signature])
-        removeSignatures.add(signature);
-    });
-
-    const removeList: string[] = [];
-    removeSignatures.forEach((s) => removeList.push(s));
-    dispatch({ type: ActionType.Remove, signatures: removeList });
-
-    const fetchList: string[] = [];
-    fetchSignatures.forEach((s) => fetchList.push(s));
-    dispatch({ type: ActionType.Add, signatures: fetchList });
-    fetchSignatures.forEach((signature) => {
-      fetchDetails(dispatch, signature, url);
-    });
-  }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (lastFetched) {
+      const confirmed =
+        transactions[lastFetched] &&
+        transactions[lastFetched].info?.confirmations === "max";
+      const noDetails = !state[lastFetched];
+      if (confirmed && noDetails) {
+        dispatch({ type: ActionType.Add, signature: lastFetched });
+        fetchDetails(dispatch, lastFetched, url);
+      }
+    }
+  }, [transactions, lastFetched]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>

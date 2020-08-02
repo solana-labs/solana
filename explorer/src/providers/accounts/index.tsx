@@ -1,7 +1,6 @@
 import React from "react";
 import { StakeAccount } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
-import { useQuery } from "../../utils/url";
 import { useCluster, ClusterStatus } from "../cluster";
 import { HistoryProvider } from "./history";
 export { useAccountHistory } from "./history";
@@ -20,7 +19,6 @@ export interface Details {
 }
 
 export interface Account {
-  id: number;
   pubkey: PublicKey;
   status: FetchStatus;
   lamports?: number;
@@ -29,13 +27,14 @@ export interface Account {
 
 type Accounts = { [address: string]: Account };
 interface State {
-  idCounter: number;
   accounts: Accounts;
+  lastFetchedAddress: string | undefined;
 }
 
 export enum ActionType {
   Update,
   Fetch,
+  Clear,
 }
 
 interface Update {
@@ -53,7 +52,11 @@ interface Fetch {
   pubkey: PublicKey;
 }
 
-type Action = Update | Fetch;
+interface Clear {
+  type: ActionType.Clear;
+}
+
+type Action = Update | Fetch | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
@@ -65,23 +68,20 @@ function reducer(state: State, action: Action): State {
         const accounts = {
           ...state.accounts,
           [address]: {
-            id: account.id,
             pubkey: account.pubkey,
             status: FetchStatus.Fetching,
           },
         };
-        return { ...state, accounts };
+        return { ...state, accounts, lastFetchedAddress: address };
       } else {
-        const idCounter = state.idCounter + 1;
         const accounts = {
           ...state.accounts,
           [address]: {
-            id: idCounter,
             status: FetchStatus.Fetching,
             pubkey: action.pubkey,
           },
         };
-        return { ...state, accounts, idCounter };
+        return { ...state, accounts, lastFetchedAddress: address };
       }
     }
 
@@ -100,6 +100,13 @@ function reducer(state: State, action: Action): State {
       }
       break;
     }
+
+    case ActionType.Clear: {
+      return {
+        ...state,
+        accounts: {},
+      };
+    }
   }
   return state;
 }
@@ -113,39 +120,19 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {
-    idCounter: 0,
     accounts: {},
+    lastFetchedAddress: undefined,
   });
 
-  const { status, url } = useCluster();
-
   // Check account statuses on startup and whenever cluster updates
+  const { status, url } = useCluster();
   React.useEffect(() => {
-    Object.keys(state.accounts).forEach((address) => {
-      fetchAccountInfo(dispatch, new PublicKey(address), url, status);
-    });
+    if (status === ClusterStatus.Connecting) {
+      dispatch({ type: ActionType.Clear });
+    } else if (status === ClusterStatus.Connected && state.lastFetchedAddress) {
+      fetchAccountInfo(dispatch, new PublicKey(state.lastFetchedAddress), url);
+    }
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const query = useQuery();
-  const values = ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map((key) =>
-    query.get(key)
-  );
-  React.useEffect(() => {
-    values
-      .filter((value): value is string => value !== null)
-      .flatMap((value) => value.split(","))
-      // Remove duplicates
-      .filter((item, pos, self) => self.indexOf(item) === pos)
-      .filter((address) => !state.accounts[address])
-      .forEach((address) => {
-        try {
-          fetchAccountInfo(dispatch, new PublicKey(address), url, status);
-        } catch (err) {
-          console.error(err);
-          // TODO handle bad addresses
-        }
-      });
-  }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -159,16 +146,12 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
 async function fetchAccountInfo(
   dispatch: Dispatch,
   pubkey: PublicKey,
-  url: string,
-  status: ClusterStatus
+  url: string
 ) {
   dispatch({
     type: ActionType.Fetch,
     pubkey,
   });
-
-  // We will auto-refetch when status is no longer connecting
-  if (status === ClusterStatus.Connecting) return;
 
   let fetchStatus;
   let details;
@@ -213,12 +196,7 @@ export function useAccounts() {
   if (!context) {
     throw new Error(`useAccounts must be used within a AccountsProvider`);
   }
-  return {
-    idCounter: context.idCounter,
-    accounts: Object.values(context.accounts).sort((a, b) =>
-      a.id <= b.id ? 1 : -1
-    ),
-  };
+  return context;
 }
 
 export function useAccountInfo(address: string) {
@@ -239,8 +217,8 @@ export function useFetchAccountInfo() {
     );
   }
 
-  const { url, status } = useCluster();
+  const { url } = useCluster();
   return (pubkey: PublicKey) => {
-    fetchAccountInfo(dispatch, pubkey, url, status);
+    fetchAccountInfo(dispatch, pubkey, url);
   };
 }
