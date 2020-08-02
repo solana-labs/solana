@@ -6,10 +6,9 @@ import {
   SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function CreateDetailsCard(props: {
   ix: TransactionInstruction;
@@ -26,9 +25,6 @@ export function CreateDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const from = params.fromPubkey.toBase58();
-  const newKey = params.newAccountPubkey.toBase58();
-
   return (
     <InstructionCard
       ix={ix}
@@ -39,27 +35,21 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>From Address</td>
         <td className="text-right">
-          <Copyable right text={from}>
-            <code>{from}</code>
-          </Copyable>
+          <Address pubkey={params.fromPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Address</td>
         <td className="text-right">
-          <Copyable right text={newKey}>
-            <code>{newKey}</code>
-          </Copyable>
+          <Address pubkey={params.newAccountPubkey} alignRight link />
         </td>
       </tr>
 
@@ -76,9 +66,7 @@ export function CreateDetailsCard(props: {
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable right text={params.programId.toBase58()}>
-            <code>{displayAddress(params.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={params.programId} alignRight link />
         </td>
       </tr>
     </InstructionCard>

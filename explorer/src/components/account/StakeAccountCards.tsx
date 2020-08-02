@@ -2,10 +2,9 @@ import React from "react";
 import { StakeAccount, Meta } from "solana-sdk-wasm";
 import TableCardBody from "components/common/TableCardBody";
 import { lamportsToSolString } from "utils";
-import Copyable from "components/Copyable";
-import { displayAddress } from "utils/tx";
 import { displayTimestamp } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
+import Address from "components/common/Address";
 
 export function StakeAccountCards({
   account,
@@ -65,9 +64,7 @@ function OverviewCard({
         <tr>
           <td>Address</td>
           <td className="text-right">
-            <Copyable text={account.pubkey.toBase58()} bottom right>
-              <code>{account.pubkey.toBase58()}</code>
-            </Copyable>
+            <Address pubkey={account.pubkey} alignRight />
           </td>
         </tr>
         <tr>
@@ -130,11 +127,11 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
             <tr>
               <td>Delegated Vote Address</td>
               <td className="text-right">
-                <Copyable text={stake.delegation.voterPubkey.toBase58()} right>
-                  <code>
-                    {displayAddress(stake.delegation.voterPubkey.toBase58())}
-                  </code>
-                </Copyable>
+                <Address
+                  pubkey={stake.delegation.voterPubkey}
+                  alignRight
+                  link
+                />
               </td>
             </tr>
 
@@ -175,18 +172,14 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
         <tr>
           <td>Stake Authority Address</td>
           <td className="text-right">
-            <Copyable text={meta.authorized.staker.toBase58()} bottom right>
-              <code>{meta.authorized.staker.toBase58()}</code>
-            </Copyable>
+            <Address pubkey={meta.authorized.staker} alignRight link />
           </td>
         </tr>
 
         <tr>
           <td>Withdraw Authority Address</td>
           <td className="text-right">
-            <Copyable text={meta.authorized.withdrawer.toBase58()} right>
-              <code>{meta.authorized.withdrawer.toBase58()}</code>
-            </Copyable>
+            <Address pubkey={meta.authorized.withdrawer} alignRight link />
           </td>
         </tr>
 
@@ -194,9 +187,7 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
           <tr>
             <td>Lockup Authority Address</td>
             <td className="text-right">
-              <Copyable text={meta.lockup.custodian.toBase58()} right>
-                <code>{displayAddress(meta.lockup.custodian.toBase58())}</code>
-              </Copyable>
+              <Address pubkey={meta.lockup.custodian} alignRight link />
             </td>
           </tr>
         )}

@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import { PublicKey, StakeProgram, TokenAccountInfo } from "@solana/web3.js";
 import {
   FetchStatus,
@@ -9,8 +8,6 @@ import {
   Account,
 } from "providers/accounts";
 import { lamportsToSolString } from "utils";
-import Copyable from "./Copyable";
-import { displayAddress } from "utils/tx";
 import { StakeAccountCards } from "components/account/StakeAccountCards";
 import ErrorCard from "components/common/ErrorCard";
 import LoadingCard from "components/common/LoadingCard";
@@ -21,6 +18,8 @@ import {
   useAccountOwnedTokens,
 } from "providers/accounts/tokens";
 import { useCluster, ClusterStatus } from "providers/cluster";
+import Address from "./common/Address";
+import Signature from "./common/Signature";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
@@ -92,9 +91,7 @@ function UnknownAccountCard({ account }: { account: Account }) {
         <tr>
           <td>Address</td>
           <td className="text-right">
-            <Copyable text={account.pubkey.toBase58()} right bottom>
-              <code>{displayAddress(account.pubkey.toBase58())}</code>
-            </Copyable>
+            <Address pubkey={account.pubkey} alignRight />
           </td>
         </tr>
         <tr>
@@ -115,9 +112,7 @@ function UnknownAccountCard({ account }: { account: Account }) {
           <tr>
             <td>Owner</td>
             <td className="text-right">
-              <Copyable text={details.owner.toBase58()} right>
-                <code>{displayAddress(details.owner.toBase58())}</code>
-              </Copyable>
+              <Address pubkey={details.owner} alignRight link />
             </td>
           </tr>
         )}
@@ -178,24 +173,9 @@ function TokensCard({ pubkey }: { pubkey: PublicKey }) {
     detailsList.push(
       <tr key={mintAddress}>
         <td>
-          <Copyable text={mintAddress}>
-            <code>{mintAddress}</code>
-          </Copyable>
+          <Address pubkey={new PublicKey(mintAddress)} link />
         </td>
-
         <td>{balance}</td>
-
-        <td>
-          <Link
-            to={(location) => ({
-              ...location,
-              pathname: "/account/" + mintAddress,
-            })}
-            className="btn btn-rounded-circle btn-white btn-sm"
-          >
-            <span className="fe fe-arrow-right"></span>
-          </Link>
-        </td>
       </tr>
     );
   });
@@ -229,7 +209,6 @@ function TokensCard({ pubkey }: { pubkey: PublicKey }) {
             <tr>
               <th className="text-muted">Token Address</th>
               <th className="text-muted">Balance</th>
-              <th className="text-muted">Details</th>
             </tr>
           </thead>
           <tbody className="list">{detailsList}</tbody>
@@ -317,21 +296,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
           </td>
 
           <td>
-            <Copyable text={signature}>
-              <code>{signature}</code>
-            </Copyable>
-          </td>
-
-          <td>
-            <Link
-              to={(location) => ({
-                ...location,
-                pathname: "/tx/" + signature,
-              })}
-              className="btn btn-rounded-circle btn-white btn-sm"
-            >
-              <span className="fe fe-arrow-right"></span>
-            </Link>
+            <Signature signature={signature} link />
           </td>
         </tr>
       );
@@ -369,7 +334,6 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
               <th className="text-muted w-1">Slot</th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
-              <th className="text-muted">Details</th>
             </tr>
           </thead>
           <tbody className="list">{detailsList}</tbody>

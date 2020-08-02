@@ -5,10 +5,9 @@ import {
   SignatureResult,
   SystemInstruction,
 } from "@solana/web3.js";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function NonceInitializeDetailsCard(props: {
   ix: TransactionInstruction;
@@ -25,9 +24,6 @@ export function NonceInitializeDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const nonceKey = params.noncePubkey.toBase58();
-  const authorizedKey = params.authorizedPubkey.toBase58();
-
   return (
     <InstructionCard
       ix={ix}
@@ -38,27 +34,21 @@ export function NonceInitializeDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Nonce Address</td>
         <td className="text-right">
-          <Copyable right text={nonceKey}>
-            <code>{nonceKey}</code>
-          </Copyable>
+          <Address pubkey={params.noncePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
         <td className="text-right">
-          <Copyable right text={authorizedKey}>
-            <code>{authorizedKey}</code>
-          </Copyable>
+          <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>
     </InstructionCard>

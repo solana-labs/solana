@@ -6,10 +6,9 @@ import {
   SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function TransferDetailsCard(props: {
   ix: TransactionInstruction;
@@ -26,34 +25,26 @@ export function TransferDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const from = transfer.fromPubkey.toBase58();
-  const to = transfer.toPubkey.toBase58();
   return (
     <InstructionCard ix={ix} index={index} result={result} title="Transfer">
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>From Address</td>
         <td className="text-right">
-          <Copyable right text={from}>
-            <code>{from}</code>
-          </Copyable>
+          <Address pubkey={transfer.fromPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>To Address</td>
         <td className="text-right">
-          <Copyable right text={to}>
-            <code>{to}</code>
-          </Copyable>
+          <Address pubkey={transfer.toPubkey} alignRight link />
         </td>
       </tr>
 

@@ -5,10 +5,9 @@ import {
   SignatureResult,
   SystemInstruction,
 } from "@solana/web3.js";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import Address from "components/common/Address";
 
 export function AssignDetailsCard(props: {
   ix: TransactionInstruction;
@@ -25,8 +24,6 @@ export function AssignDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const accountKey = params.accountPubkey.toBase58();
-
   return (
     <InstructionCard
       ix={ix}
@@ -37,27 +34,21 @@ export function AssignDetailsCard(props: {
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom right text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account Address</td>
         <td className="text-right">
-          <Copyable right text={accountKey}>
-            <code>{accountKey}</code>
-          </Copyable>
+          <Address pubkey={params.accountPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Assigned Owner</td>
         <td className="text-right">
-          <Copyable right text={params.programId.toBase58()}>
-            <code>{displayAddress(params.programId.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={params.programId} alignRight link />
         </td>
       </tr>
     </InstructionCard>
