@@ -1,9 +1,9 @@
 import React, { Component } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Row, Col, CardBody, Card } from "reactstrap";
-import HashFormat from "../../helpers/HashFormat";
-import solanaLogo from "../../assets/images/solana/logo.png";
-import questionmarkLogo from "../../assets/images/solana/questionmark.png";
+import HashFormat from "./HashFormat";
+import solanaLogo from "../../img/solanabeach/logo.png";
+import questionmarkLogo from "../../img/solanabeach/questionmark.png";
 
 import {
   ZoomableGroup,
