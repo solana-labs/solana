@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use solana_sdk::message::Message;
 
 type AccountAttributes = Vec<AccountAttribute>;
@@ -11,7 +11,7 @@ enum AccountAttribute {
 }
 
 pub fn parse_accounts(message: &Message) -> Value {
-    let mut accounts: Vec<Value> = vec![];
+    let mut accounts: Map<String, Value> = Map::new();
     for (i, account_key) in message.account_keys.iter().enumerate() {
         let mut attributes: AccountAttributes = vec![];
         if message.is_writable(i) {
@@ -20,7 +20,7 @@ pub fn parse_accounts(message: &Message) -> Value {
         if message.is_signer(i) {
             attributes.push(AccountAttribute::Signer);
         }
-        accounts.push(json!({ account_key.to_string(): attributes }));
+        accounts.insert(account_key.to_string(), json!(attributes));
     }
     json!(accounts)
 }
@@ -44,12 +44,12 @@ mod test {
         };
         message.account_keys = vec![pubkey0, pubkey1, pubkey2, pubkey3];
 
-        let expected_json = json!([
-            {pubkey0.to_string(): ["writable", "signer"]},
-            {pubkey1.to_string(): ["signer"]},
-            {pubkey2.to_string(): ["writable"]},
-            {pubkey3.to_string(): []},
-        ]);
+        let expected_json = json!({
+            pubkey0.to_string(): ["writable", "signer"],
+            pubkey1.to_string(): ["signer"],
+            pubkey2.to_string(): ["writable"],
+            pubkey3.to_string(): [],
+        });
 
         assert_eq!(parse_accounts(&message), expected_json);
     }

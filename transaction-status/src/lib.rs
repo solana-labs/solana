@@ -8,12 +8,13 @@ pub mod parse_instruction;
 pub mod parse_token;
 
 use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
-use serde_json::Value;
+use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     instruction::CompiledInstruction,
     message::MessageHeader,
+    pubkey::Pubkey,
     transaction::{Result, Transaction, TransactionError},
 };
 
@@ -39,6 +40,29 @@ impl From<&CompiledInstruction> for UiCompiledInstruction {
         Self {
             program_id_index: instruction.program_id_index,
             accounts: instruction.accounts.clone(),
+            data: bs58::encode(instruction.data.clone()).into_string(),
+        }
+    }
+}
+
+/// A partially decoded CompiledInstruction that includes explicit account addresses
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiPartiallyDecodedInstruction {
+    pub program_id: String,
+    pub accounts: Vec<String>,
+    pub data: String,
+}
+
+impl UiPartiallyDecodedInstruction {
+    fn from(instruction: &CompiledInstruction, account_keys: &[Pubkey]) -> Self {
+        Self {
+            program_id: account_keys[instruction.program_id_index as usize].to_string(),
+            accounts: instruction
+                .accounts
+                .iter()
+                .map(|&i| account_keys[i as usize].to_string())
+                .collect(),
             data: bs58::encode(instruction.data.clone()).into_string(),
         }
     }
@@ -228,7 +252,12 @@ impl EncodedTransaction {
                                 ) {
                                     UiInstruction::Parsed(parsed_instruction)
                                 } else {
-                                    UiInstruction::Compiled(instruction.into())
+                                    UiInstruction::Parsed(json!(
+                                        UiPartiallyDecodedInstruction::from(
+                                            instruction,
+                                            &transaction.message.account_keys
+                                        )
+                                    ))
                                 }
                             })
                             .collect(),
