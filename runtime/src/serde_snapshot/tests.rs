@@ -6,6 +6,7 @@ use {
         accounts_db::get_temp_accounts_paths,
         bank::{Bank, StatusCacheRc},
     },
+    bincode::serialize_into,
     rand::{thread_rng, Rng},
     solana_sdk::{
         account::Account,
@@ -88,11 +89,6 @@ where
             account_paths,
             stream_append_vecs_path,
         ),
-        SerdeStyle::OLDER => context_accountsdb_from_stream::<TypeContextLegacy, R, P>(
-            stream,
-            account_paths,
-            stream_append_vecs_path,
-        ),
     }
 }
 
@@ -111,15 +107,6 @@ where
         SerdeStyle::NEWER => serialize_into(
             stream,
             &SerializableAccountsDB::<TypeContextFuture> {
-                accounts_db,
-                slot,
-                account_storage_entries,
-                phantom: std::marker::PhantomData::default(),
-            },
-        ),
-        SerdeStyle::OLDER => serialize_into(
-            stream,
-            &SerializableAccountsDB::<TypeContextLegacy> {
                 accounts_db,
                 slot,
                 account_storage_entries,
@@ -262,18 +249,8 @@ fn test_accounts_serialize_newer() {
 }
 
 #[test]
-fn test_accounts_serialize_older() {
-    test_accounts_serialize_style(SerdeStyle::OLDER)
-}
-
-#[test]
 fn test_bank_serialize_newer() {
     test_bank_serialize_style(SerdeStyle::NEWER)
-}
-
-#[test]
-fn test_bank_serialize_older() {
-    test_bank_serialize_style(SerdeStyle::OLDER)
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
@@ -298,29 +275,6 @@ mod test_bank_serialize {
         assert_eq!(snapshot_storages.len(), 1);
 
         (SerializableBankAndStorage::<future::Context> {
-            bank,
-            snapshot_storages: &snapshot_storages,
-            phantom: std::marker::PhantomData::default(),
-        })
-        .serialize(s)
-    }
-
-    #[frozen_abi(digest = "9g4bYykzsC86fULgu9iUh4kpvb1pxvAmipvyZPChLhws")]
-    #[derive(Serialize, AbiExample)]
-    pub struct BankAbiTestWrapperLegacy {
-        #[serde(serialize_with = "wrapper_legacy")]
-        bank: Bank,
-    }
-
-    pub fn wrapper_legacy<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(0);
-        // ensure there is a single snapshot storage example for ABI digesting
-        assert_eq!(snapshot_storages.len(), 1);
-
-        (SerializableBankAndStorage::<legacy::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
