@@ -1,9 +1,7 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::{
-            AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId, BankHashInfo,
-        },
+        accounts_db::{AccountStorageEntry, AccountsDB, AppendVecId, BankHashInfo},
         accounts_index::Ancestors,
         append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankRc},
@@ -14,14 +12,11 @@ use {
         stakes::Stakes,
     },
     bincode,
-    bincode::{config::Options, serialize_into, Error},
+    bincode::{config::Options, Error},
     fs_extra::dir::CopyOptions,
     log::{info, warn},
     rand::{thread_rng, Rng},
-    serde::{
-        de::{DeserializeOwned, Visitor},
-        Deserialize, Deserializer, Serialize, Serializer,
-    },
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
@@ -33,10 +28,8 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        cmp::min,
         collections::HashMap,
-        fmt::{Formatter, Result as FormatResult},
-        io::{BufReader, BufWriter, Cursor, Read, Write},
+        io::{BufReader, BufWriter, Read, Write},
         path::{Path, PathBuf},
         result::Result,
         sync::{atomic::Ordering, Arc},
@@ -49,12 +42,10 @@ use solana_sdk::abi_example::IgnoreAsHelper;
 
 mod common;
 mod future;
-mod legacy;
 mod tests;
 mod utils;
 
 use future::Context as TypeContextFuture;
-use legacy::Context as TypeContextLegacy;
 #[allow(unused_imports)]
 use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
 
@@ -67,7 +58,6 @@ pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
     NEWER,
-    OLDER,
 }
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
@@ -155,7 +145,6 @@ where
     }
     match serde_style {
         SerdeStyle::NEWER => INTO!(TypeContextFuture),
-        SerdeStyle::OLDER => INTO!(TypeContextLegacy),
     }
     .map_err(|err| {
         warn!("bankrc_from_stream error: {:?}", err);
@@ -186,7 +175,6 @@ where
     }
     match serde_style {
         SerdeStyle::NEWER => INTO!(TypeContextFuture),
-        SerdeStyle::OLDER => INTO!(TypeContextLegacy),
     }
     .map_err(|err| {
         warn!("bankrc_to_stream error: {:?}", err);

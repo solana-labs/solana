@@ -712,10 +712,10 @@ pub fn main() {
             Arg::with_name("snapshot_version")
                 .long("snapshot-version")
                 .value_name("SNAPSHOT_VERSION")
-		.validator(is_parsable::<SnapshotVersion>)
-		.takes_value(true)
-		.default_value(SnapshotVersion::default().into())
-		.help("Output snapshot version"),
+                .validator(is_parsable::<SnapshotVersion>)
+                .takes_value(true)
+                .default_value(SnapshotVersion::default().into())
+                .help("Output snapshot version"),
         )
         .arg(
             Arg::with_name("limit_ledger_size")
