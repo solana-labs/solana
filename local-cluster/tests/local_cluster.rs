@@ -1480,7 +1480,7 @@ fn test_validator_saves_tower() {
         cluster_lamports: 10_000,
         node_stakes: vec![100],
         validator_configs: vec![validator_config],
-        validator_keys: Some(vec![validator_identity_keypair.clone()]),
+        validator_keys: Some(vec![(validator_identity_keypair.clone(), true)]),
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&config);
@@ -1496,10 +1496,13 @@ fn test_validator_saves_tower() {
         .clone();
 
     // Wait for some votes to be generated
+    let mut last_replayed_root;
     loop {
         if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
             trace!("current slot: {}", slot);
             if slot > 2 {
+                // this will be the root next time a validator starts
+                last_replayed_root = slot;
                 break;
             }
         }
@@ -1520,7 +1523,8 @@ fn test_validator_saves_tower() {
     loop {
         if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
             trace!("current root: {}", root);
-            if root > 0 {
+            if root > last_replayed_root + 1 {
+                last_replayed_root = root;
                 break;
             }
         }
@@ -1528,10 +1532,14 @@ fn test_validator_saves_tower() {
     }
 
     // Stop validator, and check saved tower
+    let recent_slot = validator_client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .unwrap();
     let validator_info = cluster.exit_node(&validator_id);
     let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower2: {:?}", tower2);
-    assert_eq!(tower2.root(), Some(1));
+    assert_eq!(tower2.root(), Some(last_replayed_root));
+    last_replayed_root = recent_slot;
 
     // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
     // without having to wait for that snapshot to be generated in this test
@@ -1543,8 +1551,12 @@ fn test_validator_saves_tower() {
     // Wait for a new root, demonstrating the validator was able to make progress from the older `tower1`
     loop {
         if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
-            trace!("current root: {}", root);
-            if root > 1 {
+            trace!(
+                "current root: {}, last_replayed_root: {}",
+                root,
+                last_replayed_root
+            );
+            if root > last_replayed_root {
                 break;
             }
         }
@@ -1555,7 +1567,7 @@ fn test_validator_saves_tower() {
     let mut validator_info = cluster.exit_node(&validator_id);
     let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower3: {:?}", tower3);
-    assert!(tower3.root().unwrap() > 1);
+    assert!(tower3.root().unwrap() > last_replayed_root);
 
     // Remove the tower file entirely and allow the validator to start without a tower.  It will
     // rebuild tower from its vote account contents
@@ -1583,7 +1595,8 @@ fn test_validator_saves_tower() {
 
     let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower4: {:?}", tower4);
-    assert_eq!(tower4.root(), tower3.root());
+    // should tower4 advance 1 slot compared to tower3????
+    assert_eq!(tower4.root(), tower3.root().map(|s| s + 1));
 }
 
 fn wait_for_next_snapshot(

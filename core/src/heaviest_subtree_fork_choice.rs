@@ -501,10 +501,14 @@ impl HeaviestSubtreeForkChoice {
                     // return None because bank_forks doesn't have corresponding banks
                     return None;
                 };
-                let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork.expect(
-                    "a bank at last_voted_slot is a frozen bank so must have been added to \
-                heaviest_subtree_fork_choice at time of freezing",
-                );
+                let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "a bank at last_voted_slot({}) is a frozen bank so must have been\
+                            added to heaviest_subtree_fork_choice at time of freezing",
+                            last_voted_slot,
+                        )
+                    });
 
                 if heaviest_slot_on_same_voted_fork == last_voted_slot {
                     None

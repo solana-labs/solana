@@ -501,6 +501,7 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
+        let root = self.lockouts.root_slot.unwrap_or(0);
         let mut stray_restored_ancestors = HashSet::default();
 
         self.last_voted_slot()
@@ -894,20 +895,25 @@ impl Tower {
         let mut retain_flags_for_each_vote =
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
+        let original_votes_len = self.lockouts.votes.len();
         self.lockouts
             .votes
             .retain(move |_| retain_flags_for_each_vote.next().unwrap());
 
         if self.lockouts.votes.is_empty() {
             info!(
-                "All restored votes were behind replayed_root_slot; resetting root_slot and last_vote in tower!",
+                "All restored votes were behind replayed_root_slot({}); resetting root_slot and last_vote in tower!",
+                replayed_root_slot
             );
-
+            // we might not have banks for those votes so just reset.
+            // That's because the votes may well past replayed_root_slot
             self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
             info!(
-                "Some restored votes were on different fork or are upcoming votes on unrooted slots: {:?}!",
+                "{} restored votes (out of {}) were on different fork or are upcoming votes on unrooted slots: {:?}!",
+                self.voted_slots().len(),
+                original_votes_len,
                 self.voted_slots()
             );
 
@@ -924,7 +930,6 @@ impl Tower {
             } else {
                 self.stray_restored_slots = self.voted_slots().into_iter().collect();
             }
-            // should call self.votes.pop_expired_votes()?
         }
 
         Ok(self)
@@ -1121,11 +1126,7 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        clock::Slot,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::Signer,
-        slot_history::SlotHistory,
+        clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer, slot_history::SlotHistory,
     };
     use solana_vote_program::{
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
@@ -2341,6 +2342,10 @@ pub mod test {
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
+
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         let mut tower = Tower::new_with_key(&my_pubkey);
@@ -2422,6 +2427,9 @@ pub mod test {
 
         // Fill the BankForks according to the above fork structure
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        for (_, fork_progress) in vote_simulator.progress.iter_mut() {
+            fork_progress.fork_stats.computed = true;
+        }
 
         // prepend tower restart!
         let mut slot_history = SlotHistory::default();
@@ -2643,7 +2651,7 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
         assert_eq!(tower.root(), None);
-        assert_eq!(tower.stray_restored_slots, BTreeSet::default());
+        assert_eq!(tower.stray_restored_slots, vec![].into_iter().collect());
     }
 
     #[test]
