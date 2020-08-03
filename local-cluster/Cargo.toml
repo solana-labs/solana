@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 itertools = "0.9.0"
+gag = "0.1.10"
 log = "0.4.8"
 rand = "0.7.0"
 solana-config-program = { path = "../programs/config", version = "1.3.0" }

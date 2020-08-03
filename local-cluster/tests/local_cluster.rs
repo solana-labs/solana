@@ -1,4 +1,5 @@
 use assert_matches::assert_matches;
+use gag::BufferRedirect;
 use log::*;
 use serial_test_derive::serial;
 use solana_client::rpc_client::RpcClient;
@@ -37,7 +38,9 @@ use solana_sdk::{
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
-    fs, iter,
+    fs,
+    io::Read,
+    iter,
     path::{Path, PathBuf},
     sync::Arc,
     thread::sleep,
@@ -1294,6 +1297,7 @@ fn test_no_voting() {
 #[test]
 fn test_optimistic_confirmation_violation() {
     solana_logger::setup();
+    let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![50, 51];
@@ -1377,6 +1381,13 @@ fn test_optimistic_confirmation_violation() {
         &[cluster.get_contact_info(&entry_point_id).unwrap().clone()],
         "test_optimistic_confirmation_violation",
     );
+
+    // Check to see that validator detected optimistic confirmation for
+    // `prev_voted_slot` failed
+    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
+    let mut output = String::new();
+    buf.read_to_string(&mut output).unwrap();
+    assert!(output.contains(&expected_log));
 }
 
 fn wait_for_next_snapshot(
