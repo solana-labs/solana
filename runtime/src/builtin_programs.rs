@@ -1,4 +1,4 @@
-use crate::{legacy_system_instruction_processor0, system_instruction_processor};
+use crate::system_instruction_processor;
 use solana_sdk::{
     clock::Epoch, entrypoint_native::ProcessInstruction, genesis_config::OperatingMode,
     pubkey::Pubkey, system_program,
@@ -19,30 +19,14 @@ impl BuiltinProgram {
     }
 }
 
-pub(crate) fn new_system_program_activation_epoch(operating_mode: OperatingMode) -> Epoch {
-    match operating_mode {
-        OperatingMode::Development => 0,
-        OperatingMode::Preview => 60,
-        OperatingMode::Stable => 40,
-    }
-}
-
 /// All builtin programs that should be active at the given (operating_mode, epoch)
-pub fn get_builtin_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<BuiltinProgram> {
+pub fn get_builtin_programs(_operating_mode: OperatingMode, _epoch: Epoch) -> Vec<BuiltinProgram> {
     vec![
-        if epoch < new_system_program_activation_epoch(operating_mode) {
-            BuiltinProgram::new(
-                "system_program",
-                system_program::id(),
-                legacy_system_instruction_processor0::process_instruction,
-            )
-        } else {
-            BuiltinProgram::new(
-                "system_program",
-                system_program::id(),
-                system_instruction_processor::process_instruction,
-            )
-        },
+        BuiltinProgram::new(
+            "system_program",
+            system_program::id(),
+            system_instruction_processor::process_instruction,
+        ),
         BuiltinProgram::new(
             "config_program",
             solana_config_program::id(),
@@ -63,16 +47,8 @@ pub fn get_builtin_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<
 
 /// Builtin programs that activate at the given (operating_mode, epoch)
 pub fn get_epoch_activated_builtin_programs(
-    operating_mode: OperatingMode,
-    epoch: Epoch,
+    _operating_mode: OperatingMode,
+    _epoch: Epoch,
 ) -> Option<Vec<BuiltinProgram>> {
-    if epoch == new_system_program_activation_epoch(operating_mode) {
-        Some(vec![BuiltinProgram::new(
-            "system_program",
-            system_program::id(),
-            system_instruction_processor::process_instruction,
-        )])
-    } else {
-        None
-    }
+    None
 }
