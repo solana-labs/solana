@@ -1,7 +1,7 @@
 import React from "react";
 import { Connection, PublicKey, TokenAccountInfo } from "@solana/web3.js";
 import { FetchStatus, useAccounts } from "./index";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 
 interface AccountTokens {
   status: FetchStatus;
@@ -49,7 +49,7 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type ProviderProps = { children: React.ReactNode };
 export function TokensProvider({ children }: ProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {});
-  const { url } = useCluster();
+  const { cluster, url } = useCluster();
   const { accounts, lastFetchedAddress } = useAccounts();
 
   React.useEffect(() => {
@@ -58,7 +58,7 @@ export function TokensProvider({ children }: ProviderProps) {
 
   // Fetch history for new accounts
   React.useEffect(() => {
-    if (lastFetchedAddress) {
+    if (lastFetchedAddress && cluster !== Cluster.MainnetBeta) {
       const infoFetched =
         accounts[lastFetchedAddress] &&
         accounts[lastFetchedAddress].lamports !== undefined;
