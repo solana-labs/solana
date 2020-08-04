@@ -250,7 +250,9 @@ impl EncodedTransaction {
                                     instruction,
                                     &transaction.message.account_keys,
                                 ) {
-                                    UiInstruction::Parsed(parsed_instruction)
+                                    UiInstruction::Parsed(
+                                        serde_json::to_value(parsed_instruction).unwrap(),
+                                    )
                                 } else {
                                     UiInstruction::Parsed(json!(
                                         UiPartiallyDecodedInstruction::from(
