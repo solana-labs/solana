@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "img/logos-solana/light-explorer-logo.svg";
+import Logo from "img/logos-solana/dark-explorer-logo.svg";
 import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";

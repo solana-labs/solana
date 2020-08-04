@@ -163,3 +163,11 @@ h4.slot-pill {
     color: hsl(0,0%,40%);
   }
 }
+
+.search-bar__control {
+  border-radius: $border-radius !important;
+}
+
+.search-bar__menu {
+  border-radius: $border-radius !important;
+}

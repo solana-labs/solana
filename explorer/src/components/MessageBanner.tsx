@@ -63,7 +63,7 @@ export default function Banner() {
   }
 
   return (
-    <div className="bg-danger text-white">
+    <div className="bg-info">
       <div className="container">
         <div className="d-flex flex-column align-items-center justify-content-center text-center py-3">
           <h3 className="mb-0 line-height-md">

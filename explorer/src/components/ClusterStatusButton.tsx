@@ -41,7 +41,7 @@ function Button() {
   switch (status) {
     case ClusterStatus.Connected:
       return (
-        <span className={btnClasses("success")}>
+        <span className={btnClasses("primary")}>
           <span className="fe fe-check-circle mr-2"></span>
           {statusName}
         </span>
