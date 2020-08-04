@@ -224,5 +224,5 @@ pub struct RpcStakeActivation {
 #[serde(rename_all = "camelCase")]
 pub struct RpcTokenAccountBalance {
     pub address: String,
-    pub amount: u64,
+    pub amount: f64,
 }
