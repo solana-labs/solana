@@ -17,7 +17,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
     <>
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={ix.programId} alignRight link />
         </td>
       </tr>
@@ -33,7 +33,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
               <span className="badge badge-soft-dark mr-1">Signer</span>
             )}
           </td>
-          <td className="text-right">
+          <td className="text-lg-right">
             <Address pubkey={pubkey} alignRight link />
           </td>
         </tr>
@@ -41,7 +41,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
 
       <tr>
         <td>Instruction Data (Base58)</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Copyable text={data} right>
             <code>{displayData(data)}</code>
           </Copyable>

@@ -33,21 +33,21 @@ export function AssignDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.accountPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Assigned Owner</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.programId} alignRight link />
         </td>
       </tr>

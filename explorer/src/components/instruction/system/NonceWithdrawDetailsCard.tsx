@@ -34,35 +34,37 @@ export function NonceWithdrawDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Nonce Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.noncePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>To Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.toPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Withdraw Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
+        <td className="text-lg-right">
+          {lamportsToSolString(params.lamports)}
+        </td>
       </tr>
     </InstructionCard>
   );

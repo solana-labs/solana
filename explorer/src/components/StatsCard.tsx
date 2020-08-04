@@ -75,31 +75,31 @@ function StatsCardBody() {
     <TableCardBody>
       <tr>
         <td className="w-100">Block</td>
-        <td className="text-right text-monospace">{currentBlock}</td>
+        <td className="text-lg-right text-monospace">{currentBlock}</td>
       </tr>
       <tr>
         <td className="w-100">Block time</td>
-        <td className="text-right text-monospace">{averageBlockTime}</td>
+        <td className="text-lg-right text-monospace">{averageBlockTime}</td>
       </tr>
       <tr>
         <td className="w-100">Epoch</td>
-        <td className="text-right text-monospace">{currentEpoch} </td>
+        <td className="text-lg-right text-monospace">{currentEpoch} </td>
       </tr>
       <tr>
         <td className="w-100">Epoch progress</td>
-        <td className="text-right text-monospace">{epochProgress} </td>
+        <td className="text-lg-right text-monospace">{epochProgress} </td>
       </tr>
       <tr>
         <td className="w-100">Epoch time remaining</td>
-        <td className="text-right text-monospace">{epochTimeRemaining} </td>
+        <td className="text-lg-right text-monospace">{epochTimeRemaining} </td>
       </tr>
       <tr>
         <td className="w-100">Transaction count</td>
-        <td className="text-right text-monospace">{transactionCount} </td>
+        <td className="text-lg-right text-monospace">{transactionCount} </td>
       </tr>
       <tr>
         <td className="w-100">Transactions per second</td>
-        <td className="text-right text-monospace">{averageTps} </td>
+        <td className="text-lg-right text-monospace">{averageTps} </td>
       </tr>
     </TableCardBody>
   );

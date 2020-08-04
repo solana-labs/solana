@@ -35,35 +35,35 @@ export function CreateWithSeedDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>From Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.fromPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.newAccountPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.basePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Seed</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Copyable right text={params.seed}>
             <code>{params.seed}</code>
           </Copyable>
@@ -72,17 +72,19 @@ export function CreateWithSeedDetailsCard(props: {
 
       <tr>
         <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
+        <td className="text-lg-right">
+          {lamportsToSolString(params.lamports)}
+        </td>
       </tr>
 
       <tr>
         <td>Allocated Space (Bytes)</td>
-        <td className="text-right">{params.space}</td>
+        <td className="text-lg-right">{params.space}</td>
       </tr>
 
       <tr>
         <td>Assigned Owner</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.programId} alignRight link />
         </td>
       </tr>

@@ -33,21 +33,21 @@ export function DeactivateDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.stakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>

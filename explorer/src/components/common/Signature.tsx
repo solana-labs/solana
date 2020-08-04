@@ -4,9 +4,13 @@ import { TransactionSignature } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
 
 type CopyState = "copy" | "copied";
-type Props = { signature: TransactionSignature; link?: boolean };
+type Props = {
+  signature: TransactionSignature;
+  alignRight?: boolean;
+  link?: boolean;
+};
 
-export default function Signature({ signature, link }: Props) {
+export default function Signature({ signature, alignRight, link }: Props) {
   const [state, setState] = useState<CopyState>("copy");
 
   const copyToClipboard = () => navigator.clipboard.writeText(signature);
@@ -28,7 +32,11 @@ export default function Signature({ signature, link }: Props) {
   );
 
   return (
-    <div className="d-flex align-items-center justify-content-end">
+    <div
+      className={`d-flex align-items-center ${
+        alignRight ? "justify-content-end" : ""
+      }`}
+    >
       {copyButton}
       <span className="text-monospace">
         {link ? (

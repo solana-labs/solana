@@ -30,17 +30,9 @@ export default function Address({ pubkey, alignRight, link }: Props) {
       <span className="fe fe-check-circle"></span>
     );
 
-  const copyButton = (
-    <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
-  );
-
-  return (
-    <div
-      className={`d-flex align-items-center ${
-        alignRight ? "justify-content-end" : ""
-      }`}
-    >
-      {copyButton}
+  const content = (
+    <>
+      <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
       <span className="text-monospace">
         {link ? (
           <Link className="" to={clusterPath(`/accounts/${address}`)}>
@@ -51,6 +43,19 @@ export default function Address({ pubkey, alignRight, link }: Props) {
           displayAddress(address)
         )}
       </span>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      <div
+        className={`d-none d-lg-flex align-items-center ${
+          alignRight ? "justify-content-end" : ""
+        }`}
+      >
+        {content}
+      </div>
+      <div className="d-flex d-lg-none align-items-center">{content}</div>
+    </>
   );
 }

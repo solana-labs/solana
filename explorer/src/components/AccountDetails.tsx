@@ -90,13 +90,13 @@ function UnknownAccountCard({ account }: { account: Account }) {
       <TableCardBody>
         <tr>
           <td>Address</td>
-          <td className="text-right">
+          <td className="text-lg-right">
             <Address pubkey={account.pubkey} alignRight />
           </td>
         </tr>
         <tr>
           <td>Balance (SOL)</td>
-          <td className="text-right text-uppercase">
+          <td className="text-lg-right text-uppercase">
             {lamportsToSolString(lamports)}
           </td>
         </tr>
@@ -104,14 +104,14 @@ function UnknownAccountCard({ account }: { account: Account }) {
         {details && (
           <tr>
             <td>Data (Bytes)</td>
-            <td className="text-right">{details.space}</td>
+            <td className="text-lg-right">{details.space}</td>
           </tr>
         )}
 
         {details && (
           <tr>
             <td>Owner</td>
-            <td className="text-right">
+            <td className="text-lg-right">
               <Address pubkey={details.owner} alignRight link />
             </td>
           </tr>
@@ -120,7 +120,9 @@ function UnknownAccountCard({ account }: { account: Account }) {
         {details && (
           <tr>
             <td>Executable</td>
-            <td className="text-right">{details.executable ? "Yes" : "No"}</td>
+            <td className="text-lg-right">
+              {details.executable ? "Yes" : "No"}
+            </td>
           </tr>
         )}
       </TableCardBody>
@@ -281,13 +283,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
       detailsList.push(
         <tr key={signature}>
-          {index === 0 ? (
-            <td className="w-1">{slot}</td>
-          ) : (
-            <td className="text-muted text-center w-1">
-              <span className="fe fe-more-horizontal" />
-            </td>
-          )}
+          <td className="w-1">{slot}</td>
 
           <td>
             <span className={`badge badge-soft-${statusClass}`}>
