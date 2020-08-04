@@ -980,6 +980,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gag"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cc0b9f53275dc5fada808f1d2f82e3688a6c14d735633d1590b7be8eb2307b5"
+dependencies = [
+ "libc",
+ "tempfile",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3556,6 +3566,7 @@ name = "solana-local-cluster"
 version = "1.3.0"
 dependencies = [
  "assert_matches",
+ "gag",
  "itertools",
  "log 0.4.8",
  "rand 0.7.3",
