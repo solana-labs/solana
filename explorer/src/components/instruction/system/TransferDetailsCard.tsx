@@ -29,28 +29,30 @@ export function TransferDetailsCard(props: {
     <InstructionCard ix={ix} index={index} result={result} title="Transfer">
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>From Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={transfer.fromPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>To Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={transfer.toPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(transfer.lamports)}</td>
+        <td className="text-lg-right">
+          {lamportsToSolString(transfer.lamports)}
+        </td>
       </tr>
     </InstructionCard>
   );

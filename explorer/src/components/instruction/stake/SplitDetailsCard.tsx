@@ -29,35 +29,37 @@ export function SplitDetailsCard(props: {
     <InstructionCard ix={ix} index={index} result={result} title="Split Stake">
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.stakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Stake Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.splitStakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Split Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
+        <td className="text-lg-right">
+          {lamportsToSolString(params.lamports)}
+        </td>
       </tr>
     </InstructionCard>
   );

@@ -34,28 +34,28 @@ export function AssignWithSeedDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.accountPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Address</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.basePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Seed</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Copyable right text={params.seed}>
             <code>{params.seed}</code>
           </Copyable>
@@ -64,7 +64,7 @@ export function AssignWithSeedDetailsCard(props: {
 
       <tr>
         <td>Assigned Owner</td>
-        <td className="text-right">
+        <td className="text-lg-right">
           <Address pubkey={params.programId} alignRight link />
         </td>
       </tr>

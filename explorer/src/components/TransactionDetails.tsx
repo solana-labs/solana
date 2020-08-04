@@ -114,19 +114,19 @@ function StatusCard({ signature }: Props) {
       <TableCardBody>
         <tr>
           <td>Signature</td>
-          <td className="text-right">
-            <Signature signature={signature} />
+          <td className="text-lg-right">
+            <Signature signature={signature} alignRight />
           </td>
         </tr>
 
         <tr>
           <td>Result</td>
-          <td className="text-right">{renderResult()}</td>
+          <td className="text-lg-right">{renderResult()}</td>
         </tr>
 
         <tr>
           <td>Timestamp</td>
-          <td className="text-right">
+          <td className="text-lg-right">
             {info.timestamp !== "unavailable" ? (
               displayTimestamp(info.timestamp * 1000)
             ) : (
@@ -143,12 +143,12 @@ function StatusCard({ signature }: Props) {
 
         <tr>
           <td>Confirmations</td>
-          <td className="text-right text-uppercase">{info.confirmations}</td>
+          <td className="text-lg-right text-uppercase">{info.confirmations}</td>
         </tr>
 
         <tr>
           <td>Block</td>
-          <td className="text-right">{info.slot}</td>
+          <td className="text-lg-right">{info.slot}</td>
         </tr>
 
         {blockhash && (
@@ -162,7 +162,7 @@ function StatusCard({ signature }: Props) {
                 </InfoTooltip>
               )}
             </td>
-            <td className="text-right">
+            <td className="text-lg-right">
               <code>{blockhash}</code>
             </td>
           </tr>
@@ -171,7 +171,7 @@ function StatusCard({ signature }: Props) {
         {fee && (
           <tr>
             <td>Fee (SOL)</td>
-            <td className="text-right">{lamportsToSolString(fee)}</td>
+            <td className="text-lg-right">{lamportsToSolString(fee)}</td>
           </tr>
         )}
       </TableCardBody>
