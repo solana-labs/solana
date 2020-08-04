@@ -52,6 +52,9 @@ HUMANIZER.addLanguage("short", {
   decimal: ".",
 });
 
-export function slotsToHumanString(slots: number): string {
-  return HUMANIZER.humanize(slots * MS_PER_SLOT);
+export function slotsToHumanString(
+  slots: number,
+  slotTime = MS_PER_SLOT
+): string {
+  return HUMANIZER.humanize(slots * slotTime);
 }
