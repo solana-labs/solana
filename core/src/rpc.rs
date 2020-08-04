@@ -939,9 +939,11 @@ impl JsonRpcRequestProcessor {
         &self,
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-        let bank = self.bank(commitment);
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -965,7 +967,7 @@ impl JsonRpcRequestProcessor {
         let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
+                account: UiAccount::encode(account, encoding.clone()),
             })
             .collect();
         Ok(new_response(&bank, accounts))
@@ -975,9 +977,11 @@ impl JsonRpcRequestProcessor {
         &self,
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-        let bank = self.bank(commitment);
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -1009,7 +1013,7 @@ impl JsonRpcRequestProcessor {
         let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, UiAccountEncoding::JsonParsed),
+                account: UiAccount::encode(account, encoding.clone()),
             })
             .collect();
         Ok(new_response(&bank, accounts))
@@ -1402,7 +1406,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         owner_str: String,
         token_account_filter: RpcTokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 
     #[rpc(meta, name = "getTokenAccountsByDelegate")]
@@ -1411,7 +1415,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         delegate_str: String,
         token_account_filter: RpcTokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
 }
 
@@ -2050,7 +2054,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         owner_str: String,
         token_account_filter: RpcTokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         debug!(
             "get_token_accounts_by_owner rpc request received: {:?}",
@@ -2058,7 +2062,7 @@ impl RpcSol for RpcSolImpl {
         );
         let owner = verify_pubkey(owner_str)?;
         let token_account_filter = verify_token_account_filter(token_account_filter)?;
-        meta.get_token_accounts_by_owner(&owner, token_account_filter, commitment)
+        meta.get_token_accounts_by_owner(&owner, token_account_filter, config)
     }
 
     fn get_token_accounts_by_delegate(
@@ -2066,7 +2070,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         delegate_str: String,
         token_account_filter: RpcTokenAccountsFilter,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
         debug!(
             "get_token_accounts_by_delegate rpc request received: {:?}",
@@ -2074,7 +2078,7 @@ impl RpcSol for RpcSolImpl {
         );
         let delegate = verify_pubkey(delegate_str)?;
         let token_account_filter = verify_token_account_filter(token_account_filter)?;
-        meta.get_token_accounts_by_delegate(&delegate, token_account_filter, commitment)
+        meta.get_token_accounts_by_delegate(&delegate, token_account_filter, config)
     }
 }
 

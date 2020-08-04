@@ -1120,7 +1120,15 @@ fn parse_keyed_accounts(
                 request,
             )
         })?;
-        pubkey_accounts.push((pubkey, account.decode().unwrap()));
+        pubkey_accounts.push((
+            pubkey,
+            account.decode().ok_or_else(|| {
+                ClientError::new_with_request(
+                    RpcError::ParseError("Account from rpc".to_string()).into(),
+                    request,
+                )
+            })?,
+        ));
     }
     Ok(pubkey_accounts)
 }
