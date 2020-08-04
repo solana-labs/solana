@@ -45,7 +45,6 @@ impl RentCollector {
             ..self.clone()
         }
     }
-
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
@@ -57,57 +56,44 @@ impl RentCollector {
             || *address == incinerator::id()
         {
             0
-        } else if account.rent_epoch == self.epoch {
-            // previously this account was rent exempt
-            // this depends on no bug in the eager rent collection?
-            // also needs gating
-            let years_elapsed = self.years_elapsed_since(self.epoch);
-            let (rent_due, exempt) =
-                self.rent
-                    .due(account.lamports, account.data.len(), years_elapsed);
-            self.update_account(account, rent_due, exempt)
         } else {
-            let years_elapsed = self.years_elapsed_since(account.rent_epoch);
-            let (rent_due, exempt) =
-                self.rent
-                    .due(account.lamports, account.data.len(), years_elapsed);
-            self.update_account(account, rent_due, exempt)
-        }
-    }
+            let slots_elapsed: u64 = (account.rent_epoch..=self.epoch)
+                .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
+                .sum();
 
-    fn years_elapsed_since(&self, rent_epoch: Epoch) -> f64 {
-        let slots_elapsed: u64 = (rent_epoch..=self.epoch)
-            .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
-            .sum();
-
-        // avoid infinite rent in rust 1.45
-        if self.slots_per_year != 0.0 {
-            slots_elapsed as f64 / self.slots_per_year
-        } else {
-            0.0
-        }
-    }
-
-    fn update_account(&self, account: &mut Account, rent_due: u64, exempt: bool) -> u64 {
-        if exempt || rent_due != 0 {
-            if account.lamports > rent_due {
-                account.rent_epoch = self.epoch
-                    + if exempt {
-                        // this way, signify last rent collection was exempt...
-                        0
-                    } else {
-                        1
-                    };
-                account.lamports -= rent_due;
-                rent_due
+            // avoid infinite rent in rust 1.45
+            let years_elapsed = if self.slots_per_year != 0.0 {
+                slots_elapsed as f64 / self.slots_per_year
             } else {
-                let rent_charged = account.lamports;
-                *account = Account::default();
-                rent_charged
+                0.0
+            };
+
+            let (rent_due, exempt) =
+                self.rent
+                    .due(account.lamports, account.data.len(), years_elapsed);
+
+            if exempt || rent_due != 0 {
+                if account.lamports > rent_due {
+                    account.rent_epoch = self.epoch
+                        + if exempt {
+                            // Rent isn't collected for the next epoch
+                            // Make sure to check exempt status later in curent epoch again
+                            0
+                        } else {
+                            // Rent is collected for next epoch
+                            1
+                        };
+                    account.lamports -= rent_due;
+                    rent_due
+                } else {
+                    let rent_charged = account.lamports;
+                    *account = Account::default();
+                    rent_charged
+                }
+            } else {
+                // maybe collect rent later, leave account alone
+                0
             }
-        } else {
-            // maybe collect rent later, leave account alone
-            0
         }
     }
 
