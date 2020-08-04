@@ -73,9 +73,7 @@ export function SearchBar() {
             onChange={onChange}
             onInputChange={onInputChange}
             components={{ DropdownIndicator }}
-            styles={{
-              control: (styles) => ({ ...styles, borderRadius: "7px" }),
-            }}
+            classNamePrefix="search-bar"
           />
         </div>
       </div>

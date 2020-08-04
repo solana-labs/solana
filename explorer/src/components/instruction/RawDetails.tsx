@@ -27,10 +27,10 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
           <td>
             <div className="mr-2 d-md-inline">Account #{keyIndex + 1}</div>
             {!isWritable && (
-              <span className="badge badge-soft-dark mr-1">Readonly</span>
+              <span className="badge badge-soft-info mr-1">Readonly</span>
             )}
             {isSigner && (
-              <span className="badge badge-soft-dark mr-1">Signer</span>
+              <span className="badge badge-soft-info mr-1">Signer</span>
             )}
           </td>
           <td className="text-lg-right">

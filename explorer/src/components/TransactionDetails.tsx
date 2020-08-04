@@ -243,16 +243,16 @@ function AccountsCard({ signature }: Props) {
         <td>{lamportsToSolString(post)}</td>
         <td>
           {index === 0 && (
-            <span className="badge badge-soft-dark mr-1">Fee Payer</span>
+            <span className="badge badge-soft-info mr-1">Fee Payer</span>
           )}
           {!message.isAccountWritable(index) && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
+            <span className="badge badge-soft-info mr-1">Readonly</span>
           )}
           {index < message.header.numRequiredSignatures && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
+            <span className="badge badge-soft-info mr-1">Signer</span>
           )}
           {message.instructions.find((ix) => ix.programIdIndex === index) && (
-            <span className="badge badge-soft-dark mr-1">Program</span>
+            <span className="badge badge-soft-info mr-1">Program</span>
           )}
         </td>
       </tr>

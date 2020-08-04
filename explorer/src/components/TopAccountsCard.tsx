@@ -114,7 +114,7 @@ const renderAccountRow = (
   return (
     <tr key={index}>
       <td>
-        <span className="badge badge-soft-dark badge-pill">{index + 1}</span>
+        <span className="badge badge-soft-gray badge-pill">{index + 1}</span>
       </td>
       <td>
         <Address pubkey={account.address} link />

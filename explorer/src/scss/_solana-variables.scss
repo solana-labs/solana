@@ -5,7 +5,7 @@
 
 // Example of a variable override to change Dashkit's background color
 // Remove the "//" to comment it in and see it in action!
-$body-bg: #f9fdfc;
+$body-bg: #f9fdfc !default;
 
 // Dashkit scss needs to know where img masks are stored
 $path-to-img: "../../img/dashkit" !default;
@@ -13,7 +13,7 @@ $path-to-fonts: "../../fonts" !default;
 
 // Colors
 
-$white: #ffffff;
+$white: #ffffff !default;
 $gray-100: #f9fdfc;
 $gray-200: #f1f8f6;
 $gray-300: #e5ebe9;
@@ -31,25 +31,25 @@ $rainbow-3: #79abd2;
 $rainbow-4: #38d0bd;
 $rainbow-5: #1dd79b;
 
-$primary: #358c70;
-$success: #42ba96;
-$primary-desat: #42ba96;
+$primary: #42ba96 !default;
+$primary-dark: #33a382 !default;
+$success: #19be56 !default;
 $secondary: $gray-700;
-$info: #b45be1;
-$info-muted: #9272a3;
-$warning: #d83aeb;
-$danger: #43b5c5;
+$danger: #b45be1;
+$warning: #d83aeb !default;
+$info: #43b5c5 !default;
 $light: $gray-100;
 $dark: $gray-900;
 
-$card-border-color: $gray-300;
-$text-info-muted: $info-muted;
-$navbar-light-active-color: $primary;
 $theme-colors: (
-  "primary-desat": $primary-desat,
   "black": $black,
-  "white": $white
-);
+  "gray": $gray-900,
+) !default;
+
+$card-border-color: $gray-300 !default;
+$input-group-addon-color: $gray-900 !default;
+$navbar-light-active-color: $primary-dark;
+$link-color: $primary-dark;
 
 // Global
 
