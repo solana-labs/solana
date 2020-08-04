@@ -18,6 +18,10 @@
   }
 }
 
+.cardTitle {
+  color: green;
+}
+
 .buttons {
   display: flex;
   align-items: center;

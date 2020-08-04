@@ -8,27 +8,26 @@ import styles from "./styles.module.css";
 
 const features = [
   {
-    title: <>Run a Validator</>,
-    imageUrl: "running-validator",
-    description: <>Learn how to start a validator on the Solana cluster.</>,
-  },
-  {
-    title: <>Launch an Application</>,
+    title: <>⛏ Build an Application</>,
     imageUrl: "apps",
-    description: <>Build superfast applications with one API.</>,
+    description: <>Get started building your decentralized app or marketplace.</>,
   },
   {
-    title: <>Participate in Tour de SOL</>,
+    title: <>✅ Run a Validator Node</>,
+    imageUrl: "running-validator",
+    description: <>Validate transactions, secure the network, and earn rewards.</>,
+  },
+  {
+    title: <>🏛 Create an SPL Token</>,
     imageUrl: "tour-de-sol",
     description: (
       <>
-        Participate in our incentivised testnet and earn rewards by finding
-        bugs.
+        Launch your own SPL Token, Solana's equivalent of ERC-20.
       </>
     ),
   },
   {
-    title: <>Integrate the SOL token into your Exchange</>,
+    title: <>🏦 Integrate an Exchange</>,
     imageUrl: "integrations/exchange",
     description: (
       <>
@@ -38,22 +37,20 @@ const features = [
     ),
   },
   {
-    title: <>Create or Configure a Solana Wallet</>,
+    title: <>📲 Manage a Wallet</>,
     imageUrl: "wallet-guide",
     description: (
       <>
-        Whether you need to create a wallet, check the balance of your funds, or
-        take a look at what's out there for housing SOL tokens, start here.
+        Create a wallet, check your balance, and learn about wallet options.
       </>
     ),
   },
   {
-    title: <>Learn About Solana's Architecture</>,
+    title: <>🤯 Learn How Solana Works</>,
     imageUrl: "cluster/overview",
     description: (
       <>
-        Familiarize yourself with the high level architecture of a Solana
-        cluster.
+        Get a high-level understanding of Solana's architecture.
       </>
     ),
   }, //
