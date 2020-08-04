@@ -67,3 +67,7 @@ main {
 footer .text--center {
   padding: 2rem 0 0 0;
 }
+
+.card__header h3 {
+  color: #1DD79B;
+}
