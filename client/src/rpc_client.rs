@@ -11,7 +11,10 @@ use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
-use solana_account_decoder::UiAccount;
+use solana_account_decoder::{
+    parse_token::{parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount},
+    UiAccount,
+};
 use solana_sdk::{
     account::Account,
     clock::{
@@ -650,6 +653,87 @@ impl RpcClient {
         Ok(hash)
     }
 
+    pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
+        Ok(self
+            .get_token_account_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Option<UiTokenAccount>> {
+        let Response {
+            context,
+            value: account,
+        } = self.get_account_with_commitment(pubkey, commitment_config)?;
+
+        Ok(Response {
+            context,
+            value: account
+                .map(|account| match parse_token(&account.data) {
+                    Ok(TokenAccountType::Account(ui_token_account)) => Some(ui_token_account),
+                    _ => None,
+                })
+                .flatten(),
+        })
+    }
+
+    pub fn get_token_mint(&self, pubkey: &Pubkey) -> ClientResult<Option<UiMint>> {
+        Ok(self
+            .get_token_mint_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_mint_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Option<UiMint>> {
+        let Response {
+            context,
+            value: account,
+        } = self.get_account_with_commitment(pubkey, commitment_config)?;
+
+        Ok(Response {
+            context,
+            value: account
+                .map(|account| match parse_token(&account.data) {
+                    Ok(TokenAccountType::Mint(ui_token_mint)) => Some(ui_token_mint),
+                    _ => None,
+                })
+                .flatten(),
+        })
+    }
+
+    pub fn get_token_multisig(&self, pubkey: &Pubkey) -> ClientResult<Option<UiMultisig>> {
+        Ok(self
+            .get_token_multisig_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_multisig_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Option<UiMultisig>> {
+        let Response {
+            context,
+            value: account,
+        } = self.get_account_with_commitment(pubkey, commitment_config)?;
+
+        Ok(Response {
+            context,
+            value: account
+                .map(|account| match parse_token(&account.data) {
+                    Ok(TokenAccountType::Multisig(ui_token_multisig)) => Some(ui_token_multisig),
+                    _ => None,
+                })
+                .flatten(),
+        })
+    }
+
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
         Ok(self
             .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
@@ -671,7 +755,7 @@ impl RpcClient {
         &self,
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, Account)>> {
+    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
         Ok(self
             .get_token_accounts_by_delegate_with_commitment(
                 delegate,
@@ -686,7 +770,7 @@ impl RpcClient {
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, Account)>> {
+    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
@@ -704,8 +788,10 @@ impl RpcClient {
                 commitment_config
             ]),
         )?;
-        let pubkey_accounts =
-            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?;
+        let pubkey_accounts = accounts_to_token_accounts(parse_keyed_accounts(
+            accounts,
+            RpcRequest::GetTokenAccountsByDelegate,
+        )?);
         Ok(Response {
             context,
             value: pubkey_accounts,
@@ -716,7 +802,7 @@ impl RpcClient {
         &self,
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, Account)>> {
+    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
         Ok(self
             .get_token_accounts_by_owner_with_commitment(
                 owner,
@@ -731,7 +817,7 @@ impl RpcClient {
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, Account)>> {
+    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
@@ -745,7 +831,10 @@ impl RpcClient {
             RpcRequest::GetTokenAccountsByOwner,
             json!([owner.to_string(), token_account_filter, commitment_config]),
         )?;
-        let pubkey_accounts = parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByOwner)?;
+        let pubkey_accounts = accounts_to_token_accounts(parse_keyed_accounts(
+            accounts,
+            RpcRequest::GetTokenAccountsByDelegate,
+        )?);
         Ok(Response {
             context,
             value: pubkey_accounts,
@@ -1131,6 +1220,18 @@ fn parse_keyed_accounts(
         ));
     }
     Ok(pubkey_accounts)
+}
+
+fn accounts_to_token_accounts(
+    pubkey_accounts: Vec<(Pubkey, Account)>,
+) -> Vec<(Pubkey, UiTokenAccount)> {
+    pubkey_accounts
+        .into_iter()
+        .filter_map(|(pubkey, account)| match parse_token(&account.data) {
+            Ok(TokenAccountType::Account(ui_token_account)) => Some((pubkey, ui_token_account)),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]
