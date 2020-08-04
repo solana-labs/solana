@@ -891,13 +891,9 @@ impl JsonRpcRequestProcessor {
         token_account_filter: TokenAccountsFilter,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-<<<<<<< HEAD
-        let bank = self.bank(commitment)?;
-=======
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.commitment);
+        let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
->>>>>>> d0144ce38... Fix token rpc-client methods (#11361)
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -933,13 +929,9 @@ impl JsonRpcRequestProcessor {
         token_account_filter: TokenAccountsFilter,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-<<<<<<< HEAD
-        let bank = self.bank(commitment)?;
-=======
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.commitment);
+        let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
->>>>>>> d0144ce38... Fix token rpc-client methods (#11361)
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
