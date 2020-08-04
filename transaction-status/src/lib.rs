@@ -236,7 +236,7 @@ impl EncodedTransaction {
                     })
                 } else {
                     UiMessage::Parsed(UiParsedMessage {
-                        account_keys: parse_accounts(&transaction.message),
+                        account_keys: json!(parse_accounts(&transaction.message)),
                         recent_blockhash: transaction.message.recent_blockhash.to_string(),
                         instructions: transaction
                             .message
@@ -250,9 +250,7 @@ impl EncodedTransaction {
                                     instruction,
                                     &transaction.message.account_keys,
                                 ) {
-                                    UiInstruction::Parsed(
-                                        serde_json::to_value(parsed_instruction).unwrap(),
-                                    )
+                                    UiInstruction::Parsed(json!(parsed_instruction))
                                 } else {
                                     UiInstruction::Parsed(json!(
                                         UiPartiallyDecodedInstruction::from(
