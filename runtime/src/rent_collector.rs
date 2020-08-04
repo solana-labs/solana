@@ -56,25 +56,25 @@ impl RentCollector {
             || *address == incinerator::id()
         {
             0
-        } else if account.rent_epoch == self.epoch + 2
+        } else if account.rent_epoch == self.epoch {
             // previously this account was rent exempt
-            // this depends on no bug in the eager rent collection
+            // this depends on no bug in the eager rent collection?
             // also needs gating
             let years_elapsed = self.years_elapsed_since(self.epoch);
             let (rent_due, exempt) =
                 self.rent
                     .due(account.lamports, account.data.len(), years_elapsed);
-            update_account(account, rent_due_exempt)
+            self.update_account(account, rent_due, exempt)
         } else {
             let years_elapsed = self.years_elapsed_since(account.rent_epoch);
             let (rent_due, exempt) =
                 self.rent
                     .due(account.lamports, account.data.len(), years_elapsed);
-            update_account(account, rent_due_exempt)
+            self.update_account(account, rent_due, exempt)
         }
     }
 
-    fn years_elapsed_since(rent_epoch: Epoch) -> f64 {
+    fn years_elapsed_since(&self, rent_epoch: Epoch) -> f64 {
         let slots_elapsed: u64 = (rent_epoch..=self.epoch)
             .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
             .sum();
@@ -87,15 +87,16 @@ impl RentCollector {
         }
     }
 
-    fn update_account(account: &mut Account, rent_due: u64, exempt: bool) -> u64 {
+    fn update_account(&self, account: &mut Account, rent_due: u64, exempt: bool) -> u64 {
         if exempt || rent_due != 0 {
             if account.lamports > rent_due {
-                account.rent_epoch = self.epoch + if exempt {
-                    // this way, mark last rent collection was exempt...
-                    2
-                } else {
-                    1
-                };
+                account.rent_epoch = self.epoch
+                    + if exempt {
+                        // this way, signify last rent collection was exempt...
+                        0
+                    } else {
+                        1
+                    };
                 account.lamports -= rent_due;
                 rent_due
             } else {
