@@ -3483,8 +3483,9 @@ pub mod tests {
         );
         SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
 
-        let bad_transaction =
-            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, Hash::default());
+        let keypair = Keypair::new();
+        let mut bad_transaction =
+            system_transaction::transfer(&keypair, &Pubkey::default(), 42, Hash::default());
 
         // sendTransaction will fail because the blockhash is invalid
         let req = format!(
@@ -3499,7 +3500,21 @@ pub mod tests {
             )
         );
 
+        // sendTransaction will fail due to insanity
+        bad_transaction.message.instructions[0].program_id_index = 255u8;
         let recent_blockhash = bank_forks.read().unwrap().root_bank().last_blockhash();
+        bad_transaction.sign(&[&keypair], recent_blockhash);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
+            bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Transaction failed to sanitize accounts offsets correctly"},"id":1}"#.to_string(),
+            )
+        );
         let mut bad_transaction =
             system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, recent_blockhash);
 
