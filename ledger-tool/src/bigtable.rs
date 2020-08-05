@@ -309,13 +309,13 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
 pub async fn transaction_history(
     address: &Pubkey,
     limit: usize,
-    start_after: Option<&Signature>,
+    before: Option<&Signature>,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
     let results = bigtable
-        .get_confirmed_signatures_for_address(address, start_after, limit)
+        .get_confirmed_signatures_for_address(address, before, limit)
         .await?;
 
     for (signature, slot, memo, err) in results {
@@ -466,8 +466,8 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Maximum number of transaction signatures to return"),
                         )
                         .arg(
-                            Arg::with_name("after")
-                                .long("after")
+                            Arg::with_name("before")
+                                .long("before")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
                                 .help("Start with the first signature older than this one"),
@@ -526,15 +526,15 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("transaction-history", Some(arg_matches)) => {
             let address = pubkey_of(arg_matches, "address").unwrap();
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
-            let after = arg_matches
-                .value_of("after")
+            let before = arg_matches
+                .value_of("before")
                 .map(|signature| signature.parse().expect("Invalid signature"));
             let verbose = arg_matches.is_present("verbose");
 
             runtime.block_on(transaction_history(
                 &address,
                 limit,
-                after.as_ref(),
+                before.as_ref(),
                 verbose,
             ))
         }

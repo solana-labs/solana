@@ -358,23 +358,23 @@ impl LedgerStorage {
     /// Get confirmed signatures for the provided address, in descending ledger order
     ///
     /// address: address to search for
-    /// start_after_signature: start with the first signature older than this one
+    /// before_signature: start with the first signature older than this one
     /// limit: stop after this many signatures.
     pub async fn get_confirmed_signatures_for_address(
         &self,
         address: &Pubkey,
-        start_after_signature: Option<&Signature>,
+        before_signature: Option<&Signature>,
         limit: usize,
     ) -> Result<Vec<(Signature, Slot, Option<String>, Option<TransactionError>)>> {
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{}/", address);
 
-        // Figure out where to start listing from based on `start_after_signature`
-        let (first_slot, mut first_transaction_index) = match start_after_signature {
+        // Figure out where to start listing from based on `before_signature`
+        let (first_slot, mut first_transaction_index) = match before_signature {
             None => (Slot::MAX, 0),
-            Some(start_after_signature) => {
+            Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
-                    .get_bincode_cell("tx", start_after_signature.to_string())
+                    .get_bincode_cell("tx", before_signature.to_string())
                     .await?;
 
                 (slot, index + 1)
