@@ -613,8 +613,7 @@ impl Accounts {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = OrderedIterator::new(txs, txs_iteration_order)
             .map(|tx| {
-                tx.sanitize()
-                    .map_err(|_| TransactionError::SanitizeFailure)?;
+                tx.sanitize().map_err(TransactionError::from)?;
 
                 if Self::has_duplicates(&tx.message.account_keys) {
                     return Err(TransactionError::AccountLoadedTwice);
