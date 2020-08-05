@@ -8,7 +8,10 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
+use solana_account_decoder::{
+    parse_token::{spl_token_id_v1_0, spl_token_v1_0_native_mint},
+    UiAccount, UiAccountEncoding,
+};
 use solana_client::{
     rpc_config::*,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -854,15 +857,9 @@ impl JsonRpcRequestProcessor {
             spl_token_v1_0::state::unpack::<TokenAccount>(&mut data).map_err(|_| {
                 Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
             })?;
-        let mint_account = bank
-            .get_account(
-                &Pubkey::from_str(&token_account.mint.to_string())
-                    .expect("Token account mint should be convertible to Pubkey"),
-            )
-            .ok_or_else(|| {
-                Error::invalid_params("Invalid param: could not find mint".to_string())
-            })?;
-        let decimals = get_mint_decimals(&mint_account.data)?;
+        let mint = &Pubkey::from_str(&token_account.mint.to_string())
+            .expect("Token account mint should be convertible to Pubkey");
+        let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
         let balance = token_amount_to_ui_amount(token_account.amount, decimals);
         Ok(new_response(&bank, balance))
     }
@@ -873,14 +870,13 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<RpcTokenAmount>> {
         let bank = self.bank(commitment);
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
+        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
         }
+
         let filters = vec![
             // Filter on Mint address
             RpcFilterType::Memcmp(Memcmp {
@@ -891,7 +887,7 @@ impl JsonRpcRequestProcessor {
             // Filter on Token Account state
             RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
         ];
-        let supply = get_filtered_program_accounts(&bank, &mint_account.owner, filters)
+        let supply = get_filtered_program_accounts(&bank, &mint_owner, filters)
             .map(|(_pubkey, account)| {
                 let mut data = account.data.to_vec();
                 spl_token_v1_0::state::unpack(&mut data)
@@ -899,7 +895,6 @@ impl JsonRpcRequestProcessor {
                     .unwrap_or(0)
             })
             .sum();
-        let decimals = get_mint_decimals(&mint_account.data)?;
         let supply = token_amount_to_ui_amount(supply, decimals);
         Ok(new_response(&bank, supply))
     }
@@ -910,10 +905,8 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
         let bank = self.bank(commitment);
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
+        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
@@ -928,9 +921,8 @@ impl JsonRpcRequestProcessor {
             // Filter on Token Account state
             RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
         ];
-        let decimals = get_mint_decimals(&mint_account.data)?;
         let mut token_balances: Vec<RpcTokenAccountBalance> =
-            get_filtered_program_accounts(&bank, &mint_account.owner, filters)
+            get_filtered_program_accounts(&bank, &mint_owner, filters)
                 .map(|(address, account)| {
                     let mut data = account.data.to_vec();
                     let amount = spl_token_v1_0::state::unpack(&mut data)
@@ -1097,15 +1089,13 @@ fn get_token_program_id_and_mint(
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
-            let mint_account = bank.get_account(&mint).ok_or_else(|| {
-                Error::invalid_params("Invalid param: could not find mint".to_string())
-            })?;
-            if mint_account.owner != spl_token_id_v1_0() {
+            let (mint_owner, _) = get_mint_owner_and_decimals(&bank, &mint)?;
+            if mint_owner != spl_token_id_v1_0() {
                 return Err(Error::invalid_params(
                     "Invalid param: not a v1.0 Token mint".to_string(),
                 ));
             }
-            Ok((mint_account.owner, Some(mint)))
+            Ok((mint_owner, Some(mint)))
         }
         TokenAccountsFilter::ProgramId(program_id) => {
             if program_id == spl_token_id_v1_0() {
@@ -1119,6 +1109,22 @@ fn get_token_program_id_and_mint(
     }
 }
 
+/// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
+/// program_id) and decimals
+fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
+    if mint == &spl_token_v1_0_native_mint() {
+        // Uncomment the following once spl_token is bumped to a version that includes ative_mint::DECIMALS
+        // Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
+        Ok((spl_token_id_v1_0(), 9))
+    } else {
+        let mint_account = bank.get_account(mint).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find mint".to_string())
+        })?;
+        let decimals = get_mint_decimals(&mint_account.data)?;
+        Ok((mint_account.owner, decimals))
+    }
+}
+
 fn get_mint_decimals(data: &[u8]) -> Result<u8> {
     let mut data = data.to_vec();
     spl_token_v1_0::state::unpack(&mut data)
@@ -1129,6 +1135,7 @@ fn get_mint_decimals(data: &[u8]) -> Result<u8> {
 }
 
 fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> RpcTokenAmount {
+    // Use `amount_to_ui_amount()` once spl_token is bumped to a version that supports it: https://github.com/solana-labs/solana-program-library/pull/211
     let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
     RpcTokenAmount {
         ui_amount: amount_decimals,
