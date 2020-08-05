@@ -81,6 +81,12 @@ impl std::fmt::Display for TransactionError {
     }
 }
 
+impl From<SanitizeError> for TransactionError {
+    fn from(_: SanitizeError) -> Self {
+        Self::SanitizeFailure
+    }
+}
+
 /// An atomic transaction
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
