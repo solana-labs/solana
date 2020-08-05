@@ -1033,8 +1033,9 @@ Returns the token balance of an SPL Token account.
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `amount: <f64>` - the balance, using mint-prescribed decimals
-- `rawAmount: <u64>` - the raw balance without decimals
+- `uiAmount: <f64>` - the balance, using mint-prescribed decimals
+- `amount: <string>` - the raw balance without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
 #### Example:
 
@@ -1042,7 +1043,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"amount":98.64,"rawAmount":9864},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":98.64,"amount":"9864","decimals":2},"id":1}
 ```
 
 ### getTokenAccountsByDelegate
@@ -1130,8 +1131,9 @@ Returns the total supply of an SPL Token type.
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `amount: <f64>` - the total token supply, using mint-prescribed decimals
-- `rawAmount: <u64>` - the raw total token supply without decimals
+- `uiAmount: <f64>` - the total token supply, using mint-prescribed decimals
+- `amount: <string>` - the raw total token supply without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
 #### Example:
 
@@ -1139,8 +1141,8 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"amount":1000.0,"rawAmount":100000},"id":1}
-```}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":1000.0,"amount":"100000","decimals":2},"id":1}
+```
 
 ### getTransactionCount
 

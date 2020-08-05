@@ -226,7 +226,7 @@ pub struct RpcStakeActivation {
 pub struct RpcTokenAmount {
     pub ui_amount: f64,
     pub decimals: u8,
-    pub amount: RpcAmount, // "u64"
+    pub amount: RpcAmount,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
