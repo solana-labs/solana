@@ -67,7 +67,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "accountType", content = "info")]
 pub enum TokenAccountType {
     Account(UiTokenAccount),
     Mint(UiMint),
