@@ -720,10 +720,13 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-<<<<<<< HEAD
     pub fn get_first_available_block(&self) -> Result<Slot> {
         Ok(self
-=======
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default())
+    }
+
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: Pubkey,
@@ -735,7 +738,7 @@ impl JsonRpcRequestProcessor {
                 .block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root();
+                .highest_confirmed_slot();
 
             let results = self
                 .blockstore
@@ -751,14 +754,6 @@ impl JsonRpcRequestProcessor {
         } else {
             Ok(vec![])
         }
-    }
-
-    pub fn get_first_available_block(&self) -> Slot {
-        let slot = self
->>>>>>> 1b2276520... Add getConfirmedSignaturesForAddress2 RPC method
-            .blockstore
-            .get_first_available_block()
-            .unwrap_or_default())
     }
 
     pub fn get_stake_activation(
