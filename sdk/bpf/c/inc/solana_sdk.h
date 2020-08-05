@@ -289,12 +289,15 @@ static bool sol_deserialize(
       if (dup_info == UINT8_MAX) {
         input += sizeof(uint8_t);
         input += sizeof(uint8_t);
-        input += sizeof(SolPubkey);
-        input += sizeof(uint64_t);
-        input += *(uint64_t *) input;
-        input += sizeof(uint64_t);
-        input += sizeof(SolPubkey);
         input += sizeof(uint8_t);
+        input += 4; // padding
+        input += sizeof(SolPubkey);
+        input += sizeof(SolPubkey);
+        input += sizeof(uint64_t);
+        uint64_t data_len = *(uint64_t *) input;
+        input += sizeof(uint64_t);
+        input += data_len;
+        input += 16 - (data_len % 16); // padding
         input += sizeof(uint64_t);
       }
       continue;
@@ -308,8 +311,18 @@ static bool sol_deserialize(
       params->ka[i].is_writable = *(uint8_t *) input != 0;
       input += sizeof(uint8_t);
 
+      // executable?
+      params->ka[i].executable = *(uint8_t *) input;
+      input += sizeof(uint8_t);
+
+      input += 4; // padding
+
       // key
       params->ka[i].key = (SolPubkey *) input;
+      input += sizeof(SolPubkey);
+
+      // owner
+      params->ka[i].owner = (SolPubkey *) input;
       input += sizeof(SolPubkey);
 
       // lamports
@@ -322,26 +335,22 @@ static bool sol_deserialize(
       params->ka[i].data = (uint8_t *) input;
       input += params->ka[i].data_len;
 
-      // owner
-      params->ka[i].owner = (SolPubkey *) input;
-      input += sizeof(SolPubkey);
-
-      // executable?
-      params->ka[i].executable = *(uint8_t *) input;
-      input += sizeof(uint8_t);
+      input += 16 - (params->ka[i].data_len % 16); // padding
 
       // rent epoch
       params->ka[i].rent_epoch = *(uint64_t *) input;
       input += sizeof(uint64_t);
     } else {
       params->ka[i].is_signer = params->ka[dup_info].is_signer;
+      params->ka[i].is_writable = params->ka[dup_info].is_writable;
+      params->ka[i].executable = params->ka[dup_info].executable;
       params->ka[i].key = params->ka[dup_info].key;
+      params->ka[i].owner = params->ka[dup_info].owner;
       params->ka[i].lamports = params->ka[dup_info].lamports;
       params->ka[i].data_len = params->ka[dup_info].data_len;
       params->ka[i].data = params->ka[dup_info].data;
-      params->ka[i].owner = params->ka[dup_info].owner;
-      params->ka[i].executable = params->ka[dup_info].executable;
       params->ka[i].rent_epoch = params->ka[dup_info].rent_epoch;
+      input += 7; // padding
     }
   }
 

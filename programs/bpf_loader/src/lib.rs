@@ -22,7 +22,10 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use std::{io::prelude::*, mem};
+use std::{
+    io::prelude::*,
+    mem::{self, align_of},
+};
 use thiserror::Error;
 
 solana_sdk::declare_loader!(
@@ -93,26 +96,37 @@ pub fn serialize_parameters(
 ) -> Result<Vec<u8>, InstructionError> {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
+    // TODO use with capacity would be nice, but don't know account data sizes...
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
+
+    // TODO panic?
+    if v.as_ptr().align_offset(align_of::<u128>()) != 0 {
+        panic!();
+    }
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
         if is_dup {
             v.write_u8(position as u8).unwrap();
+            v.write_all(&[0u8, 0, 0, 0, 0, 0, 0, 0]).unwrap(); // 7 bytes of padding to make 64-bit aligned
         } else {
             v.write_u8(std::u8::MAX).unwrap();
             v.write_u8(keyed_account.signer_key().is_some() as u8)
                 .unwrap();
             v.write_u8(keyed_account.is_writable() as u8).unwrap();
+            v.write_u8(keyed_account.executable()? as u8).unwrap();
+            v.write_all(&[0u8, 0, 0, 0]).unwrap(); // 4 bytes of padding to make 128-bit aligned
             v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
+            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
             v.write_u64::<LittleEndian>(keyed_account.lamports()?)
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
             v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
-            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
-            v.write_u8(keyed_account.executable()? as u8).unwrap();
+            for _ in 0..16 - (v.len() % 16) {
+                v.write_u8(0).unwrap(); // 128 bit aligned again
+            }
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
                 .unwrap();
         }
@@ -134,9 +148,12 @@ pub fn deserialize_parameters(
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
         start += 1; // is_dup
         if !is_dup {
-            start += mem::size_of::<u8>(); // is_signer
-            start += mem::size_of::<u8>(); // is_writable
-            start += mem::size_of::<Pubkey>(); // pubkey
+            start += mem::size_of::<u8>() // is_signer
+            + mem::size_of::<u8>() // is_writable
+            + mem::size_of::<u8>() // executable
+            + 4 // padding
+            + mem::size_of::<Pubkey>() // pubkey
+            + mem::size_of::<Pubkey>(); // owner
             keyed_account.try_account_ref_mut()?.lamports =
                 LittleEndian::read_u64(&buffer[start..]);
             start += mem::size_of::<u64>() // lamports
@@ -146,10 +163,11 @@ pub fn deserialize_parameters(
                 .try_account_ref_mut()?
                 .data
                 .clone_from_slice(&buffer[start..end]);
-            start += keyed_account.data_len()? // data
-                + mem::size_of::<Pubkey>() // owner
-                + mem::size_of::<u8>() // executable
-                + mem::size_of::<u64>(); // rent_epoch
+            start += keyed_account.data_len()?; // data
+            start += 16 - (start % 16); // padding
+            start += mem::size_of::<u64>(); // rent_epoch
+        } else {
+            start += 7; // padding
         }
     }
     Ok(())
