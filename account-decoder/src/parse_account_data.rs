@@ -44,13 +44,6 @@ pub struct ParsedAccount {
     pub parsed: Value,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct ParsedAccountType {
-    pub account_type: String,
-    pub info: Value,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableAccount {

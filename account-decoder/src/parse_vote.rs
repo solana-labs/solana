@@ -60,7 +60,7 @@ pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
 
 /// A wrapper enum for consistency across programs
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", tag = "accountType", content = "info")]
+#[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum VoteAccountType {
     Vote(UiVoteState),
 }
