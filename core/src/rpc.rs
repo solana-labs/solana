@@ -3475,7 +3475,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
-        let bank_forks = new_bank_forks().0;
+        let (bank_forks, mint_keypair, ..) = new_bank_forks();
         let health = RpcHealth::stub();
 
         // Freeze bank 0 to prevent a panic in `run_transaction_simulation()`
@@ -3503,9 +3503,8 @@ pub mod tests {
             )),
         );
 
-        let keypair = Keypair::new();
         let mut bad_transaction =
-            system_transaction::transfer(&keypair, &Pubkey::default(), 42, Hash::default());
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_rand(), 42, Hash::default());
 
         // sendTransaction will fail because the blockhash is invalid
         let req = format!(
@@ -3523,7 +3522,7 @@ pub mod tests {
         // sendTransaction will fail due to insanity
         bad_transaction.message.instructions[0].program_id_index = 255u8;
         let recent_blockhash = bank_forks.read().unwrap().root_bank().last_blockhash();
-        bad_transaction.sign(&[&keypair], recent_blockhash);
+        bad_transaction.sign(&[&mint_keypair], recent_blockhash);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
             bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
@@ -3536,7 +3535,7 @@ pub mod tests {
             )
         );
         let mut bad_transaction =
-            system_transaction::transfer(&Keypair::new(), &Pubkey::default(), 42, recent_blockhash);
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_rand(), 42, recent_blockhash);
 
         // sendTransaction will fail due to poor node health
         health.stub_set_health_status(Some(RpcHealthStatus::Behind));
