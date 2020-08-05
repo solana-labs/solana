@@ -246,7 +246,7 @@ pub enum CliCommand {
     },
     TransactionHistory {
         address: Pubkey,
-        start_after: Option<Signature>,
+        before: Option<Signature>,
         limit: usize,
     },
     // Nonce commands
@@ -1837,9 +1837,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
         CliCommand::TransactionHistory {
             address,
-            start_after,
+            before,
             limit,
-        } => process_transaction_history(&rpc_client, config, address, *start_after, *limit),
+        } => process_transaction_history(&rpc_client, config, address, *before, *limit),
 
         // Nonce Commands
 
