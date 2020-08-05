@@ -742,7 +742,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
+    pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<RpcTokenAmount> {
         Ok(self
             .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
             .value)
@@ -752,7 +752,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<u64> {
+    ) -> RpcResult<RpcTokenAmount> {
         self.send(
             RpcRequest::GetTokenAccountBalance,
             json!([pubkey.to_string(), commitment_config]),
@@ -849,7 +849,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<u64> {
+    pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<RpcTokenAmount> {
         Ok(self
             .get_token_supply_with_commitment(mint, CommitmentConfig::default())?
             .value)
@@ -859,7 +859,7 @@ impl RpcClient {
         &self,
         mint: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<u64> {
+    ) -> RpcResult<RpcTokenAmount> {
         self.send(
             RpcRequest::GetTokenSupply,
             json!([mint.to_string(), commitment_config]),
