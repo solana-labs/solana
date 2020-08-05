@@ -90,7 +90,9 @@ pub fn register_syscalls<'a>(
             logger: invoke_context.get_logger(),
         }),
     )?;
-    vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+    if invoke_context.is_cross_program_supported() {
+        vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+    }
 
     // Cross-program invocation syscalls
 
