@@ -4,7 +4,7 @@ use crate::{
     parse_vote::parse_vote,
 };
 use inflector::Inflector;
-use serde_json::{json, Value};
+use serde_json::Value;
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -37,6 +37,13 @@ pub enum ParseAccountError {
     SerdeJsonError(#[from] serde_json::error::Error),
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedAccount {
+    pub program: String,
+    pub parsed: Value,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableAccount {
@@ -45,7 +52,10 @@ pub enum ParsableAccount {
     Vote,
 }
 
-pub fn parse_account_data(program_id: &Pubkey, data: &[u8]) -> Result<Value, ParseAccountError> {
+pub fn parse_account_data(
+    program_id: &Pubkey,
+    data: &[u8],
+) -> Result<ParsedAccount, ParseAccountError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
         .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
@@ -54,9 +64,10 @@ pub fn parse_account_data(program_id: &Pubkey, data: &[u8]) -> Result<Value, Par
         ParsableAccount::SplToken => serde_json::to_value(parse_token(data)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
-    Ok(json!({
-        format!("{:?}", program_name).to_kebab_case(): parsed_json
-    }))
+    Ok(ParsedAccount {
+        program: format!("{:?}", program_name).to_kebab_case(),
+        parsed: parsed_json,
+    })
 }
 
 #[cfg(test)]
@@ -79,11 +90,11 @@ mod test {
         let versioned = VoteStateVersions::Current(Box::new(vote_state));
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
         let parsed = parse_account_data(&solana_vote_program::id(), &vote_account_data).unwrap();
-        assert!(parsed.as_object().unwrap().contains_key("vote"));
+        assert_eq!(parsed.program, "vote".to_string());
 
         let nonce_data = Versions::new_current(State::Initialized(Data::default()));
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
         let parsed = parse_account_data(&system_program::id(), &nonce_account_data).unwrap();
-        assert!(parsed.as_object().unwrap().contains_key("nonce"));
+        assert_eq!(parsed.program, "nonce".to_string());
     }
 }
