@@ -9,6 +9,7 @@ use solana_sdk::{
 use std::{collections::HashMap, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
+pub type RpcAmount = String;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RpcResponseContext {
@@ -222,7 +223,16 @@ pub struct RpcStakeActivation {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcTokenAmount {
+    pub ui_amount: f64,
+    pub decimals: u8,
+    pub amount: RpcAmount,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcTokenAccountBalance {
     pub address: String,
-    pub amount: u64,
+    #[serde(flatten)]
+    pub amount: RpcTokenAmount,
 }

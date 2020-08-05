@@ -7,9 +7,16 @@ use spl_token_v1_0::{
 };
 use std::{mem::size_of, str::FromStr};
 
-// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to
+// solana_sdk::pubkey::Pubkey
 pub fn spl_token_id_v1_0() -> Pubkey {
     Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
+}
+
+// A helper function to convert spl_token_v1_0::native_mint::id() as spl_sdk::pubkey::Pubkey to
+// solana_sdk::pubkey::Pubkey
+pub fn spl_token_v1_0_native_mint() -> Pubkey {
+    Pubkey::from_str(&spl_token_v1_0::native_mint::id().to_string()).unwrap()
 }
 
 pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
