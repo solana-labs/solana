@@ -1416,6 +1416,8 @@ fn test_optimistic_confirmation_violation() {
     // Mark fork as dead on the heavier validator, this should make the fork effectively
     // dead, even though it was optimistically confirmed. The smaller validator should
     // jump over to the new fork
+    // Also, remove saved tower to intentionally make the restarted validator to violate the
+    // optimistic confirmation
     {
         let blockstore = Blockstore::open_with_access_type(
             &exited_validator_info.info.ledger_path,
@@ -1433,6 +1435,12 @@ fn test_optimistic_confirmation_violation() {
             prev_voted_slot
         );
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
+
+        std::fs::remove_file(Tower::get_filename(
+            &exited_validator_info.info.ledger_path,
+            &entry_point_id,
+        ))
+        .unwrap();
     }
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
