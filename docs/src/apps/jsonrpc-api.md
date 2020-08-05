@@ -1079,7 +1079,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByDelegate", "params": ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"amount":1,"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
 ```
 
 ### getTokenAccountsByOwner
@@ -1115,7 +1115,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"amount":1,"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
 ```
 
 ### getTokenSupply

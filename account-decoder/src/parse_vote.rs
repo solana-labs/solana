@@ -5,7 +5,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::{BlockTimestamp, Lockout, VoteState};
 
-pub fn parse_vote(data: &[u8]) -> Result<UiVoteState, ParseAccountError> {
+pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
     let mut vote_state = VoteState::deserialize(data).map_err(ParseAccountError::from)?;
     let epoch_credits = vote_state
         .epoch_credits()
@@ -45,7 +45,7 @@ pub fn parse_vote(data: &[u8]) -> Result<UiVoteState, ParseAccountError> {
             },
         )
         .collect();
-    Ok(UiVoteState {
+    Ok(VoteAccountType::Vote(UiVoteState {
         node_pubkey: vote_state.node_pubkey.to_string(),
         authorized_withdrawer: vote_state.authorized_withdrawer.to_string(),
         commission: vote_state.commission,
@@ -55,7 +55,14 @@ pub fn parse_vote(data: &[u8]) -> Result<UiVoteState, ParseAccountError> {
         prior_voters,
         epoch_credits,
         last_timestamp: vote_state.last_timestamp,
-    })
+    }))
+}
+
+/// A wrapper enum for consistency across programs
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", tag = "type", content = "info")]
+pub enum VoteAccountType {
+    Vote(UiVoteState),
 }
 
 /// A duplicate representation of VoteState for pretty JSON serialization
@@ -126,7 +133,10 @@ mod test {
         let mut expected_vote_state = UiVoteState::default();
         expected_vote_state.node_pubkey = Pubkey::default().to_string();
         expected_vote_state.authorized_withdrawer = Pubkey::default().to_string();
-        assert_eq!(parse_vote(&vote_account_data).unwrap(), expected_vote_state,);
+        assert_eq!(
+            parse_vote(&vote_account_data).unwrap(),
+            VoteAccountType::Vote(expected_vote_state)
+        );
 
         let bad_data = vec![0; 4];
         assert!(parse_vote(&bad_data).is_err());
