@@ -1927,7 +1927,7 @@ impl Blockstore {
         &self,
         address: Pubkey,
         highest_confirmed_root: Slot,
-        start_after: Option<Signature>,
+        before: Option<Signature>,
         limit: usize,
     ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
         datapoint_info!(
@@ -1940,12 +1940,12 @@ impl Blockstore {
         );
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
-        // `start_after` signature if present.  Also generate a HashSet of signatures that should
+        // `before` signature if present.  Also generate a HashSet of signatures that should
         // be excluded from the results.
-        let (mut slot, mut excluded_signatures) = match start_after {
+        let (mut slot, mut excluded_signatures) = match before {
             None => (highest_confirmed_root, None),
-            Some(start_after) => {
-                let transaction_status = self.get_transaction_status(start_after)?;
+            Some(before) => {
+                let transaction_status = self.get_transaction_status(before)?;
                 match transaction_status {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
@@ -1978,7 +1978,7 @@ impl Blockstore {
                         // not by block ordering
                         slot_signatures.sort();
 
-                        if let Some(pos) = slot_signatures.iter().position(|&x| x == start_after) {
+                        if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
                         }
 
@@ -6345,7 +6345,7 @@ pub mod tests {
                 assert_eq!(results[1], all1[i + 1]);
             }
 
-            // A search for address 0 with a `start_after` signature from address1 should also work
+            // A search for address 0 with a `before` signature from address1 should also work
             let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,

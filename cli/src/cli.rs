@@ -231,7 +231,7 @@ pub enum CliCommand {
     TotalSupply,
     TransactionHistory {
         address: Pubkey,
-        start_after: Option<Signature>,
+        before: Option<Signature>,
         limit: usize,
     },
     // Nonce commands
@@ -1871,9 +1871,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::TotalSupply => process_total_supply(&rpc_client, config),
         CliCommand::TransactionHistory {
             address,
-            start_after,
+            before,
             limit,
-        } => process_transaction_history(&rpc_client, config, address, *start_after, *limit),
+        } => process_transaction_history(&rpc_client, config, address, *before, *limit),
 
         // Nonce Commands
 
