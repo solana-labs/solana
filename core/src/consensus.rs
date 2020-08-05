@@ -3,7 +3,7 @@ use crate::{
     pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
-use solana_ledger::{blockstore::Blockstore, blockstore_db};
+use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
 use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_sdk::{
@@ -20,6 +20,7 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
+    cmp::Ordering,
     collections::{BTreeSet, HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
@@ -484,6 +485,7 @@ impl Tower {
         false
     }
 
+    #[cfg(test)]
     fn use_stray_restored_ancestors(
         &self,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
@@ -506,11 +508,10 @@ impl Tower {
 
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let last_vote_ancestors = if !self.use_stray_restored_ancestors(ancestors, last_voted_slot) {
-                    ancestors.get(&last_voted_slot).unwrap()
-                } else {
-                    // Use stray restored ancestors because we couldn't derive them from
-                    // given ancestors (=bank_forks)
+                // NOTE: Update use_stray_restored_ancestors() as well when updating this!
+                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+                    // Use stray restored ancestors because we couldn't derive last_vote_ancestors
+                    // from given ancestors (=bank_forks)
                     // Also, can't just return empty ancestors because we should exclude
                     // lockouts on stray last vote's ancestors in the lockout_intervals later
                     // in this fn.
@@ -520,7 +521,7 @@ impl Tower {
                         stray_restored_ancestors, last_voted_slot
                     );
                     &stray_restored_ancestors
-                };
+                });
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -1094,11 +1095,23 @@ pub fn reconcile_blockstore_roots_with_tower(
     if let Some(tower_root) = tower.root() {
         let last_blockstore_root = blockstore.last_root();
         if last_blockstore_root < tower_root {
-            let new_roots: Vec<_> = blockstore
-                .slot_meta_iterator(last_blockstore_root + 1)?
-                .map(|(slot, _)| slot)
-                .take_while(|slot| *slot <= tower_root)
+            // Ensure tower_root itself to exist and mark as rooted in the blockstore
+            // in addition to its ancestors.
+            let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
+                .take_while(|current| match current.cmp(&last_blockstore_root) {
+                    Ordering::Equal => false,
+                    Ordering::Greater => true,
+                    Ordering::Less => panic!(
+                        "couldn't find a last_blockstore_root upwards from: {}!?",
+                        tower_root
+                    ),
+                })
                 .collect();
+            assert!(
+                !new_roots.is_empty(),
+                "at least 1 parent slot must be found"
+            );
+
             blockstore.set_roots(&new_roots)?
         }
     }
@@ -2561,20 +2574,81 @@ pub mod test {
     }
 
     #[test]
-    fn test_reconcile_blockstore_roots_with_tower() {
+    fn test_reconcile_blockstore_roots_with_tower_normal() {
+        solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            assert_eq!(blockstore.last_root(), 0);
 
             let (shreds, _) = make_slot_entries(1, 0, 42);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert_eq!(blockstore.last_root(), 0);
+            let (shreds, _) = make_slot_entries(3, 1, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (shreds, _) = make_slot_entries(4, 1, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            assert!(!blockstore.is_root(0));
+            assert!(!blockstore.is_root(1));
+            assert!(!blockstore.is_root(3));
+            assert!(!blockstore.is_root(4));
 
             let mut tower = Tower::new_with_key(&Pubkey::default());
-            tower.lockouts.root_slot = Some(1);
+            tower.lockouts.root_slot = Some(4);
             reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
-            assert_eq!(blockstore.last_root(), 1);
+
+            assert!(!blockstore.is_root(0));
+            assert!(blockstore.is_root(1));
+            assert!(!blockstore.is_root(3));
+            assert!(blockstore.is_root(4));
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    #[should_panic(expected = "couldn't find a last_blockstore_root upwards from: 4!?")]
+    fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let (shreds, _) = make_slot_entries(1, 0, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (shreds, _) = make_slot_entries(3, 1, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (shreds, _) = make_slot_entries(4, 1, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore.set_roots(&[3]).unwrap();
+            assert!(!blockstore.is_root(0));
+            assert!(!blockstore.is_root(1));
+            assert!(blockstore.is_root(3));
+            assert!(!blockstore.is_root(4));
+
+            let mut tower = Tower::new_with_key(&Pubkey::default());
+            tower.lockouts.root_slot = Some(4);
+            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    #[should_panic(expected = "at least 1 parent slot must be found")]
+    fn test_reconcile_blockstore_roots_with_tower_panic_no_parent() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let (shreds, _) = make_slot_entries(1, 0, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (shreds, _) = make_slot_entries(3, 1, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            assert!(!blockstore.is_root(0));
+            assert!(!blockstore.is_root(1));
+            assert!(!blockstore.is_root(3));
+
+            let mut tower = Tower::new_with_key(&Pubkey::default());
+            tower.lockouts.root_slot = Some(4);
+            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
