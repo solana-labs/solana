@@ -16,7 +16,7 @@
     "@types/react-router-dom": "^5.1.5",
     "@types/react-select": "^3.0.15",
     "@types/socket.io-client": "^1.4.33",
-    "bootstrap": "^4.5.0",
+    "bootstrap": "^4.5.1",
     "bs58": "^4.0.1",
     "humanize-duration-ts": "^2.1.1",
     "node-sass": "^4.14.1",
