@@ -121,7 +121,10 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .highest_confirmed_slot();
                 debug!("RPC using confirmed slot: {:?}", slot);
-                Ok(r_bank_forks.get(slot).cloned().unwrap())
+                Ok(r_bank_forks
+                    .get(slot)
+                    .cloned()
+                    .unwrap_or_else(|| r_bank_forks.root_bank().clone()))
             }
             CommitmentLevel::Max => {
                 let cluster_root = self
