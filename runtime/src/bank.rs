@@ -47,6 +47,7 @@ use solana_sdk::{
     native_loader, nonce,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -1346,7 +1347,11 @@ impl Bank {
         &'a self,
         txs: &'b [Transaction],
     ) -> TransactionBatch<'a, 'b> {
-        let mut batch = TransactionBatch::new(vec![Ok(()); txs.len()], &self, txs, None);
+        let lock_results: Vec<_> = txs
+            .iter()
+            .map(|tx| tx.sanitize().map_err(|e| e.into()))
+            .collect();
+        let mut batch = TransactionBatch::new(lock_results, &self, txs, None);
         batch.needs_unlock = false;
         batch
     }
