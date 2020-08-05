@@ -38,14 +38,14 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    EncodedTransaction, Rewards, TransactionStatusMeta, TransactionWithStatusMeta, UiMessage,
+    EncodedTransaction, Rewards, TransactionStatusMeta, TransactionWithStatusMeta,
     UiTransactionEncoding, UiTransactionStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
     cell::RefCell,
     cmp,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     io::{Error as IOError, ErrorKind},
     path::{Path, PathBuf},
@@ -1872,7 +1872,8 @@ impl Blockstore {
     }
 
     // Returns all cached signatures for an address, ordered by slot that the transaction was
-    // processed in
+    // processed in.   Within each slot the transactions will be ordered by signature, and NOT by
+    // the order in which the transactions exist in the block
     fn find_address_signatures(
         &self,
         pubkey: Pubkey,
@@ -1938,52 +1939,53 @@ impl Blockstore {
             )
         );
 
-        let (mut slot, mut start_after) = match start_after {
+        // Figure the `slot` to start listing signatures at, based on the ledger location of the
+        // `start_after` signature if present.  Also generate a HashSet of signatures that should
+        // be excluded from the results.
+        let (mut slot, mut excluded_signatures) = match start_after {
             None => (highest_confirmed_root, None),
             Some(start_after) => {
-                let confirmed_transaction =
-                    self.get_confirmed_transaction(start_after, Some(UiTransactionEncoding::Json))?;
-                match confirmed_transaction {
+                let transaction_status = self.get_transaction_status(start_after)?;
+                match transaction_status {
                     None => return Ok(vec![]),
-                    Some(ConfirmedTransaction { slot, transaction }) => {
-                        // Ensure that `start_after` is from a transaction that contains `address`
-                        match transaction.transaction {
-                            EncodedTransaction::Json(ui_transaction) => {
-                                match ui_transaction.message {
-                                    UiMessage::Raw(message) => {
-                                        let address = address.to_string();
-                                        if !message
-                                            .account_keys
-                                            .iter()
-                                            .any(|account_address| *account_address == address)
-                                        {
-                                            return Err(BlockstoreError::IO(IOError::new(
-                                                ErrorKind::Other,
-                                                format!(
-                                                    "Invalid start_after signature: {}",
-                                                    start_after
-                                                ),
-                                            )));
-                                        }
-                                    }
-                                    _ => {
-                                        // Should never happen...
-                                        return Err(BlockstoreError::IO(IOError::new(
-                                            ErrorKind::Other,
-                                            "Unexpected transaction message encoding".to_string(),
-                                        )));
-                                    }
-                                }
-                            }
-                            _ => {
-                                // Should never happen...
-                                return Err(BlockstoreError::IO(IOError::new(
+                    Some((slot, _)) => {
+                        let confirmed_block = self
+                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Binary))
+                            .map_err(|err| {
+                                BlockstoreError::IO(IOError::new(
                                     ErrorKind::Other,
-                                    "Unexpected transaction encoding".to_string(),
-                                )));
-                            }
+                                    format!("Unable to get confirmed block: {}", err),
+                                ))
+                            })?;
+
+                        // Load all signatures for the block
+                        let mut slot_signatures: Vec<_> = confirmed_block
+                            .transactions
+                            .iter()
+                            .filter_map(|transaction_with_meta| {
+                                if let Some(transaction) =
+                                    transaction_with_meta.transaction.decode()
+                                {
+                                    transaction.signatures.into_iter().next()
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        // Sort signatures as a way to entire a stable ordering within a slot, as
+                        // `self.find_address_signatures()` is ordered by signatures ordered and
+                        // not by block ordering
+                        slot_signatures.sort();
+
+                        if let Some(pos) = slot_signatures.iter().position(|&x| x == start_after) {
+                            slot_signatures.truncate(pos + 1);
                         }
-                        (slot, Some(start_after))
+
+                        (
+                            slot,
+                            Some(slot_signatures.into_iter().collect::<HashSet<_>>()),
+                        )
                     }
                 }
             }
@@ -1999,23 +2001,16 @@ impl Blockstore {
             }
 
             let mut signatures = self.find_address_signatures(address, slot, slot)?;
-            if let Some(start_after) = start_after {
-                if let Some(index) = signatures
-                    .iter()
-                    .position(|(_slot, signature)| *signature == start_after)
-                {
-                    address_signatures.append(&mut signatures.split_off(index + 1));
-                    signatures.clear();
-                } else {
-                    // Should never happen...
-                    warn!(
-                        "Blockstore corruption?  Expected to find {} in slot {}",
-                        start_after, slot
-                    );
-                }
+            if let Some(excluded_signatures) = excluded_signatures.take() {
+                address_signatures.extend(
+                    signatures
+                        .into_iter()
+                        .filter(|(_, signature)| !excluded_signatures.contains(&signature)),
+                )
+            } else {
+                address_signatures.append(&mut signatures);
             }
-            address_signatures.append(&mut signatures);
-            start_after = None;
+            excluded_signatures = None;
 
             if slot == first_available_block {
                 break;
@@ -6294,7 +6289,7 @@ pub mod tests {
                     )
                     .unwrap();
                 assert_eq!(results.len(), 1);
-                assert_eq!(results[0], all0[i]);
+                assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
             }
 
             assert!(blockstore
@@ -6328,15 +6323,40 @@ pub mod tests {
                 assert_eq!(results[2], all0[i + 2]);
             }
 
-            // `start_after` signature from address1 should fail
-            blockstore
+            // Ensure that the signatures within a slot are ordered by signature
+            // (current limitation of the .get_confirmed_signatures_for_address2())
+            for i in (0..all1.len()).step_by(2) {
+                let results = blockstore
+                    .get_confirmed_signatures_for_address2(
+                        address1,
+                        highest_confirmed_root,
+                        if i == 0 {
+                            None
+                        } else {
+                            Some(all1[i - 1].signature)
+                        },
+                        2,
+                    )
+                    .unwrap();
+                assert_eq!(results.len(), 2);
+                assert_eq!(results[0].slot, results[1].slot);
+                assert!(results[0].signature <= results[1].signature);
+                assert_eq!(results[0], all1[i]);
+                assert_eq!(results[1], all1[i + 1]);
+            }
+
+            // A search for address 0 with a `start_after` signature from address1 should also work
+            let results = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
                     Some(all1[0].signature),
                     usize::MAX,
                 )
-                .unwrap_err();
+                .unwrap();
+            // The exact number of results returned is variable, based on the sort order of the
+            // random signatures that are generated
+            assert!(!results.is_empty());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
