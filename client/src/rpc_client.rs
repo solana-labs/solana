@@ -302,11 +302,11 @@ impl RpcClient {
     pub fn get_confirmed_signatures_for_address2_with_config(
         &self,
         address: &Pubkey,
-        start_after: Option<Signature>,
+        before: Option<Signature>,
         limit: Option<usize>,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         let config = RpcGetConfirmedSignaturesForAddress2Config {
-            start_after: start_after.map(|signature| signature.to_string()),
+            before: before.map(|signature| signature.to_string()),
             limit,
         };
 

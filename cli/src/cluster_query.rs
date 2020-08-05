@@ -277,8 +277,8 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Maximum number of transaction signatures to return"),
                 )
                 .arg(
-                    Arg::with_name("after")
-                        .long("after")
+                    Arg::with_name("before")
+                        .long("before")
                         .value_name("TRANSACTION_SIGNATURE")
                         .takes_value(true)
                         .help("Start with the first signature older than this one"),
@@ -437,7 +437,7 @@ pub fn parse_transaction_history(
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
 
-    let start_after = match matches.value_of("after") {
+    let before = match matches.value_of("before") {
         Some(signature) => Some(
             signature
                 .parse()
@@ -450,7 +450,7 @@ pub fn parse_transaction_history(
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
             address,
-            start_after,
+            before,
             limit,
         },
         signers: vec![],
@@ -1311,12 +1311,12 @@ pub fn process_transaction_history(
     rpc_client: &RpcClient,
     config: &CliConfig,
     address: &Pubkey,
-    start_after: Option<Signature>,
+    before: Option<Signature>,
     limit: usize,
 ) -> ProcessResult {
     let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
         address,
-        start_after,
+        before,
         Some(limit),
     )?;
 

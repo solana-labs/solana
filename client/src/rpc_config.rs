@@ -69,6 +69,6 @@ pub enum RpcTokenAccountsFilter {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcGetConfirmedSignaturesForAddress2Config {
-    pub start_after: Option<String>, // Signature as base-58 string
+    pub before: Option<String>, // Signature as base-58 string
     pub limit: Option<usize>,
 }
