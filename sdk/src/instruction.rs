@@ -155,6 +155,10 @@ pub enum InstructionError {
     /// Length of the seed is too long for address generation
     #[error("Length of the seed is too long for address generation")]
     MaxSeedLengthExceeded,
+
+    /// Provided seeds do not result in a valid address
+    #[error("Provided seeds do not result in a valid address")]
+    InvalidSeeds,
 }
 
 impl InstructionError {

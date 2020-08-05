@@ -120,6 +120,8 @@ fn process_instruction(
             assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
             assert!(!accounts[DERIVED_KEY3_INDEX].is_signer);
 
+            let nonce2 = instruction_data[1];
+            let nonce3 = instruction_data[2];
             let invoked_instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[
@@ -133,8 +135,8 @@ fn process_instruction(
                 &invoked_instruction,
                 accounts,
                 &[
-                    &[b"Lil'", b"Bits"],
-                    &[accounts[DERIVED_KEY2_INDEX].key.as_ref()],
+                    &[b"Lil'", b"Bits", &[nonce2]],
+                    &[accounts[DERIVED_KEY2_INDEX].key.as_ref(), &[nonce3]],
                 ],
             )?;
         }

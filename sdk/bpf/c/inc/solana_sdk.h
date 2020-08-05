@@ -111,6 +111,8 @@ static_assert(sizeof(uint64_t) == 8);
 #define ERROR_ACCOUNT_BORROW_FAILED TO_BUILTIN(12)
 /** The length of the seed is too long for address generation */
 #define MAX_SEED_LENGTH_EXCEEDED TO_BUILTIN(13)
+/** Provided seeds do not result in a valid address */
+#define INVALID_SEEDS TO_BUILTIN(14)
 
 /**
  * Boolean type
@@ -390,12 +392,29 @@ typedef struct {
   uint64_t len; /** Number of seeds */
 } SolSignerSeeds;
 
+/*
+ * Create a program address
+ *
+ * @param seeds Seed strings used to sign program accounts
+ * @param seeds_len Length of the seeds array
+ * @param Progam id of the signer
+ * @param Program address created, filled on return
+ */
+static uint64_t sol_create_program_address(
+    const SolSignerSeed *seeds,
+    int seeds_len,
+    const SolPubkey *program_id,
+    const SolPubkey *address
+);
+
 /**
  * Cross-program invocation
  *  * @{
  */
 
 /*
+ * Invoke another program and sign for some of the keys
+ *
  * @param instruction Instruction to process
  * @param account_infos Accounts used by instruction
  * @param account_infos_len Length of account_infos array
@@ -426,9 +445,11 @@ static uint64_t sol_invoke_signed(
   );
 }
 /*
-* @param instruction Instruction to process
-* @param account_infos Accounts used by instruction
-* @param account_infos_len Length of account_infos array
+ * Invoke another program
+ *
+ * @param instruction Instruction to process
+ * @param account_infos Accounts used by instruction
+ * @param account_infos_len Length of account_infos array
 */
 static uint64_t sol_invoke(
     const SolInstruction *instruction,
