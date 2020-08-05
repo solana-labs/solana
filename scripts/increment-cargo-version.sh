@@ -31,7 +31,7 @@ readCargoVariable() {
 }
 
 # shellcheck disable=2207
-Cargo_tomls=($(find . -name Cargo.toml))
+Cargo_tomls=($(find . -name Cargo.toml -not -path './web3.js/examples/*'))
 # shellcheck disable=2207
 markdownFiles=($(find . -name "*.md"))
 
