@@ -1,4 +1,4 @@
-use crate::parse_instruction::{ParsableProgram, ParseInstructionError};
+use crate::parse_instruction::{ParsableProgram, ParseInstructionError, ParsedInstructionEnum};
 use serde_json::{json, Map, Value};
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 use spl_token_v1_0::instruction::TokenInstruction;
@@ -6,7 +6,7 @@ use spl_token_v1_0::instruction::TokenInstruction;
 pub fn parse_token(
     instruction: &CompiledInstruction,
     account_keys: &[Pubkey],
-) -> Result<Value, ParseInstructionError> {
+) -> Result<ParsedInstructionEnum, ParseInstructionError> {
     let token_instruction = TokenInstruction::unpack(&instruction.data)
         .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken))?;
     if instruction.accounts.len() > account_keys.len() {
@@ -23,7 +23,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "initializeMint",
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "amount": amount,
                 "decimals":decimals,
@@ -46,7 +45,10 @@ pub fn parse_token(
                     );
                 }
             }
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeMint".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::InitializeAccount => {
             if instruction.accounts.len() < 3 {
@@ -54,12 +56,14 @@ pub fn parse_token(
                     ParsableProgram::SplToken,
                 ));
             }
-            Ok(json!({
-                "type": "initializeAccount",
-                "account": account_keys[instruction.accounts[0] as usize].to_string(),
-                "mint": account_keys[instruction.accounts[1] as usize].to_string(),
-                "owner": account_keys[instruction.accounts[2] as usize].to_string(),
-            }))
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeAccount".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "owner": account_keys[instruction.accounts[2] as usize].to_string(),
+                }),
+            })
         }
         TokenInstruction::InitializeMultisig { m } => {
             if instruction.accounts.len() < 2 {
@@ -71,12 +75,14 @@ pub fn parse_token(
             for i in instruction.accounts[1..].iter() {
                 signers.push(account_keys[*i as usize].to_string());
             }
-            Ok(json!({
-                "type": "initializeMultisig",
-                "multisig": account_keys[instruction.accounts[0] as usize].to_string(),
-                "signers": signers,
-                "m": m,
-            }))
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeMultisig".to_string(),
+                info: json!({
+                    "multisig": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "signers": signers,
+                    "m": m,
+                }),
+            })
         }
         TokenInstruction::Transfer { amount } => {
             if instruction.accounts.len() < 3 {
@@ -85,7 +91,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "transfer",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[1] as usize].to_string(),
                 "amount": amount,
@@ -99,7 +104,10 @@ pub fn parse_token(
                 "authority",
                 "multisigAuthority",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "transfer".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::Approve { amount } => {
             if instruction.accounts.len() < 3 {
@@ -108,7 +116,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "approve",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "delegate": account_keys[instruction.accounts[1] as usize].to_string(),
                 "amount": amount,
@@ -122,7 +129,10 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "approve".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::Revoke => {
             if instruction.accounts.len() < 2 {
@@ -131,7 +141,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "revoke",
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
             });
             let mut map = value.as_object_mut().unwrap();
@@ -143,7 +152,10 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "revoke".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::SetOwner => {
             if instruction.accounts.len() < 3 {
@@ -152,7 +164,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "setOwner",
                 "owned": account_keys[instruction.accounts[0] as usize].to_string(),
                 "newOwner": account_keys[instruction.accounts[1] as usize].to_string(),
             });
@@ -165,7 +176,10 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "setOwner".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::MintTo { amount } => {
             if instruction.accounts.len() < 3 {
@@ -174,7 +188,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "mintTo",
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "account": account_keys[instruction.accounts[1] as usize].to_string(),
                 "amount": amount,
@@ -188,7 +201,10 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "mintTo".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::Burn { amount } => {
             if instruction.accounts.len() < 2 {
@@ -197,7 +213,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "burn",
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "amount": amount,
             });
@@ -210,7 +225,10 @@ pub fn parse_token(
                 "authority",
                 "multisigAuthority",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "burn".to_string(),
+                info: value,
+            })
         }
         TokenInstruction::CloseAccount => {
             if instruction.accounts.len() < 3 {
@@ -219,7 +237,6 @@ pub fn parse_token(
                 ));
             }
             let mut value = json!({
-                "type": "closeAccount",
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[1] as usize].to_string(),
             });
@@ -232,7 +249,10 @@ pub fn parse_token(
                 "owner",
                 "multisigOwner",
             );
-            Ok(value)
+            Ok(ParsedInstructionEnum {
+                instruction_type: "closeAccount".to_string(),
+                info: value,
+            })
         }
     }
 }
@@ -311,14 +331,16 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "initializeMint",
-                "mint": keys[0].to_string(),
-                "amount": 42,
-                "decimals": 2,
-                "account": keys[1].to_string(),
-                "owner": keys[2].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "initializeMint".to_string(),
+                info: json!({
+                    "mint": keys[0].to_string(),
+                    "amount": 42,
+                    "decimals": 2,
+                    "account": keys[1].to_string(),
+                    "owner": keys[2].to_string(),
+                })
+            }
         );
 
         let initialize_mint_ix = initialize_mint(
@@ -334,13 +356,15 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "initializeMint",
-                "mint": keys[0].to_string(),
-                "amount": 42,
-                "decimals": 2,
-                "account": keys[1].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "initializeMint".to_string(),
+                info: json!({
+                   "mint": keys[0].to_string(),
+                   "amount": 42,
+                   "decimals": 2,
+                   "account": keys[1].to_string(),
+                })
+            }
         );
 
         let initialize_mint_ix = initialize_mint(
@@ -356,13 +380,15 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "initializeMint",
-                "mint": keys[0].to_string(),
-                "amount": 0,
-                "decimals": 2,
-                "owner": keys[1].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "initializeMint".to_string(),
+                info: json!({
+                   "mint": keys[0].to_string(),
+                   "amount": 0,
+                   "decimals": 2,
+                   "owner": keys[1].to_string(),
+                })
+            }
         );
 
         // Test InitializeAccount
@@ -377,12 +403,14 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "initializeAccount",
-                "account": keys[0].to_string(),
-                "mint": keys[1].to_string(),
-                "owner": keys[2].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "initializeAccount".to_string(),
+                info: json!({
+                   "account": keys[0].to_string(),
+                   "mint": keys[1].to_string(),
+                   "owner": keys[2].to_string(),
+                })
+            }
         );
 
         // Test InitializeMultisig
@@ -401,12 +429,14 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "initializeMultisig",
-                "multisig": keys[0].to_string(),
-                "m": 2,
-                "signers": keys[1..4].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "initializeMultisig".to_string(),
+                info: json!({
+                   "multisig": keys[0].to_string(),
+                   "m": 2,
+                   "signers": keys[1..4].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                })
+            }
         );
 
         // Test Transfer, incl multisig
@@ -423,13 +453,15 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "transfer",
-                "source": keys[1].to_string(),
-                "destination": keys[2].to_string(),
-                "authority": keys[0].to_string(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "transfer".to_string(),
+                info: json!({
+                   "source": keys[1].to_string(),
+                   "destination": keys[2].to_string(),
+                   "authority": keys[0].to_string(),
+                   "amount": 42,
+                })
+            }
         );
 
         let transfer_ix = transfer(
@@ -445,14 +477,16 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "transfer",
-                "source": keys[2].to_string(),
-                "destination": keys[3].to_string(),
-                "multisigAuthority": keys[4].to_string(),
-                "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "transfer".to_string(),
+                info: json!({
+                   "source": keys[2].to_string(),
+                   "destination": keys[3].to_string(),
+                   "multisigAuthority": keys[4].to_string(),
+                   "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                   "amount": 42,
+                })
+            }
         );
 
         // Test Approve, incl multisig
@@ -469,13 +503,15 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "approve",
-                "source": keys[1].to_string(),
-                "delegate": keys[2].to_string(),
-                "owner": keys[0].to_string(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "approve".to_string(),
+                info: json!({
+                   "source": keys[1].to_string(),
+                   "delegate": keys[2].to_string(),
+                   "owner": keys[0].to_string(),
+                   "amount": 42,
+                })
+            }
         );
 
         let approve_ix = approve(
@@ -491,14 +527,16 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "approve",
-                "source": keys[2].to_string(),
-                "delegate": keys[3].to_string(),
-                "multisigOwner": keys[4].to_string(),
-                "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "approve".to_string(),
+                info: json!({
+                   "source": keys[2].to_string(),
+                   "delegate": keys[3].to_string(),
+                   "multisigOwner": keys[4].to_string(),
+                   "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                   "amount": 42,
+                })
+            }
         );
 
         // Test Revoke
@@ -513,11 +551,13 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "revoke",
-                "source": keys[1].to_string(),
-                "owner": keys[0].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "revoke".to_string(),
+                info: json!({
+                   "source": keys[1].to_string(),
+                   "owner": keys[0].to_string(),
+                })
+            }
         );
 
         // Test SetOwner
@@ -533,12 +573,14 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "setOwner",
-                "owned": keys[1].to_string(),
-                "newOwner": keys[2].to_string(),
-                "owner": keys[0].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "setOwner".to_string(),
+                info: json!({
+                   "owned": keys[1].to_string(),
+                   "newOwner": keys[2].to_string(),
+                   "owner": keys[0].to_string(),
+                })
+            }
         );
 
         // Test MintTo
@@ -555,13 +597,15 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "mintTo",
-                "mint": keys[1].to_string(),
-                "account": keys[2].to_string(),
-                "owner": keys[0].to_string(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "mintTo".to_string(),
+                info: json!({
+                   "mint": keys[1].to_string(),
+                   "account": keys[2].to_string(),
+                   "owner": keys[0].to_string(),
+                   "amount": 42,
+                })
+            }
         );
 
         // Test Burn
@@ -577,12 +621,14 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "burn",
-                "account": keys[1].to_string(),
-                "authority": keys[0].to_string(),
-                "amount": 42,
-            })
+            ParsedInstructionEnum {
+                instruction_type: "burn".to_string(),
+                info: json!({
+                   "account": keys[1].to_string(),
+                   "authority": keys[0].to_string(),
+                   "amount": 42,
+                })
+            }
         );
 
         // Test CloseAccount
@@ -598,12 +644,14 @@ mod test {
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
-            json!({
-                "type": "closeAccount",
-                "account": keys[1].to_string(),
-                "destination": keys[2].to_string(),
-                "owner": keys[0].to_string(),
-            })
+            ParsedInstructionEnum {
+                instruction_type: "closeAccount".to_string(),
+                info: json!({
+                   "account": keys[1].to_string(),
+                   "destination": keys[2].to_string(),
+                   "owner": keys[0].to_string(),
+                })
+            }
         );
     }
 
