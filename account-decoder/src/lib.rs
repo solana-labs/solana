@@ -8,8 +8,7 @@ pub mod parse_nonce;
 pub mod parse_token;
 pub mod parse_vote;
 
-use crate::parse_account_data::parse_account_data;
-use serde_json::Value;
+use crate::parse_account_data::{parse_account_data, ParsedAccount};
 use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use std::str::FromStr;
 
@@ -28,7 +27,7 @@ pub struct UiAccount {
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiAccountData {
     Binary(String),
-    Json(Value),
+    Json(ParsedAccount),
 }
 
 impl From<Vec<u8>> for UiAccountData {
