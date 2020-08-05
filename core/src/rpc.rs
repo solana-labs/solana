@@ -4404,7 +4404,8 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let balance: f64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(balance, 4.2);
+        let error = f64::EPSILON;
+        assert!((balance - 4.2).abs() < error);
 
         // Test non-existent token account
         let req = format!(
@@ -4428,7 +4429,8 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let supply: f64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(supply, 2.0 * 4.2);
+        let error = f64::EPSILON;
+        assert!((supply - 2.0 * 4.2).abs() < error);
 
         // Test non-existent mint address
         let req = format!(
