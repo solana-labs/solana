@@ -838,7 +838,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         let bank = self.bank(commitment);
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
@@ -871,7 +871,7 @@ impl JsonRpcRequestProcessor {
         &self,
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         let bank = self.bank(commitment);
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
@@ -943,7 +943,14 @@ impl JsonRpcRequestProcessor {
                     }
                 })
                 .collect();
-        token_balances.sort_by(|a, b| a.amount.partial_cmp(&b.amount).unwrap().reverse());
+        token_balances.sort_by(|a, b| {
+            a.amount
+                .amount
+                .parse::<u64>()
+                .unwrap()
+                .cmp(&b.amount.amount.parse::<u64>().unwrap())
+                .reverse()
+        });
         token_balances.truncate(NUM_LARGEST_ACCOUNTS);
         Ok(new_response(&bank, token_balances))
     }
@@ -1121,8 +1128,13 @@ fn get_mint_decimals(data: &[u8]) -> Result<u8> {
         .map(|mint: &mut Mint| mint.decimals)
 }
 
-fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> f64 {
-    amount as f64 / 10_usize.pow(decimals as u32) as f64
+fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> RpcTokenAmount {
+    let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
+    RpcTokenAmount {
+        ui_amount: amount_decimals,
+        decimals,
+        amount: amount.to_string(),
+    }
 }
 
 #[rpc]
@@ -1408,7 +1420,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>>;
+    ) -> Result<RpcResponse<RpcTokenAmount>>;
 
     #[rpc(meta, name = "getTokenSupply")]
     fn get_token_supply(
@@ -1416,7 +1428,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>>;
+    ) -> Result<RpcResponse<RpcTokenAmount>>;
 
     #[rpc(meta, name = "getTokenLargestAccounts")]
     fn get_token_largest_accounts(
@@ -2041,7 +2053,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         debug!(
             "get_token_account_balance rpc request received: {:?}",
             pubkey_str
@@ -2055,7 +2067,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<f64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
@@ -4403,9 +4415,12 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let balance: f64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        let balance: RpcTokenAmount =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
-        assert!((balance - 4.2).abs() < error);
+        assert!((balance.ui_amount - 4.2).abs() < error);
+        assert_eq!(balance.amount, 420.to_string());
+        assert_eq!(balance.decimals, 2);
 
         // Test non-existent token account
         let req = format!(
@@ -4428,9 +4443,12 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let supply: f64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        let supply: RpcTokenAmount =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
-        assert!((supply - 2.0 * 4.2).abs() < error);
+        assert!((supply.ui_amount - 2.0 * 4.2).abs() < error);
+        assert_eq!(supply.amount, (2 * 420).to_string());
+        assert_eq!(supply.decimals, 2);
 
         // Test non-existent mint address
         let req = format!(
@@ -4685,11 +4703,19 @@ pub mod tests {
             vec![
                 RpcTokenAccountBalance {
                     address: token_with_different_mint_pubkey.to_string(),
-                    amount: 0.42,
+                    amount: RpcTokenAmount {
+                        ui_amount: 0.42,
+                        decimals: 2,
+                        amount: "42".to_string(),
+                    }
                 },
                 RpcTokenAccountBalance {
                     address: token_with_smaller_balance.to_string(),
-                    amount: 0.1,
+                    amount: RpcTokenAmount {
+                        ui_amount: 0.1,
+                        decimals: 2,
+                        amount: "10".to_string(),
+                    }
                 }
             ]
         );
