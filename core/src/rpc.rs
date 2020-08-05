@@ -791,13 +791,8 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
-<<<<<<< HEAD
-    ) -> Result<RpcResponse<u64>> {
-        let bank = self.bank(commitment)?;
-=======
     ) -> Result<RpcResponse<RpcTokenAmount>> {
-        let bank = self.bank(commitment);
->>>>>>> 86e3f96f1... Return token amounts as floats (#11370)
+        let bank = self.bank(commitment)?;
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
@@ -811,37 +806,22 @@ impl JsonRpcRequestProcessor {
         let token_account =
             spl_token_v1_0::state::unpack::<TokenAccount>(&mut data).map_err(|_| {
                 Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
-<<<<<<< HEAD
-            })
-            .map(|account: &mut TokenAccount| account.amount)?;
-        new_response(&bank, balance)
-=======
             })?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
         let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
         let balance = token_amount_to_ui_amount(token_account.amount, decimals);
-        Ok(new_response(&bank, balance))
->>>>>>> 86e3f96f1... Return token amounts as floats (#11370)
+        new_response(&bank, balance)
     }
 
     pub fn get_token_supply(
         &self,
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
-<<<<<<< HEAD
-    ) -> Result<RpcResponse<u64>> {
-        let bank = self.bank(commitment)?;
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
-=======
     ) -> Result<RpcResponse<RpcTokenAmount>> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
         if mint_owner != spl_token_id_v1_0() {
->>>>>>> 86e3f96f1... Return token amounts as floats (#11370)
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
@@ -865,12 +845,8 @@ impl JsonRpcRequestProcessor {
                     .unwrap_or(0)
             })
             .sum();
-<<<<<<< HEAD
-        new_response(&bank, supply)
-=======
         let supply = token_amount_to_ui_amount(supply, decimals);
-        Ok(new_response(&bank, supply))
->>>>>>> 86e3f96f1... Return token amounts as floats (#11370)
+        new_response(&bank, supply)
     }
 
     pub fn get_token_largest_accounts(
@@ -878,17 +854,9 @@ impl JsonRpcRequestProcessor {
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
-<<<<<<< HEAD
         let bank = self.bank(commitment)?;
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
-=======
-        let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
         if mint_owner != spl_token_id_v1_0() {
->>>>>>> 86e3f96f1... Return token amounts as floats (#11370)
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
