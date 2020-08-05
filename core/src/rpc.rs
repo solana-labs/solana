@@ -8,7 +8,10 @@ use crate::{
 use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
+use solana_account_decoder::{
+    parse_token::{spl_token_id_v1_0, spl_token_v1_0_native_mint},
+    UiAccount, UiAccountEncoding,
+};
 use solana_client::{
     rpc_config::*,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -50,7 +53,7 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use spl_token_v1_0::state::Account as TokenAccount;
+use spl_token_v1_0::state::{Account as TokenAccount, Mint};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -838,7 +841,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         let bank = self.bank(commitment);
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
@@ -850,11 +853,14 @@ impl JsonRpcRequestProcessor {
             ));
         }
         let mut data = account.data.to_vec();
-        let balance = spl_token_v1_0::state::unpack(&mut data)
-            .map_err(|_| {
+        let token_account =
+            spl_token_v1_0::state::unpack::<TokenAccount>(&mut data).map_err(|_| {
                 Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
-            })
-            .map(|account: &mut TokenAccount| account.amount)?;
+            })?;
+        let mint = &Pubkey::from_str(&token_account.mint.to_string())
+            .expect("Token account mint should be convertible to Pubkey");
+        let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
+        let balance = token_amount_to_ui_amount(token_account.amount, decimals);
         Ok(new_response(&bank, balance))
     }
 
@@ -862,16 +868,15 @@ impl JsonRpcRequestProcessor {
         &self,
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         let bank = self.bank(commitment);
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
+        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
         }
+
         let filters = vec![
             // Filter on Mint address
             RpcFilterType::Memcmp(Memcmp {
@@ -882,7 +887,7 @@ impl JsonRpcRequestProcessor {
             // Filter on Token Account state
             RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
         ];
-        let supply = get_filtered_program_accounts(&bank, &mint_account.owner, filters)
+        let supply = get_filtered_program_accounts(&bank, &mint_owner, filters)
             .map(|(_pubkey, account)| {
                 let mut data = account.data.to_vec();
                 spl_token_v1_0::state::unpack(&mut data)
@@ -890,6 +895,7 @@ impl JsonRpcRequestProcessor {
                     .unwrap_or(0)
             })
             .sum();
+        let supply = token_amount_to_ui_amount(supply, decimals);
         Ok(new_response(&bank, supply))
     }
 
@@ -899,10 +905,8 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
         let bank = self.bank(commitment);
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        if mint_account.owner != spl_token_id_v1_0() {
+        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
             ));
@@ -918,19 +922,27 @@ impl JsonRpcRequestProcessor {
             RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
         ];
         let mut token_balances: Vec<RpcTokenAccountBalance> =
-            get_filtered_program_accounts(&bank, &mint_account.owner, filters)
+            get_filtered_program_accounts(&bank, &mint_owner, filters)
                 .map(|(address, account)| {
                     let mut data = account.data.to_vec();
                     let amount = spl_token_v1_0::state::unpack(&mut data)
                         .map(|account: &mut TokenAccount| account.amount)
                         .unwrap_or(0);
+                    let amount = token_amount_to_ui_amount(amount, decimals);
                     RpcTokenAccountBalance {
                         address: address.to_string(),
                         amount,
                     }
                 })
                 .collect();
-        token_balances.sort_by(|a, b| a.amount.cmp(&b.amount).reverse());
+        token_balances.sort_by(|a, b| {
+            a.amount
+                .amount
+                .parse::<u64>()
+                .unwrap()
+                .cmp(&b.amount.amount.parse::<u64>().unwrap())
+                .reverse()
+        });
         token_balances.truncate(NUM_LARGEST_ACCOUNTS);
         Ok(new_response(&bank, token_balances))
     }
@@ -1077,15 +1089,13 @@ fn get_token_program_id_and_mint(
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
-            let mint_account = bank.get_account(&mint).ok_or_else(|| {
-                Error::invalid_params("Invalid param: could not find mint".to_string())
-            })?;
-            if mint_account.owner != spl_token_id_v1_0() {
+            let (mint_owner, _) = get_mint_owner_and_decimals(&bank, &mint)?;
+            if mint_owner != spl_token_id_v1_0() {
                 return Err(Error::invalid_params(
                     "Invalid param: not a v1.0 Token mint".to_string(),
                 ));
             }
-            Ok((mint_account.owner, Some(mint)))
+            Ok((mint_owner, Some(mint)))
         }
         TokenAccountsFilter::ProgramId(program_id) => {
             if program_id == spl_token_id_v1_0() {
@@ -1096,6 +1106,41 @@ fn get_token_program_id_and_mint(
                 ))
             }
         }
+    }
+}
+
+/// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
+/// program_id) and decimals
+fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
+    if mint == &spl_token_v1_0_native_mint() {
+        // Uncomment the following once spl_token is bumped to a version that includes native_mint::DECIMALS
+        // Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
+        Ok((spl_token_id_v1_0(), 9))
+    } else {
+        let mint_account = bank.get_account(mint).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find mint".to_string())
+        })?;
+        let decimals = get_mint_decimals(&mint_account.data)?;
+        Ok((mint_account.owner, decimals))
+    }
+}
+
+fn get_mint_decimals(data: &[u8]) -> Result<u8> {
+    let mut data = data.to_vec();
+    spl_token_v1_0::state::unpack(&mut data)
+        .map_err(|_| {
+            Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
+        })
+        .map(|mint: &mut Mint| mint.decimals)
+}
+
+fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> RpcTokenAmount {
+    // Use `amount_to_ui_amount()` once spl_token is bumped to a version that supports it: https://github.com/solana-labs/solana-program-library/pull/211
+    let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
+    RpcTokenAmount {
+        ui_amount: amount_decimals,
+        decimals,
+        amount: amount.to_string(),
     }
 }
 
@@ -1382,7 +1427,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>>;
+    ) -> Result<RpcResponse<RpcTokenAmount>>;
 
     #[rpc(meta, name = "getTokenSupply")]
     fn get_token_supply(
@@ -1390,7 +1435,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>>;
+    ) -> Result<RpcResponse<RpcTokenAmount>>;
 
     #[rpc(meta, name = "getTokenLargestAccounts")]
     fn get_token_largest_accounts(
@@ -2015,7 +2060,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         debug!(
             "get_token_account_balance rpc request received: {:?}",
             pubkey_str
@@ -2029,7 +2074,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<u64>> {
+    ) -> Result<RpcResponse<RpcTokenAmount>> {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
@@ -4353,7 +4398,7 @@ pub mod tests {
             mint,
             owner,
             delegate: COption::Some(delegate),
-            amount: 42,
+            amount: 420,
             is_initialized: true,
             is_native: false,
             delegated_amount: 30,
@@ -4367,27 +4412,7 @@ pub mod tests {
         let token_account_pubkey = Pubkey::new_rand();
         bank.store_account(&token_account_pubkey, &token_account);
 
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
-            token_account_pubkey,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let balance: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(balance, 42);
-
-        // Test non-existent token account
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
-            Pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
-
-        // Add the mint, plus another token account to ensure getTokenSupply sums all mint accounts
+        // Add the mint
         let mut mint_data = [0; size_of::<Mint>()];
         let mint_state: &mut Mint =
             spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
@@ -4403,6 +4428,32 @@ pub mod tests {
             ..Account::default()
         };
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
+            token_account_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let balance: RpcTokenAmount =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        let error = f64::EPSILON;
+        assert!((balance.ui_amount - 4.2).abs() < error);
+        assert_eq!(balance.amount, 420.to_string());
+        assert_eq!(balance.decimals, 2);
+
+        // Test non-existent token account
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
+            Pubkey::new_rand(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert!(result.get("error").is_some());
+
+        // Add another token account to ensure getTokenSupply sums all mint accounts
         let other_token_account_pubkey = Pubkey::new_rand();
         bank.store_account(&other_token_account_pubkey, &token_account);
 
@@ -4413,8 +4464,12 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let supply: u64 = serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(supply, 2 * 42);
+        let supply: RpcTokenAmount =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        let error = f64::EPSILON;
+        assert!((supply.ui_amount - 2.0 * 4.2).abs() < error);
+        assert_eq!(supply.amount, (2 * 420).to_string());
+        assert_eq!(supply.decimals, 2);
 
         // Test non-existent mint address
         let req = format!(
@@ -4669,11 +4724,19 @@ pub mod tests {
             vec![
                 RpcTokenAccountBalance {
                     address: token_with_different_mint_pubkey.to_string(),
-                    amount: 42,
+                    amount: RpcTokenAmount {
+                        ui_amount: 0.42,
+                        decimals: 2,
+                        amount: "42".to_string(),
+                    }
                 },
                 RpcTokenAccountBalance {
                     address: token_with_smaller_balance.to_string(),
-                    amount: 10,
+                    amount: RpcTokenAmount {
+                        ui_amount: 0.1,
+                        decimals: 2,
+                        amount: "10".to_string(),
+                    }
                 }
             ]
         );
