@@ -1,28 +1,23 @@
-use serde_json::{json, Map, Value};
 use solana_sdk::message::Message;
 
-type AccountAttributes = Vec<AccountAttribute>;
-
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-enum AccountAttribute {
-    Signer,
-    Writable,
+pub struct ParsedAccount {
+    pub pubkey: String,
+    pub writable: bool,
+    pub signer: bool,
 }
 
-pub fn parse_accounts(message: &Message) -> Value {
-    let mut accounts: Map<String, Value> = Map::new();
+pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
+    let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
-        let mut attributes: AccountAttributes = vec![];
-        if message.is_writable(i) {
-            attributes.push(AccountAttribute::Writable);
-        }
-        if message.is_signer(i) {
-            attributes.push(AccountAttribute::Signer);
-        }
-        accounts.insert(account_key.to_string(), json!(attributes));
+        accounts.push(ParsedAccount {
+            pubkey: account_key.to_string(),
+            writable: message.is_writable(i),
+            signer: message.is_signer(i),
+        });
     }
-    json!(accounts)
+    accounts
 }
 
 #[cfg(test)]
@@ -44,13 +39,30 @@ mod test {
         };
         message.account_keys = vec![pubkey0, pubkey1, pubkey2, pubkey3];
 
-        let expected_json = json!({
-            pubkey0.to_string(): ["writable", "signer"],
-            pubkey1.to_string(): ["signer"],
-            pubkey2.to_string(): ["writable"],
-            pubkey3.to_string(): [],
-        });
-
-        assert_eq!(parse_accounts(&message), expected_json);
+        assert_eq!(
+            parse_accounts(&message),
+            vec![
+                ParsedAccount {
+                    pubkey: pubkey0.to_string(),
+                    writable: true,
+                    signer: true,
+                },
+                ParsedAccount {
+                    pubkey: pubkey1.to_string(),
+                    writable: false,
+                    signer: true,
+                },
+                ParsedAccount {
+                    pubkey: pubkey2.to_string(),
+                    writable: true,
+                    signer: false,
+                },
+                ParsedAccount {
+                    pubkey: pubkey3.to_string(),
+                    writable: false,
+                    signer: false,
+                },
+            ]
+        );
     }
 }

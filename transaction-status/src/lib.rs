@@ -7,8 +7,10 @@ pub mod parse_accounts;
 pub mod parse_instruction;
 pub mod parse_token;
 
-use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
-use serde_json::{json, Value};
+use crate::{
+    parse_accounts::{parse_accounts, ParsedAccount},
+    parse_instruction::{parse, ParsedInstruction},
+};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
@@ -23,7 +25,14 @@ use solana_sdk::{
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiInstruction {
     Compiled(UiCompiledInstruction),
-    Parsed(Value),
+    Parsed(UiParsedInstruction),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum UiParsedInstruction {
+    Parsed(ParsedInstruction),
+    PartiallyDecoded(UiPartiallyDecodedInstruction),
 }
 
 /// A duplicate representation of a CompiledInstruction for pretty JSON serialization
@@ -183,7 +192,7 @@ pub struct UiRawMessage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
-    pub account_keys: Value,
+    pub account_keys: Vec<ParsedAccount>,
     pub recent_blockhash: String,
     pub instructions: Vec<UiInstruction>,
 }
@@ -250,13 +259,15 @@ impl EncodedTransaction {
                                     instruction,
                                     &transaction.message.account_keys,
                                 ) {
-                                    UiInstruction::Parsed(parsed_instruction)
+                                    UiInstruction::Parsed(UiParsedInstruction::Parsed(
+                                        parsed_instruction,
+                                    ))
                                 } else {
-                                    UiInstruction::Parsed(json!(
+                                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
                                         UiPartiallyDecodedInstruction::from(
                                             instruction,
-                                            &transaction.message.account_keys
-                                        )
+                                            &transaction.message.account_keys,
+                                        ),
                                     ))
                                 }
                             })
