@@ -76,6 +76,10 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
+<<<<<<< HEAD
+=======
+#[frozen_abi(digest = "3bFpd1M1YHHKFASfjUU5L9dUkg87TKuMzwUoUebwa8Pu")]
+>>>>>>> 03263c850... Force program address off the curve (#11323)
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;

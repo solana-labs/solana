@@ -77,6 +77,25 @@ pub fn register_syscalls<'a>(
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     // Syscall function common across languages
     vm.register_syscall_ex("abort", syscall_abort)?;
+<<<<<<< HEAD
+=======
+    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
+    vm.register_syscall_with_context_ex(
+        "sol_log_",
+        Box::new(SyscallLog {
+            logger: invoke_context.get_logger(),
+        }),
+    )?;
+    vm.register_syscall_with_context_ex(
+        "sol_log_64_",
+        Box::new(SyscallLogU64 {
+            logger: invoke_context.get_logger(),
+        }),
+    )?;
+    if invoke_context.is_cross_program_supported() {
+        vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+    }
+>>>>>>> 03263c850... Force program address off the curve (#11323)
 
     {
         let invoke_context = Rc::new(RefCell::new(invoke_context));
@@ -360,6 +379,36 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
             Ok(0)
         }
     }
+}
+
+/// Create a program address
+pub fn syscall_create_program_address(
+    seeds_addr: u64,
+    seeds_len: u64,
+    program_id_addr: u64,
+    address_addr: u64,
+    _arg5: u64,
+    ro_regions: &[MemoryRegion],
+    rw_regions: &[MemoryRegion],
+) -> Result<u64, EbpfError<BPFError>> {
+    let untranslated_seeds = translate_slice!(&[&str], seeds_addr, seeds_len, ro_regions)?;
+    let seeds = untranslated_seeds
+        .iter()
+        .map(|untranslated_seed| {
+            translate_slice!(
+                u8,
+                untranslated_seed.as_ptr(),
+                untranslated_seed.len(),
+                ro_regions
+            )
+        })
+        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+    let program_id = translate_type!(Pubkey, program_id_addr, rw_regions)?;
+    let new_address =
+        Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds)?;
+    let address = translate_slice_mut!(u8, address_addr, 32, ro_regions)?;
+    address.copy_from_slice(new_address.as_ref());
+    Ok(0)
 }
 
 // Cross-program invocation syscalls

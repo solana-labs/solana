@@ -1044,9 +1044,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac746a5f3bbfdadd6106868134545e684693d54d9d44f6e9588a7d54af0bf980"
+checksum = "60fb4bb6bba52f78a471264d9a3b7d026cc0af47b22cd2cffbc0b787ca003e63"
 dependencies = [
  "serde",
  "typenum",
@@ -3913,7 +3913,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "ed25519-dalek",
- "generic-array 0.14.2",
+ "generic-array 0.14.3",
  "hex",
  "hmac",
  "itertools",
@@ -3949,7 +3949,7 @@ dependencies = [
  "chrono",
  "curve25519-dalek",
  "ed25519-dalek",
- "generic-array 0.14.2",
+ "generic-array 0.14.3",
  "hex",
  "hmac",
  "itertools",

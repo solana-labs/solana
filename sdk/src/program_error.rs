@@ -38,6 +38,13 @@ pub enum ProgramError {
     NotEnoughAccountKeys,
     #[error("Failed to borrow a reference to account data, already borrowed")]
     AccountBorrowFailed,
+<<<<<<< HEAD
+=======
+    #[error("Length of the seed is too long for address generation")]
+    MaxSeedLengthExceeded,
+    #[error("Provided seeds do not result in a valid address")]
+    InvalidSeeds,
+>>>>>>> 03263c850... Force program address off the curve (#11323)
 }
 
 pub trait PrintProgramError {
@@ -70,6 +77,11 @@ impl PrintProgramError for ProgramError {
             Self::UninitializedAccount => info!("Error: UninitializedAccount"),
             Self::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
             Self::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
+<<<<<<< HEAD
+=======
+            Self::MaxSeedLengthExceeded => info!("Error: MaxSeedLengthExceeded"),
+            Self::InvalidSeeds => info!("Error: InvalidSeeds"),
+>>>>>>> 03263c850... Force program address off the curve (#11323)
         }
     }
 }
@@ -94,6 +106,11 @@ const ACCOUNT_ALREADY_INITIALIZED: u64 = to_builtin!(9);
 const UNINITIALIZED_ACCOUNT: u64 = to_builtin!(10);
 const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
 const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
+<<<<<<< HEAD
+=======
+const MAX_SEED_LENGTH_EXCEEDED: u64 = to_builtin!(13);
+const INVALID_SEEDS: u64 = to_builtin!(14);
+>>>>>>> 03263c850... Force program address off the curve (#11323)
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -109,6 +126,12 @@ impl From<ProgramError> for u64 {
             ProgramError::UninitializedAccount => UNINITIALIZED_ACCOUNT,
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
+<<<<<<< HEAD
+=======
+            ProgramError::MaxSeedLengthExceeded => MAX_SEED_LENGTH_EXCEEDED,
+            ProgramError::InvalidSeeds => INVALID_SEEDS,
+
+>>>>>>> 03263c850... Force program address off the curve (#11323)
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -134,6 +157,11 @@ impl From<u64> for ProgramError {
             UNINITIALIZED_ACCOUNT => ProgramError::UninitializedAccount,
             NOT_ENOUGH_ACCOUNT_KEYS => ProgramError::NotEnoughAccountKeys,
             ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
+<<<<<<< HEAD
+=======
+            MAX_SEED_LENGTH_EXCEEDED => ProgramError::MaxSeedLengthExceeded,
+            INVALID_SEEDS => ProgramError::InvalidSeeds,
+>>>>>>> 03263c850... Force program address off the curve (#11323)
             CUSTOM_ZERO => ProgramError::Custom(0),
             _ => ProgramError::Custom(error as u32),
         }
@@ -181,6 +209,11 @@ where
             UNINITIALIZED_ACCOUNT => InstructionError::UninitializedAccount,
             NOT_ENOUGH_ACCOUNT_KEYS => InstructionError::NotEnoughAccountKeys,
             ACCOUNT_BORROW_FAILED => InstructionError::AccountBorrowFailed,
+<<<<<<< HEAD
+=======
+            MAX_SEED_LENGTH_EXCEEDED => InstructionError::MaxSeedLengthExceeded,
+            INVALID_SEEDS => InstructionError::InvalidSeeds,
+>>>>>>> 03263c850... Force program address off the curve (#11323)
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
@@ -192,3 +225,15 @@ where
         }
     }
 }
+<<<<<<< HEAD
+=======
+
+impl From<PubkeyError> for ProgramError {
+    fn from(error: PubkeyError) -> Self {
+        match error {
+            PubkeyError::MaxSeedLengthExceeded => ProgramError::MaxSeedLengthExceeded,
+            PubkeyError::InvalidSeeds => ProgramError::InvalidSeeds,
+        }
+    }
+}
+>>>>>>> 03263c850... Force program address off the curve (#11323)
