@@ -839,7 +839,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: Pubkey,
-        start_after: Option<Signature>,
+        before: Option<Signature>,
         limit: usize,
     ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         if self.config.enable_rpc_transaction_history {
@@ -854,7 +854,7 @@ impl JsonRpcRequestProcessor {
                 .get_confirmed_signatures_for_address2(
                     address,
                     highest_confirmed_root,
-                    start_after,
+                    before,
                     limit,
                 )
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
@@ -2162,8 +2162,8 @@ impl RpcSol for RpcSolImpl {
         let address = verify_pubkey(address)?;
 
         let config = config.unwrap_or_default();
-        let start_after = if let Some(start_after) = config.start_after {
-            Some(verify_signature(&start_after)?)
+        let before = if let Some(before) = config.before {
+            Some(verify_signature(&before)?)
         } else {
             None
         };
@@ -2178,7 +2178,7 @@ impl RpcSol for RpcSolImpl {
             )));
         }
 
-        meta.get_confirmed_signatures_for_address2(address, start_after, limit)
+        meta.get_confirmed_signatures_for_address2(address, before, limit)
     }
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
