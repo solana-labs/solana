@@ -32,11 +32,11 @@ pub enum ParseInstructionError {
     #[error("Program not parsable")]
     ProgramNotParsable,
 
-    #[error("Serde json error")]
+    #[error("Internal error, please report")]
     SerdeJsonError(#[from] serde_json::error::Error),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstruction {
     pub program: String,
@@ -47,6 +47,7 @@ pub struct ParsedInstruction {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstructionEnum {
+    #[serde(rename = "type")]
     pub instruction_type: String,
     pub info: Value,
 }
