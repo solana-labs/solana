@@ -1834,16 +1834,10 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_confirmed_transaction".to_string(), String)
         );
-<<<<<<< HEAD
         if let Some((slot, status)) = self.get_transaction_status(signature.clone())? {
-            let transaction = self.find_transaction_in_slot(slot, signature)?
-                .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
-=======
-        if let Some((slot, status)) = self.get_transaction_status(signature)? {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
->>>>>>> 1061b5066... Fix blockstore empty panic (#11423)
             let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
             let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
             Ok(Some(ConfirmedTransaction {
