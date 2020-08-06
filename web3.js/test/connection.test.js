@@ -1286,7 +1286,7 @@ test('token methods', async () => {
     payerAccount,
     mintOwner.publicKey,
     accountOwner.publicKey,
-    new u64(10000),
+    new u64(11111),
     2,
     TOKEN_PROGRAM_ID,
     false,
@@ -1314,7 +1314,9 @@ test('token methods', async () => {
 
   const supply = (await connection.getTokenSupply(token.publicKey, 'recent'))
     .value;
-  expect(supply).toEqual(10000);
+  expect(supply.uiAmount).toEqual(111.11);
+  expect(supply.decimals).toEqual(2);
+  expect(supply.amount).toEqual('11111');
 
   const newAccount = new Account();
   await expect(
@@ -1324,7 +1326,9 @@ test('token methods', async () => {
   const balance = (
     await connection.getTokenAccountBalance(tokenAccount, 'recent')
   ).value;
-  expect(balance).toEqual(9999);
+  expect(balance.amount).toEqual('11110');
+  expect(balance.decimals).toEqual(2);
+  expect(balance.uiAmount).toEqual(111.1);
 
   await expect(
     connection.getTokenAccountBalance(newAccount.publicKey, 'recent'),
@@ -1338,12 +1342,6 @@ test('token methods', async () => {
     )
   ).value;
   expect(accountsWithMintFilter.length).toEqual(2);
-  for (const {account} of accountsWithMintFilter) {
-    expect(account.data.mint.toBase58()).toEqual(token.publicKey.toBase58());
-    expect(account.data.owner.toBase58()).toEqual(
-      accountOwner.publicKey.toBase58(),
-    );
-  }
 
   const accountsWithProgramFilter = (
     await connection.getTokenAccountsByOwner(
@@ -1353,11 +1351,6 @@ test('token methods', async () => {
     )
   ).value;
   expect(accountsWithProgramFilter.length).toEqual(3);
-  for (const {account} of accountsWithProgramFilter) {
-    expect(account.data.owner.toBase58()).toEqual(
-      accountOwner.publicKey.toBase58(),
-    );
-  }
 
   const noAccounts = (
     await connection.getTokenAccountsByOwner(

@@ -158,21 +158,10 @@ declare module '@solana/web3.js' {
     root: number;
   };
 
-  export type TokenAccountInfo = {
-    mint: PublicKey;
-    owner: PublicKey;
-    amount: number;
-    delegate: null | PublicKey;
-    delegatedAmount: number;
-    isInitialized: boolean;
-    isNative: boolean;
-  };
-
-  export type TokenAccount = {
-    executable: boolean;
-    owner: PublicKey;
-    lamports: number;
-    data: TokenAccountInfo;
+  export type TokenAmount = {
+    uiAmount: number;
+    decimals: number;
+    amount: string;
   };
 
   export type AccountChangeCallback = (
@@ -267,17 +256,17 @@ declare module '@solana/web3.js' {
     getTokenSupply(
       tokenMintAddress: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<number>>;
+    ): Promise<RpcResponseAndContext<TokenAmount>>;
     getTokenAccountBalance(
       tokenAddress: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<number>>;
+    ): Promise<RpcResponseAndContext<TokenAmount>>;
     getTokenAccountsByOwner(
       ownerAddress: PublicKey,
       filter: TokenAccountsFilter,
       commitment?: Commitment,
     ): Promise<
-      RpcResponseAndContext<Array<{pubkey: PublicKey; account: TokenAccount}>>
+      RpcResponseAndContext<Array<{pubkey: PublicKey; account: AccountInfo}>>
     >;
     getLargestAccounts(
       config?: GetLargestAccountsConfig,
