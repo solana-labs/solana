@@ -106,7 +106,7 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
             }
         }
         if OperatingMode::Stable == operating_mode {
-            bank.set_cross_program_support(bank.epoch() > 62);
+            bank.set_cross_program_support(bank.epoch() >= 63);
         } else {
             bank.set_cross_program_support(true);
         }
