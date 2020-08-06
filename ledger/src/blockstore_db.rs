@@ -57,6 +57,7 @@ pub enum BlockstoreError {
     SlotCleanedUp,
     UnpackError(#[from] UnpackError),
     UnableToSetOpenFileDescriptorLimit,
+    TransactionStatusSlotMismatch,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
