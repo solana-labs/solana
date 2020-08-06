@@ -1,7 +1,6 @@
-use crate::{
-    decode_error::DecodeError,
-    hash::{hash, hashv, Hasher},
-};
+#[cfg(not(feature = "program"))]
+use crate::hash::Hasher;
+use crate::{decode_error::DecodeError, hash::hashv};
 use num_derive::{FromPrimitive, ToPrimitive};
 #[cfg(not(feature = "program"))]
 use std::error;
@@ -18,6 +17,8 @@ pub enum PubkeyError {
     /// Length of the seed is too long for address generation
     #[error("Length of the seed is too long for address generation")]
     MaxSeedLengthExceeded,
+    #[error("Provided seeds do not result in a valid address")]
+    InvalidSeeds,
 }
 impl<T> DecodeError<T> for PubkeyError {
     fn type_of() -> &'static str {
@@ -87,6 +88,9 @@ impl Pubkey {
         ))
     }
 
+    /// Create a program address, valid program address must not be on the
+    /// ed25519 curve
+    #[cfg(not(feature = "program"))]
     pub fn create_program_address(
         seeds: &[&[u8]],
         program_id: &Pubkey,
@@ -99,8 +103,34 @@ impl Pubkey {
             hasher.hash(seed);
         }
         hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
+        let hash = hasher.result();
 
-        Ok(Pubkey::new(hash(hasher.result().as_ref()).as_ref()))
+        if curve25519_dalek::edwards::CompressedEdwardsY::from_slice(hash.as_ref())
+            .decompress()
+            .is_some()
+        {
+            return Err(PubkeyError::InvalidSeeds);
+        }
+
+        Ok(Pubkey::new(hash.as_ref()))
+    }
+
+    /// Find a valid program address and its corresponding nonce which must be passed
+    /// as an additional seed when calling `create_program_address`
+    #[cfg(not(feature = "program"))]
+    pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
+        let mut nonce = [255];
+        for _ in 0..std::u8::MAX {
+            {
+                let mut seeds_with_nonce = seeds.to_vec();
+                seeds_with_nonce.push(&nonce);
+                if let Ok(address) = Self::create_program_address(&seeds_with_nonce, program_id) {
+                    return (address, nonce[0]);
+                }
+            }
+            nonce[0] -= 1;
+        }
+        panic!("Unable to find a viable program address nonce");
     }
 
     #[cfg(not(feature = "program"))]
@@ -259,35 +289,71 @@ mod tests {
             Pubkey::create_program_address(&[b"short_seed", exceeded_seed], &program_id),
             Err(PubkeyError::MaxSeedLengthExceeded)
         );
-        assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand()).is_ok());
+        assert!(Pubkey::create_program_address(&[max_seed], &program_id).is_ok());
         assert_eq!(
-            Pubkey::create_program_address(&[b""], &program_id),
-            Ok("CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc"
+            Pubkey::create_program_address(&[b"", &[1]], &program_id),
+            Ok("3gF2KMe9KiC6FNVBmfg9i267aMPvK37FewCip4eGBFcT"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉".as_ref()], &program_id),
-            Ok("A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF"
+            Ok("7ytmC1nT1xY4RfxCV2ZgyA7UakC93do5ZdyhdF3EtPj7"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id),
-            Ok("CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu"
+            Ok("HwRVBufQ4haG5XSgpspwKtNd3PC9GM9m1196uJW36vds"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&[public_key.as_ref()], &program_id),
-            Ok("4ak7qJacCKMAGP8xJtDkg2VYZh5QKExa71ijMDjZGQyb"
+            Ok("GUs5qLUfsEHkcMB9T38vjr18ypEhRuNWiePW2LoK4E3K"
                 .parse()
                 .unwrap())
         );
         assert_ne!(
-            Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id),
-            Pubkey::create_program_address(&[b"Talking"], &program_id),
+            Pubkey::create_program_address(&[b"Talking", b"Squirrels"], &program_id).unwrap(),
+            Pubkey::create_program_address(&[b"Talking"], &program_id).unwrap(),
         );
+    }
+
+    #[test]
+    fn test_pubkey_off_curve() {
+        // try a bunch of random input, all successful generated program
+        // addresses must land off the curve and be unique
+        let mut addresses = vec![];
+        for _ in 0..1_000 {
+            let program_id = Pubkey::new_rand();
+            let bytes1 = rand::random::<[u8; 10]>();
+            let bytes2 = rand::random::<[u8; 32]>();
+            if let Ok(program_address) =
+                Pubkey::create_program_address(&[&bytes1, &bytes2], &program_id)
+            {
+                let is_on_curve = curve25519_dalek::edwards::CompressedEdwardsY::from_slice(
+                    &program_address.to_bytes(),
+                )
+                .decompress()
+                .is_some();
+                assert!(!is_on_curve);
+                assert!(!addresses.contains(&program_address));
+                addresses.push(program_address);
+            }
+        }
+    }
+
+    #[test]
+    fn test_find_program_address() {
+        for _ in 0..1_000 {
+            let program_id = Pubkey::new_rand();
+            let (address, nonce) = Pubkey::find_program_address(&[b"Lil'", b"Bits"], &program_id);
+            assert_eq!(
+                address,
+                Pubkey::create_program_address(&[b"Lil'", b"Bits", &[nonce]], &program_id).unwrap()
+            );
+        }
     }
 
     #[test]
