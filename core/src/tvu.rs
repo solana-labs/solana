@@ -21,12 +21,12 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::{ReplayVotesSender, TransactionStatusSender},
+    blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
     bank_forks::BankForks, commitment::BlockCommitmentCache,
-    snapshot_package::AccountsPackageSender,
+    snapshot_package::AccountsPackageSender, vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
@@ -98,7 +98,7 @@ impl Tvu {
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         verified_vote_receiver: VerifiedVoteReceiver,
-        replay_votes_sender: ReplayVotesSender,
+        replay_vote_sender: ReplayVoteSender,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
@@ -199,7 +199,7 @@ impl Tvu {
             cluster_slots,
             retransmit_slots_sender,
             duplicate_slots_reset_receiver,
-            replay_votes_sender,
+            replay_vote_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -285,7 +285,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
-        let (replay_votes_sender, _replay_votes_receiver) = unbounded();
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -319,7 +319,7 @@ pub mod tests {
             Arc::new(VoteTracker::new(&bank)),
             retransmit_slots_sender,
             verified_vote_receiver,
-            replay_votes_sender,
+            replay_vote_sender,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);

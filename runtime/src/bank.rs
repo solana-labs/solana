@@ -1938,6 +1938,7 @@ impl Bank {
         self.update_transaction_statuses(txs, iteration_order, &executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);
+
         TransactionResults {
             fee_collection_results,
             processing_results: executed.to_vec(),

@@ -24,7 +24,9 @@ use solana_perf::{
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult},
+    bank_utils,
     transaction_batch::TransactionBatch,
+    vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     clock::{
@@ -81,6 +83,7 @@ impl BankingStage {
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: ReplayVoteSender,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -89,6 +92,7 @@ impl BankingStage {
             verified_vote_receiver,
             Self::num_threads(),
             transaction_status_sender,
+            gossip_vote_sender,
         )
     }
 
@@ -99,6 +103,7 @@ impl BankingStage {
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: ReplayVoteSender,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -119,6 +124,7 @@ impl BankingStage {
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
+                let gossip_vote_sender = gossip_vote_sender.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -132,7 +138,8 @@ impl BankingStage {
                             enable_forwarding,
                             i,
                             batch_limit,
-                            transaction_status_sender.clone(),
+                            transaction_status_sender,
+                            gossip_vote_sender,
                         );
                     })
                     .unwrap()
@@ -168,6 +175,7 @@ impl BankingStage {
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> UnprocessedPackets {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
@@ -199,6 +207,7 @@ impl BankingStage {
                     &msgs,
                     unprocessed_indexes.to_owned(),
                     transaction_status_sender.clone(),
+                    gossip_vote_sender,
                 );
 
             new_tx_count += processed;
@@ -283,6 +292,7 @@ impl BankingStage {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
         socket: &std::net::UdpSocket,
@@ -292,6 +302,7 @@ impl BankingStage {
         enable_forwarding: bool,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
@@ -319,6 +330,7 @@ impl BankingStage {
                     buffered_packets,
                     batch_limit,
                     transaction_status_sender,
+                    gossip_vote_sender,
                 );
                 buffered_packets.append(&mut unprocessed);
             }
@@ -352,6 +364,7 @@ impl BankingStage {
         decision
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_loop(
         my_pubkey: Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
@@ -362,6 +375,7 @@ impl BankingStage {
         id: u32,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: ReplayVoteSender,
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
@@ -376,6 +390,7 @@ impl BankingStage {
                     enable_forwarding,
                     batch_limit,
                     transaction_status_sender.clone(),
+                    &gossip_vote_sender,
                 );
                 if decision == BufferedPacketsDecision::Hold {
                     // If we are waiting on a new bank,
@@ -403,6 +418,7 @@ impl BankingStage {
                 id,
                 batch_limit,
                 transaction_status_sender.clone(),
+                &gossip_vote_sender,
             ) {
                 Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -501,6 +517,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
@@ -533,24 +550,23 @@ impl BankingStage {
         let num_to_commit = num_to_commit.unwrap();
 
         if num_to_commit != 0 {
-            let transaction_statuses = bank
-                .commit_transactions(
-                    txs,
-                    None,
-                    &mut loaded_accounts,
-                    &results,
-                    tx_count,
-                    signature_count,
-                )
-                .processing_results;
+            let tx_results = bank.commit_transactions(
+                txs,
+                None,
+                &mut loaded_accounts,
+                &results,
+                tx_count,
+                signature_count,
+            );
 
+            bank_utils::find_and_send_votes(txs, &tx_results, Some(gossip_vote_sender));
             if let Some(sender) = transaction_status_sender {
                 let post_balances = bank.collect_balances(batch);
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
                     batch.iteration_order_vec(),
-                    transaction_statuses,
+                    tx_results.processing_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     sender,
                 );
@@ -578,6 +594,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -590,6 +607,7 @@ impl BankingStage {
             poh,
             &batch,
             transaction_status_sender,
+            gossip_vote_sender,
         );
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
@@ -618,6 +636,7 @@ impl BankingStage {
         transactions: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> (usize, Vec<usize>) {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
@@ -633,6 +652,7 @@ impl BankingStage {
                 poh,
                 chunk_start,
                 transaction_status_sender.clone(),
+                gossip_vote_sender,
             );
             trace!("process_transactions result: {:?}", result);
 
@@ -764,6 +784,7 @@ impl BankingStage {
         msgs: &Packets,
         packet_indexes: Vec<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> (usize, usize, Vec<usize>) {
         let (transactions, transaction_to_packet_indexes) =
             Self::transactions_from_packets(msgs, &packet_indexes);
@@ -775,8 +796,13 @@ impl BankingStage {
 
         let tx_len = transactions.len();
 
-        let (processed, unprocessed_tx_indexes) =
-            Self::process_transactions(bank, &transactions, poh, transaction_status_sender);
+        let (processed, unprocessed_tx_indexes) = Self::process_transactions(
+            bank,
+            &transactions,
+            poh,
+            transaction_status_sender,
+            gossip_vote_sender,
+        );
 
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
 
@@ -846,6 +872,7 @@ impl BankingStage {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
     pub fn process_packets(
         my_pubkey: &Pubkey,
@@ -856,6 +883,7 @@ impl BankingStage {
         id: u32,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
     ) -> Result<UnprocessedPackets, RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -898,6 +926,7 @@ impl BankingStage {
                 &msgs,
                 packet_indexes,
                 transaction_status_sender.clone(),
+                gossip_vote_sender,
             );
 
             new_tx_count += processed;
@@ -1045,6 +1074,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
+        let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1061,6 +1091,7 @@ mod tests {
                 verified_receiver,
                 vote_receiver,
                 None,
+                gossip_vote_sender,
             );
             drop(verified_sender);
             drop(vote_sender);
@@ -1095,12 +1126,15 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
                 None,
+                gossip_vote_sender,
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1158,12 +1192,15 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
                 None,
+                gossip_vote_sender,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1284,6 +1321,8 @@ mod tests {
         let (vote_sender, vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new(&genesis_config));
@@ -1306,6 +1345,7 @@ mod tests {
                     vote_receiver,
                     2,
                     None,
+                    gossip_vote_sender,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -1683,6 +1723,7 @@ mod tests {
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             BankingStage::process_and_record_transactions(
                 &bank,
@@ -1690,6 +1731,7 @@ mod tests {
                 &poh_recorder,
                 0,
                 None,
+                &gossip_vote_sender,
             )
             .0
             .unwrap();
@@ -1726,6 +1768,7 @@ mod tests {
                     &poh_recorder,
                     0,
                     None,
+                    &gossip_vote_sender,
                 )
                 .0,
                 Err(PohRecorderError::MaxHeightReached)
@@ -1777,12 +1820,15 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let (result, unprocessed) = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
                 &poh_recorder,
                 0,
                 None,
+                &gossip_vote_sender,
             );
 
             assert!(result.is_ok());
@@ -1866,8 +1912,16 @@ mod tests {
             // record
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let (processed_transactions_count, mut retryable_txs) =
-                BankingStage::process_transactions(&bank, &transactions, &poh_recorder, None);
+                BankingStage::process_transactions(
+                    &bank,
+                    &transactions,
+                    &poh_recorder,
+                    None,
+                    &gossip_vote_sender,
+                );
 
             assert_eq!(processed_transactions_count, 0,);
 
@@ -1944,12 +1998,15 @@ mod tests {
                 &Arc::new(AtomicBool::new(false)),
             );
 
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
                 &poh_recorder,
                 0,
                 Some(transaction_status_sender),
+                &gossip_vote_sender,
             );
 
             transaction_status_service.join().unwrap();
