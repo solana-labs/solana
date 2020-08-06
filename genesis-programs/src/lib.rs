@@ -105,7 +105,11 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
                 bank.add_native_program(name, program_id);
             }
         }
-        bank.set_cross_program_support(OperatingMode::Stable != operating_mode);
+        if OperatingMode::Stable == operating_mode {
+            bank.set_cross_program_support(bank.epoch() > 62);
+        } else {
+            bank.set_cross_program_support(true);
+        }
     })
 }
 
