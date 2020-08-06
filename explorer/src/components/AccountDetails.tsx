@@ -1,9 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { useClusterModal } from "providers/cluster";
-import { PublicKey, StakeProgram } from "@solana/web3.js";
-import ClusterStatusButton from "components/ClusterStatusButton";
-import { useHistory, useLocation } from "react-router-dom";
+import { PublicKey, StakeProgram, TokenAccountInfo } from "@solana/web3.js";
 import {
   FetchStatus,
   useFetchAccountInfo,
@@ -12,22 +8,21 @@ import {
   Account,
 } from "providers/accounts";
 import { lamportsToSolString } from "utils";
-import Copyable from "./Copyable";
-import { displayAddress } from "utils/tx";
 import { StakeAccountCards } from "components/account/StakeAccountCards";
 import ErrorCard from "components/common/ErrorCard";
 import LoadingCard from "components/common/LoadingCard";
 import TableCardBody from "components/common/TableCardBody";
 import { useFetchAccountHistory } from "providers/accounts/history";
+import {
+  useFetchAccountOwnedTokens,
+  useAccountOwnedTokens,
+} from "providers/accounts/tokens";
+import { useCluster, ClusterStatus } from "providers/cluster";
+import Address from "./common/Address";
+import Signature from "./common/Signature";
 
 type Props = { address: string };
 export default function AccountDetails({ address }: Props) {
-  const fetchAccount = useFetchAccountInfo();
-  const [, setShow] = useClusterModal();
-  const [search, setSearch] = React.useState(address);
-  const history = useHistory();
-  const location = useLocation();
-
   let pubkey: PublicKey | undefined;
   try {
     pubkey = new PublicKey(address);
@@ -36,71 +31,33 @@ export default function AccountDetails({ address }: Props) {
     // TODO handle bad addresses
   }
 
-  const updateAddress = () => {
-    history.push({ ...location, pathname: "/account/" + search });
-  };
-
-  // Fetch account on load
-  React.useEffect(() => {
-    setSearch(address);
-    if (pubkey) fetchAccount(pubkey);
-  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const searchInput = (
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      onKeyUp={(e) => e.key === "Enter" && updateAddress()}
-      className="form-control form-control-prepended search text-monospace"
-      placeholder="Search for address"
-    />
-  );
-
   return (
-    <div className="container">
+    <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <div className="row align-items-center">
-            <div className="col">
-              <h6 className="header-pretitle">Details</h6>
-              <h3 className="header-title">Account</h3>
-            </div>
-            <div className="col-auto">
-              <ClusterStatusButton onClick={() => setShow(true)} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row mb-4 mt-n2 align-items-center">
-        <div className="col d-none d-md-block">
-          <div className="input-group input-group-merge">
-            {searchInput}
-            <div className="input-group-prepend">
-              <div className="input-group-text">
-                <span className="fe fe-search"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col d-block d-md-none">{searchInput}</div>
-        <div className="col-auto ml-n3 d-block d-md-none">
-          <button className="btn btn-white" onClick={updateAddress}>
-            <span className="fe fe-search"></span>
-          </button>
+          <h6 className="header-pretitle">Details</h6>
+          <h4 className="header-title">Account</h4>
         </div>
       </div>
       {pubkey && <AccountCards pubkey={pubkey} />}
+      {pubkey && <TokensCard pubkey={pubkey} />}
       {pubkey && <HistoryCard pubkey={pubkey} />}
     </div>
   );
 }
 
 function AccountCards({ pubkey }: { pubkey: PublicKey }) {
+  const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
   const refresh = useFetchAccountInfo();
+  const { status } = useCluster();
+
+  // Fetch account on load
+  React.useEffect(() => {
+    if (pubkey && !info && status === ClusterStatus.Connected)
+      fetchAccount(pubkey);
+  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -127,13 +84,19 @@ function UnknownAccountCard({ account }: { account: Account }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Account Overview</h3>
+        <h3 className="card-header-title">Overview</h3>
       </div>
 
       <TableCardBody>
         <tr>
+          <td>Address</td>
+          <td className="text-lg-right">
+            <Address pubkey={account.pubkey} alignRight />
+          </td>
+        </tr>
+        <tr>
           <td>Balance (SOL)</td>
-          <td className="text-right text-uppercase">
+          <td className="text-lg-right text-uppercase">
             {lamportsToSolString(lamports)}
           </td>
         </tr>
@@ -141,17 +104,15 @@ function UnknownAccountCard({ account }: { account: Account }) {
         {details && (
           <tr>
             <td>Data (Bytes)</td>
-            <td className="text-right">{details.space}</td>
+            <td className="text-lg-right">{details.space}</td>
           </tr>
         )}
 
         {details && (
           <tr>
             <td>Owner</td>
-            <td className="text-right">
-              <Copyable text={details.owner.toBase58()} right>
-                <code>{displayAddress(details.owner.toBase58())}</code>
-              </Copyable>
+            <td className="text-lg-right">
+              <Address pubkey={details.owner} alignRight link />
             </td>
           </tr>
         )}
@@ -159,10 +120,102 @@ function UnknownAccountCard({ account }: { account: Account }) {
         {details && (
           <tr>
             <td>Executable</td>
-            <td className="text-right">{details.executable ? "Yes" : "No"}</td>
+            <td className="text-lg-right">
+              {details.executable ? "Yes" : "No"}
+            </td>
           </tr>
         )}
       </TableCardBody>
+    </div>
+  );
+}
+
+function TokensCard({ pubkey }: { pubkey: PublicKey }) {
+  const address = pubkey.toBase58();
+  const ownedTokens = useAccountOwnedTokens(address);
+  const fetchAccountTokens = useFetchAccountOwnedTokens();
+  const refresh = () => fetchAccountTokens(pubkey);
+
+  if (ownedTokens === undefined) {
+    return null;
+  }
+
+  const { status, tokens } = ownedTokens;
+  const fetching = status === FetchStatus.Fetching;
+  if (fetching && (tokens === undefined || tokens.length === 0)) {
+    return <LoadingCard message="Loading owned tokens" />;
+  } else if (tokens === undefined) {
+    return <ErrorCard retry={refresh} text="Failed to fetch owned tokens" />;
+  }
+
+  if (tokens.length === 0) {
+    return (
+      <ErrorCard
+        retry={refresh}
+        retryText="Try Again"
+        text={"No owned tokens found"}
+      />
+    );
+  }
+
+  const mappedTokens = new Map<string, TokenAccountInfo>();
+  for (const token of tokens) {
+    const mintAddress = token.mint.toBase58();
+    const tokenInfo = mappedTokens.get(mintAddress);
+    if (tokenInfo) {
+      tokenInfo.amount += token.amount;
+    } else {
+      mappedTokens.set(mintAddress, token);
+    }
+  }
+
+  const detailsList: React.ReactNode[] = [];
+  mappedTokens.forEach((tokenInfo, mintAddress) => {
+    const balance = tokenInfo.amount;
+    detailsList.push(
+      <tr key={mintAddress}>
+        <td>
+          <Address pubkey={new PublicKey(mintAddress)} link />
+        </td>
+        <td>{balance}</td>
+      </tr>
+    );
+  });
+
+  return (
+    <div className="card">
+      <div className="card-header align-items-center">
+        <h3 className="card-header-title">Tokens</h3>
+        <button
+          className="btn btn-white btn-sm"
+          disabled={fetching}
+          onClick={refresh}
+        >
+          {fetching ? (
+            <>
+              <span className="spinner-grow spinner-grow-sm mr-2"></span>
+              Loading
+            </>
+          ) : (
+            <>
+              <span className="fe fe-refresh-cw mr-2"></span>
+              Refresh
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="table-responsive mb-0">
+        <table className="table table-sm table-nowrap card-table">
+          <thead>
+            <tr>
+              <th className="text-muted">Token Address</th>
+              <th className="text-muted">Balance</th>
+            </tr>
+          </thead>
+          <tbody className="list">{detailsList}</tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -182,7 +235,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
     history.fetchedRange === undefined
   ) {
     if (history.status === FetchStatus.Fetching) {
-      return <LoadingCard />;
+      return <LoadingCard message="Loading history" />;
     }
 
     return (
@@ -192,7 +245,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
   if (history.fetched.length === 0) {
     if (history.status === FetchStatus.Fetching) {
-      return <LoadingCard />;
+      return <LoadingCard message="Loading history" />;
     }
     return (
       <ErrorCard
@@ -230,13 +283,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
       detailsList.push(
         <tr key={signature}>
-          {index === 0 ? (
-            <td className="w-1">{slot}</td>
-          ) : (
-            <td className="text-muted text-center w-1">
-              <span className="fe fe-more-horizontal" />
-            </td>
-          )}
+          <td className="w-1">{slot}</td>
 
           <td>
             <span className={`badge badge-soft-${statusClass}`}>
@@ -245,21 +292,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
           </td>
 
           <td>
-            <Copyable text={signature}>
-              <code>{signature}</code>
-            </Copyable>
-          </td>
-
-          <td>
-            <Link
-              to={(location) => ({
-                ...location,
-                pathname: "/tx/" + signature,
-              })}
-              className="btn btn-rounded-circle btn-white btn-sm"
-            >
-              <span className="fe fe-arrow-right"></span>
-            </Link>
+            <Signature signature={signature} link />
           </td>
         </tr>
       );
@@ -297,7 +330,6 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
               <th className="text-muted w-1">Slot</th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
-              <th className="text-muted">Details</th>
             </tr>
           </thead>
           <tbody className="list">{detailsList}</tbody>

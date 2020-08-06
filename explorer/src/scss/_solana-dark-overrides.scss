@@ -1,0 +1,37 @@
+//
+// solana.scss
+// Use this to write your custom SCSS
+//
+
+code {
+  background-color: $black-dark;
+  color: $white;
+}
+
+.form-control {
+  border-color: $input-border-color;
+}
+
+.input-group .input-group-text {
+  border-color: $input-border-color;
+}
+
+.search-bar__control {
+  background-color: $gray-800-dark !important;
+  border-color: $card-outline-color !important;
+  box-shadow: $card-box-shadow !important;
+
+  .search-bar__input {
+    color: $white !important;
+  }
+}
+
+.search-bar__menu {
+  background-color: $gray-800-dark !important;
+  border-color: $card-outline-color !important;
+  box-shadow: $card-box-shadow !important;
+
+  .search-bar__option {
+    background-color: $gray-700-dark !important;
+  }
+}

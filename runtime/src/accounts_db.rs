@@ -1519,13 +1519,9 @@ impl AccountsDB {
             hashes = new_hashes.chunks(fanout).map(|x| x.to_vec()).collect();
         }
         let mut hasher = Hasher::default();
-        hashes
-            .into_iter()
-            .flatten()
-            .map(|hash| hash)
-            .for_each(|hash| {
-                hasher.hash(hash.as_ref());
-            });
+        hashes.into_iter().flatten().for_each(|hash| {
+            hasher.hash(hash.as_ref());
+        });
         hasher.result()
     }
 

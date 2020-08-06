@@ -3,19 +3,26 @@ use solana_sdk::pubkey::Pubkey;
 use spl_token_v1_0::{
     option::COption,
     solana_sdk::pubkey::Pubkey as SplTokenPubkey,
-    state::{Account, Mint, Multisig, State},
+    state::{unpack, Account, Mint, Multisig},
 };
 use std::{mem::size_of, str::FromStr};
 
-// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to
+// solana_sdk::pubkey::Pubkey
 pub fn spl_token_id_v1_0() -> Pubkey {
     Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
+}
+
+// A helper function to convert spl_token_v1_0::native_mint::id() as spl_sdk::pubkey::Pubkey to
+// solana_sdk::pubkey::Pubkey
+pub fn spl_token_v1_0_native_mint() -> Pubkey {
+    Pubkey::from_str(&spl_token_v1_0::native_mint::id().to_string()).unwrap()
 }
 
 pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
     let mut data = data.to_vec();
     if data.len() == size_of::<Account>() {
-        let account: Account = *State::unpack(&mut data)
+        let account: Account = *unpack(&mut data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Account(UiTokenAccount {
             mint: account.mint.to_string(),
@@ -30,7 +37,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
             delegated_amount: account.delegated_amount,
         }))
     } else if data.len() == size_of::<Mint>() {
-        let mint: Mint = *State::unpack(&mut data)
+        let mint: Mint = *unpack(&mut data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Mint(UiMint {
             owner: match mint.owner {
@@ -41,7 +48,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
             is_initialized: mint.is_initialized,
         }))
     } else if data.len() == size_of::<Multisig>() {
-        let multisig: Multisig = *State::unpack(&mut data)
+        let multisig: Multisig = *unpack(&mut data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
             num_required_signers: multisig.m,
@@ -67,7 +74,7 @@ pub fn parse_token(data: &[u8]) -> Result<TokenAccountType, ParseAccountError> {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum TokenAccountType {
     Account(UiTokenAccount),
     Mint(UiMint),
@@ -106,13 +113,14 @@ pub struct UiMultisig {
 #[cfg(test)]
 mod test {
     use super::*;
+    use spl_token_v1_0::state::unpack_unchecked;
 
     #[test]
     fn test_parse_token() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
         let mut account_data = [0; size_of::<Account>()];
-        let mut account: &mut Account = State::unpack_unchecked(&mut account_data).unwrap();
+        let mut account: &mut Account = unpack_unchecked(&mut account_data).unwrap();
         account.mint = mint_pubkey;
         account.owner = owner_pubkey;
         account.amount = 42;
@@ -131,7 +139,7 @@ mod test {
         );
 
         let mut mint_data = [0; size_of::<Mint>()];
-        let mut mint: &mut Mint = State::unpack_unchecked(&mut mint_data).unwrap();
+        let mut mint: &mut Mint = unpack_unchecked(&mut mint_data).unwrap();
         mint.owner = COption::Some(owner_pubkey);
         mint.decimals = 3;
         mint.is_initialized = true;
@@ -148,7 +156,7 @@ mod test {
         let signer2 = SplTokenPubkey::new(&[2; 32]);
         let signer3 = SplTokenPubkey::new(&[3; 32]);
         let mut multisig_data = [0; size_of::<Multisig>()];
-        let mut multisig: &mut Multisig = State::unpack_unchecked(&mut multisig_data).unwrap();
+        let mut multisig: &mut Multisig = unpack_unchecked(&mut multisig_data).unwrap();
         let mut signers = [SplTokenPubkey::default(); 11];
         signers[0] = signer1;
         signers[1] = signer2;

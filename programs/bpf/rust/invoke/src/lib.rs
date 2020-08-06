@@ -10,7 +10,7 @@ use solana_sdk::{
     entrypoint,
     entrypoint::ProgramResult,
     info,
-    program::{invoke, invoke_signed},
+    program::{create_program_address, invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
@@ -34,11 +34,15 @@ const FROM_INDEX: usize = 10;
 
 entrypoint!(process_instruction);
 fn process_instruction(
-    _program_id: &Pubkey,
+    program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
     info!("invoke Rust program");
+
+    let nonce1 = instruction_data[1];
+    let nonce2 = instruction_data[2];
+    let nonce3 = instruction_data[3];
 
     match instruction_data[0] {
         TEST_SUCCESS => {
@@ -91,6 +95,12 @@ fn process_instruction(
                 );
             }
 
+            info!("Test create_program_address");
+            {
+                let address = create_program_address(&[b"You pass butter", &[nonce1]], program_id)?;
+                assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
+            }
+
             info!("Test derived signers");
             {
                 assert!(!accounts[DERIVED_KEY1_INDEX].is_signer);
@@ -105,12 +115,12 @@ fn process_instruction(
                         (accounts[DERIVED_KEY2_INDEX].key, true, false),
                         (accounts[DERIVED_KEY3_INDEX].key, false, false),
                     ],
-                    vec![TEST_DERIVED_SIGNERS],
+                    vec![TEST_DERIVED_SIGNERS, nonce2, nonce3],
                 );
                 invoke_signed(
                     &invoked_instruction,
                     accounts,
-                    &[&[b"You pass butter"], &[b"Lil'", b"Bits"]],
+                    &[&[b"You pass butter", &[nonce1]]],
                 )?;
             }
 

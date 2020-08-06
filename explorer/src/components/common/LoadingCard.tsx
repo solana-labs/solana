@@ -1,11 +1,11 @@
 import React from "react";
 
-export default function LoadingCard() {
+export default function LoadingCard({ message }: { message?: string }) {
   return (
     <div className="card">
       <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
+        {message || "Loading"}
       </div>
     </div>
   );

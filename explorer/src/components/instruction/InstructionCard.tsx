@@ -34,7 +34,7 @@ export function InstructionCard({
 
         <button
           className={`btn btn-sm d-flex ${
-            showRaw ? "btn-dark active" : "btn-white"
+            showRaw ? "btn-black active" : "btn-white"
           }`}
           onClick={() => setShowRaw((r) => !r)}
         >

@@ -24,6 +24,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 - [getConfirmedSignaturesForAddress](jsonrpc-api.md#getconfirmedsignaturesforaddress)
+- [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
 - [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 - [getEpochInfo](jsonrpc-api.md#getepochinfo)
 - [getEpochSchedule](jsonrpc-api.md#getepochschedule)
@@ -45,10 +46,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
-- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
-- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
-- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
-- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -67,6 +64,15 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
   - [signatureUnsubscribe](jsonrpc-api.md#signatureunsubscribe)
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
+
+## Unstable Methods
+
+Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
+
+- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
+- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 
 ## Request Formatting
 
@@ -151,7 +157,7 @@ Returns all information associated with the account of provided Pubkey
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -299,7 +305,7 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 - `<u64>` - slot, as u64 integer
-- `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON.
+- `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", or "binary". If parameter not provided, the default encoding is JSON. **jsonParsed encoding is UNSTABLE**
   Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
@@ -389,6 +395,8 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ### getConfirmedSignaturesForAddress
 
+**DEPRECATED: Please use getConfirmedSignaturesForAddress2 instead**
+
 Returns a list of all the confirmed signatures for transactions involving an
 address, within a specified Slot range. Max range allowed is 10,000 Slots
 
@@ -416,6 +424,37 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"]},"id":1}
 ```
 
+
+### getConfirmedSignaturesForAddress2
+
+Returns confirmed signatures for transactions involving an
+address backwards in time from the provided signature or most recent confirmed block
+
+#### Parameters:
+* `<string>` - account address as base-58 encoded string
+* `<object>` - (optional) Configuration object containing the following fields:
+  * `before: <string>` - (optional) start searching backwards from this transaction signature.
+                         If not provided the search starts from the top of the highest max confirmed block.
+  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+
+#### Results:
+The result field will be an array of transaction signature information, ordered
+from newest to oldest transaction:
+* `<object>`
+  * `signature: <string>` - transaction signature as base-58 encoded string
+  * `slot: <u64>` - The slot that contains the block with the transaction
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+
+#### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["Vote111111111111111111111111111111111111111", {"limit": 1}]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"err":null,"memo":null,"signature":"5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv","slot":114}],"id":1}
+```
+
 ### getConfirmedTransaction
 
 Returns transaction details for a confirmed transaction
@@ -424,7 +463,7 @@ Returns transaction details for a confirmed transaction
 
 - `<string>` - transaction signature as base-58 encoded string
 N encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary".
+- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", or "binary". **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -805,7 +844,7 @@ Returns all accounts owned by the provided program Pubkey
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 ##### Filters:
@@ -1022,7 +1061,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ### getTokenAccountBalance
 
-Returns the token balance of an SPL Token account.
+Returns the token balance of an SPL Token account. **UNSTABLE**
 
 #### Parameters:
 
@@ -1031,7 +1070,11 @@ Returns the token balance of an SPL Token account.
 
 #### Results:
 
-- `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the balance
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
+
+- `uiAmount: <f64>` - the balance, using mint-prescribed decimals
+- `amount: <string>` - the raw balance without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
 #### Example:
 
@@ -1039,12 +1082,12 @@ Returns the token balance of an SPL Token account.
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":9864,"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":98.64,"amount":"9864","decimals":2},"id":1}
 ```
 
 ### getTokenAccountsByDelegate
 
-Returns all SPL Token accounts by approved Delegate.
+Returns all SPL Token accounts by approved Delegate. **UNSTABLE**
 
 #### Parameters:
 
@@ -1052,7 +1095,10 @@ Returns all SPL Token accounts by approved Delegate.
 - `<object>` - Either:
   * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -1062,7 +1108,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 - `account: <object>` - a JSON object, with the following sub fields:
    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   `data: <object>`, Token state data associated with the account, in JSON format `{<program>: <state>}`
+   - `data: <object>`, Token state data associated with the account, either as base-58 encoded binary data or in JSON format `{<program>: <state>}`
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
@@ -1070,14 +1116,14 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByDelegate", "params": ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"}]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByDelegate", "params": ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"amount":1,"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
 ```
 
 ### getTokenAccountsByOwner
 
-Returns all SPL Token accounts by token owner.
+Returns all SPL Token accounts by token owner. **UNSTABLE**
 
 #### Parameters:
 
@@ -1085,7 +1131,10 @@ Returns all SPL Token accounts by token owner.
 - `<object>` - Either:
   * `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -1095,7 +1144,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 - `account: <object>` - a JSON object, with the following sub fields:
    - `lamports: <u64>`, number of lamports assigned to this account, as a u64
    - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-   `data: <object>`, Token state data associated with the account, in JSON format `{<program>: <state>}`
+   - `data: <object>`, Token state data associated with the account, either as base-58 encoded binary data or in JSON format `{<program>: <state>}`
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
@@ -1103,14 +1152,14 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"token":{"account":{"amount":1,"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"amount":1,"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
 ```
 
 ### getTokenSupply
 
-Returns the total supply of an SPL Token type.
+Returns the total supply of an SPL Token type. **UNSTABLE**
 
 #### Parameters:
 
@@ -1119,7 +1168,11 @@ Returns the total supply of an SPL Token type.
 
 #### Results:
 
-- `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the total token supply
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
+
+- `uiAmount: <f64>` - the total token supply, using mint-prescribed decimals
+- `amount: <string>` - the raw total token supply without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
 #### Example:
 
@@ -1127,7 +1180,7 @@ Returns the total supply of an SPL Token type.
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":100000,"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":1000.0,"amount":"100000","decimals":2},"id":1}
 ```
 
 ### getTransactionCount
@@ -1172,7 +1225,7 @@ The result field will be a JSON object with the following fields:
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"solana-core": "1.3.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.4.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -1373,7 +1426,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -1481,7 +1534,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 #### Results:

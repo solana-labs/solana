@@ -18,6 +18,7 @@ const PROGRAM_IDS = {
   [SystemProgram.programId.toBase58()]: "System",
   Vest111111111111111111111111111111111111111: "Vest",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote",
+  TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o: "Token",
 };
 
 const LOADER_IDS = {

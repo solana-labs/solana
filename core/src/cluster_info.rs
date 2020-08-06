@@ -780,7 +780,7 @@ impl ClusterInfo {
             .crds
             .table
             .values()
-            .filter_map(|x| x.value.snapshot_hash().map(|v| v))
+            .filter_map(|x| x.value.snapshot_hash())
             .filter_map(|x| {
                 for (table_slot, hash) in &x.hashes {
                     if *table_slot == slot {

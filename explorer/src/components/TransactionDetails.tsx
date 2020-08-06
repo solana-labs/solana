@@ -6,18 +6,14 @@ import {
   FetchStatus,
 } from "../providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useCluster, useClusterModal } from "providers/cluster";
+import { useCluster, ClusterStatus } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
   StakeProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
-import { displayAddress } from "utils/tx";
-import Copyable from "./Copyable";
-import { useHistory, useLocation } from "react-router-dom";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
@@ -27,67 +23,17 @@ import TableCardBody from "./common/TableCardBody";
 import { displayTimestamp } from "utils/date";
 import InfoTooltip from "components/InfoTooltip";
 import { isCached } from "providers/transactions/cached";
+import Address from "./common/Address";
+import Signature from "./common/Signature";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
-  const fetchTransaction = useFetchTransactionStatus();
-  const [, setShow] = useClusterModal();
-  const [search, setSearch] = React.useState(signature);
-  const history = useHistory();
-  const location = useLocation();
-
-  const updateSignature = () => {
-    history.push({ ...location, pathname: "/tx/" + search });
-  };
-
-  // Fetch transaction on load
-  React.useEffect(() => {
-    fetchTransaction(signature);
-  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const searchInput = (
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      onKeyUp={(e) => e.key === "Enter" && updateSignature()}
-      className="form-control form-control-prepended search text-monospace"
-      placeholder="Search for signature"
-    />
-  );
-
   return (
-    <div className="container">
+    <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <div className="row align-items-center">
-            <div className="col">
-              <h6 className="header-pretitle">Details</h6>
-              <h3 className="header-title">Transaction</h3>
-            </div>
-            <div className="col-auto">
-              <ClusterStatusButton onClick={() => setShow(true)} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row mb-4 mt-n2 align-items-center">
-        <div className="col d-none d-md-block">
-          <div className="input-group input-group-merge">
-            {searchInput}
-            <div className="input-group-prepend">
-              <div className="input-group-text">
-                <span className="fe fe-search"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col d-block d-md-none">{searchInput}</div>
-        <div className="col-auto ml-n3 d-block d-md-none">
-          <button className="btn btn-white" onClick={updateSignature}>
-            <span className="fe fe-search"></span>
-          </button>
+          <h6 className="header-pretitle">Details</h6>
+          <h4 className="header-title">Transaction</h4>
         </div>
       </div>
 
@@ -99,10 +45,17 @@ export default function TransactionDetails({ signature }: Props) {
 }
 
 function StatusCard({ signature }: Props) {
+  const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const refresh = useFetchTransactionStatus();
   const details = useTransactionDetails(signature);
-  const { firstAvailableBlock } = useCluster();
+  const { firstAvailableBlock, status: clusterStatus } = useCluster();
+
+  // Fetch transaction on load
+  React.useEffect(() => {
+    if (!status && clusterStatus === ClusterStatus.Connected)
+      fetchStatus(signature);
+  }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -148,7 +101,7 @@ function StatusCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Status</h3>
+        <h3 className="card-header-title">Overview</h3>
         <button
           className="btn btn-white btn-sm"
           onClick={() => refresh(signature)}
@@ -160,13 +113,20 @@ function StatusCard({ signature }: Props) {
 
       <TableCardBody>
         <tr>
+          <td>Signature</td>
+          <td className="text-lg-right">
+            <Signature signature={signature} alignRight />
+          </td>
+        </tr>
+
+        <tr>
           <td>Result</td>
-          <td className="text-right">{renderResult()}</td>
+          <td className="text-lg-right">{renderResult()}</td>
         </tr>
 
         <tr>
           <td>Timestamp</td>
-          <td className="text-right">
+          <td className="text-lg-right">
             {info.timestamp !== "unavailable" ? (
               displayTimestamp(info.timestamp * 1000)
             ) : (
@@ -183,12 +143,12 @@ function StatusCard({ signature }: Props) {
 
         <tr>
           <td>Confirmations</td>
-          <td className="text-right text-uppercase">{info.confirmations}</td>
+          <td className="text-lg-right text-uppercase">{info.confirmations}</td>
         </tr>
 
         <tr>
           <td>Block</td>
-          <td className="text-right">{info.slot}</td>
+          <td className="text-lg-right">{info.slot}</td>
         </tr>
 
         {blockhash && (
@@ -202,7 +162,7 @@ function StatusCard({ signature }: Props) {
                 </InfoTooltip>
               )}
             </td>
-            <td className="text-right">
+            <td className="text-lg-right">
               <code>{blockhash}</code>
             </td>
           </tr>
@@ -211,7 +171,7 @@ function StatusCard({ signature }: Props) {
         {fee && (
           <tr>
             <td>Fee (SOL)</td>
-            <td className="text-right">{lamportsToSolString(fee)}</td>
+            <td className="text-lg-right">{lamportsToSolString(fee)}</td>
           </tr>
         )}
       </TableCardBody>
@@ -268,33 +228,31 @@ function AccountsCard({ signature }: Props) {
       if (change === 0) return "";
       const sols = lamportsToSolString(change);
       if (change > 0) {
-        return <span className="badge badge-soft-success">{"+" + sols}</span>;
+        return <span className="badge badge-soft-success">+{sols}</span>;
       } else {
-        return <span className="badge badge-soft-warning">{"-" + sols}</span>;
+        return <span className="badge badge-soft-warning">-{sols}</span>;
       }
     };
 
     return (
       <tr key={key}>
         <td>
-          <Copyable text={key}>
-            <code>{displayAddress(pubkey.toBase58())}</code>
-          </Copyable>
+          <Address pubkey={pubkey} link />
         </td>
         <td>{renderChange()}</td>
         <td>{lamportsToSolString(post)}</td>
         <td>
           {index === 0 && (
-            <span className="badge badge-soft-dark mr-1">Fee Payer</span>
+            <span className="badge badge-soft-info mr-1">Fee Payer</span>
           )}
           {!message.isAccountWritable(index) && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
+            <span className="badge badge-soft-info mr-1">Readonly</span>
           )}
           {index < message.header.numRequiredSignatures && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
+            <span className="badge badge-soft-info mr-1">Signer</span>
           )}
           {message.instructions.find((ix) => ix.programIdIndex === index) && (
-            <span className="badge badge-soft-dark mr-1">Program</span>
+            <span className="badge badge-soft-info mr-1">Program</span>
           )}
         </td>
       </tr>

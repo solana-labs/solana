@@ -1,6 +1,7 @@
 declare module 'superstruct' {
   declare type StructFunc = {
       (any): any,
+      object(schema: any): any;
       union(schema: any): any;
       array(schema: any): any;
       literal(schema: any): any;

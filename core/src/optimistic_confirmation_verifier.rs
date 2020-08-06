@@ -95,8 +95,10 @@ impl OptimisticConfirmationVerifier {
                     .map(|s| s.stake())
                     .unwrap_or(0);
 
-                warn!(
-                    "Optimistic slot {}, hash: {}, epoch: {} was not rooted,
+                error!(
+                    "Optimistic slot {} was not rooted,
+                    hash: {},
+                    epoch: {},
                     voted keys: {:?},
                     root: {},
                     root bank hash: {},

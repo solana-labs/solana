@@ -7,13 +7,17 @@ pub mod parse_accounts;
 pub mod parse_instruction;
 pub mod parse_token;
 
-use crate::{parse_accounts::parse_accounts, parse_instruction::parse};
-use serde_json::Value;
+use crate::{
+    parse_accounts::{parse_accounts, ParsedAccount},
+    parse_instruction::{parse, ParsedInstruction},
+};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     instruction::CompiledInstruction,
     message::MessageHeader,
+    pubkey::Pubkey,
+    signature::Signature,
     transaction::{Result, Transaction, TransactionError},
 };
 
@@ -22,7 +26,14 @@ use solana_sdk::{
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiInstruction {
     Compiled(UiCompiledInstruction),
-    Parsed(Value),
+    Parsed(UiParsedInstruction),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum UiParsedInstruction {
+    Parsed(ParsedInstruction),
+    PartiallyDecoded(UiPartiallyDecodedInstruction),
 }
 
 /// A duplicate representation of a CompiledInstruction for pretty JSON serialization
@@ -39,6 +50,29 @@ impl From<&CompiledInstruction> for UiCompiledInstruction {
         Self {
             program_id_index: instruction.program_id_index,
             accounts: instruction.accounts.clone(),
+            data: bs58::encode(instruction.data.clone()).into_string(),
+        }
+    }
+}
+
+/// A partially decoded CompiledInstruction that includes explicit account addresses
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiPartiallyDecodedInstruction {
+    pub program_id: String,
+    pub accounts: Vec<String>,
+    pub data: String,
+}
+
+impl UiPartiallyDecodedInstruction {
+    fn from(instruction: &CompiledInstruction, account_keys: &[Pubkey]) -> Self {
+        Self {
+            program_id: account_keys[instruction.program_id_index as usize].to_string(),
+            accounts: instruction
+                .accounts
+                .iter()
+                .map(|&i| account_keys[i as usize].to_string())
+                .collect(),
             data: bs58::encode(instruction.data.clone()).into_string(),
         }
     }
@@ -92,7 +126,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
-    pub status: Result<()>,
+    pub status: Result<()>,           // legacy field
     pub err: Option<TransactionError>,
 }
 
@@ -101,6 +135,15 @@ impl TransactionStatus {
         (commitment_config == CommitmentConfig::default() && self.confirmations.is_none())
             || commitment_config == CommitmentConfig::recent()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmedTransactionStatusWithSignature {
+    pub signature: Signature,
+    pub slot: Slot,
+    pub err: Option<TransactionError>,
+    pub memo: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -159,7 +202,7 @@ pub struct UiRawMessage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
-    pub account_keys: Value,
+    pub account_keys: Vec<ParsedAccount>,
     pub recent_blockhash: String,
     pub instructions: Vec<UiInstruction>,
 }
@@ -171,7 +214,7 @@ pub struct TransactionWithStatusMeta {
     pub meta: Option<UiTransactionStatusMeta>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary,
@@ -226,9 +269,16 @@ impl EncodedTransaction {
                                     instruction,
                                     &transaction.message.account_keys,
                                 ) {
-                                    UiInstruction::Parsed(parsed_instruction)
+                                    UiInstruction::Parsed(UiParsedInstruction::Parsed(
+                                        parsed_instruction,
+                                    ))
                                 } else {
-                                    UiInstruction::Compiled(instruction.into())
+                                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
+                                        UiPartiallyDecodedInstruction::from(
+                                            instruction,
+                                            &transaction.message.account_keys,
+                                        ),
+                                    ))
                                 }
                             })
                             .collect(),

@@ -240,12 +240,12 @@ test('createProgramAddress', async () => {
   );
 
   let programAddress = await PublicKey.createProgramAddress(
-    [Buffer.from('', 'utf8')],
+    [Buffer.from('', 'utf8'), Buffer.from([1])],
     programId,
   );
   expect(
     programAddress.equals(
-      new PublicKey('CsdSsqp6Upkh2qajhZMBM8xT4GAyDNSmcV37g4pN8rsc'),
+      new PublicKey('3gF2KMe9KiC6FNVBmfg9i267aMPvK37FewCip4eGBFcT'),
     ),
   ).toBe(true);
 
@@ -255,7 +255,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('A8mYnN8Pfx7Nn6f8RoQgsPNtAGAWmmKSBCDfyDvE6sXF'),
+      new PublicKey('7ytmC1nT1xY4RfxCV2ZgyA7UakC93do5ZdyhdF3EtPj7'),
     ),
   ).toBe(true);
 
@@ -265,7 +265,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('CawYq8Rmj4JRR992wVnGEFUjMEkmtmcFgEL4iS1qPczu'),
+      new PublicKey('HwRVBufQ4haG5XSgpspwKtNd3PC9GM9m1196uJW36vds'),
     ),
   ).toBe(true);
 
@@ -275,7 +275,7 @@ test('createProgramAddress', async () => {
   );
   expect(
     programAddress.equals(
-      new PublicKey('4ak7qJacCKMAGP8xJtDkg2VYZh5QKExa71ijMDjZGQyb'),
+      new PublicKey('GUs5qLUfsEHkcMB9T38vjr18ypEhRuNWiePW2LoK4E3K'),
     ),
   ).toBe(true);
 
@@ -284,4 +284,22 @@ test('createProgramAddress', async () => {
     programId,
   );
   expect(programAddress.equals(programAddress2)).toBe(false);
+});
+
+test('findProgramAddress', async () => {
+  const programId = new PublicKey(
+    'BPFLoader1111111111111111111111111111111111',
+  );
+  let [programAddress, nonce] = await PublicKey.findProgramAddress(
+    [Buffer.from('', 'utf8')],
+    programId,
+  );
+  expect(
+    programAddress.equals(
+      await PublicKey.createProgramAddress(
+        [Buffer.from('', 'utf8'), Buffer.from([nonce])],
+        programId,
+      ),
+    ),
+  ).toBe(true);
 });

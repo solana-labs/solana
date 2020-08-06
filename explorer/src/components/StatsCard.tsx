@@ -19,7 +19,7 @@ export default function StatsCard() {
       <div className="card-header">
         <div className="row align-items-center">
           <div className="col">
-            <h4 className="card-header-title">Live Cluster Info</h4>
+            <h4 className="card-header-title">Live Cluster Stats</h4>
           </div>
         </div>
       </div>
@@ -62,12 +62,16 @@ function StatsCardBody() {
   }
 
   const currentBlock = rootSlot.toLocaleString("en-US");
-  const { avgBlockTime_1min, epochInfo } = dashboardInfo;
+  const { avgBlockTime_1h, avgBlockTime_1min, epochInfo } = dashboardInfo;
+  const hourlyBlockTime = Math.round(1000 * avgBlockTime_1h);
   const averageBlockTime = Math.round(1000 * avgBlockTime_1min) + "ms";
   const { slotIndex, slotsInEpoch } = epochInfo;
   const currentEpoch = epochInfo.epoch.toString();
   const epochProgress = ((100 * slotIndex) / slotsInEpoch).toFixed(1) + "%";
-  const epochTimeRemaining = slotsToHumanString(slotsInEpoch - slotIndex);
+  const epochTimeRemaining = slotsToHumanString(
+    slotsInEpoch - slotIndex,
+    hourlyBlockTime
+  );
   const averageTps = Math.round(performanceInfo.avgTPS);
   const transactionCount = <AnimatedTransactionCount info={performanceInfo} />;
 
@@ -75,31 +79,31 @@ function StatsCardBody() {
     <TableCardBody>
       <tr>
         <td className="w-100">Block</td>
-        <td className="text-right text-monospace">{currentBlock}</td>
+        <td className="text-lg-right text-monospace">{currentBlock}</td>
       </tr>
       <tr>
         <td className="w-100">Block time</td>
-        <td className="text-right text-monospace">{averageBlockTime}</td>
+        <td className="text-lg-right text-monospace">{averageBlockTime}</td>
       </tr>
       <tr>
         <td className="w-100">Epoch</td>
-        <td className="text-right text-monospace">{currentEpoch} </td>
+        <td className="text-lg-right text-monospace">{currentEpoch} </td>
       </tr>
       <tr>
         <td className="w-100">Epoch progress</td>
-        <td className="text-right text-monospace">{epochProgress} </td>
+        <td className="text-lg-right text-monospace">{epochProgress} </td>
       </tr>
       <tr>
         <td className="w-100">Epoch time remaining</td>
-        <td className="text-right text-monospace">{epochTimeRemaining} </td>
+        <td className="text-lg-right text-monospace">{epochTimeRemaining} </td>
       </tr>
       <tr>
         <td className="w-100">Transaction count</td>
-        <td className="text-right text-monospace">{transactionCount} </td>
+        <td className="text-lg-right text-monospace">{transactionCount} </td>
       </tr>
       <tr>
         <td className="w-100">Transactions per second</td>
-        <td className="text-right text-monospace">{averageTps} </td>
+        <td className="text-lg-right text-monospace">{averageTps} </td>
       </tr>
     </TableCardBody>
   );

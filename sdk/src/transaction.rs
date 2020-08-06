@@ -90,6 +90,12 @@ pub enum TransactionError {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
+impl From<SanitizeError> for TransactionError {
+    fn from(_: SanitizeError) -> Self {
+        Self::SanitizeFailure
+    }
+}
+
 /// An atomic transaction
 #[frozen_abi(digest = "GoxM5ZMMjM2FSuY1VtuMhs1j8u9kMuYsH3dpYcSVVnTe")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]

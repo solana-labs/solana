@@ -19,7 +19,7 @@ type State = { [address: string]: AccountHistory };
 export enum ActionType {
   Update,
   Add,
-  Remove,
+  Clear,
 }
 
 interface Update {
@@ -32,38 +32,26 @@ interface Update {
 
 interface Add {
   type: ActionType.Add;
-  addresses: string[];
+  address: string;
 }
 
-interface Remove {
-  type: ActionType.Remove;
-  addresses: string[];
+interface Clear {
+  type: ActionType.Clear;
 }
 
-type Action = Update | Add | Remove;
+type Action = Update | Add | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case ActionType.Add: {
-      if (action.addresses.length === 0) return state;
       const details = { ...state };
-      action.addresses.forEach((address) => {
-        if (!details[address]) {
-          details[address] = {
-            status: FetchStatus.Fetching,
-          };
-        }
-      });
-      return details;
-    }
-
-    case ActionType.Remove: {
-      if (action.addresses.length === 0) return state;
-      const details = { ...state };
-      action.addresses.forEach((address) => {
-        delete details[address];
-      });
+      const address = action.address;
+      if (!details[address]) {
+        details[address] = {
+          status: FetchStatus.Fetching,
+        };
+      }
       return details;
     }
 
@@ -87,6 +75,10 @@ function reducer(state: State, action: Action): State {
       }
       break;
     }
+
+    case ActionType.Clear: {
+      return {};
+    }
   }
   return state;
 }
@@ -100,45 +92,33 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type HistoryProviderProps = { children: React.ReactNode };
 export function HistoryProvider({ children }: HistoryProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {});
-  const { accounts } = useAccounts();
+  const { accounts, lastFetchedAddress } = useAccounts();
   const { url } = useCluster();
 
   const manager = React.useRef(new HistoryManager(url));
   React.useEffect(() => {
     manager.current = new HistoryManager(url);
+    dispatch({ type: ActionType.Clear });
   }, [url]);
 
   // Fetch history for new accounts
   React.useEffect(() => {
-    const removeAddresses = new Set<string>();
-    const fetchAddresses = new Set<string>();
-    accounts.forEach(({ pubkey, lamports }) => {
-      const address = pubkey.toBase58();
-      if (lamports !== undefined && !state[address])
-        fetchAddresses.add(address);
-      else if (lamports === undefined && state[address])
-        removeAddresses.add(address);
-    });
-
-    const removeList: string[] = [];
-    removeAddresses.forEach((address) => {
-      manager.current.removeAccountHistory(address);
-      removeList.push(address);
-    });
-    dispatch({ type: ActionType.Remove, addresses: removeList });
-
-    const fetchList: string[] = [];
-    fetchAddresses.forEach((s) => fetchList.push(s));
-    dispatch({ type: ActionType.Add, addresses: fetchList });
-    fetchAddresses.forEach((address) => {
-      fetchAccountHistory(
-        dispatch,
-        new PublicKey(address),
-        manager.current,
-        true
-      );
-    });
-  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (lastFetchedAddress) {
+      const infoFetched =
+        accounts[lastFetchedAddress] &&
+        accounts[lastFetchedAddress].lamports !== undefined;
+      const noHistory = !state[lastFetchedAddress];
+      if (infoFetched && noHistory) {
+        dispatch({ type: ActionType.Add, address: lastFetchedAddress });
+        fetchAccountHistory(
+          dispatch,
+          new PublicKey(lastFetchedAddress),
+          manager.current,
+          true
+        );
+      }
+    }
+  }, [accounts, lastFetchedAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ManagerContext.Provider value={manager.current}>

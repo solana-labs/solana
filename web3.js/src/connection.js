@@ -25,12 +25,12 @@ export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type TokenAccountsFilter =
-  | {
+  | {|
       mint: PublicKey,
-    }
-  | {
+    |}
+  | {|
       programId: PublicKey,
-    };
+    |};
 
 /**
  * Extra contextual information for RPC responses
@@ -49,7 +49,7 @@ type Context = {
  * @property {boolean | undefined} skipPreflight disable transaction verification step
  */
 export type SendOptions = {
-  skipPreflight: ?boolean,
+  skipPreflight?: boolean,
 };
 
 /**
@@ -60,8 +60,22 @@ export type SendOptions = {
  * @property {number | undefined} confirmations desired number of cluster confirmations
  */
 export type ConfirmOptions = {
-  skipPreflight: ?boolean,
-  confirmations: ?number,
+  skipPreflight?: boolean,
+  confirmations?: number,
+};
+
+/**
+ * Options for getConfirmedSignaturesForAddress2
+ *
+ * @typedef {Object} ConfirmedSignaturesForAddress2Options
+ * @property {TransactionSignature | undefined} before start searching backwards from this transaction signature.
+ *               If not provided the search starts from the highest max confirmed block.
+ * @property {number | undefined} limit maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+ *
+ */
+export type ConfirmedSignaturesForAddress2Options = {
+  before?: TransactionSignature,
+  limit?: number,
 };
 
 /**
@@ -365,6 +379,88 @@ type ConfirmedTransaction = {
 };
 
 /**
+ * A partially decoded transaction instruction
+ *
+ * @typedef {Object} ParsedMessageAccount
+ * @property {PublicKey} pubkey Public key of the account
+ * @property {PublicKey} accounts Indicates if the account signed the transaction
+ * @property {string} data Raw base-58 instruction data
+ */
+type PartiallyDecodedInstruction = {|
+  programId: PublicKey,
+  accounts: Array<PublicKey>,
+  data: string,
+|};
+
+/**
+ * A parsed transaction message account
+ *
+ * @typedef {Object} ParsedMessageAccount
+ * @property {PublicKey} pubkey Public key of the account
+ * @property {boolean} signer Indicates if the account signed the transaction
+ * @property {boolean} writable Indicates if the account is writable for this transaction
+ */
+type ParsedMessageAccount = {
+  pubkey: PublicKey,
+  signer: boolean,
+  writable: boolean,
+};
+
+/**
+ * A parsed transaction instruction
+ *
+ * @typedef {Object} ParsedInstruction
+ * @property {string} program Name of the program for this instruction
+ * @property {PublicKey} programId ID of the program for this instruction
+ * @property {any} parsed Parsed instruction info
+ */
+type ParsedInstruction = {|
+  program: string,
+  programId: PublicKey,
+  parsed: any,
+|};
+
+/**
+ * A parsed transaction message
+ *
+ * @typedef {Object} ParsedMessage
+ * @property {Array<ParsedMessageAccount>} accountKeys Accounts used in the instructions
+ * @property {Array<ParsedInstruction | PartiallyDecodedInstruction>} instructions The atomically executed instructions for the transaction
+ * @property {string} recentBlockhash Recent blockhash
+ */
+type ParsedMessage = {
+  accountKeys: ParsedMessageAccount[],
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+  recentBlockhash: string,
+};
+
+/**
+ * A parsed transaction
+ *
+ * @typedef {Object} ParsedTransaction
+ * @property {Array<string>} signatures Signatures for the transaction
+ * @property {ParsedMessage} message Message of the transaction
+ */
+type ParsedTransaction = {
+  signatures: Array<string>,
+  message: ParsedMessage,
+};
+
+/**
+ * A parsed and confirmed transaction on the ledger
+ *
+ * @typedef {Object} ParsedConfirmedTransaction
+ * @property {number} slot The slot during which the transaction was processed
+ * @property {ParsedTransaction} transaction The details of the transaction
+ * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
+ */
+type ParsedConfirmedTransaction = {
+  slot: number,
+  transaction: ParsedTransaction,
+  meta: ConfirmedTransactionMeta | null,
+};
+
+/**
  * A ConfirmedBlock on the ledger
  *
  * @typedef {Object} ConfirmedBlock
@@ -508,71 +604,64 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
   }),
 );
 
-/**
- * Information describing a token account
- */
-type TokenAccountInfo = {|
-  mint: PublicKey,
-  owner: PublicKey,
-  amount: number,
-  delegate: null | PublicKey,
-  delegatedAmount: number,
-  isInitialized: boolean,
-  isNative: boolean,
-|};
-
-/**
- * Information describing an account with token account data
- *
- * @typedef {Object} TokenAccount
- * @property {number} lamports Number of lamports assigned to the account
- * @property {PublicKey} owner Identifier of the program that owns the account
- * @property {TokenAccountInfo} data Token account data
- * @property {boolean} executable `true` if this account's data contains a loaded program
- */
-type TokenAccount = {
-  executable: boolean,
-  owner: PublicKey,
-  lamports: number,
-  data: TokenAccountInfo,
+type TokenAmount = {
+  amount: string,
+  decimals: 2,
+  uiAmount: number,
 };
 
-const TokenAccountResult = struct({
-  token: struct({
-    account: struct({
-      mint: 'string',
-      owner: 'string',
-      amount: 'number',
-      delegate: struct.union(['string', 'null']),
-      delegatedAmount: 'number',
-      isInitialized: 'boolean',
-      isNative: 'boolean',
-    }),
-  }),
+/**
+ * Expected JSON RPC structure for token amounts
+ */
+const TokenAmountResult = struct({
+  amount: 'string',
+  uiAmount: 'number',
+  decimals: 'number',
 });
 
 /**
  * Expected JSON RPC response for the "getTokenAccountBalance" message
  */
-const GetTokenAccountBalance = jsonRpcResultAndContext('number');
+const GetTokenAccountBalance = jsonRpcResultAndContext(TokenAmountResult);
 
 /**
  * Expected JSON RPC response for the "getTokenSupply" message
  */
-const GetTokenSupplyRpcResult = jsonRpcResultAndContext('number');
+const GetTokenSupplyRpcResult = jsonRpcResultAndContext(TokenAmountResult);
 
 /**
  * Expected JSON RPC response for the "getTokenAccountsByOwner" message
  */
 const GetTokenAccountsByOwner = jsonRpcResultAndContext(
   struct.array([
-    struct({
+    struct.object({
       pubkey: 'string',
-      account: struct({
+      account: struct.object({
         executable: 'boolean',
         owner: 'string',
         lamports: 'number',
-        data: TokenAccountResult,
+        data: 'string',
+        rentEpoch: 'number?',
+      }),
+    }),
+  ]),
+);
+
+/**
+ * Expected JSON RPC response for the "getTokenAccountsByOwner" message with parsed data
+ */
+const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
+  struct.array([
+    struct.object({
+      pubkey: 'string',
+      account: struct.object({
+        executable: 'boolean',
+        owner: 'string',
+        lamports: 'number',
+        data: struct.object({
+          program: 'string',
+          parsed: 'any',
+        }),
         rentEpoch: 'number?',
       }),
     }),
@@ -625,6 +714,23 @@ const AccountInfoResult = struct({
 });
 
 /**
+ * @private
+ */
+const ParsedAccountInfoResult = struct.object({
+  executable: 'boolean',
+  owner: 'string',
+  lamports: 'number',
+  data: struct.union([
+    'string',
+    struct.object({
+      program: 'string',
+      parsed: 'any',
+    }),
+  ]),
+  rentEpoch: 'number?',
+});
+
+/**
  * Expected JSON RPC response for the "getAccountInfo" message
  */
 const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
@@ -632,10 +738,32 @@ const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
 );
 
 /**
- * @private
+ * Expected JSON RPC response for the "getAccountInfo" message with jsonParsed param
+ */
+const GetParsedAccountInfoResult = jsonRpcResultAndContext(
+  struct.union(['null', ParsedAccountInfoResult]),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
  */
 const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
   struct.array(['string']),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
+ */
+
+const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
+  struct.array([
+    struct({
+      signature: 'string',
+      slot: 'number',
+      err: TransactionErrorResult,
+      memo: struct.union(['null', 'string']),
+    }),
+  ]),
 );
 
 /***
@@ -652,6 +780,14 @@ const AccountNotificationResult = struct({
 const ProgramAccountInfoResult = struct({
   pubkey: 'string',
   account: AccountInfoResult,
+});
+
+/**
+ * @private
+ */
+const ParsedProgramAccountInfoResult = struct({
+  pubkey: 'string',
+  account: ParsedAccountInfoResult,
 });
 
 /***
@@ -700,6 +836,13 @@ const RootNotificationResult = struct({
  */
 const GetProgramAccountsRpcResult = jsonRpcResult(
   struct.array([ProgramAccountInfoResult]),
+);
+
+/**
+ * Expected JSON RPC response for the "getProgramAccounts" message
+ */
+const GetParsedProgramAccountsRpcResult = jsonRpcResult(
+  struct.array([ParsedProgramAccountInfoResult]),
 );
 
 /**
@@ -807,12 +950,40 @@ const ConfirmedTransactionResult = struct({
       numReadonlyUnsignedAccounts: 'number',
     }),
     instructions: struct.array([
+      struct({
+        accounts: struct.array(['number']),
+        data: 'string',
+        programIdIndex: 'number',
+      }),
+    ]),
+    recentBlockhash: 'string',
+  }),
+});
+
+/**
+ * @private
+ */
+const ParsedConfirmedTransactionResult = struct({
+  signatures: struct.array(['string']),
+  message: struct({
+    accountKeys: struct.array([
+      struct({
+        pubkey: 'string',
+        signer: 'boolean',
+        writable: 'boolean',
+      }),
+    ]),
+    instructions: struct.array([
       struct.union([
-        struct.array(['number']),
         struct({
-          accounts: struct.array(['number']),
+          accounts: struct.array(['string']),
           data: 'string',
-          programIdIndex: 'number',
+          programId: 'string',
+        }),
+        struct({
+          parsed: 'any',
+          program: 'string',
+          programId: 'string',
         }),
       ]),
     ]),
@@ -877,6 +1048,20 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
 );
 
 /**
+ * Expected JSON RPC response for the "getConfirmedTransaction" message
+ */
+const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
+  struct.union([
+    'null',
+    struct.pick({
+      slot: 'number',
+      transaction: ParsedConfirmedTransactionResult,
+      meta: ConfirmedTransactionMetaResult,
+    }),
+  ]),
+);
+
+/**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
@@ -927,19 +1112,31 @@ type SlotInfo = {
 };
 
 /**
+ * Parsed account data
+ *
+ * @typedef {Object} ParsedAccountData
+ * @property {string} program Name of the program that owns this account
+ * @property {any} parsed Parsed account data
+ */
+type ParsedAccountData = {
+  program: string,
+  parsed: any,
+};
+
+/**
  * Information describing an account
  *
  * @typedef {Object} AccountInfo
  * @property {number} lamports Number of lamports assigned to the account
  * @property {PublicKey} owner Identifier of the program that owns the account
- * @property {?Buffer} data Optional data assigned to the account
+ * @property {T} data Optional data assigned to the account
  * @property {boolean} executable `true` if this account's data contains a loaded program
  */
-type AccountInfo = {
+type AccountInfo<T> = {
   executable: boolean,
   owner: PublicKey,
   lamports: number,
-  data: Buffer,
+  data: T,
 };
 
 /**
@@ -947,18 +1144,18 @@ type AccountInfo = {
  *
  * @typedef {Object} KeyedAccountInfo
  * @property {PublicKey} accountId
- * @property {AccountInfo} accountInfo
+ * @property {AccountInfo<Buffer>} accountInfo
  */
 type KeyedAccountInfo = {
   accountId: PublicKey,
-  accountInfo: AccountInfo,
+  accountInfo: AccountInfo<Buffer>,
 };
 
 /**
  * Callback function for account change notifications
  */
 export type AccountChangeCallback = (
-  accountInfo: AccountInfo,
+  accountInfo: AccountInfo<Buffer>,
   context: Context,
 ) => void;
 
@@ -1067,6 +1264,22 @@ export type SignatureStatus = {
   slot: number,
   confirmations: number | null,
   err: TransactionError | null,
+};
+
+/**
+ * A confirmed signature with its status
+ *
+ * @typedef {Object} ConfirmedSignatureInfo
+ * @property {string} signature the transaction signature
+ * @property {number} slot when the transaction was processed
+ * @property {TransactionError | null} err error, if any
+ * @property {string | null} memo memo associated with the transaction, if any
+ */
+export type ConfirmedSignatureInfo = {
+  signature: string,
+  slot: number,
+  err: TransactionError | null,
+  memo: string | null,
 };
 
 /**
@@ -1270,7 +1483,7 @@ export class Connection {
   async getTokenSupply(
     tokenMintAddress: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<number>> {
+  ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._argsWithCommitment(
       [tokenMintAddress.toBase58()],
       commitment,
@@ -1290,7 +1503,7 @@ export class Connection {
   async getTokenAccountBalance(
     tokenAddress: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<number>> {
+  ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._argsWithCommitment(
       [tokenAddress.toBase58()],
       commitment,
@@ -1309,25 +1522,23 @@ export class Connection {
   /**
    * Fetch all the token accounts owned by the specified account
    *
-   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>>}
+   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>>>}
    */
   async getTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
     commitment: ?Commitment,
   ): Promise<
-    RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>,
+    RpcResponseAndContext<
+      Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>,
+    >,
   > {
     let _args = [ownerAddress.toBase58()];
-
-    // Strip flow types to make flow happy
-    ((filter: any) => {
-      if ('mint' in filter) {
-        _args.push({mint: filter.mint.toBase58()});
-      } else {
-        _args.push({programId: filter.programId.toBase58()});
-      }
-    })(filter);
+    if (filter.mint) {
+      _args.push({mint: filter.mint.toBase58()});
+    } else {
+      _args.push({programId: filter.programId.toBase58()});
+    }
 
     const args = this._argsWithCommitment(_args, commitment);
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
@@ -1347,23 +1558,66 @@ export class Connection {
 
     return {
       context,
-      value: value.map(result => {
-        const data = result.account.data.token.account;
-        return {
-          pubkey: new PublicKey(result.pubkey),
-          account: {
-            executable: result.account.executable,
-            owner: new PublicKey(result.account.owner),
-            lamports: result.account.lamports,
-            data: {
-              ...data,
-              mint: new PublicKey(data.mint),
-              owner: new PublicKey(data.owner),
-              delegate: data.delegate ? new PublicKey(data.delegate) : null,
-            },
-          },
-        };
-      }),
+      value: value.map(result => ({
+        pubkey: new PublicKey(result.pubkey),
+        account: {
+          executable: result.account.executable,
+          owner: new PublicKey(result.account.owner),
+          lamports: result.account.lamports,
+          data: bs58.decode(result.account.data),
+        },
+      })),
+    };
+  }
+
+  /**
+   * Fetch parsed token accounts owned by the specified account
+   *
+   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo<ParsedAccountData>}>>>}
+   */
+  async getParsedTokenAccountsByOwner(
+    ownerAddress: PublicKey,
+    filter: TokenAccountsFilter,
+    commitment: ?Commitment,
+  ): Promise<
+    RpcResponseAndContext<
+      Array<{pubkey: PublicKey, account: AccountInfo<ParsedAccountData>}>,
+    >,
+  > {
+    let _args = [ownerAddress.toBase58()];
+    if (filter.mint) {
+      _args.push({mint: filter.mint.toBase58()});
+    } else {
+      _args.push({programId: filter.programId.toBase58()});
+    }
+
+    const args = this._argsWithCommitment(_args, commitment, 'jsonParsed');
+    const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
+    const res = GetParsedTokenAccountsByOwner(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get token accounts owned by account ' +
+          ownerAddress.toBase58() +
+          ': ' +
+          res.error.message,
+      );
+    }
+
+    const {result} = res;
+    const {context, value} = result;
+    assert(typeof result !== 'undefined');
+
+    return {
+      context,
+      value: value.map(result => ({
+        pubkey: new PublicKey(result.pubkey),
+        account: {
+          executable: result.account.executable,
+          owner: new PublicKey(result.account.owner),
+          lamports: result.account.lamports,
+          data: result.account.data,
+        },
+      })),
     };
   }
 
@@ -1397,7 +1651,7 @@ export class Connection {
   async getAccountInfoAndContext(
     publicKey: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<AccountInfo | null>> {
+  ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
     const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
@@ -1431,12 +1685,63 @@ export class Connection {
   }
 
   /**
+   * Fetch parsed account info for the specified public key
+   */
+  async getParsedAccountInfo(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<
+    RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>,
+  > {
+    const args = this._argsWithCommitment(
+      [publicKey.toBase58()],
+      commitment,
+      'jsonParsed',
+    );
+    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+    const res = GetParsedAccountInfoResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get info about account ' +
+          publicKey.toBase58() +
+          ': ' +
+          res.error.message,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+
+    let value = null;
+    if (res.result.value) {
+      const {executable, owner, lamports, data: resultData} = res.result.value;
+
+      let data = resultData;
+      if (!data.program) {
+        data = bs58.decode(data);
+      }
+
+      value = {
+        executable,
+        owner: new PublicKey(owner),
+        lamports,
+        data,
+      };
+    }
+
+    return {
+      context: {
+        slot: res.result.context.slot,
+      },
+      value,
+    };
+  }
+
+  /**
    * Fetch all the account info for the specified public key
    */
   async getAccountInfo(
     publicKey: PublicKey,
     commitment: ?Commitment,
-  ): Promise<AccountInfo | null> {
+  ): Promise<AccountInfo<Buffer> | null> {
     return await this.getAccountInfoAndContext(publicKey, commitment)
       .then(x => x.value)
       .catch(e => {
@@ -1449,12 +1754,12 @@ export class Connection {
   /**
    * Fetch all the accounts owned by the specified program id
    *
-   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo}>>}
+   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>>}
    */
   async getProgramAccounts(
     programId: PublicKey,
     commitment: ?Commitment,
-  ): Promise<Array<{pubkey: PublicKey, account: AccountInfo}>> {
+  ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
     const args = this._argsWithCommitment([programId.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
@@ -1472,12 +1777,65 @@ export class Connection {
 
     return result.map(result => {
       return {
-        pubkey: result.pubkey,
+        pubkey: new PublicKey(result.pubkey),
         account: {
           executable: result.account.executable,
           owner: new PublicKey(result.account.owner),
           lamports: result.account.lamports,
           data: bs58.decode(result.account.data),
+        },
+      };
+    });
+  }
+
+  /**
+   * Fetch and parse all the accounts owned by the specified program id
+   *
+   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer | ParsedAccountData>}>>}
+   */
+  async getParsedProgramAccounts(
+    programId: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<
+    Array<{
+      pubkey: PublicKey,
+      account: AccountInfo<Buffer | ParsedAccountData>,
+    }>,
+  > {
+    const args = this._argsWithCommitment(
+      [programId.toBase58()],
+      commitment,
+      'jsonParsed',
+    );
+    const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
+    const res = GetParsedProgramAccountsRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get accounts owned by program ' +
+          programId.toBase58() +
+          ': ' +
+          res.error.message,
+      );
+    }
+
+    const {result} = res;
+    assert(typeof result !== 'undefined');
+
+    return result.map(result => {
+      const resultData = result.account.data;
+
+      let data = resultData;
+      if (!data.program) {
+        data = bs58.decode(data);
+      }
+
+      return {
+        pubkey: new PublicKey(result.pubkey),
+        account: {
+          executable: result.account.executable,
+          owner: new PublicKey(result.account.owner),
+          lamports: result.account.lamports,
+          data,
         },
       };
     });
@@ -1845,6 +2203,56 @@ export class Connection {
   }
 
   /**
+   * Fetch parsed transaction details for a confirmed transaction
+   */
+  async getParsedConfirmedTransaction(
+    signature: TransactionSignature,
+  ): Promise<ParsedConfirmedTransaction | null> {
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
+      signature,
+      'jsonParsed',
+    ]);
+    const {result, error} = GetParsedConfirmedTransactionRpcResult(unsafeRes);
+    if (error) {
+      throw new Error('failed to get confirmed transaction: ' + error.message);
+    }
+    assert(typeof result !== 'undefined');
+    if (result === null) return result;
+
+    const {
+      accountKeys,
+      instructions,
+      recentBlockhash,
+    } = result.transaction.message;
+    return {
+      slot: result.slot,
+      meta: result.meta,
+      transaction: {
+        signatures: result.transaction.signatures,
+        message: {
+          accountKeys: accountKeys.map(accountKey => ({
+            pubkey: new PublicKey(accountKey.pubkey),
+            signer: accountKey.signer,
+            writable: accountKey.writable,
+          })),
+          instructions: instructions.map(ix => {
+            let mapped: any = {programId: new PublicKey(ix.programId)};
+            if ('accounts' in ix) {
+              mapped.accounts = ix.accounts.map(key => new PublicKey(key));
+            }
+
+            return {
+              ...ix,
+              ...mapped,
+            };
+          }),
+          recentBlockhash,
+        },
+      },
+    };
+  }
+
+  /**
    * Fetch a list of all the confirmed signatures for transactions involving an address
    * within a specified slot range. Max range allowed is 10,000 slots.
    *
@@ -1862,6 +2270,33 @@ export class Connection {
       [address.toBase58(), startSlot, endSlot],
     );
     const result = GetConfirmedSignaturesForAddressRpcResult(unsafeRes);
+    if (result.error) {
+      throw new Error(
+        'failed to get confirmed signatures for address: ' +
+          result.error.message,
+      );
+    }
+    assert(typeof result.result !== 'undefined');
+    return result.result;
+  }
+
+  /**
+   * Returns confirmed signatures for transactions involving an
+   * address backwards in time from the provided signature or most recent confirmed block
+   *
+   *
+   * @param address queried address
+   * @param options
+   */
+  async getConfirmedSignaturesForAddress2(
+    address: PublicKey,
+    options: ?ConfirmedSignaturesForAddress2Options,
+  ): Promise<Array<ConfirmedSignatureInfo>> {
+    const unsafeRes = await this._rpcRequest(
+      'getConfirmedSignaturesForAddress2',
+      [address.toBase58(), options],
+    );
+    const result = GetConfirmedSignaturesForAddress2RpcResult(unsafeRes);
     if (result.error) {
       throw new Error(
         'failed to get confirmed signatures for address: ' +
@@ -2415,10 +2850,21 @@ export class Connection {
     }
   }
 
-  _argsWithCommitment(args: Array<any>, override: ?Commitment): Array<any> {
+  _argsWithCommitment(
+    args: Array<any>,
+    override: ?Commitment,
+    encoding?: 'jsonParsed',
+  ): Array<any> {
     const commitment = override || this._commitment;
-    if (commitment) {
-      args.push({commitment});
+    if (commitment || encoding) {
+      let options: any = {};
+      if (encoding) {
+        options.encoding = encoding;
+      }
+      if (commitment) {
+        options.commitment = commitment;
+      }
+      args.push(options);
     }
     return args;
   }

@@ -2,10 +2,9 @@ import React from "react";
 import { StakeAccount, Meta } from "solana-sdk-wasm";
 import TableCardBody from "components/common/TableCardBody";
 import { lamportsToSolString } from "utils";
-import Copyable from "components/Copyable";
-import { displayAddress } from "utils/tx";
 import { displayTimestamp } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
+import Address from "components/common/Address";
 
 export function StakeAccountCards({
   account,
@@ -64,22 +63,20 @@ function OverviewCard({
       <TableCardBody>
         <tr>
           <td>Address</td>
-          <td className="text-right">
-            <Copyable text={account.pubkey.toBase58()} bottom right>
-              <code>{account.pubkey.toBase58()}</code>
-            </Copyable>
+          <td className="text-lg-right">
+            <Address pubkey={account.pubkey} alignRight />
           </td>
         </tr>
         <tr>
           <td>Balance (SOL)</td>
-          <td className="text-right text-uppercase">
+          <td className="text-lg-right text-uppercase">
             {lamportsToSolString(account.lamports || 0)}
           </td>
         </tr>
         {stakeAccount.meta && (
           <tr>
             <td>Rent Reserve (SOL)</td>
-            <td className="text-right">
+            <td className="text-lg-right">
               {lamportsToSolString(stakeAccount.meta.rentExemptReserve)}
             </td>
           </tr>
@@ -87,7 +84,7 @@ function OverviewCard({
         {!stakeAccount.meta && (
           <tr>
             <td>State</td>
-            <td className="text-right">{stakeAccount.displayState()}</td>
+            <td className="text-lg-right">{stakeAccount.displayState()}</td>
           </tr>
         )}
       </TableCardBody>
@@ -115,32 +112,32 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
       <TableCardBody>
         <tr>
           <td>Status</td>
-          <td className="text-right">{displayStatus()}</td>
+          <td className="text-lg-right">{displayStatus()}</td>
         </tr>
 
         {stake && (
           <>
             <tr>
               <td>Delegated Stake (SOL)</td>
-              <td className="text-right">
+              <td className="text-lg-right">
                 {lamportsToSolString(stake.delegation.stake)}
               </td>
             </tr>
 
             <tr>
               <td>Delegated Vote Address</td>
-              <td className="text-right">
-                <Copyable text={stake.delegation.voterPubkey.toBase58()} right>
-                  <code>
-                    {displayAddress(stake.delegation.voterPubkey.toBase58())}
-                  </code>
-                </Copyable>
+              <td className="text-lg-right">
+                <Address
+                  pubkey={stake.delegation.voterPubkey}
+                  alignRight
+                  link
+                />
               </td>
             </tr>
 
             <tr>
               <td>Activation Epoch</td>
-              <td className="text-right">
+              <td className="text-lg-right">
                 {stake.delegation.isBootstrapStake()
                   ? "-"
                   : stake.delegation.activationEpoch}
@@ -149,7 +146,7 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
 
             <tr>
               <td>Deactivation Epoch</td>
-              <td className="text-right">
+              <td className="text-lg-right">
                 {stake.delegation.isDeactivated()
                   ? stake.delegation.deactivationEpoch
                   : "-"}
@@ -174,29 +171,23 @@ function AuthoritiesCard({ meta }: { meta: Meta }) {
       <TableCardBody>
         <tr>
           <td>Stake Authority Address</td>
-          <td className="text-right">
-            <Copyable text={meta.authorized.staker.toBase58()} bottom right>
-              <code>{meta.authorized.staker.toBase58()}</code>
-            </Copyable>
+          <td className="text-lg-right">
+            <Address pubkey={meta.authorized.staker} alignRight link />
           </td>
         </tr>
 
         <tr>
           <td>Withdraw Authority Address</td>
-          <td className="text-right">
-            <Copyable text={meta.authorized.withdrawer.toBase58()} right>
-              <code>{meta.authorized.withdrawer.toBase58()}</code>
-            </Copyable>
+          <td className="text-lg-right">
+            <Address pubkey={meta.authorized.withdrawer} alignRight link />
           </td>
         </tr>
 
         {hasLockup && (
           <tr>
             <td>Lockup Authority Address</td>
-            <td className="text-right">
-              <Copyable text={meta.lockup.custodian.toBase58()} right>
-                <code>{displayAddress(meta.lockup.custodian.toBase58())}</code>
-              </Copyable>
+            <td className="text-lg-right">
+              <Address pubkey={meta.lockup.custodian} alignRight link />
             </td>
           </tr>
         )}

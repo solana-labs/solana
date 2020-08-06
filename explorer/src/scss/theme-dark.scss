@@ -5,8 +5,14 @@
  * to ensure cascade of styles.
  */
 
+ // Icon font
+@import "../fonts/feather/feather";
+
 // Bootstrap functions
 @import '~bootstrap/scss/functions.scss';
+
+// Custom variables
+@import 'solana-variables-dark';
 
 // Custom variables
 @import 'solana-variables';
@@ -28,3 +34,6 @@
 
 // Custom core
 @import 'solana';
+
+// Dark mode overrides
+@import 'solana-dark-overrides';

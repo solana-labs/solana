@@ -358,13 +358,12 @@ mod bpf {
             let account = Account::new(43, 0, &solana_sdk::system_program::id());
             bank.store_account(&from_keypair.pubkey(), &account);
 
-            let derived_key1 =
-                Pubkey::create_program_address(&[b"You pass butter"], &invoke_program_id).unwrap();
-            let derived_key2 =
-                Pubkey::create_program_address(&[b"Lil'", b"Bits"], &invoked_program_id).unwrap();
-            let derived_key3 =
-                Pubkey::create_program_address(&[derived_key2.as_ref()], &invoked_program_id)
-                    .unwrap();
+            let (derived_key1, nonce1) =
+                Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
+            let (derived_key2, nonce2) =
+                Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
+            let (derived_key3, nonce3) =
+                Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
 
             let mint_pubkey = mint_keypair.pubkey();
             let account_metas = vec![
@@ -383,8 +382,11 @@ mod bpf {
 
             // success cases
 
-            let instruction =
-                Instruction::new(invoke_program_id, &TEST_SUCCESS, account_metas.clone());
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_SUCCESS, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
             let message = Message::new(&[instruction], Some(&mint_pubkey));
             assert!(bank_client
                 .send_and_confirm_message(

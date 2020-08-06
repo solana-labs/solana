@@ -50,6 +50,11 @@ declare module '@solana/web3.js' {
     skipPreflight?: boolean;
   };
 
+  export type ConfirmedSignaturesForAddress2Options = {
+    before?: TransactionSignature;
+    limit?: number;
+  };
+
   export type TokenAccountsFilter =
     | {
         mint: PublicKey;
@@ -87,21 +92,28 @@ declare module '@solana/web3.js' {
     confirmations: number | null;
   };
 
+  export type ConfirmedSignatureInfo = {
+    signature: string;
+    slot: number;
+    err: TransactionError | null;
+    memo: string | null;
+  };
+
   export type BlockhashAndFeeCalculator = {
     blockhash: Blockhash;
     feeCalculator: FeeCalculator;
   };
 
-  export type PublicKeyAndAccount = {
+  export type PublicKeyAndAccount<T> = {
     pubkey: PublicKey;
-    account: AccountInfo;
+    account: AccountInfo<T>;
   };
 
-  export type AccountInfo = {
+  export type AccountInfo<T> = {
     executable: boolean;
     owner: PublicKey;
     lamports: number;
-    data: Buffer;
+    data: T;
     rentEpoch?: number;
   };
 
@@ -136,9 +148,47 @@ declare module '@solana/web3.js' {
     meta: ConfirmedTransactionMeta | null;
   };
 
+  export type ParsedMessageAccount = {
+    pubkey: PublicKey;
+    signer: boolean;
+    writable: boolean;
+  };
+
+  export type ParsedInstruction = {
+    programId: PublicKey;
+    program: string;
+    parsed: string;
+  };
+
+  export type PartiallyDecodedInstruction = {
+    programId: PublicKey;
+    accounts: Array<PublicKey>;
+    data: string;
+  };
+
+  export type ParsedTransaction = {
+    signatures: Array<string>;
+    message: {
+      accountKeys: ParsedMessageAccount[];
+      instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+      recentBlockhash: string;
+    };
+  };
+
+  export type ParsedConfirmedTransaction = {
+    slot: number;
+    transaction: ParsedTransaction;
+    meta: ConfirmedTransactionMeta | null;
+  };
+
+  export type ParsedAccountData = {
+    program: string;
+    parsed: any;
+  };
+
   export type KeyedAccountInfo = {
     accountId: PublicKey;
-    accountInfo: AccountInfo;
+    accountInfo: AccountInfo<Buffer>;
   };
 
   export type Version = {
@@ -158,25 +208,14 @@ declare module '@solana/web3.js' {
     root: number;
   };
 
-  export type TokenAccountInfo = {
-    mint: PublicKey;
-    owner: PublicKey;
-    amount: number;
-    delegate: null | PublicKey;
-    delegatedAmount: number;
-    isInitialized: boolean;
-    isNative: boolean;
-  };
-
-  export type TokenAccount = {
-    executable: boolean;
-    owner: PublicKey;
-    lamports: number;
-    data: TokenAccountInfo;
+  export type TokenAmount = {
+    uiAmount: number;
+    decimals: number;
+    amount: string;
   };
 
   export type AccountChangeCallback = (
-    accountInfo: AccountInfo,
+    accountInfo: AccountInfo<Buffer>,
     context: Context,
   ) => void;
   export type ProgramAccountChangeCallback = (
@@ -246,15 +285,25 @@ declare module '@solana/web3.js' {
     getAccountInfoAndContext(
       publicKey: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<AccountInfo | null>>;
+    ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>>;
     getAccountInfo(
       publicKey: PublicKey,
       commitment?: Commitment,
-    ): Promise<AccountInfo | null>;
+    ): Promise<AccountInfo<Buffer> | null>;
+    getParsedAccountInfo(
+      publicKey: PublicKey,
+      commitment?: Commitment,
+    ): Promise<
+      RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>
+    >;
     getProgramAccounts(
       programId: PublicKey,
       commitment?: Commitment,
-    ): Promise<Array<PublicKeyAndAccount>>;
+    ): Promise<Array<PublicKeyAndAccount<Buffer>>>;
+    getParsedProgramAccounts(
+      programId: PublicKey,
+      commitment?: Commitment,
+    ): Promise<Array<PublicKeyAndAccount<Buffer | ParsedAccountData>>>;
     getBalanceAndContext(
       publicKey: PublicKey,
       commitment?: Commitment,
@@ -267,17 +316,28 @@ declare module '@solana/web3.js' {
     getTokenSupply(
       tokenMintAddress: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<number>>;
+    ): Promise<RpcResponseAndContext<TokenAmount>>;
     getTokenAccountBalance(
       tokenAddress: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<number>>;
+    ): Promise<RpcResponseAndContext<TokenAmount>>;
     getTokenAccountsByOwner(
       ownerAddress: PublicKey,
       filter: TokenAccountsFilter,
       commitment?: Commitment,
     ): Promise<
-      RpcResponseAndContext<Array<{pubkey: PublicKey; account: TokenAccount}>>
+      RpcResponseAndContext<
+        Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>
+      >
+    >;
+    getParsedTokenAccountsByOwner(
+      ownerAddress: PublicKey,
+      filter: TokenAccountsFilter,
+      commitment?: Commitment,
+    ): Promise<
+      RpcResponseAndContext<
+        Array<{pubkey: PublicKey; account: AccountInfo<ParsedAccountData>}>
+      >
     >;
     getLargestAccounts(
       config?: GetLargestAccountsConfig,
@@ -287,6 +347,9 @@ declare module '@solana/web3.js' {
     getConfirmedTransaction(
       signature: TransactionSignature,
     ): Promise<ConfirmedTransaction | null>;
+    getParsedConfirmedTransaction(
+      signature: TransactionSignature,
+    ): Promise<ParsedConfirmedTransaction | null>;
     getConfirmedSignaturesForAddress(
       address: PublicKey,
       startSlot: number,

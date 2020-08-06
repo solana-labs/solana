@@ -121,10 +121,7 @@ pub fn respan(input: TokenStream) -> TokenStream {
         .into_iter()
         .map(|mut t| {
             // Combine the location of the token with the resolution behavior of `respan_using`
-            // Note: `proc_macro2::Span::resolved_at` is currently gated with cfg(procmacro2_semver_exempt)
-            // Once this gate is removed, we will no longer need to use 'unwrap()' to call
-            // the underling `proc_macro::Span::resolved_at` method.
-            let new_span: Span = t.span().unwrap().resolved_at(respan_using.unwrap()).into();
+            let new_span: Span = t.span().resolved_at(respan_using);
             t.set_span(new_span);
             t
         })
