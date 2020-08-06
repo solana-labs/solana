@@ -92,6 +92,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
     sol_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
 
+    uint8_t nonce2 = params.data[1];
+    uint8_t nonce3 = params.data[2];
+
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY1_INDEX].key, true, false},
         {accounts[DERIVED_KEY2_INDEX].key, true, true},
@@ -103,9 +106,11 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t seed1[] = {'L', 'i', 'l', '\''};
     uint8_t seed2[] = {'B', 'i', 't', 's'};
     const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                    {seed2, SOL_ARRAY_SIZE(seed2)}};
+                                    {seed2, SOL_ARRAY_SIZE(seed2)},
+                                    {&nonce2, 1}};
     const SolSignerSeed seeds2[] = {
-        {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY}};
+        {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY},
+        {&nonce3, 1}};
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
 

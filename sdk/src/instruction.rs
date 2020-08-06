@@ -151,6 +151,14 @@ pub enum InstructionError {
     /// Cross-program invocation reentrancy not allowed for this instruction
     #[error("Cross-program invocation reentrancy not allowed for this instruction")]
     ReentrancyNotAllowed,
+
+    /// Length of the seed is too long for address generation
+    #[error("Length of the seed is too long for address generation")]
+    MaxSeedLengthExceeded,
+
+    /// Provided seeds do not result in a valid address
+    #[error("Provided seeds do not result in a valid address")]
+    InvalidSeeds,
 }
 
 impl InstructionError {
