@@ -1,7 +1,7 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use crate::sanitize::Sanitize;
-use crate::{pubkey::Pubkey, short_vec, system_instruction::SystemError};
+use crate::{pubkey::Pubkey, short_vec};
 use bincode::serialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -159,12 +159,6 @@ pub enum InstructionError {
     /// Provided seeds do not result in a valid address
     #[error("Provided seeds do not result in a valid address")]
     InvalidSeeds,
-}
-
-impl InstructionError {
-    pub fn new_result_with_negative_lamports() -> Self {
-        SystemError::ResultWithNegativeLamports.into()
-    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
