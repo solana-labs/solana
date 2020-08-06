@@ -3149,7 +3149,8 @@ mod tests {
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, Signer},
-        system_instruction, system_program,
+        system_instruction::{self, SystemError},
+        system_program,
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
     };
@@ -5060,10 +5061,7 @@ mod tests {
         let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
         assert_eq!(
             bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            )
+            TransactionError::InstructionError(1, SystemError::ResultWithNegativeLamports.into())
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
@@ -5105,7 +5103,7 @@ mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
 
@@ -5141,7 +5139,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, &pubkey),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
@@ -5410,7 +5408,7 @@ mod tests {
             (
                 Err(TransactionError::InstructionError(
                     1,
-                    InstructionError::new_result_with_negative_lamports(),
+                    SystemError::ResultWithNegativeLamports.into(),
                 )),
                 Some(HashAgeKind::Extant),
             ),
@@ -6525,7 +6523,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, &Pubkey::new_rand()),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
 
@@ -7171,7 +7169,7 @@ mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::InstructionError(
                 1,
-                system_instruction::SystemError::ResultWithNegativeLamports.into()
+                system_instruction::SystemError::ResultWithNegativeLamports.into(),
             ))
         );
         /* Check fee charged and nonce has advanced */

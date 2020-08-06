@@ -1032,6 +1032,7 @@ mod tests {
     use solana_sdk::{
         instruction::InstructionError,
         signature::{Keypair, Signer},
+        system_instruction::SystemError,
         system_transaction,
         transaction::TransactionError,
     };
@@ -1397,7 +1398,7 @@ mod tests {
             results[0] = (
                 Err(TransactionError::InstructionError(
                     1,
-                    InstructionError::new_result_with_negative_lamports(),
+                    SystemError::ResultWithNegativeLamports.into(),
                 )),
                 Some(HashAgeKind::Extant),
             );

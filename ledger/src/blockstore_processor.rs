@@ -981,9 +981,9 @@ pub mod tests {
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
         hash::Hash,
-        instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
+        system_instruction::SystemError,
         system_transaction,
         transaction::{Transaction, TransactionError},
     };
@@ -2401,7 +2401,7 @@ pub mod tests {
             bank.transfer(10_001, &mint_keypair, &pubkey),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
         assert_eq!(
