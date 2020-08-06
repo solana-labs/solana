@@ -452,9 +452,8 @@ impl BigTableSubCommand for App<'_, '_> {
                 .subcommand(
                     SubCommand::with_name("transaction-history")
                         .about(
-                            "Show historical transactions affecting the given address, \
-                       ordered based on the slot in which they were confirmed in \
-                       from lowest to highest slot",
+                            "Show historical transactions affecting the given address \
+                             from newest to oldest",
                         )
                         .arg(
                             Arg::with_name("address")
