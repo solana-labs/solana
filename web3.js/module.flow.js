@@ -15,6 +15,7 @@ import * as BufferLayout from 'buffer-layout';
 
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
+  declare export type PublicKeyNonce = [PublicKey, number];
   declare export class PublicKey {
     constructor(
       value: number | string | Buffer | Uint8Array | Array<number>,
@@ -28,6 +29,10 @@ declare module '@solana/web3.js' {
       seeds: Array<Buffer | Uint8Array>,
       programId: PublicKey,
     ): Promise<PublicKey>;
+    static findProgramAddress(
+      seeds: Array<Buffer | Uint8Array>,
+      programId: PublicKey,
+    ): Promise<PublicKeyNonce>;
     equals(publickey: PublicKey): boolean;
     toBase58(): string;
     toBuffer(): Buffer;
