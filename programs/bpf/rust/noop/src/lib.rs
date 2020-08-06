@@ -7,15 +7,6 @@ use solana_sdk::{
     account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, info, log::*,
     pubkey::Pubkey,
 };
-use std::mem::align_of;
-
-fn is_aligned<T>(ptr: *const T) -> bool {
-    if ptr.align_offset(align_of::<T>()) == 0 {
-        true
-    } else {
-        false
-    }
-}
 
 #[derive(Debug, PartialEq)]
 struct SStruct {
@@ -35,21 +26,6 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    for account in accounts {
-        let info_ptr = account as *const AccountInfo as *const u8;
-        let lamports_ptr = account.lamports.as_ptr();
-        let data_ptr = account.data.as_ptr();
-
-        info!(line!(), 0, info_ptr, lamports_ptr, data_ptr);
-        info!(
-            line!(),
-            0,
-            is_aligned(info_ptr),
-            is_aligned(lamports_ptr),
-            is_aligned(data_ptr)
-        );
-    }
-
     info!("Program identifier:");
     program_id.log();
 

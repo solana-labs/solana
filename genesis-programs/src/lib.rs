@@ -50,10 +50,9 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
         OperatingMode::Development => {
             if epoch == 0 {
                 Some(vec![
-                    // Enable all Stable programs
                     solana_bpf_loader_program!(),
+                    solana_bpf_loader_deprecated_program!(),
                     solana_vest_program!(),
-                    // Programs that are only available in Development mode
                     solana_budget_program!(),
                     solana_exchange_program!(),
                 ])
@@ -76,7 +75,10 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
         }
         OperatingMode::Preview => {
             if epoch == 0 {
-                Some(vec![solana_bpf_loader_program!()])
+                Some(vec![
+                    solana_bpf_loader_program!(),
+                    solana_bpf_loader_deprecated_program!(),
+                ])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
                 // future hard fork.
@@ -138,7 +140,7 @@ mod tests {
     fn test_development_programs() {
         assert_eq!(
             get_programs(OperatingMode::Development, 0).unwrap().len(),
-            4
+            5
         );
         assert_eq!(get_programs(OperatingMode::Development, 1), None);
     }

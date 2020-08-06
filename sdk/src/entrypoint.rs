@@ -119,7 +119,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             });
         } else {
             offset += 7; // padding
-                         // Duplicate account, clone the original
+
+            // Duplicate account, clone the original
             accounts.push(accounts[dup_info as usize].clone());
         }
     }
