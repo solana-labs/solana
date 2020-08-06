@@ -508,58 +508,30 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
   }),
 );
 
-/**
- * Information describing a token account
- */
-type TokenAccountInfo = {|
-  mint: PublicKey,
-  owner: PublicKey,
-  amount: number,
-  delegate: null | PublicKey,
-  delegatedAmount: number,
-  isInitialized: boolean,
-  isNative: boolean,
-|};
-
-/**
- * Information describing an account with token account data
- *
- * @typedef {Object} TokenAccount
- * @property {number} lamports Number of lamports assigned to the account
- * @property {PublicKey} owner Identifier of the program that owns the account
- * @property {TokenAccountInfo} data Token account data
- * @property {boolean} executable `true` if this account's data contains a loaded program
- */
-type TokenAccount = {
-  executable: boolean,
-  owner: PublicKey,
-  lamports: number,
-  data: TokenAccountInfo,
+type TokenAmount = {
+  amount: string,
+  decimals: 2,
+  uiAmount: number,
 };
 
-const TokenAccountResult = struct({
-  token: struct({
-    account: struct({
-      mint: 'string',
-      owner: 'string',
-      amount: 'number',
-      delegate: struct.union(['string', 'null']),
-      delegatedAmount: 'number',
-      isInitialized: 'boolean',
-      isNative: 'boolean',
-    }),
-  }),
+/**
+ * Expected JSON RPC structure for token amounts
+ */
+const TokenAmountResult = struct({
+  amount: 'string',
+  uiAmount: 'number',
+  decimals: 'number',
 });
 
 /**
  * Expected JSON RPC response for the "getTokenAccountBalance" message
  */
-const GetTokenAccountBalance = jsonRpcResultAndContext('number');
+const GetTokenAccountBalance = jsonRpcResultAndContext(TokenAmountResult);
 
 /**
  * Expected JSON RPC response for the "getTokenSupply" message
  */
-const GetTokenSupplyRpcResult = jsonRpcResultAndContext('number');
+const GetTokenSupplyRpcResult = jsonRpcResultAndContext(TokenAmountResult);
 
 /**
  * Expected JSON RPC response for the "getTokenAccountsByOwner" message
@@ -572,7 +544,7 @@ const GetTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: 'boolean',
         owner: 'string',
         lamports: 'number',
-        data: TokenAccountResult,
+        data: 'any',
         rentEpoch: 'number?',
       }),
     }),
@@ -1270,7 +1242,7 @@ export class Connection {
   async getTokenSupply(
     tokenMintAddress: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<number>> {
+  ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._argsWithCommitment(
       [tokenMintAddress.toBase58()],
       commitment,
@@ -1290,7 +1262,7 @@ export class Connection {
   async getTokenAccountBalance(
     tokenAddress: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<number>> {
+  ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._argsWithCommitment(
       [tokenAddress.toBase58()],
       commitment,
@@ -1309,14 +1281,14 @@ export class Connection {
   /**
    * Fetch all the token accounts owned by the specified account
    *
-   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>>}
+   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo}>>>}
    */
   async getTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
     commitment: ?Commitment,
   ): Promise<
-    RpcResponseAndContext<Array<{pubkey: PublicKey, account: TokenAccount}>>,
+    RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo}>>,
   > {
     let _args = [ownerAddress.toBase58()];
 
@@ -1347,23 +1319,15 @@ export class Connection {
 
     return {
       context,
-      value: value.map(result => {
-        const data = result.account.data.token.account;
-        return {
-          pubkey: new PublicKey(result.pubkey),
-          account: {
-            executable: result.account.executable,
-            owner: new PublicKey(result.account.owner),
-            lamports: result.account.lamports,
-            data: {
-              ...data,
-              mint: new PublicKey(data.mint),
-              owner: new PublicKey(data.owner),
-              delegate: data.delegate ? new PublicKey(data.delegate) : null,
-            },
-          },
-        };
-      }),
+      value: value.map(result => ({
+        pubkey: result.pubkey,
+        account: {
+          executable: result.account.executable,
+          owner: new PublicKey(result.account.owner),
+          lamports: result.account.lamports,
+          data: bs58.decode(result.account.data),
+        },
+      })),
     };
   }
 
