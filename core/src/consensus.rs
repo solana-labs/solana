@@ -509,7 +509,9 @@ impl Tower {
         self.last_voted_slot()
             .map(|last_voted_slot| {
                 // NOTE: Update use_stray_restored_ancestors() as well when updating this!
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+                let last_vote_ancestors = if !self.is_stray_last_vote() {
+                    ancestors.get(&last_voted_slot).unwrap()
+                } else {
                     // Use stray restored ancestors because we couldn't derive last_vote_ancestors
                     // from given ancestors (=bank_forks)
                     // Also, can't just return empty ancestors because we should exclude
@@ -521,7 +523,7 @@ impl Tower {
                         stray_restored_ancestors, last_voted_slot
                     );
                     &stray_restored_ancestors
-                });
+                };
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -1095,12 +1097,12 @@ pub fn reconcile_blockstore_roots_with_tower(
     if let Some(tower_root) = tower.root() {
         let last_blockstore_root = blockstore.last_root();
         if last_blockstore_root < tower_root {
-            // Ensure tower_root itself to exist and mark as rooted in the blockstore
+            // Ensure tower_root itself to exist and be marked as rooted in the blockstore
             // in addition to its ancestors.
             let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
                 .take_while(|current| match current.cmp(&last_blockstore_root) {
-                    Ordering::Equal => false,
                     Ordering::Greater => true,
+                    Ordering::Equal => false,
                     Ordering::Less => panic!(
                         "couldn't find a last_blockstore_root upwards from: {}!?",
                         tower_root
