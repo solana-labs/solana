@@ -77,6 +77,12 @@ test('get account info - not found', async () => {
   ]);
 
   expect(await connection.getAccountInfo(account.publicKey)).toBeNull();
+
+  if (!mockRpcEnabled) {
+    expect(
+      (await connection.getParsedAccountInfo(account.publicKey)).value,
+    ).toBeNull();
+  }
 });
 
 test('get program accounts', async () => {
@@ -282,20 +288,39 @@ test('get program accounts', async () => {
   expect(programAccounts.length).toBe(2);
 
   programAccounts.forEach(function (element) {
-    expect([
-      account0.publicKey.toBase58(),
-      account1.publicKey.toBase58(),
-    ]).toEqual(expect.arrayContaining([element.pubkey]));
-    if (element.pubkey == account0.publicKey) {
+    if (element.pubkey.equals(account0.publicKey)) {
       expect(element.account.lamports).toBe(
         LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
-    } else {
+    } else if (element.pubkey.equals(account1.publicKey)) {
       expect(element.account.lamports).toBe(
         0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
+    } else {
+      expect(element.pubkey.equals(account1.publicKey)).toBe(true);
     }
   });
+
+  if (!mockRpcEnabled) {
+    const programAccounts = await connection.getParsedProgramAccounts(
+      programId.publicKey,
+    );
+    expect(programAccounts.length).toBe(2);
+
+    programAccounts.forEach(function (element) {
+      if (element.pubkey.equals(account0.publicKey)) {
+        expect(element.account.lamports).toBe(
+          LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        );
+      } else if (element.pubkey.equals(account1.publicKey)) {
+        expect(element.account.lamports).toBe(
+          0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        );
+      } else {
+        expect(element.pubkey.equals(account1.publicKey)).toBe(true);
+      }
+    });
+  }
 });
 
 test('validatorExit', async () => {
@@ -1410,6 +1435,55 @@ describe('token methods', () => {
     ).rejects.toThrow();
   });
 
+  test('get parsed token account info', async () => {
+    const accountInfo = (
+      await connection.getParsedAccountInfo(testTokenAccount)
+    ).value;
+    if (accountInfo) {
+      const data = accountInfo.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.program).toEqual('spl-token');
+        expect(data.parsed).toBeTruthy();
+      }
+    }
+  });
+
+  test('get parsed token program accounts', async () => {
+    const tokenAccounts = await connection.getParsedProgramAccounts(
+      TOKEN_PROGRAM_ID,
+    );
+    tokenAccounts.forEach(({account}) => {
+      expect(account.owner.equals(TOKEN_PROGRAM_ID)).toBe(true);
+      const data = account.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.parsed).toBeTruthy();
+        expect(data.program).toEqual('spl-token');
+      }
+    });
+  });
+
+  test('get parsed token accounts by owner', async () => {
+    const tokenAccounts = (
+      await connection.getParsedTokenAccountsByOwner(testOwner.publicKey, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    tokenAccounts.forEach(({account}) => {
+      expect(account.owner.equals(TOKEN_PROGRAM_ID)).toBe(true);
+      const data = account.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.parsed).toBeTruthy();
+        expect(data.program).toEqual('spl-token');
+      }
+    });
+  });
+
   test('get token accounts by owner', async () => {
     const accountsWithMintFilter = (
       await connection.getTokenAccountsByOwner(testOwner.publicKey, {
@@ -1611,6 +1685,45 @@ test('request airdrop', async () => {
   expect(accountInfo.lamports).toBe(minimumAmount + 42);
   expect(accountInfo.data).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getAccountInfo',
+      params: [
+        account.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'jsonParsed'},
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: {
+          owner: '11111111111111111111111111111111',
+          lamports: minimumAmount + 42,
+          data: '',
+          executable: false,
+        },
+      },
+    },
+  ]);
+
+  const parsedAccountInfo = (
+    await connection.getParsedAccountInfo(account.publicKey)
+  ).value;
+  if (parsedAccountInfo === null) {
+    expect(parsedAccountInfo).not.toBeNull();
+    return;
+  } else if (parsedAccountInfo.data.parsed) {
+    expect(parsedAccountInfo.data.parsed).not.toBeTruthy();
+    return;
+  }
+  expect(parsedAccountInfo.lamports).toBe(minimumAmount + 42);
+  expect(parsedAccountInfo.data).toHaveLength(0);
+  expect(parsedAccountInfo.owner).toEqual(SystemProgram.programId);
 });
 
 test('transaction failure', async () => {
