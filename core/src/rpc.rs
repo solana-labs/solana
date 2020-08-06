@@ -9,7 +9,9 @@ use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
-    parse_token::{spl_token_id_v1_0, spl_token_v1_0_native_mint},
+    parse_token::{
+        spl_token_id_v1_0, spl_token_v1_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
+    },
     UiAccount, UiAccountEncoding,
 };
 use solana_client::{
@@ -971,7 +973,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
@@ -998,7 +1000,7 @@ impl JsonRpcRequestProcessor {
         &self,
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
         if mint_owner != spl_token_id_v1_0() {
@@ -1262,16 +1264,6 @@ fn get_mint_decimals(data: &[u8]) -> Result<u8> {
             Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
         })
         .map(|mint: &mut Mint| mint.decimals)
-}
-
-fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> RpcTokenAmount {
-    // Use `amount_to_ui_amount()` once spl_token is bumped to a version that supports it: https://github.com/solana-labs/solana-program-library/pull/211
-    let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
-    RpcTokenAmount {
-        ui_amount: amount_decimals,
-        decimals,
-        amount: amount.to_string(),
-    }
 }
 
 #[rpc]
@@ -1565,7 +1557,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>>;
+    ) -> Result<RpcResponse<UiTokenAmount>>;
 
     #[rpc(meta, name = "getTokenSupply")]
     fn get_token_supply(
@@ -1573,7 +1565,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>>;
+    ) -> Result<RpcResponse<UiTokenAmount>>;
 
     #[rpc(meta, name = "getTokenLargestAccounts")]
     fn get_token_largest_accounts(
@@ -2226,7 +2218,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         debug!(
             "get_token_account_balance rpc request received: {:?}",
             pubkey_str
@@ -2240,7 +2232,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
@@ -4614,7 +4606,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let balance: RpcTokenAmount =
+        let balance: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
         assert!((balance.ui_amount - 4.2).abs() < error);
@@ -4642,7 +4634,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let supply: RpcTokenAmount =
+        let supply: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
         assert!((supply.ui_amount - 2.0 * 4.2).abs() < error);
@@ -4902,7 +4894,7 @@ pub mod tests {
             vec![
                 RpcTokenAccountBalance {
                     address: token_with_different_mint_pubkey.to_string(),
-                    amount: RpcTokenAmount {
+                    amount: UiTokenAmount {
                         ui_amount: 0.42,
                         decimals: 2,
                         amount: "42".to_string(),
@@ -4910,7 +4902,7 @@ pub mod tests {
                 },
                 RpcTokenAccountBalance {
                     address: token_with_smaller_balance.to_string(),
-                    amount: RpcTokenAmount {
+                    amount: UiTokenAmount {
                         ui_amount: 0.1,
                         decimals: 2,
                         amount: "10".to_string(),

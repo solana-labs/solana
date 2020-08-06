@@ -61,7 +61,7 @@ pub fn parse_account_data(
         .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
     let parsed_json = match program_name {
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
-        ParsableAccount::SplToken => serde_json::to_value(parse_token(data)?)?,
+        ParsableAccount::SplToken => serde_json::to_value(parse_token(data, None)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(ParsedAccount {
