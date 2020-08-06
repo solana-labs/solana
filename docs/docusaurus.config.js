@@ -31,6 +31,16 @@ module.exports = {
           position: "left",
         },
         {
+          to: "integrations/exchange",
+          label: "Integrate",
+          position: "left",
+        },
+        {
+          to: "cluster/overview",
+          label: "Learn",
+          position: "left",
+        },
+        {
           href: "https://discordapp.com/invite/pquxPsq",
           label: "Chat",
           position: "right",
