@@ -1,5 +1,6 @@
 // @flow
 
+import bs58 from 'bs58';
 import fs from 'mz/fs';
 
 import {
@@ -77,7 +78,29 @@ test('load BPF Rust program', async () => {
     programId: program.publicKey,
   });
   await sendAndConfirmTransaction(connection, transaction, [from], {
-    confirmations: 1,
     skipPreflight: true,
   });
+
+  if (transaction.signature === null) {
+    expect(transaction.signature).not.toBeNull();
+    return;
+  }
+
+  const confirmedSignature = bs58.encode(transaction.signature);
+  const parsedTx = await connection.getParsedConfirmedTransaction(
+    confirmedSignature,
+  );
+  if (parsedTx === null) {
+    expect(parsedTx).not.toBeNull();
+    return;
+  }
+  const {signatures, message} = parsedTx.transaction;
+  expect(signatures[0]).toEqual(confirmedSignature);
+  const ix = message.instructions[0];
+  if (ix.parsed) {
+    expect('parsed' in ix).toBe(false);
+  } else {
+    expect(ix.programId.equals(program.publicKey)).toBe(true);
+    expect(ix.data).toEqual('');
+  }
 });
