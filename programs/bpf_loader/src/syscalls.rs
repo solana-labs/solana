@@ -847,6 +847,12 @@ fn call<'a>(
         let account = account.borrow();
         if message.is_writable(i) && !account.executable {
             *lamport_ref = account.lamports;
+            if data.len() != account.data.len() {
+                return Err(SyscallError::InstructionError(
+                    InstructionError::AccountDataSizeChanged,
+                )
+                .into());
+            }
             data.clone_from_slice(&account.data);
         }
     }
