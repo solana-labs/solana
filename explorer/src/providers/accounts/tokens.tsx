@@ -1,17 +1,36 @@
 import React from "react";
-import { Connection, PublicKey, TokenAccountInfo } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { FetchStatus, useAccounts } from "./index";
 import { useCluster, Cluster } from "../cluster";
+import { number, string, boolean, coerce, object, nullable } from "superstruct";
+
+export type TokenAccountData = {
+  mint: PublicKey;
+  owner: PublicKey;
+  amount: number;
+  isInitialized: boolean;
+  isNative: boolean;
+};
+
+const TokenAccountInfo = object({
+  mint: string(),
+  owner: string(),
+  amount: number(),
+  delegate: nullable(string()),
+  delegatedAmount: number(),
+  isInitialized: boolean(),
+  isNative: boolean(),
+});
 
 interface AccountTokens {
   status: FetchStatus;
-  tokens?: TokenAccountInfo[];
+  tokens?: TokenAccountData[];
 }
 
 interface Update {
   pubkey: PublicKey;
   status: FetchStatus;
-  tokens?: TokenAccountInfo[];
+  tokens?: TokenAccountData[];
 }
 
 type Action = Update | "clear";
@@ -98,8 +117,18 @@ async function fetchAccountTokens(
     const { value } = await new Connection(
       url,
       "recent"
-    ).getTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
-    tokens = value.map((accountInfo) => accountInfo.account.data);
+    ).getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
+    tokens = value.map((accountInfo) => {
+      const parsedInfo = accountInfo.account.data.parsed.info;
+      const info = coerce(parsedInfo, TokenAccountInfo);
+      return {
+        mint: new PublicKey(info.mint),
+        owner: new PublicKey(info.owner),
+        amount: info.amount,
+        isInitialized: info.isInitialized,
+        isNative: info.isNative,
+      };
+    });
     status = FetchStatus.Fetched;
   } catch (error) {
     status = FetchStatus.FetchFailed;
