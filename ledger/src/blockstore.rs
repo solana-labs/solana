@@ -6060,6 +6060,19 @@ pub mod tests {
     }
 
     #[test]
+    fn test_empty_transaction_status() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
+        assert_eq!(
+            blockstore
+                .get_confirmed_transaction(Signature::default(), None)
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
     fn test_get_confirmed_signatures_for_address() {
         let blockstore_path = get_tmp_ledger_path!();
         {
