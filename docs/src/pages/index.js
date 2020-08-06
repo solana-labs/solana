@@ -13,13 +13,13 @@ const features = [
     description: <>Get started building your decentralized app or marketplace.</>,
   },
   {
-    title: <>✅ Run a Validator Node</>,
+    title: <>🎛 Run a Validator Node</>,
     imageUrl: "running-validator",
     description: <>Validate transactions, secure the network, and earn rewards.</>,
   },
   {
     title: <>🏛 Create an SPL Token</>,
-    imageUrl: "tour-de-sol",
+    imageUrl: "https://spl.solana.com/token",
     description: (
       <>
         Launch your own SPL Token, Solana's equivalent of ERC-20.
