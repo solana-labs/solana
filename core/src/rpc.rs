@@ -9,8 +9,10 @@ use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
+    parse_account_data::AccountAdditionalData,
     parse_token::{
-        spl_token_id_v1_0, spl_token_v1_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
+        get_token_account_mint, spl_token_id_v1_0, spl_token_v1_0_native_mint,
+        token_amount_to_ui_amount, UiTokenAmount,
     },
     UiAccount, UiAccountEncoding,
 };
@@ -244,8 +246,14 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         new_response(
             &bank,
-            bank.get_account(pubkey)
-                .map(|account| UiAccount::encode(account, encoding)),
+            bank.get_account(pubkey).and_then(|account| {
+                if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed
+                {
+                    get_parsed_token_account(&bank, account)
+                } else {
+                    Some(UiAccount::encode(account, encoding, None))
+                }
+            }),
         )
     }
 
@@ -267,12 +275,17 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        get_filtered_program_accounts(&bank, program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect()
+        let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
+        if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(&bank, keyed_accounts)
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        }
     }
 
     pub fn get_inflation_governor(
@@ -1108,12 +1121,17 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }));
         }
-        let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect();
+        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        let accounts = if encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(&bank, keyed_accounts)
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        };
         Ok(new_response(&bank, accounts))
     }
 
@@ -1154,12 +1172,17 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }));
         }
-        let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect();
+        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        let accounts = if encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(&bank, keyed_accounts)
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        };
         Ok(new_response(&bank, accounts))
     }
 }
@@ -1211,6 +1234,46 @@ fn get_filtered_program_accounts(
                 RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
             })
         })
+}
+
+fn get_parsed_token_account(bank: &Arc<Bank>, account: Account) -> Option<UiAccount> {
+    get_token_account_mint(&account.data)
+        .and_then(|mint_pubkey| get_mint_owner_and_decimals(bank, &mint_pubkey).ok())
+        .map(|(_, decimals)| {
+            UiAccount::encode(
+                account,
+                UiAccountEncoding::JsonParsed,
+                Some(AccountAdditionalData {
+                    spl_token_decimals: Some(decimals),
+                }),
+            )
+        })
+}
+
+fn get_parsed_token_accounts<I>(bank: &Arc<Bank>, keyed_accounts: I) -> Vec<RpcKeyedAccount>
+where
+    I: Iterator<Item = (Pubkey, Account)>,
+{
+    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+    keyed_accounts
+        .filter_map(|(pubkey, account)| {
+            get_token_account_mint(&account.data).map(|mint_pubkey| {
+                let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
+                    let (_, decimals) = get_mint_owner_and_decimals(bank, &mint_pubkey).ok()?;
+                    mint_decimals.insert(mint_pubkey, decimals);
+                    Some(decimals)
+                });
+                RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(
+                        account,
+                        UiAccountEncoding::JsonParsed,
+                        Some(AccountAdditionalData { spl_token_decimals }),
+                    ),
+                }
+            })
+        })
+        .collect()
 }
 
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program

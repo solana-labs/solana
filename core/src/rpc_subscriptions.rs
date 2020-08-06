@@ -251,7 +251,7 @@ fn filter_account_result(
         if fork != last_notified_slot {
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
             return (
-                Box::new(iter::once(UiAccount::encode(account, encoding))),
+                Box::new(iter::once(UiAccount::encode(account, encoding, None))),
                 fork,
             );
         }
@@ -294,7 +294,7 @@ fn filter_program_results(
                 })
                 .map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone()),
+                    account: UiAccount::encode(account, encoding.clone(), None),
                 }),
         ),
         last_notified_slot,
