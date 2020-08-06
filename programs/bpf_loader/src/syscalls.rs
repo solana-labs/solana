@@ -77,26 +77,10 @@ pub fn register_syscalls<'a>(
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     // Syscall function common across languages
     vm.register_syscall_ex("abort", syscall_abort)?;
-<<<<<<< HEAD
-=======
-    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
-    vm.register_syscall_with_context_ex(
-        "sol_log_",
-        Box::new(SyscallLog {
-            logger: invoke_context.get_logger(),
-        }),
-    )?;
-    vm.register_syscall_with_context_ex(
-        "sol_log_64_",
-        Box::new(SyscallLogU64 {
-            logger: invoke_context.get_logger(),
-        }),
-    )?;
     if invoke_context.is_cross_program_supported() {
         vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
     }
->>>>>>> 03263c850... Force program address off the curve (#11323)
-
+    
     {
         let invoke_context = Rc::new(RefCell::new(invoke_context));
 

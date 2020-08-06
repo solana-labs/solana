@@ -109,13 +109,10 @@ static_assert(sizeof(uint64_t) == 8);
 #define ERROR_NOT_ENOUGH_ACCOUNT_KEYS TO_BUILTIN(11)
 /** Note: Not applicable to program written in C */
 #define ERROR_ACCOUNT_BORROW_FAILED TO_BUILTIN(12)
-<<<<<<< HEAD
-=======
 /** The length of the seed is too long for address generation */
 #define MAX_SEED_LENGTH_EXCEEDED TO_BUILTIN(13)
 /** Provided seeds do not result in a valid address */
 #define INVALID_SEEDS TO_BUILTIN(14)
->>>>>>> 03263c850... Force program address off the curve (#11323)
 
 /**
  * Boolean type
