@@ -629,7 +629,7 @@ pub mod tests {
                 .unwrap();
             let padding_entry = status_entry_iterator.next().unwrap().0;
             assert_eq!(padding_entry.0, 2);
-            assert_eq!(padding_entry.2, Slot::MAX);
+            assert_eq!(padding_entry.2, 0);
             assert!(status_entry_iterator.next().is_none());
             let mut address_transactions_iterator = blockstore
                 .db
@@ -640,7 +640,7 @@ pub mod tests {
                 .unwrap();
             let padding_entry = address_transactions_iterator.next().unwrap().0;
             assert_eq!(padding_entry.0, 2);
-            assert_eq!(padding_entry.2, Slot::MAX);
+            assert_eq!(padding_entry.2, 0);
             assert!(address_transactions_iterator.next().is_none());
             assert_eq!(
                 transaction_status_index_cf.get(0).unwrap().unwrap(),

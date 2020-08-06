@@ -1678,11 +1678,11 @@ impl Blockstore {
             .put(1, &TransactionStatusIndexMeta::default())?;
         // This dummy status improves compaction performance
         self.transaction_status_cf.put(
-            (2, Signature::default(), Slot::MAX),
+            cf::TransactionStatus::as_index(2),
             &TransactionStatusMeta::default(),
         )?;
         self.address_signatures_cf.put(
-            (2, Pubkey::default(), Slot::MAX, Signature::default()),
+            cf::AddressSignatures::as_index(2),
             &AddressSignatureMeta::default(),
         )
     }
