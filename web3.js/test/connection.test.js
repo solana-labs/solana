@@ -16,6 +16,7 @@ import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {sleep} from '../src/util/sleep';
 import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
+import type {TransactionSignature} from '../src/transaction';
 import type {SignatureStatus, TransactionError} from '../src/connection';
 import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
 
@@ -1299,116 +1300,150 @@ const TOKEN_PROGRAM_ID = new PublicKey(
   'TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o',
 );
 
-test('token methods', async () => {
+describe('token methods', () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
   }
 
   const connection = new Connection(url);
-  const payerAccount = new Account();
-  await connection.confirmTransaction(
-    await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
-    0,
-  );
+  const newAccount = new Account().publicKey;
 
-  const mintOwner = new Account();
-  const accountOwner = new Account();
-  const [token, tokenAccount] = await Token.createMint(
-    connection,
-    payerAccount,
-    mintOwner.publicKey,
-    accountOwner.publicKey,
-    new u64(11111),
-    2,
-    TOKEN_PROGRAM_ID,
-    false,
-  );
+  let testToken: Token;
+  let testTokenAccount: PublicKey;
+  let testSignature: TransactionSignature;
+  let testOwner: Account;
 
-  await Token.createMint(
-    connection,
-    payerAccount,
-    mintOwner.publicKey,
-    accountOwner.publicKey,
-    new u64(10000),
-    2,
-    TOKEN_PROGRAM_ID,
-    false,
-  );
+  // Setup token mints and accounts for token tests
+  beforeAll(async () => {
+    const payerAccount = new Account();
+    await connection.confirmTransaction(
+      await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
+      0,
+    );
 
-  const tokenAccountDest = await token.createAccount(accountOwner.publicKey);
-  await token.transfer(
-    tokenAccount,
-    tokenAccountDest,
-    accountOwner,
-    [],
-    new u64(1),
-  );
-
-  const supply = (await connection.getTokenSupply(token.publicKey, 'recent'))
-    .value;
-  expect(supply.uiAmount).toEqual(111.11);
-  expect(supply.decimals).toEqual(2);
-  expect(supply.amount).toEqual('11111');
-
-  const newAccount = new Account();
-  await expect(
-    connection.getTokenSupply(newAccount.publicKey, 'recent'),
-  ).rejects.toThrow();
-
-  const balance = (
-    await connection.getTokenAccountBalance(tokenAccount, 'recent')
-  ).value;
-  expect(balance.amount).toEqual('11110');
-  expect(balance.decimals).toEqual(2);
-  expect(balance.uiAmount).toEqual(111.1);
-
-  await expect(
-    connection.getTokenAccountBalance(newAccount.publicKey, 'recent'),
-  ).rejects.toThrow();
-
-  const accountsWithMintFilter = (
-    await connection.getTokenAccountsByOwner(
+    const mintOwner = new Account();
+    const accountOwner = new Account();
+    const [token, tokenAccount] = await Token.createMint(
+      connection,
+      payerAccount,
+      mintOwner.publicKey,
       accountOwner.publicKey,
-      {mint: token.publicKey},
-      'recent',
-    )
-  ).value;
-  expect(accountsWithMintFilter.length).toEqual(2);
+      new u64(11111),
+      2,
+      TOKEN_PROGRAM_ID,
+      false,
+    );
 
-  const accountsWithProgramFilter = (
-    await connection.getTokenAccountsByOwner(
+    await Token.createMint(
+      connection,
+      payerAccount,
+      mintOwner.publicKey,
       accountOwner.publicKey,
-      {programId: TOKEN_PROGRAM_ID},
-      'recent',
-    )
-  ).value;
-  expect(accountsWithProgramFilter.length).toEqual(3);
+      new u64(10000),
+      2,
+      TOKEN_PROGRAM_ID,
+      false,
+    );
 
-  const noAccounts = (
-    await connection.getTokenAccountsByOwner(
-      newAccount.publicKey,
-      {mint: token.publicKey},
-      'recent',
-    )
-  ).value;
-  expect(noAccounts.length).toEqual(0);
+    const tokenAccountDest = await token.createAccount(accountOwner.publicKey);
+    testSignature = await token.transfer(
+      tokenAccount,
+      tokenAccountDest,
+      accountOwner,
+      [],
+      new u64(1),
+    );
 
-  await expect(
-    connection.getTokenAccountsByOwner(
-      accountOwner.publicKey,
-      {mint: newAccount.publicKey},
-      'recent',
-    ),
-  ).rejects.toThrow();
+    await connection.confirmTransaction(testSignature);
 
-  await expect(
-    connection.getTokenAccountsByOwner(
-      accountOwner.publicKey,
-      {programId: newAccount.publicKey},
-      'recent',
-    ),
-  ).rejects.toThrow();
+    testOwner = accountOwner;
+    testToken = token;
+    testTokenAccount = tokenAccount;
+  });
+
+  test('get token supply', async () => {
+    const supply = (await connection.getTokenSupply(testToken.publicKey)).value;
+    expect(supply.uiAmount).toEqual(111.11);
+    expect(supply.decimals).toEqual(2);
+    expect(supply.amount).toEqual('11111');
+
+    await expect(connection.getTokenSupply(newAccount)).rejects.toThrow();
+  });
+
+  test('get confirmed token transaction', async () => {
+    const parsedTx = await connection.getParsedConfirmedTransaction(
+      testSignature,
+    );
+    if (parsedTx === null) {
+      expect(parsedTx).not.toBeNull();
+      return;
+    }
+    const {signatures, message} = parsedTx.transaction;
+    expect(signatures[0]).toEqual(testSignature);
+    const ix = message.instructions[0];
+    if (ix.parsed) {
+      expect(ix.program).toEqual('spl-token');
+      expect(ix.programId.equals(TOKEN_PROGRAM_ID)).toBe(true);
+    } else {
+      expect('parsed' in ix).toBe(true);
+    }
+
+    const missingSignature =
+      '45pGoC4Rr3fJ1TKrsiRkhHRbdUeX7633XAGVec6XzVdpRbzQgHhe6ZC6Uq164MPWtiqMg7wCkC6Wy3jy2BqsDEKf';
+    const nullResponse = await connection.getParsedConfirmedTransaction(
+      missingSignature,
+    );
+
+    expect(nullResponse).toBeNull();
+  });
+
+  test('get token account balance', async () => {
+    const balance = (await connection.getTokenAccountBalance(testTokenAccount))
+      .value;
+    expect(balance.amount).toEqual('11110');
+    expect(balance.decimals).toEqual(2);
+    expect(balance.uiAmount).toEqual(111.1);
+
+    await expect(
+      connection.getTokenAccountBalance(newAccount),
+    ).rejects.toThrow();
+  });
+
+  test('get token accounts by owner', async () => {
+    const accountsWithMintFilter = (
+      await connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    expect(accountsWithMintFilter.length).toEqual(2);
+
+    const accountsWithProgramFilter = (
+      await connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        programId: TOKEN_PROGRAM_ID,
+      })
+    ).value;
+    expect(accountsWithProgramFilter.length).toEqual(3);
+
+    const noAccounts = (
+      await connection.getTokenAccountsByOwner(newAccount, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    expect(noAccounts.length).toEqual(0);
+
+    await expect(
+      connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        mint: newAccount,
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        programId: newAccount,
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 test('get largest accounts', async () => {

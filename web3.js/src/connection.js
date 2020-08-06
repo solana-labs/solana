@@ -49,7 +49,7 @@ type Context = {
  * @property {boolean | undefined} skipPreflight disable transaction verification step
  */
 export type SendOptions = {
-  skipPreflight: ?boolean,
+  skipPreflight?: boolean,
 };
 
 /**
@@ -60,8 +60,8 @@ export type SendOptions = {
  * @property {number | undefined} confirmations desired number of cluster confirmations
  */
 export type ConfirmOptions = {
-  skipPreflight: ?boolean,
-  confirmations: ?number,
+  skipPreflight?: boolean,
+  confirmations?: number,
 };
 
 /**
@@ -375,6 +375,88 @@ type ConfirmedTransactionMeta = {
 type ConfirmedTransaction = {
   slot: number,
   transaction: Transaction,
+  meta: ConfirmedTransactionMeta | null,
+};
+
+/**
+ * A partially decoded transaction instruction
+ *
+ * @typedef {Object} ParsedMessageAccount
+ * @property {PublicKey} pubkey Public key of the account
+ * @property {PublicKey} accounts Indicates if the account signed the transaction
+ * @property {string} data Raw base-58 instruction data
+ */
+type PartiallyDecodedInstruction = {|
+  programId: PublicKey,
+  accounts: Array<PublicKey>,
+  data: string,
+|};
+
+/**
+ * A parsed transaction message account
+ *
+ * @typedef {Object} ParsedMessageAccount
+ * @property {PublicKey} pubkey Public key of the account
+ * @property {boolean} signer Indicates if the account signed the transaction
+ * @property {boolean} writable Indicates if the account is writable for this transaction
+ */
+type ParsedMessageAccount = {
+  pubkey: PublicKey,
+  signer: boolean,
+  writable: boolean,
+};
+
+/**
+ * A parsed transaction instruction
+ *
+ * @typedef {Object} ParsedInstruction
+ * @property {string} program Name of the program for this instruction
+ * @property {PublicKey} programId ID of the program for this instruction
+ * @property {any} parsed Parsed instruction info
+ */
+type ParsedInstruction = {|
+  program: string,
+  programId: PublicKey,
+  parsed: any,
+|};
+
+/**
+ * A parsed transaction message
+ *
+ * @typedef {Object} ParsedMessage
+ * @property {Array<ParsedMessageAccount>} accountKeys Accounts used in the instructions
+ * @property {Array<ParsedInstruction | PartiallyDecodedInstruction>} instructions The atomically executed instructions for the transaction
+ * @property {string} recentBlockhash Recent blockhash
+ */
+type ParsedMessage = {
+  accountKeys: ParsedMessageAccount[],
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+  recentBlockhash: string,
+};
+
+/**
+ * A parsed transaction
+ *
+ * @typedef {Object} ParsedTransaction
+ * @property {Array<string>} signatures Signatures for the transaction
+ * @property {ParsedMessage} message Message of the transaction
+ */
+type ParsedTransaction = {
+  signatures: Array<string>,
+  message: ParsedMessage,
+};
+
+/**
+ * A parsed and confirmed transaction on the ledger
+ *
+ * @typedef {Object} ParsedConfirmedTransaction
+ * @property {number} slot The slot during which the transaction was processed
+ * @property {ParsedTransaction} transaction The details of the transaction
+ * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
+ */
+type ParsedConfirmedTransaction = {
+  slot: number,
+  transaction: ParsedTransaction,
   meta: ConfirmedTransactionMeta | null,
 };
 
@@ -808,12 +890,40 @@ const ConfirmedTransactionResult = struct({
       numReadonlyUnsignedAccounts: 'number',
     }),
     instructions: struct.array([
+      struct({
+        accounts: struct.array(['number']),
+        data: 'string',
+        programIdIndex: 'number',
+      }),
+    ]),
+    recentBlockhash: 'string',
+  }),
+});
+
+/**
+ * @private
+ */
+const ParsedConfirmedTransactionResult = struct({
+  signatures: struct.array(['string']),
+  message: struct({
+    accountKeys: struct.array([
+      struct({
+        pubkey: 'string',
+        signer: 'boolean',
+        writable: 'boolean',
+      }),
+    ]),
+    instructions: struct.array([
       struct.union([
-        struct.array(['number']),
         struct({
-          accounts: struct.array(['number']),
+          accounts: struct.array(['string']),
           data: 'string',
-          programIdIndex: 'number',
+          programId: 'string',
+        }),
+        struct({
+          parsed: 'any',
+          program: 'string',
+          programId: 'string',
         }),
       ]),
     ]),
@@ -872,6 +982,20 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
     struct.pick({
       slot: 'number',
       transaction: ConfirmedTransactionResult,
+      meta: ConfirmedTransactionMetaResult,
+    }),
+  ]),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedTransaction" message
+ */
+const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
+  struct.union([
+    'null',
+    struct.pick({
+      slot: 'number',
+      transaction: ParsedConfirmedTransactionResult,
       meta: ConfirmedTransactionMetaResult,
     }),
   ]),
@@ -1850,6 +1974,56 @@ export class Connection {
       slot: result.slot,
       transaction: Transaction.populate(new Message(message), signatures),
       meta: result.meta,
+    };
+  }
+
+  /**
+   * Fetch parsed transaction details for a confirmed transaction
+   */
+  async getParsedConfirmedTransaction(
+    signature: TransactionSignature,
+  ): Promise<ParsedConfirmedTransaction | null> {
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
+      signature,
+      'jsonParsed',
+    ]);
+    const {result, error} = GetParsedConfirmedTransactionRpcResult(unsafeRes);
+    if (error) {
+      throw new Error('failed to get confirmed transaction: ' + error.message);
+    }
+    assert(typeof result !== 'undefined');
+    if (result === null) return result;
+
+    const {
+      accountKeys,
+      instructions,
+      recentBlockhash,
+    } = result.transaction.message;
+    return {
+      slot: result.slot,
+      meta: result.meta,
+      transaction: {
+        signatures: result.transaction.signatures,
+        message: {
+          accountKeys: accountKeys.map(accountKey => ({
+            pubkey: new PublicKey(accountKey.pubkey),
+            signer: accountKey.signer,
+            writable: accountKey.writable,
+          })),
+          instructions: instructions.map(ix => {
+            let mapped: any = {programId: new PublicKey(ix.programId)};
+            if ('accounts' in ix) {
+              mapped.accounts = ix.accounts.map(key => new PublicKey(key));
+            }
+
+            return {
+              ...ix,
+              ...mapped,
+            };
+          }),
+          recentBlockhash,
+        },
+      },
     };
   }
 

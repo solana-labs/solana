@@ -164,6 +164,39 @@ declare module '@solana/web3.js' {
     meta: ConfirmedTransactionMeta | null,
   };
 
+  declare export type ParsedMessageAccount = {
+    pubkey: PublicKey,
+    signer: boolean,
+    writable: boolean,
+  };
+
+  declare export type ParsedInstruction = {|
+    programId: PublicKey,
+    program: string,
+    parsed: string,
+  |};
+
+  declare export type PartiallyDecodedInstruction = {|
+    programId: PublicKey,
+    accounts: Array<PublicKey>,
+    data: string,
+  |};
+
+  declare export type ParsedTransaction = {
+    signatures: Array<string>,
+    message: {
+      accountKeys: ParsedMessageAccount[],
+      instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+      recentBlockhash: string,
+    },
+  };
+
+  declare export type ParsedConfirmedTransaction = {
+    slot: number,
+    transaction: ParsedTransaction,
+    meta: ConfirmedTransactionMeta | null,
+  };
+
   declare export type KeyedAccountInfo = {
     accountId: PublicKey,
     accountInfo: AccountInfo,
@@ -304,6 +337,9 @@ declare module '@solana/web3.js' {
     getConfirmedTransaction(
       signature: TransactionSignature,
     ): Promise<ConfirmedTransaction | null>;
+    getParsedConfirmedTransaction(
+      signature: TransactionSignature,
+    ): Promise<ParsedConfirmedTransaction | null>;
     getConfirmedSignaturesForAddress(
       address: PublicKey,
       startSlot: number,
