@@ -6073,6 +6073,23 @@ pub mod tests {
     }
 
     #[test]
+    fn test_empty_transaction_status_contains_no_roots() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
+        let index_iterator = blockstore
+            .transaction_status_cf
+            .iter(IteratorMode::From(
+                cf::TransactionStatus::as_index(0),
+                IteratorDirection::Forward,
+            ))
+            .unwrap();
+        for ((_, _, slot), _) in index_iterator {
+            assert!(!blockstore.is_root(slot));
+        }
+    }
+
+    #[test]
     fn test_get_confirmed_signatures_for_address() {
         let blockstore_path = get_tmp_ledger_path!();
         {
