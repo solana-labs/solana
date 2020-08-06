@@ -1804,9 +1804,9 @@ impl Blockstore {
                 (transaction_status_cf_primary_index, signature, 0),
                 IteratorDirection::Forward,
             ))?;
-            for ((_, sig, slot), data) in index_iterator {
+            for ((i, sig, slot), data) in index_iterator {
                 counter += 1;
-                if sig != signature {
+                if i != transaction_status_cf_primary_index || sig != signature {
                     break;
                 }
                 if self.is_root(slot) {
@@ -1842,8 +1842,9 @@ impl Blockstore {
             ("method", "get_confirmed_transaction".to_string(), String)
         );
         if let Some((slot, status)) = self.get_transaction_status(signature)? {
-            let transaction = self.find_transaction_in_slot(slot, signature)?
-                .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
+            let transaction = self
+                .find_transaction_in_slot(slot, signature)?
+                .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
             let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
             let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
             Ok(Some(ConfirmedTransaction {
@@ -6057,6 +6058,19 @@ pub mod tests {
                 None,
             );
         }
+    }
+
+    #[test]
+    fn test_empty_transaction_status() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
+        assert_eq!(
+            blockstore
+                .get_confirmed_transaction(Signature::default(), None)
+                .unwrap(),
+            None
+        );
     }
 
     #[test]
