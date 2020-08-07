@@ -47,6 +47,59 @@ jobs:
     - <<: *release-artifacts
       name: "Windows release artifacts"
       os: windows
+<<<<<<< HEAD
+=======
+    #  Linux release artifacts are still built by ci/buildkite-secondary.yml
+    #- <<: *release-artifacts
+    #  name: "Linux release artifacts"
+    #  os: linux
+    #  before_install:
+    #    - sudo apt-get install libssl-dev libudev-dev
+
+    # explorer pull request
+    - name: "explorer"
+      if: type = pull_request AND branch = master
+
+      language: node_js
+      node_js:
+        - "node"
+
+      cache:
+        directories:
+          - ~/.npm
+
+      before_install:
+        - .travis/affects.sh explorer/ .travis || travis_terminate 0
+        - cd explorer
+
+      script:
+        - npm run build
+        - npm run format
+
+    # web3.js pull request
+    - name: "web3.js"
+      if: type = pull_request AND branch = master
+
+      language: node_js
+      node_js:
+        - "lts/*"
+
+      services:
+        - docker
+
+      cache:
+        directories:
+          - ~/.npm
+
+      before_install:
+        - .travis/affects.sh web3.js/ .travis || travis_terminate 0
+        - cd web3.js/
+        - source .travis/before_install.sh
+
+      script:
+        - ../.travis/commitlint.sh
+        - source .travis/script.sh
+>>>>>>> a3165c6a6... Only run web3.js/explorer CI when targeting master branch
 
     # docs pull request or commit
     - name: "docs"
