@@ -1,22 +1,25 @@
 use crate::{
     parse_nonce::parse_nonce,
+    parse_sysvar::parse_sysvar,
     parse_token::{parse_token, spl_token_id_v1_0},
     parse_vote::parse_vote,
 };
 use inflector::Inflector;
 use serde_json::Value;
-use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program};
+use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, system_program, sysvar};
 use std::collections::HashMap;
 use thiserror::Error;
 
 lazy_static! {
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
+    static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v1_0();
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
         m.insert(*TOKEN_PROGRAM_ID, ParsableAccount::SplToken);
+        m.insert(*SYSVAR_PROGRAM_ID, ParsableAccount::Sysvar);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);
         m
     };
@@ -52,6 +55,7 @@ pub struct ParsedAccount {
 pub enum ParsableAccount {
     Nonce,
     SplToken,
+    Sysvar,
     Vote,
 }
 
@@ -61,7 +65,7 @@ pub struct AccountAdditionalData {
 }
 
 pub fn parse_account_data(
-    _pubkey: &Pubkey,
+    pubkey: &Pubkey,
     program_id: &Pubkey,
     data: &[u8],
     additional_data: Option<AccountAdditionalData>,
@@ -75,6 +79,7 @@ pub fn parse_account_data(
         ParsableAccount::SplToken => {
             serde_json::to_value(parse_token(data, additional_data.spl_token_decimals)?)?
         }
+        ParsableAccount::Sysvar => serde_json::to_value(parse_sysvar(data, pubkey)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(ParsedAccount {

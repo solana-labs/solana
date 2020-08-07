@@ -3207,6 +3207,7 @@ dependencies = [
  "base64 0.12.3",
  "bincode",
  "bs58",
+ "bv",
  "lazy_static",
  "serde",
  "serde_derive",
