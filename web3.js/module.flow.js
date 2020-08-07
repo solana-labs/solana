@@ -944,7 +944,7 @@ declare module '@solana/web3.js' {
 
   // === src/bpf-loader.js ===
   declare export class BpfLoader {
-    static programId: PublicKey;
+    static programId(version: ?number): PublicKey;
     static getMinNumSignatures(dataLength: number): number;
     static load(
       connection: Connection,
