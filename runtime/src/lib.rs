@@ -29,6 +29,7 @@ pub mod status_cache;
 mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_utils;
+pub mod vote_sender_types;
 
 extern crate solana_config_program;
 extern crate solana_stake_program;
