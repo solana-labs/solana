@@ -1592,9 +1592,18 @@ impl AccountsDB {
         }
 
         scan.stop();
-        debug!("{}", scan);
+        let hash_total = hashes.len();
 
-        Ok(Self::accumulate_account_hashes(hashes))
+        let mut accumulate = Measure::start("accumulate");
+        let accumulated_hash = Self::accumulate_account_hashes(hashes);
+        accumulate.stop();
+        datapoint_info!(
+            "update_accounts_hash",
+            ("accounts_scan", scan.as_us(), i64),
+            ("hash_accumulate", accumulate.as_us(), i64),
+            ("hash_total", hash_total, i64),
+        );
+        Ok(accumulated_hash)
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
