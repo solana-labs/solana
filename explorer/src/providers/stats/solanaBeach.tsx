@@ -1,49 +1,29 @@
 import React from "react";
 import io from "socket.io-client";
 
-import { object, number, is, StructType, any } from "superstruct";
+import { pick, number, is, StructType } from "superstruct";
 import { useCluster, Cluster } from "providers/cluster";
 
-// TODO: use `partial` when it is fixed
-// https://github.com/ianstormtaylor/superstruct/issues/405
-const DashboardInfo = object({
-  activatedStake: number(),
+const DashboardInfo = pick({
   avgBlockTime_1h: number(),
   avgBlockTime_1min: number(),
-  circulatingSupply: number(),
-  dailyPriceChange: number(),
-  dailyVolume: number(),
-  delinquentStake: number(),
-  epochInfo: object({
-    absoluteEpochStartSlot: number(),
+  epochInfo: pick({
     absoluteSlot: number(),
     blockHeight: number(),
     epoch: number(),
     slotIndex: number(),
     slotsInEpoch: number(),
   }),
-  stakingYield: number(),
-  tokenPrice: number(),
-  totalDelegatedStake: number(),
-  totalSupply: number(),
 });
 
-// TODO: use `partial` when it is fixed
-// https://github.com/ianstormtaylor/superstruct/issues/405
-const RootInfo = object({
-  currentLeader: any(),
-  nextLeaders: any(),
+const RootInfo = pick({
   root: number(),
-  servedSlots: any(),
 });
 
 export const PERF_UPDATE_SEC = 5;
 
-// TODO: use `partial` when it is fixed
-// https://github.com/ianstormtaylor/superstruct/issues/405
-const PerformanceInfo = object({
+const PerformanceInfo = pick({
   avgTPS: number(),
-  perfHistory: any(),
   totalTransactionCount: number(),
 });
 
