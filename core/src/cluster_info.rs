@@ -1746,7 +1746,7 @@ impl ClusterInfo {
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&caller_and_filters);
+            .generate_pull_responses(&caller_and_filters, now);
 
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
             .process_pull_requests(caller_and_filters, now);

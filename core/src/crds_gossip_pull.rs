@@ -237,8 +237,9 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
+        now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        self.filter_crds_values(crds, requests)
+        self.filter_crds_values(crds, requests, now)
     }
 
     // Checks if responses should be inserted and
@@ -371,10 +372,20 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
+        now: u64,
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
+        let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         for v in crds.table.values() {
-            filters.iter().enumerate().for_each(|(i, (_, filter))| {
+            filters.iter().enumerate().for_each(|(i, (caller, filter))| {
+                //skip callers that are too old
+                if caller.wallclock().checked_add(msg_timeout).unwrap_or_else(|| 0) < now {
+                    continue;
+                }
+                //skip values that are too new
+                if v.wallclock() > caller.wallclock() {
+                    continue;
+                }
                 if !filter.contains(&v.value_hash) {
                     ret[i].push(v.value.clone());
                 }
