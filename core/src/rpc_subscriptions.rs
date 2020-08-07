@@ -1,6 +1,10 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+<<<<<<< HEAD
 use crate::commitment::BlockCommitmentCache;
+=======
+use crate::rpc::{get_parsed_token_account, get_parsed_token_accounts};
+>>>>>>> b7c268190... Token Accounts: return ui_amount, decimals with decoded account (#11407)
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -8,7 +12,7 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
+use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::RpcFilterType,
@@ -186,7 +190,7 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X, Slot, Option<T>) -> (Box<dyn Iterator<Item = S>>, Slot),
+    F: Fn(X, Slot, Option<T>, Option<Arc<Bank>>) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Serialize + Default,
     T: Clone,
 {
@@ -210,16 +214,18 @@ where
                     cache_slot_info.highest_confirmed_slot
                 }
             };
-            let results = {
-                let bank_forks = bank_forks.read().unwrap();
-                bank_forks
-                    .get(slot)
-                    .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
-                    .unwrap_or_default()
-            };
+            let bank = bank_forks.read().unwrap().get(slot).cloned();
+            let results = bank
+                .clone()
+                .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
+                .unwrap_or_default();
             let mut w_last_notified_slot = last_notified_slot.write().unwrap();
-            let (filter_results, result_slot) =
-                filter_results(results, *w_last_notified_slot, config.as_ref().cloned());
+            let (filter_results, result_slot) = filter_results(
+                results,
+                *w_last_notified_slot,
+                config.as_ref().cloned(),
+                bank,
+            );
             for result in filter_results {
                 notifier.notify(
                     Response {
@@ -252,16 +258,24 @@ fn filter_account_result(
     result: Option<(Account, Slot)>,
     last_notified_slot: Slot,
     encoding: Option<UiAccountEncoding>,
+    bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = UiAccount>>, Slot) {
     if let Some((account, fork)) = result {
         // If fork < last_notified_slot this means that we last notified for a fork
         // and should notify that the account state has been reverted.
         if fork != last_notified_slot {
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-            return (
-                Box::new(iter::once(UiAccount::encode(account, encoding))),
-                fork,
-            );
+            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+                let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
+                if let Some(ui_account) = get_parsed_token_account(bank, account) {
+                    return (Box::new(iter::once(ui_account)), fork);
+                }
+            } else {
+                return (
+                    Box::new(iter::once(UiAccount::encode(account, encoding, None))),
+                    fork,
+                );
+            }
         }
     }
     (Box::new(iter::empty()), last_notified_slot)
@@ -271,6 +285,7 @@ fn filter_signature_result(
     result: Option<transaction::Result<()>>,
     last_notified_slot: Slot,
     _config: Option<()>,
+    _bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
         Box::new(
@@ -286,27 +301,30 @@ fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,
+    bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = RpcKeyedAccount>>, Slot) {
     let config = config.unwrap_or_default();
     let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
     let filters = config.filters;
-    (
-        Box::new(
-            accounts
-                .into_iter()
-                .filter(move |(_, account)| {
-                    filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-                    })
-                })
-                .map(move |(pubkey, account)| RpcKeyedAccount {
+    let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
+        filters.iter().all(|filter_type| match filter_type {
+            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+        })
+    });
+    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
+        if encoding == UiAccountEncoding::JsonParsed {
+            let bank = bank.unwrap(); // If !accounts.is_empty(), bank must be Some
+            Box::new(get_parsed_token_accounts(bank, keyed_accounts))
+        } else {
+            Box::new(
+                keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone()),
+                    account: UiAccount::encode(account, encoding.clone(), None),
                 }),
-        ),
-        last_notified_slot,
-    )
+            )
+        };
+    (accounts, last_notified_slot)
 }
 
 #[derive(Clone)]
@@ -873,8 +891,13 @@ impl RpcSubscriptions {
             &subscriptions.gossip_account_subscriptions,
             &subscriptions.gossip_program_subscriptions,
             &subscriptions.gossip_signature_subscriptions,
+<<<<<<< HEAD
             &bank_forks,
             &cache_slot_info,
+=======
+            bank_forks,
+            &commitment_slots,
+>>>>>>> b7c268190... Token Accounts: return ui_amount, decimals with decoded account (#11407)
             &notifier,
         );
     }
@@ -894,7 +917,7 @@ impl RpcSubscriptions {
         for pubkey in &pubkeys {
             Self::check_account(
                 pubkey,
-                &bank_forks,
+                bank_forks,
                 account_subscriptions.clone(),
                 &notifier,
                 &cache_slot_info,
@@ -908,7 +931,7 @@ impl RpcSubscriptions {
         for program_id in &programs {
             Self::check_program(
                 program_id,
-                &bank_forks,
+                bank_forks,
                 program_subscriptions.clone(),
                 &notifier,
                 &cache_slot_info,
@@ -922,7 +945,7 @@ impl RpcSubscriptions {
         for signature in &signatures {
             Self::check_signature(
                 signature,
-                &bank_forks,
+                bank_forks,
                 signature_subscriptions.clone(),
                 &notifier,
                 &cache_slot_info,
