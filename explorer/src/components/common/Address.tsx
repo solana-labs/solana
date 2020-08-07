@@ -35,7 +35,7 @@ export default function Address({ pubkey, alignRight, link }: Props) {
       <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
       <span className="text-monospace">
         {link ? (
-          <Link className="" to={clusterPath(`/accounts/${address}`)}>
+          <Link className="" to={clusterPath(`/address/${address}`)}>
             {displayAddress(address)}
             <span className="fe fe-external-link ml-2"></span>
           </Link>

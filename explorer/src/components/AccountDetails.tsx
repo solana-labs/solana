@@ -21,15 +21,22 @@ import {
 import { useCluster, ClusterStatus } from "providers/cluster";
 import Address from "./common/Address";
 import Signature from "./common/Signature";
+import { NavLink } from "react-router-dom";
+import { clusterPath } from "utils/url";
 
-type Props = { address: string };
-export default function AccountDetails({ address }: Props) {
+type Props = { address: string; tab?: string };
+export default function AccountDetails({ address, tab }: Props) {
   let pubkey: PublicKey | undefined;
   try {
     pubkey = new PublicKey(address);
   } catch (err) {
     console.error(err);
     // TODO handle bad addresses
+  }
+
+  let moreTab: MoreTabs = "history";
+  if (tab === "history" || tab === "tokens") {
+    moreTab = tab;
   }
 
   return (
@@ -41,9 +48,48 @@ export default function AccountDetails({ address }: Props) {
         </div>
       </div>
       {pubkey && <AccountCards pubkey={pubkey} />}
-      {pubkey && <TokensCard pubkey={pubkey} />}
-      {pubkey && <HistoryCard pubkey={pubkey} />}
+      {pubkey && <MoreSection pubkey={pubkey} tab={moreTab} />}
     </div>
+  );
+}
+
+type MoreTabs = "history" | "tokens";
+function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
+  const address = pubkey.toBase58();
+  const info = useAccountInfo(address);
+  if (!info || info.lamports === undefined) return null;
+
+  return (
+    <>
+      <div className="container">
+        <div className="header">
+          <div className="header-body pt-0">
+            <ul className="nav nav-tabs nav-overflow header-tabs">
+              <li className="nav-item">
+                <NavLink
+                  className="nav-link"
+                  to={clusterPath(`/address/${address}`)}
+                  exact
+                >
+                  History
+                </NavLink>
+              </li>
+              <li className="nav-item">
+                <NavLink
+                  className="nav-link"
+                  to={clusterPath(`/address/${address}/tokens`)}
+                  exact
+                >
+                  Tokens
+                </NavLink>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      {tab === "tokens" && <TokensCard pubkey={pubkey} />}
+      {tab === "history" && <HistoryCard pubkey={pubkey} />}
+    </>
   );
 }
 
@@ -56,8 +102,7 @@ function AccountCards({ pubkey }: { pubkey: PublicKey }) {
 
   // Fetch account on load
   React.useEffect(() => {
-    if (pubkey && !info && status === ClusterStatus.Connected)
-      fetchAccount(pubkey);
+    if (!info && status === ClusterStatus.Connected) fetchAccount(pubkey);
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!info || info.status === FetchStatus.Fetching) {
@@ -137,6 +182,11 @@ function TokensCard({ pubkey }: { pubkey: PublicKey }) {
   const fetchAccountTokens = useFetchAccountOwnedTokens();
   const refresh = () => fetchAccountTokens(pubkey);
 
+  // Fetch owned tokens
+  React.useEffect(() => {
+    if (!ownedTokens) refresh();
+  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (ownedTokens === undefined) {
     return null;
   }
@@ -186,7 +236,7 @@ function TokensCard({ pubkey }: { pubkey: PublicKey }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Tokens</h3>
+        <h3 className="card-header-title">Owned Tokens</h3>
         <button
           className="btn btn-white btn-sm"
           disabled={fetching}
@@ -228,6 +278,10 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const fetchAccountHistory = useFetchAccountHistory();
   const refresh = () => fetchAccountHistory(pubkey, true);
   const loadMore = () => fetchAccountHistory(pubkey);
+
+  React.useEffect(() => {
+    if (!history) refresh();
+  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!info || !history || info.lamports === undefined) {
     return null;

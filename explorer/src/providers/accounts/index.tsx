@@ -1,7 +1,7 @@
 import React from "react";
 import { StakeAccount } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
-import { useCluster, ClusterStatus } from "../cluster";
+import { useCluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider } from "./tokens";
 export { useAccountHistory } from "./history";
@@ -29,7 +29,6 @@ export interface Account {
 type Accounts = { [address: string]: Account };
 interface State {
   accounts: Accounts;
-  lastFetchedAddress: string | undefined;
 }
 
 export enum ActionType {
@@ -73,7 +72,7 @@ function reducer(state: State, action: Action): State {
             status: FetchStatus.Fetching,
           },
         };
-        return { ...state, accounts, lastFetchedAddress: address };
+        return { ...state, accounts };
       } else {
         const accounts = {
           ...state.accounts,
@@ -82,7 +81,7 @@ function reducer(state: State, action: Action): State {
             pubkey: action.pubkey,
           },
         };
-        return { ...state, accounts, lastFetchedAddress: address };
+        return { ...state, accounts };
       }
     }
 
@@ -112,9 +111,6 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
-export const ACCOUNT_ALIASES = ["account", "address"];
-export const ACCOUNT_ALIASES_PLURAL = ["accounts", "addresses"];
-
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
@@ -122,18 +118,13 @@ type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {
     accounts: {},
-    lastFetchedAddress: undefined,
   });
 
-  // Check account statuses on startup and whenever cluster updates
-  const { status, url } = useCluster();
+  // Clear account statuses whenever cluster is changed
+  const { url } = useCluster();
   React.useEffect(() => {
-    if (status === ClusterStatus.Connecting) {
-      dispatch({ type: ActionType.Clear });
-    } else if (status === ClusterStatus.Connected && state.lastFetchedAddress) {
-      fetchAccountInfo(dispatch, new PublicKey(state.lastFetchedAddress), url);
-    }
-  }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
+    dispatch({ type: ActionType.Clear });
+  }, [url]);
 
   return (
     <StateContext.Provider value={state}>

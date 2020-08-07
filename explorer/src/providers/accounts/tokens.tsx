@@ -1,7 +1,7 @@
 import React from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { FetchStatus, useAccounts } from "./index";
-import { useCluster, Cluster } from "../cluster";
+import { FetchStatus } from "./index";
+import { useCluster } from "../cluster";
 import { number, string, boolean, coerce, object, nullable } from "superstruct";
 
 export type TokenAccountData = {
@@ -28,22 +28,38 @@ interface AccountTokens {
 }
 
 interface Update {
+  type: "update";
+  url: string;
   pubkey: PublicKey;
   status: FetchStatus;
   tokens?: TokenAccountData[];
 }
 
-type Action = Update | "clear";
-type State = { [address: string]: AccountTokens };
+interface Clear {
+  type: "clear";
+  url: string;
+}
+
+type Action = Update | Clear;
+type State = {
+  url: string;
+  map: { [address: string]: AccountTokens };
+};
+
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
-  if (action === "clear") {
-    return {};
+  if (action.type === "clear") {
+    return {
+      url: action.url,
+      map: {},
+    };
+  } else if (action.url !== state.url) {
+    return state;
   }
 
   const address = action.pubkey.toBase58();
-  let addressEntry = state[address];
+  let addressEntry = state.map[address];
   if (addressEntry && action.status === FetchStatus.Fetching) {
     addressEntry = {
       ...addressEntry,
@@ -58,7 +74,10 @@ function reducer(state: State, action: Action): State {
 
   return {
     ...state,
-    [address]: addressEntry,
+    map: {
+      ...state.map,
+      [address]: addressEntry,
+    },
   };
 }
 
@@ -67,26 +86,12 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type ProviderProps = { children: React.ReactNode };
 export function TokensProvider({ children }: ProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, {});
-  const { cluster, url } = useCluster();
-  const { accounts, lastFetchedAddress } = useAccounts();
+  const { url } = useCluster();
+  const [state, dispatch] = React.useReducer(reducer, { url, map: {} });
 
   React.useEffect(() => {
-    dispatch("clear");
+    dispatch({ url, type: "clear" });
   }, [url]);
-
-  // Fetch history for new accounts
-  React.useEffect(() => {
-    if (lastFetchedAddress && cluster !== Cluster.MainnetBeta) {
-      const infoFetched =
-        accounts[lastFetchedAddress] &&
-        accounts[lastFetchedAddress].lamports !== undefined;
-      const noRecord = !state[lastFetchedAddress];
-      if (infoFetched && noRecord) {
-        fetchAccountTokens(dispatch, new PublicKey(lastFetchedAddress), url);
-      }
-    }
-  }, [accounts, lastFetchedAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -107,8 +112,10 @@ async function fetchAccountTokens(
   url: string
 ) {
   dispatch({
+    type: "update",
     status: FetchStatus.Fetching,
     pubkey,
+    url,
   });
 
   let status;
@@ -133,7 +140,7 @@ async function fetchAccountTokens(
   } catch (error) {
     status = FetchStatus.FetchFailed;
   }
-  dispatch({ status, tokens, pubkey });
+  dispatch({ type: "update", url, status, tokens, pubkey });
 }
 
 export function useAccountOwnedTokens(address: string) {
@@ -145,7 +152,7 @@ export function useAccountOwnedTokens(address: string) {
     );
   }
 
-  return context[address];
+  return context.map[address];
 }
 
 export function useFetchAccountOwnedTokens() {
