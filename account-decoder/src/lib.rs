@@ -49,6 +49,7 @@ pub enum UiAccountEncoding {
 
 impl UiAccount {
     pub fn encode(
+        pubkey: &Pubkey,
         account: Account,
         encoding: UiAccountEncoding,
         additional_data: Option<AccountAdditionalData>,
@@ -58,7 +59,7 @@ impl UiAccount {
             UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(account.data)),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
-                    parse_account_data(&account.owner, &account.data, additional_data)
+                    parse_account_data(pubkey, &account.owner, &account.data, additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {

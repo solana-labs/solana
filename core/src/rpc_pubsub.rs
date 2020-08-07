@@ -672,8 +672,13 @@ mod tests {
             .get_account(&nonce_account.pubkey())
             .unwrap()
             .data;
-        let expected_data =
-            parse_account_data(&system_program::id(), &expected_data, None).unwrap();
+        let expected_data = parse_account_data(
+            &nonce_account.pubkey(),
+            &system_program::id(),
+            &expected_data,
+            None,
+        )
+        .unwrap();
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",

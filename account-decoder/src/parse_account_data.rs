@@ -61,6 +61,7 @@ pub struct AccountAdditionalData {
 }
 
 pub fn parse_account_data(
+    _pubkey: &Pubkey,
     program_id: &Pubkey,
     data: &[u8],
     additional_data: Option<AccountAdditionalData>,
@@ -93,21 +94,33 @@ mod test {
 
     #[test]
     fn test_parse_account_data() {
+        let account_pubkey = Pubkey::new_rand();
         let other_program = Pubkey::new_rand();
         let data = vec![0; 4];
-        assert!(parse_account_data(&other_program, &data, None).is_err());
+        assert!(parse_account_data(&account_pubkey, &other_program, &data, None).is_err());
 
         let vote_state = VoteState::default();
         let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
         let versioned = VoteStateVersions::Current(Box::new(vote_state));
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
-        let parsed =
-            parse_account_data(&solana_vote_program::id(), &vote_account_data, None).unwrap();
+        let parsed = parse_account_data(
+            &account_pubkey,
+            &solana_vote_program::id(),
+            &vote_account_data,
+            None,
+        )
+        .unwrap();
         assert_eq!(parsed.program, "vote".to_string());
 
         let nonce_data = Versions::new_current(State::Initialized(Data::default()));
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
-        let parsed = parse_account_data(&system_program::id(), &nonce_account_data, None).unwrap();
+        let parsed = parse_account_data(
+            &account_pubkey,
+            &system_program::id(),
+            &nonce_account_data,
+            None,
+        )
+        .unwrap();
         assert_eq!(parsed.program, "nonce".to_string());
     }
 }
