@@ -4,10 +4,12 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod parse_account_data;
+pub mod parse_config;
 pub mod parse_nonce;
 pub mod parse_sysvar;
 pub mod parse_token;
 pub mod parse_vote;
+pub mod validator_info;
 
 use crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount};
 use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
