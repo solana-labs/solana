@@ -22,6 +22,8 @@ import type {TransactionSignature} from './transaction';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
+type CiTriggerRevertMe = string;
+
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type TokenAccountsFilter =

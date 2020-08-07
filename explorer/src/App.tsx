@@ -25,7 +25,7 @@ function App() {
         <SearchBar />
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
-            <div className="container mt-4">
+            <div className="container mt-4 ciTriggerRevertMe">
               <SupplyCard />
               <TopAccountsCard />
             </div>
