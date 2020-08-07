@@ -22,9 +22,9 @@ pub struct SendTransactionService {
 }
 
 pub struct TransactionInfo {
-    signature: Signature,
-    wire_transaction: Vec<u8>,
-    last_valid_slot: Slot,
+    pub signature: Signature,
+    pub wire_transaction: Vec<u8>,
+    pub last_valid_slot: Slot,
 }
 
 impl TransactionInfo {

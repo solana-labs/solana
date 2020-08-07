@@ -202,6 +202,7 @@ impl LocalCluster {
         leader_config.rpc_ports = Some((
             leader_node.info.rpc.port(),
             leader_node.info.rpc_pubsub.port(),
+            leader_node.info.rpc_banks.port(),
         ));
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_server = Validator::new(
@@ -343,6 +344,7 @@ impl LocalCluster {
         config.rpc_ports = Some((
             validator_node.info.rpc.port(),
             validator_node.info.rpc_pubsub.port(),
+            validator_node.info.rpc_banks.port(),
         ));
         config.account_paths = vec![ledger_path.join("accounts")];
         let voting_keypair = voting_keypair.unwrap();
@@ -613,8 +615,11 @@ impl Cluster for LocalCluster {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
-        cluster_validator_info.config.rpc_ports =
-            Some((node.info.rpc.port(), node.info.rpc_pubsub.port()));
+        cluster_validator_info.config.rpc_ports = Some((
+            node.info.rpc.port(),
+            node.info.rpc_pubsub.port(),
+            node.info.rpc_banks.port(),
+        ));
 
         let entry_point_info = {
             if *pubkey == self.entry_point_info.id {

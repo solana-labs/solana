@@ -26,7 +26,7 @@ default = [
     "serde_json",
     "ed25519-dalek",
     "solana-logger",
-    "solana-crate-features"
+    "solana-crate-features",
 ]
 
 [dependencies]

@@ -18,6 +18,7 @@ indexmap = "1.4.0"
 indicatif = "0.15.0"
 pickledb = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
+solana-banks-client = { path = "../banks-client", version = "1.4.0" }
 solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
 solana-cli-config = { path = "../cli-config", version = "1.4.0" }
 solana-client = { path = "../client", version = "1.4.0" }
@@ -25,9 +26,12 @@ solana-remote-wallet = { path = "../remote-wallet", version = "1.4.0" }
 solana-runtime = { path = "../runtime", version = "1.4.0" }
 solana-sdk = { path = "../sdk", version = "1.4.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.4.0" }
-solana-transaction-status = { path = "../transaction-status", version = "1.4.0" }
 tempfile = "3.1.0"
 thiserror = "1.0"
+tokio = "0.2"
+url = "2.1"
 
 [dev-dependencies]
+solana-banks-server = { path = "../banks-server", version = "1.4.0" }
 solana-core = { path = "../core", version = "1.4.0" }
+solana-runtime = { path = "../runtime", version = "1.4.0" }
