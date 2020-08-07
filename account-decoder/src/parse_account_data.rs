@@ -30,6 +30,9 @@ pub enum ParseAccountError {
     #[error("Program not parsable")]
     ProgramNotParsable,
 
+    #[error("Additional data required to parse: {0}")]
+    AdditionalDataMissing(String),
+
     #[error("Instruction error")]
     InstructionError(#[from] InstructionError),
 
@@ -52,16 +55,25 @@ pub enum ParsableAccount {
     Vote,
 }
 
+#[derive(Default)]
+pub struct AccountAdditionalData {
+    pub spl_token_decimals: Option<u8>,
+}
+
 pub fn parse_account_data(
     program_id: &Pubkey,
     data: &[u8],
+    additional_data: Option<AccountAdditionalData>,
 ) -> Result<ParsedAccount, ParseAccountError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
         .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
+    let additional_data = additional_data.unwrap_or_default();
     let parsed_json = match program_name {
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
-        ParsableAccount::SplToken => serde_json::to_value(parse_token(data)?)?,
+        ParsableAccount::SplToken => {
+            serde_json::to_value(parse_token(data, additional_data.spl_token_decimals)?)?
+        }
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(ParsedAccount {
@@ -83,18 +95,19 @@ mod test {
     fn test_parse_account_data() {
         let other_program = Pubkey::new_rand();
         let data = vec![0; 4];
-        assert!(parse_account_data(&other_program, &data).is_err());
+        assert!(parse_account_data(&other_program, &data, None).is_err());
 
         let vote_state = VoteState::default();
         let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
         let versioned = VoteStateVersions::Current(Box::new(vote_state));
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
-        let parsed = parse_account_data(&solana_vote_program::id(), &vote_account_data).unwrap();
+        let parsed =
+            parse_account_data(&solana_vote_program::id(), &vote_account_data, None).unwrap();
         assert_eq!(parsed.program, "vote".to_string());
 
         let nonce_data = Versions::new_current(State::Initialized(Data::default()));
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
-        let parsed = parse_account_data(&system_program::id(), &nonce_account_data).unwrap();
+        let parsed = parse_account_data(&system_program::id(), &nonce_account_data, None).unwrap();
         assert_eq!(parsed.program, "nonce".to_string());
     }
 }
