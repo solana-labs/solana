@@ -231,10 +231,7 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
   if (!info || !history || info.lamports === undefined) {
     return null;
-  } else if (
-    history.fetched === undefined ||
-    history.fetchedRange === undefined
-  ) {
+  } else if (history.fetched === undefined) {
     if (history.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading history" />;
     }
@@ -251,10 +248,8 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
     return (
       <ErrorCard
         retry={loadMore}
-        retryText="Look back further"
-        text={
-          "No transaction history found since slot " + history.fetchedRange.min
-        }
+        retryText="Try again"
+        text="No transaction history found"
       />
     );
   }
@@ -263,18 +258,18 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const transactions = history.fetched;
 
   for (var i = 0; i < transactions.length; i++) {
-    const slot = transactions[i].status.slot;
+    const slot = transactions[i].slot;
     const slotTransactions = [transactions[i]];
     while (i + 1 < transactions.length) {
-      const nextSlot = transactions[i + 1].status.slot;
+      const nextSlot = transactions[i + 1].slot;
       if (nextSlot !== slot) break;
       slotTransactions.push(transactions[++i]);
     }
 
-    slotTransactions.forEach(({ signature, status }, index) => {
+    slotTransactions.forEach(({ signature, err }) => {
       let statusText;
       let statusClass;
-      if (status.err) {
+      if (err) {
         statusClass = "warning";
         statusText = "Failed";
       } else {
@@ -338,20 +333,24 @@ function HistoryCard({ pubkey }: { pubkey: PublicKey }) {
       </div>
 
       <div className="card-footer">
-        <button
-          className="btn btn-primary w-100"
-          onClick={loadMore}
-          disabled={fetching}
-        >
-          {fetching ? (
-            <>
-              <span className="spinner-grow spinner-grow-sm mr-2"></span>
-              Loading
-            </>
-          ) : (
-            "Load More"
-          )}
-        </button>
+        {history.foundOldest ? (
+          <div className="text-muted text-center">Fetched full history</div>
+        ) : (
+          <button
+            className="btn btn-primary w-100"
+            onClick={loadMore}
+            disabled={fetching}
+          >
+            {fetching ? (
+              <>
+                <span className="spinner-grow spinner-grow-sm mr-2"></span>
+                Loading
+              </>
+            ) : (
+              "Load More"
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
