@@ -5,7 +5,6 @@ import TableCardBody from "./common/TableCardBody";
 import {
   useDashboardInfo,
   usePerformanceInfo,
-  useRootSlot,
   PERF_UPDATE_SEC,
   useSetActive,
   PerformanceInfo,
@@ -29,7 +28,6 @@ export default function StatsCard() {
 }
 
 function StatsCardBody() {
-  const rootSlot = useRootSlot();
   const dashboardInfo = useDashboardInfo();
   const performanceInfo = usePerformanceInfo();
   const setSocketActive = useSetActive();
@@ -52,7 +50,7 @@ function StatsCardBody() {
     );
   }
 
-  if (rootSlot === undefined || !dashboardInfo || !performanceInfo) {
+  if (!dashboardInfo || !performanceInfo) {
     return (
       <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
@@ -61,7 +59,6 @@ function StatsCardBody() {
     );
   }
 
-  const currentBlock = rootSlot.toLocaleString("en-US");
   const { avgBlockTime_1h, avgBlockTime_1min, epochInfo } = dashboardInfo;
   const hourlyBlockTime = Math.round(1000 * avgBlockTime_1h);
   const averageBlockTime = Math.round(1000 * avgBlockTime_1min) + "ms";
@@ -74,12 +71,18 @@ function StatsCardBody() {
   );
   const averageTps = Math.round(performanceInfo.avgTPS);
   const transactionCount = <AnimatedTransactionCount info={performanceInfo} />;
+  const blockHeight = epochInfo.blockHeight.toLocaleString("en-US");
+  const currentSlot = epochInfo.absoluteSlot.toLocaleString("en-US");
 
   return (
     <TableCardBody>
       <tr>
-        <td className="w-100">Block</td>
-        <td className="text-lg-right text-monospace">{currentBlock}</td>
+        <td className="w-100">Slot</td>
+        <td className="text-lg-right text-monospace">{currentSlot}</td>
+      </tr>
+      <tr>
+        <td className="w-100">Block height</td>
+        <td className="text-lg-right text-monospace">{blockHeight}</td>
       </tr>
       <tr>
         <td className="w-100">Block time</td>
