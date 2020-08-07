@@ -71,6 +71,8 @@ jobs:
       branches:
         only:
           - master
+        except:
+          - /^v\d+\.\d+/
 
       language: node_js
       node_js:
@@ -94,6 +96,8 @@ jobs:
       branches:
         only:
           - master
+        except:
+          - /^v\d+\.\d+/
 
       language: node_js
       node_js:
