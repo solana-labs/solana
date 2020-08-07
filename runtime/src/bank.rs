@@ -175,11 +175,18 @@ pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub processing_results: Vec<TransactionProcessResult>,
+    pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
 }
+pub struct OverwrittenVoteAccount {
+    pub account: Account,
+    pub transaction_index: usize,
+    pub transaction_result_index: usize,
+}
+
 impl TransactionBalancesSet {
     pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
         assert_eq!(pre_balances.len(), post_balances.len());
@@ -1276,7 +1283,7 @@ impl Bank {
         res: &[TransactionProcessResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
-        for (i, tx) in OrderedIterator::new(txs, iteration_order).enumerate() {
+        for (i, (_, tx)) in OrderedIterator::new(txs, iteration_order).enumerate() {
             let (res, _hash_age_kind) = &res[i];
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 status_cache.insert(
@@ -1422,7 +1429,7 @@ impl Bank {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| match lock_res {
+            .map(|((_, tx), lock_res)| match lock_res {
                 Ok(()) => {
                     let message = tx.message();
                     let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
@@ -1452,7 +1459,7 @@ impl Bank {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
+            .map(|((_, tx), lock_res)| {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
@@ -1487,7 +1494,7 @@ impl Bank {
     ) -> Vec<TransactionProcessResult> {
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
+            .map(|((_, tx), lock_res)| {
                 if lock_res.0.is_ok() {
                     if tx.message.instructions.len() == 1 {
                         let instruction = &tx.message.instructions[0];
@@ -1579,7 +1586,8 @@ impl Bank {
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
-        for transaction in OrderedIterator::new(batch.transactions(), batch.iteration_order()) {
+        for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order())
+        {
             let mut transaction_balances: Vec<u64> = vec![];
             for account_key in transaction.message.account_keys.iter() {
                 transaction_balances.push(self.get_balance(account_key));
@@ -1728,7 +1736,7 @@ impl Bank {
         let retryable_txs: Vec<_> =
             OrderedIterator::new(batch.lock_results(), batch.iteration_order())
                 .enumerate()
-                .filter_map(|(index, res)| match res {
+                .filter_map(|(index, (_, res))| match res {
                     Err(TransactionError::AccountInUse) => {
                         error_counters.account_in_use += 1;
                         Some(index)
@@ -1758,7 +1766,7 @@ impl Bank {
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
-            .map(|(accs, tx)| match accs {
+            .map(|(accs, (_, tx))| match accs {
                 (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
@@ -1837,7 +1845,7 @@ impl Bank {
         let mut fees = 0;
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
-            .map(|(tx, (res, hash_age_kind))| {
+            .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
                         (nonce_utils::fee_calculator_of(account), true)
@@ -1921,7 +1929,8 @@ impl Bank {
         );
         self.collect_rent(executed, loaded_accounts);
 
-        self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
+        let overwritten_vote_accounts =
+            self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -1929,9 +1938,11 @@ impl Bank {
         self.update_transaction_statuses(txs, iteration_order, &executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);
+
         TransactionResults {
             fee_collection_results,
             processing_results: executed.to_vec(),
+            overwritten_vote_accounts,
         }
     }
 
@@ -2866,8 +2877,9 @@ impl Bank {
         iteration_order: Option<&[usize]>,
         res: &[TransactionProcessResult],
         loaded: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
-    ) {
-        for (i, ((raccs, _load_hash_age_kind), tx)) in loaded
+    ) -> Vec<OverwrittenVoteAccount> {
+        let mut overwritten_vote_accounts = vec![];
+        for (i, ((raccs, _load_hash_age_kind), (transaction_index, tx))) in loaded
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
@@ -2887,10 +2899,20 @@ impl Bank {
                 .filter(|(_key, account)| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {
-                    self.stakes.write().unwrap().store(pubkey, account);
+                    if let Some(old_vote_account) =
+                        self.stakes.write().unwrap().store(pubkey, account)
+                    {
+                        overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                            account: old_vote_account,
+                            transaction_index,
+                            transaction_result_index: i,
+                        });
+                    }
                 }
             }
         }
+
+        overwritten_vote_accounts
     }
 
     /// current stake delegations for this bank

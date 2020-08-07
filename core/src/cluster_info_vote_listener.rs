@@ -15,10 +15,7 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
-use solana_ledger::{
-    blockstore::Blockstore,
-    blockstore_processor::{ReplayVotesReceiver, ReplayedVote},
-};
+use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
 use solana_runtime::{
@@ -26,6 +23,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
     stakes::Stakes,
+    vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
 };
 use solana_sdk::{
     clock::{Epoch, Slot},
@@ -248,7 +246,7 @@ impl ClusterInfoVoteListener {
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
         verified_vote_sender: VerifiedVoteSender,
-        replay_votes_receiver: ReplayVotesReceiver,
+        replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
     ) -> Self {
         let exit_ = exit.clone();
@@ -420,7 +418,7 @@ impl ClusterInfoVoteListener {
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
         verified_vote_sender: VerifiedVoteSender,
-        replay_votes_receiver: ReplayVotesReceiver,
+        replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
     ) -> Result<()> {
         let mut optimistic_confirmation_verifier =
@@ -478,7 +476,7 @@ impl ClusterInfoVoteListener {
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
-        replay_votes_receiver: &ReplayVotesReceiver,
+        replay_votes_receiver: &ReplayVoteReceiver,
     ) -> Result<Vec<(Slot, Hash)>> {
         Self::get_and_process_votes(
             gossip_vote_txs_receiver,
@@ -496,7 +494,7 @@ impl ClusterInfoVoteListener {
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
-        replay_votes_receiver: &ReplayVotesReceiver,
+        replay_votes_receiver: &ReplayVoteReceiver,
     ) -> Result<Vec<(Slot, Hash)>> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -772,12 +770,12 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::blockstore_processor::ReplayVotesSender;
     use solana_perf::packet;
     use solana_runtime::{
         bank::Bank,
         commitment::BlockCommitmentCache,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        vote_sender_types::ReplayVoteSender,
     };
     use solana_sdk::{
         hash::Hash,
@@ -1040,7 +1038,7 @@ mod tests {
         validator_voting_keypairs: &[ValidatorVoteKeypairs],
         switch_proof_hash: Option<Hash>,
         votes_sender: &VerifiedVoteTransactionsSender,
-        replay_votes_sender: &ReplayVotesSender,
+        replay_votes_sender: &ReplayVoteSender,
     ) {
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;

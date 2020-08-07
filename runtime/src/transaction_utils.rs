@@ -21,7 +21,7 @@ impl<'a, T> OrderedIterator<'a, T> {
 }
 
 impl<'a, T> Iterator for OrderedIterator<'a, T> {
-    type Item = &'a T;
+    type Item = (usize, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.vec.len() {
             None
@@ -33,7 +33,7 @@ impl<'a, T> Iterator for OrderedIterator<'a, T> {
                 index = self.current;
             }
             self.current += 1;
-            Some(self.vec.index(index))
+            Some((index, self.vec.index(index)))
         }
     }
 }
@@ -42,17 +42,22 @@ impl<'a, T> Iterator for OrderedIterator<'a, T> {
 mod tests {
     use super::*;
 
+    type IteratorResponse<'a> = Vec<(((usize, &'a usize), &'a usize), usize)>;
+
     #[test]
     fn test_ordered_iterator_custom_order() {
         let vec: Vec<usize> = vec![1, 2, 3, 4];
         let custom_order: Vec<usize> = vec![3, 1, 0, 2];
-
+        let custom_order_ = custom_order.clone();
         let ordered_iterator = OrderedIterator::new(&vec, Some(&custom_order));
         let expected_response: Vec<usize> = vec![4, 2, 1, 3];
 
-        let resp: Vec<(&usize, &usize)> = ordered_iterator
+        let resp: IteratorResponse = ordered_iterator
             .zip(expected_response.iter())
-            .filter(|(actual_elem, expected_elem)| *actual_elem == *expected_elem)
+            .zip(custom_order_)
+            .filter(|(((index, actual_elem), expected_elem), expected_index)| {
+                *actual_elem == *expected_elem && index == expected_index
+            })
             .collect();
 
         assert_eq!(resp.len(), custom_order.len());
@@ -63,9 +68,12 @@ mod tests {
         let vec: Vec<usize> = vec![1, 2, 3, 4];
         let ordered_iterator = OrderedIterator::new(&vec, None);
 
-        let resp: Vec<(&usize, &usize)> = ordered_iterator
+        let resp: IteratorResponse = ordered_iterator
             .zip(vec.iter())
-            .filter(|(actual_elem, expected_elem)| *actual_elem == *expected_elem)
+            .zip(0..=4)
+            .filter(|(((index, actual_elem), expected_elem), expected_index)| {
+                *actual_elem == *expected_elem && index == expected_index
+            })
             .collect();
 
         assert_eq!(resp.len(), vec.len());

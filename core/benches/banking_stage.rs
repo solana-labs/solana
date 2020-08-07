@@ -73,6 +73,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             let batch_len = batch.packets.len();
             packets.push((batch, vec![0usize; batch_len]));
         }
+        let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
@@ -82,6 +83,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &mut packets,
                 10_000,
                 None,
+                &s,
             );
         });
 
@@ -190,12 +192,14 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(cluster_info);
+        let (s, _r) = unbounded();
         let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
             verified_receiver,
             vote_receiver,
             None,
+            s,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
