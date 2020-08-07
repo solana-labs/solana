@@ -1225,7 +1225,7 @@ The result field will be a JSON object with the following fields:
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"solana-core": "1.3.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.3.1"},"id":1}
 ```
 
 ### getVoteAccounts
