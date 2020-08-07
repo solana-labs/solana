@@ -355,6 +355,10 @@ declare module '@solana/web3.js' {
       startSlot: number,
       endSlot: number,
     ): Promise<Array<TransactionSignature>>;
+    getConfirmedSignaturesForAddress2(
+      address: PublicKey,
+      options?: ConfirmedSignaturesForAddress2Options,
+    ): Promise<Array<ConfirmedSignatureInfo>>;
     getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus>;
     confirmTransaction(
       signature: TransactionSignature,
