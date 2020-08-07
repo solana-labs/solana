@@ -1906,6 +1906,30 @@ impl Blockstore {
         Ok(signatures)
     }
 
+    fn get_lowest_slot_for_address(&self, address: Pubkey) -> Result<Option<Slot>> {
+        let mut lowest_slot = None;
+        for transaction_status_cf_primary_index in 0..=1 {
+            let mut index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
+                (
+                    transaction_status_cf_primary_index,
+                    address,
+                    0,
+                    Signature::default(),
+                ),
+                IteratorDirection::Forward,
+            ))?;
+            if let Some(((i, key_address, slot, _), _)) = index_iterator.next() {
+                if i == transaction_status_cf_primary_index
+                    && key_address == address
+                    && slot < lowest_slot.unwrap_or(Slot::MAX)
+                {
+                    lowest_slot = Some(slot);
+                }
+            }
+        }
+        Ok(lowest_slot)
+    }
+
     pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
@@ -1994,6 +2018,11 @@ impl Blockstore {
 
         // Fetch the list of signatures that affect the given address
         let first_available_block = self.get_first_available_block()?;
+        let first_address_slot = self.get_lowest_slot_for_address(address)?;
+        if first_address_slot.is_none() {
+            return Ok(vec![]);
+        }
+        let lower_bound = cmp::max(first_available_block, first_address_slot.unwrap());
         let mut address_signatures = vec![];
         loop {
             if address_signatures.len() >= limit {
@@ -2013,7 +2042,7 @@ impl Blockstore {
             }
             excluded_signatures = None;
 
-            if slot == first_available_block {
+            if slot == lower_bound {
                 break;
             }
             slot -= 1;
@@ -6209,6 +6238,82 @@ pub mod tests {
                 assert!(slot >= past_slot);
                 past_slot = slot;
             }
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_get_lowest_slot_for_address() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let address = Pubkey::new_rand();
+            let address2 = Pubkey::new_rand();
+            let slot = 5;
+            // Add an additional to record to ensure that existent or lower slots in entries for
+            // other addresses do not affect return
+            blockstore
+                .address_signatures_cf
+                .put(
+                    (0, address2, slot, Signature::default()),
+                    &AddressSignatureMeta { writeable: false },
+                )
+                .unwrap();
+            assert_eq!(
+                blockstore.get_lowest_slot_for_address(address).unwrap(),
+                None
+            );
+
+            let slot = 200;
+            blockstore
+                .address_signatures_cf
+                .put(
+                    (0, address, slot, Signature::default()),
+                    &AddressSignatureMeta { writeable: false },
+                )
+                .unwrap();
+            assert_eq!(
+                blockstore.get_lowest_slot_for_address(address).unwrap(),
+                Some(200)
+            );
+
+            blockstore
+                .address_signatures_cf
+                .put(
+                    (1, address, slot, Signature::default()),
+                    &AddressSignatureMeta { writeable: false },
+                )
+                .unwrap();
+            assert_eq!(
+                blockstore.get_lowest_slot_for_address(address).unwrap(),
+                Some(200)
+            );
+
+            let slot = 300;
+            blockstore
+                .address_signatures_cf
+                .put(
+                    (1, address, slot, Signature::default()),
+                    &AddressSignatureMeta { writeable: false },
+                )
+                .unwrap();
+            assert_eq!(
+                blockstore.get_lowest_slot_for_address(address).unwrap(),
+                Some(200)
+            );
+
+            let slot = 100;
+            blockstore
+                .address_signatures_cf
+                .put(
+                    (1, address, slot, Signature::default()),
+                    &AddressSignatureMeta { writeable: false },
+                )
+                .unwrap();
+            assert_eq!(
+                blockstore.get_lowest_slot_for_address(address).unwrap(),
+                Some(100)
+            );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
