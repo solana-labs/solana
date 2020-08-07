@@ -50,6 +50,8 @@ pub enum SyscallError {
     InstructionError(InstructionError),
     #[error("Cross-program invocation with unauthorized signer or writable account")]
     PrivilegeEscalation,
+    #[error("Unaligned pointer")]
+    UnalignedPointer,
 }
 impl From<SyscallError> for EbpfError<BPFError> {
     fn from(error: SyscallError) -> Self {
@@ -141,20 +143,24 @@ macro_rules! translate {
 
 #[macro_export]
 macro_rules! translate_type_mut {
-    ($t:ty, $vm_addr:expr, $regions:expr) => {
-        unsafe {
-            match translate_addr::<BPFError>(
-                $vm_addr as u64,
-                size_of::<$t>(),
-                file!(),
-                line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
-                $regions,
-            ) {
-                Ok(value) => Ok(&mut *(value as *mut $t)),
-                Err(e) => Err(e),
+    ($t:ty, $vm_addr:expr, $regions:expr) => {{
+        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+            Err(SyscallError::UnalignedPointer.into())
+        } else {
+            unsafe {
+                match translate_addr::<BPFError>(
+                    $vm_addr as u64,
+                    size_of::<$t>(),
+                    file!(),
+                    line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+                    $regions,
+                ) {
+                    Ok(value) => Ok(&mut *(value as *mut $t)),
+                    Err(e) => Err(e),
+                }
             }
         }
-    };
+    }};
 }
 #[macro_export]
 macro_rules! translate_type {
@@ -168,18 +174,22 @@ macro_rules! translate_type {
 
 #[macro_export]
 macro_rules! translate_slice_mut {
-    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
-        match translate_addr::<BPFError>(
-            $vm_addr as u64,
-            $len as usize * size_of::<$t>(),
-            file!(),
-            line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
-            $regions,
-        ) {
-            Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
-            Err(e) => Err(e),
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {{
+        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+            Err(SyscallError::UnalignedPointer.into())
+        } else {
+            match translate_addr::<BPFError>(
+                $vm_addr as u64,
+                $len as usize * size_of::<$t>(),
+                file!(),
+                line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+                $regions,
+            ) {
+                Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
+                Err(e) => Err(e),
+            }
         }
-    };
+    }};
 }
 #[macro_export]
 macro_rules! translate_slice {
@@ -456,7 +466,7 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
                     let lamports_ref = {
                         // Double translate lamports out of RefCell
                         let ptr = translate_type!(u64, account_info.lamports.as_ptr(), ro_regions)?;
-                        translate_type_mut!(u64, *(ptr as *const u64), rw_regions)?
+                        translate_type_mut!(u64, *ptr, rw_regions)?
                     };
                     let data = {
                         // Double translate data out of RefCell
@@ -918,13 +928,17 @@ mod tests {
             vec![AccountMeta::new(Pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
-        let regions = vec![MemoryRegion {
+        let mut regions = vec![MemoryRegion {
             addr_host: addr,
-            addr_vm: 100,
+            addr_vm: 96,
             len: std::mem::size_of::<Instruction>() as u64,
         }];
-        let translated_instruction = translate_type!(Instruction, 100, &regions).unwrap();
+        let translated_instruction = translate_type!(Instruction, 96, &regions).unwrap();
         assert_eq!(instruction, *translated_instruction);
+        regions[0].len = 1;
+        assert!(translate_type!(Instruction, 100, &regions).is_err());
+        regions[0].len = std::mem::size_of::<Instruction>() as u64 * 2;
+        assert!(translate_type!(Instruction, 100, &regions).is_err());
     }
 
     #[test]
