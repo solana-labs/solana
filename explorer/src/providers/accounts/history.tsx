@@ -5,7 +5,7 @@ import {
   TransactionSignature,
   Connection,
 } from "@solana/web3.js";
-import { useAccounts, FetchStatus } from "./index";
+import { FetchStatus } from "./index";
 import { useCluster } from "../cluster";
 
 interface AccountHistory {
@@ -14,16 +14,19 @@ interface AccountHistory {
   foundOldest: boolean;
 }
 
-type State = { [address: string]: AccountHistory };
+type State = {
+  url: string;
+  map: { [address: string]: AccountHistory };
+};
 
 export enum ActionType {
   Update,
-  Add,
   Clear,
 }
 
 interface Update {
   type: ActionType.Update;
+  url: string;
   pubkey: PublicKey;
   status: FetchStatus;
   fetched?: ConfirmedSignatureInfo[];
@@ -31,16 +34,12 @@ interface Update {
   foundOldest?: boolean;
 }
 
-interface Add {
-  type: ActionType.Add;
-  address: string;
-}
-
 interface Clear {
   type: ActionType.Clear;
+  url: string;
 }
 
-type Action = Update | Add | Clear;
+type Action = Update | Clear;
 type Dispatch = (action: Action) => void;
 
 function combineFetched(
@@ -63,42 +62,44 @@ function combineFetched(
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case ActionType.Add: {
-      const details = { ...state };
-      const address = action.address;
-      if (!details[address]) {
-        details[address] = {
-          status: FetchStatus.Fetching,
-          foundOldest: false,
-        };
-      }
-      return details;
-    }
-
     case ActionType.Update: {
+      if (action.url !== state.url) return state;
       const address = action.pubkey.toBase58();
-      if (state[address]) {
+      if (state.map[address]) {
         return {
           ...state,
-          [address]: {
-            status: action.status,
-            fetched: combineFetched(
-              action.fetched,
-              state[address].fetched,
-              action.before
-            ),
-            foundOldest: action.foundOldest || state[address].foundOldest,
+          map: {
+            ...state.map,
+            [address]: {
+              status: action.status,
+              fetched: combineFetched(
+                action.fetched,
+                state.map[address].fetched,
+                action.before
+              ),
+              foundOldest: action.foundOldest || state.map[address].foundOldest,
+            },
+          },
+        };
+      } else {
+        return {
+          ...state,
+          map: {
+            ...state.map,
+            [address]: {
+              status: action.status,
+              fetched: action.fetched,
+              foundOldest: action.foundOldest || false,
+            },
           },
         };
       }
-      break;
     }
 
     case ActionType.Clear: {
-      return {};
+      return { url: action.url, map: {} };
     }
   }
-  return state;
 }
 
 const StateContext = React.createContext<State | undefined>(undefined);
@@ -106,29 +107,12 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type HistoryProviderProps = { children: React.ReactNode };
 export function HistoryProvider({ children }: HistoryProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, {});
-  const { accounts, lastFetchedAddress } = useAccounts();
   const { url } = useCluster();
+  const [state, dispatch] = React.useReducer(reducer, { url, map: {} });
 
   React.useEffect(() => {
-    dispatch({ type: ActionType.Clear });
+    dispatch({ type: ActionType.Clear, url });
   }, [url]);
-
-  // Fetch history for new accounts
-  React.useEffect(() => {
-    if (lastFetchedAddress) {
-      const infoFetched =
-        accounts[lastFetchedAddress] &&
-        accounts[lastFetchedAddress].lamports !== undefined;
-      const noHistory = !state[lastFetchedAddress];
-      if (infoFetched && noHistory) {
-        dispatch({ type: ActionType.Add, address: lastFetchedAddress });
-        fetchAccountHistory(dispatch, new PublicKey(lastFetchedAddress), url, {
-          limit: 10,
-        });
-      }
-    }
-  }, [accounts, lastFetchedAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -149,6 +133,7 @@ async function fetchAccountHistory(
     type: ActionType.Update,
     status: FetchStatus.Fetching,
     pubkey,
+    url,
   });
 
   let status;
@@ -168,6 +153,7 @@ async function fetchAccountHistory(
   }
   dispatch({
     type: ActionType.Update,
+    url,
     status,
     fetched,
     before: options?.before,
@@ -183,7 +169,7 @@ export function useAccountHistory(address: string) {
     throw new Error(`useAccountHistory must be used within a AccountsProvider`);
   }
 
-  return context[address];
+  return context.map[address];
 }
 
 export function useFetchAccountHistory() {
@@ -197,7 +183,7 @@ export function useFetchAccountHistory() {
   }
 
   return (pubkey: PublicKey, refresh?: boolean) => {
-    const before = state[pubkey.toBase58()];
+    const before = state.map[pubkey.toBase58()];
     if (!refresh && before && before.fetched && before.fetched.length > 0) {
       const oldest = before.fetched[before.fetched.length - 1].signature;
       fetchAccountHistory(dispatch, pubkey, url, { before: oldest, limit: 25 });

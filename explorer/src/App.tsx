@@ -5,7 +5,6 @@ import AccountDetails from "./components/AccountDetails";
 import TransactionDetails from "./components/TransactionDetails";
 import ClusterModal from "./components/ClusterModal";
 import { TX_ALIASES } from "./providers/transactions";
-import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
 import TopAccountsCard from "components/TopAccountsCard";
 import SupplyCard from "components/SupplyCard";
 import StatsCard from "components/StatsCard";
@@ -13,6 +12,8 @@ import MessageBanner from "components/MessageBanner";
 import Navbar from "components/Navbar";
 import { ClusterStatusBanner } from "components/ClusterStatusButton";
 import { SearchBar } from "components/SearchBar";
+
+const ACCOUNT_ALIASES = ["account", "accounts", "addresses"];
 
 function App() {
   return (
@@ -41,11 +42,26 @@ function App() {
           />
           <Route
             exact
-            path={ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(
-              (account) => `/${account}/:address`
-            )}
+            path={ACCOUNT_ALIASES.flatMap((account) => [
+              `/${account}/:address`,
+              `/${account}/:address/:tab`,
+            ])}
+            render={({ match, location }) => {
+              let pathname = `/address/${match.params.address}`;
+              if (match.params.tab) {
+                pathname += `/${match.params.tab}`;
+              }
+              return <Redirect to={{ ...location, pathname }} />;
+            }}
+          />
+          <Route
+            exact
+            path={["/address/:address", "/address/:address/:tab"]}
             render={({ match }) => (
-              <AccountDetails address={match.params.address} />
+              <AccountDetails
+                address={match.params.address}
+                tab={match.params.tab}
+              />
             )}
           />
           <Route exact path="/">
