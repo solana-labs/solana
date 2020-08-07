@@ -21,7 +21,6 @@ pub struct AbiDigester {
 }
 
 pub type DigestResult = Result<AbiDigester, DigestError>;
-type NoResult = Result<(), DigestError>;
 type Sstr = &'static str;
 
 #[derive(Debug, Error)]
@@ -143,12 +142,16 @@ impl AbiDigester {
         Ok(self)
     }
 
-    fn digest_element<T: ?Sized + Serialize>(&mut self, v: &T) -> NoResult {
+    fn digest_element<T: ?Sized + Serialize>(&mut self, v: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("element");
         self.create_child().digest_data(v).map(|_| ())
     }
 
-    fn digest_named_field<T: ?Sized + Serialize>(&mut self, key: Sstr, v: &T) -> NoResult {
+    fn digest_named_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: Sstr,
+        v: &T,
+    ) -> Result<(), DigestError> {
         self.update_with_string(format!("field {}: {}", key, type_name::<T>()));
         self.create_child()
             .digest_data(v)
@@ -156,12 +159,16 @@ impl AbiDigester {
             .map_err(|e| DigestError::wrap_by_str(e, key))
     }
 
-    fn digest_unnamed_field<T: ?Sized + Serialize>(&mut self, v: &T) -> NoResult {
+    fn digest_unnamed_field<T: ?Sized + Serialize>(&mut self, v: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("field");
         self.create_child().digest_data(v).map(|_| ())
     }
 
-    fn check_for_enum(&mut self, label: &'static str, variant: &'static str) -> NoResult {
+    fn check_for_enum(
+        &mut self,
+        label: &'static str,
+        variant: &'static str,
+    ) -> Result<(), DigestError> {
         if !self.for_enum {
             panic!("derive AbiEnumVisitor or implement it for the enum, which contains a variant ({}) named {}", label, variant);
         }
@@ -406,7 +413,7 @@ impl SerializeSeq for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_element<T: ?Sized + Serialize>(&mut self, data: &T) -> NoResult {
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, data: &T) -> Result<(), DigestError> {
         self.digest_element(data)
     }
 
@@ -419,7 +426,7 @@ impl SerializeTuple for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_element<T: ?Sized + Serialize>(&mut self, data: &T) -> NoResult {
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, data: &T) -> Result<(), DigestError> {
         self.digest_element(data)
     }
 
@@ -431,7 +438,7 @@ impl SerializeTupleStruct for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, data: &T) -> NoResult {
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, data: &T) -> Result<(), DigestError> {
         self.digest_unnamed_field(data)
     }
 
@@ -444,7 +451,7 @@ impl SerializeTupleVariant for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, data: &T) -> NoResult {
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, data: &T) -> Result<(), DigestError> {
         self.digest_unnamed_field(data)
     }
 
@@ -457,12 +464,12 @@ impl SerializeMap for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> NoResult {
+    fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("key");
         self.create_child().digest_data(key).map(|_| ())
     }
 
-    fn serialize_value<T: ?Sized + Serialize>(&mut self, value: &T) -> NoResult {
+    fn serialize_value<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), DigestError> {
         self.update_with_type::<T>("value");
         self.create_child().digest_data(value).map(|_| ())
     }
@@ -476,7 +483,11 @@ impl SerializeStruct for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, key: Sstr, data: &T) -> NoResult {
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: Sstr,
+        data: &T,
+    ) -> Result<(), DigestError> {
         self.digest_named_field(key, data)
     }
 
@@ -489,7 +500,11 @@ impl SerializeStructVariant for AbiDigester {
     type Ok = Self;
     type Error = DigestError;
 
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, key: Sstr, data: &T) -> NoResult {
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: Sstr,
+        data: &T,
+    ) -> Result<(), DigestError> {
         self.digest_named_field(key, data)
     }
 
