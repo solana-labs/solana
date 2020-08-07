@@ -3204,6 +3204,7 @@ name = "solana-account-decoder"
 version = "1.4.0"
 dependencies = [
  "Inflector",
+ "base64 0.12.3",
  "bincode",
  "bs58",
  "lazy_static",

@@ -2,6 +2,7 @@ use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     http_sender::HttpSender,
     mock_sender::{MockSender, Mocks},
+    rpc_config::RpcAccountInfoConfig,
     rpc_config::{
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
         RpcSendTransactionConfig, RpcTokenAccountsFilter,
@@ -19,7 +20,7 @@ use solana_account_decoder::{
         get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount,
         UiTokenAmount,
     },
-    UiAccount,
+    UiAccount, UiAccountEncoding,
 };
 use solana_sdk::{
     account::Account,
@@ -466,9 +467,13 @@ impl RpcClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::Binary64),
+            commitment: Some(commitment_config),
+        };
         let response = self.sender.send(
             RpcRequest::GetAccountInfo,
-            json!([pubkey.to_string(), commitment_config]),
+            json!([pubkey.to_string(), config]),
         );
 
         response
