@@ -16,8 +16,8 @@ use log::*;
 use serde_json::{json, Value};
 use solana_account_decoder::{
     parse_token::{
-        get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig,
-        UiTokenAccountWithDecimals, UiTokenAmount,
+        get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount,
+        UiTokenAmount,
     },
     UiAccount,
 };
@@ -686,10 +686,7 @@ impl RpcClient {
         Ok(hash)
     }
 
-    pub fn get_token_account(
-        &self,
-        pubkey: &Pubkey,
-    ) -> ClientResult<Option<UiTokenAccountWithDecimals>> {
+    pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
         Ok(self
             .get_token_account_with_commitment(pubkey, CommitmentConfig::default())?
             .value)
@@ -699,7 +696,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Option<UiTokenAccountWithDecimals>> {
+    ) -> RpcResult<Option<UiTokenAccount>> {
         let Response {
             context,
             value: account,
@@ -726,9 +723,7 @@ impl RpcClient {
         Ok(Response {
             context,
             value: match parse_token(&account.data, Some(mint.decimals)) {
-                Ok(TokenAccountType::AccountWithDecimals(ui_token_account)) => {
-                    Some(ui_token_account)
-                }
+                Ok(TokenAccountType::Account(ui_token_account)) => Some(ui_token_account),
                 _ => None,
             },
         })
@@ -809,7 +804,7 @@ impl RpcClient {
         &self,
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, UiTokenAccountWithDecimals)>> {
+    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
         Ok(self
             .get_token_accounts_by_delegate_with_commitment(
                 delegate,
@@ -824,7 +819,7 @@ impl RpcClient {
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, UiTokenAccountWithDecimals)>> {
+    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
@@ -856,7 +851,7 @@ impl RpcClient {
         &self,
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, UiTokenAccountWithDecimals)>> {
+    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
         Ok(self
             .get_token_accounts_by_owner_with_commitment(
                 owner,
@@ -871,7 +866,7 @@ impl RpcClient {
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, UiTokenAccountWithDecimals)>> {
+    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
@@ -916,7 +911,7 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
         pubkey_accounts: Vec<(Pubkey, Account)>,
-    ) -> Vec<(Pubkey, UiTokenAccountWithDecimals)> {
+    ) -> Vec<(Pubkey, UiTokenAccount)> {
         let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
         pubkey_accounts
             .into_iter()
@@ -932,7 +927,7 @@ impl RpcClient {
                     Some(mint.decimals)
                 })?;
                 match parse_token(&account.data, Some(decimals)) {
-                    Ok(TokenAccountType::AccountWithDecimals(ui_token_account)) => {
+                    Ok(TokenAccountType::Account(ui_token_account)) => {
                         Some((pubkey, ui_token_account))
                     }
                     _ => None,

@@ -30,6 +30,9 @@ pub enum ParseAccountError {
     #[error("Program not parsable")]
     ProgramNotParsable,
 
+    #[error("Additional data required to parse: {0}")]
+    AdditionalDataMissing(String),
+
     #[error("Instruction error")]
     InstructionError(#[from] InstructionError),
 

@@ -30,38 +30,24 @@ pub fn parse_token(
     if data.len() == size_of::<Account>() {
         let account: Account = *unpack(&mut data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
-        if let Some(decimals) = mint_decimals {
-            let ui_token_amount = token_amount_to_ui_amount(account.amount, decimals);
-            Ok(TokenAccountType::AccountWithDecimals(
-                UiTokenAccountWithDecimals {
-                    mint: account.mint.to_string(),
-                    owner: account.owner.to_string(),
-                    amount: account.amount.to_string(),
-                    ui_amount: ui_token_amount.ui_amount,
-                    decimals,
-                    delegate: match account.delegate {
-                        COption::Some(pubkey) => Some(pubkey.to_string()),
-                        COption::None => None,
-                    },
-                    is_initialized: account.is_initialized,
-                    is_native: account.is_native,
-                    delegated_amount: account.delegated_amount,
-                },
-            ))
-        } else {
-            Ok(TokenAccountType::Account(UiTokenAccount {
-                mint: account.mint.to_string(),
-                owner: account.owner.to_string(),
-                amount: account.amount.to_string(),
-                delegate: match account.delegate {
-                    COption::Some(pubkey) => Some(pubkey.to_string()),
-                    COption::None => None,
-                },
-                is_initialized: account.is_initialized,
-                is_native: account.is_native,
-                delegated_amount: account.delegated_amount,
-            }))
-        }
+        let decimals = mint_decimals.ok_or_else(|| {
+            ParseAccountError::AdditionalDataMissing(
+                "no mint_decimals provided to parse spl-token account".to_string(),
+            )
+        })?;
+        let ui_token_amount = token_amount_to_ui_amount(account.amount, decimals);
+        Ok(TokenAccountType::Account(UiTokenAccount {
+            mint: account.mint.to_string(),
+            owner: account.owner.to_string(),
+            token_amount: ui_token_amount,
+            delegate: match account.delegate {
+                COption::Some(pubkey) => Some(pubkey.to_string()),
+                COption::None => None,
+            },
+            is_initialized: account.is_initialized,
+            is_native: account.is_native,
+            delegated_amount: account.delegated_amount,
+        }))
     } else if data.len() == size_of::<Mint>() {
         let mint: Mint = *unpack(&mut data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
@@ -103,7 +89,6 @@ pub fn parse_token(
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum TokenAccountType {
     Account(UiTokenAccount),
-    AccountWithDecimals(UiTokenAccountWithDecimals),
     Mint(UiMint),
     Multisig(UiMultisig),
 }
@@ -113,21 +98,7 @@ pub enum TokenAccountType {
 pub struct UiTokenAccount {
     pub mint: String,
     pub owner: String,
-    pub amount: UiAmount,
-    pub delegate: Option<String>,
-    pub is_initialized: bool,
-    pub is_native: bool,
-    pub delegated_amount: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct UiTokenAccountWithDecimals {
-    pub mint: String,
-    pub owner: String,
-    pub ui_amount: f64,
-    pub decimals: u8,
-    pub amount: UiAmount,
+    pub token_amount: UiTokenAmount,
     pub delegate: Option<String>,
     pub is_initialized: bool,
     pub is_native: bool,
@@ -192,26 +163,17 @@ mod test {
         account.owner = owner_pubkey;
         account.amount = 42;
         account.is_initialized = true;
+        assert!(parse_token(&account_data, None).is_err());
         assert_eq!(
-            parse_token(&account_data, None).unwrap(),
+            parse_token(&account_data, Some(2)).unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
-                amount: "42".to_string(),
-                delegate: None,
-                is_initialized: true,
-                is_native: false,
-                delegated_amount: 0,
-            }),
-        );
-        assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
-            TokenAccountType::AccountWithDecimals(UiTokenAccountWithDecimals {
-                mint: mint_pubkey.to_string(),
-                owner: owner_pubkey.to_string(),
-                ui_amount: 0.42,
-                decimals: 2,
-                amount: "42".to_string(),
+                token_amount: UiTokenAmount {
+                    ui_amount: 0.42,
+                    decimals: 2,
+                    amount: "42".to_string()
+                },
                 delegate: None,
                 is_initialized: true,
                 is_native: false,
