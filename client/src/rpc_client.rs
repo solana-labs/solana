@@ -915,9 +915,6 @@ impl RpcClient {
         )
     }
 
-<<<<<<< HEAD
-    pub fn poll_balance_with_timeout_and_commitment(
-=======
     fn accounts_to_token_accounts(
         &self,
         commitment_config: CommitmentConfig,
@@ -947,8 +944,7 @@ impl RpcClient {
             .collect()
     }
 
-    fn poll_balance_with_timeout_and_commitment(
->>>>>>> b7c268190... Token Accounts: return ui_amount, decimals with decoded account (#11407)
+    pub fn poll_balance_with_timeout_and_commitment(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,

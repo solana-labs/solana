@@ -1,10 +1,9 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-<<<<<<< HEAD
-use crate::commitment::BlockCommitmentCache;
-=======
-use crate::rpc::{get_parsed_token_account, get_parsed_token_accounts};
->>>>>>> b7c268190... Token Accounts: return ui_amount, decimals with decoded account (#11407)
+use crate::{
+    commitment::BlockCommitmentCache,
+    rpc::{get_parsed_token_account, get_parsed_token_accounts},
+};
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -891,13 +890,8 @@ impl RpcSubscriptions {
             &subscriptions.gossip_account_subscriptions,
             &subscriptions.gossip_program_subscriptions,
             &subscriptions.gossip_signature_subscriptions,
-<<<<<<< HEAD
-            &bank_forks,
-            &cache_slot_info,
-=======
             bank_forks,
-            &commitment_slots,
->>>>>>> b7c268190... Token Accounts: return ui_amount, decimals with decoded account (#11407)
+            &cache_slot_info,
             &notifier,
         );
     }
