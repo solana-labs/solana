@@ -1,3 +1,7 @@
+branches:
+  only:
+    - master
+    - /^v\d+\.\d+/
 
 notifications:
   email: false
@@ -13,10 +17,6 @@ language: minimal
 jobs:
   include:
     - name: "Export Github Repositories"
-      branches:
-        only:
-          - master
-          - /^v\d+\.\d+/
       if: type IN (push, cron) AND branch = master
       language: python
       git:
@@ -28,10 +28,6 @@ jobs:
     - &release-artifacts
       if: type IN (api, cron) OR tag IS present
       name: "macOS release artifacts"
-      branches:
-        only:
-          - master
-          - /^v\d+\.\d+/
       os: osx
       language: rust
       rust:
@@ -61,10 +57,6 @@ jobs:
             tags: true
     - <<: *release-artifacts
       name: "Windows release artifacts"
-      branches:
-        only:
-          - master
-          - /^v\d+\.\d+/
       os: windows
     #  Linux release artifacts are still built by ci/buildkite-secondary.yml
     #- <<: *release-artifacts
@@ -75,10 +67,7 @@ jobs:
 
     # explorer pull request
     - name: "explorer"
-      branches:
-        only:
-          - master
-      if: type = pull_request
+      if: type = pull_request AND branch = master
 
       language: node_js
       node_js:
@@ -98,10 +87,7 @@ jobs:
 
     # web3.js pull request
     - name: "web3.js"
-      branches:
-        only:
-          - master
-      if: type = pull_request
+      if: type = pull_request AND branch = master
 
       language: node_js
       node_js:
@@ -125,10 +111,6 @@ jobs:
 
     # docs pull request
     - name: "docs"
-      branches:
-        only:
-          - master
-          - /^v\d+\.\d+/
       if: type IN (push, pull_request) OR tag IS present
       language: node_js
       node_js:
