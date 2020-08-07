@@ -69,8 +69,6 @@ jobs:
     - name: "explorer"
       if: type = pull_request
       branches:
-        only:
-          - master
         except:
           - /^v\d+\.\d+/
 
@@ -94,8 +92,6 @@ jobs:
     - name: "web3.js"
       if: type = pull_request
       branches:
-        only:
-          - master
         except:
           - /^v\d+\.\d+/
 
