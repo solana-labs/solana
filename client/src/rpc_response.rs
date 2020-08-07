@@ -1,5 +1,5 @@
 use crate::client_error;
-use solana_account_decoder::UiAccount;
+use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount};
 use solana_sdk::{
     clock::{Epoch, Slot},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -10,7 +10,6 @@ use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
 use std::{collections::HashMap, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
-pub type RpcAmount = String;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RpcResponseContext {
@@ -224,18 +223,10 @@ pub struct RpcStakeActivation {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTokenAmount {
-    pub ui_amount: f64,
-    pub decimals: u8,
-    pub amount: RpcAmount,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct RpcTokenAccountBalance {
     pub address: String,
     #[serde(flatten)]
-    pub amount: RpcTokenAmount,
+    pub amount: UiTokenAmount,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

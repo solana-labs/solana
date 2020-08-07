@@ -15,7 +15,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
 use solana_account_decoder::{
-    parse_token::{parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount},
+    parse_token::{
+        get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount,
+        UiTokenAmount,
+    },
     UiAccount,
 };
 use solana_sdk::{
@@ -38,6 +41,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -698,14 +702,30 @@ impl RpcClient {
             value: account,
         } = self.get_account_with_commitment(pubkey, commitment_config)?;
 
+        if account.is_none() {
+            return Err(RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into());
+        }
+        let account = account.unwrap();
+        let mint = get_token_account_mint(&account.data)
+            .and_then(|mint_pubkey| {
+                self.get_token_mint_with_commitment(&mint_pubkey, commitment_config)
+                    .ok()
+                    .map(|response| response.value)
+                    .flatten()
+            })
+            .ok_or_else(|| {
+                Into::<ClientError>::into(RpcError::ForUser(format!(
+                    "AccountNotFound: mint for token acccount pubkey={}",
+                    pubkey
+                )))
+            })?;
+
         Ok(Response {
             context,
-            value: account
-                .map(|account| match parse_token(&account.data) {
-                    Ok(TokenAccountType::Account(ui_token_account)) => Some(ui_token_account),
-                    _ => None,
-                })
-                .flatten(),
+            value: match parse_token(&account.data, Some(mint.decimals)) {
+                Ok(TokenAccountType::Account(ui_token_account)) => Some(ui_token_account),
+                _ => None,
+            },
         })
     }
 
@@ -728,7 +748,7 @@ impl RpcClient {
         Ok(Response {
             context,
             value: account
-                .map(|account| match parse_token(&account.data) {
+                .map(|account| match parse_token(&account.data, None) {
                     Ok(TokenAccountType::Mint(ui_token_mint)) => Some(ui_token_mint),
                     _ => None,
                 })
@@ -755,7 +775,7 @@ impl RpcClient {
         Ok(Response {
             context,
             value: account
-                .map(|account| match parse_token(&account.data) {
+                .map(|account| match parse_token(&account.data, None) {
                     Ok(TokenAccountType::Multisig(ui_token_multisig)) => Some(ui_token_multisig),
                     _ => None,
                 })
@@ -763,7 +783,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<RpcTokenAmount> {
+    pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
             .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
             .value)
@@ -773,7 +793,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<RpcTokenAmount> {
+    ) -> RpcResult<UiTokenAmount> {
         self.send(
             RpcRequest::GetTokenAccountBalance,
             json!([pubkey.to_string(), commitment_config]),
@@ -817,10 +837,10 @@ impl RpcClient {
                 commitment_config
             ]),
         )?;
-        let pubkey_accounts = accounts_to_token_accounts(parse_keyed_accounts(
-            accounts,
-            RpcRequest::GetTokenAccountsByDelegate,
-        )?);
+        let pubkey_accounts = self.accounts_to_token_accounts(
+            commitment_config,
+            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?,
+        );
         Ok(Response {
             context,
             value: pubkey_accounts,
@@ -860,17 +880,17 @@ impl RpcClient {
             RpcRequest::GetTokenAccountsByOwner,
             json!([owner.to_string(), token_account_filter, commitment_config]),
         )?;
-        let pubkey_accounts = accounts_to_token_accounts(parse_keyed_accounts(
-            accounts,
-            RpcRequest::GetTokenAccountsByDelegate,
-        )?);
+        let pubkey_accounts = self.accounts_to_token_accounts(
+            commitment_config,
+            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?,
+        );
         Ok(Response {
             context,
             value: pubkey_accounts,
         })
     }
 
-    pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<RpcTokenAmount> {
+    pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
             .get_token_supply_with_commitment(mint, CommitmentConfig::default())?
             .value)
@@ -880,11 +900,40 @@ impl RpcClient {
         &self,
         mint: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<RpcTokenAmount> {
+    ) -> RpcResult<UiTokenAmount> {
         self.send(
             RpcRequest::GetTokenSupply,
             json!([mint.to_string(), commitment_config]),
         )
+    }
+
+    fn accounts_to_token_accounts(
+        &self,
+        commitment_config: CommitmentConfig,
+        pubkey_accounts: Vec<(Pubkey, Account)>,
+    ) -> Vec<(Pubkey, UiTokenAccount)> {
+        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+        pubkey_accounts
+            .into_iter()
+            .filter_map(|(pubkey, account)| {
+                let mint_pubkey = get_token_account_mint(&account.data)?;
+                let decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
+                    let mint = self
+                        .get_token_mint_with_commitment(&mint_pubkey, commitment_config)
+                        .ok()
+                        .map(|response| response.value)
+                        .flatten()?;
+                    mint_decimals.insert(mint_pubkey, mint.decimals);
+                    Some(mint.decimals)
+                })?;
+                match parse_token(&account.data, Some(decimals)) {
+                    Ok(TokenAccountType::Account(ui_token_account)) => {
+                        Some((pubkey, ui_token_account))
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
     }
 
     fn poll_balance_with_timeout_and_commitment(
@@ -1249,18 +1298,6 @@ fn parse_keyed_accounts(
         ));
     }
     Ok(pubkey_accounts)
-}
-
-fn accounts_to_token_accounts(
-    pubkey_accounts: Vec<(Pubkey, Account)>,
-) -> Vec<(Pubkey, UiTokenAccount)> {
-    pubkey_accounts
-        .into_iter()
-        .filter_map(|(pubkey, account)| match parse_token(&account.data) {
-            Ok(TokenAccountType::Account(ui_token_account)) => Some((pubkey, ui_token_account)),
-            _ => None,
-        })
-        .collect()
 }
 
 #[cfg(test)]
