@@ -46,7 +46,6 @@ serde_json = "1.0.56"
 solana-account-decoder = { path = "../account-decoder", version = "1.4.0" }
 solana-banks-server = { path = "../banks-server", version = "1.4.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.4.0" }
-solana-budget-program = { path = "../programs/budget", version = "1.4.0" }
 solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
 solana-client = { path = "../client", version = "1.4.0" }
 solana-faucet = { path = "../faucet", version = "1.4.0" }

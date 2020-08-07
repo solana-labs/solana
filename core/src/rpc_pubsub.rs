@@ -359,7 +359,6 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-    use solana_budget_program::{self, budget_instruction};
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -376,6 +375,10 @@ mod tests {
         signature::{Keypair, Signer},
         system_instruction, system_program, system_transaction,
         transaction::{self, Transaction},
+    };
+    use solana_stake_program::{
+        self, stake_instruction,
+        stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
     };
     use solana_vote_program::vote_transaction;
     use std::{
@@ -503,21 +506,16 @@ mod tests {
     #[serial]
     fn test_account_subscribe() {
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair: alice,
             ..
         } = create_genesis_config(10_000);
 
-        // This test depends on the budget program
-        genesis_config
-            .native_instruction_processors
-            .push(solana_budget_program!());
-
-        let bob_pubkey = Pubkey::new_rand();
-        let witness = Keypair::new();
-        let contract_funds = Keypair::new();
-        let contract_state = Keypair::new();
-        let budget_program_id = solana_budget_program::id();
+        let new_stake_authority = Pubkey::new_rand();
+        let stake_authority = Keypair::new();
+        let from = Keypair::new();
+        let stake_account = Keypair::new();
+        let stake_program_id = solana_stake_program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -540,26 +538,26 @@ mod tests {
         rpc.account_subscribe(
             session,
             subscriber,
-            contract_state.pubkey().to_string(),
+            stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::recent()),
                 encoding: None,
             }),
         );
 
-        let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
+        let tx = system_transaction::transfer(&alice, &from.pubkey(), 51, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
 
-        let ixs = budget_instruction::when_signed(
-            &contract_funds.pubkey(),
-            &bob_pubkey,
-            &contract_state.pubkey(),
-            &witness.pubkey(),
-            None,
+        let authorized = Authorized::auto(&stake_authority.pubkey());
+        let ixs = stake_instruction::create_account(
+            &from.pubkey(),
+            &stake_account.pubkey(),
+            &authorized,
+            &Lockup::default(),
             51,
         );
-        let message = Message::new(&ixs, Some(&contract_funds.pubkey()));
-        let tx = Transaction::new(&[&contract_funds, &contract_state], message, blockhash);
+        let message = Message::new(&ixs, Some(&from.pubkey()));
+        let tx = Transaction::new(&[&from, &stake_account], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
@@ -569,7 +567,7 @@ mod tests {
             .unwrap()
             .get(1)
             .unwrap()
-            .get_account(&contract_state.pubkey())
+            .get_account(&stake_account.pubkey())
             .unwrap()
             .data;
         let expected = json!({
@@ -579,7 +577,7 @@ mod tests {
                "result": {
                    "context": { "slot": 1 },
                    "value": {
-                       "owner": budget_program_id.to_string(),
+                       "owner": stake_program_id.to_string(),
                        "lamports": 51,
                        "data": bs58::encode(expected_data).into_string(),
                        "executable": false,
@@ -593,27 +591,25 @@ mod tests {
         let (response, _) = robust_poll_or_panic(receiver);
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
-        let tx = system_transaction::transfer(&alice, &witness.pubkey(), 1, blockhash);
+        let tx = system_transaction::transfer(&alice, &stake_authority.pubkey(), 1, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
-        let ix = budget_instruction::apply_signature(
-            &witness.pubkey(),
-            &contract_state.pubkey(),
-            &bob_pubkey,
+        let ix = stake_instruction::authorize(
+            &stake_account.pubkey(),
+            &stake_authority.pubkey(),
+            &new_stake_authority,
+            StakeAuthorize::Staker,
         );
-        let message = Message::new(&[ix], Some(&witness.pubkey()));
-        let tx = Transaction::new(&[&witness], message, blockhash);
+        let message = Message::new(&[ix], Some(&stake_authority.pubkey()));
+        let tx = Transaction::new(&[&stake_authority], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
+        let bank = bank_forks.read().unwrap()[1].clone();
+        let account = bank.get_account(&stake_account.pubkey()).unwrap();
         assert_eq!(
-            bank_forks
-                .read()
-                .unwrap()
-                .get(1)
-                .unwrap()
-                .get_account(&contract_state.pubkey()),
-            None
+            StakeState::authorized_from(&account).unwrap().staker,
+            new_stake_authority
         );
     }
 

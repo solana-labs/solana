@@ -3542,7 +3542,6 @@ dependencies = [
  "solana-account-decoder",
  "solana-banks-server",
  "solana-bpf-loader-program",
- "solana-budget-program",
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
