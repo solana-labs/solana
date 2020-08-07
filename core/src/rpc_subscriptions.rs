@@ -1044,7 +1044,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
         bank_forks
             .write()
@@ -1067,7 +1067,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },
@@ -1103,7 +1103,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
         bank_forks
             .write()
@@ -1123,7 +1123,7 @@ pub(crate) mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         );
         subscriptions.add_program_subscription(
-            solana_budget_program::id(),
+            solana_stake_program::id(),
             None,
             sub_id.clone(),
             subscriber,
@@ -1134,7 +1134,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_program::id()));
+            .contains_key(&solana_stake_program::id()));
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -1149,7 +1149,7 @@ pub(crate) mod tests {
                           "data": "1111111111111111",
                           "executable": false,
                           "lamports": 1,
-                          "owner": "Budget1111111111111111111111111111111111111",
+                          "owner": "Stake11111111111111111111111111111111111111",
                           "rentEpoch": 1,
                        },
                        "pubkey": alice.pubkey().to_string(),
@@ -1166,7 +1166,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_program::id()));
+            .contains_key(&solana_stake_program::id()));
     }
 
     #[test]
@@ -1528,7 +1528,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
 
         // Add the transaction to the 1st bank and then freeze the bank
@@ -1562,7 +1562,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },
@@ -1595,7 +1595,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },
