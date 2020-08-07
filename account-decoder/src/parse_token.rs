@@ -1,6 +1,6 @@
 use crate::{
     parse_account_data::{ParsableAccount, ParseAccountError},
-    UiAmount,
+    StringAmount,
 };
 use solana_sdk::pubkey::Pubkey;
 use spl_token_v1_0::{
@@ -110,7 +110,7 @@ pub struct UiTokenAccount {
 pub struct UiTokenAmount {
     pub ui_amount: f64,
     pub decimals: u8,
-    pub amount: UiAmount,
+    pub amount: StringAmount,
 }
 
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {

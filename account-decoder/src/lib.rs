@@ -12,7 +12,7 @@ use crate::parse_account_data::{parse_account_data, AccountAdditionalData, Parse
 use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use std::str::FromStr;
 
-pub type UiAmount = String;
+pub type StringAmount = String;
 
 /// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
