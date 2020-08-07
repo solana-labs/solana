@@ -1,13 +1,18 @@
 import React from "react";
-import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
+import {
+  TransactionInstruction,
+  SignatureResult,
+  ParsedInstruction,
+} from "@solana/web3.js";
 import { RawDetails } from "./RawDetails";
+import { RawParsedDetails } from "./RawParsedDetails";
 
 type InstructionProps = {
   title: string;
   children?: React.ReactNode;
   result: SignatureResult;
   index: number;
-  ix: TransactionInstruction;
+  ix: TransactionInstruction | ParsedInstruction;
   defaultRaw?: boolean;
 };
 
@@ -45,7 +50,15 @@ export function InstructionCard({
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <tbody className="list">
-            {showRaw ? <RawDetails ix={ix} /> : children}
+            {showRaw ? (
+              "parsed" in ix ? (
+                <RawParsedDetails ix={ix} />
+              ) : (
+                <RawDetails ix={ix} />
+              )
+            ) : (
+              children
+            )}
           </tbody>
         </table>
       </div>

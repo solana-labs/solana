@@ -2,7 +2,7 @@ import React from "react";
 import {
   Connection,
   TransactionSignature,
-  ConfirmedTransaction,
+  ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
 import { useTransactions, FetchStatus } from "./index";
@@ -10,7 +10,7 @@ import { CACHED_DETAILS, isCached } from "./cached";
 
 export interface Details {
   fetchStatus: FetchStatus;
-  transaction: ConfirmedTransaction | null;
+  transaction: ParsedConfirmedTransaction | null;
 }
 
 type State = { [signature: string]: Details };
@@ -25,7 +25,7 @@ interface Update {
   type: ActionType.Update;
   signature: string;
   fetchStatus: FetchStatus;
-  transaction: ConfirmedTransaction | null;
+  transaction: ParsedConfirmedTransaction | null;
 }
 
 interface Add {
@@ -134,7 +134,7 @@ async function fetchDetails(
     fetchStatus = FetchStatus.Fetched;
   } else {
     try {
-      transaction = await new Connection(url).getConfirmedTransaction(
+      transaction = await new Connection(url).getParsedConfirmedTransaction(
         signature
       );
       fetchStatus = FetchStatus.Fetched;

@@ -1,3 +1,4 @@
+import bs58 from "bs58";
 import {
   SystemProgram,
   StakeProgram,
@@ -7,6 +8,9 @@ import {
   SYSVAR_RENT_PUBKEY,
   SYSVAR_REWARDS_PUBKEY,
   SYSVAR_STAKE_HISTORY_PUBKEY,
+  ParsedTransaction,
+  TransactionInstruction,
+  Transaction,
 } from "@solana/web3.js";
 
 const PROGRAM_IDS = {
@@ -47,4 +51,54 @@ export function displayAddress(address: string): string {
     SYSVAR_IDS[address] ||
     address
   );
+}
+
+export function intoTransactionInstruction(
+  tx: ParsedTransaction,
+  index: number
+): TransactionInstruction | undefined {
+  const message = tx.message;
+  const instruction = message.instructions[index];
+  if ("parsed" in instruction) return;
+
+  const keys = [];
+  for (const account of instruction.accounts) {
+    const accountKey = message.accountKeys.find(({ pubkey }) =>
+      pubkey.equals(account)
+    );
+    if (!accountKey) return;
+    keys.push({
+      pubkey: accountKey.pubkey,
+      isSigner: accountKey.signer,
+      isWritable: accountKey.writable,
+    });
+  }
+
+  return new TransactionInstruction({
+    data: bs58.decode(instruction.data),
+    keys: keys,
+    programId: instruction.programId,
+  });
+}
+
+export function intoParsedTransaction(tx: Transaction): ParsedTransaction {
+  const message = tx.compileMessage();
+  return {
+    signatures: tx.signatures.map((value) =>
+      bs58.encode(value.signature as any)
+    ),
+    message: {
+      accountKeys: message.accountKeys.map((key, index) => ({
+        pubkey: key,
+        signer: tx.signatures.some(({ publicKey }) => publicKey.equals(key)),
+        writable: message.isAccountWritable(index),
+      })),
+      instructions: message.instructions.map((ix) => ({
+        programId: message.accountKeys[ix.programIdIndex],
+        accounts: ix.accounts.map((index) => message.accountKeys[index]),
+        data: ix.data,
+      })),
+      recentBlockhash: message.recentBlockhash,
+    },
+  };
 }

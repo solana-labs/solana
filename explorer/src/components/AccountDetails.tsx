@@ -1,5 +1,5 @@
 import React from "react";
-import { PublicKey, StakeProgram, TokenAccountInfo } from "@solana/web3.js";
+import { PublicKey, StakeProgram } from "@solana/web3.js";
 import {
   FetchStatus,
   useFetchAccountInfo,
@@ -16,6 +16,7 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 import {
   useFetchAccountOwnedTokens,
   useAccountOwnedTokens,
+  TokenAccountData,
 } from "providers/accounts/tokens";
 import { useCluster, ClusterStatus } from "providers/cluster";
 import Address from "./common/Address";
@@ -158,7 +159,7 @@ function TokensCard({ pubkey }: { pubkey: PublicKey }) {
     );
   }
 
-  const mappedTokens = new Map<string, TokenAccountInfo>();
+  const mappedTokens = new Map<string, TokenAccountData>();
   for (const token of tokens) {
     const mintAddress = token.mint.toBase58();
     const tokenInfo = mappedTokens.get(mintAddress);

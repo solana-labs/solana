@@ -25,6 +25,8 @@ import InfoTooltip from "components/InfoTooltip";
 import { isCached } from "providers/transactions/cached";
 import Address from "./common/Address";
 import Signature from "./common/Signature";
+import { intoTransactionInstruction } from "utils/tx";
+import { TokenDetailsCard } from "./instruction/token/TokenDetailsCard";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -91,12 +93,17 @@ function StatusCard({ signature }: Props) {
   };
 
   const fee = details?.transaction?.meta?.fee;
-  const blockhash = details?.transaction?.transaction.recentBlockhash;
-  const ix = details?.transaction?.transaction.instructions[0];
-  const isNonce =
-    ix &&
-    SystemProgram.programId.equals(ix.programId) &&
-    SystemInstruction.decodeInstructionType(ix) === "AdvanceNonceAccount";
+  const transaction = details?.transaction?.transaction;
+  const blockhash = transaction?.message.recentBlockhash;
+  const isNonce = (() => {
+    if (!transaction) return false;
+    const ix = intoTransactionInstruction(transaction, 0);
+    return (
+      ix &&
+      SystemProgram.programId.equals(ix.programId) &&
+      SystemInstruction.decodeInstructionType(ix) === "AdvanceNonceAccount"
+    );
+  })();
 
   return (
     <div className="card">
@@ -188,10 +195,7 @@ function AccountsCard({ signature }: Props) {
   const refreshStatus = () => fetchStatus(signature);
   const refreshDetails = () => fetchDetails(signature);
   const transaction = details?.transaction?.transaction;
-  const message = React.useMemo(() => {
-    return transaction?.compileMessage();
-  }, [transaction]);
-
+  const message = transaction?.message;
   const status = useTransactionStatus(signature);
 
   if (!status || !status.info) {
@@ -219,10 +223,11 @@ function AccountsCard({ signature }: Props) {
     return <ErrorCard retry={refreshDetails} text="Metadata Missing" />;
   }
 
-  const accountRows = message.accountKeys.map((pubkey, index) => {
+  const accountRows = message.accountKeys.map((account, index) => {
     const pre = meta.preBalances[index];
     const post = meta.postBalances[index];
-    const key = pubkey.toBase58();
+    const pubkey = account.pubkey;
+    const key = account.pubkey.toBase58();
     const renderChange = () => {
       const change = post - pre;
       if (change === 0) return "";
@@ -245,13 +250,13 @@ function AccountsCard({ signature }: Props) {
           {index === 0 && (
             <span className="badge badge-soft-info mr-1">Fee Payer</span>
           )}
-          {!message.isAccountWritable(index) && (
+          {!account.writable && (
             <span className="badge badge-soft-info mr-1">Readonly</span>
           )}
-          {index < message.header.numRequiredSignatures && (
+          {account.signer && (
             <span className="badge badge-soft-info mr-1">Signer</span>
           )}
-          {message.instructions.find((ix) => ix.programIdIndex === index) && (
+          {message.instructions.find((ix) => ix.programId.equals(pubkey)) && (
             <span className="badge badge-soft-info mr-1">Program</span>
           )}
         </td>
@@ -290,22 +295,50 @@ function InstructionsSection({ signature }: Props) {
   if (!status || !status.info || !details || !details.transaction) return null;
 
   const { transaction } = details.transaction;
-  if (transaction.instructions.length === 0) {
+  if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
   const result = status.info.result;
-  const instructionDetails = transaction.instructions.map((ix, index) => {
-    const props = { ix, result, index };
+  const instructionDetails = transaction.message.instructions.map(
+    (next, index) => {
+      if ("parsed" in next) {
+        if (next.program === "spl-token") {
+          return (
+            <TokenDetailsCard
+              key={index}
+              tx={transaction}
+              ix={next}
+              result={result}
+              index={index}
+            />
+          );
+        }
 
-    if (SystemProgram.programId.equals(ix.programId)) {
-      return <SystemDetailsCard key={index} {...props} />;
-    } else if (StakeProgram.programId.equals(ix.programId)) {
-      return <StakeDetailsCard key={index} {...props} />;
-    } else {
-      return <UnknownDetailsCard key={index} {...props} />;
+        const props = { ix: next, result, index };
+        return <UnknownDetailsCard key={index} {...props} />;
+      }
+
+      const ix = intoTransactionInstruction(transaction, index);
+      if (!ix) {
+        return (
+          <ErrorCard
+            key={index}
+            text="Could not display this instruction, please report"
+          />
+        );
+      }
+
+      const props = { ix, result, index };
+      if (SystemProgram.programId.equals(ix.programId)) {
+        return <SystemDetailsCard key={index} {...props} />;
+      } else if (StakeProgram.programId.equals(ix.programId)) {
+        return <StakeDetailsCard key={index} {...props} />;
+      } else {
+        return <UnknownDetailsCard key={index} {...props} />;
+      }
     }
-  });
+  );
 
   return (
     <>
