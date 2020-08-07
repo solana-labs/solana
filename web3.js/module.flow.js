@@ -54,9 +54,6 @@ declare module '@solana/web3.js' {
     lamportsPerSignature: number,
   };
 
-  // === src/budget-program.js ===
-  /* TODO */
-
   // === src/connection.js ===
   declare export type Context = {
     slot: number,
