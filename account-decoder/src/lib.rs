@@ -8,9 +8,11 @@ pub mod parse_nonce;
 pub mod parse_token;
 pub mod parse_vote;
 
-use crate::parse_account_data::{parse_account_data, ParsedAccount};
+use crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount};
 use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use std::str::FromStr;
+
+pub type StringAmount = String;
 
 /// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -44,11 +46,17 @@ pub enum UiAccountEncoding {
 }
 
 impl UiAccount {
-    pub fn encode(account: Account, encoding: UiAccountEncoding) -> Self {
+    pub fn encode(
+        account: Account,
+        encoding: UiAccountEncoding,
+        additional_data: Option<AccountAdditionalData>,
+    ) -> Self {
         let data = match encoding {
             UiAccountEncoding::Binary => account.data.into(),
             UiAccountEncoding::JsonParsed => {
-                if let Ok(parsed_data) = parse_account_data(&account.owner, &account.data) {
+                if let Ok(parsed_data) =
+                    parse_account_data(&account.owner, &account.data, additional_data)
+                {
                     UiAccountData::Json(parsed_data)
                 } else {
                     account.data.into()

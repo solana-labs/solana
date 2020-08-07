@@ -9,7 +9,11 @@ use bincode::{config::Options, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
-    parse_token::{spl_token_id_v1_0, spl_token_v1_0_native_mint},
+    parse_account_data::AccountAdditionalData,
+    parse_token::{
+        get_token_account_mint, spl_token_id_v1_0, spl_token_v1_0_native_mint,
+        token_amount_to_ui_amount, UiTokenAmount,
+    },
     UiAccount, UiAccountEncoding,
 };
 use solana_client::{
@@ -242,8 +246,14 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         new_response(
             &bank,
-            bank.get_account(pubkey)
-                .map(|account| UiAccount::encode(account, encoding)),
+            bank.get_account(pubkey).and_then(|account| {
+                if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed
+                {
+                    get_parsed_token_account(bank.clone(), account)
+                } else {
+                    Some(UiAccount::encode(account, encoding, None))
+                }
+            }),
         )
     }
 
@@ -265,12 +275,17 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        get_filtered_program_accounts(&bank, program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect()
+        let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
+        if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(bank, keyed_accounts).collect()
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        }
     }
 
     pub fn get_inflation_governor(
@@ -971,7 +986,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
         let account = bank.get_account(pubkey).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
@@ -998,7 +1013,7 @@ impl JsonRpcRequestProcessor {
         &self,
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
         if mint_owner != spl_token_id_v1_0() {
@@ -1106,12 +1121,17 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }));
         }
-        let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect();
+        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        let accounts = if encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(bank.clone(), keyed_accounts).collect()
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        };
         Ok(new_response(&bank, accounts))
     }
 
@@ -1152,12 +1172,17 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }));
         }
-        let accounts = get_filtered_program_accounts(&bank, &token_program_id, filters)
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(account, encoding.clone()),
-            })
-            .collect();
+        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        let accounts = if encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(bank.clone(), keyed_accounts).collect()
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(account, encoding.clone(), None),
+                })
+                .collect()
+        };
         Ok(new_response(&bank, accounts))
     }
 }
@@ -1211,6 +1236,47 @@ fn get_filtered_program_accounts(
         })
 }
 
+pub(crate) fn get_parsed_token_account(bank: Arc<Bank>, account: Account) -> Option<UiAccount> {
+    get_token_account_mint(&account.data)
+        .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
+        .map(|(_, decimals)| {
+            UiAccount::encode(
+                account,
+                UiAccountEncoding::JsonParsed,
+                Some(AccountAdditionalData {
+                    spl_token_decimals: Some(decimals),
+                }),
+            )
+        })
+}
+
+pub(crate) fn get_parsed_token_accounts<I>(
+    bank: Arc<Bank>,
+    keyed_accounts: I,
+) -> impl Iterator<Item = RpcKeyedAccount>
+where
+    I: Iterator<Item = (Pubkey, Account)>,
+{
+    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+    keyed_accounts.filter_map(move |(pubkey, account)| {
+        get_token_account_mint(&account.data).map(|mint_pubkey| {
+            let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
+                let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
+                mint_decimals.insert(mint_pubkey, decimals);
+                Some(decimals)
+            });
+            RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: UiAccount::encode(
+                    account,
+                    UiAccountEncoding::JsonParsed,
+                    Some(AccountAdditionalData { spl_token_decimals }),
+                ),
+            }
+        })
+    })
+}
+
 /// Analyze a passed Pubkey that may be a Token program id or Mint address to determine the program
 /// id and optional Mint
 fn get_token_program_id_and_mint(
@@ -1262,16 +1328,6 @@ fn get_mint_decimals(data: &[u8]) -> Result<u8> {
             Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
         })
         .map(|mint: &mut Mint| mint.decimals)
-}
-
-fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> RpcTokenAmount {
-    // Use `amount_to_ui_amount()` once spl_token is bumped to a version that supports it: https://github.com/solana-labs/solana-program-library/pull/211
-    let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
-    RpcTokenAmount {
-        ui_amount: amount_decimals,
-        decimals,
-        amount: amount.to_string(),
-    }
 }
 
 #[rpc]
@@ -1565,7 +1621,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>>;
+    ) -> Result<RpcResponse<UiTokenAmount>>;
 
     #[rpc(meta, name = "getTokenSupply")]
     fn get_token_supply(
@@ -1573,7 +1629,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>>;
+    ) -> Result<RpcResponse<UiTokenAmount>>;
 
     #[rpc(meta, name = "getTokenLargestAccounts")]
     fn get_token_largest_accounts(
@@ -2226,7 +2282,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         debug!(
             "get_token_account_balance rpc request received: {:?}",
             pubkey_str
@@ -2240,7 +2296,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         mint_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcTokenAmount>> {
+    ) -> Result<RpcResponse<UiTokenAmount>> {
         debug!("get_token_supply rpc request received: {:?}", mint_str);
         let mint = verify_pubkey(mint_str)?;
         meta.get_token_supply(&mint, commitment)
@@ -4614,7 +4670,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let balance: RpcTokenAmount =
+        let balance: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
         assert!((balance.ui_amount - 4.2).abs() < error);
@@ -4642,7 +4698,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let supply: RpcTokenAmount =
+        let supply: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
         assert!((supply.ui_amount - 2.0 * 4.2).abs() < error);
@@ -4902,7 +4958,7 @@ pub mod tests {
             vec![
                 RpcTokenAccountBalance {
                     address: token_with_different_mint_pubkey.to_string(),
-                    amount: RpcTokenAmount {
+                    amount: UiTokenAmount {
                         ui_amount: 0.42,
                         decimals: 2,
                         amount: "42".to_string(),
@@ -4910,7 +4966,7 @@ pub mod tests {
                 },
                 RpcTokenAccountBalance {
                     address: token_with_smaller_balance.to_string(),
-                    amount: RpcTokenAmount {
+                    amount: UiTokenAmount {
                         ui_amount: 0.1,
                         decimals: 2,
                         amount: "10".to_string(),
