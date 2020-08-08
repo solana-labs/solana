@@ -49,31 +49,41 @@ export function TransactionDetailsPage({ signature }: Props) {
 function StatusCard({ signature }: Props) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
-  const refresh = useFetchTransactionStatus();
+  const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
+  const refresh = React.useCallback(
+    (signature: string) => {
+      fetchStatus(signature);
+      fetchDetails(signature);
+    },
+    [fetchStatus, fetchDetails]
+  );
 
   // Fetch transaction on load
   React.useEffect(() => {
-    if (!status && clusterStatus === ClusterStatus.Connected)
+    if (!status && clusterStatus === ClusterStatus.Connected) {
       fetchStatus(signature);
+    }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (status?.fetchStatus === FetchStatus.FetchFailed) {
-    return <ErrorCard retry={() => refresh(signature)} text="Fetch Failed" />;
+    return (
+      <ErrorCard retry={() => fetchStatus(signature)} text="Fetch Failed" />
+    );
   } else if (!status.info) {
     if (firstAvailableBlock !== undefined) {
       return (
         <ErrorCard
-          retry={() => refresh(signature)}
+          retry={() => fetchStatus(signature)}
           text="Not Found"
           subtext={`Note: Transactions processed before block ${firstAvailableBlock} are not available at this time`}
         />
       );
     }
-    return <ErrorCard retry={() => refresh(signature)} text="Not Found" />;
+    return <ErrorCard retry={() => fetchStatus(signature)} text="Not Found" />;
   }
 
   const { info } = status;
@@ -187,9 +197,8 @@ function StatusCard({ signature }: Props) {
 }
 
 function AccountsCard({ signature }: Props) {
-  const details = useTransactionDetails(signature);
-
   const { url } = useCluster();
+  const details = useTransactionDetails(signature);
   const fetchStatus = useFetchTransactionStatus();
   const fetchDetails = useFetchTransactionDetails();
   const refreshStatus = () => fetchStatus(signature);
@@ -197,6 +206,13 @@ function AccountsCard({ signature }: Props) {
   const transaction = details?.transaction?.transaction;
   const message = transaction?.message;
   const status = useTransactionStatus(signature);
+
+  // Fetch details on load
+  React.useEffect(() => {
+    if (status?.info?.confirmations === "max" && !details) {
+      fetchDetails(signature);
+    }
+  }, [signature, details, status, fetchDetails]);
 
   if (!status || !status.info) {
     return null;

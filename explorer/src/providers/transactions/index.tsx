@@ -44,7 +44,7 @@ export interface TransactionStatus {
 type Transactions = { [signature: string]: TransactionStatus };
 interface State {
   transactions: Transactions;
-  lastFetched: TransactionSignature | undefined;
+  url: string;
 }
 
 export enum ActionType {
@@ -55,6 +55,7 @@ export enum ActionType {
 
 interface UpdateStatus {
   type: ActionType.UpdateStatus;
+  url: string;
   signature: TransactionSignature;
   fetchStatus: FetchStatus;
   info?: TransactionStatusInfo;
@@ -62,17 +63,25 @@ interface UpdateStatus {
 
 interface FetchSignature {
   type: ActionType.FetchSignature;
+  url: string;
   signature: TransactionSignature;
 }
 
 interface Clear {
   type: ActionType.Clear;
+  url: string;
 }
 
 type Action = UpdateStatus | FetchSignature | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
+  if (action.type === ActionType.Clear) {
+    return { url: action.url, transactions: {} };
+  } else if (action.url !== state.url) {
+    return state;
+  }
+
   switch (action.type) {
     case ActionType.FetchSignature: {
       const signature = action.signature;
@@ -86,7 +95,7 @@ function reducer(state: State, action: Action): State {
             info: undefined,
           },
         };
-        return { ...state, transactions, lastFetched: signature };
+        return { ...state, transactions };
       } else {
         const transactions = {
           ...state.transactions,
@@ -95,7 +104,7 @@ function reducer(state: State, action: Action): State {
             fetchStatus: FetchStatus.Fetching,
           },
         };
-        return { ...state, transactions, lastFetched: signature };
+        return { ...state, transactions };
       }
     }
 
@@ -114,13 +123,6 @@ function reducer(state: State, action: Action): State {
       }
       break;
     }
-
-    case ActionType.Clear: {
-      return {
-        ...state,
-        transactions: {},
-      };
-    }
   }
   return state;
 }
@@ -132,12 +134,12 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
+  const { cluster, status: clusterStatus, url } = useCluster();
   const [state, dispatch] = React.useReducer(reducer, {
     transactions: {},
-    lastFetched: undefined,
+    url,
   });
 
-  const { cluster, status: clusterStatus, url } = useCluster();
   const fetchAccount = useFetchAccountInfo();
   const query = useQuery();
   const testFlag = query.get("test");
@@ -145,9 +147,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
     if (clusterStatus === ClusterStatus.Connecting) {
-      dispatch({ type: ActionType.Clear });
-    } else if (clusterStatus === ClusterStatus.Connected && state.lastFetched) {
-      fetchTransactionStatus(dispatch, state.lastFetched, url);
+      dispatch({ type: ActionType.Clear, url });
     }
 
     // Create a test transaction
@@ -216,6 +216,7 @@ export async function fetchTransactionStatus(
   dispatch({
     type: ActionType.FetchSignature,
     signature,
+    url,
   });
 
   let fetchStatus;
@@ -261,6 +262,7 @@ export async function fetchTransactionStatus(
     signature,
     fetchStatus,
     info,
+    url,
   });
 }
 
@@ -295,7 +297,7 @@ export function useTransactionDetails(signature: TransactionSignature) {
     );
   }
 
-  return context[signature];
+  return context.entries[signature];
 }
 
 export function useFetchTransactionStatus() {
