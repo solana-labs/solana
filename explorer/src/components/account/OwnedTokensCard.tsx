@@ -50,7 +50,7 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
     if (tokenInfo) {
       tokenInfo.amount += token.amount;
     } else {
-      mappedTokens.set(mintAddress, token);
+      mappedTokens.set(mintAddress, { ...token });
     }
   }
 
