@@ -249,7 +249,7 @@ impl JsonRpcRequestProcessor {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 response = get_parsed_token_account(bank.clone(), account);
             } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
-                let message = "Encoded binary (bs58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
+                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
                 return Err(error::Error {
                     code: error::ErrorCode::InvalidRequest,
                     message,
