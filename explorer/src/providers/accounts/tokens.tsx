@@ -102,7 +102,7 @@ export function TokensProvider({ children }: ProviderProps) {
   );
 }
 
-const TOKEN_PROGRAM_ID = new PublicKey(
+export const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"
 );
 
