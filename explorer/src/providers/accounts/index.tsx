@@ -29,6 +29,7 @@ export interface Account {
 type Accounts = { [address: string]: Account };
 interface State {
   accounts: Accounts;
+  url: string;
 }
 
 export enum ActionType {
@@ -39,6 +40,7 @@ export enum ActionType {
 
 interface Update {
   type: ActionType.Update;
+  url: string;
   pubkey: PublicKey;
   data: {
     status: FetchStatus;
@@ -49,17 +51,25 @@ interface Update {
 
 interface Fetch {
   type: ActionType.Fetch;
+  url: string;
   pubkey: PublicKey;
 }
 
 interface Clear {
   type: ActionType.Clear;
+  url: string;
 }
 
 type Action = Update | Fetch | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
+  if (action.type === ActionType.Clear) {
+    return { url: action.url, accounts: {} };
+  } else if (action.url !== state.url) {
+    return state;
+  }
+
   switch (action.type) {
     case ActionType.Fetch: {
       const address = action.pubkey.toBase58();
@@ -100,13 +110,6 @@ function reducer(state: State, action: Action): State {
       }
       break;
     }
-
-    case ActionType.Clear: {
-      return {
-        ...state,
-        accounts: {},
-      };
-    }
   }
   return state;
 }
@@ -116,14 +119,15 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
+  const { url } = useCluster();
   const [state, dispatch] = React.useReducer(reducer, {
+    url,
     accounts: {},
   });
 
   // Clear account statuses whenever cluster is changed
-  const { url } = useCluster();
   React.useEffect(() => {
-    dispatch({ type: ActionType.Clear });
+    dispatch({ type: ActionType.Clear, url });
   }, [url]);
 
   return (
@@ -145,6 +149,7 @@ async function fetchAccountInfo(
   dispatch({
     type: ActionType.Fetch,
     pubkey,
+    url,
   });
 
   let fetchStatus;
@@ -182,7 +187,7 @@ async function fetchAccountInfo(
     fetchStatus = FetchStatus.FetchFailed;
   }
   const data = { status: fetchStatus, lamports, details };
-  dispatch({ type: ActionType.Update, data, pubkey });
+  dispatch({ type: ActionType.Update, data, pubkey, url });
 }
 
 export function useAccounts() {

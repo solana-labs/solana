@@ -5,7 +5,7 @@ import {
   ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
-import { useTransactions, FetchStatus } from "./index";
+import { FetchStatus } from "./index";
 import { CACHED_DETAILS, isCached } from "./cached";
 
 export interface Details {
@@ -13,68 +13,69 @@ export interface Details {
   transaction: ParsedConfirmedTransaction | null;
 }
 
-type State = { [signature: string]: Details };
+type State = {
+  entries: { [signature: string]: Details };
+  url: string;
+};
 
 export enum ActionType {
   Update,
-  Add,
   Clear,
 }
 
 interface Update {
   type: ActionType.Update;
+  url: string;
   signature: string;
   fetchStatus: FetchStatus;
   transaction: ParsedConfirmedTransaction | null;
 }
 
-interface Add {
-  type: ActionType.Add;
-  signature: TransactionSignature;
-}
-
 interface Clear {
   type: ActionType.Clear;
+  url: string;
 }
 
-type Action = Update | Add | Clear;
+type Action = Update | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case ActionType.Add: {
-      const details = { ...state };
-      const signature = action.signature;
-      if (!details[signature]) {
-        details[signature] = {
-          fetchStatus: FetchStatus.Fetching,
-          transaction: null,
-        };
-      }
-      return details;
-    }
+  if (action.type === ActionType.Clear) {
+    return { url: action.url, entries: {} };
+  } else if (action.url !== state.url) {
+    return state;
+  }
 
+  switch (action.type) {
     case ActionType.Update: {
-      let details = state[action.signature];
+      const signature = action.signature;
+      const details = state.entries[signature];
       if (details) {
-        details = {
-          ...details,
-          fetchStatus: action.fetchStatus,
-          transaction: action.transaction,
-        };
         return {
           ...state,
-          [action.signature]: details,
+          entries: {
+            ...state.entries,
+            [signature]: {
+              ...details,
+              fetchStatus: action.fetchStatus,
+              transaction: action.transaction,
+            },
+          },
+        };
+      } else {
+        return {
+          ...state,
+          entries: {
+            ...state.entries,
+            [signature]: {
+              fetchStatus: FetchStatus.Fetching,
+              transaction: null,
+            },
+          },
         };
       }
-      break;
-    }
-
-    case ActionType.Clear: {
-      return {};
     }
   }
-  return state;
 }
 
 export const StateContext = React.createContext<State | undefined>(undefined);
@@ -84,27 +85,12 @@ export const DispatchContext = React.createContext<Dispatch | undefined>(
 
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, {});
-  const { transactions, lastFetched } = useTransactions();
   const { url } = useCluster();
+  const [state, dispatch] = React.useReducer(reducer, { url, entries: {} });
 
   React.useEffect(() => {
-    dispatch({ type: ActionType.Clear });
+    dispatch({ type: ActionType.Clear, url });
   }, [url]);
-
-  // Filter blocks for current transaction slots
-  React.useEffect(() => {
-    if (lastFetched) {
-      const confirmed =
-        transactions[lastFetched] &&
-        transactions[lastFetched].info?.confirmations === "max";
-      const noDetails = !state[lastFetched];
-      if (confirmed && noDetails) {
-        dispatch({ type: ActionType.Add, signature: lastFetched });
-        fetchDetails(dispatch, lastFetched, url);
-      }
-    }
-  }, [transactions, lastFetched]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -125,6 +111,7 @@ async function fetchDetails(
     fetchStatus: FetchStatus.Fetching,
     transaction: null,
     signature,
+    url,
   });
 
   let fetchStatus;
@@ -143,7 +130,13 @@ async function fetchDetails(
       fetchStatus = FetchStatus.FetchFailed;
     }
   }
-  dispatch({ type: ActionType.Update, fetchStatus, signature, transaction });
+  dispatch({
+    type: ActionType.Update,
+    fetchStatus,
+    signature,
+    transaction,
+    url,
+  });
 }
 
 export function useFetchTransactionDetails() {
