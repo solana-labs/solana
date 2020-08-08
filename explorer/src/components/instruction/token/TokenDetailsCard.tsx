@@ -10,7 +10,8 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { ParsedInstructionInfo, IX_STRUCTS } from "./types";
+import { IX_STRUCTS, TokenInstructionType } from "./types";
+import { ParsedInfo } from "validators";
 
 const IX_TITLES = {
   initializeMint: "Initialize Mint",
@@ -34,8 +35,9 @@ type DetailsProps = {
 
 export function TokenDetailsCard(props: DetailsProps) {
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInstructionInfo);
-    const { type, info } = parsed;
+    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const { type: rawType, info } = parsed;
+    const type = coerce(rawType, TokenInstructionType);
     const title = `Token: ${IX_TITLES[type]}`;
     const coerced = coerce(info, IX_STRUCTS[type] as any);
     return <TokenInstruction title={title} info={coerced} {...props} />;

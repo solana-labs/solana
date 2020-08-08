@@ -68,7 +68,22 @@ function InfoSection({ pubkey }: { pubkey: PublicKey }) {
   const owner = info.details?.owner;
   const data = info.details?.data;
   if (data && owner && owner.equals(StakeProgram.programId)) {
-    return <StakeAccountSection account={info} stakeAccount={data} />;
+    let stakeAccountType, stakeAccount;
+    if ("accountType" in data) {
+      stakeAccount = data;
+      stakeAccountType = data.accountType as any;
+    } else {
+      stakeAccount = data.info;
+      stakeAccountType = data.type;
+    }
+
+    return (
+      <StakeAccountSection
+        account={info}
+        stakeAccount={stakeAccount}
+        stakeAccountType={stakeAccountType}
+      />
+    );
   } else {
     return <UnknownAccountCard account={info} />;
   }

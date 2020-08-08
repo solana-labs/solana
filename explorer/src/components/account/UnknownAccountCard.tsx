@@ -28,7 +28,7 @@ export function UnknownAccountCard({ account }: { account: Account }) {
           </td>
         </tr>
 
-        {details && (
+        {details?.space !== undefined && (
           <tr>
             <td>Data (Bytes)</td>
             <td className="text-lg-right">{details.space}</td>
