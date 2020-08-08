@@ -3,16 +3,16 @@ import { Link } from "react-router-dom";
 import { Location } from "history";
 import { AccountBalancePair } from "@solana/web3.js";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
-import LoadingCard from "./common/LoadingCard";
-import ErrorCard from "./common/ErrorCard";
+import { LoadingCard } from "./common/LoadingCard";
+import { ErrorCard } from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
 import { useQuery } from "utils/url";
 import { useSupply } from "providers/supply";
-import Address from "./common/Address";
+import { Address } from "./common/Address";
 
 type Filter = "circulating" | "nonCirculating" | "all" | null;
 
-export default function TopAccountsCard() {
+export function TopAccountsCard() {
   const supply = useSupply();
   const richList = useRichList();
   const fetchRichList = useFetchRichList();

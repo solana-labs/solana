@@ -10,7 +10,7 @@ type Props = {
   link?: boolean;
 };
 
-export default function Signature({ signature, alignRight, link }: Props) {
+export function Signature({ signature, alignRight, link }: Props) {
   const [state, setState] = useState<CopyState>("copy");
 
   const copyToClipboard = () => navigator.clipboard.writeText(signature);

@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function LoadingCard({ message }: { message?: string }) {
+export function LoadingCard({ message }: { message?: string }) {
   return (
     <div className="card">
       <div className="card-body text-center">

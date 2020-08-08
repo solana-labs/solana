@@ -32,7 +32,7 @@ function Popover({
   );
 }
 
-function Copyable({ bottom, right, text, children }: CopyableProps) {
+export function Copyable({ bottom, right, text, children }: CopyableProps) {
   const [state, setState] = useState<State>("hide");
 
   const copyToClipboard = () => navigator.clipboard.writeText(text);
@@ -54,5 +54,3 @@ function Copyable({ bottom, right, text, children }: CopyableProps) {
     </div>
   );
 }
-
-export default Copyable;

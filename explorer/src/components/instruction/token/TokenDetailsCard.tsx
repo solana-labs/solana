@@ -9,7 +9,7 @@ import {
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
-import Address from "components/common/Address";
+import { Address } from "components/common/Address";
 import { ParsedInstructionInfo, IX_STRUCTS } from "./types";
 
 const IX_TITLES = {

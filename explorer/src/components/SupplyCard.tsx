@@ -1,11 +1,11 @@
 import React from "react";
 import { useSupply, useFetchSupply, Status } from "providers/supply";
-import LoadingCard from "./common/LoadingCard";
-import ErrorCard from "./common/ErrorCard";
+import { LoadingCard } from "./common/LoadingCard";
+import { ErrorCard } from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
-import TableCardBody from "./common/TableCardBody";
+import { TableCardBody } from "./common/TableCardBody";
 
-export default function SupplyCard() {
+export function SupplyCard() {
   const supply = useSupply();
   const fetchSupply = useFetchSupply();
 

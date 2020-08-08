@@ -33,7 +33,7 @@ function Popover({
   );
 }
 
-function InfoTooltip({ bottom, right, text, children }: Props) {
+export function InfoTooltip({ bottom, right, text, children }: Props) {
   const [state, setState] = useState<State>("hide");
 
   const justify = right ? "end" : "start";
@@ -51,5 +51,3 @@ function InfoTooltip({ bottom, right, text, children }: Props) {
     </div>
   );
 }
-
-export default InfoTooltip;

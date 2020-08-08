@@ -1,17 +1,17 @@
 import React from "react";
 import { Switch, Route, Redirect } from "react-router-dom";
 
-import AccountDetails from "./components/AccountDetails";
-import TransactionDetails from "./components/TransactionDetails";
-import ClusterModal from "./components/ClusterModal";
-import { TX_ALIASES } from "./providers/transactions";
-import TopAccountsCard from "components/TopAccountsCard";
-import SupplyCard from "components/SupplyCard";
-import StatsCard from "components/StatsCard";
-import MessageBanner from "components/MessageBanner";
-import Navbar from "components/Navbar";
+import { ClusterModal } from "components/ClusterModal";
+import { TX_ALIASES } from "providers/transactions";
+import { MessageBanner } from "components/MessageBanner";
+import { Navbar } from "components/Navbar";
 import { ClusterStatusBanner } from "components/ClusterStatusButton";
 import { SearchBar } from "components/SearchBar";
+
+import { AccountDetailsPage } from "pages/AccountDetailsPage";
+import { ClusterStatsPage } from "pages/ClusterStatsPage";
+import { SupplyPage } from "pages/SupplyPage";
+import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 
 const ACCOUNT_ALIASES = ["account", "accounts", "addresses"];
 
@@ -26,10 +26,7 @@ function App() {
         <SearchBar />
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
-            <div className="container mt-4">
-              <SupplyCard />
-              <TopAccountsCard />
-            </div>
+            <SupplyPage />
           </Route>
           <Route
             exact
@@ -37,7 +34,7 @@ function App() {
               (tx) => `/${tx}/:signature`
             )}
             render={({ match }) => (
-              <TransactionDetails signature={match.params.signature} />
+              <TransactionDetailsPage signature={match.params.signature} />
             )}
           />
           <Route
@@ -58,16 +55,14 @@ function App() {
             exact
             path={["/address/:address", "/address/:address/:tab"]}
             render={({ match }) => (
-              <AccountDetails
+              <AccountDetailsPage
                 address={match.params.address}
                 tab={match.params.tab}
               />
             )}
           />
           <Route exact path="/">
-            <div className="container mt-4">
-              <StatsCard />
-            </div>
+            <ClusterStatsPage />
           </Route>
           <Route
             render={({ location }) => (

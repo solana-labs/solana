@@ -25,7 +25,7 @@ const announcements = new Map<Cluster, Announcement>();
 //     "Mainnet Beta upgrade in progress. Transactions disabled until epoch 62",
 // });
 
-export default function Banner() {
+export function MessageBanner() {
   const cluster = useCluster().cluster;
   const announcement = announcements.get(cluster);
   if (!announcement) return null;

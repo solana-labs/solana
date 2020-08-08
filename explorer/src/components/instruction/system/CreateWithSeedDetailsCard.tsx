@@ -7,9 +7,9 @@ import {
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
+import { Copyable } from "components/common/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
-import Address from "components/common/Address";
+import { Address } from "components/common/Address";
 
 export function CreateWithSeedDetailsCard(props: {
   ix: TransactionInstruction;

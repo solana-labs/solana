@@ -8,7 +8,7 @@ import {
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
-import Address from "components/common/Address";
+import { Address } from "components/common/Address";
 
 export function CreateDetailsCard(props: {
   ix: TransactionInstruction;

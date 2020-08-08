@@ -4,7 +4,7 @@ import {
   useTransactionStatus,
   useTransactionDetails,
   FetchStatus,
-} from "../providers/transactions";
+} from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import { useCluster, ClusterStatus } from "providers/cluster";
 import {
@@ -14,22 +14,22 @@ import {
   SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
-import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
-import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
-import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
-import ErrorCard from "./common/ErrorCard";
-import LoadingCard from "./common/LoadingCard";
-import TableCardBody from "./common/TableCardBody";
+import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
+import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
+import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard";
+import { ErrorCard } from "components/common/ErrorCard";
+import { LoadingCard } from "components/common/LoadingCard";
+import { TableCardBody } from "components/common/TableCardBody";
 import { displayTimestamp } from "utils/date";
-import InfoTooltip from "components/InfoTooltip";
+import { InfoTooltip } from "components/common/InfoTooltip";
 import { isCached } from "providers/transactions/cached";
-import Address from "./common/Address";
-import Signature from "./common/Signature";
+import { Address } from "components/common/Address";
+import { Signature } from "components/common/Signature";
 import { intoTransactionInstruction } from "utils/tx";
-import { TokenDetailsCard } from "./instruction/token/TokenDetailsCard";
+import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 
 type Props = { signature: TransactionSignature };
-export default function TransactionDetails({ signature }: Props) {
+export function TransactionDetailsPage({ signature }: Props) {
   return (
     <div className="container mt-n3">
       <div className="header">

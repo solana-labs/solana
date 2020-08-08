@@ -1,7 +1,7 @@
 import React from "react";
 import CountUp from "react-countup";
 
-import TableCardBody from "./common/TableCardBody";
+import { TableCardBody } from "components/common/TableCardBody";
 import {
   useDashboardInfo,
   usePerformanceInfo,
@@ -12,17 +12,19 @@ import {
 import { slotsToHumanString } from "utils";
 import { useCluster, Cluster } from "providers/cluster";
 
-export default function StatsCard() {
+export function ClusterStatsPage() {
   return (
-    <div className="card">
-      <div className="card-header">
-        <div className="row align-items-center">
-          <div className="col">
-            <h4 className="card-header-title">Live Cluster Stats</h4>
+    <div className="container mt-4">
+      <div className="card">
+        <div className="card-header">
+          <div className="row align-items-center">
+            <div className="col">
+              <h4 className="card-header-title">Live Cluster Stats</h4>
+            </div>
           </div>
         </div>
+        <StatsCardBody />
       </div>
-      <StatsCardBody />
     </div>
   );
 }
