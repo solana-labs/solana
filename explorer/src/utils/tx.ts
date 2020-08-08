@@ -13,7 +13,7 @@ import {
   Transaction,
 } from "@solana/web3.js";
 
-const PROGRAM_IDS = {
+export const PROGRAM_IDS = {
   Budget1111111111111111111111111111111111111: "Budget",
   Config1111111111111111111111111111111111111: "Config",
   Exchange11111111111111111111111111111111111: "Exchange",
@@ -31,8 +31,11 @@ const LOADER_IDS = {
   [BpfLoader.programId.toBase58()]: "BPF Loader",
 };
 
-const SYSVAR_IDS = {
+const SYSVAR_ID: { [key: string]: string } = {
   Sysvar1111111111111111111111111111111111111: "SYSVAR",
+};
+
+export const SYSVAR_IDS = {
   [SYSVAR_CLOCK_PUBKEY.toBase58()]: "SYSVAR_CLOCK",
   SysvarEpochSchedu1e111111111111111111111111: "SYSVAR_EPOCH_SCHEDULE",
   SysvarFees111111111111111111111111111111111: "SYSVAR_FEES",
@@ -49,6 +52,7 @@ export function displayAddress(address: string): string {
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
+    SYSVAR_ID[address] ||
     address
   );
 }

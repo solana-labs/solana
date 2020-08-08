@@ -3,6 +3,7 @@ import bs58 from "bs58";
 import { useHistory, useLocation } from "react-router-dom";
 import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
+import { PROGRAM_IDS, SYSVAR_IDS } from "utils/tx";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
@@ -10,10 +11,7 @@ export function SearchBar() {
   const history = useHistory();
   const location = useLocation();
 
-  const onChange = (
-    { value: pathname }: ValueType<any>,
-    meta: ActionMeta<any>
-  ) => {
+  const onChange = ({ pathname }: ValueType<any>, meta: ActionMeta<any>) => {
     if (meta.action === "select-option") {
       history.push({ ...location, pathname });
       setSearch("");
@@ -24,38 +22,6 @@ export function SearchBar() {
     if (action === "input-change") setSearch(value);
   };
 
-  const options = ((searchValue: string) => {
-    try {
-      const decoded = bs58.decode(searchValue);
-      if (decoded.length === 32) {
-        return [
-          {
-            label: "Account",
-            options: [
-              {
-                label: searchValue,
-                value: "/address/" + searchValue,
-              },
-            ],
-          },
-        ];
-      } else if (decoded.length === 64) {
-        return [
-          {
-            label: "Transaction",
-            options: [
-              {
-                label: searchValue,
-                value: "/tx/" + searchValue,
-              },
-            ],
-          },
-        ];
-      }
-    } catch (err) {}
-    return [];
-  })(search);
-
   const resetValue = "" as any;
   return (
     <div className="container my-4">
@@ -63,7 +29,7 @@ export function SearchBar() {
         <div className="col">
           <Select
             ref={(ref) => (selectRef.current = ref)}
-            options={options}
+            options={buildOptions(search)}
             noOptionsMessage={() => "No Results"}
             placeholder="Search by address or signature"
             value={resetValue}
@@ -79,6 +45,89 @@ export function SearchBar() {
       </div>
     </div>
   );
+}
+
+const SEARCHABLE_PROGRAMS = ["Config", "Stake", "System", "Vote", "Token"];
+
+function buildProgramOptions(search: string) {
+  const matchedPrograms = Object.entries(PROGRAM_IDS).filter(([, name]) => {
+    return (
+      SEARCHABLE_PROGRAMS.includes(name) &&
+      name.toLowerCase().includes(search.toLowerCase())
+    );
+  });
+
+  if (matchedPrograms.length > 0) {
+    return {
+      label: "Programs",
+      options: matchedPrograms.map(([id, name]) => ({
+        label: name,
+        value: name,
+        pathname: "/address/" + id,
+      })),
+    };
+  }
+}
+
+function buildSysvarOptions(search: string) {
+  const matchedSysvars = Object.entries(SYSVAR_IDS).filter(([, name]) => {
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
+
+  if (matchedSysvars.length > 0) {
+    return {
+      label: "Sysvars",
+      options: matchedSysvars.map(([id, name]) => ({
+        label: name,
+        value: name,
+        pathname: "/address/" + id,
+      })),
+    };
+  }
+}
+
+function buildOptions(search: string) {
+  if (search.length === 0) return [];
+
+  const options = [];
+
+  const programOptions = buildProgramOptions(search);
+  if (programOptions) {
+    options.push(programOptions);
+  }
+
+  const sysvarOptions = buildSysvarOptions(search);
+  if (sysvarOptions) {
+    options.push(sysvarOptions);
+  }
+
+  try {
+    const decoded = bs58.decode(search);
+    if (decoded.length === 32) {
+      options.push({
+        label: "Account",
+        options: [
+          {
+            label: search,
+            value: search,
+            pathname: "/address/" + search,
+          },
+        ],
+      });
+    } else if (decoded.length === 64) {
+      options.push({
+        label: "Transaction",
+        options: [
+          {
+            label: search,
+            value: search,
+            pathname: "/tx/" + search,
+          },
+        ],
+      });
+    }
+  } catch (err) {}
+  return options;
 }
 
 function DropdownIndicator() {
