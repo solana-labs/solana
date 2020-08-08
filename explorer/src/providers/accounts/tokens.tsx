@@ -5,6 +5,7 @@ import { useCluster } from "../cluster";
 import { number, string, boolean, coerce, object, nullable } from "superstruct";
 
 export type TokenAccountData = {
+  pubkey: PublicKey;
   mint: PublicKey;
   owner: PublicKey;
   amount: number;
@@ -129,6 +130,7 @@ async function fetchAccountTokens(
       const parsedInfo = accountInfo.account.data.parsed.info;
       const info = coerce(parsedInfo, TokenAccountInfo);
       return {
+        pubkey: accountInfo.pubkey,
         mint: new PublicKey(info.mint),
         owner: new PublicKey(info.owner),
         amount: info.amount,
