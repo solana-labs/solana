@@ -124,7 +124,7 @@ export class StakeAccount {
 /**
 * @returns {string} 
 */
-  displayState(): string;
+  accountType(): string;
 /**
 * @returns {Meta | undefined} 
 */

@@ -1,29 +1,54 @@
 import React from "react";
-import { StakeAccount, Meta } from "solana-sdk-wasm";
+import { StakeAccount as StakeAccountWasm, Meta } from "solana-sdk-wasm";
 import { TableCardBody } from "components/common/TableCardBody";
 import { lamportsToSolString } from "utils";
 import { displayTimestamp } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Address } from "components/common/Address";
+import {
+  StakeAccountInfo,
+  StakeMeta,
+  StakeAccountType,
+} from "providers/accounts/types";
+import BN from "bn.js";
+
+const MAX_EPOCH = new BN(2).pow(new BN(64));
 
 export function StakeAccountSection({
   account,
   stakeAccount,
+  stakeAccountType,
 }: {
   account: Account;
-  stakeAccount: StakeAccount;
+  stakeAccount: StakeAccountInfo | StakeAccountWasm;
+  stakeAccountType: StakeAccountType;
 }) {
   return (
     <>
       <LockupCard stakeAccount={stakeAccount} />
-      <OverviewCard account={account} stakeAccount={stakeAccount} />
-      {stakeAccount.meta && <DelegationCard stakeAccount={stakeAccount} />}
-      {stakeAccount.meta && <AuthoritiesCard meta={stakeAccount.meta} />}
+      <OverviewCard
+        account={account}
+        stakeAccount={stakeAccount}
+        stakeAccountType={stakeAccountType}
+      />
+      {stakeAccount.meta && (
+        <>
+          <DelegationCard
+            stakeAccount={stakeAccount}
+            stakeAccountType={stakeAccountType}
+          />
+          <AuthoritiesCard meta={stakeAccount.meta} />
+        </>
+      )}
     </>
   );
 }
 
-function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
+function LockupCard({
+  stakeAccount,
+}: {
+  stakeAccount: StakeAccountInfo | StakeAccountWasm;
+}) {
   const unixTimestamp = stakeAccount.meta?.lockup.unixTimestamp;
   if (unixTimestamp && unixTimestamp > 0) {
     const prettyTimestamp = displayTimestamp(unixTimestamp * 1000);
@@ -37,12 +62,21 @@ function LockupCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   }
 }
 
+const TYPE_NAMES = {
+  uninitialized: "Uninitialized",
+  initialized: "Initialized",
+  delegated: "Delegated",
+  rewardsPool: "RewardsPool",
+};
+
 function OverviewCard({
   account,
   stakeAccount,
+  stakeAccountType,
 }: {
   account: Account;
-  stakeAccount: StakeAccount;
+  stakeAccount: StakeAccountInfo | StakeAccountWasm;
+  stakeAccountType: StakeAccountType;
 }) {
   const refresh = useFetchAccountInfo();
   return (
@@ -84,7 +118,7 @@ function OverviewCard({
         {!stakeAccount.meta && (
           <tr>
             <td>State</td>
-            <td className="text-lg-right">{stakeAccount.displayState()}</td>
+            <td className="text-lg-right">{TYPE_NAMES[stakeAccountType]}</td>
           </tr>
         )}
       </TableCardBody>
@@ -92,16 +126,48 @@ function OverviewCard({
   );
 }
 
-function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
-  const { stake } = stakeAccount;
+function DelegationCard({
+  stakeAccount,
+  stakeAccountType,
+}: {
+  stakeAccount: StakeAccountInfo | StakeAccountWasm;
+  stakeAccountType: StakeAccountType;
+}) {
   const displayStatus = () => {
-    let status = stakeAccount.displayState();
-    if (status !== "Delegated") {
+    // TODO check epoch
+    let status = TYPE_NAMES[stakeAccountType];
+    if (stakeAccountType !== "delegated") {
       status = "Not delegated";
     }
     return status;
   };
 
+  let voterPubkey, activationEpoch, deactivationEpoch;
+  if ("accountType" in stakeAccount) {
+    const delegation = stakeAccount?.stake?.delegation;
+    if (delegation) {
+      voterPubkey = delegation.voterPubkey;
+      activationEpoch = delegation.isBootstrapStake()
+        ? "-"
+        : delegation.activationEpoch;
+      deactivationEpoch = delegation.isDeactivated()
+        ? delegation.deactivationEpoch
+        : "-";
+    }
+  } else {
+    const delegation = stakeAccount?.stake?.delegation;
+    if (delegation) {
+      voterPubkey = delegation.voter;
+      activationEpoch = delegation.activationEpoch.eq(MAX_EPOCH)
+        ? "-"
+        : delegation.activationEpoch.toString();
+      deactivationEpoch = delegation.deactivationEpoch.eq(MAX_EPOCH)
+        ? "-"
+        : delegation.deactivationEpoch.toString();
+    }
+  }
+
+  const { stake } = stakeAccount;
   return (
     <div className="card">
       <div className="card-header">
@@ -124,33 +190,23 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
               </td>
             </tr>
 
-            <tr>
-              <td>Delegated Vote Address</td>
-              <td className="text-lg-right">
-                <Address
-                  pubkey={stake.delegation.voterPubkey}
-                  alignRight
-                  link
-                />
-              </td>
-            </tr>
+            {voterPubkey && (
+              <tr>
+                <td>Delegated Vote Address</td>
+                <td className="text-lg-right">
+                  <Address pubkey={voterPubkey} alignRight link />
+                </td>
+              </tr>
+            )}
 
             <tr>
               <td>Activation Epoch</td>
-              <td className="text-lg-right">
-                {stake.delegation.isBootstrapStake()
-                  ? "-"
-                  : stake.delegation.activationEpoch}
-              </td>
+              <td className="text-lg-right">{activationEpoch}</td>
             </tr>
 
             <tr>
               <td>Deactivation Epoch</td>
-              <td className="text-lg-right">
-                {stake.delegation.isDeactivated()
-                  ? stake.delegation.deactivationEpoch
-                  : "-"}
-              </td>
+              <td className="text-lg-right">{deactivationEpoch}</td>
             </tr>
           </>
         )}
@@ -159,7 +215,7 @@ function DelegationCard({ stakeAccount }: { stakeAccount: StakeAccount }) {
   );
 }
 
-function AuthoritiesCard({ meta }: { meta: Meta }) {
+function AuthoritiesCard({ meta }: { meta: Meta | StakeMeta }) {
   const hasLockup = meta && meta.lockup.unixTimestamp > 0;
   return (
     <div className="card">

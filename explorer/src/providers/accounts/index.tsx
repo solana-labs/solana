@@ -1,9 +1,12 @@
 import React from "react";
-import { StakeAccount } from "solana-sdk-wasm";
+import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
 import { useCluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider } from "./tokens";
+import { coerce } from "superstruct";
+import { ParsedInfo } from "validators";
+import { StakeAccount } from "./types";
 export { useAccountHistory } from "./history";
 
 export enum FetchStatus {
@@ -15,8 +18,8 @@ export enum FetchStatus {
 export interface Details {
   executable: boolean;
   owner: PublicKey;
-  space: number;
-  data?: StakeAccount;
+  space?: number;
+  data?: StakeAccount | StakeAccountWasm;
 }
 
 export interface Account {
@@ -156,18 +159,30 @@ async function fetchAccountInfo(
   let details;
   let lamports;
   try {
-    const result = await new Connection(url, "recent").getAccountInfo(pubkey);
+    const result = (
+      await new Connection(url, "single").getParsedAccountInfo(pubkey)
+    ).value;
     if (result === null) {
       lamports = 0;
     } else {
       lamports = result.lamports;
-      let data = undefined;
 
       // Only save data in memory if we can decode it
+      let space;
+      if (!("parsed" in result.data)) {
+        space = result.data.length;
+      }
+
+      let data;
       if (result.owner.equals(StakeProgram.programId)) {
         try {
-          const wasm = await import("solana-sdk-wasm");
-          data = wasm.StakeAccount.fromAccountData(result.data);
+          if ("parsed" in result.data) {
+            const info = coerce(result.data.parsed, ParsedInfo);
+            data = coerce(info, StakeAccount);
+          } else {
+            const wasm = await import("solana-sdk-wasm");
+            data = wasm.StakeAccount.fromAccountData(result.data);
+          }
         } catch (err) {
           console.error("Unexpected error loading wasm", err);
           // TODO store error state in Account info
@@ -175,7 +190,7 @@ async function fetchAccountInfo(
       }
 
       details = {
-        space: result.data.length,
+        space,
         executable: result.executable,
         owner: result.owner,
         data,

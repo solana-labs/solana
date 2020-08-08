@@ -456,9 +456,9 @@ export class StakeAccount {
     /**
     * @returns {string}
     */
-    displayState() {
+    accountType() {
         try {
-            wasm.stakeaccount_displayState(8, this.ptr);
+            wasm.stakeaccount_accountType(8, this.ptr);
             var r0 = getInt32Memory0()[8 / 4 + 0];
             var r1 = getInt32Memory0()[8 / 4 + 1];
             return getStringFromWasm0(r0, r1);

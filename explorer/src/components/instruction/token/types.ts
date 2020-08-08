@@ -1,21 +1,12 @@
 import {
   enums,
   object,
-  any,
   StructType,
-  coercion,
-  struct,
   number,
   optional,
   array,
 } from "superstruct";
-import { PublicKey } from "@solana/web3.js";
-
-const PubkeyValue = struct("Pubkey", (value) => value instanceof PublicKey);
-const Pubkey = coercion(PubkeyValue, (value) => {
-  if (typeof value === "string") return new PublicKey(value);
-  throw new Error("invalid pubkey");
-});
+import { Pubkey } from "validators/pubkey";
 
 const InitializeMint = object({
   mint: Pubkey,
@@ -95,8 +86,8 @@ const CloseAccount = object({
   signers: optional(array(Pubkey)),
 });
 
-type TokenInstructionType = StructType<typeof TokenInstructionType>;
-const TokenInstructionType = enums([
+export type TokenInstructionType = StructType<typeof TokenInstructionType>;
+export const TokenInstructionType = enums([
   "initializeMint",
   "initializeAccount",
   "initializeMultisig",
@@ -121,9 +112,3 @@ export const IX_STRUCTS = {
   burn: Burn,
   closeAccount: CloseAccount,
 };
-
-export type ParsedInstructionInfo = StructType<typeof ParsedInstructionInfo>;
-export const ParsedInstructionInfo = object({
-  type: TokenInstructionType,
-  info: any(),
-});
