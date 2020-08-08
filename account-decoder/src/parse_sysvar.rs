@@ -102,7 +102,6 @@ pub enum SysvarAccountType {
 #[serde(rename_all = "camelCase")]
 pub struct UiClock {
     pub slot: Slot,
-    pub unused: u64,
     pub epoch: Epoch,
     pub leader_schedule_epoch: Epoch,
     pub unix_timestamp: UnixTimestamp,
@@ -112,7 +111,6 @@ impl From<Clock> for UiClock {
     fn from(clock: Clock) -> Self {
         Self {
             slot: clock.slot,
-            unused: clock.unused,
             epoch: clock.epoch,
             leader_schedule_epoch: clock.leader_schedule_epoch,
             unix_timestamp: clock.unix_timestamp,

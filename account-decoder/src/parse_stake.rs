@@ -108,7 +108,7 @@ impl From<Stake> for UiStake {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiDelegation {
-    pub voter_pubkey: String,
+    pub voter: String,
     pub stake: u64,
     pub activation_epoch: Epoch,
     pub deactivation_epoch: Epoch,
@@ -118,7 +118,7 @@ pub struct UiDelegation {
 impl From<Delegation> for UiDelegation {
     fn from(delegation: Delegation) -> Self {
         Self {
-            voter_pubkey: delegation.voter_pubkey.to_string(),
+            voter: delegation.voter_pubkey.to_string(),
             stake: delegation.stake,
             activation_epoch: delegation.activation_epoch,
             deactivation_epoch: delegation.deactivation_epoch,
@@ -208,7 +208,7 @@ mod test {
                 },
                 stake: Some(UiStake {
                     delegation: UiDelegation {
-                        voter_pubkey: voter_pubkey.to_string(),
+                        voter: voter_pubkey.to_string(),
                         stake: 20,
                         activation_epoch: 2,
                         deactivation_epoch: std::u64::MAX,
