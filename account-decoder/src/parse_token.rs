@@ -98,9 +98,11 @@ pub struct UiTokenAccount {
     pub mint: String,
     pub owner: String,
     pub token_amount: UiTokenAmount,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegate: Option<String>,
     pub is_initialized: bool,
     pub is_native: bool,
+    #[serde(skip_serializing_if = "UiTokenAmount::is_zero")]
     pub delegated_amount: UiTokenAmount,
 }
 
@@ -110,6 +112,16 @@ pub struct UiTokenAmount {
     pub ui_amount: f64,
     pub decimals: u8,
     pub amount: StringAmount,
+}
+
+impl UiTokenAmount {
+    fn is_zero(&self) -> bool {
+        if let Ok(amount) = self.amount.parse::<u64>() {
+            amount == 0
+        } else {
+            false
+        }
+    }
 }
 
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
