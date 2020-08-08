@@ -1,8 +1,8 @@
 import React from "react";
 import bs58 from "bs58";
 import { TransactionInstruction } from "@solana/web3.js";
-import Copyable from "components/Copyable";
-import Address from "components/common/Address";
+import { Copyable } from "components/common/Copyable";
+import { Address } from "components/common/Address";
 
 function displayData(data: string) {
   if (data.length > 50) {

@@ -1,6 +1,6 @@
 import React from "react";
 import { ParsedInstruction } from "@solana/web3.js";
-import Address from "components/common/Address";
+import { Address } from "components/common/Address";
 
 export function RawParsedDetails({ ix }: { ix: ParsedInstruction }) {
   return (

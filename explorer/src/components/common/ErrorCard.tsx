@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function ErrorCard({
+export function ErrorCard({
   retry,
   retryText,
   text,

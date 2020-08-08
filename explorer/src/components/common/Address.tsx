@@ -12,7 +12,7 @@ type Props = {
   link?: boolean;
 };
 
-export default function Address({ pubkey, alignRight, link }: Props) {
+export function Address({ pubkey, alignRight, link }: Props) {
   const [state, setState] = useState<CopyState>("copy");
   const address = pubkey.toBase58();
 

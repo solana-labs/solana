@@ -12,12 +12,12 @@ import {
   Cluster,
   useClusterModal,
   useUpdateCustomUrl,
-} from "../providers/cluster";
+} from "providers/cluster";
 import { assertUnreachable } from "../utils";
-import Overlay from "./Overlay";
+import { Overlay } from "./common/Overlay";
 import { useQuery } from "utils/url";
 
-function ClusterModal() {
+export function ClusterModal() {
   const [show, setShow] = useClusterModal();
   const onClose = () => setShow(false);
   return (
@@ -164,5 +164,3 @@ function ClusterToggle() {
     </div>
   );
 }
-
-export default ClusterModal;

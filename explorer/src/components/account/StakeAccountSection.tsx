@@ -1,12 +1,12 @@
 import React from "react";
 import { StakeAccount, Meta } from "solana-sdk-wasm";
-import TableCardBody from "components/common/TableCardBody";
+import { TableCardBody } from "components/common/TableCardBody";
 import { lamportsToSolString } from "utils";
 import { displayTimestamp } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
-import Address from "components/common/Address";
+import { Address } from "components/common/Address";
 
-export function StakeAccountCards({
+export function StakeAccountSection({
   account,
   stakeAccount,
 }: {

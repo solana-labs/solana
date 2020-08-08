@@ -1,10 +1,6 @@
 import React from "react";
 
-export default function TableCardBody({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function TableCardBody({ children }: { children: React.ReactNode }) {
   return (
     <div className="table-responsive mb-0">
       <table className="table table-sm table-nowrap card-table">

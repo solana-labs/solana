@@ -4,7 +4,7 @@ import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
 
-export default function Navbar() {
+export function Navbar() {
   // TODO: use `collapsing` to animate collapsible navbar
   const [collapse, setCollapse] = React.useState(false);
 
