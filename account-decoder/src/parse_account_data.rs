@@ -1,6 +1,7 @@
 use crate::{
     parse_config::parse_config,
     parse_nonce::parse_nonce,
+    parse_stake::parse_stake,
     parse_sysvar::parse_sysvar,
     parse_token::{parse_token, spl_token_id_v1_0},
     parse_vote::parse_vote,
@@ -13,6 +14,7 @@ use thiserror::Error;
 
 lazy_static! {
     static ref CONFIG_PROGRAM_ID: Pubkey = solana_config_program::id();
+    static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v1_0();
@@ -22,6 +24,7 @@ lazy_static! {
         m.insert(*CONFIG_PROGRAM_ID, ParsableAccount::Config);
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
         m.insert(*TOKEN_PROGRAM_ID, ParsableAccount::SplToken);
+        m.insert(*STAKE_PROGRAM_ID, ParsableAccount::Stake);
         m.insert(*SYSVAR_PROGRAM_ID, ParsableAccount::Sysvar);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);
         m
@@ -59,6 +62,7 @@ pub enum ParsableAccount {
     Config,
     Nonce,
     SplToken,
+    Stake,
     Sysvar,
     Vote,
 }
@@ -84,6 +88,7 @@ pub fn parse_account_data(
         ParsableAccount::SplToken => {
             serde_json::to_value(parse_token(data, additional_data.spl_token_decimals)?)?
         }
+        ParsableAccount::Stake => serde_json::to_value(parse_stake(data)?)?,
         ParsableAccount::Sysvar => serde_json::to_value(parse_sysvar(data, pubkey)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };

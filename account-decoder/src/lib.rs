@@ -6,6 +6,7 @@ extern crate serde_derive;
 pub mod parse_account_data;
 pub mod parse_config;
 pub mod parse_nonce;
+pub mod parse_stake;
 pub mod parse_sysvar;
 pub mod parse_token;
 pub mod parse_vote;
