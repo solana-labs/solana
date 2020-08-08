@@ -10,21 +10,8 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { IX_STRUCTS, TokenInstructionType } from "./types";
+import { IX_STRUCTS, TokenInstructionType, IX_TITLES } from "./types";
 import { ParsedInfo } from "validators";
-
-const IX_TITLES = {
-  initializeMint: "Initialize Mint",
-  initializeAccount: "Initialize Account",
-  initializeMultisig: "Initialize Multisig",
-  transfer: "Transfer",
-  approve: "Approve",
-  revoke: "Revoke",
-  setOwner: "Set Owner",
-  mintTo: "Mint To",
-  burn: "Burn",
-  closeAccount: "Close Account",
-};
 
 type DetailsProps = {
   tx: ParsedTransaction;

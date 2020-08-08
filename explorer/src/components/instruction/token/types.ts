@@ -112,3 +112,16 @@ export const IX_STRUCTS = {
   burn: Burn,
   closeAccount: CloseAccount,
 };
+
+export const IX_TITLES = {
+  initializeMint: "Initialize Mint",
+  initializeAccount: "Initialize Account",
+  initializeMultisig: "Initialize Multisig",
+  transfer: "Transfer",
+  approve: "Approve",
+  revoke: "Revoke",
+  setOwner: "Set Owner",
+  mintTo: "Mint To",
+  burn: "Burn",
+  closeAccount: "Close Account",
+};

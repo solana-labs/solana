@@ -162,6 +162,18 @@ async function fetchAccountHistory(
   });
 }
 
+export function useAccountHistories() {
+  const context = React.useContext(StateContext);
+
+  if (!context) {
+    throw new Error(
+      `useAccountHistories must be used within a AccountsProvider`
+    );
+  }
+
+  return context.map;
+}
+
 export function useAccountHistory(address: string) {
   const context = React.useContext(StateContext);
 
@@ -185,6 +197,7 @@ export function useFetchAccountHistory() {
   return (pubkey: PublicKey, refresh?: boolean) => {
     const before = state.map[pubkey.toBase58()];
     if (!refresh && before && before.fetched && before.fetched.length > 0) {
+      if (before.foundOldest) return;
       const oldest = before.fetched[before.fetched.length - 1].signature;
       fetchAccountHistory(dispatch, pubkey, url, { before: oldest, limit: 25 });
     } else {

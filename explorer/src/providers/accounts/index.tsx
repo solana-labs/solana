@@ -241,7 +241,7 @@ export function useAccounts() {
   if (!context) {
     throw new Error(`useAccounts must be used within a AccountsProvider`);
   }
-  return context;
+  return context.accounts;
 }
 
 export function useAccountInfo(address: string) {

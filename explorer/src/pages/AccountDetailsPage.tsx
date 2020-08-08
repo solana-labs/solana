@@ -15,6 +15,7 @@ import { clusterPath } from "utils/url";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { OwnedTokensCard } from "components/account/OwnedTokensCard";
 import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
+import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -125,7 +126,12 @@ function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
           </div>
         </div>
       </div>
-      {tab === "tokens" && <OwnedTokensCard pubkey={pubkey} />}
+      {tab === "tokens" && (
+        <>
+          <OwnedTokensCard pubkey={pubkey} />
+          <TokenHistoryCard pubkey={pubkey} />
+        </>
+      )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
     </>
   );
