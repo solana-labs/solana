@@ -32,6 +32,14 @@ code, pre {
   box-shadow: $card-box-shadow !important;
 
   .search-bar__option {
-    background-color: $gray-700-dark !important;
+    cursor: pointer;
+
+    &.search-bar__option--is-focused {
+      background-color: transparent !important;
+    }
+
+    &:hover {
+      background-color: $gray-700-dark !important;
+    }
   }
 }

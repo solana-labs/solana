@@ -155,6 +155,7 @@ h4.slot-pill {
   color: hsl(0,0%,60%);
   display: flex;
   padding: 8px 10px;
+  padding-left: 14px;
   transition: color 150ms;
   box-sizing: border-box;
   cursor: pointer;
@@ -166,6 +167,7 @@ h4.slot-pill {
 
 .search-bar__control {
   border-radius: $border-radius !important;
+  padding: 4px;
 }
 
 .search-bar__menu {

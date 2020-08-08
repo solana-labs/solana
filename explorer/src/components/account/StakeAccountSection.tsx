@@ -64,7 +64,7 @@ function OverviewCard({
         <tr>
           <td>Address</td>
           <td className="text-lg-right">
-            <Address pubkey={account.pubkey} alignRight />
+            <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
         <tr>

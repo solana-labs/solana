@@ -10,9 +10,10 @@ type Props = {
   pubkey: PublicKey | Pubkey;
   alignRight?: boolean;
   link?: boolean;
+  raw?: boolean;
 };
 
-export function Address({ pubkey, alignRight, link }: Props) {
+export function Address({ pubkey, alignRight, link, raw }: Props) {
   const [state, setState] = useState<CopyState>("copy");
   const address = pubkey.toBase58();
 
@@ -36,9 +37,11 @@ export function Address({ pubkey, alignRight, link }: Props) {
       <span className="text-monospace">
         {link ? (
           <Link className="" to={clusterPath(`/address/${address}`)}>
-            {displayAddress(address)}
+            {raw ? address : displayAddress(address)}
             <span className="fe fe-external-link ml-2"></span>
           </Link>
+        ) : raw ? (
+          address
         ) : (
           displayAddress(address)
         )}
