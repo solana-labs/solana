@@ -1,10 +1,12 @@
-use crate::parse_account_data::{ParsableAccount, ParseAccountError};
+use crate::{
+    parse_account_data::{ParsableAccount, ParseAccountError},
+    StringAmount, UiFeeCalculator,
+};
 use bincode::deserialize;
 use bv::BitVec;
 use solana_sdk::{
     clock::{Clock, Epoch, Slot, UnixTimestamp},
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
     pubkey::Pubkey,
     rent::Rent,
     slot_hashes::SlotHashes,
@@ -33,7 +35,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                         .iter()
                         .map(|entry| UiRecentBlockhashesEntry {
                             blockhash: entry.blockhash.to_string(),
-                            fee_calculator: entry.fee_calculator.clone(),
+                            fee_calculator: entry.fee_calculator.clone().into(),
                         })
                         .collect();
                     SysvarAccountType::RecentBlockhashes(recent_blockhashes)
@@ -121,12 +123,12 @@ impl From<Clock> for UiClock {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiFees {
-    pub fee_calculator: FeeCalculator,
+    pub fee_calculator: UiFeeCalculator,
 }
 impl From<Fees> for UiFees {
     fn from(fees: Fees) -> Self {
         Self {
-            fee_calculator: fees.fee_calculator,
+            fee_calculator: fees.fee_calculator.into(),
         }
     }
 }
@@ -134,7 +136,7 @@ impl From<Fees> for UiFees {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiRent {
-    pub lamports_per_byte_year: u64,
+    pub lamports_per_byte_year: StringAmount,
     pub exemption_threshold: f64,
     pub burn_percent: u8,
 }
@@ -142,7 +144,7 @@ pub struct UiRent {
 impl From<Rent> for UiRent {
     fn from(rent: Rent) -> Self {
         Self {
-            lamports_per_byte_year: rent.lamports_per_byte_year,
+            lamports_per_byte_year: rent.lamports_per_byte_year.to_string(),
             exemption_threshold: rent.exemption_threshold,
             burn_percent: rent.burn_percent,
         }
@@ -153,14 +155,12 @@ impl From<Rent> for UiRent {
 #[serde(rename_all = "camelCase")]
 pub struct UiRewards {
     pub validator_point_value: f64,
-    pub unused: f64,
 }
 
 impl From<Rewards> for UiRewards {
     fn from(rewards: Rewards) -> Self {
         Self {
             validator_point_value: rewards.validator_point_value,
-            unused: rewards.unused,
         }
     }
 }
@@ -169,7 +169,7 @@ impl From<Rewards> for UiRewards {
 #[serde(rename_all = "camelCase")]
 pub struct UiRecentBlockhashesEntry {
     pub blockhash: String,
-    pub fee_calculator: FeeCalculator,
+    pub fee_calculator: UiFeeCalculator,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -212,6 +212,7 @@ pub struct UiStakeHistoryEntry {
 mod test {
     use super::*;
     use solana_sdk::{
+        fee_calculator::FeeCalculator,
         hash::Hash,
         sysvar::{recent_blockhashes::IterItem, Sysvar},
     };
@@ -259,7 +260,7 @@ mod test {
             .unwrap(),
             SysvarAccountType::RecentBlockhashes(vec![UiRecentBlockhashesEntry {
                 blockhash: hash.to_string(),
-                fee_calculator
+                fee_calculator: fee_calculator.into(),
             }]),
         );
 

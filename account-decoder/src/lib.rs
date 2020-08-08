@@ -13,7 +13,7 @@ pub mod parse_vote;
 pub mod validator_info;
 
 use crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount};
-use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
+use solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey};
 use std::str::FromStr;
 
 pub type StringAmount = String;
@@ -93,5 +93,27 @@ impl UiAccount {
             executable: self.executable,
             rent_epoch: self.rent_epoch,
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiFeeCalculator {
+    pub lamports_per_signature: StringAmount,
+}
+
+impl From<FeeCalculator> for UiFeeCalculator {
+    fn from(fee_calculator: FeeCalculator) -> Self {
+        Self {
+            lamports_per_signature: fee_calculator.lamports_per_signature.to_string(),
+        }
+    }
+}
+
+impl Default for UiFeeCalculator {
+    fn default() -> Self {
+        Self {
+            lamports_per_signature: "0".to_string(),
+        }
     }
 }

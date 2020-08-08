@@ -1,4 +1,7 @@
-use crate::parse_account_data::{ParsableAccount, ParseAccountError};
+use crate::{
+    parse_account_data::{ParsableAccount, ParseAccountError},
+    StringAmount,
+};
 use bincode::deserialize;
 use solana_sdk::clock::{Epoch, UnixTimestamp};
 use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
@@ -40,7 +43,7 @@ pub struct UiStakeAccount {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMeta {
-    pub rent_exempt_reserve: u64,
+    pub rent_exempt_reserve: StringAmount,
     pub authorized: UiAuthorized,
     pub lockup: UiLockup,
 }
@@ -48,7 +51,7 @@ pub struct UiMeta {
 impl From<Meta> for UiMeta {
     fn from(meta: Meta) -> Self {
         Self {
-            rent_exempt_reserve: meta.rent_exempt_reserve,
+            rent_exempt_reserve: meta.rent_exempt_reserve.to_string(),
             authorized: meta.authorized.into(),
             lockup: meta.lockup.into(),
         }
@@ -109,9 +112,9 @@ impl From<Stake> for UiStake {
 #[serde(rename_all = "camelCase")]
 pub struct UiDelegation {
     pub voter: String,
-    pub stake: u64,
-    pub activation_epoch: Epoch,
-    pub deactivation_epoch: Epoch,
+    pub stake: StringAmount,
+    pub activation_epoch: StringAmount,
+    pub deactivation_epoch: StringAmount,
     pub warmup_cooldown_rate: f64,
 }
 
@@ -119,9 +122,9 @@ impl From<Delegation> for UiDelegation {
     fn from(delegation: Delegation) -> Self {
         Self {
             voter: delegation.voter_pubkey.to_string(),
-            stake: delegation.stake,
-            activation_epoch: delegation.activation_epoch,
-            deactivation_epoch: delegation.deactivation_epoch,
+            stake: delegation.stake.to_string(),
+            activation_epoch: delegation.activation_epoch.to_string(),
+            deactivation_epoch: delegation.deactivation_epoch.to_string(),
             warmup_cooldown_rate: delegation.warmup_cooldown_rate,
         }
     }
@@ -162,7 +165,7 @@ mod test {
             parse_stake(&stake_data).unwrap(),
             StakeAccountType::Initialized(UiStakeAccount {
                 meta: UiMeta {
-                    rent_exempt_reserve: 42,
+                    rent_exempt_reserve: 42.to_string(),
                     authorized: UiAuthorized {
                         staker: pubkey.to_string(),
                         withdrawer: pubkey.to_string(),
@@ -195,7 +198,7 @@ mod test {
             parse_stake(&stake_data).unwrap(),
             StakeAccountType::Delegated(UiStakeAccount {
                 meta: UiMeta {
-                    rent_exempt_reserve: 42,
+                    rent_exempt_reserve: 42.to_string(),
                     authorized: UiAuthorized {
                         staker: pubkey.to_string(),
                         withdrawer: pubkey.to_string(),
@@ -209,9 +212,9 @@ mod test {
                 stake: Some(UiStake {
                     delegation: UiDelegation {
                         voter: voter_pubkey.to_string(),
-                        stake: 20,
-                        activation_epoch: 2,
-                        deactivation_epoch: std::u64::MAX,
+                        stake: 20.to_string(),
+                        activation_epoch: 2.to_string(),
+                        deactivation_epoch: std::u64::MAX.to_string(),
                         warmup_cooldown_rate: 0.25,
                     },
                     credits_observed: 10,
