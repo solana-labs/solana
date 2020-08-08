@@ -9,7 +9,7 @@ import {
   StakeAccountInfo,
   StakeMeta,
   StakeAccountType,
-} from "providers/accounts/types";
+} from "validators/accounts/stake";
 import BN from "bn.js";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64));

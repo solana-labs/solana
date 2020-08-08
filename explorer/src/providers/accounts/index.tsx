@@ -3,10 +3,11 @@ import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
 import { useCluster } from "../cluster";
 import { HistoryProvider } from "./history";
-import { TokensProvider } from "./tokens";
+import { TokensProvider, TOKEN_PROGRAM_ID } from "./tokens";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
-import { StakeAccount } from "./types";
+import { StakeAccount } from "validators/accounts/stake";
+import { TokenAccount } from "validators/accounts/token";
 export { useAccountHistory } from "./history";
 
 export enum FetchStatus {
@@ -15,11 +16,23 @@ export enum FetchStatus {
   Fetched,
 }
 
+export type StakeProgramData = {
+  name: "stake";
+  parsed: StakeAccount | StakeAccountWasm;
+};
+
+export type TokenProgramData = {
+  name: "spl-token";
+  parsed: TokenAccount;
+};
+
+export type ProgramData = StakeProgramData | TokenProgramData;
+
 export interface Details {
   executable: boolean;
   owner: PublicKey;
   space?: number;
-  data?: StakeAccount | StakeAccountWasm;
+  data?: ProgramData;
 }
 
 export interface Account {
@@ -173,19 +186,37 @@ async function fetchAccountInfo(
         space = result.data.length;
       }
 
-      let data;
+      let data: ProgramData | undefined;
       if (result.owner.equals(StakeProgram.programId)) {
         try {
+          let parsed;
           if ("parsed" in result.data) {
             const info = coerce(result.data.parsed, ParsedInfo);
-            data = coerce(info, StakeAccount);
+            parsed = coerce(info, StakeAccount);
           } else {
             const wasm = await import("solana-sdk-wasm");
-            data = wasm.StakeAccount.fromAccountData(result.data);
+            parsed = wasm.StakeAccount.fromAccountData(result.data);
           }
+          data = {
+            name: "stake",
+            parsed,
+          };
         } catch (err) {
-          console.error("Unexpected error loading wasm", err);
+          console.error("Failed to parse stake account", err);
           // TODO store error state in Account info
+        }
+      } else if ("parsed" in result.data) {
+        if (result.owner.equals(TOKEN_PROGRAM_ID)) {
+          try {
+            const info = coerce(result.data.parsed, ParsedInfo);
+            const parsed = coerce(info, TokenAccount);
+            data = {
+              name: "spl-token",
+              parsed,
+            };
+          } catch (err) {
+            // TODO store error state in Account info
+          }
         }
       }
 
