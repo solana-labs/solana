@@ -20,7 +20,9 @@ use solana_account_decoder::{
         get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount,
         UiTokenAmount,
     },
-    UiAccount, UiAccountEncoding,
+    UiAccount,
+    UiAccountData::{Binary, Binary64},
+    UiAccountEncoding,
 };
 use solana_sdk::{
     account::Account,
@@ -485,8 +487,17 @@ impl RpcClient {
                 }
                 let Response {
                     context,
-                    value: rpc_account,
+                    value: mut rpc_account,
                 } = serde_json::from_value::<Response<Option<UiAccount>>>(result_json)?;
+                if let Some(ref mut account) = rpc_account {
+                    if let Binary(_) = &account.data {
+                        let tmp = Binary64(String::new());
+                        match std::mem::replace(&mut account.data, tmp) {
+                            Binary(new_data) => account.data = Binary64(new_data),
+                            _ => panic!("should have gotten binary here."),
+                        }
+                    }
+                }
                 trace!("Response account {:?} {:?}", pubkey, rpc_account);
                 let account = rpc_account.and_then(|rpc_account| rpc_account.decode());
                 Ok(Response {
