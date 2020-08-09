@@ -35,18 +35,17 @@ pub fn parse_token(
                 "no mint_decimals provided to parse spl-token account".to_string(),
             )
         })?;
-        let ui_token_amount = token_amount_to_ui_amount(account.amount, decimals);
         Ok(TokenAccountType::Account(UiTokenAccount {
             mint: account.mint.to_string(),
             owner: account.owner.to_string(),
-            token_amount: ui_token_amount,
+            token_amount: token_amount_to_ui_amount(account.amount, decimals),
             delegate: match account.delegate {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
             is_initialized: account.is_initialized,
             is_native: account.is_native,
-            delegated_amount: account.delegated_amount,
+            delegated_amount: token_amount_to_ui_amount(account.delegated_amount, decimals),
         }))
     } else if data.len() == size_of::<Mint>() {
         let mint: Mint = *unpack(&mut data)
@@ -99,10 +98,12 @@ pub struct UiTokenAccount {
     pub mint: String,
     pub owner: String,
     pub token_amount: UiTokenAmount,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegate: Option<String>,
     pub is_initialized: bool,
     pub is_native: bool,
-    pub delegated_amount: u64,
+    #[serde(skip_serializing_if = "UiTokenAmount::is_zero")]
+    pub delegated_amount: UiTokenAmount,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -111,6 +112,16 @@ pub struct UiTokenAmount {
     pub ui_amount: f64,
     pub decimals: u8,
     pub amount: StringAmount,
+}
+
+impl UiTokenAmount {
+    fn is_zero(&self) -> bool {
+        if let Ok(amount) = self.amount.parse::<u64>() {
+            amount == 0
+        } else {
+            false
+        }
+    }
 }
 
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
@@ -177,7 +188,11 @@ mod test {
                 delegate: None,
                 is_initialized: true,
                 is_native: false,
-                delegated_amount: 0,
+                delegated_amount: UiTokenAmount {
+                    ui_amount: 0.0,
+                    decimals: 2,
+                    amount: "0".to_string()
+                },
             }),
         );
 
