@@ -376,7 +376,7 @@ impl CrdsGossipPull {
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-        let jitter = rand::thread_rng().gen_range(0, msg_timeout/4);
+        let jitter = rand::thread_rng().gen_range(0, msg_timeout / 4);
         let start = filters.len();
         //skip filters from callers that are too old
         let future = now
