@@ -376,20 +376,34 @@ impl CrdsGossipPull {
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+        //skip filters from callers that are too old
+        let recent: Vec<_> = filters
+            .into_iter()
+            .filter(|(caller, _)| {
+                caller.wallclock() < now.checked_add(msg_timeout).unwrap_or_else(|| 0)
+                    && caller
+                        .wallclock()
+                        .checked_add(msg_timeout)
+                        .unwrap_or_else(|| 0)
+                        >= now
+            })
+            .collect();
+        if recent.is_empty() {
+            return ret;
+        }
         for v in crds.table.values() {
-            filters.iter().enumerate().for_each(|(i, (caller, filter))| {
-                //skip callers that are too old
-                if caller.wallclock().checked_add(msg_timeout).unwrap_or_else(|| 0) < now {
-                    continue;
-                }
-                //skip values that are too new
-                if v.wallclock() > caller.wallclock() {
-                    continue;
-                }
-                if !filter.contains(&v.value_hash) {
-                    ret[i].push(v.value.clone());
-                }
-            });
+            filters
+                .iter()
+                .enumerate()
+                .for_each(|(i, (caller, filter))| {
+                    //skip values that are too new
+                    if v.value.wallclock() > caller.wallclock() {
+                        return;
+                    }
+                    if !filter.contains(&v.value_hash) {
+                        ret[i].push(v.value.clone());
+                    }
+                });
         }
         ret
     }
@@ -675,7 +689,7 @@ mod test {
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters);
+        let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
         dest.process_pull_requests(&mut dest_crds, filters, 1);
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
@@ -746,7 +760,7 @@ mod test {
             );
             let (_, filters, caller) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters);
+            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
             dest.process_pull_requests(&mut dest_crds, filters, 0);
             // if there is a false positive this is empty
             // prob should be around 0.1 per iteration
