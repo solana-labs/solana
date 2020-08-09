@@ -35,7 +35,7 @@ pub enum UiAccountData {
 
 impl From<Vec<u8>> for UiAccountData {
     fn from(data: Vec<u8>) -> Self {
-        Self::Binary(bs58::encode(data).into_string())
+        Self::Binary64(base64::encode(data))
     }
 }
 
