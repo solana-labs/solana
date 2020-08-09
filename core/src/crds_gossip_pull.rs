@@ -379,7 +379,7 @@ impl CrdsGossipPull {
         let start = filters.len();
         //skip filters from callers that are too old
         let recent: Vec<_> = filters
-            .into_iter()
+            .iter()
             .filter(|(caller, _)| {
                 caller.wallclock() < now.checked_add(msg_timeout).unwrap_or_else(|| 0)
                     && caller
