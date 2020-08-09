@@ -26,6 +26,7 @@ pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
+#[allow(clippy::large_enum_variant)]
 pub enum StakeAccountType {
     Uninitialized,
     Initialized(UiStakeAccount),
