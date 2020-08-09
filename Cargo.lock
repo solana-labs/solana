@@ -3196,11 +3196,18 @@ dependencies = [
  "base64 0.12.3",
  "bincode",
  "bs58",
+ "bv",
  "lazy_static",
  "serde",
  "serde_derive",
  "serde_json",
+<<<<<<< HEAD
  "solana-sdk 1.3.2",
+=======
+ "solana-config-program",
+ "solana-sdk 1.4.0",
+ "solana-stake-program",
+>>>>>>> a9f76862f... Decode native-program and sysvar accounts (#11463)
  "solana-vote-program",
  "spl-token",
  "thiserror",
