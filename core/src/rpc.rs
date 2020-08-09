@@ -6,7 +6,7 @@ use crate::{
     rpc_health::*, validator::ValidatorExit,
 };
 use bincode::{config::Options, serialize};
-use jsonrpc_core::{Error, Metadata, Result};
+use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
     parse_account_data::AccountAdditionalData,
@@ -240,21 +240,27 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
-    ) -> RpcResponse<Option<UiAccount>> {
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        new_response(
-            &bank,
-            bank.get_account(pubkey).and_then(|account| {
-                if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed
-                {
-                    get_parsed_token_account(bank.clone(), account)
-                } else {
-                    Some(UiAccount::encode(account, encoding, None))
-                }
-            }),
-        )
+        let mut response = None;
+        if let Some(account) = bank.get_account(pubkey) {
+            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+                response = get_parsed_token_account(bank.clone(), account);
+            } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
+                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
+                return Err(error::Error {
+                    code: error::ErrorCode::InvalidRequest,
+                    message,
+                    data: None,
+                });
+            } else {
+                response = Some(UiAccount::encode(account, encoding, None));
+            }
+        }
+
+        Ok(new_response(&bank, response))
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -1701,7 +1707,7 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<RpcResponse<Option<UiAccount>>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
-        Ok(meta.get_account_info(&pubkey, config))
+        meta.get_account_info(&pubkey, config)
     }
 
     fn get_minimum_balance_for_rent_exemption(

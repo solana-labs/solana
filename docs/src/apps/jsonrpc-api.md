@@ -156,7 +156,7 @@ Returns all information associated with the account of provided Pubkey
 - `<string>` - Pubkey of account to query, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary", "binary64", or jsonParsed". If parameter not provided, the default encoding is "binary". "binary" is base-58 encoded and limited to Account data of less than 128 bytes. "binary64" will return base64 encoded data for Account data of any size.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
