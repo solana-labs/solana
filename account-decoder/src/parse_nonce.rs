@@ -1,6 +1,5 @@
-use crate::parse_account_data::ParseAccountError;
+use crate::{parse_account_data::ParseAccountError, UiFeeCalculator};
 use solana_sdk::{
-    fee_calculator::FeeCalculator,
     instruction::InstructionError,
     nonce::{state::Versions, State},
 };
@@ -14,7 +13,7 @@ pub fn parse_nonce(data: &[u8]) -> Result<UiNonceState, ParseAccountError> {
         State::Initialized(data) => Ok(UiNonceState::Initialized(UiNonceData {
             authority: data.authority.to_string(),
             blockhash: data.blockhash.to_string(),
-            fee_calculator: data.fee_calculator,
+            fee_calculator: data.fee_calculator.into(),
         })),
     }
 }
@@ -32,7 +31,7 @@ pub enum UiNonceState {
 pub struct UiNonceData {
     pub authority: String,
     pub blockhash: String,
-    pub fee_calculator: FeeCalculator,
+    pub fee_calculator: UiFeeCalculator,
 }
 
 #[cfg(test)]
@@ -56,7 +55,9 @@ mod test {
             UiNonceState::Initialized(UiNonceData {
                 authority: Pubkey::default().to_string(),
                 blockhash: Hash::default().to_string(),
-                fee_calculator: FeeCalculator::default(),
+                fee_calculator: UiFeeCalculator {
+                    lamports_per_signature: 0.to_string(),
+                },
             }),
         );
 

@@ -6,9 +6,10 @@ use crate::{
 use bincode::deserialize;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use reqwest::blocking::Client;
-use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-
+use solana_account_decoder::validator_info::{
+    self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
+};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
@@ -26,23 +27,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{error, sync::Arc};
-
-pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
-pub const MAX_LONG_FIELD_LENGTH: usize = 300;
-pub const MAX_VALIDATOR_INFO: u64 = 576;
-
-solana_sdk::declare_id!("Va1idator1nfo111111111111111111111111111111");
-
-#[derive(Debug, Deserialize, PartialEq, Serialize, Default)]
-pub struct ValidatorInfo {
-    info: String,
-}
-
-impl ConfigState for ValidatorInfo {
-    fn max_space() -> u64 {
-        MAX_VALIDATOR_INFO
-    }
-}
 
 // Return an error if a validator details are longer than the max length.
 pub fn check_details_length(string: String) -> Result<(), String> {
@@ -289,7 +273,7 @@ pub fn process_set_validator_info(
         .iter()
         .filter(|(_, account)| {
             let key_list: ConfigKeys = deserialize(&account.data).map_err(|_| false).unwrap();
-            key_list.keys.contains(&(id(), false))
+            key_list.keys.contains(&(validator_info::id(), false))
         })
         .find(|(pubkey, account)| {
             let (validator_pubkey, _) = parse_validator_info(&pubkey, &account).unwrap();
@@ -328,7 +312,10 @@ pub fn process_set_validator_info(
     };
 
     let build_message = |lamports| {
-        let keys = vec![(id(), false), (config.signers[0].pubkey(), true)];
+        let keys = vec![
+            (validator_info::id(), false),
+            (config.signers[0].pubkey(), true),
+        ];
         if balance == 0 {
             println!(
                 "Publishing info for Validator {:?}",
@@ -401,7 +388,7 @@ pub fn process_get_validator_info(
                 let key_list: ConfigKeys = deserialize(&validator_info_account.data)
                     .map_err(|_| false)
                     .unwrap();
-                key_list.keys.contains(&(id(), false))
+                key_list.keys.contains(&(validator_info::id(), false))
             })
             .collect()
     };
@@ -503,7 +490,7 @@ mod tests {
     #[test]
     fn test_parse_validator_info() {
         let pubkey = Pubkey::new_rand();
-        let keys = vec![(id(), false), (pubkey, true)];
+        let keys = vec![(validator_info::id(), false), (pubkey, true)];
         let config = ConfigKeys { keys };
 
         let mut info = Map::new();
