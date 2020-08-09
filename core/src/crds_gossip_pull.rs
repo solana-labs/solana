@@ -379,10 +379,8 @@ impl CrdsGossipPull {
         let jitter = rand::thread_rng().gen_range(0, msg_timeout / 4);
         let start = filters.len();
         //skip filters from callers that are too old
-        let future = now
-            .checked_add(msg_timeout)
-            .unwrap_or_else(|| std::u64::MAX);
-        let past = now.checked_sub(msg_timeout).unwrap_or_else(|| 0);
+        let future = now.saturating_add(msg_timeout);
+        let past = now.saturating_sub(msg_timeout);
         let recent: Vec<_> = filters
             .iter()
             .filter(|(caller, _)| caller.wallclock() < future && caller.wallclock() >= past)
