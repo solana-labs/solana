@@ -33,12 +33,6 @@ pub enum UiAccountData {
     Binary64(String),
 }
 
-impl From<Vec<u8>> for UiAccountData {
-    fn from(data: Vec<u8>) -> Self {
-        Self::Binary64(base64::encode(data))
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
@@ -54,7 +48,9 @@ impl UiAccount {
         additional_data: Option<AccountAdditionalData>,
     ) -> Self {
         let data = match encoding {
-            UiAccountEncoding::Binary => account.data.into(),
+            UiAccountEncoding::Binary => {
+                UiAccountData::Binary(bs58::encode(account.data).into_string())
+            }
             UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(account.data)),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
@@ -62,7 +58,7 @@ impl UiAccount {
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    account.data.into()
+                    UiAccountData::Binary64(base64::encode(account.data))
                 }
             }
         };
