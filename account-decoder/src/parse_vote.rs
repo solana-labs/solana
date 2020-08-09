@@ -1,4 +1,4 @@
-use crate::parse_account_data::ParseAccountError;
+use crate::{parse_account_data::ParseAccountError, StringAmount};
 use solana_sdk::{
     clock::{Epoch, Slot},
     pubkey::Pubkey,
@@ -12,8 +12,8 @@ pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
         .iter()
         .map(|(epoch, credits, previous_credits)| UiEpochCredits {
             epoch: *epoch,
-            credits: *credits,
-            previous_credits: *previous_credits,
+            credits: credits.to_string(),
+            previous_credits: previous_credits.to_string(),
         })
         .collect();
     let votes = vote_state
@@ -115,8 +115,8 @@ struct UiPriorVoters {
 #[serde(rename_all = "camelCase")]
 struct UiEpochCredits {
     epoch: Epoch,
-    credits: u64,
-    previous_credits: u64,
+    credits: StringAmount,
+    previous_credits: StringAmount,
 }
 
 #[cfg(test)]

@@ -12,10 +12,18 @@ edition = "2018"
 bincode = "1.2.1"
 base64 = "0.12.3"
 bs58 = "0.3.1"
+bv = "0.11.1"
 Inflector = "0.11.4"
 lazy_static = "1.4.0"
+<<<<<<< HEAD
 solana-sdk = { path = "../sdk", version = "1.2.21"  }
 solana-vote-program = { path = "../programs/vote", version = "1.2.21" }
+=======
+solana-config-program = { path = "../programs/config", version = "1.4.0" }
+solana-sdk = { path = "../sdk", version = "1.4.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.4.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.4.0" }
+>>>>>>> a9f76862f... Decode native-program and sysvar accounts (#11463)
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 serde = "1.0.112"
 serde_derive = "1.0.103"

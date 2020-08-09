@@ -4,12 +4,16 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod parse_account_data;
+pub mod parse_config;
 pub mod parse_nonce;
+pub mod parse_stake;
+pub mod parse_sysvar;
 pub mod parse_token;
 pub mod parse_vote;
+pub mod validator_info;
 
 use crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount};
-use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
+use solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey};
 use std::str::FromStr;
 
 pub type StringAmount = String;
@@ -49,6 +53,7 @@ pub enum UiAccountEncoding {
 
 impl UiAccount {
     pub fn encode(
+        pubkey: &Pubkey,
         account: Account,
         encoding: UiAccountEncoding,
         additional_data: Option<AccountAdditionalData>,
@@ -58,7 +63,7 @@ impl UiAccount {
             UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(account.data)),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
-                    parse_account_data(&account.owner, &account.data, additional_data)
+                    parse_account_data(pubkey, &account.owner, &account.data, additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
@@ -88,5 +93,27 @@ impl UiAccount {
             executable: self.executable,
             rent_epoch: self.rent_epoch,
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiFeeCalculator {
+    pub lamports_per_signature: StringAmount,
+}
+
+impl From<FeeCalculator> for UiFeeCalculator {
+    fn from(fee_calculator: FeeCalculator) -> Self {
+        Self {
+            lamports_per_signature: fee_calculator.lamports_per_signature.to_string(),
+        }
+    }
+}
+
+impl Default for UiFeeCalculator {
+    fn default() -> Self {
+        Self {
+            lamports_per_signature: "0".to_string(),
+        }
     }
 }

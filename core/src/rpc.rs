@@ -193,7 +193,7 @@ impl JsonRpcRequestProcessor {
         let mut response = None;
         if let Some(account) = bank.get_account(pubkey) {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
-                response = get_parsed_token_account(bank.clone(), account);
+                response = get_parsed_token_account(bank.clone(), pubkey, account);
             } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
                 let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
                 return Err(error::Error {
@@ -202,7 +202,7 @@ impl JsonRpcRequestProcessor {
                     data: None,
                 });
             } else {
-                response = Some(UiAccount::encode(account, encoding, None));
+                response = Some(UiAccount::encode(pubkey, account, encoding, None));
             }
         }
 
@@ -229,6 +229,7 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
+<<<<<<< HEAD
         let accounts =
             if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts).collect()
@@ -241,6 +242,18 @@ impl JsonRpcRequestProcessor {
                     .collect()
             };
         Ok(accounts)
+=======
+        if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            get_parsed_token_accounts(bank, keyed_accounts).collect()
+        } else {
+            keyed_accounts
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
+                })
+                .collect()
+        }
+>>>>>>> a9f76862f... Decode native-program and sysvar accounts (#11463)
     }
 
     pub fn get_inflation_governor(
@@ -1085,7 +1098,7 @@ impl JsonRpcRequestProcessor {
             keyed_accounts
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone(), None),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
                 })
                 .collect()
         };
@@ -1136,7 +1149,7 @@ impl JsonRpcRequestProcessor {
             keyed_accounts
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone(), None),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
                 })
                 .collect()
         };
@@ -1212,11 +1225,16 @@ fn get_filtered_program_accounts(
         })
 }
 
-pub(crate) fn get_parsed_token_account(bank: Arc<Bank>, account: Account) -> Option<UiAccount> {
+pub(crate) fn get_parsed_token_account(
+    bank: Arc<Bank>,
+    pubkey: &Pubkey,
+    account: Account,
+) -> Option<UiAccount> {
     get_token_account_mint(&account.data)
         .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
         .map(|(_, decimals)| {
             UiAccount::encode(
+                pubkey,
                 account,
                 UiAccountEncoding::JsonParsed,
                 Some(AccountAdditionalData {
@@ -1244,6 +1262,7 @@ where
             RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
                 account: UiAccount::encode(
+                    &pubkey,
                     account,
                     UiAccountEncoding::JsonParsed,
                     Some(AccountAdditionalData { spl_token_decimals }),
