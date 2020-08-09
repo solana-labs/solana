@@ -11,7 +11,7 @@ use crate::{
     validator::ValidatorExit,
 };
 use bincode::serialize;
-use jsonrpc_core::{Error, Metadata, Result};
+use jsonrpc_core::{types::error, Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_account_decoder::{
     parse_account_data::AccountAdditionalData,
@@ -190,17 +190,23 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
-        new_response(
-            &bank,
-            bank.get_account(pubkey).and_then(|account| {
-                if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed
-                {
-                    get_parsed_token_account(bank.clone(), account)
-                } else {
-                    Some(UiAccount::encode(account, encoding, None))
-                }
-            }),
-        )
+        let mut response = None;
+        if let Some(account) = bank.get_account(pubkey) {
+            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+                response = get_parsed_token_account(bank.clone(), account);
+            } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
+                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
+                return Err(error::Error {
+                    code: error::ErrorCode::InvalidRequest,
+                    message,
+                    data: None,
+                });
+            } else {
+                response = Some(UiAccount::encode(account, encoding, None));
+            }
+        }
+
+        new_response(&bank, response)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
