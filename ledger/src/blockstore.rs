@@ -6344,14 +6344,18 @@ pub mod tests {
             let address0 = Pubkey::new_rand();
             let address1 = Pubkey::new_rand();
 
-            for slot in 2..=4 {
+            for slot in 2..=7 {
                 let entries = make_slot_entries_with_transaction_addresses(&[
                     address0, address1, address0, address1,
                 ]);
                 let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
                 blockstore.insert_shreds(shreds, None, false).unwrap();
 
-                for entry in &entries {
+                for (i, entry) in entries.iter().enumerate() {
+                    if slot == 4 && i == 2 {
+                        // Purge to freeze index 0 and write address-signatures in new primary index
+                        blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
+                    }
                     for transaction in &entry.transactions {
                         assert_eq!(transaction.signatures.len(), 1);
                         blockstore
@@ -6366,8 +6370,8 @@ pub mod tests {
                     }
                 }
             }
-            blockstore.set_roots(&[1, 2, 3, 4]).unwrap();
-            let highest_confirmed_root = 4;
+            blockstore.set_roots(&[1, 2, 3, 4, 5, 6, 7]).unwrap();
+            let highest_confirmed_root = 7;
 
             // Fetch all signatures for address 0 at once...
             let all0 = blockstore
@@ -6378,7 +6382,7 @@ pub mod tests {
                     usize::MAX,
                 )
                 .unwrap();
-            assert_eq!(all0.len(), 6);
+            assert_eq!(all0.len(), 12);
 
             // Fetch all signatures for address 1 at once...
             let all1 = blockstore
@@ -6389,7 +6393,7 @@ pub mod tests {
                     usize::MAX,
                 )
                 .unwrap();
-            assert_eq!(all1.len(), 6);
+            assert_eq!(all1.len(), 12);
 
             assert!(all0 != all1);
 
