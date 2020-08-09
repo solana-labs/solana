@@ -1902,7 +1902,7 @@ impl Blockstore {
                 }
             }
         }
-        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
         Ok(signatures)
     }
 
