@@ -229,7 +229,6 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
-<<<<<<< HEAD
         let accounts =
             if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts).collect()
@@ -237,23 +236,11 @@ impl JsonRpcRequestProcessor {
                 keyed_accounts
                     .map(|(pubkey, account)| RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
-                        account: UiAccount::encode(account, encoding.clone(), None),
+                        account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
                     })
                     .collect()
             };
         Ok(accounts)
-=======
-        if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
-            get_parsed_token_accounts(bank, keyed_accounts).collect()
-        } else {
-            keyed_accounts
-                .map(|(pubkey, account)| RpcKeyedAccount {
-                    pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
-                })
-                .collect()
-        }
->>>>>>> a9f76862f... Decode native-program and sysvar accounts (#11463)
     }
 
     pub fn get_inflation_governor(
