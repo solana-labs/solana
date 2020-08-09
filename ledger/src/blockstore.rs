@@ -1967,7 +1967,7 @@ impl Blockstore {
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
         // `before` signature if present.  Also generate a HashSet of signatures that should
         // be excluded from the results.
-        let (mut slot, mut excluded_signatures) = match before {
+        let (slot, mut excluded_signatures) = match before {
             None => (highest_confirmed_root, None),
             Some(before) => {
                 let transaction_status = self.get_transaction_status(before)?;
@@ -1999,9 +1999,10 @@ impl Blockstore {
                             .collect();
 
                         // Sort signatures as a way to entire a stable ordering within a slot, as
-                        // `self.find_address_signatures()` is ordered by signatures ordered and
+                        // the AddressSignatures column is ordered by signatures within a slot,
                         // not by block ordering
                         slot_signatures.sort();
+                        slot_signatures.reverse();
 
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
@@ -2018,34 +2019,80 @@ impl Blockstore {
 
         // Fetch the list of signatures that affect the given address
         let first_available_block = self.get_first_available_block()?;
-        let first_address_slot = self.get_lowest_slot_for_address(address)?;
-        if first_address_slot.is_none() {
-            return Ok(vec![]);
-        }
-        let lower_bound = cmp::max(first_available_block, first_address_slot.unwrap());
         let mut address_signatures = vec![];
-        loop {
-            if address_signatures.len() >= limit {
-                address_signatures.truncate(limit);
+
+        // Get signatures in `slot`
+        let mut signatures = self.find_address_signatures(address, slot, slot)?;
+        signatures.reverse();
+        if let Some(excluded_signatures) = excluded_signatures.take() {
+            address_signatures.extend(
+                signatures
+                    .into_iter()
+                    .filter(|(_, signature)| !excluded_signatures.contains(&signature)),
+            )
+        } else {
+            address_signatures.append(&mut signatures);
+        }
+
+        // Check active_transaction_status_index to see if it contains slot. If so, start with that
+        // index, as it will contain higher slots
+        let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
+        let next_primary_index = if starting_primary_index == 0 { 1 } else { 0 };
+        let next_max_slot = self
+            .transaction_status_index_cf
+            .get(next_primary_index)?
+            .unwrap()
+            .max_slot;
+        if slot > next_max_slot {
+            let mut starting_iterator = self.address_signatures_cf.iter(IteratorMode::From(
+                (starting_primary_index, address, slot, Signature::default()),
+                IteratorDirection::Reverse,
+            ))?;
+
+            // Iterate through starting_iterator until limit is reached
+            while address_signatures.len() < limit {
+                if let Some(((i, key_address, slot, signature), _)) = starting_iterator.next() {
+                    if slot == next_max_slot {
+                        break;
+                    }
+                    if i == starting_primary_index
+                        && key_address == address
+                        && slot >= first_available_block
+                    {
+                        address_signatures.push((slot, signature));
+                        continue;
+                    }
+                }
                 break;
             }
 
-            let mut signatures = self.find_address_signatures(address, slot, slot)?;
-            if let Some(excluded_signatures) = excluded_signatures.take() {
-                address_signatures.extend(
-                    signatures
-                        .into_iter()
-                        .filter(|(_, signature)| !excluded_signatures.contains(&signature)),
-                )
-            } else {
-                address_signatures.append(&mut signatures);
-            }
-            excluded_signatures = None;
+            // Handle slots that cross primary indexes
+            let mut signatures =
+                self.find_address_signatures(address, next_max_slot, next_max_slot)?;
+            signatures.reverse();
+            address_signatures.append(&mut signatures);
+        }
 
-            if slot == lower_bound {
-                break;
+        // Iterate through next_iterator until limit is reached
+        let mut next_iterator = self.address_signatures_cf.iter(IteratorMode::From(
+            (next_primary_index, address, slot, Signature::default()),
+            IteratorDirection::Reverse,
+        ))?;
+        while address_signatures.len() < limit {
+            if let Some(((i, key_address, slot, signature), _)) = next_iterator.next() {
+                // Skip next_max_slot, which is already included
+                if slot == next_max_slot {
+                    continue;
+                }
+                if i == next_primary_index
+                    && key_address == address
+                    && slot >= first_available_block
+                {
+                    address_signatures.push((slot, signature));
+                    continue;
+                }
             }
-            slot -= 1;
+            break;
         }
         address_signatures.truncate(limit);
 
@@ -6446,7 +6493,7 @@ pub mod tests {
                 assert_eq!(results[2], all0[i + 2]);
             }
 
-            // Ensure that the signatures within a slot are ordered by signature
+            // Ensure that the signatures within a slot are reverse ordered by signature
             // (current limitation of the .get_confirmed_signatures_for_address2())
             for i in (0..all1.len()).step_by(2) {
                 let results = blockstore
@@ -6463,7 +6510,7 @@ pub mod tests {
                     .unwrap();
                 assert_eq!(results.len(), 2);
                 assert_eq!(results[0].slot, results[1].slot);
-                assert!(results[0].signature <= results[1].signature);
+                assert!(results[0].signature >= results[1].signature);
                 assert_eq!(results[0], all1[i]);
                 assert_eq!(results[1], all1[i + 1]);
             }
