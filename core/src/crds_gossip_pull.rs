@@ -376,6 +376,7 @@ impl CrdsGossipPull {
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+        let start = filters.len();
         //skip filters from callers that are too old
         let recent: Vec<_> = filters
             .into_iter()
@@ -388,9 +389,14 @@ impl CrdsGossipPull {
                         >= now
             })
             .collect();
+        inc_new_counter_info!(
+            "gossip_filter_crds_values-dropped_requests",
+            start - recent.len()
+        );
         if recent.is_empty() {
             return ret;
         }
+        let mut val = 0;
         for v in crds.table.values() {
             filters
                 .iter()
@@ -398,6 +404,7 @@ impl CrdsGossipPull {
                 .for_each(|(i, (caller, filter))| {
                     //skip values that are too new
                     if v.value.wallclock() > caller.wallclock() {
+                        val += 1;
                         return;
                     }
                     if !filter.contains(&v.value_hash) {
@@ -405,6 +412,7 @@ impl CrdsGossipPull {
                     }
                 });
         }
+        inc_new_counter_info!("gossip_filter_crds_values-dropped_values", val);
         ret
     }
     pub fn make_timeouts_def(
