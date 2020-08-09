@@ -179,7 +179,7 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X, Slot, Option<T>, Option<Arc<Bank>>) -> (Box<dyn Iterator<Item = S>>, Slot),
+    F: Fn(X, &K, Slot, Option<T>, Option<Arc<Bank>>) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Serialize + Default,
     T: Clone,
 {
@@ -211,6 +211,7 @@ where
             let mut w_last_notified_slot = last_notified_slot.write().unwrap();
             let (filter_results, result_slot) = filter_results(
                 results,
+                hashmap_key,
                 *w_last_notified_slot,
                 config.as_ref().cloned(),
                 bank,
@@ -245,6 +246,7 @@ impl RpcNotifier {
 
 fn filter_account_result(
     result: Option<(Account, Slot)>,
+    pubkey: &Pubkey,
     last_notified_slot: Slot,
     encoding: Option<UiAccountEncoding>,
     bank: Option<Arc<Bank>>,
@@ -256,12 +258,14 @@ fn filter_account_result(
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
-                if let Some(ui_account) = get_parsed_token_account(bank, account) {
+                if let Some(ui_account) = get_parsed_token_account(bank, pubkey, account) {
                     return (Box::new(iter::once(ui_account)), fork);
                 }
             } else {
                 return (
-                    Box::new(iter::once(UiAccount::encode(account, encoding, None))),
+                    Box::new(iter::once(UiAccount::encode(
+                        pubkey, account, encoding, None,
+                    ))),
                     fork,
                 );
             }
@@ -272,6 +276,7 @@ fn filter_account_result(
 
 fn filter_signature_result(
     result: Option<transaction::Result<()>>,
+    _signature: &Signature,
     last_notified_slot: Slot,
     _config: Option<()>,
     _bank: Option<Arc<Bank>>,
@@ -288,6 +293,7 @@ fn filter_signature_result(
 
 fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
+    _program_id: &Pubkey,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,
     bank: Option<Arc<Bank>>,
@@ -309,7 +315,7 @@ fn filter_program_results(
             Box::new(
                 keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone(), None),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
                 }),
             )
         };
