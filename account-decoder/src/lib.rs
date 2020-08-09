@@ -30,6 +30,7 @@ pub struct UiAccount {
 pub enum UiAccountData {
     Binary(String),
     Json(ParsedAccount),
+    Binary64(String),
 }
 
 impl From<Vec<u8>> for UiAccountData {
@@ -43,6 +44,7 @@ impl From<Vec<u8>> for UiAccountData {
 pub enum UiAccountEncoding {
     Binary,
     JsonParsed,
+    Binary64,
 }
 
 impl UiAccount {
@@ -53,6 +55,7 @@ impl UiAccount {
     ) -> Self {
         let data = match encoding {
             UiAccountEncoding::Binary => account.data.into(),
+            UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(account.data)),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
                     parse_account_data(&account.owner, &account.data, additional_data)
@@ -76,6 +79,7 @@ impl UiAccount {
         let data = match &self.data {
             UiAccountData::Json(_) => None,
             UiAccountData::Binary(blob) => bs58::decode(blob).into_vec().ok(),
+            UiAccountData::Binary64(blob) => base64::decode(blob).ok(),
         }?;
         Some(Account {
             lamports: self.lamports,

@@ -100,6 +100,19 @@ fn test_rpc_send_tx() {
 
     assert_eq!(confirmed_tx, true);
 
+    use solana_account_decoder::UiAccountEncoding;
+    use solana_client::rpc_config::RpcAccountInfoConfig;
+    let config = RpcAccountInfoConfig {
+        encoding: Some(UiAccountEncoding::Binary64),
+        commitment: None,
+    };
+    let req = json_req!(
+        "getAccountInfo",
+        json!([bs58::encode(bob_pubkey).into_string(), config])
+    );
+    let json: Value = post_rpc(req, &leader_data);
+    info!("{:?}", json["result"]["value"]);
+
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
