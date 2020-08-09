@@ -232,7 +232,17 @@ export async function fetchTransactionStatus(
       });
 
       if (value !== null) {
-        let blockTime = await connection.getBlockTime(value.slot);
+        let blockTime = null;
+        try {
+          blockTime = await connection.getBlockTime(value.slot);
+        } catch (error) {
+          console.error(
+            "Failed to fetch block time for slot ",
+            value.slot,
+            ":",
+            error
+          );
+        }
         let timestamp: Timestamp =
           blockTime !== null ? blockTime : "unavailable";
 
