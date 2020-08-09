@@ -376,35 +376,39 @@ impl CrdsGossipPull {
     ) -> Vec<Vec<CrdsValue>> {
         let mut ret = vec![vec![]; filters.len()];
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+        let jitter = rand::thread_rng().gen_range(0, msg_timeout);
         let start = filters.len();
         //skip filters from callers that are too old
+        let future = now
+            .checked_add(msg_timeout)
+            .unwrap_or_else(|| std::u64::MAX);
+        let past = now.checked_sub(msg_timeout).unwrap_or_else(|| 0);
         let recent: Vec<_> = filters
             .iter()
-            .filter(|(caller, _)| {
-                caller.wallclock() < now.checked_add(msg_timeout).unwrap_or_else(|| 0)
-                    && caller
-                        .wallclock()
-                        .checked_add(msg_timeout)
-                        .unwrap_or_else(|| 0)
-                        >= now
-            })
+            .filter(|(caller, _)| caller.wallclock() < future && caller.wallclock() >= past)
             .collect();
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
             start - recent.len()
         );
+        println!(
+            "gossip_filter_crds_values-dropped_requests {}",
+            start - recent.len()
+        );
         if recent.is_empty() {
             return ret;
         }
-        let mut val = 0;
+        let mut total_skipped = 0;
         for v in crds.table.values() {
             filters
                 .iter()
                 .enumerate()
                 .for_each(|(i, (caller, filter))| {
                     //skip values that are too new
-                    if v.value.wallclock() > caller.wallclock() {
-                        val += 1;
+                    if v.value.wallclock()
+                        > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
+                    {
+                        total_skipped += 1;
                         return;
                     }
                     if !filter.contains(&v.value_hash) {
@@ -412,7 +416,8 @@ impl CrdsGossipPull {
                     }
                 });
         }
-        inc_new_counter_info!("gossip_filter_crds_values-dropped_values", val);
+        inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
+        println!("gossip_filter_crds_values-dropped_values {}", total_skipped);
         ret
     }
     pub fn make_timeouts_def(
@@ -703,21 +708,25 @@ mod test {
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
-            1,
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         )));
-        dest_crds.insert(new, 1).unwrap();
+        dest_crds
+            .insert(new, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS)
+            .unwrap();
 
         //should skip new value since caller is to old
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
+        let rsp =
+            dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
         assert_eq!(rsp[0].len(), 0);
 
         //should return new value since caller is new
         filters[0].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
-            1,
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
+        let rsp =
+            dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
         assert_eq!(rsp[0].len(), 1);
     }
 
