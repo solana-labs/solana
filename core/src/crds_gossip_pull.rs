@@ -391,10 +391,6 @@ impl CrdsGossipPull {
             "gossip_filter_crds_values-dropped_requests",
             start - recent.len()
         );
-        println!(
-            "gossip_filter_crds_values-dropped_requests {}",
-            start - recent.len()
-        );
         if recent.is_empty() {
             return ret;
         }
@@ -417,7 +413,6 @@ impl CrdsGossipPull {
                 });
         }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
-        println!("gossip_filter_crds_values-dropped_values {}", total_skipped);
         ret
     }
     pub fn make_timeouts_def(
