@@ -1716,7 +1716,7 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        data = bs58.decode(data);
+        data = new Buffer(data, 'base64');
       }
 
       value = {
@@ -1826,7 +1826,7 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        data = bs58.decode(data);
+        data = new Buffer(data, 'base64');
       }
 
       return {
