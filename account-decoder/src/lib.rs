@@ -40,7 +40,7 @@ pub enum UiAccountData {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
-    Binary,
+    Binary, // SLOW! Avoid this encoding
     JsonParsed,
     Binary64,
 }
