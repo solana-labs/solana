@@ -501,7 +501,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
             let blockstore =
-                crate::open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary);
+                crate::open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
 
             runtime.block_on(upload(
                 blockstore,
