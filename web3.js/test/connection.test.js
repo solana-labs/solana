@@ -63,7 +63,7 @@ test('get account info - not found', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58()],
+      params: [account.publicKey.toBase58(), {encoding: 'binary64'}],
     },
     {
       error: null,
@@ -253,7 +253,10 @@ test('get program accounts', async () => {
     url,
     {
       method: 'getProgramAccounts',
-      params: [programId.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [
+        programId.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'binary64'},
+      ],
     },
     {
       error: null,
@@ -1659,7 +1662,10 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [
+        account.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'binary64'},
+      ],
     },
     {
       error: null,

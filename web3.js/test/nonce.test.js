@@ -22,7 +22,7 @@ const expectedData = (authorizedPubkey: PublicKey): string => {
   const mockNonce = new Account();
   mockNonce.publicKey.toBuffer().copy(expectedData, 40); // Hash, 32 bytes
   expectedData.writeUInt16LE(5000, 72); // feeCalculator, 8 bytes
-  return bs58.encode(expectedData);
+  return expectedData.toString('base64');
 };
 
 test('create and query nonce account', async () => {
