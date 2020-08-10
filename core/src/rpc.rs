@@ -247,7 +247,7 @@ impl JsonRpcRequestProcessor {
         let mut response = None;
         if let Some(account) = bank.get_account(pubkey) {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
-                response = get_parsed_token_account(bank.clone(), pubkey, account);
+                response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
             } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
                 let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
                 return Err(error::Error {
@@ -1246,19 +1246,19 @@ pub(crate) fn get_parsed_token_account(
     bank: Arc<Bank>,
     pubkey: &Pubkey,
     account: Account,
-) -> Option<UiAccount> {
-    get_token_account_mint(&account.data)
+) -> UiAccount {
+    let additional_data = get_token_account_mint(&account.data)
         .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
-        .map(|(_, decimals)| {
-            UiAccount::encode(
-                pubkey,
-                account,
-                UiAccountEncoding::JsonParsed,
-                Some(AccountAdditionalData {
-                    spl_token_decimals: Some(decimals),
-                }),
-            )
-        })
+        .map(|(_, decimals)| AccountAdditionalData {
+            spl_token_decimals: Some(decimals),
+        });
+
+    UiAccount::encode(
+        pubkey,
+        account,
+        UiAccountEncoding::JsonParsed,
+        additional_data,
+    )
 }
 
 pub(crate) fn get_parsed_token_accounts<I>(
@@ -1269,23 +1269,25 @@ where
     I: Iterator<Item = (Pubkey, Account)>,
 {
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-    keyed_accounts.filter_map(move |(pubkey, account)| {
-        get_token_account_mint(&account.data).map(|mint_pubkey| {
+    keyed_accounts.map(move |(pubkey, account)| {
+        let additional_data = get_token_account_mint(&account.data).map(|mint_pubkey| {
             let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
                 let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
                 mint_decimals.insert(mint_pubkey, decimals);
                 Some(decimals)
             });
-            RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: UiAccount::encode(
-                    &pubkey,
-                    account,
-                    UiAccountEncoding::JsonParsed,
-                    Some(AccountAdditionalData { spl_token_decimals }),
-                ),
-            }
-        })
+            AccountAdditionalData { spl_token_decimals }
+        });
+
+        RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: UiAccount::encode(
+                &pubkey,
+                account,
+                UiAccountEncoding::JsonParsed,
+                additional_data,
+            ),
+        }
     })
 }
 
@@ -4985,6 +4987,111 @@ pub mod tests {
                     }
                 }
             ]
+        );
+    }
+
+    #[test]
+    fn test_token_parsing() {
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
+
+        let mut account_data = [0; size_of::<TokenAccount>()];
+        let account: &mut TokenAccount =
+            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
+        let mint = SplTokenPubkey::new(&[2; 32]);
+        let owner = SplTokenPubkey::new(&[3; 32]);
+        let delegate = SplTokenPubkey::new(&[4; 32]);
+        *account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 420,
+            is_initialized: true,
+            is_native: false,
+            delegated_amount: 30,
+        };
+        let token_account = Account {
+            lamports: 111,
+            data: account_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        let token_account_pubkey = Pubkey::new_rand();
+        bank.store_account(&token_account_pubkey, &token_account);
+
+        // Add the mint
+        let mut mint_data = [0; size_of::<Mint>()];
+        let mint_state: &mut Mint =
+            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
+        *mint_state = Mint {
+            owner: COption::Some(owner),
+            decimals: 2,
+            is_initialized: true,
+        };
+        let mint_account = Account {
+            lamports: 111,
+            data: mint_data.to_vec(),
+            owner: spl_token_id_v1_0(),
+            ..Account::default()
+        };
+        bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
+            token_account_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["result"]["value"]["data"],
+            json!({
+                "program": "spl-token",
+                "space": 120,
+                "parsed": {
+                    "type": "account",
+                    "info": {
+                        "mint": mint.to_string(),
+                        "owner": owner.to_string(),
+                        "tokenAmount": {
+                            "uiAmount": 4.2,
+                            "decimals": 2,
+                            "amount": "420",
+                        },
+                        "delegate": delegate.to_string(),
+                        "isInitialized": true,
+                        "isNative": false,
+                        "delegatedAmount": {
+                            "uiAmount": 0.3,
+                            "decimals": 2,
+                            "amount": "30",
+                        },
+                    }
+                }
+            })
+        );
+
+        // Test Mint
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
+            mint,
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["result"]["value"]["data"],
+            json!({
+                "program": "spl-token",
+                "space": 40,
+                "parsed": {
+                    "type": "mint",
+                    "info": {
+                        "owner": owner.to_string(),
+                        "decimals": 2,
+                        "isInitialized": true,
+                    }
+                }
+            })
         );
     }
 }
