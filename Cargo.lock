@@ -3509,6 +3509,7 @@ dependencies = [
 name = "solana-core"
 version = "1.4.0"
 dependencies = [
+ "base64 0.12.3",
  "bincode",
  "bs58",
  "bv",

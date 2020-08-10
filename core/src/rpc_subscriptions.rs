@@ -265,7 +265,7 @@ fn filter_account_result(
             } else {
                 return (
                     Box::new(iter::once(UiAccount::encode(
-                        pubkey, account, encoding, None,
+                        pubkey, account, encoding, None, None,
                     ))),
                     fork,
                 );
@@ -316,7 +316,7 @@ fn filter_program_results(
             Box::new(
                 keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
                 }),
             )
         };
@@ -1033,6 +1033,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::recent()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id.clone(),
             subscriber,
@@ -1517,6 +1518,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::single_gossip()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id0.clone(),
             subscriber0,
@@ -1585,6 +1587,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::single_gossip()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id1.clone(),
             subscriber1,

@@ -105,6 +105,7 @@ fn test_rpc_send_tx() {
     let config = RpcAccountInfoConfig {
         encoding: Some(UiAccountEncoding::Binary64),
         commitment: None,
+        data_slice: None,
     };
     let req = json_req!(
         "getAccountInfo",
