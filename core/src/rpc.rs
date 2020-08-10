@@ -238,24 +238,13 @@ impl JsonRpcRequestProcessor {
         let data_slice_config = config.data_slice;
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
-<<<<<<< HEAD
-        let accounts =
-=======
         let result =
->>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
             if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts).collect()
             } else {
                 keyed_accounts
                     .map(|(pubkey, account)| RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
-<<<<<<< HEAD
-                        account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
-                    })
-                    .collect()
-            };
-        Ok(accounts)
-=======
                         account: UiAccount::encode(
                             &pubkey,
                             account,
@@ -267,7 +256,6 @@ impl JsonRpcRequestProcessor {
                     .collect()
             };
         Ok(result)
->>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
     }
 
     pub fn get_inflation_governor(
@@ -1220,7 +1208,6 @@ fn verify_token_account_filter(
     }
 }
 
-<<<<<<< HEAD
 /// Run transactions against a frozen bank without committing the results
 fn run_transaction_simulation(
     bank: &Bank,
@@ -1238,7 +1225,8 @@ fn run_transaction_simulation(
             Some(&log_collector),
         );
     (executed[0].0.clone().map(|_| ()), log_collector.output())
-=======
+}
+
 fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
     match encoding {
         UiAccountEncoding::JsonParsed => {
@@ -1257,7 +1245,6 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
         }
         UiAccountEncoding::Binary | UiAccountEncoding::Binary64 => Ok(()),
     }
->>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
 }
 
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
