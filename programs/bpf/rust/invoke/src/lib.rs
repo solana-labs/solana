@@ -10,7 +10,7 @@ use solana_sdk::{
     entrypoint,
     entrypoint::ProgramResult,
     info,
-    program::{create_program_address, invoke, invoke_signed},
+    program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
@@ -97,7 +97,8 @@ fn process_instruction(
 
             info!("Test create_program_address");
             {
-                let address = create_program_address(&[b"You pass butter", &[nonce1]], program_id)?;
+                let address =
+                    Pubkey::create_program_address(&[b"You pass butter", &[nonce1]], program_id)?;
                 assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
             }
 

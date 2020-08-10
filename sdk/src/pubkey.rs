@@ -1,3 +1,5 @@
+#[cfg(feature = "program")]
+use crate::entrypoint::SUCCESS;
 #[cfg(not(feature = "program"))]
 use crate::hash::Hasher;
 use crate::{decode_error::DecodeError, hash::hashv};
@@ -23,6 +25,15 @@ pub enum PubkeyError {
 impl<T> DecodeError<T> for PubkeyError {
     fn type_of() -> &'static str {
         "PubkeyError"
+    }
+}
+impl From<u64> for PubkeyError {
+    fn from(error: u64) -> Self {
+        match error {
+            0 => PubkeyError::MaxSeedLengthExceeded,
+            1 => PubkeyError::InvalidSeeds,
+            _ => panic!("Unsupported PubkeyError"),
+        }
     }
 }
 
@@ -90,34 +101,66 @@ impl Pubkey {
 
     /// Create a program address, valid program address must not be on the
     /// ed25519 curve
-    #[cfg(not(feature = "program"))]
     pub fn create_program_address(
         seeds: &[&[u8]],
         program_id: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
-        let mut hasher = Hasher::default();
-        for seed in seeds.iter() {
-            if seed.len() > MAX_SEED_LEN {
-                return Err(PubkeyError::MaxSeedLengthExceeded);
-            }
-            hasher.hash(seed);
-        }
-        hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
-        let hash = hasher.result();
-
-        if curve25519_dalek::edwards::CompressedEdwardsY::from_slice(hash.as_ref())
-            .decompress()
-            .is_some()
+        // Perform the calculation inline, calling this from within a program is
+        // not supported
+        #[cfg(not(feature = "program"))]
         {
-            return Err(PubkeyError::InvalidSeeds);
-        }
+            let mut hasher = Hasher::default();
+            for seed in seeds.iter() {
+                if seed.len() > MAX_SEED_LEN {
+                    return Err(PubkeyError::MaxSeedLengthExceeded);
+                }
+                hasher.hash(seed);
+            }
+            hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
+            let hash = hasher.result();
 
-        Ok(Pubkey::new(hash.as_ref()))
+            if curve25519_dalek::edwards::CompressedEdwardsY::from_slice(hash.as_ref())
+                .decompress()
+                .is_some()
+            {
+                return Err(PubkeyError::InvalidSeeds);
+            }
+
+            Ok(Pubkey::new(hash.as_ref()))
+        }
+        // Call via a system call to perform the calculation
+        #[cfg(feature = "program")]
+        {
+            extern "C" {
+                fn sol_create_program_address(
+                    seeds_addr: *const u8,
+                    seeds_len: u64,
+                    program_id_addr: *const u8,
+                    address_bytes_addr: *const u8,
+                ) -> u64;
+            };
+            let bytes = [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ];
+            let result = unsafe {
+                sol_create_program_address(
+                    seeds as *const _ as *const u8,
+                    seeds.len() as u64,
+                    program_id as *const _ as *const u8,
+                    &bytes as *const _ as *const u8,
+                )
+            };
+            match result {
+                SUCCESS => Ok(Pubkey::new(&bytes)),
+                _ => Err(result.into()),
+            }
+        }
     }
 
     /// Find a valid program address and its corresponding nonce which must be passed
     /// as an additional seed when calling `create_program_address`
-    #[cfg(not(feature = "program"))]
+    // #[cfg(not(feature = "program"))]
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         let mut nonce = [255];
         for _ in 0..std::u8::MAX {
@@ -142,6 +185,8 @@ impl Pubkey {
         self.0
     }
 }
+
+// TODO localalize this
 
 impl AsRef<[u8]> for Pubkey {
     fn as_ref(&self) -> &[u8] {
