@@ -54,6 +54,7 @@ pub enum ParseAccountError {
 pub struct ParsedAccount {
     pub program: String,
     pub parsed: Value,
+    pub space: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -95,6 +96,7 @@ pub fn parse_account_data(
     Ok(ParsedAccount {
         program: format!("{:?}", program_name).to_kebab_case(),
         parsed: parsed_json,
+        space: data.len() as u64,
     })
 }
 
@@ -126,6 +128,7 @@ mod test {
         )
         .unwrap();
         assert_eq!(parsed.program, "vote".to_string());
+        assert_eq!(parsed.space, VoteState::size_of() as u64);
 
         let nonce_data = Versions::new_current(State::Initialized(Data::default()));
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
@@ -137,5 +140,6 @@ mod test {
         )
         .unwrap();
         assert_eq!(parsed.program, "nonce".to_string());
+        assert_eq!(parsed.space, State::size() as u64);
     }
 }
