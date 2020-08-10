@@ -1381,7 +1381,7 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<number>> {
-    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
+    const args = this._buildArgs([publicKey.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = GetBalanceAndContextRpcResult(unsafeRes);
     if (res.error) {
@@ -1464,7 +1464,7 @@ export class Connection {
   async getSupply(
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<Supply>> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSupply', args);
     const res = GetSupplyRpcResult(unsafeRes);
     if (res.error) {
@@ -1484,10 +1484,7 @@ export class Connection {
     tokenMintAddress: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<TokenAmount>> {
-    const args = this._argsWithCommitment(
-      [tokenMintAddress.toBase58()],
-      commitment,
-    );
+    const args = this._buildArgs([tokenMintAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenSupply', args);
     const res = GetTokenSupplyRpcResult(unsafeRes);
     if (res.error) {
@@ -1504,10 +1501,7 @@ export class Connection {
     tokenAddress: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<TokenAmount>> {
-    const args = this._argsWithCommitment(
-      [tokenAddress.toBase58()],
-      commitment,
-    );
+    const args = this._buildArgs([tokenAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
     const res = GetTokenAccountBalance(unsafeRes);
     if (res.error) {
@@ -1540,7 +1534,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._argsWithCommitment(_args, commitment);
+    const args = this._buildArgs(_args, commitment, 'binary64');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = GetTokenAccountsByOwner(unsafeRes);
     if (res.error) {
@@ -1564,7 +1558,7 @@ export class Connection {
           executable: result.account.executable,
           owner: new PublicKey(result.account.owner),
           lamports: result.account.lamports,
-          data: bs58.decode(result.account.data),
+          data: Buffer.from(result.account.data, 'base64'),
         },
       })),
     };
@@ -1591,7 +1585,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._argsWithCommitment(_args, commitment, 'jsonParsed');
+    const args = this._buildArgs(_args, commitment, 'jsonParsed');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = GetParsedTokenAccountsByOwner(unsafeRes);
     if (res.error) {
@@ -1652,7 +1646,11 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      'binary64',
+    );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
     if (res.error) {
@@ -1672,7 +1670,7 @@ export class Connection {
         executable,
         owner: new PublicKey(owner),
         lamports,
-        data: bs58.decode(data),
+        data: Buffer.from(data, 'base64'),
       };
     }
 
@@ -1693,7 +1691,7 @@ export class Connection {
   ): Promise<
     RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>,
   > {
-    const args = this._argsWithCommitment(
+    const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
       'jsonParsed',
@@ -1760,7 +1758,11 @@ export class Connection {
     programId: PublicKey,
     commitment: ?Commitment,
   ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
-    const args = this._argsWithCommitment([programId.toBase58()], commitment);
+    const args = this._buildArgs(
+      [programId.toBase58()],
+      commitment,
+      'binary64',
+    );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {
@@ -1782,7 +1784,7 @@ export class Connection {
           executable: result.account.executable,
           owner: new PublicKey(result.account.owner),
           lamports: result.account.lamports,
-          data: bs58.decode(result.account.data),
+          data: Buffer.from(result.account.data, 'base64'),
         },
       };
     });
@@ -1802,7 +1804,7 @@ export class Connection {
       account: AccountInfo<Buffer | ParsedAccountData>,
     }>,
   > {
-    const args = this._argsWithCommitment(
+    const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       'jsonParsed',
@@ -1894,7 +1896,7 @@ export class Connection {
    * Return the list of nodes that are currently participating in the cluster
    */
   async getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
     const res = GetVoteAccounts(unsafeRes);
     //const res = unsafeRes;
@@ -1909,7 +1911,7 @@ export class Connection {
    * Fetch the current slot that the node is processing
    */
   async getSlot(commitment: ?Commitment): Promise<number> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = GetSlot(unsafeRes);
     if (res.error) {
@@ -1923,7 +1925,7 @@ export class Connection {
    * Fetch the current slot leader of the cluster
    */
   async getSlotLeader(commitment: ?Commitment): Promise<string> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = GetSlotLeader(unsafeRes);
     if (res.error) {
@@ -1972,7 +1974,7 @@ export class Connection {
    * Fetch the current transaction count of the cluster
    */
   async getTransactionCount(commitment: ?Commitment): Promise<number> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = GetTransactionCountRpcResult(unsafeRes);
     if (res.error) {
@@ -1986,7 +1988,7 @@ export class Connection {
    * Fetch the current total currency supply of the cluster in lamports
    */
   async getTotalSupply(commitment: ?Commitment): Promise<number> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getTotalSupply', args);
     const res = GetTotalSupplyRpcResult(unsafeRes);
     if (res.error) {
@@ -2002,7 +2004,7 @@ export class Connection {
   async getInflationGovernor(
     commitment: ?Commitment,
   ): Promise<InflationGovernor> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
     const res = GetInflationGovernorRpcResult(unsafeRes);
     if (res.error) {
@@ -2016,7 +2018,7 @@ export class Connection {
    * Fetch the Epoch Info parameters
    */
   async getEpochInfo(commitment: ?Commitment): Promise<EpochInfo> {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = GetEpochInfoRpcResult(unsafeRes);
     if (res.error) {
@@ -2061,7 +2063,7 @@ export class Connection {
     dataLength: number,
     commitment: ?Commitment,
   ): Promise<number> {
-    const args = this._argsWithCommitment([dataLength], commitment);
+    const args = this._buildArgs([dataLength], commitment);
     const unsafeRes = await this._rpcRequest(
       'getMinimumBalanceForRentExemption',
       args,
@@ -2084,7 +2086,7 @@ export class Connection {
   ): Promise<
     RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>,
   > {
-    const args = this._argsWithCommitment([], commitment);
+    const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
     const res = GetRecentBlockhashAndContextRpcResult(unsafeRes);
@@ -2102,7 +2104,7 @@ export class Connection {
     blockhash: Blockhash,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<FeeCalculator | null>> {
-    const args = this._argsWithCommitment([blockhash], commitment);
+    const args = this._buildArgs([blockhash], commitment);
     const unsafeRes = await this._rpcRequest(
       'getFeeCalculatorForBlockhash',
       args,
@@ -2613,7 +2615,7 @@ export class Connection {
       this._subscribe(
         sub,
         'accountSubscribe',
-        this._argsWithCommitment([sub.publicKey], sub.commitment),
+        this._buildArgs([sub.publicKey], sub.commitment, 'binary64'),
       );
     }
 
@@ -2622,7 +2624,7 @@ export class Connection {
       this._subscribe(
         sub,
         'programSubscribe',
-        this._argsWithCommitment([sub.programId], sub.commitment),
+        this._buildArgs([sub.programId], sub.commitment, 'binary64'),
       );
     }
 
@@ -2636,7 +2638,7 @@ export class Connection {
       this._subscribe(
         sub,
         'signatureSubscribe',
-        this._argsWithCommitment([sub.signature], sub.commitment),
+        this._buildArgs([sub.signature], sub.commitment),
       );
     }
 
@@ -2667,7 +2669,7 @@ export class Connection {
             executable: value.executable,
             owner: new PublicKey(value.owner),
             lamports: value.lamports,
-            data: bs58.decode(value.data),
+            data: Buffer.from(value.data, 'base64'),
           },
           context,
         );
@@ -2743,7 +2745,7 @@ export class Connection {
               executable: value.account.executable,
               owner: new PublicKey(value.account.owner),
               lamports: value.account.lamports,
-              data: bs58.decode(value.account.data),
+              data: Buffer.from(value.account.data, 'base64'),
             },
           },
           context,
@@ -2850,10 +2852,10 @@ export class Connection {
     }
   }
 
-  _argsWithCommitment(
+  _buildArgs(
     args: Array<any>,
     override: ?Commitment,
-    encoding?: 'jsonParsed',
+    encoding?: 'jsonParsed' | 'binary64',
   ): Array<any> {
     const commitment = override || this._commitment;
     if (commitment || encoding) {
