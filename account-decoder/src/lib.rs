@@ -51,19 +51,23 @@ impl UiAccount {
         account: Account,
         encoding: UiAccountEncoding,
         additional_data: Option<AccountAdditionalData>,
+        data_slice_config: Option<UiDataSliceConfig>,
     ) -> Self {
         let data = match encoding {
-            UiAccountEncoding::Binary => {
-                UiAccountData::Binary(bs58::encode(account.data).into_string())
-            }
-            UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(account.data)),
+            UiAccountEncoding::Binary => UiAccountData::Binary(
+                bs58::encode(slice_data(&account.data, data_slice_config)).into_string(),
+            ),
+            UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(slice_data(
+                &account.data,
+                data_slice_config,
+            ))),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
                     parse_account_data(pubkey, &account.owner, &account.data, additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary64(base64::encode(account.data))
+                    UiAccountData::Binary64(base64::encode(&account.data))
                 }
             }
         };
@@ -111,5 +115,59 @@ impl Default for UiFeeCalculator {
         Self {
             lamports_per_signature: "0".to_string(),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiDataSliceConfig {
+    pub offset: usize,
+    pub length: usize,
+}
+
+fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8] {
+    if let Some(UiDataSliceConfig { offset, length }) = data_slice_config {
+        if offset >= data.len() {
+            &[]
+        } else if length > data.len() - offset {
+            &data[offset..]
+        } else {
+            &data[offset..offset + length]
+        }
+    } else {
+        data
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_slice_data() {
+        let data = vec![1, 2, 3, 4, 5];
+        let slice_config = Some(UiDataSliceConfig {
+            offset: 0,
+            length: 5,
+        });
+        assert_eq!(slice_data(&data, slice_config), &data[..]);
+
+        let slice_config = Some(UiDataSliceConfig {
+            offset: 0,
+            length: 10,
+        });
+        assert_eq!(slice_data(&data, slice_config), &data[..]);
+
+        let slice_config = Some(UiDataSliceConfig {
+            offset: 1,
+            length: 2,
+        });
+        assert_eq!(slice_data(&data, slice_config), &data[1..3]);
+
+        let slice_config = Some(UiDataSliceConfig {
+            offset: 10,
+            length: 2,
+        });
+        assert_eq!(slice_data(&data, slice_config), &[] as &[u8]);
     }
 }
