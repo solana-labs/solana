@@ -1,5 +1,5 @@
 use crate::rpc_filter::RpcFilterType;
-use solana_account_decoder::UiAccountEncoding;
+use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_sdk::{clock::Epoch, commitment_config::CommitmentConfig};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -47,6 +47,7 @@ pub struct RpcStakeConfig {
 #[serde(rename_all = "camelCase")]
 pub struct RpcAccountInfoConfig {
     pub encoding: Option<UiAccountEncoding>,
+    pub data_slice: Option<UiDataSliceConfig>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }
