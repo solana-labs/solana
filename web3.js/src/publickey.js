@@ -110,7 +110,7 @@ export class PublicKey {
       Buffer.from('ProgramDerivedAddress'),
     ]);
     let hash = await sha256(new Uint8Array(buffer));
-    let publicKeyBytes = new BN(hash, 16).toBuffer();
+    let publicKeyBytes = new BN(hash, 16).toArray();
     if (is_on_curve(publicKeyBytes)) {
       throw new Error(`Invalid seeds, address must fall off the curve`);
     }
