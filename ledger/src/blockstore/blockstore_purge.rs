@@ -235,6 +235,9 @@ impl Blockstore {
         Ok(result)
     }
 
+    /// Purges special columns (using a non-Slot primary-index) exactly, by deserializing each slot
+    /// being purged and iterating through all transactions to determine the keys of individual
+    /// records. **This method is very slow.**
     fn purge_special_columns_exact(
         &self,
         batch: &mut WriteBatch,
@@ -279,6 +282,8 @@ impl Blockstore {
         Ok(())
     }
 
+    /// Purges special columns (using a non-Slot primary-index) by range. Purge occurs if frozen
+    /// primary index has a max-slot less than the highest slot being purged.
     fn purge_special_columns_with_primary_index(
         &self,
         write_batch: &mut WriteBatch,
