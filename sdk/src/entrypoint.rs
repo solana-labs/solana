@@ -48,6 +48,8 @@ macro_rules! entrypoint {
     };
 }
 
+pub const MAX_REALLOC_SIZE: usize = 1_024 * 10;
+
 /// Deserialize the input arguments
 ///
 /// # Safety
@@ -99,7 +101,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let data = Rc::new(RefCell::new({
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
-            offset += data_len;
+            offset += data_len + MAX_REALLOC_SIZE;
             offset += (offset as *const u8).align_offset(align_of::<u128>()); // padding
 
             #[allow(clippy::cast_ptr_alignment)]
