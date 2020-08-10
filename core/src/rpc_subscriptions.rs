@@ -258,9 +258,10 @@ fn filter_account_result(
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
-                if let Some(ui_account) = get_parsed_token_account(bank, pubkey, account) {
-                    return (Box::new(iter::once(ui_account)), fork);
-                }
+                return (
+                    Box::new(iter::once(get_parsed_token_account(bank, pubkey, account))),
+                    fork,
+                );
             } else {
                 return (
                     Box::new(iter::once(UiAccount::encode(
