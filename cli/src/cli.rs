@@ -1230,7 +1230,13 @@ fn process_show_account(
     let cli_account = CliAccount {
         keyed_account: RpcKeyedAccount {
             pubkey: account_pubkey.to_string(),
-            account: UiAccount::encode(account_pubkey, account, UiAccountEncoding::Binary64, None),
+            account: UiAccount::encode(
+                account_pubkey,
+                account,
+                UiAccountEncoding::Binary64,
+                None,
+                None,
+            ),
         },
         use_lamports_unit,
     };

@@ -190,6 +190,7 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
         let mut response = None;
         if let Some(account) = bank.get_account(pubkey) {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
@@ -202,7 +203,13 @@ impl JsonRpcRequestProcessor {
                     data: None,
                 });
             } else {
-                response = Some(UiAccount::encode(pubkey, account, encoding, None));
+                response = Some(UiAccount::encode(
+                    pubkey,
+                    account,
+                    encoding,
+                    None,
+                    config.data_slice,
+                ));
             }
         }
 
@@ -228,19 +235,39 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        let data_slice_config = config.data_slice;
+        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
+<<<<<<< HEAD
         let accounts =
+=======
+        let result =
+>>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
             if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts).collect()
             } else {
                 keyed_accounts
                     .map(|(pubkey, account)| RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
+<<<<<<< HEAD
                         account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
                     })
                     .collect()
             };
         Ok(accounts)
+=======
+                        account: UiAccount::encode(
+                            &pubkey,
+                            account,
+                            encoding.clone(),
+                            None,
+                            data_slice_config,
+                        ),
+                    })
+                    .collect()
+            };
+        Ok(result)
+>>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
     }
 
     pub fn get_inflation_governor(
@@ -1058,6 +1085,8 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        let data_slice_config = config.data_slice;
+        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -1085,7 +1114,13 @@ impl JsonRpcRequestProcessor {
             keyed_accounts
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
+                    account: UiAccount::encode(
+                        &pubkey,
+                        account,
+                        encoding.clone(),
+                        None,
+                        data_slice_config,
+                    ),
                 })
                 .collect()
         };
@@ -1101,6 +1136,8 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        let data_slice_config = config.data_slice;
+        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -1136,7 +1173,13 @@ impl JsonRpcRequestProcessor {
             keyed_accounts
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None),
+                    account: UiAccount::encode(
+                        &pubkey,
+                        account,
+                        encoding.clone(),
+                        None,
+                        data_slice_config,
+                    ),
                 })
                 .collect()
         };
@@ -1177,6 +1220,7 @@ fn verify_token_account_filter(
     }
 }
 
+<<<<<<< HEAD
 /// Run transactions against a frozen bank without committing the results
 fn run_transaction_simulation(
     bank: &Bank,
@@ -1194,6 +1238,26 @@ fn run_transaction_simulation(
             Some(&log_collector),
         );
     (executed[0].0.clone().map(|_| ()), log_collector.output())
+=======
+fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
+    match encoding {
+        UiAccountEncoding::JsonParsed => {
+            if data_slice_is_some {
+                let message =
+                    "Sliced account data can only be encoded using binary (base 58) or binary64 encoding."
+                        .to_string();
+                Err(error::Error {
+                    code: error::ErrorCode::InvalidRequest,
+                    message,
+                    data: None,
+                })
+            } else {
+                Ok(())
+            }
+        }
+        UiAccountEncoding::Binary | UiAccountEncoding::Binary64 => Ok(()),
+    }
+>>>>>>> 88ca04dbd... Add config param to specify offset/length for single and program account info (#11515)
 }
 
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
@@ -1228,6 +1292,7 @@ pub(crate) fn get_parsed_token_account(
         account,
         UiAccountEncoding::JsonParsed,
         additional_data,
+        None,
     )
 }
 
@@ -1256,6 +1321,7 @@ where
                 account,
                 UiAccountEncoding::JsonParsed,
                 additional_data,
+                None,
             ),
         }
     })
@@ -2996,13 +3062,13 @@ pub mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
@@ -3022,6 +3088,54 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+
+        let address = Pubkey::new_rand();
+        let data = vec![1, 2, 3, 4, 5];
+        let mut account = Account::new(42, 5, &Pubkey::default());
+        account.data = data.clone();
+        bank.store_account(&address, &account);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary64"}}]}}"#,
+            address
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result["result"]["value"]["data"], base64::encode(&data));
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary64", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
+            address
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["result"]["value"]["data"],
+            base64::encode(&data[1..3]),
+        );
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
+            address
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["result"]["value"]["data"],
+            bs58::encode(&data[1..3]).into_string(),
+        );
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"jsonParsed", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
+            address
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
     }
 
     #[test]
