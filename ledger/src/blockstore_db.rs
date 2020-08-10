@@ -40,7 +40,9 @@ const CODE_SHRED_CF: &str = "code_shred";
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
 /// Column family for Address Signatures
 const ADDRESS_SIGNATURES_CF: &str = "address_signatures";
-/// Column family for Transaction Status Index
+/// Column family for the Transaction Status Index.
+/// This column family is used for tracking the active primary index for columns that for
+/// query performance reasons should not be indexed by Slot.
 const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 /// Column family for Rewards
 const REWARDS_CF: &str = "rewards";
