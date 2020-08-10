@@ -1671,6 +1671,10 @@ impl Blockstore {
             .collect()
     }
 
+    /// Initializes the TransactionStatusIndex column family with two records, `0` and `1`,
+    /// which are used as the primary index for entries in the TransactionStatus and
+    /// AddressSignatures columns. At any given time, one primary index is active (ie. new records
+    /// are stored under this index), the other is frozen.
     fn initialize_transaction_status_index(&self) -> Result<()> {
         self.transaction_status_index_cf
             .put(0, &TransactionStatusIndexMeta::default())?;
@@ -1687,6 +1691,8 @@ impl Blockstore {
         )
     }
 
+    /// Toggles the active primary index between `0` and `1`, and clears the stored max-slot of the
+    /// frozen index in preparation for pruning.
     fn toggle_transaction_status_index(
         &self,
         batch: &mut WriteBatch,
@@ -2014,8 +2020,8 @@ impl Blockstore {
         }
         get_initial_slot_timer.stop();
 
-        // Check active_transaction_status_index to see if it contains slot. If so, start with that
-        // index, as it will contain higher slots
+        // Check the active_transaction_status_index to see if it contains slot. If so, start with
+        // that index, as it will contain higher slots
         let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
         let next_primary_index = if starting_primary_index == 0 { 1 } else { 0 };
         let next_max_slot = self
