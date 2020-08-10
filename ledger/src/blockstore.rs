@@ -1943,6 +1943,7 @@ impl Blockstore {
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
         // `before` signature if present.  Also generate a HashSet of signatures that should
         // be excluded from the results.
+        let mut get_before_slot_timer = Measure::start("get_before_slot_timer");
         let (slot, mut excluded_signatures) = match before {
             None => (highest_confirmed_root, None),
             Some(before) => {
@@ -1992,12 +1993,14 @@ impl Blockstore {
                 }
             }
         };
+        get_before_slot_timer.stop();
 
         // Fetch the list of signatures that affect the given address
         let first_available_block = self.get_first_available_block()?;
         let mut address_signatures = vec![];
 
         // Get signatures in `slot`
+        let mut get_initial_slot_timer = Measure::start("get_initial_slot_timer");
         let mut signatures = self.find_address_signatures(address, slot, slot)?;
         signatures.reverse();
         if let Some(excluded_signatures) = excluded_signatures.take() {
@@ -2009,6 +2012,7 @@ impl Blockstore {
         } else {
             address_signatures.append(&mut signatures);
         }
+        get_initial_slot_timer.stop();
 
         // Check active_transaction_status_index to see if it contains slot. If so, start with that
         // index, as it will contain higher slots
@@ -2019,6 +2023,8 @@ impl Blockstore {
             .get(next_primary_index)?
             .unwrap()
             .max_slot;
+
+        let mut starting_primary_index_iter_timer = Measure::start("starting_primary_index_iter");
         if slot > next_max_slot {
             let mut starting_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (starting_primary_index, address, slot, Signature::default()),
@@ -2048,8 +2054,10 @@ impl Blockstore {
             signatures.reverse();
             address_signatures.append(&mut signatures);
         }
+        starting_primary_index_iter_timer.stop();
 
         // Iterate through next_iterator until limit is reached
+        let mut next_primary_index_iter_timer = Measure::start("next_primary_index_iter_timer");
         let mut next_iterator = self.address_signatures_cf.iter(IteratorMode::From(
             (next_primary_index, address, slot, Signature::default()),
             IteratorDirection::Reverse,
@@ -2070,9 +2078,11 @@ impl Blockstore {
             }
             break;
         }
+        next_primary_index_iter_timer.stop();
         address_signatures.truncate(limit);
 
         // Fill in the status information for each found transaction
+        let mut get_status_info_timer = Measure::start("get_status_info_timer");
         let mut infos = vec![];
         for (slot, signature) in address_signatures.into_iter() {
             let transaction_status = self.get_transaction_status(signature)?;
@@ -2087,6 +2097,36 @@ impl Blockstore {
                 memo: None,
             });
         }
+        get_status_info_timer.stop();
+
+        datapoint_info!(
+            "blockstore-get-conf-sigs-for-addr-2",
+            (
+                "get_before_slot_us",
+                get_before_slot_timer.as_us() as i64,
+                i64
+            ),
+            (
+                "get_initial_slot_us",
+                get_initial_slot_timer.as_us() as i64,
+                i64
+            ),
+            (
+                "starting_primary_index_iter_us",
+                starting_primary_index_iter_timer.as_us() as i64,
+                i64
+            ),
+            (
+                "next_primary_index_iter_us",
+                next_primary_index_iter_timer.as_us() as i64,
+                i64
+            ),
+            (
+                "get_status_info_us",
+                get_status_info_timer.as_us() as i64,
+                i64
+            )
+        );
 
         Ok(infos)
     }
