@@ -1260,17 +1260,23 @@ fn verify_token_account_filter(
 }
 
 fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
-    if data_slice_is_some && encoding == &UiAccountEncoding::JsonParsed {
-        let message =
-            "Sliced account data can only be encoded using binary (base 58) or binary64 encoding."
-                .to_string();
-        return Err(error::Error {
-            code: error::ErrorCode::InvalidRequest,
-            message,
-            data: None,
-        });
+    match encoding {
+        UiAccountEncoding::JsonParsed => {
+            if data_slice_is_some {
+                let message =
+                    "Sliced account data can only be encoded using binary (base 58) or binary64 encoding."
+                        .to_string();
+                Err(error::Error {
+                    code: error::ErrorCode::InvalidRequest,
+                    message,
+                    data: None,
+                })
+            } else {
+                Ok(())
+            }
+        }
+        UiAccountEncoding::Binary | UiAccountEncoding::Binary64 => Ok(()),
     }
-    Ok(())
 }
 
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
