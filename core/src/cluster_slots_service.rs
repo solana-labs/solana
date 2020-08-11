@@ -1,7 +1,9 @@
 use crate::{cluster_info::ClusterInfo, cluster_slots::ClusterSlots};
-use solana_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
+use solana_ledger::{
+    bank_forks::BankForks,
+    blockstore::{Blockstore, CompletedSlotsReceiver},
+};
 use solana_measure::measure::Measure;
-use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     sync::{

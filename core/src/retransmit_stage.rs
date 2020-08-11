@@ -429,7 +429,6 @@ impl RetransmitStage {
             retransmit_receiver,
         );
 
-        let leader_schedule_cache_clone = leader_schedule_cache.clone();
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
             cluster_slots.clone(),
@@ -443,10 +442,7 @@ impl RetransmitStage {
             epoch_schedule,
             duplicate_slots_reset_sender,
         };
-<<<<<<< HEAD
         let leader_schedule_cache = leader_schedule_cache.clone();
-=======
->>>>>>> 7ef50a935... Move cluster slots update to separate thread (#11523)
         let window_service = WindowService::new(
             blockstore,
             cluster_info.clone(),

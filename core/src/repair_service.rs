@@ -12,12 +12,8 @@ use crate::{
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
-<<<<<<< HEAD
     bank_forks::BankForks,
-    blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-=======
     blockstore::{Blockstore, SlotMeta},
->>>>>>> 7ef50a935... Move cluster slots update to separate thread (#11523)
     shred::Nonce,
 };
 use solana_measure::measure::Measure;
