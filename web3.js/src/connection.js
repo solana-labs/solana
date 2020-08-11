@@ -348,6 +348,18 @@ const Version = struct({
   'solana-core': 'string',
 });
 
+type SimulatedTransactionResponse = {
+  err: TransactionError | string | null,
+  logs: Array<string> | null,
+};
+
+const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
+  struct.pick({
+    err: struct.union(['null', 'object', 'string']),
+    logs: struct.union(['null', struct.array(['string'])]),
+  }),
+);
+
 /**
  * Metadata for a confirmed transaction on the ledger
  *
@@ -1294,6 +1306,7 @@ export class Connection {
   _blockhashInfo: {
     recentBlockhash: Blockhash | null,
     lastFetch: Date,
+    simulatedSignatures: Array<string>,
     transactionSignatures: Array<string>,
   };
   _disableBlockhashCaching: boolean = false;
@@ -1331,6 +1344,7 @@ export class Connection {
       recentBlockhash: null,
       lastFetch: new Date(0),
       transactionSignatures: [],
+      simulatedSignatures: [],
     };
 
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -2372,6 +2386,99 @@ export class Connection {
     return res.result;
   }
 
+  async _recentBlockhash(disableCache: boolean): Promise<Blockhash> {
+    if (!disableCache) {
+      // Attempt to use a recent blockhash for up to 30 seconds
+      const expired =
+        Date.now() - this._blockhashInfo.lastFetch >=
+        BLOCKHASH_CACHE_TIMEOUT_MS;
+      if (this._blockhashInfo.recentBlockhash !== null && !expired) {
+        return this._blockhashInfo.recentBlockhash;
+      }
+    }
+
+    return await this._pollNewBlockhash();
+  }
+
+  async _pollNewBlockhash(): Promise<Blockhash> {
+    const startTime = Date.now();
+    for (let i = 0; i < 50; i++) {
+      const {blockhash} = await this.getRecentBlockhash('max');
+
+      if (this._blockhashInfo.recentBlockhash != blockhash) {
+        this._blockhashInfo = {
+          recentBlockhash: blockhash,
+          lastFetch: new Date(),
+          transactionSignatures: [],
+          simulatedSignatures: [],
+        };
+        return blockhash;
+      }
+
+      // Sleep for approximately half a slot
+      await sleep(MS_PER_SLOT / 2);
+    }
+
+    throw new Error(
+      `Unable to obtain a new blockhash after ${Date.now() - startTime}ms`,
+    );
+  }
+
+  /**
+   * Simulate a transaction
+   */
+  async simulateTransaction(
+    transaction: Transaction,
+    signers?: Array<Account>,
+  ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
+    if (transaction.nonceInfo && signers) {
+      transaction.sign(...signers);
+    } else {
+      let disableCache = this._disableBlockhashCaching;
+      for (;;) {
+        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+
+        if (!signers) break;
+
+        transaction.sign(...signers);
+        if (!transaction.signature) {
+          throw new Error('!signature'); // should never happen
+        }
+
+        // If the signature of this transaction has not been seen before with the
+        // current recentBlockhash, all done.
+        const signature = transaction.signature.toString('base64');
+        if (
+          !this._blockhashInfo.simulatedSignatures.includes(signature) &&
+          !this._blockhashInfo.transactionSignatures.includes(signature)
+        ) {
+          this._blockhashInfo.simulatedSignatures.push(signature);
+          break;
+        } else {
+          disableCache = true;
+        }
+      }
+    }
+
+    const signData = transaction.serializeMessage();
+    const wireTransaction = transaction._serialize(signData);
+    const encodedTransaction = bs58.encode(wireTransaction);
+    const args = [encodedTransaction];
+
+    if (signers) {
+      args.push({sigVerify: true});
+    }
+
+    const unsafeRes = await this._rpcRequest('simulateTransaction', args);
+    const res = SimulatedTransactionResponseValidator(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to simulate transaction: ' + res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    assert(res.result);
+    return res.result;
+  }
+
   /**
    * Sign and send a transaction
    */
@@ -2383,57 +2490,22 @@ export class Connection {
     if (transaction.nonceInfo) {
       transaction.sign(...signers);
     } else {
+      let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        // Attempt to use a recent blockhash for up to 30 seconds
-        if (
-          this._blockhashInfo.recentBlockhash != null &&
-          Date.now() - this._blockhashInfo.lastFetch <
-            BLOCKHASH_CACHE_TIMEOUT_MS
-        ) {
-          transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
-          transaction.sign(...signers);
-          if (!transaction.signature) {
-            throw new Error('!signature'); // should never happen
-          }
-
-          // If the signature of this transaction has not been seen before with the
-          // current recentBlockhash, all done.
-          const signature = transaction.signature.toString();
-          if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
-            this._blockhashInfo.transactionSignatures.push(signature);
-            if (this._disableBlockhashCaching) {
-              this._blockhashInfo.lastFetch = new Date(0);
-            }
-            break;
-          }
+        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+        transaction.sign(...signers);
+        if (!transaction.signature) {
+          throw new Error('!signature'); // should never happen
         }
 
-        // Fetch a new blockhash
-        let attempts = 0;
-        const startTime = Date.now();
-        for (;;) {
-          const {blockhash} = await this.getRecentBlockhash('max');
-
-          if (this._blockhashInfo.recentBlockhash != blockhash) {
-            this._blockhashInfo = {
-              recentBlockhash: blockhash,
-              lastFetch: new Date(),
-              transactionSignatures: [],
-            };
-            break;
-          }
-          if (attempts === 50) {
-            throw new Error(
-              `Unable to obtain a new blockhash after ${
-                Date.now() - startTime
-              }ms`,
-            );
-          }
-
-          // Sleep for approximately half a slot
-          await sleep(MS_PER_SLOT / 2);
-
-          ++attempts;
+        // If the signature of this transaction has not been seen before with the
+        // current recentBlockhash, all done.
+        const signature = transaction.signature.toString('base64');
+        if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
+          this._blockhashInfo.transactionSignatures.push(signature);
+          break;
+        } else {
+          disableCache = true;
         }
       }
     }
