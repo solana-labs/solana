@@ -39,9 +39,8 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
         OperatingMode::Stable => match epoch {
             // No inflation at epoch 0
             0 => Some(Inflation::new_disabled()),
-            // Inflation starts
-            // The epoch of Epoch::MAX is a placeholder and is expected to be reduced in
-            // a future hard fork.
+            // Inflation starts The epoch of Epoch::MAX is a placeholder and is
+            // expected to be reduced in a future hard fork.
             Epoch::MAX => Some(Inflation::default()),
             _ => None,
         },
@@ -57,12 +56,25 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
     match operating_mode {
         OperatingMode::Development => {
             if epoch == 0 {
+                // Programs used for testing
                 Some(vec![
+<<<<<<< HEAD
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                     Program::Native(solana_budget_program!()),
                     Program::Native(solana_exchange_program!()),
+=======
+                    solana_bpf_loader_program!(),
+                    solana_bpf_loader_deprecated_program!(),
+                    solana_vest_program!(),
+                    solana_budget_program!(),
+                    solana_exchange_program!(),
+>>>>>>> 9290e561e... Align host addresses (#11384)
                 ])
+            } else if epoch == std::u64::MAX {
+                // The epoch of std::u64::MAX is a placeholder and is expected
+                // to be reduced in a future network update.
+                Some(vec![solana_bpf_loader_program!()])
             } else {
                 None
             }
@@ -71,10 +83,14 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
+<<<<<<< HEAD
                 Some(vec![
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                 ])
+=======
+                Some(vec![solana_bpf_loader_program!(), solana_vest_program!()])
+>>>>>>> 9290e561e... Align host addresses (#11384)
             } else {
                 None
             }
@@ -83,10 +99,14 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
+<<<<<<< HEAD
                 Some(vec![
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                 ])
+=======
+                Some(vec![solana_bpf_loader_program!(), solana_vest_program!()])
+>>>>>>> 9290e561e... Align host addresses (#11384)
             } else {
                 None
             }
@@ -179,7 +199,7 @@ mod tests {
     fn test_development_programs() {
         assert_eq!(
             get_programs(OperatingMode::Development, 0).unwrap().len(),
-            4
+            5
         );
         assert!(get_programs(OperatingMode::Development, 1).is_none());
     }
@@ -210,7 +230,11 @@ mod tests {
 
     #[test]
     fn test_softlaunch_programs() {
+<<<<<<< HEAD
         assert!(get_programs(OperatingMode::Stable, 1).is_none());
+=======
+        assert_eq!(get_programs(OperatingMode::Stable, 1), None);
+>>>>>>> 9290e561e... Align host addresses (#11384)
         assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }

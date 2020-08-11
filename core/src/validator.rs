@@ -873,7 +873,15 @@ impl TestValidator {
         );
         genesis_config
             .native_instruction_processors
+<<<<<<< HEAD
             .push(solana_budget_program!());
+=======
+            .push(solana_bpf_loader_program!());
+        genesis_config
+            .native_instruction_processors
+            .push(solana_bpf_loader_deprecated_program!());
+
+>>>>>>> 9290e561e... Align host addresses (#11384)
         genesis_config.rent.lamports_per_byte_year = 1;
         genesis_config.rent.exemption_threshold = 1.0;
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
