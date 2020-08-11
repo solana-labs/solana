@@ -1355,7 +1355,7 @@ Simulate sending a transaction
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 #### Example:
@@ -1365,7 +1365,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"simulateTransaction", "params":["4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":218},"value":{"confirmations":0,"err":null,"slot":218,"status":{"Ok":null}}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":218},"value":{"err":null,"logs":["BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"]},"id":1}
 ```
 
 ### setLogFilter
