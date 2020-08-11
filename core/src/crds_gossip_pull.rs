@@ -394,21 +394,17 @@ impl CrdsGossipPull {
         }
         let mut total_skipped = 0;
         for v in crds.table.values() {
-            recent
-                .iter()
-                .enumerate()
-                .for_each(|(i, (caller, filter))| {
-                    //skip values that are too new
-                    if v.value.wallclock()
-                        > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
-                    {
-                        total_skipped += 1;
-                        return;
-                    }
-                    if !filter.contains(&v.value_hash) {
-                        ret[i].push(v.value.clone());
-                    }
-                });
+            recent.iter().enumerate().for_each(|(i, (caller, filter))| {
+                //skip values that are too new
+                if v.value.wallclock() > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
+                {
+                    total_skipped += 1;
+                    return;
+                }
+                if !filter.contains(&v.value_hash) {
+                    ret[i].push(v.value.clone());
+                }
+            });
         }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
