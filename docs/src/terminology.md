@@ -100,7 +100,7 @@ When nodes representing 2/3rd of the stake have a common [root](terminology.md#r
 
 ## fork
 
-A [ledger](terminology.md#ledger) derived from common entries but then diverged.
+A portion of a [ledger](terminology.md#ledger) that has diverged from a common entry when compared to another validator’s view of the ledger.
 
 ## genesis block
 
@@ -110,13 +110,17 @@ The first [block](terminology.md#block) in the chain.
 
 The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
 
+## gossip 
+
+A protocol for peer-to-peer communication. Validators utilize a gossip service to ensure that information is available to all other nodes in a cluster. 
+
 ## hash
 
 A digital fingerprint of a sequence of bytes.
 
 ## inflation
 
-An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
+An increase in the token supply, used to fund validator rewards and Solana protocol development. Validator rewards trickle down to stake accounts that delegate their stake weight.
 
 ## instruction
 
@@ -130,13 +134,15 @@ A [public key](terminology.md#public-key) and corresponding [private key](termin
 
 A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
 
+The smallest unit of the [native token](terminology.md#native-token), SOL. Equal to 0.000000001 [SOL](terminology.md#sol). Named after computer scientist [Leslie Lamport.](http://www.lamport.org/)
+
 ## leader
 
-The role of a [validator](terminology.md#validator) when it is appending [entries](terminology.md#entry) to the [ledger](terminology.md#ledger).
+Also known as the Proof of History Generator - The [validator](terminology.md#validator) that is selected to append [entries](terminology.md#entry) to the [ledger](terminology.md#ledger) for a given slot. To be accepted as valid, all entries need to be signed with the public key listed within the leader schedule for the slot being verified.
 
 ## leader schedule
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) matched to all slots in an epoch. Validators shall ensure that a shred is signed by the correct [leader](terminology.md#leader) before confirming its validity to be added to the next block. The leader schedule is calculated from the bank state at the start of the previous epoch.
 
 ## ledger
 
