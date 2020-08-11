@@ -19,6 +19,7 @@ pub mod contact_info;
 pub mod bank_weight_fork_choice;
 pub mod cluster_info;
 pub mod cluster_slots;
+pub mod cluster_slots_service;
 pub mod consensus;
 pub mod crds;
 pub mod crds_gossip;

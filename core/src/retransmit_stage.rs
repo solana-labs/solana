@@ -4,6 +4,7 @@ use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
+    cluster_slots_service::ClusterSlotsService,
     contact_info::ContactInfo,
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
@@ -394,6 +395,7 @@ pub fn retransmitter(
 pub struct RetransmitStage {
     thread_hdls: Vec<JoinHandle<()>>,
     window_service: WindowService,
+    cluster_slots_service: ClusterSlotsService,
 }
 
 impl RetransmitStage {
@@ -427,13 +429,20 @@ impl RetransmitStage {
             retransmit_receiver,
         );
 
+        let leader_schedule_cache_clone = leader_schedule_cache.clone();
+        let cluster_slots_service = ClusterSlotsService::new(
+            blockstore.clone(),
+            cluster_slots.clone(),
+            bank_forks.clone(),
+            cluster_info.clone(),
+            completed_slots_receiver,
+            exit.clone(),
+        );
         let repair_info = RepairInfo {
             bank_forks,
-            completed_slots_receiver,
             epoch_schedule,
             duplicate_slots_reset_sender,
         };
-        let leader_schedule_cache_clone = leader_schedule_cache.clone();
         let window_service = WindowService::new(
             blockstore,
             cluster_info.clone(),
@@ -466,6 +475,7 @@ impl RetransmitStage {
         Self {
             thread_hdls,
             window_service,
+            cluster_slots_service,
         }
     }
 
@@ -474,6 +484,7 @@ impl RetransmitStage {
             thread_hdl.join()?;
         }
         self.window_service.join()?;
+        self.cluster_slots_service.join()?;
         Ok(())
     }
 }
