@@ -658,7 +658,7 @@ const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: 'boolean',
         owner: 'string',
         lamports: 'number',
-        data: struct.object({
+        data: struct.pick({
           program: 'string',
           parsed: 'any',
         }),
@@ -722,7 +722,7 @@ const ParsedAccountInfoResult = struct.object({
   lamports: 'number',
   data: struct.union([
     'string',
-    struct.object({
+    struct.pick({
       program: 'string',
       parsed: 'any',
     }),
