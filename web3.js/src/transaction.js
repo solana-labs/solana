@@ -433,8 +433,14 @@ export class Transaction {
    * Verify signatures of a complete, signed Transaction
    */
   verifySignatures(): boolean {
+    return this._verifySignatures(this.serializeMessage());
+  }
+
+  /**
+   * @private
+   */
+  _verifySignatures(signData: Buffer): boolean {
     let verified = true;
-    const signData = this.serializeMessage();
     for (const {signature, publicKey} of this.signatures) {
       if (
         !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
@@ -452,11 +458,23 @@ export class Transaction {
    */
   serialize(): Buffer {
     const {signatures} = this;
-    if (!signatures || signatures.length === 0 || !this.verifySignatures()) {
+    if (!signatures || signatures.length === 0) {
       throw new Error('Transaction has not been signed');
     }
 
     const signData = this.serializeMessage();
+    if (!this._verifySignatures(signData)) {
+      throw new Error('Transaction has not been signed correctly');
+    }
+
+    return this._serialize(signData);
+  }
+
+  /**
+   * @private
+   */
+  _serialize(signData: Buffer): Buffer {
+    const {signatures} = this;
     const signatureCount = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =

@@ -121,6 +121,11 @@ declare module '@solana/web3.js' {
     version?: string;
   };
 
+  export type SimulatedTransactionResponse = {
+    err: TransactionError | string | null;
+    logs: Array<string> | null;
+  };
+
   export type ConfirmedTransactionMeta = {
     fee: number;
     preBalances: Array<number>;
@@ -404,6 +409,10 @@ declare module '@solana/web3.js' {
       wireTransaction: Buffer | Uint8Array | Array<number>,
       options?: SendOptions,
     ): Promise<TransactionSignature>;
+    simulateTransaction(
+      transaction: Transaction,
+      signers?: Array<Account>,
+    ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>>;
     onAccountChange(
       publickey: PublicKey,
       callback: AccountChangeCallback,
