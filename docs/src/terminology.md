@@ -8,6 +8,10 @@ The following terms are used throughout the documentation.
 
 A persistent file addressed by [public key](terminology.md#public-key) and with [lamports](terminology.md#lamport) tracking its lifetime.
 
+## active set
+
+The list of validators that can be considered for the next epoch’s leader schedule
+
 ## app
 
 A front-end application that interacts with a Solana cluster.
@@ -16,6 +20,10 @@ A front-end application that interacts with a Solana cluster.
 
 The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
 
+## batches
+
+To speed up the transmission of information throughout nodes, the information is cut into batches. This allows for smaller segments to be passed around, and then shared amongst peers. Once a node has received all batches, it can reconstruct the original set.
+
 ## block
 
 A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
@@ -23,6 +31,10 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 ## blockhash
 
 A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+
+## blockstore
+
+Before a block is considered to have reached finality, validators shall keep all valid forks that are generated through receipt of a shred signed by the expected leader for a given slot. Once a validator’s votes have reached max lockout, they may prune anything beyond the root from their blockstore. 
 
 ## block height
 
@@ -36,13 +48,17 @@ The first [validator](terminology.md#validator) to produce a [block](terminology
 
 Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
+## checkpoint
+
+If there are multiple active forks within the blockstore, each point in which two forks meet would be a checkpoint. When a checkpoint is older than the root, it can be pruned from memory.
+
 ## client
 
 A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster).
 
 ## cluster
 
-A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
+A set of [validators](terminology.md#validator) who run a Solana blockchain instance with the same genesis.
 
 ## confirmation time
 
