@@ -68,6 +68,14 @@ See [vote credit](terminology.md#vote-credit).
 
 A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
 
+## delinquent
+
+When a validator does not submit a vote, it is known as delinquent. It is measured in the amount of blocks since a vote was last seen from that validator.
+
+## delinquent stake
+
+When a validator is considered delinquent, the amount of stake weight that has been delegated to it is added to the delinquent stake of the cluster.
+
 ## drone
 
 An off-chain service that acts as a custodian for a user's private key. It typically serves to validate and sign transactions.
@@ -88,15 +96,19 @@ See [Proof of History](terminology.md#proof-of-history).
 
 ## epoch
 
-The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
+The time, as measured in [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid. On Mainnet, there are 432,000 slots per epoch, which should take 2 days to pass
+
+## epoch boundary 
+
+The first block of a new epoch.
 
 ## fee account
 
-The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
+The fee account in the transaction is the account that pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction, since paying for the transaction reduces the account balance and updates the bank state.
 
 ## finality
 
-When nodes representing 2/3rd of the stake have a common [root](terminology.md#root).
+When a supermajority (two-thirds) of validators have voted for the same [root](terminology.md#root), everything within the ledger older than is considered immutable and final. A transaction that has reached finality can not be rolled back due to network forks.
 
 ## fork
 
