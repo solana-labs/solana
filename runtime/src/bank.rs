@@ -1163,18 +1163,13 @@ impl Bank {
             .unwrap()
             .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
 
-        self.hashes_per_tick = genesis_config.poh_config.hashes_per_tick;
-        self.ticks_per_slot = genesis_config.ticks_per_slot;
-        self.ns_per_slot = genesis_config.poh_config.target_tick_duration.as_nanos()
-            * genesis_config.ticks_per_slot as u128;
+        self.hashes_per_tick = genesis_config.hashes_per_tick();
+        self.ticks_per_slot = genesis_config.ticks_per_slot();
+        self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
         self.unused = genesis_config.unused;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
-        self.slots_per_year = years_as_slots(
-            1.0,
-            &genesis_config.poh_config.target_tick_duration,
-            self.ticks_per_slot,
-        );
+        self.slots_per_year = genesis_config.slots_per_year();
 
         self.epoch_schedule = genesis_config.epoch_schedule;
 
@@ -2108,7 +2103,9 @@ impl Bank {
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
-            rent += self.rent_collector.update(&pubkey, &mut account);
+            rent += self
+                .rent_collector
+                .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -2545,10 +2542,25 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
-        self.collected_rent.fetch_add(
-            self.rent_collector.update(pubkey, &mut account),
-            Ordering::Relaxed,
-        );
+
+        let should_be_in_new_behavior = match self.operating_mode() {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => self.epoch() >= Epoch::max_value(),
+            OperatingMode::Stable => self.epoch() >= Epoch::max_value(),
+        };
+
+        // don't collect rents if we're in the new behavior;
+        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
+        // there are too many and subtly nuanced modification codepaths
+        if !should_be_in_new_behavior {
+            // previously we're too much collecting rents as if it existed since epoch 0...
+            self.collected_rent.fetch_add(
+                self.rent_collector
+                    .collect_from_existing_account(pubkey, &mut account),
+                Ordering::Relaxed,
+            );
+        }
+
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }

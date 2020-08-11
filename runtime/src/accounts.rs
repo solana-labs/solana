@@ -139,8 +139,9 @@ impl Accounts {
                         let (account, rent) =
                             AccountsDB::load(storage, ancestors, accounts_index, key)
                                 .map(|(mut account, _)| {
-                                    if message.is_writable(i) && !account.executable {
-                                        let rent_due = rent_collector.update(&key, &mut account);
+                                    if message.is_writable(i) {
+                                        let rent_due = rent_collector
+                                            .collect_from_existing_account(&key, &mut account);
                                         (account, rent_due)
                                     } else {
                                         (account, 0)
@@ -735,8 +736,7 @@ impl Accounts {
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
-                        account.rent_epoch = rent_collector.epoch;
-                        acc.2 += rent_collector.update(&key, account);
+                        acc.2 += rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));
                 }
