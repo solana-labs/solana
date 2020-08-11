@@ -65,6 +65,7 @@ else
     # than the ideal coding..
     tail -n 500 "${log_file}"
     gzip -f  "${log_file}"
+    source ci/upload-ci-artifact.sh
     upload-ci-artifact "${log_file}.gz"
 
     exit $test_status
