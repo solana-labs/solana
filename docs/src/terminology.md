@@ -282,9 +282,17 @@ A function that takes a fixed amount of time to execute that produces a proof th
 
 See [ledger vote](terminology.md#ledger-vote).
 
+## vote account
+
+For a validator to receive votes, it creates a vote account. Stake accounts will then be able to select this vote account to delegate their stake towards. 
+
 ## vote credit
 
 A reward tally for validators. A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+
+## vote signer
+
+A service that evaluates each vote to ensure it does not violate a slashing condition. A vote signer only needs to maintain minimal state regarding the votes it signed and the votes signed by the rest of the cluster. The vote signer controls the voting capability of a vote account.
 
 ## wallet
 
@@ -293,3 +301,7 @@ A collection of [keypairs](terminology.md#keypair).
 ## warmup period
 
 Some number of epochs after stake has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+
+## withdraw authority
+
+An authority set at account creation for a vote, stake, or nonce account. It can also be changed at any time utilizing the keypair that is assigned to the withdraw authority. This authority may be used to be remove deactivated SOL from an account, whereas the other authority may only be used for the action specific to that account (i.e. voting, staking, rolling a nonce…)
