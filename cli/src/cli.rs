@@ -23,7 +23,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::RpcKeyedAccount,
+    rpc_response::{Response, RpcKeyedAccount},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -1204,23 +1204,16 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             transactions_signatures = transactions_signatures
                 .into_iter()
                 .filter(|(_transaction, signature)| {
-                    if let Some(signature) = signature {
-                        if let Ok(status) = rpc_client.get_signature_status(&signature) {
-                            if rpc_client
-                                .get_num_blocks_since_signature_confirmation(&signature)
-                                .unwrap_or(0)
-                                > 1
-                            {
-                                return false;
-                            } else {
-                                return match status {
-                                    None => true,
-                                    Some(result) => result.is_err(),
-                                };
+                    signature
+                        .and_then(|signature| rpc_client.get_signature_statuses(&[signature]).ok())
+                        .map(|Response { context: _, value }| match &value[0] {
+                            None => true,
+                            Some(transaction_status) => {
+                                !(transaction_status.confirmations.is_none()
+                                    || transaction_status.confirmations.unwrap() > 1)
                             }
-                        }
-                    }
-                    true
+                        })
+                        .unwrap_or(true)
                 })
                 .collect();
 
@@ -1283,7 +1276,7 @@ fn process_deploy(
     let signers = [config.signers[0], program_id];
     create_account_tx.try_sign(&signers, blockhash)?;
     messages.push(&create_account_tx.message);
-    let mut write_transactions = vec![];
+    let mut write_messages = vec![];
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
             &program_id.pubkey(),
@@ -1292,19 +1285,17 @@ fn process_deploy(
             chunk.to_vec(),
         );
         let message = Message::new(&[instruction], Some(&signers[0].pubkey()));
-        let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&signers, blockhash)?;
-        write_transactions.push(tx);
+        write_messages.push(message);
     }
-    for transaction in write_transactions.iter() {
-        messages.push(&transaction.message);
+    let mut write_message_refs = vec![];
+    for message in write_messages.iter() {
+        write_message_refs.push(message);
     }
+    messages.append(&mut write_message_refs);
 
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let message = Message::new(&[instruction], Some(&signers[0].pubkey()));
-    let mut finalize_tx = Transaction::new_unsigned(message);
-    finalize_tx.try_sign(&signers, blockhash)?;
-    messages.push(&finalize_tx.message);
+    let finalize_message = Message::new(&[instruction], Some(&signers[0].pubkey()));
+    messages.push(&finalize_message);
 
     check_account_for_multiple_fees_with_commitment(
         rpc_client,
@@ -1324,10 +1315,27 @@ fn process_deploy(
         CliError::DynamicProgramError("Program account allocation failed".to_string())
     })?;
 
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
+    let mut write_transactions = vec![];
+    for message in write_messages.into_iter() {
+        let mut tx = Transaction::new_unsigned(message);
+        tx.try_sign(&signers, blockhash)?;
+        write_transactions.push(tx);
+    }
+
     trace!("Writing program data");
     send_and_confirm_transactions_with_spinner(&rpc_client, write_transactions, &signers).map_err(
         |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
     )?;
+
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
+    finalize_tx.try_sign(&signers, blockhash)?;
 
     trace!("Finalizing program account");
     rpc_client
