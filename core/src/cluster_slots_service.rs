@@ -9,11 +9,24 @@ use std::{
         {Arc, RwLock},
     },
     thread::sleep,
-    thread::{Builder, JoinHandle},
-    time::Duration,
+    thread::{self, Builder, JoinHandle},
+    time::{Duration, Instant},
 };
 
-struct ClusterSlotsService {
+#[derive(Default, Debug)]
+struct ClusterSlotsServiceTiming {
+    pub lowest_slot_elapsed: u64,
+    pub update_completed_slots_elapsed: u64,
+}
+
+impl ClusterSlotsServiceTiming {
+    fn update(&mut self, lowest_slot_elapsed: u64, update_completed_slots_elapsed: u64) {
+        self.lowest_slot_elapsed += lowest_slot_elapsed;
+        self.update_completed_slots_elapsed += update_completed_slots_elapsed;
+    }
+}
+
+pub struct ClusterSlotsService {
     t_cluster_slots_service: JoinHandle<()>,
 }
 
@@ -48,6 +61,10 @@ impl ClusterSlotsService {
         }
     }
 
+    pub fn join(self) -> thread::Result<()> {
+        self.t_cluster_slots_service.join()
+    }
+
     fn run(
         blockstore: Arc<Blockstore>,
         cluster_slots: Arc<ClusterSlots>,
@@ -56,6 +73,8 @@ impl ClusterSlotsService {
         completed_slots_receiver: CompletedSlotsReceiver,
         exit: Arc<AtomicBool>,
     ) {
+        let mut cluster_slots_service_timing = ClusterSlotsServiceTiming::default();
+        let mut last_stats = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -66,12 +85,36 @@ impl ClusterSlotsService {
             let lowest_slot = blockstore.lowest_slot();
             Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
             lowest_slot_elapsed.stop();
-            let mut update_completed_slots_elapsed = Measure::start("update_completed_slots_elapsed");
+            let mut update_completed_slots_elapsed =
+                Measure::start("update_completed_slots_elapsed");
             Self::update_completed_slots(&completed_slots_receiver, &cluster_info);
             cluster_slots.update(new_root, &cluster_info, &bank_forks);
             update_completed_slots_elapsed.stop();
+
+            cluster_slots_service_timing.update(
+                lowest_slot_elapsed.as_us(),
+                update_completed_slots_elapsed.as_us(),
+            );
+
+            if last_stats.elapsed().as_secs() > 2 {
+                datapoint_info!(
+                    "cluster_slots_service-timing",
+                    (
+                        "lowest_slot_elapsed",
+                        cluster_slots_service_timing.lowest_slot_elapsed,
+                        i64
+                    ),
+                    (
+                        "update_completed_slots_elapsed",
+                        cluster_slots_service_timing.update_completed_slots_elapsed,
+                        i64
+                    ),
+                );
+                cluster_slots_service_timing = ClusterSlotsServiceTiming::default();
+                last_stats = Instant::now();
+            }
+            sleep(Duration::from_millis(200));
         }
-        sleep(Duration::from_millis(200));
     }
 
     fn update_completed_slots(
@@ -131,12 +174,13 @@ impl ClusterSlotsService {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::cluster_info::Node;
 
     #[test]
     pub fn test_update_lowest_slot() {
         let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info);
-        RepairService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
+        ClusterSlotsService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
         let lowest = cluster_info
             .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| {
                 lowest_slot.clone()
