@@ -23,7 +23,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::RpcKeyedAccount,
+    rpc_response::{Response, RpcKeyedAccount},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -1204,23 +1204,16 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             transactions_signatures = transactions_signatures
                 .into_iter()
                 .filter(|(_transaction, signature)| {
-                    if let Some(signature) = signature {
-                        if let Ok(status) = rpc_client.get_signature_status(&signature) {
-                            if rpc_client
-                                .get_num_blocks_since_signature_confirmation(&signature)
-                                .unwrap_or(0)
-                                > 1
-                            {
-                                return false;
-                            } else {
-                                return match status {
-                                    None => true,
-                                    Some(result) => result.is_err(),
-                                };
+                    signature
+                        .and_then(|signature| rpc_client.get_signature_statuses(&[signature]).ok())
+                        .map(|Response { context: _, value }| match &value[0] {
+                            None => true,
+                            Some(transaction_status) => {
+                                !(transaction_status.confirmations.is_none()
+                                    || transaction_status.confirmations.unwrap() > 1)
                             }
-                        }
-                    }
-                    true
+                        })
+                        .unwrap_or(true)
                 })
                 .collect();
 
