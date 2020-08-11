@@ -82,7 +82,7 @@ impl UiPartiallyDecodedInstruction {
     }
 }
 
-#[frozen_abi(digest = "92G1B1o9KCHpg75PRtao2mtJAni6cquVMtqxi8UNK1RW")]
+#[frozen_abi(digest = "FY5mgiVVk1aoevvSYr8c6T58mNRneTfG2Su7WFG5pnSj")]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatusMeta {
