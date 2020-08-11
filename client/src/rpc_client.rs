@@ -819,40 +819,7 @@ impl RpcClient {
         )
     }
 
-<<<<<<< HEAD
-    fn accounts_to_token_accounts(
-        &self,
-        commitment_config: CommitmentConfig,
-        pubkey_accounts: Vec<(Pubkey, Account)>,
-    ) -> Vec<(Pubkey, UiTokenAccount)> {
-        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-        pubkey_accounts
-            .into_iter()
-            .filter_map(|(pubkey, account)| {
-                let mint_pubkey = get_token_account_mint(&account.data)?;
-                let decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                    let mint = self
-                        .get_token_mint_with_commitment(&mint_pubkey, commitment_config)
-                        .ok()
-                        .map(|response| response.value)
-                        .flatten()?;
-                    mint_decimals.insert(mint_pubkey, mint.decimals);
-                    Some(mint.decimals)
-                })?;
-                match parse_token(&account.data, Some(decimals)) {
-                    Ok(TokenAccountType::Account(ui_token_account)) => {
-                        Some((pubkey, ui_token_account))
-                    }
-                    _ => None,
-                }
-            })
-            .collect()
-    }
-
     pub fn poll_balance_with_timeout_and_commitment(
-=======
-    fn poll_balance_with_timeout_and_commitment(
->>>>>>> 17645ee20... Adapt RpcClient to recent token method changes (#11519)
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
