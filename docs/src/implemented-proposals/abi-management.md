@@ -79,7 +79,7 @@ and derive AbiExample, AbiEnumVisitor
 
 In general, once we add `frozen_abi` and its change is published in the stable
 release channel, its digest should never change. If such a change is needed, we
-should carefully do so like defining a new `struct` like `FooV1` and using special 
+should carefully do so like defining a new `struct` like `FooV1` and using special
 release flow like hard forks.
 
 
