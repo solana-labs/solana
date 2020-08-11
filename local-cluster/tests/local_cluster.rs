@@ -705,7 +705,13 @@ fn test_stable_operating_mode() {
     }
 
     // Programs that are not available at epoch 0
-    for program_id in [&solana_sdk::bpf_loader::id(), &solana_vest_program::id()].iter() {
+    for program_id in [
+        &solana_sdk::bpf_loader::id(),
+        &solana_sdk::bpf_loader_deprecated::id(),
+        &solana_vest_program::id(),
+    ]
+    .iter()
+    {
         assert_eq!(
             (
                 program_id,

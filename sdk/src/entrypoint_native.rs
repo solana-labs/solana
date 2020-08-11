@@ -33,7 +33,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 #[rustversion::since(1.46.0)]
 #[macro_export]
 macro_rules! declare_name {
-    ($name:ident) => {
+    ($name:ident, $filename:ident, $id:path) => {
         #[macro_export]
         macro_rules! $name {
             () => {
@@ -66,8 +66,8 @@ macro_rules! declare_name {
                 // `respan!` respans the path `$crate::id`, which we then call (hence the extra
                 // parens)
                 (
-                    stringify!($name).to_string(),
-                    ::solana_sdk::respan!($crate::id, $name)(),
+                    stringify!($filename).to_string(),
+                    ::solana_sdk::respan!($crate::$id, $name)(),
                 )
             };
         }
@@ -77,11 +77,11 @@ macro_rules! declare_name {
 #[rustversion::not(since(1.46.0))]
 #[macro_export]
 macro_rules! declare_name {
-    ($name:ident) => {
+    ($name:ident, $filename:ident, $id:path) => {
         #[macro_export]
         macro_rules! $name {
             () => {
-                (stringify!($name).to_string(), $crate::id())
+                (stringify!($filename).to_string(), $crate::$id())
             };
         }
     };
@@ -90,8 +90,10 @@ macro_rules! declare_name {
 /// Convenience macro to declare a native program
 ///
 /// bs58_string: bs58 string representation the program's id
-/// name: Name of the program, must match the library name in Cargo.toml
+/// name: Name of the program
+/// filename: must match the library name in Cargo.toml
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
+/// id: Path to the program id access function, used if not called in `src/lib`
 ///
 /// # Examples
 ///
@@ -159,7 +161,7 @@ macro_rules! declare_name {
 macro_rules! declare_program(
     ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
         $crate::declare_id!($bs58_string);
-        $crate::declare_name!($name);
+        $crate::declare_name!($name, $name, id);
 
         #[no_mangle]
         pub extern "C" fn $name(
@@ -174,12 +176,16 @@ macro_rules! declare_program(
 
 /// Same as declare_program but for native loaders
 #[macro_export]
-macro_rules! declare_loader(
-    ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
+macro_rules! declare_loader {
+    ($bs58_string:expr, $name:ident, $entrypoint:expr) => {
+        $crate::declare_loader!($bs58_string, $name, $entrypoint, $name, id);
+    };
+    ($bs58_string:expr, $name:ident, $entrypoint:expr, $filename:ident) => {
+        $crate::declare_loader!($bs58_string, $name, $entrypoint, $filename, id);
+    };
+    ($bs58_string:expr, $name:ident, $entrypoint:expr, $filename:ident, $id:path) => {
         $crate::declare_id!($bs58_string);
-        $crate::declare_name!($name);
-
-
+        $crate::declare_name!($name, $filename, $id);
 
         #[no_mangle]
         pub extern "C" fn $name(
@@ -190,8 +196,8 @@ macro_rules! declare_loader(
         ) -> Result<(), $crate::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, instruction_data, invoke_context)
         }
-    )
-);
+    };
+}
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 

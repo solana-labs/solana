@@ -1,10 +1,15 @@
 pub mod alloc;
 pub mod allocator_bump;
 pub mod bpf_verifier;
+pub mod deprecated;
+pub mod serialization;
 pub mod syscalls;
 
-use crate::{bpf_verifier::VerifierError, syscalls::SyscallError};
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use crate::{
+    bpf_verifier::VerifierError,
+    serialization::{deserialize_parameters, serialize_parameters},
+    syscalls::SyscallError,
+};
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     ebpf::{EbpfError, UserDefinedError},
@@ -13,7 +18,7 @@ use solana_rbpf::{
 };
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
-    bpf_loader,
+    bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
     entrypoint_native::InvokeContext,
@@ -22,13 +27,13 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use std::{io::prelude::*, mem};
 use thiserror::Error;
 
 solana_sdk::declare_loader!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
-    process_instruction
+    process_instruction,
+    solana_bpf_loader_program
 );
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -86,75 +91,6 @@ pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool,
     (false, 0)
 }
 
-pub fn serialize_parameters(
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    data: &[u8],
-) -> Result<Vec<u8>, InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
-
-    let mut v: Vec<u8> = Vec::new();
-    v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
-        .unwrap();
-    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
-        let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
-        if is_dup {
-            v.write_u8(position as u8).unwrap();
-        } else {
-            v.write_u8(std::u8::MAX).unwrap();
-            v.write_u8(keyed_account.signer_key().is_some() as u8)
-                .unwrap();
-            v.write_u8(keyed_account.is_writable() as u8).unwrap();
-            v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
-            v.write_u64::<LittleEndian>(keyed_account.lamports()?)
-                .unwrap();
-            v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
-                .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
-            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
-            v.write_u8(keyed_account.executable()? as u8).unwrap();
-            v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
-                .unwrap();
-        }
-    }
-    v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
-    v.write_all(data).unwrap();
-    v.write_all(program_id.as_ref()).unwrap();
-    Ok(v)
-}
-
-pub fn deserialize_parameters(
-    keyed_accounts: &[KeyedAccount],
-    buffer: &[u8],
-) -> Result<(), InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
-
-    let mut start = mem::size_of::<u64>(); // number of accounts
-    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
-        let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
-        start += 1; // is_dup
-        if !is_dup {
-            start += mem::size_of::<u8>(); // is_signer
-            start += mem::size_of::<u8>(); // is_writable
-            start += mem::size_of::<Pubkey>(); // pubkey
-            keyed_account.try_account_ref_mut()?.lamports =
-                LittleEndian::read_u64(&buffer[start..]);
-            start += mem::size_of::<u64>() // lamports
-                + mem::size_of::<u64>(); // data length
-            let end = start + keyed_account.data_len()?;
-            keyed_account
-                .try_account_ref_mut()?
-                .data
-                .clone_from_slice(&buffer[start..end]);
-            start += keyed_account.data_len()? // data
-                + mem::size_of::<Pubkey>() // owner
-                + mem::size_of::<u8>() // executable
-                + mem::size_of::<u64>(); // rent_epoch
-        }
-    }
-    Ok(())
-}
-
 macro_rules! log{
     ($logger:ident, $message:expr) => {
         if let Ok(mut logger) = $logger.try_borrow_mut() {
@@ -176,7 +112,7 @@ pub fn process_instruction(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    debug_assert!(bpf_loader::check_id(program_id));
+    debug_assert!(bpf_loader::check_id(program_id) || bpf_loader_deprecated::check_id(program_id));
 
     let logger = invoke_context.get_logger();
 
@@ -191,6 +127,7 @@ pub fn process_instruction(
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
         let parameter_bytes = serialize_parameters(
+            program_id,
             program.unsigned_key(),
             parameter_accounts,
             &instruction_data,
@@ -236,7 +173,7 @@ pub fn process_instruction(
                 }
             }
         }
-        deserialize_parameters(parameter_accounts, &parameter_bytes)?;
+        deserialize_parameters(program_id, parameter_accounts, &parameter_bytes)?;
         log!(logger, "BPF program {} success", program.unsigned_key());
     } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
@@ -349,6 +286,7 @@ mod tests {
         // Ensure that we can invoke this macro from the same crate
         // where it is defined.
         solana_bpf_loader_program!();
+        solana_bpf_loader_deprecated_program!();
     }
 
     #[test]
@@ -440,7 +378,7 @@ mod tests {
     fn test_bpf_loader_finalize() {
         let program_id = Pubkey::new_rand();
         let program_key = Pubkey::new_rand();
-        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         let rent = Rent::default();
         file.read_to_end(&mut elf).unwrap();
@@ -506,7 +444,7 @@ mod tests {
         let program_key = Pubkey::new_rand();
 
         // Create program account
-        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(1, 0, &program_id);
@@ -580,6 +518,94 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_bpf_loader_serialize_unaligned() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+
+        // Create program account
+        let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        let program_account = Account::new_ref(1, 0, &program_id);
+        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().executable = true;
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
+
+        // Case: With program and parameter account
+        let parameter_account = Account::new_ref(1, 0, &program_id);
+        keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
+        assert_eq!(
+            Ok(()),
+            process_instruction(
+                &bpf_loader_deprecated::id(),
+                &keyed_accounts,
+                &[],
+                &mut MockInvokeContext::default()
+            )
+        );
+
+        // Case: With duplicate accounts
+        let duplicate_key = Pubkey::new_rand();
+        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
+        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
+        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
+        assert_eq!(
+            Ok(()),
+            process_instruction(
+                &bpf_loader_deprecated::id(),
+                &keyed_accounts,
+                &[],
+                &mut MockInvokeContext::default()
+            )
+        );
+    }
+
+    #[test]
+    fn test_bpf_loader_serialize_aligned() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+
+        // Create program account
+        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        let program_account = Account::new_ref(1, 0, &program_id);
+        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().executable = true;
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
+
+        // Case: With program and parameter account
+        let parameter_account = Account::new_ref(1, 0, &program_id);
+        keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
+        assert_eq!(
+            Ok(()),
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &[],
+                &mut MockInvokeContext::default()
+            )
+        );
+
+        // Case: With duplicate accounts
+        let duplicate_key = Pubkey::new_rand();
+        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
+        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
+        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
+        assert_eq!(
+            Ok(()),
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &[],
+                &mut MockInvokeContext::default()
+            )
+        );
+    }
+
     /// fuzzing utility function
     fn fuzz<F>(
         bytes: &[u8],
@@ -610,7 +636,7 @@ mod tests {
         let program_key = Pubkey::new_rand();
 
         // Create program account
-        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
