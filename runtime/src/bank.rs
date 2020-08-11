@@ -54,7 +54,6 @@ use solana_sdk::{
     slot_history::SlotHistory,
     system_transaction,
     sysvar::{self, Sysvar},
-    timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{self, Delegation, PointValue};
@@ -2911,7 +2910,7 @@ mod tests {
         signature::{Keypair, Signer},
         system_instruction, system_program,
         sysvar::{fees::Fees, rewards::Rewards},
-        timing::duration_as_s,
+        timing::{duration_as_s, years_as_slots},
     };
     use solana_stake_program::{
         stake_instruction,
