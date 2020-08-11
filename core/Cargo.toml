@@ -77,6 +77,7 @@ tokio_io_01 = { version = "0.1", package = "tokio-io" }
 trees = "0.2.1"
 
 [dev-dependencies]
+base64 = "0.12.3"
 matches = "0.1.6"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"

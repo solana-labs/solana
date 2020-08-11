@@ -350,6 +350,7 @@ mod tests {
             nonce_account,
             UiAccountEncoding::Binary64,
             None,
+            None,
         );
         let get_account_response = json!(Response {
             context: RpcResponseContext { slot: 1 },

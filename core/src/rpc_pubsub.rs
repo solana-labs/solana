@@ -562,6 +562,7 @@ mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::recent()),
                 encoding: None,
+                data_slice: None,
             }),
         );
 
@@ -677,6 +678,7 @@ mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::recent()),
                 encoding: Some(UiAccountEncoding::JsonParsed),
+                data_slice: None,
             }),
         );
 
@@ -806,6 +808,7 @@ mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::root()),
                 encoding: None,
+                data_slice: None,
             }),
         );
 
@@ -862,6 +865,7 @@ mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::root()),
                 encoding: None,
+                data_slice: None,
             }),
         );
 
