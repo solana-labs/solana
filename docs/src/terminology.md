@@ -198,9 +198,13 @@ A stack of proofs, each which proves that some data existed before the proof was
 
 The public key of a [keypair](terminology.md#keypair).
 
+## rent 
+
+To disincentivize malicious users from creating unnecessary amounts of accounts, as well as to help compensate validators for the storage associated with each account, [rent](https://docs.solana.com/implemented-proposals/rent) is charged once per epoch on accounts holding below a certain threshold of lamports. This threshold is known as a rent reserve. Accounts that hold more lamports than this amount are considered to be rent exempt. Rent is calculated on a per byte-year rate.
+
 ## root
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a validator. The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a validator. The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor, nor a descendant of the root, are excluded from consideration for consensus and can be discarded from a validator’s blockstore.
 
 ## runtime
 
@@ -210,9 +214,25 @@ The component of a [validator](terminology.md#validator) responsible for [progra
 
 A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
 
+## signatures per slot (SPS) 
+
+A metric used to estimate the amount of network congestion. 
+
+## signatures per slot target 
+
+A value set in the genesis config file, the SPS target is used to estimate the desired processing capacity of the cluster. This is used for dynamic fee pricing, based on network congestion. A cluster looks to target the `lamports_per_signature` setting from the genesis config, which is the fee to charge per signature when the cluster is operating at SPS target.
+
+## slash 
+
+Proof of Stake systems require capital-at-risk to prevent a logical/optimal strategy of multiple chain voting. If a validator is found to submit a vote that is not on the same fork as a previous vote they had submitted, but still within their lockout period, their stake is subject to be slashed. Slashing would remove lamports delegated to them.
+
 ## slot
 
-The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block). The length of a slot is measured in ticks. [On Mainnet it is currently set](https://github.com/solana-labs/solana/blob/e12ab9d0dd4464a4082400be2b0c523bc3649d1d/sdk/src/clock.rs#L9-L11) as 64 ticks, which is equivalent to 400 milliseconds. A block can cross the boundary of a slot, so each slot does not necessarily need to contain a block. 
+
+## slot leader
+
+At a given slot height, there is one validator who has been pre-selected to be the leader. All validators shall only accept Proof of History entries generated with the public key for the slot, as found within the leader schedule.
 
 ## smart contract
 
@@ -220,7 +240,7 @@ A set of constraints that once satisfied, signal to a program that some predefin
 
 ## sol
 
-The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.
+The [native token](terminology.md#native-token) on the Solana blockchain. It is divisible to the 9th decimal place, with the smallest unit known as a Lamport. 1 lamport == 0.000000001 SOL
 
 ## stake
 
