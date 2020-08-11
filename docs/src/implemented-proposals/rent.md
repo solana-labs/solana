@@ -14,6 +14,14 @@ Currently, the rent cost is fixed at the genesis. However, it's anticipated to b
 
 There are two timings of collecting rent from accounts: \(1\) when referenced by a transaction, \(2\) periodically once an epoch. \(1\) includes the transaction to create the new account itself, and it happens during the normal transaction processing by the bank as part of the load phase. \(2\) exists to ensure to collect rents from stale accounts, which aren't referenced in recent epochs at all. \(2\) requires the whole scan of accounts and is spread over an epoch based on account address prefix to avoid load spikes due to this rent collection.
 
+On the contrary, rent collection isn't applied to accounts that are directly manipulated by any of protocol-level bookkeeping processes including:
+
+- The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
+- The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
+- The distribution of transaction fee at the end of every epoch
+
+Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
+
 ## Actual processing of collecting rent
 
 Rent is due for one epoch's worth of time, and accounts always have `Account::rent_epoch` of `current_epoch + 1`.
