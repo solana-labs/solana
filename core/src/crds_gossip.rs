@@ -10,19 +10,19 @@ use crate::{
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
     crds_value::{CrdsValue, CrdsValueLabel},
 };
+use std::sync::{RwLock};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
 
-#[derive(Clone)]
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
     pub shred_version: u16,
-    pub push: CrdsGossipPush,
-    pub pull: CrdsGossipPull,
+    pub push: RwLock<CrdsGossipPush>,
+    pub pull: RwLock<CrdsGossipPull>,
 }
 
 impl Default for CrdsGossip {

@@ -69,7 +69,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, RwLock},
     thread::{sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -111,14 +111,14 @@ pub struct DataBudget {
 }
 
 struct GossipWriteLock<'a> {
-    gossip: RwLockWriteGuard<'a, CrdsGossip>,
+    gossip: &'a CrdsGossip,
     timer: Measure,
     counter: &'a Counter,
 }
 
 impl<'a> GossipWriteLock<'a> {
     fn new(
-        gossip: RwLockWriteGuard<'a, CrdsGossip>,
+        gossip: &'a CrdsGossip,
         label: &'static str,
         counter: &'a Counter,
     ) -> Self {
@@ -131,7 +131,7 @@ impl<'a> GossipWriteLock<'a> {
 }
 
 impl<'a> Deref for GossipWriteLock<'a> {
-    type Target = RwLockWriteGuard<'a, CrdsGossip>;
+    type Target = &'a CrdsGossip;
     fn deref(&self) -> &Self::Target {
         &self.gossip
     }
@@ -150,14 +150,14 @@ impl<'a> Drop for GossipWriteLock<'a> {
 }
 
 struct GossipReadLock<'a> {
-    gossip: RwLockReadGuard<'a, CrdsGossip>,
+    gossip: &'a CrdsGossip,
     timer: Measure,
     counter: &'a Counter,
 }
 
 impl<'a> GossipReadLock<'a> {
     fn new(
-        gossip: RwLockReadGuard<'a, CrdsGossip>,
+        gossip: &'a CrdsGossip,
         label: &'static str,
         counter: &'a Counter,
     ) -> Self {
@@ -170,7 +170,7 @@ impl<'a> GossipReadLock<'a> {
 }
 
 impl<'a> Deref for GossipReadLock<'a> {
-    type Target = RwLockReadGuard<'a, CrdsGossip>;
+    type Target = &'a CrdsGossip;
     fn deref(&self) -> &Self::Target {
         &self.gossip
     }
@@ -244,9 +244,11 @@ struct GossipStats {
     push_response_count: Counter,
 }
 
+unsafe impl Send for ClusterInfo {}
+unsafe impl Sync for ClusterInfo {}
 pub struct ClusterInfo {
     /// The network
-    pub gossip: RwLock<CrdsGossip>,
+    pub gossip: Arc<CrdsGossip>,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
@@ -402,7 +404,7 @@ impl ClusterInfo {
     pub fn new(contact_info: ContactInfo, keypair: Arc<Keypair>) -> Self {
         let id = contact_info.id;
         let me = Self {
-            gossip: RwLock::new(CrdsGossip::default()),
+            gossip: Arc::new(CrdsGossip::default()),
             keypair,
             entrypoint: RwLock::new(None),
             outbound_budget: RwLock::new(DataBudget {
@@ -414,11 +416,8 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
         };
-        {
-            let mut gossip = me.gossip.write().unwrap();
-            gossip.set_self(&id);
-            gossip.set_shred_version(me.my_shred_version());
-        }
+        me.gossip.set_self(&id);
+        me.gossip.set_shred_version(me.my_shred_version());
         me.insert_self();
         me.push_self(&HashMap::new());
         me
@@ -426,12 +425,12 @@ impl ClusterInfo {
 
     // Should only be used by tests and simulations
     pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let mut gossip = self.gossip.read().unwrap().clone();
+        let gossip = self.gossip.clone();
         gossip.id = *new_id;
         let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
         my_contact_info.id = *new_id;
         ClusterInfo {
-            gossip: RwLock::new(gossip),
+            gossip: self.gossip.clone(),
             keypair: self.keypair.clone(),
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
             outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
@@ -457,15 +456,14 @@ impl ClusterInfo {
         self.my_contact_info.write().unwrap().wallclock = now;
         let entry =
             CrdsValue::new_signed(CrdsData::ContactInfo(self.my_contact_info()), &self.keypair);
-        let mut w_gossip = self.gossip.write().unwrap();
-        w_gossip.refresh_push_active_set(stakes);
-        w_gossip.process_push_message(&self.id(), vec![entry], now);
+        self.gossip.refresh_push_active_set(stakes);
+        self.gossip.process_push_message(&self.id(), vec![entry], now);
     }
 
     // TODO kill insert_info, only used by tests
     pub fn insert_info(&self, contact_info: ContactInfo) {
         let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair);
-        let _ = self.gossip.write().unwrap().crds.insert(value, timestamp());
+        let _ = self.gossip.crds.insert(value, timestamp());
     }
 
     pub fn set_entrypoint(&self, entrypoint: ContactInfo) {
@@ -482,8 +480,6 @@ impl ClusterInfo {
     {
         let entry = CrdsValueLabel::ContactInfo(*id);
         self.gossip
-            .read()
-            .unwrap()
             .crds
             .lookup(&entry)
             .and_then(CrdsValue::contact_info)
@@ -501,8 +497,6 @@ impl ClusterInfo {
     pub fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
         let entry = CrdsValueLabel::EpochSlots(ix, self.id());
         self.gossip
-            .read()
-            .unwrap()
             .crds
             .lookup(&entry)
             .and_then(CrdsValue::epoch_slots)
@@ -601,8 +595,6 @@ impl ClusterInfo {
         let now = timestamp();
         let last = self
             .gossip
-            .read()
-            .unwrap()
             .crds
             .lookup(&CrdsValueLabel::LowestSlot(self.id()))
             .and_then(|x| x.lowest_slot())
@@ -614,8 +606,6 @@ impl ClusterInfo {
                 &self.keypair,
             );
             self.gossip
-                .write()
-                .unwrap()
                 .process_push_message(&self.id(), vec![entry], now);
         }
     }
@@ -685,7 +675,7 @@ impl ClusterInfo {
         label: &'static str,
         counter: &'a Counter,
     ) -> GossipReadLock<'a> {
-        GossipReadLock::new(self.gossip.read().unwrap(), label, counter)
+        GossipReadLock::new(&self.gossip, label, counter)
     }
 
     fn time_gossip_write_lock<'a>(
