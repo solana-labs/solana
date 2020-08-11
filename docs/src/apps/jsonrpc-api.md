@@ -72,6 +72,7 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
 - [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
 - [getTokenSupply](jsonrpc-api.md#gettokensupply)
 
 ## Request Formatting
@@ -1159,6 +1160,33 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"tokenAmount":{"amount":"1","uiAmount":0.1,"decimals":1},"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+```
+
+### getTokenLargestAccounts
+
+Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
+
+#### Parameters:
+
+- `<string>` - Pubkey of token Mint to query, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
+
+- `address: <string>` - the address of the token account
+- `uiAmount: <f64>` - the token account balance, using mint-prescribed decimals
+- `amount: <string>` - the raw token account balance without decimals, a string representation of u64
+- `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenLargestAccounts", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"address":"FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r","amount":"771","decimals":2,"uiAmount":7.71},{"address":"BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu","amount":"229","decimals":2,"uiAmount":2.29}],"id":1}
 ```
 
 ### getTokenSupply
