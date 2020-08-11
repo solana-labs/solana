@@ -65,7 +65,7 @@ pub struct ServeRepairStats {
 }
 
 /// Window protocol messages
-#[frozen_abi(digest = "5RMMcS7fSxHjCGAwwTiFSyoi3FKESCBkVoeBPspKJzp4")]
+#[frozen_abi(digest = "8RYRhKQwGABY5hipqQvZMRrnzFxe3aE1sEFx1sgimFG2")]
 #[derive(Serialize, Deserialize, Debug, AbiExample, AbiEnumVisitor)]
 pub enum RepairProtocol {
     WindowIndex(ContactInfo, u64, u64),
