@@ -316,7 +316,7 @@ fn quote_for_test(
 ) -> TokenStream2 {
     // escape from nits.sh...
     let p = Ident::new(&("ep".to_owned() + "rintln"), Span::call_site());
-    let macro_time_type_name = type_name.to_string();
+    let test_name = test_mod_ident.to_string();
     quote! {
         #[cfg(test)]
         mod #test_mod_ident {
@@ -330,10 +330,7 @@ fn quote_for_test(
                 let example = <#type_name>::example();
                 let result = <_>::visit_for_abi(&&example, &mut digester);
                 let runtime_type_name = ::std::any::type_name::<#type_name>();
-                // we don't a nice way to identify the types/tests, so just use anything we
-                // have to give developers some clue and call it a label.
-                let full_type_label = format!("{}_{}", #macro_time_type_name, runtime_type_name);
-                let mut hash = digester.finalize(&full_type_label);
+                let mut hash = digester.finalize(&#test_name);
                 // pretty-print error
                 if result.is_err() {
                     ::log::error!("digest error: {:#?}", result);

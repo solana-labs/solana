@@ -176,9 +176,9 @@ impl AbiDigester {
         Ok(())
     }
 
-    // As an alternative to function!(#1), just require type_label
+    // As an alternative to function!(#1), just require test_name
     //   ref #1: https://github.com/rust-lang/rfcs/issues/1743
-    pub fn finalize(self, type_label: &str) -> Hash {
+    pub fn finalize(self, test_name: &str) -> Hash {
         let mut hasher = Hasher::default();
 
         for buf in (*self.data_types.borrow()).iter() {
@@ -188,10 +188,10 @@ impl AbiDigester {
         let hash = hasher.result();
 
         // normalize to be suitable for filenames
-        let type_label = type_label.replace(|c: char| !c.is_alphanumeric(), "_");
+        let test_name = test_name.replace(|c: char| !c.is_alphanumeric(), "_");
 
         // actually dump
-        let path = Self::ensure_dump_dir().join(format!("{}_{}", type_label, hash));
+        let path = Self::ensure_dump_dir().join(format!("{}_{}", test_name, hash));
         let mut file = std::fs::File::create(path).unwrap();
         for buf in (*self.data_types.borrow()).iter() {
             file.write_all(buf.as_bytes()).unwrap();
