@@ -43,7 +43,7 @@ main {
 
 .card {
   padding: 1rem;
-  margin-top: 2rem;
+  margin-top: 0rem;
   animation: fadeInUp 400ms backwards;
   animation-delay: 150ms;
   transition-property: all;
@@ -66,4 +66,8 @@ main {
 
 footer .text--center {
   padding: 2rem 0 0 0;
+}
+
+.card__header h3 {
+  color: #1DD79B;
 }

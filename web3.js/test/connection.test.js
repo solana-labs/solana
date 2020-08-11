@@ -1,5 +1,6 @@
 // @flow
 import bs58 from 'bs58';
+import {Token, u64} from '@solana/spl-token';
 
 import {
   Account,
@@ -15,6 +16,7 @@ import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {sleep} from '../src/util/sleep';
 import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
+import type {TransactionSignature} from '../src/transaction';
 import type {SignatureStatus, TransactionError} from '../src/connection';
 import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
 
@@ -61,7 +63,7 @@ test('get account info - not found', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58()],
+      params: [account.publicKey.toBase58(), {encoding: 'binary64'}],
     },
     {
       error: null,
@@ -75,6 +77,12 @@ test('get account info - not found', async () => {
   ]);
 
   expect(await connection.getAccountInfo(account.publicKey)).toBeNull();
+
+  if (!mockRpcEnabled) {
+    expect(
+      (await connection.getParsedAccountInfo(account.publicKey)).value,
+    ).toBeNull();
+  }
 });
 
 test('get program accounts', async () => {
@@ -245,7 +253,10 @@ test('get program accounts', async () => {
     url,
     {
       method: 'getProgramAccounts',
-      params: [programId.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [
+        programId.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'binary64'},
+      ],
     },
     {
       error: null,
@@ -280,20 +291,39 @@ test('get program accounts', async () => {
   expect(programAccounts.length).toBe(2);
 
   programAccounts.forEach(function (element) {
-    expect([
-      account0.publicKey.toBase58(),
-      account1.publicKey.toBase58(),
-    ]).toEqual(expect.arrayContaining([element.pubkey]));
-    if (element.pubkey == account0.publicKey) {
+    if (element.pubkey.equals(account0.publicKey)) {
       expect(element.account.lamports).toBe(
         LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
-    } else {
+    } else if (element.pubkey.equals(account1.publicKey)) {
       expect(element.account.lamports).toBe(
         0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
+    } else {
+      expect(element.pubkey.equals(account1.publicKey)).toBe(true);
     }
   });
+
+  if (!mockRpcEnabled) {
+    const programAccounts = await connection.getParsedProgramAccounts(
+      programId.publicKey,
+    );
+    expect(programAccounts.length).toBe(2);
+
+    programAccounts.forEach(function (element) {
+      if (element.pubkey.equals(account0.publicKey)) {
+        expect(element.account.lamports).toBe(
+          LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        );
+      } else if (element.pubkey.equals(account1.publicKey)) {
+        expect(element.account.lamports).toBe(
+          0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        );
+      } else {
+        expect(element.pubkey.equals(account1.publicKey)).toBe(true);
+      }
+    });
+  }
 });
 
 test('validatorExit', async () => {
@@ -755,6 +785,7 @@ test('get confirmed signatures for address', async () => {
     }
   }
 
+  // getConfirmedSignaturesForAddress tests...
   mockRpc.push([
     url,
     {
@@ -793,6 +824,38 @@ test('get confirmed signatures for address', async () => {
     badSlot + 1,
   );
   expect(emptySignatures.length).toBe(0);
+
+  // getConfirmedSignaturesForAddress2 tests...
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedSignaturesForAddress2',
+      params: [address.toBase58(), {limit: 1}],
+    },
+    {
+      error: null,
+      result: [
+        {
+          signature: expectedSignature,
+          slot,
+          err: null,
+          memo: null,
+        },
+      ],
+    },
+  ]);
+
+  const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
+    address,
+    {limit: 1},
+  );
+  expect(confirmedSignatures2.length).toBe(1);
+  if (mockRpcEnabled) {
+    expect(confirmedSignatures2[0].signature).toBe(expectedSignature);
+    expect(confirmedSignatures2[0].slot).toBe(slot);
+    expect(confirmedSignatures2[0].err).toBeNull();
+    expect(confirmedSignatures2[0].memo).toBeNull();
+  }
 });
 
 test('get confirmed transaction', async () => {
@@ -1261,6 +1324,222 @@ test('get supply', async () => {
   expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
 });
 
+const TOKEN_PROGRAM_ID = new PublicKey(
+  'TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o',
+);
+
+describe('token methods', () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const newAccount = new Account().publicKey;
+
+  let testToken: Token;
+  let testTokenAccount: PublicKey;
+  let testSignature: TransactionSignature;
+  let testOwner: Account;
+
+  // Setup token mints and accounts for token tests
+  beforeAll(async () => {
+    const payerAccount = new Account();
+    await connection.confirmTransaction(
+      await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
+      0,
+    );
+
+    const mintOwner = new Account();
+    const accountOwner = new Account();
+    const [token, tokenAccount] = await Token.createMint(
+      connection,
+      payerAccount,
+      mintOwner.publicKey,
+      accountOwner.publicKey,
+      new u64(11111),
+      2,
+      TOKEN_PROGRAM_ID,
+      false,
+    );
+
+    await Token.createMint(
+      connection,
+      payerAccount,
+      mintOwner.publicKey,
+      accountOwner.publicKey,
+      new u64(10000),
+      2,
+      TOKEN_PROGRAM_ID,
+      false,
+    );
+
+    const tokenAccountDest = await token.createAccount(accountOwner.publicKey);
+    testSignature = await token.transfer(
+      tokenAccount,
+      tokenAccountDest,
+      accountOwner,
+      [],
+      new u64(1),
+    );
+
+    await connection.confirmTransaction(testSignature);
+
+    testOwner = accountOwner;
+    testToken = token;
+    testTokenAccount = tokenAccount;
+  });
+
+  test('get token supply', async () => {
+    const supply = (await connection.getTokenSupply(testToken.publicKey)).value;
+    expect(supply.uiAmount).toEqual(111.11);
+    expect(supply.decimals).toEqual(2);
+    expect(supply.amount).toEqual('11111');
+
+    await expect(connection.getTokenSupply(newAccount)).rejects.toThrow();
+  });
+
+  test('get token largest accounts', async () => {
+    const largestAccounts = (
+      await connection.getTokenLargestAccounts(testToken.publicKey)
+    ).value;
+
+    expect(largestAccounts.length).toEqual(2);
+    const largestAccount = largestAccounts[0];
+    expect(largestAccount.address.equals(testTokenAccount)).toBe(true);
+    expect(largestAccount.amount).toEqual('11110');
+    expect(largestAccount.decimals).toEqual(2);
+    expect(largestAccount.uiAmount).toEqual(111.1);
+
+    await expect(
+      connection.getTokenLargestAccounts(newAccount),
+    ).rejects.toThrow();
+  });
+
+  test('get confirmed token transaction', async () => {
+    const parsedTx = await connection.getParsedConfirmedTransaction(
+      testSignature,
+    );
+    if (parsedTx === null) {
+      expect(parsedTx).not.toBeNull();
+      return;
+    }
+    const {signatures, message} = parsedTx.transaction;
+    expect(signatures[0]).toEqual(testSignature);
+    const ix = message.instructions[0];
+    if (ix.parsed) {
+      expect(ix.program).toEqual('spl-token');
+      expect(ix.programId.equals(TOKEN_PROGRAM_ID)).toBe(true);
+    } else {
+      expect('parsed' in ix).toBe(true);
+    }
+
+    const missingSignature =
+      '45pGoC4Rr3fJ1TKrsiRkhHRbdUeX7633XAGVec6XzVdpRbzQgHhe6ZC6Uq164MPWtiqMg7wCkC6Wy3jy2BqsDEKf';
+    const nullResponse = await connection.getParsedConfirmedTransaction(
+      missingSignature,
+    );
+
+    expect(nullResponse).toBeNull();
+  });
+
+  test('get token account balance', async () => {
+    const balance = (await connection.getTokenAccountBalance(testTokenAccount))
+      .value;
+    expect(balance.amount).toEqual('11110');
+    expect(balance.decimals).toEqual(2);
+    expect(balance.uiAmount).toEqual(111.1);
+
+    await expect(
+      connection.getTokenAccountBalance(newAccount),
+    ).rejects.toThrow();
+  });
+
+  test('get parsed token account info', async () => {
+    const accountInfo = (
+      await connection.getParsedAccountInfo(testTokenAccount)
+    ).value;
+    if (accountInfo) {
+      const data = accountInfo.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.program).toEqual('spl-token');
+        expect(data.parsed).toBeTruthy();
+      }
+    }
+  });
+
+  test('get parsed token program accounts', async () => {
+    const tokenAccounts = await connection.getParsedProgramAccounts(
+      TOKEN_PROGRAM_ID,
+    );
+    tokenAccounts.forEach(({account}) => {
+      expect(account.owner.equals(TOKEN_PROGRAM_ID)).toBe(true);
+      const data = account.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.parsed).toBeTruthy();
+        expect(data.program).toEqual('spl-token');
+      }
+    });
+  });
+
+  test('get parsed token accounts by owner', async () => {
+    const tokenAccounts = (
+      await connection.getParsedTokenAccountsByOwner(testOwner.publicKey, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    tokenAccounts.forEach(({account}) => {
+      expect(account.owner.equals(TOKEN_PROGRAM_ID)).toBe(true);
+      const data = account.data;
+      if (data instanceof Buffer) {
+        expect(data instanceof Buffer).toBe(false);
+      } else {
+        expect(data.parsed).toBeTruthy();
+        expect(data.program).toEqual('spl-token');
+      }
+    });
+  });
+
+  test('get token accounts by owner', async () => {
+    const accountsWithMintFilter = (
+      await connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    expect(accountsWithMintFilter.length).toEqual(2);
+
+    const accountsWithProgramFilter = (
+      await connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        programId: TOKEN_PROGRAM_ID,
+      })
+    ).value;
+    expect(accountsWithProgramFilter.length).toEqual(3);
+
+    const noAccounts = (
+      await connection.getTokenAccountsByOwner(newAccount, {
+        mint: testToken.publicKey,
+      })
+    ).value;
+    expect(noAccounts.length).toEqual(0);
+
+    await expect(
+      connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        mint: newAccount,
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      connection.getTokenAccountsByOwner(testOwner.publicKey, {
+        programId: newAccount,
+      }),
+    ).rejects.toThrow();
+  });
+});
+
 test('get largest accounts', async () => {
   const connection = new Connection(url);
 
@@ -1400,7 +1679,10 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [
+        account.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'binary64'},
+      ],
     },
     {
       error: null,
@@ -1426,6 +1708,45 @@ test('request airdrop', async () => {
   expect(accountInfo.lamports).toBe(minimumAmount + 42);
   expect(accountInfo.data).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getAccountInfo',
+      params: [
+        account.publicKey.toBase58(),
+        {commitment: 'recent', encoding: 'jsonParsed'},
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: {
+          owner: '11111111111111111111111111111111',
+          lamports: minimumAmount + 42,
+          data: '',
+          executable: false,
+        },
+      },
+    },
+  ]);
+
+  const parsedAccountInfo = (
+    await connection.getParsedAccountInfo(account.publicKey)
+  ).value;
+  if (parsedAccountInfo === null) {
+    expect(parsedAccountInfo).not.toBeNull();
+    return;
+  } else if (parsedAccountInfo.data.parsed) {
+    expect(parsedAccountInfo.data.parsed).not.toBeTruthy();
+    return;
+  }
+  expect(parsedAccountInfo.lamports).toBe(minimumAmount + 42);
+  expect(parsedAccountInfo.data).toHaveLength(0);
+  expect(parsedAccountInfo.owner).toEqual(SystemProgram.programId);
 });
 
 test('transaction failure', async () => {

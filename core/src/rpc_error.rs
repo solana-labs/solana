@@ -3,6 +3,7 @@ use solana_sdk::clock::Slot;
 
 const JSON_RPC_SERVER_ERROR_1: i64 = -32001;
 const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
+const JSON_RPC_SERVER_ERROR_3: i64 = -32003;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -12,6 +13,7 @@ pub enum RpcCustomError {
     SendTransactionPreflightFailure {
         message: String,
     },
+    SendTransactionIsNotSigned,
 }
 
 impl From<RpcCustomError> for Error {
@@ -31,6 +33,11 @@ impl From<RpcCustomError> for Error {
             RpcCustomError::SendTransactionPreflightFailure { message } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_2),
                 message,
+                data: None,
+            },
+            RpcCustomError::SendTransactionIsNotSigned => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_3),
+                message: "Transaction is not signed".to_string(),
                 data: None,
             },
         }

@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use thiserror::Error;
 
@@ -13,6 +14,7 @@ pub enum RpcRequest {
     GetConfirmedBlock,
     GetConfirmedBlocks,
     GetConfirmedSignaturesForAddress,
+    GetConfirmedSignaturesForAddress2,
     GetConfirmedTransaction,
     GetEpochInfo,
     GetEpochSchedule,
@@ -36,6 +38,10 @@ pub enum RpcRequest {
     GetSlotsPerSegment,
     GetStoragePubkeysForSlot,
     GetSupply,
+    GetTokenAccountBalance,
+    GetTokenAccountsByDelegate,
+    GetTokenAccountsByOwner,
+    GetTokenSupply,
     GetTotalSupply,
     GetTransactionCount,
     GetVersion,
@@ -60,6 +66,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetConfirmedBlock => "getConfirmedBlock",
             RpcRequest::GetConfirmedBlocks => "getConfirmedBlocks",
             RpcRequest::GetConfirmedSignaturesForAddress => "getConfirmedSignaturesForAddress",
+            RpcRequest::GetConfirmedSignaturesForAddress2 => "getConfirmedSignaturesForAddress2",
             RpcRequest::GetConfirmedTransaction => "getConfirmedTransaction",
             RpcRequest::GetEpochInfo => "getEpochInfo",
             RpcRequest::GetEpochSchedule => "getEpochSchedule",
@@ -83,6 +90,10 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetSlotsPerSegment => "getSlotsPerSegment",
             RpcRequest::GetStoragePubkeysForSlot => "getStoragePubkeysForSlot",
             RpcRequest::GetSupply => "getSupply",
+            RpcRequest::GetTokenAccountBalance => "getTokenAccountBalance",
+            RpcRequest::GetTokenAccountsByDelegate => "getTokenAccountsByDelegate",
+            RpcRequest::GetTokenAccountsByOwner => "getTokenAccountsByOwner",
+            RpcRequest::GetTokenSupply => "getTokenSupply",
             RpcRequest::GetTotalSupply => "getTotalSupply",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
@@ -103,6 +114,7 @@ pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
 pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
 pub const MAX_GET_CONFIRMED_BLOCKS_RANGE: u64 = 500_000;
+pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT: usize = 1_000;
 
 // Validators that are this number of slots behind are considered delinquent
 pub const DELINQUENT_VALIDATOR_SLOT_DISTANCE: u64 = 128;
@@ -131,9 +143,16 @@ pub enum RpcError {
     ForUser(String), /* "direct-to-user message" */
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum TokenAccountsFilter {
+    Mint(Pubkey),
+    ProgramId(Pubkey),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rpc_config::RpcTokenAccountsFilter;
     use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
     #[test]
@@ -197,5 +216,16 @@ mod tests {
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(1, json!([addr, commitment_config]));
         assert_eq!(request["params"], json!([addr, commitment_config]));
+
+        // Test request with CommitmentConfig and params
+        let test_request = RpcRequest::GetTokenAccountsByOwner;
+        let mint = Pubkey::new_rand();
+        let token_account_filter = RpcTokenAccountsFilter::Mint(mint.to_string());
+        let request = test_request
+            .build_request_json(1, json!([addr, token_account_filter, commitment_config]));
+        assert_eq!(
+            request["params"],
+            json!([addr, token_account_filter, commitment_config])
+        );
     }
 }

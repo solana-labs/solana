@@ -62,13 +62,13 @@ impl StakeAccount {
         return Ok(stake_state.into());
     }
 
-    #[wasm_bindgen(js_name = displayState)]
-    pub fn display_state(&self) -> String {
+    #[wasm_bindgen(js_name = accountType)]
+    pub fn account_type(&self) -> String {
         match self.state {
-            State::Uninitialized => "Uninitialized".to_string(),
-            State::Initialized => "Initialized".to_string(),
-            State::Delegated => "Delegated".to_string(),
-            State::RewardsPool => "RewardsPool".to_string(),
+            State::Uninitialized => "uninitialized".to_string(),
+            State::Initialized => "initialized".to_string(),
+            State::Delegated => "delegated".to_string(),
+            State::RewardsPool => "rewardsPool".to_string(),
         }
     }
 }

@@ -1,94 +1,74 @@
 import React from "react";
-import { Link, Switch, Route, Redirect } from "react-router-dom";
+import { Switch, Route, Redirect } from "react-router-dom";
 
-import AccountsCard from "./components/AccountsCard";
-import AccountDetails from "./components/AccountDetails";
-import TransactionsCard from "./components/TransactionsCard";
-import TransactionDetails from "./components/TransactionDetails";
-import ClusterModal from "./components/ClusterModal";
-import Logo from "./img/logos-solana/light-explorer-logo.svg";
-import { TX_ALIASES } from "./providers/transactions";
-import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
-import TabbedPage from "components/TabbedPage";
-import TopAccountsCard from "components/TopAccountsCard";
-import SupplyCard from "components/SupplyCard";
-import { pickCluster } from "utils/url";
-import Banner from "components/Banner";
+import { ClusterModal } from "components/ClusterModal";
+import { TX_ALIASES } from "providers/transactions";
+import { MessageBanner } from "components/MessageBanner";
+import { Navbar } from "components/Navbar";
+import { ClusterStatusBanner } from "components/ClusterStatusButton";
+import { SearchBar } from "components/SearchBar";
+
+import { AccountDetailsPage } from "pages/AccountDetailsPage";
+import { ClusterStatsPage } from "pages/ClusterStatsPage";
+import { SupplyPage } from "pages/SupplyPage";
+import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
+
+const ACCOUNT_ALIASES = ["account", "accounts", "addresses"];
 
 function App() {
   return (
     <>
       <ClusterModal />
       <div className="main-content">
-        <nav className="navbar navbar-expand-xl navbar-light">
-          <div className="container">
-            <div className="row align-items-end">
-              <div className="col">
-                <Link
-                  to={(location) => ({
-                    ...pickCluster(location),
-                    pathname: "/",
-                  })}
-                >
-                  <img src={Logo} width="250" alt="Solana Explorer" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        <Banner />
-
+        <Navbar />
+        <MessageBanner />
+        <ClusterStatusBanner />
+        <SearchBar />
         <Switch>
-          <Route exact path="/supply">
-            <TabbedPage tab="Supply">
-              <SupplyCard />
-              <TopAccountsCard />
-            </TabbedPage>
+          <Route exact path={["/supply", "/accounts", "accounts/top"]}>
+            <SupplyPage />
           </Route>
-          <Route
-            exact
-            path="/accounts/top"
-            render={({ location }) => (
-              <Redirect to={{ ...location, pathname: "/supply" }} />
-            )}
-          ></Route>
           <Route
             exact
             path={TX_ALIASES.flatMap((tx) => [tx, tx + "s"]).map(
               (tx) => `/${tx}/:signature`
             )}
             render={({ match }) => (
-              <TransactionDetails signature={match.params.signature} />
+              <TransactionDetailsPage signature={match.params.signature} />
             )}
           />
-          <Route exact path={TX_ALIASES.map((tx) => `/${tx}s`)}>
-            <TabbedPage tab="Transactions">
-              <TransactionsCard />
-            </TabbedPage>
-          </Route>
           <Route
             exact
-            path={ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(
-              (account) => `/${account}/:address`
-            )}
+            path={ACCOUNT_ALIASES.flatMap((account) => [
+              `/${account}/:address`,
+              `/${account}/:address/:tab`,
+            ])}
+            render={({ match, location }) => {
+              let pathname = `/address/${match.params.address}`;
+              if (match.params.tab) {
+                pathname += `/${match.params.tab}`;
+              }
+              return <Redirect to={{ ...location, pathname }} />;
+            }}
+          />
+          <Route
+            exact
+            path={["/address/:address", "/address/:address/:tab"]}
             render={({ match }) => (
-              <AccountDetails address={match.params.address} />
+              <AccountDetailsPage
+                address={match.params.address}
+                tab={match.params.tab}
+              />
             )}
           />
-          <Route
-            exact
-            path={ACCOUNT_ALIASES_PLURAL.map((alias) => "/" + alias)}
-          >
-            <TabbedPage tab="Accounts">
-              <AccountsCard />
-            </TabbedPage>
+          <Route exact path="/">
+            <ClusterStatsPage />
           </Route>
           <Route
             render={({ location }) => (
-              <Redirect to={{ ...location, pathname: "/transactions" }} />
+              <Redirect to={{ ...location, pathname: "/" }} />
             )}
-          ></Route>
+          />
         </Switch>
       </div>
     </>

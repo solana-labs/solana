@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { BrowserRouter as Router } from "react-router-dom";
-import "./scss/theme.scss";
+import "./scss/theme-dark.scss";
 import App from "./App";
 import * as serviceWorker from "./serviceWorker";
 import { ClusterProvider } from "./providers/cluster";
@@ -9,19 +9,22 @@ import { RichListProvider } from "./providers/richList";
 import { SupplyProvider } from "./providers/supply";
 import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
+import { StatsProvider } from "providers/stats";
 
 ReactDOM.render(
   <Router>
     <ClusterProvider>
-      <SupplyProvider>
-        <RichListProvider>
-          <AccountsProvider>
-            <TransactionsProvider>
-              <App />
-            </TransactionsProvider>
-          </AccountsProvider>
-        </RichListProvider>
-      </SupplyProvider>
+      <StatsProvider>
+        <SupplyProvider>
+          <RichListProvider>
+            <AccountsProvider>
+              <TransactionsProvider>
+                <App />
+              </TransactionsProvider>
+            </AccountsProvider>
+          </RichListProvider>
+        </SupplyProvider>
+      </StatsProvider>
     </ClusterProvider>
   </Router>,
   document.getElementById("root")

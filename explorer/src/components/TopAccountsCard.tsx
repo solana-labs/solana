@@ -2,17 +2,17 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Location } from "history";
 import { AccountBalancePair } from "@solana/web3.js";
-import Copyable from "./Copyable";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
-import LoadingCard from "./common/LoadingCard";
-import ErrorCard from "./common/ErrorCard";
+import { LoadingCard } from "./common/LoadingCard";
+import { ErrorCard } from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
 import { useQuery } from "utils/url";
 import { useSupply } from "providers/supply";
+import { Address } from "./common/Address";
 
 type Filter = "circulating" | "nonCirculating" | "all" | null;
 
-export default function TopAccountsCard() {
+export function TopAccountsCard() {
   const supply = useSupply();
   const richList = useRichList();
   const fetchRichList = useFetchRichList();
@@ -90,9 +90,8 @@ export default function TopAccountsCard() {
               <tr>
                 <th className="text-muted">Rank</th>
                 <th className="text-muted">Address</th>
-                <th className="text-muted">Balance (SOL)</th>
-                <th className="text-muted">% of {header} Supply</th>
-                <th className="text-muted">Details</th>
+                <th className="text-muted text-right">Balance (SOL)</th>
+                <th className="text-muted text-right">% of {header} Supply</th>
               </tr>
             </thead>
             <tbody className="list">
@@ -112,30 +111,19 @@ const renderAccountRow = (
   index: number,
   supply: number
 ) => {
-  const base58AccountPubkey = account.address.toBase58();
   return (
     <tr key={index}>
       <td>
-        <span className="badge badge-soft-dark badge-pill">{index + 1}</span>
+        <span className="badge badge-soft-gray badge-pill">{index + 1}</span>
       </td>
       <td>
-        <Copyable text={base58AccountPubkey}>
-          <code>{base58AccountPubkey}</code>
-        </Copyable>
+        <Address pubkey={account.address} link />
       </td>
-      <td>{lamportsToSolString(account.lamports, 0)}</td>
-      <td>{`${((100 * account.lamports) / supply).toFixed(3)}%`}</td>
-      <td>
-        <Link
-          to={(location) => ({
-            ...location,
-            pathname: "/account/" + base58AccountPubkey,
-          })}
-          className="btn btn-rounded-circle btn-white btn-sm"
-        >
-          <span className="fe fe-arrow-right"></span>
-        </Link>
-      </td>
+      <td className="text-right">{lamportsToSolString(account.lamports, 0)}</td>
+      <td className="text-right">{`${(
+        (100 * account.lamports) /
+        supply
+      ).toFixed(3)}%`}</td>
     </tr>
   );
 };

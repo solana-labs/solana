@@ -1,181 +1,177 @@
 import React from "react";
-import { PublicKey } from "@solana/web3.js";
-import { useAccounts, FetchStatus } from "./index";
-import { useCluster } from "../cluster";
 import {
-  HistoryManager,
-  HistoricalTransaction,
-  SlotRange,
-} from "./historyManager";
+  PublicKey,
+  ConfirmedSignatureInfo,
+  TransactionSignature,
+  Connection,
+} from "@solana/web3.js";
+import { FetchStatus } from "./index";
+import { useCluster } from "../cluster";
 
 interface AccountHistory {
   status: FetchStatus;
-  fetched?: HistoricalTransaction[];
-  fetchedRange?: SlotRange;
+  fetched?: ConfirmedSignatureInfo[];
+  foundOldest: boolean;
 }
 
-type State = { [address: string]: AccountHistory };
+type State = {
+  url: string;
+  map: { [address: string]: AccountHistory };
+};
 
 export enum ActionType {
   Update,
-  Add,
-  Remove,
+  Clear,
 }
 
 interface Update {
   type: ActionType.Update;
+  url: string;
   pubkey: PublicKey;
   status: FetchStatus;
-  fetched?: HistoricalTransaction[];
-  fetchedRange?: SlotRange;
+  fetched?: ConfirmedSignatureInfo[];
+  before?: TransactionSignature;
+  foundOldest?: boolean;
 }
 
-interface Add {
-  type: ActionType.Add;
-  addresses: string[];
+interface Clear {
+  type: ActionType.Clear;
+  url: string;
 }
 
-interface Remove {
-  type: ActionType.Remove;
-  addresses: string[];
-}
-
-type Action = Update | Add | Remove;
+type Action = Update | Clear;
 type Dispatch = (action: Action) => void;
+
+function combineFetched(
+  fetched: ConfirmedSignatureInfo[] | undefined,
+  current: ConfirmedSignatureInfo[] | undefined,
+  before: TransactionSignature | undefined
+) {
+  if (fetched === undefined) {
+    return current;
+  } else if (current === undefined) {
+    return fetched;
+  }
+
+  if (current.length > 0 && current[current.length - 1].signature === before) {
+    return current.concat(fetched);
+  } else {
+    return fetched;
+  }
+}
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case ActionType.Add: {
-      if (action.addresses.length === 0) return state;
-      const details = { ...state };
-      action.addresses.forEach((address) => {
-        if (!details[address]) {
-          details[address] = {
-            status: FetchStatus.Fetching,
-          };
-        }
-      });
-      return details;
-    }
-
-    case ActionType.Remove: {
-      if (action.addresses.length === 0) return state;
-      const details = { ...state };
-      action.addresses.forEach((address) => {
-        delete details[address];
-      });
-      return details;
-    }
-
     case ActionType.Update: {
+      if (action.url !== state.url) return state;
       const address = action.pubkey.toBase58();
-      if (state[address]) {
-        const fetched = action.fetched
-          ? action.fetched
-          : state[address].fetched;
-        const fetchedRange = action.fetchedRange
-          ? action.fetchedRange
-          : state[address].fetchedRange;
+      if (state.map[address]) {
         return {
           ...state,
-          [address]: {
-            status: action.status,
-            fetched,
-            fetchedRange,
+          map: {
+            ...state.map,
+            [address]: {
+              status: action.status,
+              fetched: combineFetched(
+                action.fetched,
+                state.map[address].fetched,
+                action.before
+              ),
+              foundOldest: action.foundOldest || state.map[address].foundOldest,
+            },
+          },
+        };
+      } else {
+        return {
+          ...state,
+          map: {
+            ...state.map,
+            [address]: {
+              status: action.status,
+              fetched: action.fetched,
+              foundOldest: action.foundOldest || false,
+            },
           },
         };
       }
-      break;
+    }
+
+    case ActionType.Clear: {
+      return { url: action.url, map: {} };
     }
   }
-  return state;
 }
 
-const ManagerContext = React.createContext<HistoryManager | undefined>(
-  undefined
-);
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type HistoryProviderProps = { children: React.ReactNode };
 export function HistoryProvider({ children }: HistoryProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, {});
-  const { accounts } = useAccounts();
   const { url } = useCluster();
+  const [state, dispatch] = React.useReducer(reducer, { url, map: {} });
 
-  const manager = React.useRef(new HistoryManager(url));
   React.useEffect(() => {
-    manager.current = new HistoryManager(url);
+    dispatch({ type: ActionType.Clear, url });
   }, [url]);
 
-  // Fetch history for new accounts
-  React.useEffect(() => {
-    const removeAddresses = new Set<string>();
-    const fetchAddresses = new Set<string>();
-    accounts.forEach(({ pubkey, lamports }) => {
-      const address = pubkey.toBase58();
-      if (lamports !== undefined && !state[address])
-        fetchAddresses.add(address);
-      else if (lamports === undefined && state[address])
-        removeAddresses.add(address);
-    });
-
-    const removeList: string[] = [];
-    removeAddresses.forEach((address) => {
-      manager.current.removeAccountHistory(address);
-      removeList.push(address);
-    });
-    dispatch({ type: ActionType.Remove, addresses: removeList });
-
-    const fetchList: string[] = [];
-    fetchAddresses.forEach((s) => fetchList.push(s));
-    dispatch({ type: ActionType.Add, addresses: fetchList });
-    fetchAddresses.forEach((address) => {
-      fetchAccountHistory(
-        dispatch,
-        new PublicKey(address),
-        manager.current,
-        true
-      );
-    });
-  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
-    <ManagerContext.Provider value={manager.current}>
-      <StateContext.Provider value={state}>
-        <DispatchContext.Provider value={dispatch}>
-          {children}
-        </DispatchContext.Provider>
-      </StateContext.Provider>
-    </ManagerContext.Provider>
+    <StateContext.Provider value={state}>
+      <DispatchContext.Provider value={dispatch}>
+        {children}
+      </DispatchContext.Provider>
+    </StateContext.Provider>
   );
 }
 
 async function fetchAccountHistory(
   dispatch: Dispatch,
   pubkey: PublicKey,
-  manager: HistoryManager,
-  refresh?: boolean
+  url: string,
+  options: { before?: TransactionSignature; limit: number }
 ) {
   dispatch({
     type: ActionType.Update,
     status: FetchStatus.Fetching,
     pubkey,
+    url,
   });
 
   let status;
   let fetched;
-  let fetchedRange;
+  let foundOldest;
   try {
-    await manager.fetchAccountHistory(pubkey, refresh || false);
-    fetched = manager.accountHistory.get(pubkey.toBase58()) || undefined;
-    fetchedRange = manager.accountRanges.get(pubkey.toBase58()) || undefined;
+    const connection = new Connection(url);
+    fetched = await connection.getConfirmedSignaturesForAddress2(
+      pubkey,
+      options
+    );
+    foundOldest = fetched.length < options.limit;
     status = FetchStatus.Fetched;
   } catch (error) {
     console.error("Failed to fetch account history", error);
     status = FetchStatus.FetchFailed;
   }
-  dispatch({ type: ActionType.Update, status, fetched, fetchedRange, pubkey });
+  dispatch({
+    type: ActionType.Update,
+    url,
+    status,
+    fetched,
+    before: options?.before,
+    pubkey,
+    foundOldest,
+  });
+}
+
+export function useAccountHistories() {
+  const context = React.useContext(StateContext);
+
+  if (!context) {
+    throw new Error(
+      `useAccountHistories must be used within a AccountsProvider`
+    );
+  }
+
+  return context.map;
 }
 
 export function useAccountHistory(address: string) {
@@ -185,19 +181,27 @@ export function useAccountHistory(address: string) {
     throw new Error(`useAccountHistory must be used within a AccountsProvider`);
   }
 
-  return context[address];
+  return context.map[address];
 }
 
 export function useFetchAccountHistory() {
-  const manager = React.useContext(ManagerContext);
+  const { url } = useCluster();
+  const state = React.useContext(StateContext);
   const dispatch = React.useContext(DispatchContext);
-  if (!manager || !dispatch) {
+  if (!state || !dispatch) {
     throw new Error(
       `useFetchAccountHistory must be used within a AccountsProvider`
     );
   }
 
   return (pubkey: PublicKey, refresh?: boolean) => {
-    fetchAccountHistory(dispatch, pubkey, manager, refresh);
+    const before = state.map[pubkey.toBase58()];
+    if (!refresh && before && before.fetched && before.fetched.length > 0) {
+      if (before.foundOldest) return;
+      const oldest = before.fetched[before.fetched.length - 1].signature;
+      fetchAccountHistory(dispatch, pubkey, url, { before: oldest, limit: 25 });
+    } else {
+      fetchAccountHistory(dispatch, pubkey, url, { limit: 25 });
+    }
   };
 }

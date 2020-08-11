@@ -7,7 +7,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-    consensus::{ComputedBankState, PubkeyVotes, Stake, SwitchForkDecision, Tower, VotedStakes},
+    consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -18,7 +18,6 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
@@ -30,7 +29,7 @@ use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
     bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
-    snapshot_package::AccountsPackageSender,
+    snapshot_package::AccountsPackageSender, vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -61,9 +60,6 @@ use std::{
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
-
-pub type ReplayVotesSender = CrossbeamSender<Arc<PubkeyVotes>>;
-pub type ReplayVotesReceiver = CrossbeamReceiver<Arc<PubkeyVotes>>;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -225,7 +221,7 @@ impl ReplayStage {
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
         duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
-        replay_votes_sender: ReplayVotesSender,
+        replay_vote_sender: ReplayVoteSender,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -346,6 +342,7 @@ impl ReplayStage {
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
                         &subscriptions,
+                        &replay_vote_sender,
                     );
                     replay_active_banks_time.stop();
                     Self::report_memory(&allocated, "replay_active_banks", start);
@@ -392,7 +389,6 @@ impl ReplayStage {
                         &mut all_pubkeys,
                         &mut heaviest_subtree_fork_choice,
                         &mut bank_weight_fork_choice,
-                        &replay_votes_sender,
                     );
                     compute_bank_stats_time.stop();
 
@@ -942,6 +938,7 @@ impl ReplayStage {
         blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
@@ -952,6 +949,7 @@ impl ReplayStage {
             &mut bank_progress.replay_progress,
             false,
             transaction_status_sender,
+            Some(replay_vote_sender),
             None,
             verify_recyclers,
         );
@@ -1203,6 +1201,7 @@ impl ReplayStage {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn replay_active_banks(
         blockstore: &Arc<Blockstore>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -1213,6 +1212,7 @@ impl ReplayStage {
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         subscriptions: &Arc<RpcSubscriptions>,
+        replay_vote_sender: &ReplayVoteSender,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1258,6 +1258,7 @@ impl ReplayStage {
                     &blockstore,
                     bank_progress,
                     transaction_status_sender.clone(),
+                    replay_vote_sender,
                     verify_recyclers,
                 );
                 match replay_result {
@@ -1309,7 +1310,6 @@ impl ReplayStage {
         all_pubkeys: &mut PubkeyReferences,
         heaviest_subtree_fork_choice: &mut dyn ForkChoice,
         bank_weight_fork_choice: &mut dyn ForkChoice,
-        replay_votes_sender: &ReplayVotesSender,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -1333,7 +1333,6 @@ impl ReplayStage {
                     );
                     // Notify any listeners of the votes found in this newly computed
                     // bank
-                    let _ = replay_votes_sender.send(computed_bank_state.pubkey_votes.clone());
                     heaviest_subtree_fork_choice.compute_bank_stats(
                         &bank,
                         tower,
@@ -1859,7 +1858,8 @@ impl ReplayStage {
     pub fn get_unlock_switch_vote_slot(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => std::u64::MAX / 2,
+            // 400_000 slots into epoch 61
+            OperatingMode::Stable => 26_752_000,
             // Epoch 63
             OperatingMode::Preview => 21_692_256,
         }
@@ -1868,7 +1868,8 @@ impl ReplayStage {
     pub fn get_unlock_heaviest_subtree_fork_choice(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => std::u64::MAX / 2,
+            // 400_000 slots into epoch 61
+            OperatingMode::Stable => 26_752_000,
             // Epoch 63
             OperatingMode::Preview => 21_692_256,
         }
@@ -2414,6 +2415,7 @@ pub(crate) mod tests {
         F: Fn(&Keypair, Arc<Bank>) -> Vec<Shred>,
     {
         let ledger_path = get_tmp_ledger_path!();
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let res = {
             let blockstore = Arc::new(
                 Blockstore::open(&ledger_path)
@@ -2438,7 +2440,8 @@ pub(crate) mod tests {
                 &blockstore,
                 &mut bank0_progress,
                 None,
-                &VerifyRecyclers::default(),
+                &replay_vote_sender,
+                &&VerifyRecyclers::default(),
             );
 
             // Check that the erroring bank was marked as dead in the progress map
@@ -2601,6 +2604,7 @@ pub(crate) mod tests {
         blockstore.set_roots(&[slot]).unwrap();
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
             blockstore,
@@ -2614,6 +2618,7 @@ pub(crate) mod tests {
             &entries,
             true,
             Some(transaction_status_sender),
+            Some(&replay_vote_sender),
         );
 
         transaction_status_service.join().unwrap();
@@ -2706,6 +2711,7 @@ pub(crate) mod tests {
             &my_keypairs.node_keypair,
             &my_keypairs.vote_keypair,
             &my_keypairs.vote_keypair,
+            None,
         );
 
         let bank_forks = RwLock::new(bank_forks);
@@ -2723,7 +2729,6 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         let tower = Tower::new_for_tests(0, 0.67);
-        let (replay_votes_sender, replay_votes_receiver) = unbounded();
         let newly_computed = ReplayStage::compute_bank_stats(
             &node_pubkey,
             &ancestors,
@@ -2736,11 +2741,9 @@ pub(crate) mod tests {
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
-            &replay_votes_sender,
         );
 
         // bank 0 has no votes, should not send any votes on the channel
-        assert_eq!(replay_votes_receiver.try_recv().unwrap(), Arc::new(vec![]));
         assert_eq!(newly_computed, vec![0]);
 
         // The only vote is in bank 1, and bank_forks does not currently contain
@@ -2784,15 +2787,9 @@ pub(crate) mod tests {
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
-            &replay_votes_sender,
         );
 
-        // Bank 1 had one vote, ensure that `compute_bank_stats` notifies listeners
-        // via `replay_votes_receiver`.
-        assert_eq!(
-            replay_votes_receiver.try_recv().unwrap(),
-            Arc::new(vec![(my_keypairs.vote_keypair.pubkey(), 0)])
-        );
+        // Bank 1 had one vote
         assert_eq!(newly_computed, vec![1]);
         {
             let fork_progress = progress.get(&1).unwrap();
@@ -2826,10 +2823,8 @@ pub(crate) mod tests {
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
-            &replay_votes_sender,
         );
         // No new stats should have been computed
-        assert!(replay_votes_receiver.try_iter().next().is_none());
         assert!(newly_computed.is_empty());
     }
 
@@ -2854,7 +2849,6 @@ pub(crate) mod tests {
             .collect();
 
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let (replay_votes_sender, _replay_votes_receiver) = unbounded();
         ReplayStage::compute_bank_stats(
             &node_pubkey,
             &ancestors,
@@ -2867,7 +2861,6 @@ pub(crate) mod tests {
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
-            &replay_votes_sender,
         );
 
         assert_eq!(
@@ -2930,7 +2923,6 @@ pub(crate) mod tests {
             .cloned()
             .collect();
 
-        let (replay_votes_sender, _replay_votes_receiver) = unbounded();
         ReplayStage::compute_bank_stats(
             &node_pubkey,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),
@@ -2943,7 +2935,6 @@ pub(crate) mod tests {
             &mut PubkeyReferences::default(),
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut BankWeightForkChoice::default(),
-            &replay_votes_sender,
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());

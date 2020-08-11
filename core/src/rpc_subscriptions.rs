@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use crate::rpc::{get_parsed_token_account, get_parsed_token_accounts};
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -7,7 +8,7 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
+use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::RpcFilterType,
@@ -38,7 +39,9 @@ use std::{
     iter,
     sync::{Arc, Mutex, RwLock},
 };
-use tokio::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
+
+// Stuck on tokio 0.1 until the jsonrpc-pubsub crate upgrades to tokio 0.2
+use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
@@ -176,7 +179,7 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X, Slot, Option<T>) -> (Box<dyn Iterator<Item = S>>, Slot),
+    F: Fn(X, &K, Slot, Option<T>, Option<Arc<Bank>>) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Serialize + Default,
     T: Clone,
 {
@@ -200,16 +203,19 @@ where
                     commitment_slots.highest_confirmed_slot
                 }
             };
-            let results = {
-                let bank_forks = bank_forks.read().unwrap();
-                bank_forks
-                    .get(slot)
-                    .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
-                    .unwrap_or_default()
-            };
+            let bank = bank_forks.read().unwrap().get(slot).cloned();
+            let results = bank
+                .clone()
+                .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
+                .unwrap_or_default();
             let mut w_last_notified_slot = last_notified_slot.write().unwrap();
-            let (filter_results, result_slot) =
-                filter_results(results, *w_last_notified_slot, config.as_ref().cloned());
+            let (filter_results, result_slot) = filter_results(
+                results,
+                hashmap_key,
+                *w_last_notified_slot,
+                config.as_ref().cloned(),
+                bank,
+            );
             for result in filter_results {
                 notifier.notify(
                     Response {
@@ -240,18 +246,30 @@ impl RpcNotifier {
 
 fn filter_account_result(
     result: Option<(Account, Slot)>,
+    pubkey: &Pubkey,
     last_notified_slot: Slot,
     encoding: Option<UiAccountEncoding>,
+    bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = UiAccount>>, Slot) {
     if let Some((account, fork)) = result {
         // If fork < last_notified_slot this means that we last notified for a fork
         // and should notify that the account state has been reverted.
         if fork != last_notified_slot {
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-            return (
-                Box::new(iter::once(UiAccount::encode(account, encoding))),
-                fork,
-            );
+            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+                let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
+                return (
+                    Box::new(iter::once(get_parsed_token_account(bank, pubkey, account))),
+                    fork,
+                );
+            } else {
+                return (
+                    Box::new(iter::once(UiAccount::encode(
+                        pubkey, account, encoding, None, None,
+                    ))),
+                    fork,
+                );
+            }
         }
     }
     (Box::new(iter::empty()), last_notified_slot)
@@ -259,8 +277,10 @@ fn filter_account_result(
 
 fn filter_signature_result(
     result: Option<transaction::Result<()>>,
+    _signature: &Signature,
     last_notified_slot: Slot,
     _config: Option<()>,
+    _bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
         Box::new(
@@ -274,29 +294,33 @@ fn filter_signature_result(
 
 fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
+    _program_id: &Pubkey,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,
+    bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = RpcKeyedAccount>>, Slot) {
     let config = config.unwrap_or_default();
     let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
     let filters = config.filters;
-    (
-        Box::new(
-            accounts
-                .into_iter()
-                .filter(move |(_, account)| {
-                    filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-                    })
-                })
-                .map(move |(pubkey, account)| RpcKeyedAccount {
+    let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
+        filters.iter().all(|filter_type| match filter_type {
+            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+        })
+    });
+    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
+        if encoding == UiAccountEncoding::JsonParsed {
+            let bank = bank.unwrap(); // If !accounts.is_empty(), bank must be Some
+            Box::new(get_parsed_token_accounts(bank, keyed_accounts))
+        } else {
+            Box::new(
+                keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(account, encoding.clone()),
+                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
                 }),
-        ),
-        last_notified_slot,
-    )
+            )
+        };
+    (accounts, last_notified_slot)
 }
 
 #[derive(Clone)]
@@ -858,7 +882,7 @@ impl RpcSubscriptions {
             &subscriptions.gossip_account_subscriptions,
             &subscriptions.gossip_program_subscriptions,
             &subscriptions.gossip_signature_subscriptions,
-            &bank_forks,
+            bank_forks,
             &commitment_slots,
             &notifier,
         );
@@ -879,7 +903,7 @@ impl RpcSubscriptions {
         for pubkey in &pubkeys {
             Self::check_account(
                 pubkey,
-                &bank_forks,
+                bank_forks,
                 account_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
@@ -893,7 +917,7 @@ impl RpcSubscriptions {
         for program_id in &programs {
             Self::check_program(
                 program_id,
-                &bank_forks,
+                bank_forks,
                 program_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
@@ -907,7 +931,7 @@ impl RpcSubscriptions {
         for signature in &signatures {
             Self::check_signature(
                 signature,
-                &bank_forks,
+                bank_forks,
                 signature_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
@@ -950,7 +974,7 @@ pub(crate) mod tests {
         system_transaction,
     };
     use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
-    use tokio::{prelude::FutureExt, runtime::Runtime, timer::Delay};
+    use tokio_01::{prelude::FutureExt, runtime::Runtime, timer::Delay};
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
         receiver: futures::sync::mpsc::Receiver<T>,
@@ -1009,6 +1033,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::recent()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id.clone(),
             subscriber,
@@ -1027,7 +1052,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
         bank_forks
             .write()
@@ -1050,7 +1075,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },
@@ -1086,7 +1111,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
         bank_forks
             .write()
@@ -1106,7 +1131,7 @@ pub(crate) mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
         );
         subscriptions.add_program_subscription(
-            solana_budget_program::id(),
+            solana_stake_program::id(),
             None,
             sub_id.clone(),
             subscriber,
@@ -1117,7 +1142,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_program::id()));
+            .contains_key(&solana_stake_program::id()));
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -1132,7 +1157,7 @@ pub(crate) mod tests {
                           "data": "1111111111111111",
                           "executable": false,
                           "lamports": 1,
-                          "owner": "Budget1111111111111111111111111111111111111",
+                          "owner": "Stake11111111111111111111111111111111111111",
                           "rentEpoch": 1,
                        },
                        "pubkey": alice.pubkey().to_string(),
@@ -1149,7 +1174,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_program::id()));
+            .contains_key(&solana_stake_program::id()));
     }
 
     #[test]
@@ -1493,6 +1518,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::single_gossip()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id0.clone(),
             subscriber0,
@@ -1511,7 +1537,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_program::id(),
+            &solana_stake_program::id(),
         );
 
         // Add the transaction to the 1st bank and then freeze the bank
@@ -1545,7 +1571,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },
@@ -1561,6 +1587,7 @@ pub(crate) mod tests {
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::single_gossip()),
                 encoding: None,
+                data_slice: None,
             }),
             sub_id1.clone(),
             subscriber1,
@@ -1578,7 +1605,7 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Budget1111111111111111111111111111111111111",
+                       "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 1,
                     },
                },

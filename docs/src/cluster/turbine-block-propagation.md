@@ -8,19 +8,19 @@ During its slot, the leader node distributes shreds between the validator nodes 
 
 ## Neighborhood Assignment - Weighted Selection
 
-In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer-0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
+In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
 
 To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
 
 ## Layer and Neighborhood Structure
 
-The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer-0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
+The current leader makes its initial broadcasts to at most `DATA_PLANE_FANOUT` nodes. If this layer 0 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 0 starts with 1 neighborhood with fanout nodes. The number of nodes in each additional layer grows by a factor of fanout.
 
-As mentioned above, each node in a layer only has to broadcast its shreds to its neighbors and to exactly 1 node in some next-layer neighborhoods, instead of to every TVU peer in the cluster. A good way to think about this is, layer-0 starts with 1 neighborhood with fanout nodes, layer-1 adds "fanout" neighborhoods, each with fanout nodes and layer-2 will have `fanout * number of nodes in layer-1` and so on.
+As mentioned above, each node in a layer only has to broadcast its shreds to its neighbors and to exactly 1 node in some next-layer neighborhoods, instead of to every TVU peer in the cluster. A good way to think about this is, layer 0 starts with 1 neighborhood with fanout nodes, layer 1 adds fanout neighborhoods, each with fanout nodes and layer 2 will have `fanout * number of nodes in layer 1` and so on.
 
 This way each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes.
 
-The following diagram shows how the Leader sends shreds with a Fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
+The following diagram shows how the Leader sends shreds with a fanout of 2 to Neighborhood 0 in Layer 0 and how the nodes in Neighborhood 0 share their data with each other.
 
 ![Leader sends shreds to Neighborhood 0 in Layer 0](/img/data-plane-seeding.svg)
 
@@ -28,7 +28,7 @@ The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2
 
 ![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
 
-Finally, the following diagram shows a two layer cluster with a Fanout of 2.
+Finally, the following diagram shows a two layer cluster with a fanout of 2.
 
 ![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
 
@@ -42,7 +42,7 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 Turbine relies on retransmission of packets between validators. Due to
 retransmission, any network wide packet loss is compounded, and the
-probability of the packet failing to reach is destination increases
+probability of the packet failing to reach its destination increases
 on each hop. The FEC rate needs to take into account the network wide
 packet loss, and the propagation depth.
 
@@ -72,8 +72,8 @@ Probability of a block succeeding in turbine:
 For example:
 
 - Network packet loss rate is 15%.
-- 50kpts network generates 6400 shreds per second.
-- FEC rate increases the total shres per block by the FEC ratio.
+- 50k tps network generates 6400 shreds per second.
+- FEC rate increases the total shreds per block by the FEC ratio.
 
 With a FEC rate: `16:4`
 

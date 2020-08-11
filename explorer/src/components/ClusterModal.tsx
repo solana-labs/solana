@@ -12,12 +12,12 @@ import {
   Cluster,
   useClusterModal,
   useUpdateCustomUrl,
-} from "../providers/cluster";
+} from "providers/cluster";
 import { assertUnreachable } from "../utils";
-import Overlay from "./Overlay";
+import { Overlay } from "./common/Overlay";
 import { useQuery } from "utils/url";
 
-function ClusterModal() {
+export function ClusterModal() {
   const [show, setShow] = useClusterModal();
   const onClose = () => setShow(false);
   return (
@@ -92,7 +92,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
-          <span className={customClass("text") || "text-dark"}>Custom:</span>
+          <span className={customClass("text") || ""}>Custom:</span>
         </div>
       </div>
     </Link>
@@ -105,7 +105,7 @@ function ClusterToggle() {
   let activeSuffix = "";
   switch (status) {
     case ClusterStatus.Connected:
-      activeSuffix = "success";
+      activeSuffix = "primary";
       break;
     case ClusterStatus.Connecting:
       activeSuffix = "warning";
@@ -132,7 +132,7 @@ function ClusterToggle() {
 
         const btnClass = active
           ? `border-${activeSuffix} text-${activeSuffix}`
-          : "btn-white text-dark";
+          : "btn-white";
 
         const clusterLocation = (location: Location) => {
           const params = new URLSearchParams(location.search);
@@ -164,5 +164,3 @@ function ClusterToggle() {
     </div>
   );
 }
-
-export default ClusterModal;

@@ -63,6 +63,11 @@ fi
 if [[ -e "$ledgerDir"/genesis.bin || -e "$ledgerDir"/genesis.tar.bz2 ]]; then
   echo "Use existing genesis"
 else
+  ./fetch-spl.sh
+  if [[ -r spl-genesis-args.sh ]]; then
+    SPL_GENESIS_ARGS=$(cat spl-genesis-args.sh)
+  fi
+
   # shellcheck disable=SC2086
   solana-genesis \
     --hashes-per-tick sleep \
@@ -74,6 +79,7 @@ else
       "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
     --operating-mode development \
+    $SPL_GENESIS_ARGS \
     $SOLANA_RUN_SH_GENESIS_ARGS
 fi
 

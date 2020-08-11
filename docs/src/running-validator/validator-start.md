@@ -168,11 +168,14 @@ vote account on the network. If you have completed this step, you should see the
 solana-keygen new -o ~/vote-account-keypair.json
 ```
 
-Create your vote account on the blockchain:
+The following command can be used to create your vote account on the blockchain
+with all the default options:
 
 ```bash
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
+
+Read more about [creating and managing a vote account](vote-accounts.md).
 
 ## Trusted validators
 

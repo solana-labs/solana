@@ -1,11 +1,11 @@
 import React from "react";
 import { useSupply, useFetchSupply, Status } from "providers/supply";
-import LoadingCard from "./common/LoadingCard";
-import ErrorCard from "./common/ErrorCard";
+import { LoadingCard } from "./common/LoadingCard";
+import { ErrorCard } from "./common/ErrorCard";
 import { lamportsToSolString } from "utils";
-import TableCardBody from "./common/TableCardBody";
+import { TableCardBody } from "./common/TableCardBody";
 
-export default function SupplyCard() {
+export function SupplyCard() {
   const supply = useSupply();
   const fetchSupply = useFetchSupply();
 
@@ -32,17 +32,23 @@ export default function SupplyCard() {
       <TableCardBody>
         <tr>
           <td className="w-100">Total Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.total)}</td>
+          <td className="text-lg-right">
+            {lamportsToSolString(supply.total, 0)}
+          </td>
         </tr>
 
         <tr>
           <td className="w-100">Circulating Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.circulating)}</td>
+          <td className="text-lg-right">
+            {lamportsToSolString(supply.circulating, 0)}
+          </td>
         </tr>
 
         <tr>
           <td className="w-100">Non-Circulating Supply (SOL)</td>
-          <td>{lamportsToSolString(supply.nonCirculating)}</td>
+          <td className="text-lg-right">
+            {lamportsToSolString(supply.nonCirculating, 0)}
+          </td>
         </tr>
       </TableCardBody>
     </div>
@@ -54,7 +60,7 @@ const renderHeader = () => {
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
-          <h4 className="card-header-title">Overview</h4>
+          <h4 className="card-header-title">Supply Overview</h4>
         </div>
       </div>
     </div>

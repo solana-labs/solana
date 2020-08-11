@@ -214,6 +214,8 @@ pub trait InvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
+    /// Are cross program invocations supported
+    fn is_cross_program_supported(&self) -> bool;
 }
 
 /// Log messages

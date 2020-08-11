@@ -1,5 +1,5 @@
 ---
-title: History of the Solana Codebase
+title: History
 ---
 
 In November of 2017, Anatoly Yakovenko published a whitepaper describing Proof

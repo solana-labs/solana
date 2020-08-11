@@ -105,20 +105,18 @@ impl Stakes {
                 && account.data.len() >= std::mem::size_of::<StakeState>()
     }
 
-    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
+    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) -> Option<Account> {
         if solana_vote_program::check_id(&account.owner) {
-            if account.lamports == 0 {
-                self.vote_accounts.remove(pubkey);
-            } else {
-                let old = self.vote_accounts.get(pubkey);
-
-                let stake = old.map_or_else(
+            let old = self.vote_accounts.remove(pubkey);
+            if account.lamports != 0 {
+                let stake = old.as_ref().map_or_else(
                     || self.calculate_stake(pubkey, self.epoch, Some(&self.stake_history)),
                     |v| v.0,
                 );
 
                 self.vote_accounts.insert(*pubkey, (stake, account.clone()));
             }
+            old.map(|(_, account)| account)
         } else if solana_stake_program::check_id(&account.owner) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
@@ -160,6 +158,9 @@ impl Stakes {
             } else if let Some(delegation) = delegation {
                 self.stake_delegations.insert(*pubkey, delegation);
             }
+            None
+        } else {
+            None
         }
     }
 

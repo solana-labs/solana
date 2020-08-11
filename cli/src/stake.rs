@@ -32,7 +32,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
-use std::{collections::HashSet, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
@@ -1485,7 +1485,7 @@ pub fn build_stake_state(
             let (active_stake, activating_stake, deactivating_stake) = stake
                 .delegation
                 .stake_activating_and_deactivating(current_epoch, Some(stake_history));
-            let lockup = if lockup.is_in_force(clock, &HashSet::new()) {
+            let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
                 None
@@ -1535,7 +1535,7 @@ pub fn build_stake_state(
             authorized,
             lockup,
         }) => {
-            let lockup = if lockup.is_in_force(clock, &HashSet::new()) {
+            let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
                 None

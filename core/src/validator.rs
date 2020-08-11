@@ -23,6 +23,7 @@ use crate::{
 };
 use crossbeam_channel::unbounded;
 use rand::{thread_rng, Rng};
+use solana_banks_server::rpc_banks_service::RpcBanksService;
 use solana_ledger::{
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
@@ -72,7 +73,7 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
-    pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
+    pub rpc_ports: Option<(u16, u16, u16)>, // (JsonRpc, JsonRpcPubSub, Banks)
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -148,7 +149,7 @@ struct TransactionHistoryServices {
 pub struct Validator {
     pub id: Pubkey,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
-    rpc_service: Option<(JsonRpcService, PubSubService)>,
+    rpc_service: Option<(JsonRpcService, PubSubService, RpcBanksService)>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     gossip_service: GossipService,
@@ -223,6 +224,7 @@ impl Validator {
         validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
             genesis_config,
             bank_forks,
@@ -281,36 +283,47 @@ impl Validator {
         ));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
-            if ContactInfo::is_valid_address(&node.info.rpc) {
-                assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                assert_eq!(rpc_port, node.info.rpc.port());
-                assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
-            } else {
-                assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-            }
-            (
-                JsonRpcService::new(
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
-                    config.rpc_config.clone(),
-                    config.snapshot_config.clone(),
-                    bank_forks.clone(),
-                    block_commitment_cache.clone(),
-                    blockstore.clone(),
-                    cluster_info.clone(),
-                    genesis_config.hash(),
-                    ledger_path,
-                    validator_exit.clone(),
-                    config.trusted_validators.clone(),
-                    rpc_override_health_check.clone(),
-                ),
-                PubSubService::new(
-                    &subscriptions,
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-                    &exit,
-                ),
-            )
-        });
+        let rpc_service = config
+            .rpc_ports
+            .map(|(rpc_port, rpc_pubsub_port, rpc_banks_port)| {
+                if ContactInfo::is_valid_address(&node.info.rpc) {
+                    assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                    assert_eq!(rpc_port, node.info.rpc.port());
+                    assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
+                    assert_eq!(rpc_banks_port, node.info.rpc_banks.port());
+                } else {
+                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                }
+                let tpu_address = cluster_info.my_contact_info().tpu;
+                (
+                    JsonRpcService::new(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                        config.rpc_config.clone(),
+                        config.snapshot_config.clone(),
+                        bank_forks.clone(),
+                        block_commitment_cache.clone(),
+                        blockstore.clone(),
+                        cluster_info.clone(),
+                        genesis_config.hash(),
+                        ledger_path,
+                        validator_exit.clone(),
+                        config.trusted_validators.clone(),
+                        rpc_override_health_check.clone(),
+                    ),
+                    PubSubService::new(
+                        &subscriptions,
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+                        &exit,
+                    ),
+                    RpcBanksService::new(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_banks_port),
+                        tpu_address,
+                        &bank_forks,
+                        &block_commitment_cache,
+                        &exit,
+                    ),
+                )
+            });
 
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
@@ -407,7 +420,6 @@ impl Validator {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
-        let (replay_votes_sender, replay_votes_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -453,7 +465,7 @@ impl Validator {
             vote_tracker.clone(),
             retransmit_slots_sender,
             verified_vote_receiver,
-            replay_votes_sender,
+            replay_vote_sender.clone(),
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -481,7 +493,8 @@ impl Validator {
             vote_tracker,
             bank_forks,
             verified_vote_sender,
-            replay_votes_receiver,
+            replay_vote_receiver,
+            replay_vote_sender,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
@@ -542,9 +555,10 @@ impl Validator {
     pub fn join(self) -> Result<()> {
         self.poh_service.join()?;
         drop(self.poh_recorder);
-        if let Some((rpc_service, rpc_pubsub_service)) = self.rpc_service {
+        if let Some((rpc_service, rpc_pubsub_service, rpc_banks_service)) = self.rpc_service {
             rpc_service.join()?;
             rpc_pubsub_service.join()?;
+            rpc_banks_service.join()?;
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service.join()?;
@@ -856,9 +870,6 @@ impl TestValidator {
         );
         genesis_config
             .native_instruction_processors
-            .push(solana_budget_program!());
-        genesis_config
-            .native_instruction_processors
             .push(solana_bpf_loader_program!());
 
         genesis_config.rent.lamports_per_byte_year = 1;
@@ -868,7 +879,11 @@ impl TestValidator {
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let config = ValidatorConfig {
-            rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
+            rpc_ports: Some((
+                node.info.rpc.port(),
+                node.info.rpc_pubsub.port(),
+                node.info.rpc_banks.port(),
+            )),
             ..ValidatorConfig::default()
         };
         let node = Validator::new(
@@ -1036,6 +1051,7 @@ mod tests {
             rpc_ports: Some((
                 validator_node.info.rpc.port(),
                 validator_node.info.rpc_pubsub.port(),
+                validator_node.info.rpc_banks.port(),
             )),
             ..ValidatorConfig::default()
         };
@@ -1110,6 +1126,7 @@ mod tests {
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),
                         validator_node.info.rpc_pubsub.port(),
+                        validator_node.info.rpc_banks.port(),
                     )),
                     ..ValidatorConfig::default()
                 };

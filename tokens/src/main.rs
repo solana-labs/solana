@@ -1,11 +1,9 @@
-use solana_cli_config::Config;
-use solana_cli_config::CONFIG_FILE;
-use solana_client::rpc_client::RpcClient;
-use solana_tokens::{arg_parser::parse_args, args::Command, commands, thin_client::ThinClient};
-use std::env;
-use std::error::Error;
-use std::path::Path;
-use std::process;
+use solana_banks_client::start_tcp_client;
+use solana_cli_config::{Config, CONFIG_FILE};
+use solana_tokens::{arg_parser::parse_args, args::Command, commands};
+use std::{env, error::Error, path::Path, process};
+use tokio::runtime::Runtime;
+use url::Url;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let command_args = parse_args(env::args_os())?;
@@ -20,16 +18,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         Config::default()
     };
     let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
-    let client = RpcClient::new(json_rpc_url);
+    let rpc_banks_url = Config::compute_rpc_banks_url(&json_rpc_url);
+    let url = Url::parse(&rpc_banks_url)?;
+    let host_port = (url.host_str().unwrap(), url.port().unwrap());
+
+    let mut runtime = Runtime::new().unwrap();
+    let mut banks_client = runtime.block_on(start_tcp_client(&host_port))?;
 
     match command_args.command {
         Command::DistributeTokens(args) => {
-            let thin_client = ThinClient::new(client, args.dry_run);
-            commands::process_distribute_tokens(&thin_client, &args)?;
+            runtime.block_on(commands::process_distribute_tokens(
+                &mut banks_client,
+                &args,
+            ))?;
         }
         Command::Balances(args) => {
-            let thin_client = ThinClient::new(client, false);
-            commands::process_balances(&thin_client, &args)?;
+            runtime.block_on(commands::process_balances(&mut banks_client, &args))?;
         }
         Command::TransactionLog(args) => {
             commands::process_transaction_log(&args)?;

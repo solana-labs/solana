@@ -9,7 +9,7 @@ export function __wbg_set_stakeaccount_stake(a: number, b: number): void;
 export function __wbg_get_stakeaccount_state(a: number): number;
 export function __wbg_set_stakeaccount_state(a: number, b: number): void;
 export function stakeaccount_fromAccountData(a: number, b: number): number;
-export function stakeaccount_displayState(a: number, b: number): void;
+export function stakeaccount_accountType(a: number, b: number): void;
 export function __wbg_lockup_free(a: number): void;
 export function __wbg_get_lockup_custodian(a: number): number;
 export function __wbg_set_lockup_custodian(a: number, b: number): void;

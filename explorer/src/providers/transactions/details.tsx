@@ -2,87 +2,80 @@ import React from "react";
 import {
   Connection,
   TransactionSignature,
-  ConfirmedTransaction,
+  ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
-import { useTransactions, FetchStatus } from "./index";
+import { FetchStatus } from "./index";
 import { CACHED_DETAILS, isCached } from "./cached";
 
 export interface Details {
   fetchStatus: FetchStatus;
-  transaction: ConfirmedTransaction | null;
+  transaction: ParsedConfirmedTransaction | null;
 }
 
-type State = { [signature: string]: Details };
+type State = {
+  entries: { [signature: string]: Details };
+  url: string;
+};
 
 export enum ActionType {
   Update,
-  Add,
-  Remove,
+  Clear,
 }
 
 interface Update {
   type: ActionType.Update;
+  url: string;
   signature: string;
   fetchStatus: FetchStatus;
-  transaction: ConfirmedTransaction | null;
+  transaction: ParsedConfirmedTransaction | null;
 }
 
-interface Add {
-  type: ActionType.Add;
-  signatures: TransactionSignature[];
+interface Clear {
+  type: ActionType.Clear;
+  url: string;
 }
 
-interface Remove {
-  type: ActionType.Remove;
-  signatures: TransactionSignature[];
-}
-
-type Action = Update | Add | Remove;
+type Action = Update | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
+  if (action.type === ActionType.Clear) {
+    return { url: action.url, entries: {} };
+  } else if (action.url !== state.url) {
+    return state;
+  }
+
   switch (action.type) {
-    case ActionType.Add: {
-      if (action.signatures.length === 0) return state;
-      const details = { ...state };
-      action.signatures.forEach((signature) => {
-        if (!details[signature]) {
-          details[signature] = {
-            fetchStatus: FetchStatus.Fetching,
-            transaction: null,
-          };
-        }
-      });
-      return details;
-    }
-
-    case ActionType.Remove: {
-      if (action.signatures.length === 0) return state;
-      const details = { ...state };
-      action.signatures.forEach((signature) => {
-        delete details[signature];
-      });
-      return details;
-    }
-
     case ActionType.Update: {
-      let details = state[action.signature];
+      const signature = action.signature;
+      const details = state.entries[signature];
       if (details) {
-        details = {
-          ...details,
-          fetchStatus: action.fetchStatus,
-          transaction: action.transaction,
-        };
         return {
           ...state,
-          [action.signature]: details,
+          entries: {
+            ...state.entries,
+            [signature]: {
+              ...details,
+              fetchStatus: action.fetchStatus,
+              transaction: action.transaction,
+            },
+          },
+        };
+      } else {
+        return {
+          ...state,
+          entries: {
+            ...state.entries,
+            [signature]: {
+              fetchStatus: FetchStatus.Fetching,
+              transaction: null,
+            },
+          },
         };
       }
-      break;
     }
   }
-  return state;
 }
 
 export const StateContext = React.createContext<State | undefined>(undefined);
@@ -92,33 +85,12 @@ export const DispatchContext = React.createContext<Dispatch | undefined>(
 
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, {});
-
-  const { transactions } = useTransactions();
   const { url } = useCluster();
+  const [state, dispatch] = React.useReducer(reducer, { url, entries: {} });
 
-  // Filter blocks for current transaction slots
   React.useEffect(() => {
-    const removeSignatures = new Set<string>();
-    const fetchSignatures = new Set<string>();
-    transactions.forEach(({ signature, info }) => {
-      if (info?.confirmations === "max" && !state[signature])
-        fetchSignatures.add(signature);
-      else if (info?.confirmations !== "max" && state[signature])
-        removeSignatures.add(signature);
-    });
-
-    const removeList: string[] = [];
-    removeSignatures.forEach((s) => removeList.push(s));
-    dispatch({ type: ActionType.Remove, signatures: removeList });
-
-    const fetchList: string[] = [];
-    fetchSignatures.forEach((s) => fetchList.push(s));
-    dispatch({ type: ActionType.Add, signatures: fetchList });
-    fetchSignatures.forEach((signature) => {
-      fetchDetails(dispatch, signature, url);
-    });
-  }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+    dispatch({ type: ActionType.Clear, url });
+  }, [url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -139,6 +111,7 @@ async function fetchDetails(
     fetchStatus: FetchStatus.Fetching,
     transaction: null,
     signature,
+    url,
   });
 
   let fetchStatus;
@@ -148,7 +121,7 @@ async function fetchDetails(
     fetchStatus = FetchStatus.Fetched;
   } else {
     try {
-      transaction = await new Connection(url).getConfirmedTransaction(
+      transaction = await new Connection(url).getParsedConfirmedTransaction(
         signature
       );
       fetchStatus = FetchStatus.Fetched;
@@ -157,7 +130,13 @@ async function fetchDetails(
       fetchStatus = FetchStatus.FetchFailed;
     }
   }
-  dispatch({ type: ActionType.Update, fetchStatus, signature, transaction });
+  dispatch({
+    type: ActionType.Update,
+    fetchStatus,
+    signature,
+    transaction,
+    url,
+  });
 }
 
 export function useFetchTransactionDetails() {

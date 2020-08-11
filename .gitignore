@@ -23,3 +23,9 @@ log-*/
 /.idea/
 /solana.iml
 /.vscode/
+
+# fetch-spl.sh artifacts
+/spl-genesis-args.sh
+/spl_*.so
+
+.DS_Store

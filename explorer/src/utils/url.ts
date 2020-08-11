@@ -5,6 +5,13 @@ export function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
+export const clusterPath = (pathname: string) => {
+  return (location: Location) => ({
+    ...pickCluster(location),
+    pathname,
+  });
+};
+
 export function pickCluster(location: Location): Location {
   const cluster = new URLSearchParams(location.search).get("cluster");
 

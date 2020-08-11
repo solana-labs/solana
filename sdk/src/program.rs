@@ -30,7 +30,6 @@ pub fn invoke_signed(
         _ => Err(result.into()),
     }
 }
-
 extern "C" {
     fn sol_invoke_signed_rust(
         instruction_addr: *const u8,

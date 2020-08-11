@@ -454,7 +454,8 @@ pub fn process_instruction(
                 to,
                 &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &signers,
+                next_keyed_account(keyed_accounts)?,
+                keyed_accounts.next(),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(

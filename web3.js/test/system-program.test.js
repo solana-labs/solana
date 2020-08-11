@@ -2,8 +2,8 @@
 
 import {
   Account,
-  BudgetProgram,
   Connection,
+  StakeProgram,
   SystemInstruction,
   SystemProgram,
   Transaction,
@@ -26,8 +26,8 @@ test('createAccount', () => {
     fromPubkey: new Account().publicKey,
     newAccountPubkey: new Account().publicKey,
     lamports: 123,
-    space: BudgetProgram.space,
-    programId: BudgetProgram.programId,
+    space: 0,
+    programId: SystemProgram.programId,
   };
   const transaction = SystemProgram.createAccount(params);
   expect(transaction.instructions).toHaveLength(1);
@@ -110,8 +110,8 @@ test('createAccountWithSeed', () => {
     basePubkey: fromPubkey,
     seed: 'hi there',
     lamports: 123,
-    space: BudgetProgram.space,
-    programId: BudgetProgram.programId,
+    space: 0,
+    programId: SystemProgram.programId,
   };
   const transaction = SystemProgram.createAccountWithSeed(params);
   expect(transaction.instructions).toHaveLength(1);
@@ -228,7 +228,6 @@ test('nonceAuthorize', () => {
 
 test('non-SystemInstruction error', () => {
   const from = new Account();
-  const program = new Account();
   const to = new Account();
 
   const badProgramId = {
@@ -236,7 +235,7 @@ test('non-SystemInstruction error', () => {
       {pubkey: from.publicKey, isSigner: true, isWritable: true},
       {pubkey: to.publicKey, isSigner: false, isWritable: true},
     ],
-    programId: BudgetProgram.programId,
+    programId: StakeProgram.programId,
     data: Buffer.from([2, 0, 0, 0]),
   };
   expect(() => {
@@ -245,16 +244,10 @@ test('non-SystemInstruction error', () => {
     );
   }).toThrow();
 
-  const amount = 123;
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const budgetPay = BudgetProgram.pay(
-    from.publicKey,
-    program.publicKey,
-    to.publicKey,
-    amount,
-  );
-  const transaction = new Transaction({recentBlockhash}).add(budgetPay);
-  transaction.sign(from);
+  const stakePubkey = new Account().publicKey;
+  const authorizedPubkey = new Account().publicKey;
+  const params = {stakePubkey, authorizedPubkey};
+  const transaction = StakeProgram.deactivate(params);
 
   expect(() => {
     SystemInstruction.decodeInstructionType(transaction.instructions[1]);

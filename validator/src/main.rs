@@ -599,7 +599,7 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(port_validator)
-                .help("Use this port for JSON RPC, and the next port for the RPC websocket"),
+                .help("Use this port for JSON RPC, the next port for the RPC websocket, and the following for the RPC banks API"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -627,7 +627,15 @@ pub fn main() {
                 .takes_value(false)
                 .help("Enable historical transaction info over JSON RPC, \
                        including the 'getConfirmedBlock' API.  \
-                       This will cause an increase in disk usage  and IOPS"),
+                       This will cause an increase in disk usage and IOPS"),
+        )
+        .arg(
+            Arg::with_name("enable_rpc_bigtable_ledger_storage")
+                .long("enable-rpc-bigtable-ledger-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Fetch historical transaction info from a BigTable instance \
+                       as a fallback to local ledger data"),
         )
         .arg(
             Arg::with_name("health_check_slot_distance")
@@ -712,10 +720,10 @@ pub fn main() {
             Arg::with_name("snapshot_version")
                 .long("snapshot-version")
                 .value_name("SNAPSHOT_VERSION")
-		.validator(is_parsable::<SnapshotVersion>)
-		.takes_value(true)
-		.default_value(SnapshotVersion::default().into())
-		.help("Output snapshot version"),
+                .validator(is_parsable::<SnapshotVersion>)
+                .takes_value(true)
+                .default_value(SnapshotVersion::default().into())
+                .help("Output snapshot version"),
         )
         .arg(
             Arg::with_name("limit_ledger_size")
@@ -938,6 +946,8 @@ pub fn main() {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
+            enable_bigtable_ledger_storage: matches
+                .is_present("enable_rpc_bigtable_ledger_storage"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
@@ -950,7 +960,7 @@ pub fn main() {
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
-            .map(|rpc_port| (rpc_port, rpc_port + 1)),
+            .map(|rpc_port| (rpc_port, rpc_port + 1, rpc_port + 2)),
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
@@ -1168,9 +1178,10 @@ pub fn main() {
     );
 
     if !private_rpc {
-        if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
+        if let Some((rpc_port, rpc_pubsub_port, rpc_banks_port)) = validator_config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_port);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_port);
+            node.info.rpc_banks = SocketAddr::new(node.info.gossip.ip(), rpc_banks_port);
         }
     }
 
@@ -1189,8 +1200,12 @@ pub fn main() {
 
         let mut tcp_listeners = vec![];
         if !private_rpc {
-            if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
-                for (purpose, port) in &[("RPC", rpc_port), ("RPC pubsub", rpc_pubsub_port)] {
+            if let Some((rpc_port, rpc_pubsub_port, rpc_banks_port)) = validator_config.rpc_ports {
+                for (purpose, port) in &[
+                    ("RPC", rpc_port),
+                    ("RPC pubsub", rpc_pubsub_port),
+                    ("RPC banks", rpc_banks_port),
+                ] {
                     tcp_listeners.push((
                         *port,
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))

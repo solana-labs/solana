@@ -6,10 +6,9 @@ import {
   StakeProgram,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
-import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
-import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import { Address } from "components/common/Address";
 
 export function WithdrawDetailsCard(props: {
   ix: TransactionInstruction;
@@ -26,10 +25,6 @@ export function WithdrawDetailsCard(props: {
     return <UnknownDetailsCard {...props} />;
   }
 
-  const stakePubkey = params.stakePubkey.toBase58();
-  const toPubkey = params.toPubkey.toBase58();
-  const authorizedPubkey = params.authorizedPubkey.toBase58();
-
   return (
     <InstructionCard
       ix={ix}
@@ -39,43 +34,37 @@ export function WithdrawDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-right">
-          <Copyable bottom right text={StakeProgram.programId.toBase58()}>
-            <code>{displayAddress(StakeProgram.programId.toBase58())}</code>
-          </Copyable>
+        <td className="text-lg-right">
+          <Address pubkey={StakeProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Stake Address</td>
-        <td className="text-right">
-          <Copyable right text={stakePubkey}>
-            <code>{stakePubkey}</code>
-          </Copyable>
+        <td className="text-lg-right">
+          <Address pubkey={params.stakePubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
-        <td className="text-right">
-          <Copyable right text={authorizedPubkey}>
-            <code>{authorizedPubkey}</code>
-          </Copyable>
+        <td className="text-lg-right">
+          <Address pubkey={params.authorizedPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>To Address</td>
-        <td className="text-right">
-          <Copyable right text={toPubkey}>
-            <code>{toPubkey}</code>
-          </Copyable>
+        <td className="text-lg-right">
+          <Address pubkey={params.toPubkey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Withdraw Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
+        <td className="text-lg-right">
+          {lamportsToSolString(params.lamports)}
+        </td>
       </tr>
     </InstructionCard>
   );

@@ -1,5 +1,9 @@
 import React from "react";
-import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
+import {
+  TransactionInstruction,
+  SignatureResult,
+  ParsedInstruction,
+} from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 
 export function UnknownDetailsCard({
@@ -7,7 +11,7 @@ export function UnknownDetailsCard({
   index,
   result,
 }: {
-  ix: TransactionInstruction;
+  ix: TransactionInstruction | ParsedInstruction;
   index: number;
   result: SignatureResult;
 }) {

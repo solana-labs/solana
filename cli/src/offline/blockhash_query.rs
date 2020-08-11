@@ -350,7 +350,13 @@ mod tests {
         )
         .unwrap();
         let nonce_pubkey = Pubkey::new(&[4u8; 32]);
-        let rpc_nonce_account = UiAccount::encode(nonce_account, UiAccountEncoding::Binary);
+        let rpc_nonce_account = UiAccount::encode(
+            &nonce_pubkey,
+            nonce_account,
+            UiAccountEncoding::Binary64,
+            None,
+            None,
+        );
         let get_account_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(Some(rpc_nonce_account)),

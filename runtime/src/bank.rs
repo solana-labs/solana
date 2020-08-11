@@ -47,6 +47,7 @@ use solana_sdk::{
     native_loader, nonce,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -75,7 +76,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "BHtoJzwGJ1seQ2gZmtPSLLgdvq3gRZMj5mpUJsX4wGHT")]
+#[frozen_abi(digest = "3bFpd1M1YHHKFASfjUU5L9dUkg87TKuMzwUoUebwa8Pu")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
@@ -174,11 +175,18 @@ pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub processing_results: Vec<TransactionProcessResult>,
+    pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
 }
+pub struct OverwrittenVoteAccount {
+    pub account: Account,
+    pub transaction_index: usize,
+    pub transaction_result_index: usize,
+}
+
 impl TransactionBalancesSet {
     pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
         assert_eq!(pre_balances.len(), post_balances.len());
@@ -198,10 +206,7 @@ pub enum HashAgeKind {
 
 impl HashAgeKind {
     pub fn is_durable_nonce(&self) -> bool {
-        match self {
-            HashAgeKind::DurableNonce(_, _) => true,
-            _ => false,
-        }
+        matches!(self, HashAgeKind::DurableNonce(_, _))
     }
 }
 
@@ -449,6 +454,9 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        if bank.operating_mode == Some(OperatingMode::Stable) {
+            bank.message_processor.set_cross_program_support(false);
+        }
         bank
     }
 
@@ -1155,18 +1163,13 @@ impl Bank {
             .unwrap()
             .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
 
-        self.hashes_per_tick = genesis_config.poh_config.hashes_per_tick;
-        self.ticks_per_slot = genesis_config.ticks_per_slot;
-        self.ns_per_slot = genesis_config.poh_config.target_tick_duration.as_nanos()
-            * genesis_config.ticks_per_slot as u128;
+        self.hashes_per_tick = genesis_config.hashes_per_tick();
+        self.ticks_per_slot = genesis_config.ticks_per_slot();
+        self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
         self.unused = genesis_config.unused;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
-        self.slots_per_year = years_as_slots(
-            1.0,
-            &genesis_config.poh_config.target_tick_duration,
-            self.ticks_per_slot,
-        );
+        self.slots_per_year = genesis_config.slots_per_year();
 
         self.epoch_schedule = genesis_config.epoch_schedule;
 
@@ -1189,6 +1192,11 @@ impl Bank {
         let account = native_loader::create_loadable_account(name);
         self.store_account(program_id, &account);
         debug!("Added native program {} under {:?}", name, program_id);
+    }
+
+    pub fn set_cross_program_support(&mut self, is_supported: bool) {
+        self.message_processor
+            .set_cross_program_support(is_supported);
     }
 
     /// Return the last block hash registered.
@@ -1270,7 +1278,7 @@ impl Bank {
         res: &[TransactionProcessResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
-        for (i, tx) in OrderedIterator::new(txs, iteration_order).enumerate() {
+        for (i, (_, tx)) in OrderedIterator::new(txs, iteration_order).enumerate() {
             let (res, _hash_age_kind) = &res[i];
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 status_cache.insert(
@@ -1341,9 +1349,36 @@ impl Bank {
         &'a self,
         txs: &'b [Transaction],
     ) -> TransactionBatch<'a, 'b> {
-        let mut batch = TransactionBatch::new(vec![Ok(()); txs.len()], &self, txs, None);
+        let lock_results: Vec<_> = txs
+            .iter()
+            .map(|tx| tx.sanitize().map_err(|e| e.into()))
+            .collect();
+        let mut batch = TransactionBatch::new(lock_results, &self, txs, None);
         batch.needs_unlock = false;
         batch
+    }
+
+    /// Run transactions against a frozen bank without committing the results
+    pub fn simulate_transaction(&self, transaction: Transaction) -> (Result<()>, Vec<String>) {
+        assert!(self.is_frozen(), "simulation bank must be frozen");
+
+        let txs = &[transaction];
+        let batch = self.prepare_simulation_batch(txs);
+        let log_collector = Rc::new(LogCollector::default());
+        let (
+            _loaded_accounts,
+            executed,
+            _retryable_transactions,
+            _transaction_count,
+            _signature_count,
+        ) = self.load_and_execute_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            Some(log_collector.clone()),
+        );
+        let transaction_result = executed[0].0.clone().map(|_| ());
+        let log_messages = Rc::try_unwrap(log_collector).unwrap_or_default().into();
+        (transaction_result, log_messages)
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -1389,7 +1424,7 @@ impl Bank {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| match lock_res {
+            .map(|((_, tx), lock_res)| match lock_res {
                 Ok(()) => {
                     let message = tx.message();
                     let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
@@ -1419,7 +1454,7 @@ impl Bank {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
+            .map(|((_, tx), lock_res)| {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
@@ -1454,7 +1489,7 @@ impl Bank {
     ) -> Vec<TransactionProcessResult> {
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
+            .map(|((_, tx), lock_res)| {
                 if lock_res.0.is_ok() {
                     if tx.message.instructions.len() == 1 {
                         let instruction = &tx.message.instructions[0];
@@ -1546,7 +1581,8 @@ impl Bank {
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
-        for transaction in OrderedIterator::new(batch.transactions(), batch.iteration_order()) {
+        for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order())
+        {
             let mut transaction_balances: Vec<u64> = vec![];
             for account_key in transaction.message.account_keys.iter() {
                 transaction_balances.push(self.get_balance(account_key));
@@ -1695,7 +1731,7 @@ impl Bank {
         let retryable_txs: Vec<_> =
             OrderedIterator::new(batch.lock_results(), batch.iteration_order())
                 .enumerate()
-                .filter_map(|(index, res)| match res {
+                .filter_map(|(index, (_, res))| match res {
                     Err(TransactionError::AccountInUse) => {
                         error_counters.account_in_use += 1;
                         Some(index)
@@ -1725,7 +1761,7 @@ impl Bank {
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
-            .map(|(accs, tx)| match accs {
+            .map(|(accs, (_, tx))| match accs {
                 (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
@@ -1804,7 +1840,7 @@ impl Bank {
         let mut fees = 0;
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
-            .map(|(tx, (res, hash_age_kind))| {
+            .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
                         (nonce_utils::fee_calculator_of(account), true)
@@ -1888,7 +1924,8 @@ impl Bank {
         );
         self.collect_rent(executed, loaded_accounts);
 
-        self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
+        let overwritten_vote_accounts =
+            self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -1896,9 +1933,11 @@ impl Bank {
         self.update_transaction_statuses(txs, iteration_order, &executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);
+
         TransactionResults {
             fee_collection_results,
             processing_results: executed.to_vec(),
+            overwritten_vote_accounts,
         }
     }
 
@@ -2064,7 +2103,9 @@ impl Bank {
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
-            rent += self.rent_collector.update(&pubkey, &mut account);
+            rent += self
+                .rent_collector
+                .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -2501,10 +2542,25 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
-        self.collected_rent.fetch_add(
-            self.rent_collector.update(pubkey, &mut account),
-            Ordering::Relaxed,
-        );
+
+        let should_be_in_new_behavior = match self.operating_mode() {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => self.epoch() >= Epoch::max_value(),
+            OperatingMode::Stable => self.epoch() >= Epoch::max_value(),
+        };
+
+        // don't collect rents if we're in the new behavior;
+        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
+        // there are too many and subtly nuanced modification codepaths
+        if !should_be_in_new_behavior {
+            // previously we're too much collecting rents as if it existed since epoch 0...
+            self.collected_rent.fetch_add(
+                self.rent_collector
+                    .collect_from_existing_account(pubkey, &mut account),
+                Ordering::Relaxed,
+            );
+        }
+
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }
@@ -2833,8 +2889,9 @@ impl Bank {
         iteration_order: Option<&[usize]>,
         res: &[TransactionProcessResult],
         loaded: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
-    ) {
-        for (i, ((raccs, _load_hash_age_kind), tx)) in loaded
+    ) -> Vec<OverwrittenVoteAccount> {
+        let mut overwritten_vote_accounts = vec![];
+        for (i, ((raccs, _load_hash_age_kind), (transaction_index, tx))) in loaded
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
@@ -2854,10 +2911,20 @@ impl Bank {
                 .filter(|(_key, account)| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {
-                    self.stakes.write().unwrap().store(pubkey, account);
+                    if let Some(old_vote_account) =
+                        self.stakes.write().unwrap().store(pubkey, account)
+                    {
+                        overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                            account: old_vote_account,
+                            transaction_index,
+                            transaction_result_index: i,
+                        });
+                    }
                 }
             }
         }
+
+        overwritten_vote_accounts
     }
 
     /// current stake delegations for this bank
@@ -3065,7 +3132,7 @@ impl Bank {
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
         let activation_slot = match self.operating_mode() {
             OperatingMode::Development => 0,
-            OperatingMode::Preview => Slot::MAX / 2,
+            OperatingMode::Preview => 27_740_256, // Epoch 76
             OperatingMode::Stable => Slot::MAX / 2,
         };
 
@@ -3099,7 +3166,6 @@ mod tests {
     use super::*;
     use crate::{
         accounts_index::{AccountMap, Ancestors},
-        builtin_programs::new_system_program_activation_epoch,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
@@ -3117,7 +3183,8 @@ mod tests {
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, Signer},
-        system_instruction, system_program,
+        system_instruction::{self, SystemError},
+        system_program,
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
     };
@@ -5028,10 +5095,7 @@ mod tests {
         let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
         assert_eq!(
             bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            )
+            TransactionError::InstructionError(1, SystemError::ResultWithNegativeLamports.into())
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
@@ -5073,7 +5137,7 @@ mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
 
@@ -5109,7 +5173,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, &pubkey),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
@@ -5378,7 +5442,7 @@ mod tests {
             (
                 Err(TransactionError::InstructionError(
                     1,
-                    InstructionError::new_result_with_negative_lamports(),
+                    SystemError::ResultWithNegativeLamports.into(),
                 )),
                 Some(HashAgeKind::Extant),
             ),
@@ -6493,7 +6557,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, &Pubkey::new_rand()),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::new_result_with_negative_lamports(),
+                SystemError::ResultWithNegativeLamports.into(),
             ))
         );
 
@@ -7139,7 +7203,7 @@ mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::InstructionError(
                 1,
-                system_instruction::SystemError::ResultWithNegativeLamports.into()
+                system_instruction::SystemError::ResultWithNegativeLamports.into(),
             ))
         );
         /* Check fee charged and nonce has advanced */
@@ -7474,77 +7538,6 @@ mod tests {
         // Ensure that no rent was collected, and the entire burn amount was removed from bank
         // capitalization
         assert_eq!(bank.capitalization(), pre_capitalization - burn_amount);
-    }
-
-    #[test]
-    fn test_legacy_system_instruction_processor0_stable() {
-        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        genesis_config.operating_mode = OperatingMode::Stable;
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-
-        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
-        assert!(activation_epoch > bank0.epoch());
-
-        // Transfer to self is not supported by legacy_system_instruction_processor0
-        bank0
-            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
-            .unwrap_err();
-
-        // Activate system_instruction_processor
-        let bank = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            genesis_config
-                .epoch_schedule
-                .get_first_slot_in_epoch(activation_epoch),
-        );
-
-        // Transfer to self is supported by system_instruction_processor
-        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
-            .unwrap();
-    }
-
-    #[test]
-    fn test_legacy_system_instruction_processor0_preview() {
-        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        genesis_config.operating_mode = OperatingMode::Preview;
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-
-        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
-        assert!(activation_epoch > bank0.epoch());
-
-        // Transfer to self is not supported by legacy_system_instruction_processor0
-        bank0
-            .transfer(1, &mint_keypair, &mint_keypair.pubkey())
-            .unwrap_err();
-
-        // Activate system_instruction_processor
-        let bank = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            genesis_config
-                .epoch_schedule
-                .get_first_slot_in_epoch(activation_epoch),
-        );
-
-        // Transfer to self is supported by system_instruction_processor
-        bank.transfer(2, &mint_keypair, &mint_keypair.pubkey())
-            .unwrap();
-    }
-
-    #[test]
-    fn test_legacy_system_instruction_processor0_development() {
-        let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        genesis_config.operating_mode = OperatingMode::Development;
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-
-        let activation_epoch = new_system_program_activation_epoch(bank0.operating_mode());
-        assert!(activation_epoch == bank0.epoch());
-
-        // Transfer to self is supported by system_instruction_processor
-        bank0
-            .transfer(2, &mint_keypair, &mint_keypair.pubkey())
-            .unwrap();
     }
 
     #[test]

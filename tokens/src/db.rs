@@ -1,8 +1,8 @@
 use chrono::prelude::*;
 use pickledb::{error::Error, PickleDb, PickleDbDumpPolicy};
 use serde::{Deserialize, Serialize};
+use solana_banks_client::TransactionStatus;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, transaction::Transaction};
-use solana_transaction_status::TransactionStatus;
 use std::{cmp::Ordering, fs, io, path::Path};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -155,7 +155,7 @@ pub fn update_finalized_transaction(
         return Ok(Some(confirmations));
     }
 
-    if let Err(e) = &transaction_status.status {
+    if let Some(e) = &transaction_status.err {
         // The transaction was finalized, but execution failed. Drop it.
         eprintln!(
             "Error in transaction with signature {}: {}",
@@ -273,7 +273,6 @@ mod tests {
         let transaction_status = TransactionStatus {
             slot: 0,
             confirmations: Some(1),
-            status: Ok(()),
             err: None,
         };
         assert_eq!(
@@ -297,12 +296,10 @@ mod tests {
         let signature = Signature::default();
         let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
-        let status = Err(TransactionError::AccountNotFound);
         let transaction_status = TransactionStatus {
             slot: 0,
             confirmations: None,
-            status,
-            err: None,
+            err: Some(TransactionError::AccountNotFound),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
@@ -325,7 +322,6 @@ mod tests {
         let transaction_status = TransactionStatus {
             slot: 0,
             confirmations: None,
-            status: Ok(()),
             err: None,
         };
         assert_eq!(

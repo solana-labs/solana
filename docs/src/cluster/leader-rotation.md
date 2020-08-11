@@ -4,7 +4,7 @@ title: Leader Rotation
 
 At any given moment, a cluster expects only one validator to produce ledger entries. By having only one leader at a time, all validators are able to replay identical copies of the ledger. The drawback of only one leader at a time, however, is that a malicious leader is capable of censoring votes and transactions. Since censoring cannot be distinguished from the network dropping packets, the cluster cannot simply elect a single node to hold the leader role indefinitely. Instead, the cluster minimizes the influence of a malicious leader by rotating which node takes the lead.
 
-Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
+Each validator selects the expected leader using the same algorithm, described below. When the validator receives a new signed ledger entry, it can be certain that an entry was produced by the expected leader. The order of slots which each leader is assigned a slot is called a _leader schedule_.
 
 ## Leader Schedule Rotation
 
@@ -19,7 +19,7 @@ Without a partition lasting longer than an epoch, the cluster will work as follo
 
 For example:
 
-The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100,101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
+The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100, 101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
 
 No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
 
@@ -29,7 +29,7 @@ The duration of the leader schedule offset has a direct relationship to the like
 
 Consider the following scenario:
 
-Two partitions that are generating half of the blocks each. Neither is coming to a definitive supermajority fork. Both will cross epoch 100 and 200 without actually committing to a root and therefore a cluster wide commitment to a new leader schedule.
+Two partitions that are generating half of the blocks each. Neither is coming to a definitive supermajority fork. Both will cross epoch 100 and 200 without actually committing to a root and therefore a cluster-wide commitment to a new leader schedule.
 
 In this unstable scenario, multiple valid leader schedules exist.
 
@@ -48,21 +48,10 @@ The genesis config declares the first leader for the first epoch. This leader en
 
 Leader schedule is generated using a predefined seed. The process is as follows:
 
-1. Periodically use the PoH tick height \(a monotonically increasing counter\) to
-
-   seed a stable pseudo-random algorithm.
-
-2. At that height, sample the bank for all the staked accounts with leader
-
-   identities that have voted within a cluster-configured number of ticks. The
-
-   sample is called the _active set_.
-
+1. Periodically use the PoH tick height \(a monotonically increasing counter\) to seed a stable pseudo-random algorithm.
+2. At that height, sample the bank for all the staked accounts with leader identities that have voted within a cluster-configured number of ticks. The sample is called the _active set_.
 3. Sort the active set by stake weight.
-4. Use the random seed to select nodes weighted by stake to create a
-
-   stake-weighted ordering.
-
+4. Use the random seed to select nodes weighted by stake to create a stake-weighted ordering.
 5. This ordering becomes valid after a cluster-configured number of ticks.
 
 ## Schedule Attack Vectors
@@ -88,7 +77,7 @@ Leaders can censor new staking transactions or refuse to validate blocks with ne
 
 Leaders and validators are expected to use ephemeral keys for operation, and stake owners authorize the validators to do work with their stake via delegation.
 
-The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly co-sign a validator vote even though the stake is currently delegated to a validator.
+The cluster should be able to recover from the loss of all the ephemeral keys used by leaders and validators, which could occur through a common software vulnerability shared by all the nodes. Stake owners should be able to vote directly by co-signing a validator vote even though the stake is currently delegated to a validator.
 
 ## Appending Entries
 

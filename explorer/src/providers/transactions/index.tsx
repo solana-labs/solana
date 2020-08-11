@@ -8,7 +8,7 @@ import {
   PublicKey,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { useQuery } from "../../utils/url";
+import { useQuery } from "utils/url";
 import { useCluster, Cluster, ClusterStatus } from "../cluster";
 import {
   DetailsProvider,
@@ -36,7 +36,6 @@ export interface TransactionStatusInfo {
 }
 
 export interface TransactionStatus {
-  id: number;
   fetchStatus: FetchStatus;
   signature: TransactionSignature;
   info?: TransactionStatusInfo;
@@ -44,17 +43,19 @@ export interface TransactionStatus {
 
 type Transactions = { [signature: string]: TransactionStatus };
 interface State {
-  idCounter: number;
   transactions: Transactions;
+  url: string;
 }
 
 export enum ActionType {
   UpdateStatus,
   FetchSignature,
+  Clear,
 }
 
 interface UpdateStatus {
   type: ActionType.UpdateStatus;
+  url: string;
   signature: TransactionSignature;
   fetchStatus: FetchStatus;
   info?: TransactionStatusInfo;
@@ -62,17 +63,29 @@ interface UpdateStatus {
 
 interface FetchSignature {
   type: ActionType.FetchSignature;
+  url: string;
   signature: TransactionSignature;
 }
 
-type Action = UpdateStatus | FetchSignature;
+interface Clear {
+  type: ActionType.Clear;
+  url: string;
+}
 
+type Action = UpdateStatus | FetchSignature | Clear;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
+  if (action.type === ActionType.Clear) {
+    return { url: action.url, transactions: {} };
+  } else if (action.url !== state.url) {
+    return state;
+  }
+
   switch (action.type) {
     case ActionType.FetchSignature: {
-      const transaction = state.transactions[action.signature];
+      const signature = action.signature;
+      const transaction = state.transactions[signature];
       if (transaction) {
         const transactions = {
           ...state.transactions,
@@ -84,16 +97,14 @@ function reducer(state: State, action: Action): State {
         };
         return { ...state, transactions };
       } else {
-        const nextId = state.idCounter + 1;
         const transactions = {
           ...state.transactions,
           [action.signature]: {
-            id: nextId,
             signature: action.signature,
             fetchStatus: FetchStatus.Fetching,
           },
         };
-        return { ...state, transactions, idCounter: nextId };
+        return { ...state, transactions };
       }
     }
 
@@ -123,44 +134,27 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
+  const { cluster, status: clusterStatus, url } = useCluster();
   const [state, dispatch] = React.useReducer(reducer, {
-    idCounter: 0,
     transactions: {},
+    url,
   });
 
-  const { cluster, status: clusterStatus, url } = useCluster();
   const fetchAccount = useFetchAccountInfo();
   const query = useQuery();
   const testFlag = query.get("test");
 
   // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
-    Object.keys(state.transactions).forEach((signature) => {
-      fetchTransactionStatus(dispatch, signature, url, clusterStatus);
-    });
+    if (clusterStatus === ClusterStatus.Connecting) {
+      dispatch({ type: ActionType.Clear, url });
+    }
 
     // Create a test transaction
     if (cluster === Cluster.Devnet && testFlag !== null) {
       createTestTransaction(dispatch, fetchAccount, url, clusterStatus);
     }
   }, [testFlag, cluster, clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Check for transactions in the url params
-  const values = TX_ALIASES.flatMap((key) => [
-    query.get(key),
-    query.get(key + "s"),
-  ]);
-  React.useEffect(() => {
-    values
-      .filter((value): value is string => value !== null)
-      .flatMap((value) => value.split(","))
-      // Remove duplicates
-      .filter((item, pos, self) => self.indexOf(item) === pos)
-      .filter((signature) => !state.transactions[signature])
-      .forEach((signature) => {
-        fetchTransactionStatus(dispatch, signature, url, clusterStatus);
-      });
-  }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -189,7 +183,7 @@ async function createTestTransaction(
       testAccount.publicKey,
       100000
     );
-    fetchTransactionStatus(dispatch, signature, url, clusterStatus);
+    fetchTransactionStatus(dispatch, signature, url);
     fetchAccount(testAccount.publicKey);
   } catch (error) {
     console.error("Failed to create test success transaction", error);
@@ -208,7 +202,7 @@ async function createTestTransaction(
       [testAccount],
       { confirmations: 1, skipPreflight: false }
     );
-    fetchTransactionStatus(dispatch, signature, url, clusterStatus);
+    fetchTransactionStatus(dispatch, signature, url);
   } catch (error) {
     console.error("Failed to create test failure transaction", error);
   }
@@ -217,16 +211,13 @@ async function createTestTransaction(
 export async function fetchTransactionStatus(
   dispatch: Dispatch,
   signature: TransactionSignature,
-  url: string,
-  status: ClusterStatus
+  url: string
 ) {
   dispatch({
     type: ActionType.FetchSignature,
     signature,
+    url,
   });
-
-  // We will auto-refetch when status is no longer connecting
-  if (status === ClusterStatus.Connecting) return;
 
   let fetchStatus;
   let info: TransactionStatusInfo | undefined;
@@ -241,7 +232,17 @@ export async function fetchTransactionStatus(
       });
 
       if (value !== null) {
-        let blockTime = await connection.getBlockTime(value.slot);
+        let blockTime = null;
+        try {
+          blockTime = await connection.getBlockTime(value.slot);
+        } catch (error) {
+          console.error(
+            "Failed to fetch block time for slot ",
+            value.slot,
+            ":",
+            error
+          );
+        }
         let timestamp: Timestamp =
           blockTime !== null ? blockTime : "unavailable";
 
@@ -271,6 +272,7 @@ export async function fetchTransactionStatus(
     signature,
     fetchStatus,
     info,
+    url,
   });
 }
 
@@ -281,12 +283,7 @@ export function useTransactions() {
       `useTransactions must be used within a TransactionsProvider`
     );
   }
-  return {
-    idCounter: context.idCounter,
-    transactions: Object.values(context.transactions).sort((a, b) =>
-      a.id <= b.id ? 1 : -1
-    ),
-  };
+  return context;
 }
 
 export function useTransactionStatus(signature: TransactionSignature) {
@@ -310,7 +307,7 @@ export function useTransactionDetails(signature: TransactionSignature) {
     );
   }
 
-  return context[signature];
+  return context.entries[signature];
 }
 
 export function useFetchTransactionStatus() {
@@ -321,8 +318,8 @@ export function useFetchTransactionStatus() {
     );
   }
 
-  const { url, status } = useCluster();
+  const { url } = useCluster();
   return (signature: TransactionSignature) => {
-    fetchTransactionStatus(dispatch, signature, url, status);
+    fetchTransactionStatus(dispatch, signature, url);
   };
 }

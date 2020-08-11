@@ -679,7 +679,6 @@ pub mod test {
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
-    use crossbeam_channel::unbounded;
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -762,6 +761,7 @@ pub mod test {
                             &keypairs.node_keypair,
                             &keypairs.vote_keypair,
                             &keypairs.vote_keypair,
+                            None,
                         );
                         info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
                         new_bank.process_transaction(&vote_tx).unwrap();
@@ -794,7 +794,6 @@ pub mod test {
                 .cloned()
                 .collect();
 
-            let (replay_slot_sender, _replay_slot_receiver) = unbounded();
             let _ = ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
@@ -807,7 +806,6 @@ pub mod test {
                 &mut PubkeyReferences::default(),
                 &mut self.heaviest_subtree_fork_choice,
                 &mut BankWeightForkChoice::default(),
-                &replay_slot_sender,
             );
 
             let vote_bank = self

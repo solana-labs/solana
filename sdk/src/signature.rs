@@ -61,16 +61,18 @@ impl Signature {
         Self(GenericArray::clone_from_slice(&signature_slice))
     }
 
+    pub(self) fn verify_verbose(
+        &self,
+        pubkey_bytes: &[u8],
+        message_bytes: &[u8],
+    ) -> Result<(), ed25519_dalek::SignatureError> {
+        let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+        let signature = self.0.as_slice().try_into()?;
+        publickey.verify_strict(message_bytes, &signature)
+    }
+
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
-        let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
-        let signature = self.0.as_slice().try_into();
-        if pubkey.is_err() || signature.is_err() {
-            return false;
-        }
-        pubkey
-            .unwrap()
-            .verify_strict(message_bytes, &signature.unwrap())
-            .is_ok()
+        self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
     }
 }
 
@@ -576,5 +578,26 @@ mod tests {
             pubkeys(&unique_signers(vec![&alice, &bob, &alice])),
             pubkeys(&[&alice, &bob])
         );
+    }
+
+    #[test]
+    fn test_off_curve_pubkey_verify_fails() {
+        // Golden point off the ed25519 curve
+        let off_curve_bytes = bs58::decode("9z5nJyQar1FUxVJxpBXzon6kHehbomeYiDaLi9WAMhCq")
+            .into_vec()
+            .unwrap();
+
+        // Confirm golden's off-curvedness
+        let mut off_curve_bits = [0u8; 32];
+        off_curve_bits.copy_from_slice(&off_curve_bytes);
+        let off_curve_point = curve25519_dalek::edwards::CompressedEdwardsY(off_curve_bits);
+        assert_eq!(off_curve_point.decompress(), None);
+
+        let pubkey = Pubkey::new(&off_curve_bytes);
+        let signature = Signature::default();
+        // Unfortunately, ed25519-dalek doesn't surface the internal error types that we'd ideally
+        // `source()` out of the `SignatureError` returned by `verify_strict()`.  So the best we
+        // can do is `is_err()` here.
+        assert!(signature.verify_verbose(pubkey.as_ref(), &[0u8]).is_err());
     }
 }

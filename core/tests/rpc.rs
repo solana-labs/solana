@@ -26,7 +26,7 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-use tokio::runtime::Runtime;
+use tokio_01::runtime::Runtime;
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
@@ -99,6 +99,20 @@ fn test_rpc_send_tx() {
     }
 
     assert_eq!(confirmed_tx, true);
+
+    use solana_account_decoder::UiAccountEncoding;
+    use solana_client::rpc_config::RpcAccountInfoConfig;
+    let config = RpcAccountInfoConfig {
+        encoding: Some(UiAccountEncoding::Binary64),
+        commitment: None,
+        data_slice: None,
+    };
+    let req = json_req!(
+        "getAccountInfo",
+        json!([bs58::encode(bob_pubkey).into_string(), config])
+    );
+    let json: Value = post_rpc(req, &leader_data);
+    info!("{:?}", json["result"]["value"]);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -189,7 +203,7 @@ fn test_rpc_subscriptions() {
             .and_then(move |client| {
                 for sig in signature_set {
                     let status_sender = status_sender.clone();
-                    tokio::spawn(
+                    tokio_01::spawn(
                         client
                             .signature_subscribe(sig.clone(), None)
                             .and_then(move |sig_stream| {
@@ -203,7 +217,7 @@ fn test_rpc_subscriptions() {
                             }),
                     );
                 }
-                tokio::spawn(
+                tokio_01::spawn(
                     client
                         .slot_subscribe()
                         .and_then(move |slot_stream| {
@@ -218,7 +232,7 @@ fn test_rpc_subscriptions() {
                 );
                 for pubkey in account_set {
                     let account_sender = account_sender.clone();
-                    tokio::spawn(
+                    tokio_01::spawn(
                         client
                             .account_subscribe(pubkey, None)
                             .and_then(move |account_stream| {

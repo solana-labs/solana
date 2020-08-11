@@ -34,13 +34,11 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
-const VERSION_STRING_V1_1_0: &str = "1.1.0";
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
-    V1_1_0,
     V1_2_0,
 }
 
@@ -59,7 +57,6 @@ impl fmt::Display for SnapshotVersion {
 impl From<SnapshotVersion> for &'static str {
     fn from(snapshot_version: SnapshotVersion) -> &'static str {
         match snapshot_version {
-            SnapshotVersion::V1_1_0 => VERSION_STRING_V1_1_0,
             SnapshotVersion::V1_2_0 => VERSION_STRING_V1_2_0,
         }
     }
@@ -79,7 +76,6 @@ impl FromStr for SnapshotVersion {
             version_string
         };
         match version_string {
-            VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
             VERSION_STRING_V1_2_0 => Ok(SnapshotVersion::V1_2_0),
             _ => Err("unsupported snapshot version"),
         }
@@ -458,7 +454,6 @@ pub fn add_snapshot<P: AsRef<Path>>(
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
-            SnapshotVersion::V1_1_0 => SerdeStyle::OLDER,
             SnapshotVersion::V1_2_0 => SerdeStyle::NEWER,
         };
         bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
@@ -722,14 +717,6 @@ where
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
         Ok(match snapshot_version_enum {
-            SnapshotVersion::V1_1_0 => bank_from_stream(
-                SerdeStyle::OLDER,
-                &mut stream,
-                &append_vecs_path,
-                account_paths,
-                genesis_config,
-                frozen_account_pubkeys,
-            ),
             SnapshotVersion::V1_2_0 => bank_from_stream(
                 SerdeStyle::NEWER,
                 &mut stream,

@@ -1,7 +1,11 @@
 module.exports = {
   docs: {
-    "Introduction": ["introduction"],
-    "Wallet Guide": [
+    "About": [
+      "introduction",
+      "terminology",
+      "history",
+      ],
+    "Wallets": [
       "wallet-guide",
       {
         type: "category",
@@ -28,11 +32,11 @@ module.exports = {
       },
       "wallet-guide/support",
     ],
-    "Staking Guide": [
+    "Staking": [
       "staking",
       "staking/stake-accounts",
     ],
-    "Command Line Guide": [
+    "Command Line": [
       "cli",
       "cli/install-solana-cli-tools",
       "cli/conventions",
@@ -43,8 +47,7 @@ module.exports = {
       "offline-signing",
       "offline-signing/durable-nonce",
     ],
-    "Solana Clusters": ["clusters"],
-    "Develop Applications": [
+    "Developing": [
       "apps",
       "apps/rent",
       "apps/hello-world",
@@ -56,19 +59,21 @@ module.exports = {
       "apps/javascript-api",
       "apps/builtins",
     ],
-    "Integration Guides": ["integrations/exchange"],
-    "Run a Validator": [
+    "Integrating": ["integrations/exchange"],
+    "Validating": [
       "running-validator",
       "running-validator/validator-reqs",
       "running-validator/validator-start",
+      "running-validator/vote-accounts",
       "running-validator/validator-stake",
       "running-validator/validator-monitor",
       "running-validator/validator-info",
-      "running-validator/validator-troubleshoot",
-    ],
-    "Tour de SOL": [
-      "tour-de-sol",
       {
+        type: "category",
+        label: "Incenvitized Testnet",
+        items: [
+          "tour-de-sol",
+          {
         type: "category",
         label: "Registration",
         items: [
@@ -90,10 +95,21 @@ module.exports = {
       },
       "tour-de-sol/useful-links",
       "tour-de-sol/submitting-bugs",
+        ],
+      },
+      "running-validator/validator-troubleshoot",
     ],
-    "Benchmark a Cluster": ["cluster/bench-tps", "cluster/performance-metrics"],
-    "Solana's Architecture": [
-      "cluster/overview",
+    "Clusters": [
+      "clusters",
+      "cluster/bench-tps",
+      "cluster/performance-metrics"
+    ],
+   "Architecture": [
+      {
+        type: "category",
+        label: "Cluster",
+        items: [
+          "cluster/overview",
       "cluster/synchronization",
       "cluster/leader-rotation",
       "cluster/fork-generation",
@@ -101,19 +117,27 @@ module.exports = {
       "cluster/turbine-block-propagation",
       "cluster/vote-signing",
       "cluster/stake-delegation-and-rewards",
-    ],
-    "Anatomy of a Validator": [
-      "validator/anatomy",
-      "validator/tpu",
-      "validator/tvu",
-      "validator/blockstore",
-      "validator/gossip",
-      "validator/runtime",
-    ],
-    Terminology: ["terminology"],
-    History: ["history"],
-    "Implemented Design Proposals": [
-      "implemented-proposals/implemented-proposals",
+        ],
+      },
+      {
+        type: "category",
+        label: "Validator",
+        items: [
+          "validator/anatomy",
+          "validator/tpu",
+          "validator/tvu",
+          "validator/blockstore",
+          "validator/gossip",
+          "validator/runtime",
+        ],
+      },
+   ],
+    "Design Proposals": [
+      {
+        type: "category",
+        label: "Implemented",
+        items: [
+          "implemented-proposals/implemented-proposals",
       {
         type: "category",
         label: "Economic Design",
@@ -153,9 +177,13 @@ module.exports = {
       "implemented-proposals/cross-program-invocation",
       "implemented-proposals/program-derived-addresses",
       "implemented-proposals/abi-management",
-    ],
-    "Accepted Design Proposals": [
-      "proposals/accepted-design-proposals",
+        ],
+      },
+      {
+        type: "category",
+        label: "Accepted",
+        items: [
+          "proposals/accepted-design-proposals",
       "proposals/ledger-replication-to-implement",
       "proposals/optimistic-confirmation-and-slashing",
       "proposals/vote-signing-to-implement",
@@ -171,6 +199,9 @@ module.exports = {
       "proposals/rust-clients",
       "proposals/optimistic_confirmation",
       "proposals/embedding-move",
+      "proposals/rip-curl",
+        ]
+      },
     ],
   },
 };
