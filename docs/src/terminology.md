@@ -224,11 +224,27 @@ The [native token](terminology.md#native-token) tracked by a [cluster](terminolo
 
 ## stake
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
+To delegate the voting weight of your SOL tokens, a user will delegate the tokens within a stake account to a [validator](terminology.md#validator)’s vote account. The stake is the amount of tokens counted within the Proof of Stake governance system, and are subject to slashing if malicious validator behaviour can be proven. Once inflation and voting rewards are activated, an account’s stake will determine the amount of reward an account is entitled to.
+
+## stake account
+
+A stake account shall hold tokens that are used within the Proof of Stake governance system. A stake account can only delegate to a single validator. The stake held within shall determine the vote rewards an account is entitled to once inflation is activated on a cluster.
+
+## stake authority
+
+A stake account’s stake authority shall determine the public/private keypair required to authorize delegation towards a validator.
+
+## stake weight
+
+The total SOL being delegated to a validator. The active set is ordered by stake weight.
 
 ## supermajority
 
 2/3 of a [cluster](terminology.md#cluster).
+
+## synthetic ccount
+
+An account provided by the runtime to allow programs to access network state. These include: sysvar, sysvar_rent, sysvar_recent_blockhashes...
 
 ## sysvar
 
@@ -240,7 +256,8 @@ A type of [client](terminology.md#client) that trusts it is communicating with a
 
 ## tick
 
-A ledger [entry](terminology.md#entry) that estimates wallclock duration.
+A ledger [entry](terminology.md#entry) that estimates wallclock duration. While it is expected to drift from the configured value, a cluster attempts to maintain a known rate of ticks per slot. On Mainnet, [it is currently set](https://github.com/solana-labs/solana/blob/e12ab9d0dd4464a4082400be2b0c523bc3649d1d/sdk/src/clock.rs#L3-L5) as 160 ticks per slot.
+
 
 ## tick height
 
@@ -249,6 +266,10 @@ The Nth [tick](terminology.md#tick) in the [ledger](terminology.md#ledger).
 ## token
 
 A scarce, fungible member of a set of tokens.
+
+## Tour de SOL
+
+An incentivized public testnet used by the Solana team for testing of new releases. Currently, for a validator to be eligible on the Mainnet, they need to first demonstrate their abilities on Tour de SOL.
 
 ## tps
 
@@ -265,6 +286,10 @@ The number of [confirmed blocks](terminology.md#confirmed-block) since the trans
 ## transactions entry
 
 A set of [transactions](terminology.md#transaction) that may be executed in parallel.
+
+## turbine block propagation
+
+The mechanism by which a leader is able to quickly broadcast shreds of information throughout a cluster’s active set of validators. A shred is communicated through neighborhoods, with a size determined by the data plane fanout variable. Each node only has to communicate with a maximum of `2 * data_plane_fanout - 1` nodes.
 
 ## validator
 
