@@ -430,7 +430,7 @@ impl RepairService {
             }
         } else {
             error!("Slot meta for duplicate slot does not exist, cannot generate repairs");
-            // Filter out this sl   ot from the set of duplicates to be repaired as
+            // Filter out this slot from the set of duplicates to be repaired as
             // the SlotMeta has to exist for duplicates to be generated
             None
         }
