@@ -138,6 +138,10 @@ The role of a [validator](terminology.md#validator) when it is appending [entrie
 
 A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
 
+## leader schedule offset
+
+To ensure that a [leader schedule](terminology.md#leader-schedule) is confirmed by a supermajority of validators before it takes effect, it must be placed in a block far enough in advance of the epoch boundary.
+
 ## ledger
 
 A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
@@ -156,11 +160,23 @@ A [program](terminology.md#program) with the ability to interpret the binary enc
 
 ## lockout
 
-The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork).
+The duration of time for which a [validator](terminology.md#validator) is unable to [vote](terminology.md#ledger-vote) on another [fork](terminology.md#fork) for risk of having their stake slashed.
+
+## lockup 
+
+Stake accounts can have a lockup which prevents the tokens they hold from being withdrawn before a particular date or epoch has been reached. While locked up, the stake account can still be delegated, un-delegated, or split, and its stake and withdraw authorities can be changed as normal. Only withdrawal into a wallet address is not allowed.
+
+## lockup authority 
+
+A lockup can be added when a stake account is first created, but it can be modified later, by the lockup authority or custodian, the address of which is also set when the account is created.
 
 ## native token
 
 The [token](terminology.md#token) used to track work done by [nodes](terminology.md#node) in a cluster.
+
+## neighborhoods
+
+Through the use of [Turbine Block Propagation](https://docs.solana.com/cluster/turbine-block-propagation), shreds are passed from the leader to lower groups of validators, known as [neighborhoods](https://docs.solana.com/cluster/turbine-block-propagation#neighborhoods). Each neighborhood contains a number of validators (as defined by the data_plane_fanout variable) whom all pass information amongst themselves and each onto one other validator from a lower neighborhood. This structure allows information to flow through the active set of validators with minimal duplication.
 
 ## node
 
@@ -169,6 +185,10 @@ A computer participating in a [cluster](terminology.md#cluster).
 ## node count
 
 The number of [validators](terminology.md#validator) participating in a [cluster](terminology.md#cluster).
+
+## nonce account
+
+When creating a transaction, [it must reference a recent hash that is less than 2 minutes old](https://github.com/solana-labs/solana/blob/c7a2fbe7eba18772266f3b4b02ccfb66353ffa3e/sdk/src/clock.rs#L30-L36). To prolong this limit when performing offline signing, or collecting enough signatures to satisfy a multisignature authority, a user may use a [nonce account](https://docs.solana.com/offline-signing/durable-nonce). This account persists on chain, must be rent exempt, and stores a single use nonce. A nonce can be changed by the account’s authority at any moment, and will be automatically changed to the next nonce upon use.
 
 ## PoH
 
@@ -193,6 +213,10 @@ The public key of the [account](terminology.md#account) containing a [program](t
 ## Proof of History
 
 A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+
+## proof of stake 
+
+An economic mechanism used to: align validator incentives with those of the cluster itself, punish malicious behaviour through slashing, and provide a rewards scheme for both consistent validation of the network as well as token delegation by end users towards validators.
 
 ## public key
 
