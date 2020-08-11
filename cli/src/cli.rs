@@ -1321,7 +1321,7 @@ fn process_deploy(
 
     let mut write_transactions = vec![];
     for message in write_messages.into_iter() {
-        let mut tx = Transaction::new_unsigned(message.clone());
+        let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&signers, blockhash)?;
         write_transactions.push(tx);
     }
