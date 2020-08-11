@@ -22,6 +22,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 core_affinity = "0.5.10"
 crossbeam-channel = "0.4"
 ed25519-dalek = "=1.0.0-pre.4"
+evmap = "10.0.2"
 fs_extra = "1.1.0"
 flate2 = "1.0"
 indexmap = "1.5"

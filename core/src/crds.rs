@@ -26,7 +26,8 @@
 
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use indexmap::map::IndexMap;
+use evmap::{self, ReadHandle, WriteHandle};
+use std::sync::Mutex;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -35,7 +36,8 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct Crds {
     /// Stores the map of labels and values
-    pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
+    pub reader: ReadHandle<CrdsValueLabel, VersionedCrdsValue>,
+    pub writer: Mutex<WriteHandle<CrdsValueLabel, VersionedCrdsValue>>,
     pub num_inserts: usize,
 }
 
@@ -83,8 +85,10 @@ impl VersionedCrdsValue {
 
 impl Default for Crds {
     fn default() -> Self {
+        let (reader, writer) = evmap::new();
         Crds {
-            table: IndexMap::new(),
+            reader,
+            writer: Mutex::new(writer),
             num_inserts: 0,
         }
     }
