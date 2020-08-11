@@ -131,7 +131,7 @@ pub struct CrdsGossipPull {
     /// timestamp of last request
     pub pull_request_time: HashMap<Pubkey, u64>,
     /// hash and insert time
-    purged_values: VecDeque<(Hash, u64)>,
+    pub purged_values: VecDeque<(Hash, u64)>,
     pub crds_timeout: u64,
     pub msg_timeout: u64,
     pub num_pulls: usize,
@@ -365,8 +365,10 @@ impl CrdsGossipPull {
         for (value_hash, _insert_timestamp) in &self.purged_values {
             filters.iter_mut().for_each(|filter| filter.add(value_hash));
         }
+
         filters
     }
+
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(
         &self,
