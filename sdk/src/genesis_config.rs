@@ -14,6 +14,7 @@ use crate::{
     shred_version::compute_shred_version,
     signature::{Keypair, Signer},
     system_program,
+    timing::years_as_slots,
 };
 use bincode::{deserialize, serialize};
 use chrono::{TimeZone, Utc};
@@ -182,6 +183,26 @@ impl GenesisConfig {
 
     pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
         self.rewards_pools.insert(pubkey, account);
+    }
+
+    pub fn hashes_per_tick(&self) -> Option<u64> {
+        self.poh_config.hashes_per_tick
+    }
+
+    pub fn ticks_per_slot(&self) -> u64 {
+        self.ticks_per_slot
+    }
+
+    pub fn ns_per_slot(&self) -> u128 {
+        self.poh_config.target_tick_duration.as_nanos() * self.ticks_per_slot() as u128
+    }
+
+    pub fn slots_per_year(&self) -> f64 {
+        years_as_slots(
+            1.0,
+            &self.poh_config.target_tick_duration,
+            self.ticks_per_slot(),
+        )
     }
 }
 
