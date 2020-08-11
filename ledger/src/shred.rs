@@ -90,16 +90,16 @@ pub enum ShredError {
 
 pub type Result<T> = std::result::Result<T, ShredError>;
 
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Clone, Deserialize, PartialEq, Debug, AbiExample)]
 pub struct ShredType(pub u8);
 impl Default for ShredType {
     fn default() -> Self {
         ShredType(DATA_SHRED)
     }
 }
-
 /// A common header that is present in data and code shred headers
-#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
+#[frozen_abi(digest = "6dscpJYWaLHEpBGEUZR2UUnft1mT3LkvmdUSxG47sjCs")]
+#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug, AbiExample)]
 pub struct ShredCommonHeader {
     pub signature: Signature,
     pub shred_type: ShredType,
@@ -110,7 +110,8 @@ pub struct ShredCommonHeader {
 }
 
 /// The data shred header has parent offset and flags
-#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
+#[frozen_abi(digest = "8een3rwRLK2wtf7L2Jj6Spp1xv8Ze7LQqnWtmaD2nTnd")]
+#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug, AbiExample)]
 pub struct DataShredHeader {
     pub parent_offset: u16,
     pub flags: u8,
@@ -118,14 +119,15 @@ pub struct DataShredHeader {
 }
 
 /// The coding shred header has FEC information
-#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
+#[frozen_abi(digest = "prkkDnjtmAdp644hDa2CiXKWsAA5D9spyiTo2ZPxeto")]
+#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug, AbiExample)]
 pub struct CodingShredHeader {
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
     pub position: u16,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, AbiExample)]
 pub struct Shred {
     pub common_header: ShredCommonHeader,
     pub data_header: DataShredHeader,

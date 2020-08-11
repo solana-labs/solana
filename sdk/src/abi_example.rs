@@ -11,7 +11,7 @@ pub trait AbiExample: Sized {
 
 // Following code snippets are copied and adapted from the official rustc implementation to
 // implement AbiExample trait for most of basic types.
-// These are licensed under Apache-2.0 + MIT (compatible because we're Apache-2.0)
+// These are licensed under Apache-2.0 + MIT
 
 // Source: https://github.com/rust-lang/rust/blob/ba18875557aabffe386a2534a1aa6118efb6ab88/src/libcore/tuple.rs#L7
 macro_rules! tuple_example_impls {

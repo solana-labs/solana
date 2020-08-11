@@ -6,7 +6,11 @@ extern crate lazy_static;
 
 // This file littered with these essential cfgs so ensure them.
 #[cfg(not(any(RUSTC_WITH_SPECIALIZATION, RUSTC_WITHOUT_SPECIALIZATION)))]
-compile_error!("rustc_version is missing in build dependency and build.rs is not specified");
+compile_error!(
+    "RUSTC_VERSION IS MISSING IN BUILD DEPENDENCY AND ITS CUSTOM \
+                BUILD.RS IS NOT SPECIFIED; FOLLOWING SPECIALIZATION COMPILATION \
+                ERRORS ARE EXPECTED!"
+);
 
 #[cfg(any(RUSTC_WITH_SPECIALIZATION, RUSTC_WITHOUT_SPECIALIZATION))]
 use proc_macro::TokenStream;
@@ -84,6 +88,12 @@ fn quote_for_specialization_detection() -> TokenStream2 {
         std::sync::atomic::Ordering::AcqRel,
     ) {
         quote! {
+            #[cfg(not(any(RUSTC_WITH_SPECIALIZATION, RUSTC_WITHOUT_SPECIALIZATION)))]
+            compile_error!("RUSTC_VERSION IS MISSING IN BUILD DEPENDENCY AND ITS CUSTOM \
+                            BUILD.RS IS NOT SPECIFIED AND RUSTC_WITH_SPECIALIZATION-GUARDED \
+                            CRATE ATTRIBUTE IS MISSING; FOLLOWING SPECIALIZATION COMPILATION \
+                            ERRORS ARE EXPECTED!");
+
             mod specialization_detector {
                 trait SpecializedTrait {
                     fn specialized_fn() {}
@@ -306,6 +316,7 @@ fn quote_for_test(
 ) -> TokenStream2 {
     // escape from nits.sh...
     let p = Ident::new(&("ep".to_owned() + "rintln"), Span::call_site());
+    let macro_time_type_name = type_name.to_string();
     quote! {
         #[cfg(test)]
         mod #test_mod_ident {
@@ -318,7 +329,11 @@ fn quote_for_test(
                 let mut digester = ::solana_sdk::abi_digester::AbiDigester::create();
                 let example = <#type_name>::example();
                 let result = <_>::visit_for_abi(&&example, &mut digester);
-                let mut hash = digester.finalize();
+                let runtime_type_name = ::std::any::type_name::<#type_name>();
+                // we don't a nice way to identify the types/tests, so just use anything we
+                // have to give developers some clue and call it a label.
+                let full_type_label = format!("{}_{}", #macro_time_type_name, runtime_type_name);
+                let mut hash = digester.finalize(&full_type_label);
                 // pretty-print error
                 if result.is_err() {
                     ::log::error!("digest error: {:#?}", result);
@@ -331,11 +346,7 @@ fn quote_for_test(
                     }
                     ::log::warn!("Not testing the abi digest under SOLANA_ABI_BULK_UPDATE!");
                 } else {
-                    if let Ok(dir) = ::std::env::var("SOLANA_ABI_DUMP_DIR") {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: $ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
-                    } else {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Confirm the diff by rerunning before and after this test failed with SOLANA_ABI_DUMP_DIR!");
-                    }
+                    ::solana_sdk::abi_digester::AbiDigester::assert_hash(#expected_digest, &actual_digest)
                 }
             }
         }

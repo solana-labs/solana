@@ -75,7 +75,7 @@ pub enum IteratorMode<Index> {
     End,
     From(Index, IteratorDirection),
 }
-
+// abi!
 pub mod columns {
     #[derive(Debug)]
     /// The slot metadata column

@@ -50,7 +50,8 @@ impl<E> DecodeError<E> for VoteError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[frozen_abi(digest = "GyBYC41AUZHvF1QTfYupgL3tgFj57NHVYWFwStuxxjPm")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
 pub enum VoteInstruction {
     /// Initialize a vote account
     ///

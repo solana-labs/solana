@@ -91,7 +91,7 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample, AbiEnumVisitor)]
 pub enum StakeAuthorize {
     Staker,
     Withdrawer,

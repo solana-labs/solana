@@ -9,7 +9,8 @@ pub type IpEchoServer = Runtime;
 
 pub const MAX_PORT_COUNT_PER_MESSAGE: usize = 4;
 
-#[derive(Serialize, Deserialize, Default)]
+#[frozen_abi(digest = "7NQSrBcS4djwS5ZCdzfDj9dvsPp2Zzx9E4NzZzN52QhG")]
+#[derive(Serialize, Deserialize, Default, AbiExample)]
 pub(crate) struct IpEchoServerMessage {
     tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
     udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde

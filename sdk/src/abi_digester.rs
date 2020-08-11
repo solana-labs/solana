@@ -9,6 +9,7 @@ use serde::{Serialize, Serializer};
 
 use std::any::type_name;
 use std::io::Write;
+use std::path::PathBuf;
 
 use thiserror::Error;
 
@@ -175,7 +176,9 @@ impl AbiDigester {
         Ok(())
     }
 
-    pub fn finalize(self) -> Hash {
+    // As an alternative to function!(#1), just require type_label
+    //   ref #1: https://github.com/rust-lang/rfcs/issues/1743
+    pub fn finalize(self, type_label: &str) -> Hash {
         let mut hasher = Hasher::default();
 
         for buf in (*self.data_types.borrow()).iter() {
@@ -184,24 +187,45 @@ impl AbiDigester {
 
         let hash = hasher.result();
 
-        if let Ok(dir) = std::env::var("SOLANA_ABI_DUMP_DIR") {
-            let thread_name = std::thread::current()
-                .name()
-                .unwrap_or("unknown-test-thread")
-                .replace(':', "_");
-            if thread_name == "main" {
-                error!("Bad thread name detected for dumping; Maybe, --test-threads=1? Sorry, SOLANA_ABI_DUMP_DIR doesn't work under 1; increase it");
-            }
+        // normalize to be suitable for filenames
+        let type_label = type_label.replace(|c: char| !c.is_alphanumeric(), "_");
 
-            let path = format!("{}/{}_{}", dir, thread_name, hash,);
-            let mut file = std::fs::File::create(path).unwrap();
-            for buf in (*self.data_types.borrow()).iter() {
-                file.write_all(buf.as_bytes()).unwrap();
-            }
-            file.sync_data().unwrap();
+        // actually dump
+        let path = Self::ensure_dump_dir().join(format!("{}_{}", type_label, hash));
+        let mut file = std::fs::File::create(path).unwrap();
+        for buf in (*self.data_types.borrow()).iter() {
+            file.write_all(buf.as_bytes()).unwrap();
         }
+        file.sync_data().unwrap();
 
         hash
+    }
+
+    pub fn ensure_dump_dir() -> PathBuf {
+        let path = (std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string())
+            + "/abi_dumps")
+            .into();
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[track_caller]
+    pub fn assert_hash(expected_digest: &str, actual_digest: &str) {
+        let dir = Self::ensure_dump_dir()
+            .canonicalize()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
+        assert_eq!(
+            expected_digest, actual_digest,
+            "Serialization code (=~ ABI) changed (might be incompatible); \
+            dumped an abi digest file; run this test before it started to \
+            fail and review changes between the digest files: \
+            $ diff -u {}/*{}* {}/*{}*",
+            dir, expected_digest, dir, actual_digest,
+        );
     }
 }
 

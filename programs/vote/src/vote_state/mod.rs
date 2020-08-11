@@ -90,7 +90,7 @@ impl Lockout {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
 pub struct VoteInit {
     pub node_pubkey: Pubkey,
     pub authorized_voter: Pubkey,
@@ -98,7 +98,7 @@ pub struct VoteInit {
     pub commission: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, AbiExample, AbiEnumVisitor)]
 pub enum VoteAuthorize {
     Voter,
     Withdrawer,

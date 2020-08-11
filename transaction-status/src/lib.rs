@@ -1,7 +1,11 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate solana_sdk_macro_frozen_abi;
 
 pub mod parse_accounts;
 pub mod parse_instruction;
@@ -78,7 +82,8 @@ impl UiPartiallyDecodedInstruction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[frozen_abi(digest = "92G1B1o9KCHpg75PRtao2mtJAni6cquVMtqxi8UNK1RW")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatusMeta {
     pub status: Result<()>,

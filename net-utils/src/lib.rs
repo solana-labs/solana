@@ -1,3 +1,5 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+
 //! The `net_utils` module assists with networking
 use log::*;
 use rand::{thread_rng, Rng};
@@ -12,6 +14,9 @@ use url::Url;
 mod ip_echo_server;
 use ip_echo_server::IpEchoServerMessage;
 pub use ip_echo_server::{ip_echo_server, IpEchoServer, MAX_PORT_COUNT_PER_MESSAGE};
+
+#[macro_use]
+extern crate solana_sdk_macro_frozen_abi;
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {

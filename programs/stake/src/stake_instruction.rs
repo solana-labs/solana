@@ -48,7 +48,8 @@ impl<E> DecodeError<E> for StakeError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[frozen_abi(digest = "CQqMwt8fA1LD5FhwLDNCUxn7NKZ1RCX1TnBRf3xU1KhK")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, AbiExample, AbiEnumVisitor)]
 pub enum StakeInstruction {
     /// Initialize a stake with lockup and authorization information
     ///
@@ -133,7 +134,7 @@ pub enum StakeInstruction {
     Merge,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 pub struct LockupArgs {
     pub unix_timestamp: Option<UnixTimestamp>,
     pub epoch: Option<Epoch>,

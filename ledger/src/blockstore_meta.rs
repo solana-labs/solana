@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+// abi
+
+#[frozen_abi(digest = "DBRxERf9gS7cmKDc3sbtQVp7HUdsgAHfSRH5vw8JAEB1")]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq, AbiExample)]
 // The Meta column family
 pub struct SlotMeta {
     // The number of slots above the root (the genesis block). The first

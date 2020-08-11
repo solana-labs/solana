@@ -69,14 +69,51 @@ fields.
 
 # Developer's workflow
 
+## Addition of the digest
+
 To know the digest for new ABI items, developers can add `frozen_abi` with a
 random digest value and run the unit tests and replace it with the correct
 digest from the assertion test error message.
 
+and derive AbiExample, AbiEnumVisitor
+
 In general, once we add `frozen_abi` and its change is published in the stable
 release channel, its digest should never change. If such a change is needed, we
-should opt for defining a new `struct` like `FooV1`. And special release flow
-like hard forks should be approached.
+should carefully do so like defining a new `struct` like `FooV1` and using special 
+release flow like hard forks.
+
+
+
+## Update of the digest
+
+### High-level work flow
+
+The mismatched digest is currently disigned to be very conservative. It just says something changed, which might be necesallily incompatible or compatible.
+So, developer should manually confirm the reason of difference of abi digest before updating the digest.
+
+
+for example, depending on context adding another variat to enum might be ok or not ok, so frozen abi alters enginner by failing test and then enginner expected to confirm this case-by-case basis.
+
+So, we must first create digest files pre-/post- suspected abi changes, from which the digest is derived.
+Also, the actual digest is just a base58-encoded sha256
+
+### Actual steps
+
+1. (If the frozen abi test failure is found on CI), prepare to use nightly rust to run tests locally because `frozen_abi` requires rust's unstable feature (specialization).
+2. run the abi test locally without the developer's changes (usually the base commit of the topic branch)
+    ./script/dump-abi-digest-files.sh
+    all tests should generate different digest files for each.
+3. run the abi test locally with the developer's changes
+    ./script/dump-abi-digest-files.sh
+4. diff /tmp/ /tmp/
+
+5. Update the digest
+
+After that, the failing test should start to pass. And if there should be another change, it should start to fail again.
+
+
+# Advanced topics
+IgnoreAsHelper
 
 # Implementation remarks
 

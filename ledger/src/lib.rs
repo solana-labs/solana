@@ -1,3 +1,5 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+
 pub mod bank_forks_utils;
 pub mod block_error;
 #[macro_use]
@@ -27,3 +29,6 @@ extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
+
+#[macro_use]
+extern crate solana_sdk_macro_frozen_abi;

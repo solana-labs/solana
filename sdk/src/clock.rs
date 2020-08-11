@@ -73,7 +73,8 @@ pub type UnixTimestamp = i64;
 ///  as the network progresses).
 ///
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[frozen_abi(digest = "82nHshHNhnFSSGtMcAokadFnoAhJ89mAAgoTmp4TfNgj")]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, AbiExample)]
 pub struct Clock {
     /// the current network/bank Slot
     pub slot: Slot,

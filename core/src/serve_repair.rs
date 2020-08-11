@@ -33,7 +33,10 @@ use std::{
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 pub const DEFAULT_NONCE: u32 = 42;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[frozen_abi(digest = "BZQSnWkoizpajDnMmz6axZE1NnTgThq1jcRzxAE2E4EC")]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq, AbiExample, AbiEnumVisitor,
+)]
 pub enum RepairType {
     Orphan(Slot),
     HighestShred(Slot, u64),
@@ -62,7 +65,8 @@ pub struct ServeRepairStats {
 }
 
 /// Window protocol messages
-#[derive(Serialize, Deserialize, Debug)]
+#[frozen_abi(digest = "5RMMcS7fSxHjCGAwwTiFSyoi3FKESCBkVoeBPspKJzp4")]
+#[derive(Serialize, Deserialize, Debug, AbiExample, AbiEnumVisitor)]
 pub enum RepairProtocol {
     WindowIndex(ContactInfo, u64, u64),
     HighestWindowIndex(ContactInfo, u64, u64),
