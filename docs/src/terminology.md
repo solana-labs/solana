@@ -46,7 +46,7 @@ A set of [validators](terminology.md#validator) maintaining a single [ledger](te
 
 ## confirmation time
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and creating a [confirmed block](terminology.md#confirmed-block).
+The elapsed time between the current leader adding a transaction to an entry, and the block that it was placed in receiving a supermajority of votes from the cluster’s validators.
 
 ## confirmed block
 
@@ -58,15 +58,28 @@ A gossip network connecting all [nodes](terminology.md#node) of a [cluster](term
 
 ## cooldown period
 
-Some number of epochs after stake has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+A period of some number of epochs after a user has signed a transaction to deactivate their stake. During this period, the stake progressively becomes available for withdrawal and is considered to be deactivating. As the stake [cools down](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal), it continues to earn rewards and be exposed to slashing. The rate of cooldown is configurable, and is [currently set to 25% on the Mainnet.](https://github.com/solana-labs/solana/blob/c7a2fbe7eba18772266f3b4b02ccfb66353ffa3e/programs/stake/src/config.rs#L15-L17)
 
 ## credit
 
 See [vote credit](terminology.md#vote-credit).
 
+## custodian
+
+Any person, application, or account to whom you have given signing rights to, or has access to your private key.
+
 ## data plane
 
 A multicast network used to efficiently validate [entries](terminology.md#entry) and gain consensus.
+
+## data plane fanout
+
+In order to quickly broadcast shreds throughout the cluster’s validators (using [Turbine Block Propagation](https://docs.solana.com/cluster/turbine-block-propagation)), the active set of validators is split into neighborhoods. The amount of validators within a neighborhood is determined by the configured `data_plane_fanout` variable. 
+
+## delegate
+
+The act of staking a token bond to increase the stake weight of a validator’s vote weight.
+Also, the validator to whom a user has staked their slashable token bond is known as the delegate. 
 
 ## drone
 
