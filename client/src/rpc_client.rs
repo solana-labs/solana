@@ -16,10 +16,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
 use solana_account_decoder::{
-    parse_token::{
-        get_token_account_mint, parse_token, TokenAccountType, UiMint, UiMultisig, UiTokenAccount,
-        UiTokenAmount,
-    },
+    parse_token::UiTokenAmount,
     UiAccount,
     UiAccountData::{Binary, Binary64},
     UiAccountEncoding,
@@ -44,7 +41,6 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -703,103 +699,6 @@ impl RpcClient {
         Ok(hash)
     }
 
-    pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
-        Ok(self
-            .get_token_account_with_commitment(pubkey, CommitmentConfig::default())?
-            .value)
-    }
-
-    pub fn get_token_account_with_commitment(
-        &self,
-        pubkey: &Pubkey,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<Option<UiTokenAccount>> {
-        let Response {
-            context,
-            value: account,
-        } = self.get_account_with_commitment(pubkey, commitment_config)?;
-
-        if account.is_none() {
-            return Err(RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into());
-        }
-        let account = account.unwrap();
-        let mint = get_token_account_mint(&account.data)
-            .and_then(|mint_pubkey| {
-                self.get_token_mint_with_commitment(&mint_pubkey, commitment_config)
-                    .ok()
-                    .map(|response| response.value)
-                    .flatten()
-            })
-            .ok_or_else(|| {
-                Into::<ClientError>::into(RpcError::ForUser(format!(
-                    "AccountNotFound: mint for token acccount pubkey={}",
-                    pubkey
-                )))
-            })?;
-
-        Ok(Response {
-            context,
-            value: match parse_token(&account.data, Some(mint.decimals)) {
-                Ok(TokenAccountType::Account(ui_token_account)) => Some(ui_token_account),
-                _ => None,
-            },
-        })
-    }
-
-    pub fn get_token_mint(&self, pubkey: &Pubkey) -> ClientResult<Option<UiMint>> {
-        Ok(self
-            .get_token_mint_with_commitment(pubkey, CommitmentConfig::default())?
-            .value)
-    }
-
-    pub fn get_token_mint_with_commitment(
-        &self,
-        pubkey: &Pubkey,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<Option<UiMint>> {
-        let Response {
-            context,
-            value: account,
-        } = self.get_account_with_commitment(pubkey, commitment_config)?;
-
-        Ok(Response {
-            context,
-            value: account
-                .map(|account| match parse_token(&account.data, None) {
-                    Ok(TokenAccountType::Mint(ui_token_mint)) => Some(ui_token_mint),
-                    _ => None,
-                })
-                .flatten(),
-        })
-    }
-
-    pub fn get_token_multisig(&self, pubkey: &Pubkey) -> ClientResult<Option<UiMultisig>> {
-        Ok(self
-            .get_token_multisig_with_commitment(pubkey, CommitmentConfig::default())?
-            .value)
-    }
-
-    pub fn get_token_multisig_with_commitment(
-        &self,
-        pubkey: &Pubkey,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<Option<UiMultisig>> {
-        let Response {
-            context,
-            value: account,
-        } = self.get_account_with_commitment(pubkey, commitment_config)?;
-
-        Ok(Response {
-            context,
-            value: account
-                .map(|account| match parse_token(&account.data, None) {
-                    Ok(TokenAccountType::Multisig(ui_token_multisig)) => Some(ui_token_multisig),
-                    _ => None,
-                })
-                .flatten(),
-        })
-    }
-
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
             .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
@@ -821,7 +720,7 @@ impl RpcClient {
         &self,
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
+    ) -> ClientResult<Vec<RpcKeyedAccount>> {
         Ok(self
             .get_token_accounts_by_delegate_with_commitment(
                 delegate,
@@ -836,39 +735,31 @@ impl RpcClient {
         delegate: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
+    ) -> RpcResult<Vec<RpcKeyedAccount>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
                 RpcTokenAccountsFilter::ProgramId(program_id.to_string())
             }
         };
-        let Response {
-            context,
-            value: accounts,
-        } = self.send(
-            RpcRequest::GetTokenAccountsByDelegate,
-            json!([
-                delegate.to_string(),
-                token_account_filter,
-                commitment_config
-            ]),
-        )?;
-        let pubkey_accounts = self.accounts_to_token_accounts(
-            commitment_config,
-            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?,
-        );
-        Ok(Response {
-            context,
-            value: pubkey_accounts,
-        })
+
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::JsonParsed),
+            commitment: Some(commitment_config),
+            data_slice: None,
+        };
+
+        self.send(
+            RpcRequest::GetTokenAccountsByOwner,
+            json!([delegate.to_string(), token_account_filter, config]),
+        )
     }
 
     pub fn get_token_accounts_by_owner(
         &self,
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
-    ) -> ClientResult<Vec<(Pubkey, UiTokenAccount)>> {
+    ) -> ClientResult<Vec<RpcKeyedAccount>> {
         Ok(self
             .get_token_accounts_by_owner_with_commitment(
                 owner,
@@ -883,28 +774,24 @@ impl RpcClient {
         owner: &Pubkey,
         token_account_filter: TokenAccountsFilter,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<Vec<(Pubkey, UiTokenAccount)>> {
+    ) -> RpcResult<Vec<RpcKeyedAccount>> {
         let token_account_filter = match token_account_filter {
             TokenAccountsFilter::Mint(mint) => RpcTokenAccountsFilter::Mint(mint.to_string()),
             TokenAccountsFilter::ProgramId(program_id) => {
                 RpcTokenAccountsFilter::ProgramId(program_id.to_string())
             }
         };
-        let Response {
-            context,
-            value: accounts,
-        } = self.send(
+
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::JsonParsed),
+            commitment: Some(commitment_config),
+            data_slice: None,
+        };
+
+        self.send(
             RpcRequest::GetTokenAccountsByOwner,
-            json!([owner.to_string(), token_account_filter, commitment_config]),
-        )?;
-        let pubkey_accounts = self.accounts_to_token_accounts(
-            commitment_config,
-            parse_keyed_accounts(accounts, RpcRequest::GetTokenAccountsByDelegate)?,
-        );
-        Ok(Response {
-            context,
-            value: pubkey_accounts,
-        })
+            json!([owner.to_string(), token_account_filter, config]),
+        )
     }
 
     pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<UiTokenAmount> {
@@ -922,35 +809,6 @@ impl RpcClient {
             RpcRequest::GetTokenSupply,
             json!([mint.to_string(), commitment_config]),
         )
-    }
-
-    fn accounts_to_token_accounts(
-        &self,
-        commitment_config: CommitmentConfig,
-        pubkey_accounts: Vec<(Pubkey, Account)>,
-    ) -> Vec<(Pubkey, UiTokenAccount)> {
-        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-        pubkey_accounts
-            .into_iter()
-            .filter_map(|(pubkey, account)| {
-                let mint_pubkey = get_token_account_mint(&account.data)?;
-                let decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                    let mint = self
-                        .get_token_mint_with_commitment(&mint_pubkey, commitment_config)
-                        .ok()
-                        .map(|response| response.value)
-                        .flatten()?;
-                    mint_decimals.insert(mint_pubkey, mint.decimals);
-                    Some(mint.decimals)
-                })?;
-                match parse_token(&account.data, Some(decimals)) {
-                    Ok(TokenAccountType::Account(ui_token_account)) => {
-                        Some((pubkey, ui_token_account))
-                    }
-                    _ => None,
-                }
-            })
-            .collect()
     }
 
     fn poll_balance_with_timeout_and_commitment(
