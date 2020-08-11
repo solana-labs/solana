@@ -472,6 +472,7 @@ impl RpcClient {
         let config = RpcAccountInfoConfig {
             encoding: Some(UiAccountEncoding::Binary64),
             commitment: Some(commitment_config),
+            data_slice: None,
         };
         let response = self.sender.send(
             RpcRequest::GetAccountInfo,
