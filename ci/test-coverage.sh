@@ -11,6 +11,10 @@ annotate() {
 source ci/upload-ci-artifact.sh
 source scripts/ulimit-n.sh
 
+# to suppress noisy complation warnings because of enabled specialization for
+# frozen abi thing...
+export RUSTFLAGS="-D warnings -A incomplete_features"
+
 scripts/coverage.sh "$@"
 
 if [[ -z $CI ]]; then
@@ -20,9 +24,6 @@ fi
 report=coverage-"${CI_COMMIT:0:9}".tar.gz
 mv target/cov/report.tar.gz "$report"
 upload-ci-artifact "$report"
-
-gzip -f target/cov/coverage-stderr.log
-upload-ci-artifact target/cov/coverage-stderr.log.gz
 
 annotate --style success --context lcov-report \
   "lcov report: <a href=\"artifact://$report\">$report</a>"

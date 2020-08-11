@@ -51,14 +51,22 @@ if [[ -n $CI || -z $1 ]]; then
     $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 fi
 
+log_file=target/cov/coverage-stderr.log
+
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
+if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> "${log_file}"; then
   test_status=0
 else
   test_status=$?
   echo "Failed: $test_status"
   echo "^^^ +++"
   if [[ -n $CI ]]; then
+    # This should reside in ci/test-coverage.sh but placing here is less complicated
+    # than the ideal coding..
+    tail -n 500 "${log_file}"
+    gzip -f  "${log_file}"
+    upload-ci-artifact "${log_file}.gz"
+
     exit $test_status
   fi
 fi

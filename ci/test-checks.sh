@@ -27,6 +27,8 @@ echo --- build environment
 )
 
 export RUST_BACKTRACE=1
+# to suppress noisy complation warnings because of enabled specialization for
+# frozen abi thing...
 export RUSTFLAGS="-D warnings -A incomplete_features"
 
 # Only force up-to-date lock files on edge
