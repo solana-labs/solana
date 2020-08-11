@@ -45,7 +45,14 @@ pub fn parse_token(
             },
             is_initialized: account.is_initialized,
             is_native: account.is_native,
-            delegated_amount: token_amount_to_ui_amount(account.delegated_amount, decimals),
+            delegated_amount: if account.delegate.is_none() {
+                None
+            } else {
+                Some(token_amount_to_ui_amount(
+                    account.delegated_amount,
+                    decimals,
+                ))
+            },
         }))
     } else if data.len() == size_of::<Mint>() {
         let mint: Mint = *unpack(&mut data)
@@ -102,8 +109,8 @@ pub struct UiTokenAccount {
     pub delegate: Option<String>,
     pub is_initialized: bool,
     pub is_native: bool,
-    #[serde(skip_serializing_if = "UiTokenAmount::is_zero")]
-    pub delegated_amount: UiTokenAmount,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated_amount: Option<UiTokenAmount>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -112,16 +119,6 @@ pub struct UiTokenAmount {
     pub ui_amount: f64,
     pub decimals: u8,
     pub amount: StringAmount,
-}
-
-impl UiTokenAmount {
-    fn is_zero(&self) -> bool {
-        if let Ok(amount) = self.amount.parse::<u64>() {
-            amount == 0
-        } else {
-            false
-        }
-    }
 }
 
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
@@ -188,11 +185,7 @@ mod test {
                 delegate: None,
                 is_initialized: true,
                 is_native: false,
-                delegated_amount: UiTokenAmount {
-                    ui_amount: 0.0,
-                    decimals: 2,
-                    amount: "0".to_string()
-                },
+                delegated_amount: None,
             }),
         );
 
