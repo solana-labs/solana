@@ -616,20 +616,59 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
   }),
 );
 
+/**
+ * Token amount object which returns a token amount in different formats
+ * for various client use cases.
+ *
+ * @typedef {Object} TokenAmount
+ * @property {string} amount Raw amount of tokens as string ignoring decimals
+ * @property {number} decimals Number of decimals configured for token's mint
+ * @property {number} uiAmount Token account as float, accounts for decimals
+ */
 type TokenAmount = {
   amount: string,
-  decimals: 2,
+  decimals: number,
   uiAmount: number,
 };
 
 /**
  * Expected JSON RPC structure for token amounts
  */
-const TokenAmountResult = struct({
+const TokenAmountResult = struct.object({
   amount: 'string',
   uiAmount: 'number',
   decimals: 'number',
 });
+
+/**
+ * Token address and balance.
+ *
+ * @typedef {Object} TokenAccountBalancePair
+ * @property {PublicKey} address Address of the token account
+ * @property {string} amount Raw amount of tokens as string ignoring decimals
+ * @property {number} decimals Number of decimals configured for token's mint
+ * @property {number} uiAmount Token account as float, accounts for decimals
+ */
+type TokenAccountBalancePair = {
+  address: PublicKey,
+  amount: string,
+  decimals: number,
+  uiAmount: number,
+};
+
+/**
+ * Expected JSON RPC response for the "getTokenLargestAccounts" message
+ */
+const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
+  struct.array([
+    struct.pick({
+      address: 'string',
+      amount: 'string',
+      uiAmount: 'number',
+      decimals: 'number',
+    }),
+  ]),
+);
 
 /**
  * Expected JSON RPC response for the "getTokenAccountBalance" message
@@ -1649,6 +1688,30 @@ export class Connection {
     res.result.value = res.result.value.map(({address, lamports}) => ({
       address: new PublicKey(address),
       lamports,
+    }));
+    return res.result;
+  }
+
+  /**
+   * Fetch the 20 largest token accounts with their current balances
+   * for a given mint.
+   */
+  async getTokenLargestAccounts(
+    mintAddress: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<Array<TokenAccountBalancePair>>> {
+    const args = this._buildArgs([mintAddress.toBase58()], commitment);
+    const unsafeRes = await this._rpcRequest('getTokenLargestAccounts', args);
+    const res = GetTokenLargestAccountsResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get token largest accounts: ' + res.error.message,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+    res.result.value = res.result.value.map(pair => ({
+      ...pair,
+      address: new PublicKey(pair.address),
     }));
     return res.result;
   }
