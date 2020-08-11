@@ -394,7 +394,7 @@ impl CrdsGossipPull {
         }
         let mut total_skipped = 0;
         for v in crds.table.values() {
-            filters
+            recent
                 .iter()
                 .enumerate()
                 .for_each(|(i, (caller, filter))| {
