@@ -1377,12 +1377,8 @@ fn process_deploy(
     let mut create_account_tx = Transaction::new_unsigned(message);
     create_account_tx.try_sign(&[config.signers[0], &program_id], blockhash)?;
     messages.push(&create_account_tx.message);
-<<<<<<< HEAD
     let signers = [config.signers[0], &program_id];
-    let mut write_transactions = vec![];
-=======
     let mut write_messages = vec![];
->>>>>>> c0d6761f6... Fix solana CLI deploy (#11520)
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
             &program_id.pubkey(),
@@ -1416,9 +1412,7 @@ fn process_deploy(
         CliError::DynamicProgramError("Program account allocation failed".to_string())
     })?;
 
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash()?;
 
     let mut write_transactions = vec![];
     for message in write_messages.into_iter() {
@@ -1432,9 +1426,7 @@ fn process_deploy(
         |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
     )?;
 
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash()?;
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
     finalize_tx.try_sign(&signers, blockhash)?;
 
