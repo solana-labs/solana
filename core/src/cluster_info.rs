@@ -1493,12 +1493,6 @@ impl ClusterInfo {
             .time_gossip_write_lock("purge", &self.stats.purge)
             .purge(timestamp(), &timeouts);
         inc_new_counter_info!("cluster_info-purge-count", num_purged);
-        let table_size = self.gossip.read().unwrap().crds.table.len();
-        datapoint_debug!(
-            "cluster_info-purge",
-            ("table_size", table_size as i64, i64),
-            ("purge_stake_timeout", timeout as i64, i64)
-        );
     }
 
     /// randomly pick a node and ask them for updates asynchronously
@@ -2087,6 +2081,10 @@ impl ClusterInfo {
 
     fn print_reset_stats(&self, last_print: &mut Instant) {
         if last_print.elapsed().as_millis() > 2000 {
+            let (table_size, purged_values_size) = {
+                let r_gossip = self.gossip.read().unwrap();
+                (r_gossip.crds.table.len(), r_gossip.pull.purged_values.len())
+            };
             datapoint_info!(
                 "cluster_info_stats",
                 ("entrypoint", self.stats.entrypoint.clear(), i64),
@@ -2110,6 +2108,8 @@ impl ClusterInfo {
                     self.stats.new_push_requests_num.clear(),
                     i64
                 ),
+                ("table_size", table_size as i64, i64),
+                ("purged_values_size", purged_values_size as i64, i64),
             );
             datapoint_info!(
                 "cluster_info_stats2",
