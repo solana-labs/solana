@@ -27,7 +27,7 @@
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
 use evmap::{self, ReadHandle, WriteHandle};
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock, Mutex};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -36,8 +36,8 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct Crds {
     /// Stores the map of labels and values
-    pub reader: ReadHandle<CrdsValueLabel, VersionedCrdsValue>,
-    pub writer: Mutex<WriteHandle<CrdsValueLabel, VersionedCrdsValue>>,
+    pub reader: Arc<RwLock<ReadHandle<CrdsValueLabel, VersionedCrdsValue>>>,
+    pub writer: Arc<Mutex<WriteHandle<CrdsValueLabel, VersionedCrdsValue>>>,
     pub num_inserts: usize,
 }
 
@@ -49,7 +49,7 @@ pub enum CrdsError {
 /// This structure stores some local metadata associated with the CrdsValue
 /// The implementation of PartialOrd ensures that the "highest" version is always picked to be
 /// stored in the Crds
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash, Copy)]
 pub struct VersionedCrdsValue {
     pub value: CrdsValue,
     /// local time when inserted
@@ -87,8 +87,8 @@ impl Default for Crds {
     fn default() -> Self {
         let (reader, writer) = evmap::new();
         Crds {
-            reader,
-            writer: Mutex::new(writer),
+            reader: Arc::new(RwLock::new(reader)),
+            writer: Arc::new(Mutex::new(writer)),
             num_inserts: 0,
         }
     }
