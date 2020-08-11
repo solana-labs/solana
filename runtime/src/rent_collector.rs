@@ -4,11 +4,7 @@ use solana_sdk::{
     incinerator, pubkey::Pubkey, rent::Rent, sysvar,
 };
 
-<<<<<<< HEAD
-#[derive(Default, Serialize, Deserialize, Clone)]
-=======
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
->>>>>>> 6c242f3fe... Fix bad rent in Bank::deposit as if since epoch 0 (#10468)
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,

@@ -154,18 +154,11 @@ impl Accounts {
                         }
                         let (account, rent) =
                             AccountsDB::load(storage, ancestors, accounts_index, key)
-<<<<<<< HEAD
                                 .and_then(|(mut account, _)| {
-                                    if message.is_writable(i) && !account.executable {
-                                        let rent_due = rent_collector.update(&key, &mut account);
-                                        Some((account, rent_due))
-=======
-                                .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
                                             .collect_from_existing_account(&key, &mut account);
-                                        (account, rent_due)
->>>>>>> 6c242f3fe... Fix bad rent in Bank::deposit as if since epoch 0 (#10468)
+                                        Some((account, rent_due))
                                     } else {
                                         Some((account, 0))
                                     }
