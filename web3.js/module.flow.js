@@ -232,6 +232,13 @@ declare module '@solana/web3.js' {
     amount: string,
   };
 
+  declare export type TokenAccountBalancePair = {
+    address: PublicKey,
+    amount: string,
+    decimals: number,
+    uiAmount: number,
+  };
+
   declare type AccountChangeCallback = (
     accountInfo: AccountInfo<Buffer>,
     context: Context,
@@ -351,6 +358,10 @@ declare module '@solana/web3.js' {
     getLargestAccounts(
       config: ?GetLargestAccountsConfig,
     ): Promise<RpcResponseAndContext<Array<AccountBalancePair>>>;
+    getTokenLargestAccounts(
+      mintAddress: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<Array<TokenAccountBalancePair>>>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
     getConfirmedTransaction(

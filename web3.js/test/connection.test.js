@@ -1399,6 +1399,23 @@ describe('token methods', () => {
     await expect(connection.getTokenSupply(newAccount)).rejects.toThrow();
   });
 
+  test('get token largest accounts', async () => {
+    const largestAccounts = (
+      await connection.getTokenLargestAccounts(testToken.publicKey)
+    ).value;
+
+    expect(largestAccounts.length).toEqual(2);
+    const largestAccount = largestAccounts[0];
+    expect(largestAccount.address.equals(testTokenAccount)).toBe(true);
+    expect(largestAccount.amount).toEqual('11110');
+    expect(largestAccount.decimals).toEqual(2);
+    expect(largestAccount.uiAmount).toEqual(111.1);
+
+    await expect(
+      connection.getTokenLargestAccounts(newAccount),
+    ).rejects.toThrow();
+  });
+
   test('get confirmed token transaction', async () => {
     const parsedTx = await connection.getParsedConfirmedTransaction(
       testSignature,
