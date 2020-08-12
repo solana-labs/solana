@@ -12,7 +12,7 @@ use solana_ledger::{
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
     account::Account,
-    bpf_loader, clock,
+    clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
     genesis_config::{GenesisConfig, OperatingMode},
@@ -353,7 +353,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("bpf-program")
                 .value_name("ADDRESS BPF_PROGRAM.SO")
                 .takes_value(true)
-                .number_of_values(2)
+                .number_of_values(3)
                 .multiple(true)
                 .help("Install a BPF program at the given address"),
         )
@@ -553,11 +553,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_program in values.chunks(2) {
-            match address_program {
-                [address, program] => {
+        for address_loader_program in values.chunks(3) {
+            match address_loader_program {
+                [address, loader, program] => {
                     let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
                         eprintln!("Error: invalid address {}: {}", address, err);
+                        process::exit(1);
+                    });
+
+                    let loader = loader.parse::<Pubkey>().unwrap_or_else(|err| {
+                        eprintln!("Error: invalid loader {}: {}", loader, err);
                         process::exit(1);
                     });
 
@@ -574,7 +579,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             lamports: genesis_config.rent.minimum_balance(program_data.len()),
                             data: program_data,
                             executable: true,
-                            owner: bpf_loader::id(),
+                            owner: loader,
                             rent_epoch: 0,
                         },
                     );
