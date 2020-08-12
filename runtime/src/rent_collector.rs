@@ -1,7 +1,13 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, genesis_config::GenesisConfig,
-    incinerator, pubkey::Pubkey, rent::Rent, sysvar,
+    account::Account,
+    clock::Epoch,
+    epoch_schedule::EpochSchedule,
+    genesis_config::{GenesisConfig, OperatingMode},
+    incinerator,
+    pubkey::Pubkey,
+    rent::Rent,
+    sysvar,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -10,6 +16,7 @@ pub struct RentCollector {
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
+    pub operating_mode: OperatingMode,
 }
 
 impl Default for RentCollector {
@@ -20,6 +27,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
+            operating_mode: OperatingMode::Development,
         }
     }
 }
@@ -30,12 +38,14 @@ impl RentCollector {
         epoch_schedule: &EpochSchedule,
         slots_per_year: f64,
         rent: &Rent,
+        operating_mode: OperatingMode,
     ) -> Self {
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
+            operating_mode,
         }
     }
 
@@ -74,8 +84,14 @@ impl RentCollector {
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
+                    let should_be_in_new_behavior = match self.operating_mode {
+                        OperatingMode::Development => true,
+                        OperatingMode::Preview => self.epoch >= Epoch::max_value(),
+                        OperatingMode::Stable => self.epoch >= Epoch::max_value(),
+                    };
+
                     account.rent_epoch = self.epoch
-                        + if exempt {
+                        + if should_be_in_new_behavior && exempt {
                             // Rent isn't collected for the next epoch
                             // Make sure to check exempt status later in curent epoch again
                             0
@@ -125,19 +141,51 @@ mod tests {
 
         let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
 
+        // collect rent on a newly-created account
         let collected =
             rent_collector.collect_from_created_account(&Pubkey::new_rand(), &mut created_account);
         assert!(created_account.lamports < old_lamports);
         assert_eq!(created_account.lamports + collected, old_lamports);
         assert_ne!(created_account.rent_epoch, old_epoch);
 
+        // collect rent on a already-existing account
         let collected = rent_collector
             .collect_from_existing_account(&Pubkey::new_rand(), &mut existing_account);
         assert!(existing_account.lamports < old_lamports);
         assert_eq!(existing_account.lamports + collected, old_lamports);
         assert_ne!(existing_account.rent_epoch, old_epoch);
 
+        // newly created account should be collected for less rent; thus more remaining balance
         assert!(created_account.lamports > existing_account.lamports);
         assert_eq!(created_account.rent_epoch, existing_account.rent_epoch);
+    }
+
+    #[test]
+    fn test_rent_exempt_temporal_escape() {
+        let mut account = Account::default();
+        let epoch = 3;
+        let huge_lamports = 123_456_789_012;
+        let tiny_lamports = 789_012;
+        let mut collected;
+        let pubkey = Pubkey::new_rand();
+
+        account.lamports = huge_lamports;
+        assert_eq!(account.rent_epoch, 0);
+
+        // create a tested rent collector
+        let rent_collector = RentCollector::default().clone_with_epoch(epoch);
+
+        // first mark account as being collected while being rent-exempt
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
+        assert_eq!(account.lamports, huge_lamports);
+        assert_eq!(collected, 0);
+
+        // decrease the balance not to be rent-exempt
+        account.lamports = tiny_lamports;
+
+        // ... and trigger another rent collection on the same epoch and check that rent is working
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
+        assert_eq!(account.lamports, tiny_lamports - collected);
+        assert_ne!(collected, 0);
     }
 }

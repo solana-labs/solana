@@ -671,6 +671,7 @@ impl Bank {
                 &bank.epoch_schedule,
                 bank.slots_per_year,
                 &genesis_config.rent,
+                OperatingMode::Development,
             )
         );
 
@@ -1180,6 +1181,7 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
+            self.operating_mode(),
         );
 
         // Add additional native programs specified in the genesis config
