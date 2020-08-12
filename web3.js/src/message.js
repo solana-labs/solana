@@ -53,6 +53,8 @@ type MessageArgs = {
   instructions: CompiledInstruction[],
 };
 
+const PUBKEY_LENGTH = 32;
+
 /**
  * List of instructions to be processed atomically
  */
@@ -166,5 +168,56 @@ export class Message {
     const length = signDataLayout.encode(transaction, signData);
     instructionBuffer.copy(signData, length);
     return signData.slice(0, length + instructionBuffer.length);
+  }
+
+  /**
+   * Decode a compiled message into a Message object.
+   */
+  static from(buffer: Buffer | Uint8Array | Array<number>): Message {
+    // Slice up wire data
+    let byteArray = [...buffer];
+
+    const numRequiredSignatures = byteArray.shift();
+    const numReadonlySignedAccounts = byteArray.shift();
+    const numReadonlyUnsignedAccounts = byteArray.shift();
+
+    const accountCount = shortvec.decodeLength(byteArray);
+    let accountKeys = [];
+    for (let i = 0; i < accountCount; i++) {
+      const account = byteArray.slice(0, PUBKEY_LENGTH);
+      byteArray = byteArray.slice(PUBKEY_LENGTH);
+      accountKeys.push(bs58.encode(Buffer.from(account)));
+    }
+
+    const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
+    byteArray = byteArray.slice(PUBKEY_LENGTH);
+
+    const instructionCount = shortvec.decodeLength(byteArray);
+    let instructions = [];
+    for (let i = 0; i < instructionCount; i++) {
+      let instruction = {};
+      instruction.programIdIndex = byteArray.shift();
+      const accountCount = shortvec.decodeLength(byteArray);
+      instruction.accounts = byteArray.slice(0, accountCount);
+      byteArray = byteArray.slice(accountCount);
+      const dataLength = shortvec.decodeLength(byteArray);
+      const data = byteArray.slice(0, dataLength);
+      instruction.data = bs58.encode(Buffer.from(data));
+      byteArray = byteArray.slice(dataLength);
+      instructions.push(instruction);
+    }
+
+    const messageArgs = {
+      header: {
+        numRequiredSignatures,
+        numReadonlySignedAccounts,
+        numReadonlyUnsignedAccounts,
+      },
+      recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
+      accountKeys,
+      instructions,
+    };
+
+    return new Message(messageArgs);
   }
 }
