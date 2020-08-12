@@ -5,51 +5,29 @@ import {
   TransactionSignature,
   Connection,
 } from "@solana/web3.js";
-import { FetchStatus } from "./index";
 import { useCluster } from "../cluster";
+import * as Cache from "providers/cache";
+import { ActionType, FetchStatus } from "providers/cache";
 
-interface AccountHistory {
-  status: FetchStatus;
-  fetched?: ConfirmedSignatureInfo[];
+type AccountHistory = {
+  fetched: ConfirmedSignatureInfo[];
   foundOldest: boolean;
-}
-
-type State = {
-  url: string;
-  map: { [address: string]: AccountHistory };
 };
 
-export enum ActionType {
-  Update,
-  Clear,
-}
-
-interface Update {
-  type: ActionType.Update;
-  url: string;
-  pubkey: PublicKey;
-  status: FetchStatus;
-  fetched?: ConfirmedSignatureInfo[];
+type HistoryUpdate = {
+  history?: AccountHistory;
   before?: TransactionSignature;
-  foundOldest?: boolean;
-}
+};
 
-interface Clear {
-  type: ActionType.Clear;
-  url: string;
-}
-
-type Action = Update | Clear;
-type Dispatch = (action: Action) => void;
+type State = Cache.State<AccountHistory>;
+type Dispatch = Cache.Dispatch<HistoryUpdate>;
 
 function combineFetched(
-  fetched: ConfirmedSignatureInfo[] | undefined,
+  fetched: ConfirmedSignatureInfo[],
   current: ConfirmedSignatureInfo[] | undefined,
   before: TransactionSignature | undefined
 ) {
-  if (fetched === undefined) {
-    return current;
-  } else if (current === undefined) {
+  if (current === undefined) {
     return fetched;
   }
 
@@ -60,46 +38,19 @@ function combineFetched(
   }
 }
 
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case ActionType.Update: {
-      if (action.url !== state.url) return state;
-      const address = action.pubkey.toBase58();
-      if (state.map[address]) {
-        return {
-          ...state,
-          map: {
-            ...state.map,
-            [address]: {
-              status: action.status,
-              fetched: combineFetched(
-                action.fetched,
-                state.map[address].fetched,
-                action.before
-              ),
-              foundOldest: action.foundOldest || state.map[address].foundOldest,
-            },
-          },
-        };
-      } else {
-        return {
-          ...state,
-          map: {
-            ...state.map,
-            [address]: {
-              status: action.status,
-              fetched: action.fetched,
-              foundOldest: action.foundOldest || false,
-            },
-          },
-        };
-      }
-    }
-
-    case ActionType.Clear: {
-      return { url: action.url, map: {} };
-    }
-  }
+function reconcile(
+  history: AccountHistory | undefined,
+  update: HistoryUpdate | undefined
+) {
+  if (update?.history === undefined) return;
+  return {
+    fetched: combineFetched(
+      update.history.fetched,
+      history?.fetched,
+      update?.before
+    ),
+    foundOldest: update?.history?.foundOldest || history?.foundOldest || false,
+  };
 }
 
 const StateContext = React.createContext<State | undefined>(undefined);
@@ -108,11 +59,11 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type HistoryProviderProps = { children: React.ReactNode };
 export function HistoryProvider({ children }: HistoryProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = React.useReducer(reducer, { url, map: {} });
+  const [state, dispatch] = Cache.useCustomReducer(url, reconcile);
 
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
-  }, [url]);
+  }, [dispatch, url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -132,20 +83,22 @@ async function fetchAccountHistory(
   dispatch({
     type: ActionType.Update,
     status: FetchStatus.Fetching,
-    pubkey,
+    key: pubkey.toBase58(),
     url,
   });
 
   let status;
-  let fetched;
-  let foundOldest;
+  let history;
   try {
     const connection = new Connection(url);
-    fetched = await connection.getConfirmedSignaturesForAddress2(
+    const fetched = await connection.getConfirmedSignaturesForAddress2(
       pubkey,
       options
     );
-    foundOldest = fetched.length < options.limit;
+    history = {
+      fetched,
+      foundOldest: fetched.length < options.limit,
+    };
     status = FetchStatus.Fetched;
   } catch (error) {
     console.error("Failed to fetch account history", error);
@@ -154,11 +107,12 @@ async function fetchAccountHistory(
   dispatch({
     type: ActionType.Update,
     url,
+    key: pubkey.toBase58(),
     status,
-    fetched,
-    before: options?.before,
-    pubkey,
-    foundOldest,
+    data: {
+      history,
+      before: options?.before,
+    },
   });
 }
 
@@ -171,17 +125,19 @@ export function useAccountHistories() {
     );
   }
 
-  return context.map;
+  return context.entries;
 }
 
-export function useAccountHistory(address: string) {
+export function useAccountHistory(
+  address: string
+): Cache.CacheEntry<AccountHistory> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
     throw new Error(`useAccountHistory must be used within a AccountsProvider`);
   }
 
-  return context.map[address];
+  return context.entries[address];
 }
 
 export function useFetchAccountHistory() {
@@ -195,10 +151,11 @@ export function useFetchAccountHistory() {
   }
 
   return (pubkey: PublicKey, refresh?: boolean) => {
-    const before = state.map[pubkey.toBase58()];
-    if (!refresh && before && before.fetched && before.fetched.length > 0) {
-      if (before.foundOldest) return;
-      const oldest = before.fetched[before.fetched.length - 1].signature;
+    const before = state.entries[pubkey.toBase58()];
+    if (!refresh && before?.data?.fetched && before.data.fetched.length > 0) {
+      if (before.data.foundOldest) return;
+      const oldest =
+        before.data.fetched[before.data.fetched.length - 1].signature;
       fetchAccountHistory(dispatch, pubkey, url, { before: oldest, limit: 25 });
     } else {
       fetchAccountHistory(dispatch, pubkey, url, { limit: 25 });

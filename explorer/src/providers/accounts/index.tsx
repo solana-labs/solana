@@ -8,13 +8,9 @@ import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
 import { StakeAccount } from "validators/accounts/stake";
 import { TokenAccount } from "validators/accounts/token";
+import * as Cache from "providers/cache";
+import { ActionType, FetchStatus } from "providers/cache";
 export { useAccountHistory } from "./history";
-
-export enum FetchStatus {
-  Fetching,
-  FetchFailed,
-  Fetched,
-}
 
 export type StakeProgramData = {
   name: "stake";
@@ -37,98 +33,12 @@ export interface Details {
 
 export interface Account {
   pubkey: PublicKey;
-  status: FetchStatus;
-  lamports?: number;
+  lamports: number;
   details?: Details;
 }
 
-type Accounts = { [address: string]: Account };
-interface State {
-  accounts: Accounts;
-  url: string;
-}
-
-export enum ActionType {
-  Update,
-  Fetch,
-  Clear,
-}
-
-interface Update {
-  type: ActionType.Update;
-  url: string;
-  pubkey: PublicKey;
-  data: {
-    status: FetchStatus;
-    lamports?: number;
-    details?: Details;
-  };
-}
-
-interface Fetch {
-  type: ActionType.Fetch;
-  url: string;
-  pubkey: PublicKey;
-}
-
-interface Clear {
-  type: ActionType.Clear;
-  url: string;
-}
-
-type Action = Update | Fetch | Clear;
-type Dispatch = (action: Action) => void;
-
-function reducer(state: State, action: Action): State {
-  if (action.type === ActionType.Clear) {
-    return { url: action.url, accounts: {} };
-  } else if (action.url !== state.url) {
-    return state;
-  }
-
-  switch (action.type) {
-    case ActionType.Fetch: {
-      const address = action.pubkey.toBase58();
-      const account = state.accounts[address];
-      if (account) {
-        const accounts = {
-          ...state.accounts,
-          [address]: {
-            pubkey: account.pubkey,
-            status: FetchStatus.Fetching,
-          },
-        };
-        return { ...state, accounts };
-      } else {
-        const accounts = {
-          ...state.accounts,
-          [address]: {
-            status: FetchStatus.Fetching,
-            pubkey: action.pubkey,
-          },
-        };
-        return { ...state, accounts };
-      }
-    }
-
-    case ActionType.Update: {
-      const address = action.pubkey.toBase58();
-      const account = state.accounts[address];
-      if (account) {
-        const accounts = {
-          ...state.accounts,
-          [address]: {
-            ...account,
-            ...action.data,
-          },
-        };
-        return { ...state, accounts };
-      }
-      break;
-    }
-  }
-  return state;
-}
+type State = Cache.State<Account>;
+type Dispatch = Cache.Dispatch<Account>;
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
@@ -136,15 +46,12 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = React.useReducer(reducer, {
-    url,
-    accounts: {},
-  });
+  const [state, dispatch] = Cache.useReducer<Account>(url);
 
-  // Clear account statuses whenever cluster is changed
+  // Clear accounts cache whenever cluster is changed
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
-  }, [url]);
+  }, [dispatch, url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -163,18 +70,20 @@ async function fetchAccountInfo(
   url: string
 ) {
   dispatch({
-    type: ActionType.Fetch,
-    pubkey,
+    type: ActionType.Update,
+    key: pubkey.toBase58(),
+    status: Cache.FetchStatus.Fetching,
     url,
   });
 
+  let data;
   let fetchStatus;
-  let details;
-  let lamports;
   try {
     const result = (
       await new Connection(url, "single").getParsedAccountInfo(pubkey)
     ).value;
+
+    let lamports, details;
     if (result === null) {
       lamports = 0;
     } else {
@@ -227,13 +136,19 @@ async function fetchAccountInfo(
         data,
       };
     }
+    data = { pubkey, lamports, details };
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     console.error("Failed to fetch account info", error);
     fetchStatus = FetchStatus.FetchFailed;
   }
-  const data = { status: fetchStatus, lamports, details };
-  dispatch({ type: ActionType.Update, data, pubkey, url });
+  dispatch({
+    type: ActionType.Update,
+    status: fetchStatus,
+    data,
+    key: pubkey.toBase58(),
+    url,
+  });
 }
 
 export function useAccounts() {
@@ -241,17 +156,19 @@ export function useAccounts() {
   if (!context) {
     throw new Error(`useAccounts must be used within a AccountsProvider`);
   }
-  return context.accounts;
+  return context.entries;
 }
 
-export function useAccountInfo(address: string) {
+export function useAccountInfo(
+  address: string
+): Cache.CacheEntry<Account> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
     throw new Error(`useAccountInfo must be used within a AccountsProvider`);
   }
 
-  return context.accounts[address];
+  return context.entries[address];
 }
 
 export function useFetchAccountInfo() {

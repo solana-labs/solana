@@ -5,78 +5,16 @@ import {
   ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster } from "../cluster";
-import { FetchStatus } from "./index";
 import { CACHED_DETAILS, isCached } from "./cached";
+import * as Cache from "providers/cache";
+import { ActionType, FetchStatus } from "providers/cache";
 
 export interface Details {
-  fetchStatus: FetchStatus;
-  transaction: ParsedConfirmedTransaction | null;
+  transaction?: ParsedConfirmedTransaction | null;
 }
 
-type State = {
-  entries: { [signature: string]: Details };
-  url: string;
-};
-
-export enum ActionType {
-  Update,
-  Clear,
-}
-
-interface Update {
-  type: ActionType.Update;
-  url: string;
-  signature: string;
-  fetchStatus: FetchStatus;
-  transaction: ParsedConfirmedTransaction | null;
-}
-
-interface Clear {
-  type: ActionType.Clear;
-  url: string;
-}
-
-type Action = Update | Clear;
-type Dispatch = (action: Action) => void;
-
-function reducer(state: State, action: Action): State {
-  if (action.type === ActionType.Clear) {
-    return { url: action.url, entries: {} };
-  } else if (action.url !== state.url) {
-    return state;
-  }
-
-  switch (action.type) {
-    case ActionType.Update: {
-      const signature = action.signature;
-      const details = state.entries[signature];
-      if (details) {
-        return {
-          ...state,
-          entries: {
-            ...state.entries,
-            [signature]: {
-              ...details,
-              fetchStatus: action.fetchStatus,
-              transaction: action.transaction,
-            },
-          },
-        };
-      } else {
-        return {
-          ...state,
-          entries: {
-            ...state.entries,
-            [signature]: {
-              fetchStatus: FetchStatus.Fetching,
-              transaction: null,
-            },
-          },
-        };
-      }
-    }
-  }
-}
+type State = Cache.State<Details>;
+type Dispatch = Cache.Dispatch<Details>;
 
 export const StateContext = React.createContext<State | undefined>(undefined);
 export const DispatchContext = React.createContext<Dispatch | undefined>(
@@ -86,11 +24,11 @@ export const DispatchContext = React.createContext<Dispatch | undefined>(
 type DetailsProviderProps = { children: React.ReactNode };
 export function DetailsProvider({ children }: DetailsProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = React.useReducer(reducer, { url, entries: {} });
+  const [state, dispatch] = Cache.useReducer<Details>(url);
 
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
-  }, [url]);
+  }, [dispatch, url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -108,14 +46,13 @@ async function fetchDetails(
 ) {
   dispatch({
     type: ActionType.Update,
-    fetchStatus: FetchStatus.Fetching,
-    transaction: null,
-    signature,
+    status: FetchStatus.Fetching,
+    key: signature,
     url,
   });
 
   let fetchStatus;
-  let transaction = null;
+  let transaction;
   if (isCached(url, signature)) {
     transaction = CACHED_DETAILS[signature];
     fetchStatus = FetchStatus.Fetched;
@@ -132,9 +69,9 @@ async function fetchDetails(
   }
   dispatch({
     type: ActionType.Update,
-    fetchStatus,
-    signature,
-    transaction,
+    status: fetchStatus,
+    key: signature,
+    data: { transaction },
     url,
   });
 }
@@ -151,4 +88,18 @@ export function useFetchTransactionDetails() {
   return (signature: TransactionSignature) => {
     url && fetchDetails(dispatch, signature, url);
   };
+}
+
+export function useTransactionDetails(
+  signature: TransactionSignature
+): Cache.CacheEntry<Details> | undefined {
+  const context = React.useContext(StateContext);
+
+  if (!context) {
+    throw new Error(
+      `useTransactionDetails must be used within a TransactionsProvider`
+    );
+  }
+
+  return context.entries[signature];
 }

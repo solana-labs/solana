@@ -4,7 +4,7 @@ import {
   ConfirmedSignatureInfo,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { FetchStatus } from "providers/accounts";
+import { FetchStatus } from "providers/cache";
 import {
   useAccountHistories,
   useFetchAccountHistory,
@@ -34,7 +34,7 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
     return null;
   }
 
-  const { tokens } = ownedTokens;
+  const tokens = ownedTokens.data?.tokens;
   if (tokens === undefined || tokens.length === 0) return null;
 
   return <TokenHistoryTable tokens={tokens} />;
@@ -62,17 +62,17 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 
   const fetchedFullHistory = tokens.every((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
-    return history && history.foundOldest === true;
+    return history?.data?.foundOldest === true;
   });
 
   const fetching = tokens.some((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
-    return history && history.status === FetchStatus.Fetching;
+    return history?.status === FetchStatus.Fetching;
   });
 
   const failed = tokens.some((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
-    return history && history.status === FetchStatus.FetchFailed;
+    return history?.status === FetchStatus.FetchFailed;
   });
 
   const mintAndTxs = tokens
@@ -81,12 +81,13 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       history: accountHistories[token.pubkey.toBase58()],
     }))
     .filter(({ history }) => {
-      return (
-        history !== undefined && history.fetched && history.fetched.length > 0
-      );
+      return history?.data?.fetched && history.data.fetched.length > 0;
     })
     .flatMap(({ mint, history }) =>
-      (history.fetched as ConfirmedSignatureInfo[]).map((tx) => ({ mint, tx }))
+      (history?.data?.fetched as ConfirmedSignatureInfo[]).map((tx) => ({
+        mint,
+        tx,
+      }))
     );
 
   if (mintAndTxs.length === 0) {
@@ -196,7 +197,8 @@ function TokenTransactionRow({
     if (!details) fetchDetails(tx.signature);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const instructions = details?.transaction?.transaction.message.instructions;
+  const instructions =
+    details?.data?.transaction?.transaction.message.instructions;
   if (instructions) {
     const tokenInstructions = instructions.filter(
       (ix) => "parsed" in ix && ix.program === "spl-token"
