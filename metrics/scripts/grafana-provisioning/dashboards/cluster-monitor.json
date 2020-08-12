@@ -7115,7 +7115,7 @@
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 6,
+        "h": 5,
         "w": 8,
         "x": 16,
         "y": 54
@@ -7702,10 +7702,10 @@
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 8,
         "x": 16,
-        "y": 60
+        "y": 59
       },
       "id": 46,
       "legend": {
@@ -8599,6 +8599,325 @@
       }
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 71
+      },
+      "id": 77,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {
+          "alias": "retransmit-stage.total_packets",
+          "yaxis": 2
+        },
+        {
+          "alias": "retransmit-stage.repair_total",
+          "yaxis": 2
+        },
+        {
+          "alias": "retransmit-stage.discard_total",
+          "yaxis": 2
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"total_time\") AS \"total_time\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"total_packets\") AS \"total_packets\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"retransmit_total\") AS \"retransmit_total\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"compute_turbine\") AS \"compute_turbine\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"repair_total\") AS \"repair_total\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"discard_total\") AS \"discard_total\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "F",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Retransmit ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "µs",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "aliasColors": {
         "poh-service.hashes": "#c15c17"
       },
@@ -9424,7 +9743,7 @@
         "x": 0,
         "y": 83
       },
-      "id": 74,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9547,7 +9866,7 @@
         "x": 8,
         "y": 83
       },
-      "id": 75,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9670,7 +9989,7 @@
         "x": 16,
         "y": 83
       },
-      "id": 76,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9782,7 +10101,7 @@
         "x": 0,
         "y": 88
       },
-      "id": 55,
+      "id": 58,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -9801,7 +10120,7 @@
         "x": 0,
         "y": 89
       },
-      "id": 56,
+      "id": 59,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10034,7 +10353,7 @@
         "x": 12,
         "y": 89
       },
-      "id": 57,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10187,7 +10506,7 @@
         "x": 0,
         "y": 94
       },
-      "id": 58,
+      "id": 61,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -10205,7 +10524,7 @@
         "x": 0,
         "y": 95
       },
-      "id": 59,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -10407,7 +10726,7 @@
         "x": 12,
         "y": 95
       },
-      "id": 60,
+      "id": 63,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10556,7 +10875,7 @@
         "x": 0,
         "y": 100
       },
-      "id": 61,
+      "id": 64,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -10574,7 +10893,7 @@
         "x": 0,
         "y": 101
       },
-      "id": 62,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -10766,7 +11085,7 @@
         "x": 8,
         "y": 101
       },
-      "id": 63,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
@@ -11034,7 +11353,7 @@
         "x": 16,
         "y": 101
       },
-      "id": 64,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -11228,7 +11547,7 @@
         "x": 0,
         "y": 107
       },
-      "id": 65,
+      "id": 68,
       "legend": {
         "avg": false,
         "current": false,
@@ -11419,7 +11738,7 @@
         "x": 0,
         "y": 113
       },
-      "id": 66,
+      "id": 69,
       "panels": [],
       "title": "RPC Send Transaction Service",
       "type": "row"
@@ -11437,7 +11756,7 @@
         "x": 0,
         "y": 114
       },
-      "id": 67,
+      "id": 70,
       "legend": {
         "avg": false,
         "current": false,
@@ -11555,7 +11874,7 @@
         "x": 12,
         "y": 114
       },
-      "id": 68,
+      "id": 71,
       "legend": {
         "avg": false,
         "current": false,
@@ -11818,7 +12137,7 @@
         "x": 0,
         "y": 120
       },
-      "id": 69,
+      "id": 72,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -11836,7 +12155,7 @@
         "x": 0,
         "y": 121
       },
-      "id": 70,
+      "id": 73,
       "legend": {
         "avg": false,
         "current": false,
@@ -11951,7 +12270,7 @@
         "x": 7,
         "y": 121
       },
-      "id": 71,
+      "id": 74,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -12176,7 +12495,7 @@
         "x": 14,
         "y": 121
       },
-      "id": 72,
+      "id": 75,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -12264,7 +12583,7 @@
         "x": 0,
         "y": 126
       },
-      "id": 73,
+      "id": 76,
       "legend": {
         "avg": false,
         "current": false,
