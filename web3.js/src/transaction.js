@@ -32,7 +32,6 @@ const DEFAULT_SIGNATURE = Buffer.alloc(64).fill(0);
  */
 export const PACKET_DATA_SIZE = 1280 - 40 - 8;
 
-const PUBKEY_LENGTH = 32;
 const SIGNATURE_LENGTH = 64;
 
 /**
@@ -544,48 +543,7 @@ export class Transaction {
       signatures.push(bs58.encode(Buffer.from(signature)));
     }
 
-    const numRequiredSignatures = byteArray.shift();
-    const numReadonlySignedAccounts = byteArray.shift();
-    const numReadonlyUnsignedAccounts = byteArray.shift();
-
-    const accountCount = shortvec.decodeLength(byteArray);
-    let accountKeys = [];
-    for (let i = 0; i < accountCount; i++) {
-      const account = byteArray.slice(0, PUBKEY_LENGTH);
-      byteArray = byteArray.slice(PUBKEY_LENGTH);
-      accountKeys.push(bs58.encode(Buffer.from(account)));
-    }
-
-    const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
-    byteArray = byteArray.slice(PUBKEY_LENGTH);
-
-    const instructionCount = shortvec.decodeLength(byteArray);
-    let instructions = [];
-    for (let i = 0; i < instructionCount; i++) {
-      let instruction = {};
-      instruction.programIdIndex = byteArray.shift();
-      const accountCount = shortvec.decodeLength(byteArray);
-      instruction.accounts = byteArray.slice(0, accountCount);
-      byteArray = byteArray.slice(accountCount);
-      const dataLength = shortvec.decodeLength(byteArray);
-      const data = byteArray.slice(0, dataLength);
-      instruction.data = bs58.encode(Buffer.from(data));
-      byteArray = byteArray.slice(dataLength);
-      instructions.push(instruction);
-    }
-
-    const messageArgs = {
-      header: {
-        numRequiredSignatures,
-        numReadonlySignedAccounts,
-        numReadonlyUnsignedAccounts,
-      },
-      recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
-      accountKeys,
-      instructions,
-    };
-
-    return Transaction.populate(new Message(messageArgs), signatures);
+    return Transaction.populate(Message.from(byteArray), signatures);
   }
 
   /**
