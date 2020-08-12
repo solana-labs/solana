@@ -242,6 +242,7 @@ struct GossipStats {
     push_message_count: Counter,
     push_message_value_count: Counter,
     push_response_count: Counter,
+    pull_requests_count: Counter,
 }
 
 pub struct ClusterInfo {
@@ -1689,9 +1690,14 @@ impl ClusterInfo {
         }
 
         // process the collected pulls together
-        let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes);
-        if let Some(rsp) = rsp {
-            let _ignore_disconnect = response_sender.send(rsp);
+        if !gossip_pull_data.is_empty() {
+            self.stats
+                .pull_requests_count
+                .add_relaxed(gossip_pull_data.len() as u64);
+            let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes);
+            if let Some(rsp) = rsp {
+                let _ignore_disconnect = response_sender.send(rsp);
+            }
         }
     }
 
@@ -2253,6 +2259,14 @@ impl ClusterInfo {
                 (
                     "prune_message_len",
                     self.stats.prune_message_len.clear(),
+                    i64
+                ),
+            );
+            datapoint_info!(
+                "cluster_info_stats5",
+                (
+                    "pull_requests_count",
+                    self.stats.pull_requests_count.clear(),
                     i64
                 ),
             );
