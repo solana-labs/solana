@@ -12,8 +12,12 @@ export class BpfLoader {
   /**
    * Public key that identifies the BpfLoader
    */
-  static get programId(): PublicKey {
-    return new PublicKey('BPFLoader1111111111111111111111111111111111');
+  static programId(version: number = 2): PublicKey {
+    if (version === 1) {
+      return new PublicKey('BPFLoader1111111111111111111111111111111111');
+    } else {
+      return new PublicKey('BPFLoader2111111111111111111111111111111111');
+    }
   }
 
   /**
@@ -40,6 +44,6 @@ export class BpfLoader {
     program: Account,
     elf: Buffer | Uint8Array | Array<number>,
   ): Promise<void> {
-    return Loader.load(connection, payer, program, BpfLoader.programId, elf);
+    return Loader.load(connection, payer, program, BpfLoader.programId(), elf);
   }
 }
