@@ -36,7 +36,7 @@ We detect optimistic confirmation on `84` has been violated by the root on `88`.
 # Switch Proof Contents
 Each validator's switching proof contains:
 * a) A starting `root` snapshot
-* b) A `switching vote` they claim is the *earliest* vote they made on a slot `>84` onto fork `88` (so either `87` or `88` in this case)
+* b) A `switching vote` they claim is the *earliest* vote they made on a slot `>84` onto any other fork (so either `87` or `88` in this case).
 * c) All the other votes on other forks they claim allowed them to make this switching vote. These votes in the proof are of the form
 `(vote_slot, vote_pubkey, vote_observed_slot, num_confirmations)`, where `vote_pubkey` made a vote for slot `vote_slot`, and
 `vote_observed_slot` is the slot at which `vote_slot` was observed to have confirmations == num_confirmations.
@@ -51,8 +51,64 @@ Verification (Valid Switching Proof): Wait for all the validators to upload thei
 * 1) Iterate through all the provided proofs, and find the one with the lowest snapshot root `snapshot_lowest`. From above, we know this proof includes all the ancestors, `a` of the violated optimistic slot `84`, in the range `snapshot_lowest <= a < 84`. Add all
 these ancestors to a set called `optimistic_slot_ancestors`.
 
-* 2)
-Then we go through each of the provided validator's proofs.
+* 2) We also want to preprocess the proofs for all the votes included in the proofs to
+generate `proof_vote_slots` and `last_vote_slots` like so:
+
+```
+    type LastVoteSlot = u64;
+
+    // A validator that submitted a proof and their last vote
+    type ProvingValidator = (Pubkey, LastVoteSlot);
+
+    // Sorted map from a validator `V` to votes made by `V` that were included in
+    // proofs by some other proving validator
+    type ValidatorVotes =  HashMap<Pubkey, Vec<ProvingValidator>>;
+
+    // Sorted map of any vote slots included in any proof
+    let mut proof_vote_slots = BTreeMap<(Slot, Hash), ValidatorVotes>;
+
+    // Map from each validator to their last votes on the 
+    let mut last_vote_slots = BTreeMap<(Slot, Hash), ValidatorVotes>;
+
+    for proof in proofs {
+        // Validator that generated this proof
+        let proving_validator = proof.validator_id;
+
+        // Validator that generated this proof's last vote slot
+        // before they switched forks
+        let last_vote_slot = proof.last_vote_slot;
+
+        for vote in proof.votes {
+            let vote_pubkey = vote.pubkey;
+            proof_vote_slots.entry((vote.slot, vote.hash))
+                .or_default()
+                .entry(vote_pubkey)
+                .or_default()
+                .push((proving_validator, last_vote_slot))
+        }
+    }
+```
+
+* 3) We now start replaying the `optimistic_slot_ancestors`, starting from `lowest_snapshot`.
+
+```
+    let bank_forks = load_snapshot(lowest_snapshot);
+    
+    for optimistic_slot_ancestor in optimistic_slot_ancestors {
+        // Pop all vote slots in `proof_vote_slots` < optimistic_slot_ancestor
+        let lesser_votes = proof_vote_slots.pop_range(0, optimistic_slot_ancestor);
+
+        for vote_slot in lesser_votes {
+
+        }
+
+        bank_forks.set_root(optimistic_slot_ancestor);
+    }
+```
+
+
+
+For each proof, 
     ```
         let mut possible_lockout_violaters = HashSet::new();
         
