@@ -712,6 +712,7 @@ const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
         data: struct.pick({
           program: 'string',
           parsed: 'any',
+          space: 'number',
         }),
         rentEpoch: 'number?',
       }),
@@ -776,6 +777,7 @@ const ParsedAccountInfoResult = struct.object({
     struct.pick({
       program: 'string',
       parsed: 'any',
+      space: 'number',
     }),
   ]),
   rentEpoch: 'number?',
@@ -1168,10 +1170,12 @@ type SlotInfo = {
  * @typedef {Object} ParsedAccountData
  * @property {string} program Name of the program that owns this account
  * @property {any} parsed Parsed account data
+ * @property {number} space Space used by account data
  */
 type ParsedAccountData = {
   program: string,
   parsed: any,
+  space: number,
 };
 
 /**

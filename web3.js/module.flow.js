@@ -174,6 +174,7 @@ declare module '@solana/web3.js' {
   declare export type ParsedAccountData = {
     program: string,
     parsed: any,
+    space: number,
   };
 
   declare export type ParsedMessageAccount = {

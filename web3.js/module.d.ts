@@ -185,6 +185,7 @@ declare module '@solana/web3.js' {
   export type ParsedAccountData = {
     program: string;
     parsed: any;
+    space: number;
   };
 
   export type KeyedAccountInfo = {
