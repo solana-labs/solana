@@ -4,7 +4,6 @@ import { FetchStatus } from "providers/accounts";
 import {
   useFetchAccountOwnedTokens,
   useAccountOwnedTokens,
-  TokenAccountData,
 } from "providers/accounts/tokens";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
@@ -43,26 +42,27 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
     );
   }
 
-  const mappedTokens = new Map<string, TokenAccountData>();
-  for (const token of tokens) {
+  const mappedTokens = new Map<string, number>();
+  for (const { info: token } of tokens) {
     const mintAddress = token.mint.toBase58();
-    const tokenInfo = mappedTokens.get(mintAddress);
-    if (tokenInfo) {
-      tokenInfo.amount += token.amount;
-    } else {
-      mappedTokens.set(mintAddress, { ...token });
+    const totalByMint = mappedTokens.get(mintAddress);
+
+    let amount = token?.amount || (token?.tokenAmount?.uiAmount as number);
+    if (totalByMint !== undefined) {
+      amount += totalByMint;
     }
+
+    mappedTokens.set(mintAddress, amount);
   }
 
   const detailsList: React.ReactNode[] = [];
-  mappedTokens.forEach((tokenInfo, mintAddress) => {
-    const balance = tokenInfo.amount;
+  mappedTokens.forEach((totalByMint, mintAddress) => {
     detailsList.push(
       <tr key={mintAddress}>
         <td>
           <Address pubkey={new PublicKey(mintAddress)} link />
         </td>
-        <td>{balance}</td>
+        <td>{totalByMint}</td>
       </tr>
     );
   });

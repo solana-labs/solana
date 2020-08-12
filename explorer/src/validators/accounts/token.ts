@@ -8,6 +8,7 @@ import {
   boolean,
   string,
   array,
+  pick,
   nullable,
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
@@ -16,7 +17,9 @@ export type TokenAccountType = StructType<typeof TokenAccountType>;
 export const TokenAccountType = enums(["mint", "account", "multisig"]);
 
 export type TokenAccountInfo = StructType<typeof TokenAccountInfo>;
-export const TokenAccountInfo = object({
+export const TokenAccountInfo = pick({
+  isInitialized: boolean(),
+  isNative: boolean(),
   mint: Pubkey,
   owner: Pubkey,
   amount: optional(number()), // TODO remove when ui amount is deployed
@@ -28,9 +31,7 @@ export const TokenAccountInfo = object({
     })
   ),
   delegate: nullable(optional(Pubkey)),
-  isInitialized: boolean(),
-  isNative: boolean(),
-  delegatedAmount: number(),
+  delegatedAmount: optional(number()),
 });
 
 export type MintAccountInfo = StructType<typeof MintAccountInfo>;
