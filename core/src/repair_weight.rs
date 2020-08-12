@@ -170,11 +170,20 @@ impl RepairWeight {
         if new_root == self.root {
             return;
         }
+
+        // Root slot of the tree that contains `new_root`, if one exists
+        let new_root_tree_root = self.slot_to_tree.get(&new_root).cloned();
+
         // Purge outdated trees from `self.trees`
         let subtrees_to_purge: Vec<_> = self
             .trees
             .keys()
-            .filter(|subtree_root| **subtree_root < new_root && **subtree_root != self.root)
+            .filter(|subtree_root| {
+                **subtree_root < new_root
+                    && new_root_tree_root
+                        .map(|new_root_tree_root| **subtree_root != new_root_tree_root)
+                        .unwrap_or(true)
+            })
             .cloned()
             .collect();
         for subtree_root in subtrees_to_purge {
@@ -188,25 +197,26 @@ impl RepairWeight {
             );
         }
 
-        let mut root_tree = self.trees.remove(&self.root).expect("root tree must exist");
+        if let Some(new_root_tree_root) = new_root_tree_root {
+            let mut new_root_tree = self
+                .trees
+                .remove(&new_root_tree_root)
+                .expect("Found slot root earlier in self.slot_to_trees, treee must exist");
+            // Find all descendants of `self.root` that are not reachable from `new_root`.
+            // These are exactly the unrooted slots, which can be purged and added to
+            // `self.unrooted_slots`.
+            let unrooted_slots = new_root_tree.subtree_diff(new_root_tree_root, new_root);
+            self.remove_tree_slots(unrooted_slots.iter(), new_root);
 
-        // Find all descendants of `self.root` that are not reachable from `new_root`.
-        // These are exactly the unrooted slots, which can be purged and added to
-        // `self.unrooted_slots`.
-        let unrooted_slots = root_tree.subtree_diff(self.root, new_root);
-        self.remove_tree_slots(unrooted_slots.iter(), new_root);
+            new_root_tree.set_root(new_root);
 
-        if !root_tree.contains_slot(new_root) {
-            // If the current `root_tree` does not contain the new root, we can
-            // just make a new tree for the new root
-            self.insert_new_tree(new_root);
-        } else {
-            root_tree.set_root(new_root);
             // Update `self.slot_to_tree` to reflect new root
-            self.rename_tree_root(&root_tree, new_root);
+            self.rename_tree_root(&new_root_tree, new_root);
 
             // Insert the tree for the new root
-            self.trees.insert(new_root, root_tree);
+            self.trees.insert(new_root, new_root_tree);
+        } else {
+            self.insert_new_tree(new_root);
         }
 
         // Purge `self.unrooted_slots` of slots less than `new_root` as we know any
@@ -952,6 +962,27 @@ mod test {
             assert_eq!(repair_weight.trees.get(orphan).unwrap().root(), *orphan);
             assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
         }
+    }
+
+    #[test]
+    fn test_set_root_existing_non_root_tree() {
+        let (_, _, mut repair_weight) = setup_orphan_repair_weight();
+
+        // Set root in an existing orphan branch, slot 10
+        repair_weight.set_root(10);
+        check_old_root_purged_verify_new_root(0, 10, &repair_weight);
+
+        // Should purge old root tree [0, 6]
+        for slot in 0..6 {
+            assert!(!repair_weight.slot_to_tree.contains_key(&slot));
+        }
+
+        // Should purge orphan parent as well
+        assert!(!repair_weight.slot_to_tree.contains_key(&8));
+
+        // Other higher orphan branch rooted at slot `20` remains unchanged
+        assert_eq!(repair_weight.trees.get(&20).unwrap().root(), 20);
+        assert_eq!(*repair_weight.slot_to_tree.get(&20).unwrap(), 20);
     }
 
     #[test]
