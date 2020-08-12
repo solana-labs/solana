@@ -1,33 +1,31 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
 import { FetchStatus } from "providers/cache";
-import { useFetchAccountInfo, useAccountInfo } from "providers/accounts";
+import {
+  useFetchAccountInfo,
+  useAccountInfo,
+  Account,
+} from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { useCluster, ClusterStatus } from "providers/cluster";
-import { NavLink } from "react-router-dom";
+import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { OwnedTokensCard } from "components/account/OwnedTokensCard";
 import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
+import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
   let pubkey: PublicKey | undefined;
+
   try {
     pubkey = new PublicKey(address);
-  } catch (err) {
-    console.error(err);
-    // TODO handle bad addresses
-  }
-
-  let moreTab: MoreTabs = "history";
-  if (tab === "history" || tab === "tokens") {
-    moreTab = tab;
-  }
+  } catch (err) {}
 
   return (
     <div className="container mt-n3">
@@ -37,18 +35,21 @@ export function AccountDetailsPage({ address, tab }: Props) {
           <h4 className="header-title">Account</h4>
         </div>
       </div>
-      {pubkey && <InfoSection pubkey={pubkey} />}
-      {pubkey && <MoreSection pubkey={pubkey} tab={moreTab} />}
+      {!pubkey ? (
+        <ErrorCard text={`Address "${address}" is not valid`} />
+      ) : (
+        <DetailsSections pubkey={pubkey} tab={tab} />
+      )}
     </div>
   );
 }
 
-function InfoSection({ pubkey }: { pubkey: PublicKey }) {
+function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
-  const refresh = useFetchAccountInfo();
   const { status } = useCluster();
+  const location = useLocation();
 
   // Fetch account on load
   React.useEffect(() => {
@@ -61,10 +62,52 @@ function InfoSection({ pubkey }: { pubkey: PublicKey }) {
     info.status === FetchStatus.FetchFailed ||
     info.data?.lamports === undefined
   ) {
-    return <ErrorCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
+    return <ErrorCard retry={() => fetchAccount(pubkey)} text="Fetch Failed" />;
   }
 
   const account = info.data;
+  const data = account?.details?.data;
+
+  let tabs: Tab[] = [
+    {
+      slug: "history",
+      title: "History",
+      path: "",
+    },
+  ];
+
+  if (data && data?.name === "spl-token") {
+    if (data.parsed.type === "mint") {
+      tabs.push({
+        slug: "holders",
+        title: "Holders",
+        path: "/holders",
+      });
+    }
+  } else {
+    tabs.push({
+      slug: "tokens",
+      title: "Tokens",
+      path: "/tokens",
+    });
+  }
+
+  let moreTab: MoreTabs = "history";
+  if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
+    return <Redirect to={{ ...location, pathname: `/address/${address}` }} />;
+  } else if (tab) {
+    moreTab = tab as MoreTabs;
+  }
+
+  return (
+    <>
+      {<InfoSection account={account} />}
+      {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+    </>
+  );
+}
+
+function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
   if (data && data.name === "stake") {
     let stakeAccountType, stakeAccount;
@@ -90,11 +133,24 @@ function InfoSection({ pubkey }: { pubkey: PublicKey }) {
   }
 }
 
-type MoreTabs = "history" | "tokens";
-function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
-  const address = pubkey.toBase58();
-  const info = useAccountInfo(address);
-  if (info?.data === undefined) return null;
+type Tab = {
+  slug: MoreTabs;
+  title: string;
+  path: string;
+};
+
+type MoreTabs = "history" | "tokens" | "holders";
+function MoreSection({
+  account,
+  tab,
+  tabs,
+}: {
+  account: Account;
+  tab: MoreTabs;
+  tabs: Tab[];
+}) {
+  const pubkey = account.pubkey;
+  const address = account.pubkey.toBase58();
 
   return (
     <>
@@ -102,24 +158,17 @@ function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
         <div className="header">
           <div className="header-body pt-0">
             <ul className="nav nav-tabs nav-overflow header-tabs">
-              <li className="nav-item">
-                <NavLink
-                  className="nav-link"
-                  to={clusterPath(`/address/${address}`)}
-                  exact
-                >
-                  History
-                </NavLink>
-              </li>
-              <li className="nav-item">
-                <NavLink
-                  className="nav-link"
-                  to={clusterPath(`/address/${address}/tokens`)}
-                  exact
-                >
-                  Tokens
-                </NavLink>
-              </li>
+              {tabs.map(({ title, path }) => (
+                <li className="nav-item">
+                  <NavLink
+                    className="nav-link"
+                    to={clusterPath(`/address/${address}${path}`)}
+                    exact
+                  >
+                    {title}
+                  </NavLink>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
@@ -131,6 +180,7 @@ function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
         </>
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
+      {tab === "holders" && <TokenLargestAccountsCard pubkey={pubkey} />}
     </>
   );
 }

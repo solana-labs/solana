@@ -10,6 +10,8 @@ import { coerce } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
+import { useFetchTokenSupply, useTokenSupply } from "providers/mints/supply";
+import { FetchStatus } from "providers/cache";
 
 export function TokenAccountSection({
   account,
@@ -44,7 +46,36 @@ function MintAccountCard({
   account: Account;
   info: MintAccountInfo;
 }) {
-  const refresh = useFetchAccountInfo();
+  const mintAddress = account.pubkey.toBase58();
+  const fetchInfo = useFetchAccountInfo();
+  const supply = useTokenSupply(mintAddress);
+  const fetchSupply = useFetchTokenSupply();
+  const refreshSupply = () => fetchSupply(account.pubkey);
+  const refresh = () => {
+    fetchInfo(account.pubkey);
+    refreshSupply();
+  };
+
+  let renderSupply;
+  const supplyTotal = supply?.data?.uiAmount;
+  if (supplyTotal === undefined) {
+    if (!supply || supply?.status === FetchStatus.Fetching) {
+      renderSupply = (
+        <>
+          <span className="spinner-grow spinner-grow-sm mr-2"></span>
+          Loading
+        </>
+      );
+    } else {
+      renderSupply = "Fetch failed";
+    }
+  } else {
+    renderSupply = supplyTotal;
+  }
+
+  React.useEffect(() => {
+    if (!supply) refreshSupply();
+  }, [mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="card">
@@ -52,10 +83,7 @@ function MintAccountCard({
         <h3 className="card-header-title mb-0 d-flex align-items-center">
           Token Mint Account
         </h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
-        >
+        <button className="btn btn-white btn-sm" onClick={refresh}>
           <span className="fe fe-refresh-cw mr-2"></span>
           Refresh
         </button>
@@ -69,15 +97,19 @@ function MintAccountCard({
           </td>
         </tr>
         <tr>
+          <td>Total Supply</td>
+          <td className="text-lg-right">{renderSupply}</td>
+        </tr>
+        <tr>
           <td>Decimals</td>
           <td className="text-lg-right">{info.decimals}</td>
         </tr>
-        <tr>
-          <td>Status</td>
-          <td className="text-lg-right">
-            {info.isInitialized ? "Initialized" : "Uninitialized"}
-          </td>
-        </tr>
+        {!info.isInitialized && (
+          <tr>
+            <td>Status</td>
+            <td className="text-lg-right">Uninitialized</td>
+          </tr>
+        )}
         {info.owner !== undefined && (
           <tr>
             <td>Owner</td>
