@@ -18,7 +18,7 @@ On the contrary, rent collection isn't applied to accounts that are directly man
 
 - The distribution of rent collection itself (Otherwise, it may cause recursive rent collection handling)
 - The distribution of staking rewards at the start of every epoch (To reduce as much as processing spike at the start of new epoch)
-- The distribution of transaction fee at the end of every epoch
+- The distribution of transaction fee at the end of every slot
 
 Even if those processes are out of scope of rent collection, all of manipulated accounts will eventually be handled by the \(2\) mechanism.
 
