@@ -158,8 +158,8 @@ function MoreSection({
         <div className="header">
           <div className="header-body pt-0">
             <ul className="nav nav-tabs nav-overflow header-tabs">
-              {tabs.map(({ title, path }) => (
-                <li className="nav-item">
+              {tabs.map(({ title, slug, path }) => (
+                <li key={slug} className="nav-item">
                   <NavLink
                     className="nav-link"
                     to={clusterPath(`/address/${address}${path}`)}
