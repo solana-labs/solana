@@ -36,14 +36,22 @@ export class BpfLoader {
    * @param connection The connection to use
    * @param payer Account that will pay program loading fees
    * @param program Account to load the program into
-   * @param elfBytes The entire ELF containing the BPF program
+   * @param elf The entire ELF containing the BPF program
+   * @param version The version of the BPF loader to use
    */
   static load(
     connection: Connection,
     payer: Account,
     program: Account,
     elf: Buffer | Uint8Array | Array<number>,
+    version: number = 2,
   ): Promise<void> {
-    return Loader.load(connection, payer, program, BpfLoader.programId(), elf);
+    return Loader.load(
+      connection,
+      payer,
+      program,
+      BpfLoader.programId(version),
+      elf,
+    );
   }
 }
