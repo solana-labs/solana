@@ -110,7 +110,7 @@ function MintAccountCard({
             <td className="text-lg-right">Uninitialized</td>
           </tr>
         )}
-        {info.owner !== undefined && (
+        {info.owner && (
           <tr>
             <td>Owner</td>
             <td className="text-lg-right">
