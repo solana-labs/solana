@@ -10,6 +10,7 @@ import { SupplyProvider } from "./providers/supply";
 import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
 import { StatsProvider } from "providers/stats";
+import { MintsProvider } from "providers/mints";
 
 ReactDOM.render(
   <Router>
@@ -18,9 +19,11 @@ ReactDOM.render(
         <SupplyProvider>
           <RichListProvider>
             <AccountsProvider>
-              <TransactionsProvider>
-                <App />
-              </TransactionsProvider>
+              <MintsProvider>
+                <TransactionsProvider>
+                  <App />
+                </TransactionsProvider>
+              </MintsProvider>
             </AccountsProvider>
           </RichListProvider>
         </SupplyProvider>
