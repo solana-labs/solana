@@ -38,7 +38,7 @@ export type MintAccountInfo = StructType<typeof MintAccountInfo>;
 export const MintAccountInfo = object({
   decimals: number(),
   isInitialized: boolean(),
-  owner: optional(Pubkey),
+  owner: nullable(optional(Pubkey)),
 });
 
 export type MultisigAccountInfo = StructType<typeof MultisigAccountInfo>;
