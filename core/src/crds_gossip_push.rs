@@ -157,7 +157,7 @@ impl CrdsGossipPush {
     /// process a push message to the network
     pub fn process_push_message(
         &mut self,
-        crds: &mut Crds,
+        crds: &Crds,
         from: &Pubkey,
         value: CrdsValue,
         now: u64,
@@ -338,9 +338,9 @@ impl CrdsGossipPush {
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(f32, &'a ContactInfo)> {
         crds.table
-            .values()
-            .filter(|v| v.value.contact_info().is_some())
-            .map(|v| (v.value.contact_info().unwrap(), v))
+            .into_iter()
+            .filter(|(_,v)| v.value.contact_info().is_some())
+            .map(|(_,v)| (v.value.contact_info().unwrap(), v))
             .filter(|(info, _)| {
                 info.id != *self_id
                     && ContactInfo::is_valid_address(&info.gossip)

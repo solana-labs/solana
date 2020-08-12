@@ -181,8 +181,8 @@ impl CrdsGossipPull {
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(f32, &'a ContactInfo)> {
         crds.table
-            .values()
-            .filter_map(|v| v.value.contact_info())
+            .into_iter()
+            .filter_map(|(_,v)| v.value.contact_info())
             .filter(|v| {
                 v.id != *self_id
                     && ContactInfo::is_valid_address(&v.gossip)
@@ -217,7 +217,7 @@ impl CrdsGossipPull {
     /// process a pull request
     pub fn process_pull_requests(
         &mut self,
-        crds: &mut Crds,
+        crds: &Crds,
         requests: Vec<(CrdsValue, CrdsFilter)>,
         now: u64,
     ) {
@@ -310,7 +310,7 @@ impl CrdsGossipPull {
     /// process a vec of pull responses
     pub fn process_pull_responses(
         &mut self,
-        crds: &mut Crds,
+        crds: &Crds,
         from: &Pubkey,
         responses: Vec<VersionedCrdsValue>,
         responses_expired_timeout: Vec<VersionedCrdsValue>,
@@ -354,10 +354,10 @@ impl CrdsGossipPull {
     pub fn build_crds_filters(&self, crds: &Crds, bloom_size: usize) -> Vec<CrdsFilter> {
         let num = cmp::max(
             CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
-            crds.table.values().count() + self.purged_values.len(),
+            crds.table.len() + self.purged_values.len(),
         );
         let mut filters = CrdsFilter::new_complete_set(num, bloom_size);
-        for v in crds.table.values() {
+        for (_,v) in crds.table.into_iter() {
             filters
                 .iter_mut()
                 .for_each(|filter| filter.add(&v.value_hash));
@@ -393,7 +393,7 @@ impl CrdsGossipPull {
             return ret;
         }
         let mut total_skipped = 0;
-        for v in crds.table.values() {
+        for (_,v) in crds.table.into_iter() {
             recent.iter().enumerate().for_each(|(i, (caller, filter))| {
                 //skip values that are too new
                 if v.value.wallclock() > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)

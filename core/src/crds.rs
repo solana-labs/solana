@@ -26,8 +26,7 @@
 
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use evmap::{self, ReadHandle, WriteHandle};
-use std::sync::{Arc, RwLock, Mutex};
+use chashmap::CHashMap;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -35,8 +34,7 @@ use std::collections::HashMap;
 
 pub struct Crds {
     /// Stores the map of labels and values
-    pub reader: RwLock<ReadHandle<CrdsValueLabel, Box<VersionedCrdsValue>>>,
-    pub writer: Mutex<WriteHandle<CrdsValueLabel, Box<VersionedCrdsValue>>>,
+    pub table: CHashMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize,
 }
 
@@ -48,7 +46,7 @@ pub enum CrdsError {
 /// This structure stores some local metadata associated with the CrdsValue
 /// The implementation of PartialOrd ensures that the "highest" version is always picked to be
 /// stored in the Crds
-#[derive(PartialEq, Debug, Clone, Eq, Hash)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct VersionedCrdsValue {
     pub value: CrdsValue,
     /// local time when inserted
@@ -84,10 +82,8 @@ impl VersionedCrdsValue {
 
 impl Default for Crds {
     fn default() -> Self {
-        let (reader, writer) = evmap::new();
         Crds {
-            reader: Arc::new(RwLock::new(reader)),
-            writer: Arc::new(Mutex::new(writer)),
+            table: CHashMap::new(),
             num_inserts: 0,
         }
     }
@@ -149,7 +145,10 @@ impl Crds {
         self.table.get(label).map(|x| &x.value)
     }
 
-    pub fn lookup_versioned(&self, label: &CrdsValueLabel) -> Option<&VersionedCrdsValue> {
+    pub fn lookup_versioned(
+        &self,
+        label: &CrdsValueLabel,
+    ) -> Option<chashmap::ReadGuard<CrdsValueLabel, VersionedCrdsValue>> {
         self.table.get(label)
     }
 
@@ -177,7 +176,7 @@ impl Crds {
             .get(&Pubkey::default())
             .expect("must have default timeout");
         self.table
-            .iter()
+            .into_iter()
             .filter_map(|(k, v)| {
                 if now < v.local_timestamp
                     || (timeouts.get(&k.pubkey()).is_some()
@@ -190,12 +189,11 @@ impl Crds {
                     None
                 }
             })
-            .cloned()
             .collect()
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
-        self.table.swap_remove(key);
+        self.table.remove(key);
     }
 }
 
@@ -212,7 +210,7 @@ mod test {
         assert_eq!(crds.insert(val.clone(), 0).ok(), Some(None));
         assert_eq!(crds.table.len(), 1);
         assert!(crds.table.contains_key(&val.label()));
-        assert_eq!(crds.table[&val.label()].local_timestamp, 0);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 0);
     }
     #[test]
     fn test_update_old() {
@@ -220,7 +218,7 @@ mod test {
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
         assert_eq!(crds.insert(val.clone(), 1), Err(CrdsError::InsertFailed));
-        assert_eq!(crds.table[&val.label()].local_timestamp, 0);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 0);
     }
     #[test]
     fn test_update_new() {
@@ -238,7 +236,7 @@ mod test {
             crds.insert(val.clone(), 1).unwrap().unwrap().value,
             original
         );
-        assert_eq!(crds.table[&val.label()].local_timestamp, 1);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 1);
     }
     #[test]
     fn test_update_timestamp() {
@@ -250,29 +248,29 @@ mod test {
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
 
         crds.update_label_timestamp(&val.label(), 1);
-        assert_eq!(crds.table[&val.label()].local_timestamp, 1);
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 1);
+        assert_eq!(crds.table.get(&val.label()).unwrap().insert_timestamp, 0);
 
         let val2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(val2.label().pubkey(), val.label().pubkey());
         assert_matches!(crds.insert(val2.clone(), 0), Ok(Some(_)));
 
         crds.update_record_timestamp(&val.label().pubkey(), 2);
-        assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
-        assert_eq!(crds.table[&val2.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val2.label()].insert_timestamp, 0);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 2);
+        assert_eq!(crds.table.get(&val.label()).unwrap().insert_timestamp, 0);
+        assert_eq!(crds.table.get(&val2.label()).unwrap().local_timestamp, 2);
+        assert_eq!(crds.table.get(&val2.label()).unwrap().insert_timestamp, 0);
 
         crds.update_record_timestamp(&val.label().pubkey(), 1);
-        assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
+        assert_eq!(crds.table.get(&val.label()).unwrap().local_timestamp, 2);
+        assert_eq!(crds.table.get(&val.label()).unwrap().insert_timestamp, 0);
 
         let mut ci = ContactInfo::default();
         ci.wallclock += 1;
         let val3 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
         assert_matches!(crds.insert(val3, 3), Ok(Some(_)));
-        assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
-        assert_eq!(crds.table[&val2.label()].insert_timestamp, 3);
+        assert_eq!(crds.table.get(&val2.label()).unwrap().local_timestamp, 3);
+        assert_eq!(crds.table.get(&val2.label()).unwrap().insert_timestamp, 3);
     }
     #[test]
     fn test_find_old_records_default() {
