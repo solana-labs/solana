@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { FetchStatus } from "providers/accounts";
+import { FetchStatus } from "providers/cache";
 import {
   useFetchAccountOwnedTokens,
   useAccountOwnedTokens,
@@ -24,7 +24,8 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
     return null;
   }
 
-  const { status, tokens } = ownedTokens;
+  const { status } = ownedTokens;
+  const tokens = ownedTokens.data?.tokens;
   const fetching = status === FetchStatus.Fetching;
   if (fetching && (tokens === undefined || tokens.length === 0)) {
     return <LoadingCard message="Loading owned tokens" />;

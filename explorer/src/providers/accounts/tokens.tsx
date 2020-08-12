@@ -1,6 +1,7 @@
 import React from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { FetchStatus } from "./index";
+import * as Cache from "providers/cache";
+import { ActionType, FetchStatus } from "providers/cache";
 import { TokenAccountInfo } from "validators/accounts/token";
 import { useCluster } from "../cluster";
 import { coerce } from "superstruct";
@@ -11,63 +12,11 @@ export type TokenInfoWithPubkey = {
 };
 
 interface AccountTokens {
-  status: FetchStatus;
   tokens?: TokenInfoWithPubkey[];
 }
 
-interface Update {
-  type: "update";
-  url: string;
-  pubkey: PublicKey;
-  status: FetchStatus;
-  tokens?: TokenInfoWithPubkey[];
-}
-
-interface Clear {
-  type: "clear";
-  url: string;
-}
-
-type Action = Update | Clear;
-type State = {
-  url: string;
-  map: { [address: string]: AccountTokens };
-};
-
-type Dispatch = (action: Action) => void;
-
-function reducer(state: State, action: Action): State {
-  if (action.type === "clear") {
-    return {
-      url: action.url,
-      map: {},
-    };
-  } else if (action.url !== state.url) {
-    return state;
-  }
-
-  const address = action.pubkey.toBase58();
-  let addressEntry = state.map[address];
-  if (addressEntry && action.status === FetchStatus.Fetching) {
-    addressEntry = {
-      ...addressEntry,
-      status: FetchStatus.Fetching,
-    };
-  } else {
-    addressEntry = {
-      tokens: action.tokens,
-      status: action.status,
-    };
-  }
-
-  return {
-    ...state,
-    map: {
-      ...state.map,
-      [address]: addressEntry,
-    },
-  };
-}
+type State = Cache.State<AccountTokens>;
+type Dispatch = Cache.Dispatch<AccountTokens>;
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
@@ -75,11 +24,11 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type ProviderProps = { children: React.ReactNode };
 export function TokensProvider({ children }: ProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = React.useReducer(reducer, { url, map: {} });
+  const [state, dispatch] = Cache.useReducer<AccountTokens>(url);
 
   React.useEffect(() => {
-    dispatch({ url, type: "clear" });
-  }, [url]);
+    dispatch({ url, type: ActionType.Clear });
+  }, [dispatch, url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -99,33 +48,38 @@ async function fetchAccountTokens(
   pubkey: PublicKey,
   url: string
 ) {
+  const key = pubkey.toBase58();
   dispatch({
-    type: "update",
+    type: ActionType.Update,
+    key,
     status: FetchStatus.Fetching,
-    pubkey,
     url,
   });
 
   let status;
-  let tokens;
+  let data;
   try {
     const { value } = await new Connection(
       url,
       "recent"
     ).getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
-    tokens = value.map((accountInfo) => {
-      const parsedInfo = accountInfo.account.data.parsed.info;
-      const info = coerce(parsedInfo, TokenAccountInfo);
-      return { info, pubkey: accountInfo.pubkey };
-    });
+    data = {
+      tokens: value.map((accountInfo) => {
+        const parsedInfo = accountInfo.account.data.parsed.info;
+        const info = coerce(parsedInfo, TokenAccountInfo);
+        return { info, pubkey: accountInfo.pubkey };
+      }),
+    };
     status = FetchStatus.Fetched;
   } catch (error) {
     status = FetchStatus.FetchFailed;
   }
-  dispatch({ type: "update", url, status, tokens, pubkey });
+  dispatch({ type: ActionType.Update, url, status, data, key });
 }
 
-export function useAccountOwnedTokens(address: string) {
+export function useAccountOwnedTokens(
+  address: string
+): Cache.CacheEntry<AccountTokens> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
@@ -134,7 +88,7 @@ export function useAccountOwnedTokens(address: string) {
     );
   }
 
-  return context.map[address];
+  return context.entries[address];
 }
 
 export function useFetchAccountOwnedTokens() {

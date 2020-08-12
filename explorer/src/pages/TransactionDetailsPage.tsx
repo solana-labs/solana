@@ -3,7 +3,6 @@ import {
   useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
-  FetchStatus,
 } from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import { useCluster, ClusterStatus } from "providers/cluster";
@@ -27,6 +26,7 @@ import { Address } from "components/common/Address";
 import { Signature } from "components/common/Signature";
 import { intoTransactionInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
+import { FetchStatus } from "providers/cache";
 
 type Props = { signature: TransactionSignature };
 export function TransactionDetailsPage({ signature }: Props) {
@@ -67,13 +67,13 @@ function StatusCard({ signature }: Props) {
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!status || status.fetchStatus === FetchStatus.Fetching) {
+  if (!status || status.status === FetchStatus.Fetching) {
     return <LoadingCard />;
-  } else if (status?.fetchStatus === FetchStatus.FetchFailed) {
+  } else if (status.status === FetchStatus.FetchFailed) {
     return (
       <ErrorCard retry={() => fetchStatus(signature)} text="Fetch Failed" />
     );
-  } else if (!status.info) {
+  } else if (!status.data?.info) {
     if (firstAvailableBlock !== undefined) {
       return (
         <ErrorCard
@@ -86,7 +86,7 @@ function StatusCard({ signature }: Props) {
     return <ErrorCard retry={() => fetchStatus(signature)} text="Not Found" />;
   }
 
-  const { info } = status;
+  const { info } = status.data;
   const renderResult = () => {
     let statusClass = "success";
     let statusText = "Success";
@@ -102,8 +102,8 @@ function StatusCard({ signature }: Props) {
     );
   };
 
-  const fee = details?.transaction?.meta?.fee;
-  const transaction = details?.transaction?.transaction;
+  const fee = details?.data?.transaction?.meta?.fee;
+  const transaction = details?.data?.transaction?.transaction;
   const blockhash = transaction?.message.recentBlockhash;
   const isNonce = (() => {
     if (!transaction) return false;
@@ -203,18 +203,18 @@ function AccountsCard({ signature }: Props) {
   const fetchDetails = useFetchTransactionDetails();
   const refreshStatus = () => fetchStatus(signature);
   const refreshDetails = () => fetchDetails(signature);
-  const transaction = details?.transaction?.transaction;
+  const transaction = details?.data?.transaction?.transaction;
   const message = transaction?.message;
   const status = useTransactionStatus(signature);
 
   // Fetch details on load
   React.useEffect(() => {
-    if (status?.info?.confirmations === "max" && !details) {
+    if (status?.data?.info?.confirmations === "max" && !details) {
       fetchDetails(signature);
     }
   }, [signature, details, status, fetchDetails]);
 
-  if (!status || !status.info) {
+  if (!status?.data?.info) {
     return null;
   } else if (!details) {
     return (
@@ -223,15 +223,15 @@ function AccountsCard({ signature }: Props) {
         text="Details are not available until the transaction reaches MAX confirmations"
       />
     );
-  } else if (details.fetchStatus === FetchStatus.Fetching) {
+  } else if (details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
-  } else if (details?.fetchStatus === FetchStatus.FetchFailed) {
+  } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
-  } else if (!details.transaction || !message) {
+  } else if (!details.data?.transaction || !message) {
     return <ErrorCard retry={refreshDetails} text="Not Found" />;
   }
 
-  const { meta } = details.transaction;
+  const { meta } = details.data.transaction;
   if (!meta) {
     if (isCached(url, signature)) {
       return null;
@@ -308,14 +308,14 @@ function InstructionsSection({ signature }: Props) {
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
 
-  if (!status || !status.info || !details || !details.transaction) return null;
+  if (!status?.data?.info || !details?.data?.transaction) return null;
 
-  const { transaction } = details.transaction;
+  const { transaction } = details.data.transaction;
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
-  const result = status.info.result;
+  const result = status.data.info.result;
   const instructionDetails = transaction.message.instructions.map(
     (next, index) => {
       if ("parsed" in next) {

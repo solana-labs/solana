@@ -1,10 +1,7 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import {
-  FetchStatus,
-  useFetchAccountInfo,
-  useAccountInfo,
-} from "providers/accounts";
+import { FetchStatus } from "providers/cache";
+import { useFetchAccountInfo, useAccountInfo } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
 import { ErrorCard } from "components/common/ErrorCard";
@@ -62,12 +59,13 @@ function InfoSection({ pubkey }: { pubkey: PublicKey }) {
     return <LoadingCard />;
   } else if (
     info.status === FetchStatus.FetchFailed ||
-    info.lamports === undefined
+    info.data?.lamports === undefined
   ) {
     return <ErrorCard retry={() => refresh(pubkey)} text="Fetch Failed" />;
   }
 
-  const data = info.details?.data;
+  const account = info.data;
+  const data = account?.details?.data;
   if (data && data.name === "stake") {
     let stakeAccountType, stakeAccount;
     if ("accountType" in data.parsed) {
@@ -80,15 +78,15 @@ function InfoSection({ pubkey }: { pubkey: PublicKey }) {
 
     return (
       <StakeAccountSection
-        account={info}
+        account={account}
         stakeAccount={stakeAccount}
         stakeAccountType={stakeAccountType}
       />
     );
   } else if (data && data.name === "spl-token") {
-    return <TokenAccountSection account={info} tokenAccount={data.parsed} />;
+    return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
   } else {
-    return <UnknownAccountCard account={info} />;
+    return <UnknownAccountCard account={account} />;
   }
 }
 
@@ -96,7 +94,7 @@ type MoreTabs = "history" | "tokens";
 function MoreSection({ pubkey, tab }: { pubkey: PublicKey; tab: MoreTabs }) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
-  if (!info || info.lamports === undefined) return null;
+  if (info?.data === undefined) return null;
 
   return (
     <>

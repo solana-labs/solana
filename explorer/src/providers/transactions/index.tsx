@@ -2,27 +2,14 @@ import React from "react";
 import {
   TransactionSignature,
   Connection,
-  SystemProgram,
-  Account,
   SignatureResult,
-  PublicKey,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { useQuery } from "utils/url";
-import { useCluster, Cluster, ClusterStatus } from "../cluster";
-import {
-  DetailsProvider,
-  StateContext as DetailsStateContext,
-} from "./details";
-import base58 from "bs58";
-import { useFetchAccountInfo } from "../accounts";
+import { useCluster } from "../cluster";
+import { DetailsProvider } from "./details";
+import * as Cache from "providers/cache";
+import { ActionType, FetchStatus } from "providers/cache";
 import { CACHED_STATUSES, isCached } from "./cached";
-
-export enum FetchStatus {
-  Fetching,
-  FetchFailed,
-  Fetched,
-}
+export { useTransactionDetails } from "./details";
 
 export type Confirmations = number | "max";
 
@@ -36,125 +23,27 @@ export interface TransactionStatusInfo {
 }
 
 export interface TransactionStatus {
-  fetchStatus: FetchStatus;
   signature: TransactionSignature;
-  info?: TransactionStatusInfo;
-}
-
-type Transactions = { [signature: string]: TransactionStatus };
-interface State {
-  transactions: Transactions;
-  url: string;
-}
-
-export enum ActionType {
-  UpdateStatus,
-  FetchSignature,
-  Clear,
-}
-
-interface UpdateStatus {
-  type: ActionType.UpdateStatus;
-  url: string;
-  signature: TransactionSignature;
-  fetchStatus: FetchStatus;
-  info?: TransactionStatusInfo;
-}
-
-interface FetchSignature {
-  type: ActionType.FetchSignature;
-  url: string;
-  signature: TransactionSignature;
-}
-
-interface Clear {
-  type: ActionType.Clear;
-  url: string;
-}
-
-type Action = UpdateStatus | FetchSignature | Clear;
-type Dispatch = (action: Action) => void;
-
-function reducer(state: State, action: Action): State {
-  if (action.type === ActionType.Clear) {
-    return { url: action.url, transactions: {} };
-  } else if (action.url !== state.url) {
-    return state;
-  }
-
-  switch (action.type) {
-    case ActionType.FetchSignature: {
-      const signature = action.signature;
-      const transaction = state.transactions[signature];
-      if (transaction) {
-        const transactions = {
-          ...state.transactions,
-          [action.signature]: {
-            ...transaction,
-            fetchStatus: FetchStatus.Fetching,
-            info: undefined,
-          },
-        };
-        return { ...state, transactions };
-      } else {
-        const transactions = {
-          ...state.transactions,
-          [action.signature]: {
-            signature: action.signature,
-            fetchStatus: FetchStatus.Fetching,
-          },
-        };
-        return { ...state, transactions };
-      }
-    }
-
-    case ActionType.UpdateStatus: {
-      const transaction = state.transactions[action.signature];
-      if (transaction) {
-        const transactions = {
-          ...state.transactions,
-          [action.signature]: {
-            ...transaction,
-            fetchStatus: action.fetchStatus,
-            info: action.info,
-          },
-        };
-        return { ...state, transactions };
-      }
-      break;
-    }
-  }
-  return state;
+  info: TransactionStatusInfo | null;
 }
 
 export const TX_ALIASES = ["tx", "txn", "transaction"];
+
+type State = Cache.State<TransactionStatus>;
+type Dispatch = Cache.Dispatch<TransactionStatus>;
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
-  const { cluster, status: clusterStatus, url } = useCluster();
-  const [state, dispatch] = React.useReducer(reducer, {
-    transactions: {},
-    url,
-  });
+  const { url } = useCluster();
+  const [state, dispatch] = Cache.useReducer<TransactionStatus>(url);
 
-  const fetchAccount = useFetchAccountInfo();
-  const query = useQuery();
-  const testFlag = query.get("test");
-
-  // Check transaction statuses whenever cluster updates
+  // Clear accounts cache whenever cluster is changed
   React.useEffect(() => {
-    if (clusterStatus === ClusterStatus.Connecting) {
-      dispatch({ type: ActionType.Clear, url });
-    }
-
-    // Create a test transaction
-    if (cluster === Cluster.Devnet && testFlag !== null) {
-      createTestTransaction(dispatch, fetchAccount, url, clusterStatus);
-    }
-  }, [testFlag, cluster, clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
+    dispatch({ type: ActionType.Clear, url });
+  }, [dispatch, url]);
 
   return (
     <StateContext.Provider value={state}>
@@ -165,64 +54,23 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   );
 }
 
-async function createTestTransaction(
-  dispatch: Dispatch,
-  fetchAccount: (pubkey: PublicKey) => void,
-  url: string,
-  clusterStatus: ClusterStatus
-) {
-  const testKey = process.env.REACT_APP_TEST_KEY;
-  let testAccount = new Account();
-  if (testKey) {
-    testAccount = new Account(base58.decode(testKey));
-  }
-
-  try {
-    const connection = new Connection(url, "recent");
-    const signature = await connection.requestAirdrop(
-      testAccount.publicKey,
-      100000
-    );
-    fetchTransactionStatus(dispatch, signature, url);
-    fetchAccount(testAccount.publicKey);
-  } catch (error) {
-    console.error("Failed to create test success transaction", error);
-  }
-
-  try {
-    const connection = new Connection(url, "recent");
-    const tx = SystemProgram.transfer({
-      fromPubkey: testAccount.publicKey,
-      toPubkey: testAccount.publicKey,
-      lamports: 1,
-    });
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      tx,
-      [testAccount],
-      { confirmations: 1, skipPreflight: false }
-    );
-    fetchTransactionStatus(dispatch, signature, url);
-  } catch (error) {
-    console.error("Failed to create test failure transaction", error);
-  }
-}
-
 export async function fetchTransactionStatus(
   dispatch: Dispatch,
   signature: TransactionSignature,
   url: string
 ) {
   dispatch({
-    type: ActionType.FetchSignature,
-    signature,
+    type: ActionType.Update,
+    key: signature,
+    status: FetchStatus.Fetching,
     url,
   });
 
   let fetchStatus;
-  let info: TransactionStatusInfo | undefined;
+  let data;
   if (isCached(url, signature)) {
-    info = CACHED_STATUSES[signature];
+    const info = CACHED_STATUSES[signature];
+    data = { signature, info };
     fetchStatus = FetchStatus.Fetched;
   } else {
     try {
@@ -231,6 +79,7 @@ export async function fetchTransactionStatus(
         searchTransactionHistory: true,
       });
 
+      let info = null;
       if (value !== null) {
         let blockTime = null;
         try {
@@ -260,6 +109,7 @@ export async function fetchTransactionStatus(
           result: { err: value.err },
         };
       }
+      data = { signature, info };
       fetchStatus = FetchStatus.Fetched;
     } catch (error) {
       console.error("Failed to fetch transaction status", error);
@@ -268,10 +118,10 @@ export async function fetchTransactionStatus(
   }
 
   dispatch({
-    type: ActionType.UpdateStatus,
-    signature,
-    fetchStatus,
-    info,
+    type: ActionType.Update,
+    key: signature,
+    status: fetchStatus,
+    data,
     url,
   });
 }
@@ -286,24 +136,14 @@ export function useTransactions() {
   return context;
 }
 
-export function useTransactionStatus(signature: TransactionSignature) {
+export function useTransactionStatus(
+  signature: TransactionSignature
+): Cache.CacheEntry<TransactionStatus> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
     throw new Error(
       `useTransactionStatus must be used within a TransactionsProvider`
-    );
-  }
-
-  return context.transactions[signature];
-}
-
-export function useTransactionDetails(signature: TransactionSignature) {
-  const context = React.useContext(DetailsStateContext);
-
-  if (!context) {
-    throw new Error(
-      `useTransactionDetails must be used within a TransactionsProvider`
     );
   }
 

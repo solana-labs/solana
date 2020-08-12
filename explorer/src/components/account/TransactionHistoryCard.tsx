@@ -1,10 +1,7 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import {
-  FetchStatus,
-  useAccountInfo,
-  useAccountHistory,
-} from "providers/accounts";
+import { FetchStatus } from "providers/cache";
+import { useAccountInfo, useAccountHistory } from "providers/accounts";
 import { useFetchAccountHistory } from "providers/accounts/history";
 import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
@@ -22,9 +19,11 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
     if (!history) refresh();
   }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!info || !history || info.lamports === undefined) {
+  if (!history || info?.data === undefined) {
     return null;
-  } else if (history.fetched === undefined) {
+  }
+
+  if (history?.data === undefined) {
     if (history.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading history" />;
     }
@@ -34,7 +33,8 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
     );
   }
 
-  if (history.fetched.length === 0) {
+  const transactions = history.data.fetched;
+  if (transactions.length === 0) {
     if (history.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading history" />;
     }
@@ -48,8 +48,6 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   }
 
   const detailsList: React.ReactNode[] = [];
-  const transactions = history.fetched;
-
   for (var i = 0; i < transactions.length; i++) {
     const slot = transactions[i].slot;
     const slotTransactions = [transactions[i]];
@@ -126,7 +124,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
       </div>
 
       <div className="card-footer">
-        {history.foundOldest ? (
+        {history.data.foundOldest ? (
           <div className="text-muted text-center">Fetched full history</div>
         ) : (
           <button
