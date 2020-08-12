@@ -74,7 +74,7 @@ function StatusCard({ signature }: Props) {
       <ErrorCard retry={() => fetchStatus(signature)} text="Fetch Failed" />
     );
   } else if (!status.data?.info) {
-    if (firstAvailableBlock !== undefined) {
+    if (firstAvailableBlock !== undefined && firstAvailableBlock > 1) {
       return (
         <ErrorCard
           retry={() => fetchStatus(signature)}
