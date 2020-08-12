@@ -11,7 +11,7 @@ import {
 } from "providers/accounts/history";
 import {
   useAccountOwnedTokens,
-  TokenAccountData,
+  TokenInfoWithPubkey,
 } from "providers/accounts/tokens";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
@@ -40,7 +40,7 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   return <TokenHistoryTable tokens={tokens} />;
 }
 
-function TokenHistoryTable({ tokens }: { tokens: TokenAccountData[] }) {
+function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const accountHistories = useAccountHistories();
   const fetchAccountHistory = useFetchAccountHistory();
 
@@ -77,7 +77,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenAccountData[] }) {
 
   const mintAndTxs = tokens
     .map((token) => ({
-      mint: token.mint,
+      mint: token.info.mint,
       history: accountHistories[token.pubkey.toBase58()],
     }))
     .filter(({ history }) => {
