@@ -22,7 +22,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   }, [mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const supplyTotal = supply?.data?.uiAmount;
-  if (!supplyTotal || !largestAccounts) {
+  if (supplyTotal === undefined || !largestAccounts) {
     return null;
   }
 
@@ -78,6 +78,10 @@ const renderAccountRow = (
   index: number,
   supply: number
 ) => {
+  let percent = "-";
+  if (supply > 0) {
+    percent = `${((100 * account.uiAmount) / supply).toFixed(3)}%`;
+  }
   return (
     <tr key={index}>
       <td>
@@ -87,10 +91,7 @@ const renderAccountRow = (
         <Address pubkey={account.address} link />
       </td>
       <td className="text-right">{account.uiAmount}</td>
-      <td className="text-right">{`${(
-        (100 * account.uiAmount) /
-        supply
-      ).toFixed(3)}%`}</td>
+      <td className="text-right">{percent}</td>
     </tr>
   );
 };
