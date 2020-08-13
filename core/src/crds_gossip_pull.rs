@@ -91,13 +91,17 @@ impl CrdsFilter {
         // for small ratios this can result in a negative number, ensure it returns 0 instead
         ((num_items / max_items).log2().ceil()).max(0.0) as u32
     }
-    fn hash_as_u64(item: &Hash) -> u64 {
+    pub fn hash_as_u64(item: &Hash) -> u64 {
         let arr = item.as_ref();
         let mut accum = 0;
         for (i, val) in arr.iter().enumerate().take(8) {
             accum |= (u64::from(*val)) << (i * 8) as u64;
         }
         accum
+    }
+    pub fn test_mask_u64(&self, item: u64, ones: u64) -> bool {
+        let bits = item | ones;
+        bits == self.mask
     }
     pub fn test_mask(&self, item: &Hash) -> bool {
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
@@ -114,6 +118,9 @@ impl CrdsFilter {
         if !self.test_mask(item) {
             return true;
         }
+        self.filter.contains(item)
+    }
+    pub fn filter_contains(&self, item: &Hash) -> bool {
         self.filter.contains(item)
     }
 }
@@ -395,18 +402,30 @@ impl CrdsGossipPull {
             return ret;
         }
         let mut total_skipped = 0;
-        for v in crds.table.values() {
-            recent.iter().enumerate().for_each(|(i, (caller, filter))| {
-                //skip values that are too new
-                if v.value.wallclock() > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
-                {
-                    total_skipped += 1;
-                    return;
-                }
-                if !filter.contains(&v.value_hash) {
-                    ret[i].push(v.value.clone());
-                }
-            });
+        let mask_ones: Vec<_> = recent
+            .iter()
+            .map(|(_caller, filter)| (!0u64).checked_shr(filter.mask_bits).unwrap_or(!0u64))
+            .collect();
+        for (label, mask) in crds.masks.iter() {
+            recent.iter().zip(mask_ones.iter()).enumerate().for_each(
+                |(i, ((caller, filter), mask_ones))| {
+                    if filter.test_mask_u64(*mask, *mask_ones) {
+                        let item = crds.table.get(label).unwrap();
+
+                        //skip values that are too new
+                        if item.value.wallclock()
+                            > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
+                        {
+                            total_skipped += 1;
+                            return;
+                        }
+
+                        if !filter.filter_contains(&item.value_hash) {
+                            ret[i].push(item.value.clone());
+                        }
+                    }
+                },
+            );
         }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
