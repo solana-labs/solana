@@ -40,6 +40,10 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   }
 
   const accounts = largestAccounts.data.largest;
+  if (accounts.length === 0) {
+    return <ErrorCard text="No holders found" />;
+  }
+
   return (
     <>
       <div className="card">
