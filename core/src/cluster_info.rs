@@ -829,12 +829,12 @@ impl ClusterInfo {
             .crds
             .table
             .into_iter()
-            .filter(|(_, x)| {
+            .filter(|(_, ref x)| {
                 since
                     .map(|since| x.insert_timestamp > since)
                     .unwrap_or(true)
             })
-            .filter_map(|(_, x)| Some((x.value.epoch_slots()?.clone(), x.insert_timestamp)))
+            .filter_map(|(_, ref x)| Some((x.value.epoch_slots()?.clone(), x.insert_timestamp)))
             .collect();
         let max = vals.iter().map(|x| x.1).max().or(since);
         let vec = vals.into_iter().map(|x| x.0).collect();
@@ -846,9 +846,9 @@ impl ClusterInfo {
             .crds
             .table
             .get(&CrdsValueLabel::Version(*pubkey))
-            .map(|x| x.value.version())
+            .map(|ref x| x.value.version().cloned())
             .flatten()
-            .map(|version| version.version.clone())
+            .map(|version| version.version)
     }
 
     /// all validators that have a valid rpc port regardless of `shred_version`.
