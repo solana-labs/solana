@@ -384,12 +384,20 @@ impl LedgerStorage {
 
         let mut infos = vec![];
 
-        // Return the next `limit` tx-by-addr keys
+        let starting_slot_tx_by_addr_infos = bigtable
+            .get_bincode_cell::<Vec<TransactionByAddrInfo>>(
+                "tx-by-addr",
+                format!("{}{}", address_prefix, slot_to_key(!first_slot)),
+            )
+            .await?;
+
+        // Return the next tx-by-addr keys of amount `limit` plus extra to account for the largest
+        // number that might be flitered out
         let tx_by_addr_info_keys = bigtable
             .get_row_keys(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
-                limit as i64,
+                limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
 
