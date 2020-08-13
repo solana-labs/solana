@@ -16,7 +16,9 @@ pub struct RentCollector {
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
-    pub operating_mode: OperatingMode,
+    // arrange flag meaning so that for RentCollector to enable new behavior by bool::default()
+    #[serde(skip)]
+    pub enable_old_behavior: bool,
 }
 
 impl Default for RentCollector {
@@ -27,7 +29,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
-            operating_mode: OperatingMode::Development,
+            enable_old_behavior: bool::default(),
         }
     }
 }
@@ -45,16 +47,28 @@ impl RentCollector {
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
-            operating_mode,
+            enable_old_behavior: Self::enable_old_behavior(epoch, operating_mode),
         }
     }
 
-    pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
+    pub fn clone_with_epoch(&self, epoch: Epoch, operating_mode: OperatingMode) -> Self {
         Self {
             epoch,
+            enable_old_behavior: Self::enable_old_behavior(epoch, operating_mode),
             ..self.clone()
         }
     }
+
+    fn enable_old_behavior(epoch: Epoch, operating_mode: OperatingMode) -> bool {
+        let enable_new_behavior = match operating_mode {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => epoch >= Epoch::max_value(),
+            OperatingMode::Stable => epoch >= Epoch::max_value(),
+        };
+
+        !enable_new_behavior
+    }
+
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
@@ -84,14 +98,8 @@ impl RentCollector {
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
-                    let should_be_in_new_behavior = match self.operating_mode {
-                        OperatingMode::Development => true,
-                        OperatingMode::Preview => self.epoch >= Epoch::max_value(),
-                        OperatingMode::Stable => self.epoch >= Epoch::max_value(),
-                    };
-
                     account.rent_epoch = self.epoch
-                        + if should_be_in_new_behavior && exempt {
+                        + if !self.enable_old_behavior && exempt {
                             // Rent isn't collected for the next epoch
                             // Make sure to check exempt status later in curent epoch again
                             0
@@ -139,7 +147,8 @@ mod tests {
             (account.clone(), account)
         };
 
-        let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
+        let rent_collector =
+            RentCollector::default().clone_with_epoch(new_epoch, OperatingMode::Development);
 
         // collect rent on a newly-created account
         let collected =
@@ -173,7 +182,8 @@ mod tests {
         assert_eq!(account.rent_epoch, 0);
 
         // create a tested rent collector
-        let rent_collector = RentCollector::default().clone_with_epoch(epoch);
+        let rent_collector =
+            RentCollector::default().clone_with_epoch(epoch, OperatingMode::Development);
 
         // first mark account as being collected while being rent-exempt
         collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
