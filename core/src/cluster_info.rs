@@ -1854,15 +1854,15 @@ impl ClusterInfo {
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
         trace!("PullResponse me: {} from: {} len={}", self.id, from, len);
-
-        if let Some(shred_version) = self.lookup_contact_info(from, |ci| ci.shred_version) {
-            Self::filter_by_shred_version(
-                from,
-                &mut crds_values,
-                shred_version,
-                self.my_shred_version(),
-            );
-        }
+        let shred_version = self
+            .lookup_contact_info(from, |ci| ci.shred_version)
+            .unwrap_or(0);
+        Self::filter_by_shred_version(
+            from,
+            &mut crds_values,
+            shred_version,
+            self.my_shred_version(),
+        );
         let filtered_len = crds_values.len();
 
         let mut pull_stats = ProcessPullStats::default();
@@ -1914,7 +1914,8 @@ impl ClusterInfo {
         shred_version: u16,
         my_shred_version: u16,
     ) {
-        if my_shred_version != 0 && shred_version != 0 && shred_version != my_shred_version {
+        // Always run filter on spies
+        if my_shred_version != 0 && shred_version != my_shred_version {
             // Allow someone to update their own ContactInfo so they
             // can change shred versions if needed.
             crds_values.retain(|crds_value| match &crds_value.data {
@@ -1935,14 +1936,15 @@ impl ClusterInfo {
         self.stats.push_message_count.add_relaxed(1);
         let len = crds_values.len();
 
-        if let Some(shred_version) = self.lookup_contact_info(from, |ci| ci.shred_version) {
-            Self::filter_by_shred_version(
-                from,
-                &mut crds_values,
-                shred_version,
-                self.my_shred_version(),
-            );
-        }
+        let shred_version = self
+            .lookup_contact_info(from, |ci| ci.shred_version)
+            .unwrap_or(0);
+        Self::filter_by_shred_version(
+            from,
+            &mut crds_values,
+            shred_version,
+            self.my_shred_version(),
+        );
         let filtered_len = crds_values.len();
         self.stats
             .push_message_value_count
