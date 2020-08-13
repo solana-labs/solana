@@ -103,28 +103,8 @@ impl AggregateCommitmentService {
             }
 
             let mut aggregate_commitment_time = Measure::start("aggregate-commitment-ms");
-            let (block_commitment, rooted_stake) =
-                Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
-
-            let highest_confirmed_root =
-                get_highest_confirmed_root(rooted_stake, aggregation_data.total_stake);
-
-            let mut new_block_commitment = BlockCommitmentCache::new(
-                block_commitment,
-                aggregation_data.total_stake,
-                CommitmentSlots {
-                    slot: aggregation_data.bank.slot(),
-                    root: aggregation_data.root,
-                    highest_confirmed_slot: aggregation_data.root,
-                    highest_confirmed_root,
-                },
-            );
-            let highest_confirmed_slot = new_block_commitment.calculate_highest_confirmed_slot();
-            new_block_commitment.set_highest_confirmed_slot(highest_confirmed_slot);
-
-            let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
-
-            std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+            let update_commitment_slots =
+                Self::update_commitment_cache(block_commitment_cache, aggregation_data, ancestors);
             aggregate_commitment_time.stop();
             datapoint_info!(
                 "block-commitment-cache",
@@ -138,8 +118,38 @@ impl AggregateCommitmentService {
             // Triggers rpc_subscription notifications as soon as new commitment data is available,
             // sending just the commitment cache slot information that the notifications thread
             // needs
-            subscriptions.notify_subscribers(w_block_commitment_cache.commitment_slots());
+            subscriptions.notify_subscribers(update_commitment_slots);
         }
+    }
+
+    fn update_commitment_cache(
+        block_commitment_cache: &RwLock<BlockCommitmentCache>,
+        aggregation_data: CommitmentAggregationData,
+        ancestors: Vec<u64>,
+    ) -> CommitmentSlots {
+        let (block_commitment, rooted_stake) =
+            Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
+
+        let highest_confirmed_root =
+            get_highest_confirmed_root(rooted_stake, aggregation_data.total_stake);
+
+        let mut new_block_commitment = BlockCommitmentCache::new(
+            block_commitment,
+            aggregation_data.total_stake,
+            CommitmentSlots {
+                slot: aggregation_data.bank.slot(),
+                root: aggregation_data.root,
+                highest_confirmed_slot: aggregation_data.root,
+                highest_confirmed_root,
+            },
+        );
+        let highest_confirmed_slot = new_block_commitment.calculate_highest_confirmed_slot();
+        new_block_commitment.set_highest_confirmed_slot(highest_confirmed_slot);
+
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        w_block_commitment_cache.commitment_slots()
     }
 
     pub fn aggregate_commitment(
