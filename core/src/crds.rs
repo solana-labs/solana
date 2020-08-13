@@ -24,6 +24,7 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
+use crate::crds_gossip_pull::CrdsFilter;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
 use indexmap::map::IndexMap;
@@ -37,6 +38,8 @@ pub struct Crds {
     /// Stores the map of labels and values
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize,
+
+    pub masks: IndexMap<CrdsValueLabel, u64>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,6 +89,7 @@ impl Default for Crds {
         Crds {
             table: IndexMap::new(),
             num_inserts: 0,
+            masks: IndexMap::new(),
         }
     }
 }
@@ -126,6 +130,10 @@ impl Crds {
             .map(|current| new_value > *current)
             .unwrap_or(true);
         if do_insert {
+            self.masks.insert(
+                label.clone(),
+                CrdsFilter::hash_as_u64(&new_value.value_hash),
+            );
             let old = self.table.insert(label, new_value);
             self.num_inserts += 1;
             Ok(old)
@@ -193,6 +201,7 @@ impl Crds {
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
         self.table.swap_remove(key);
+        self.masks.swap_remove(key);
     }
 }
 
