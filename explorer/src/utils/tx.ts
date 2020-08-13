@@ -28,7 +28,8 @@ export const PROGRAM_IDS = {
 const LOADER_IDS = {
   MoveLdr111111111111111111111111111111111111: "Move Loader",
   NativeLoader1111111111111111111111111111111: "Native Loader",
-  [BpfLoader.programId.toBase58()]: "BPF Loader",
+  [BpfLoader.programId().toBase58()]: "BPF Loader",
+  [BpfLoader.programId(2).toBase58()]: "BPF Loader 2",
 };
 
 const SYSVAR_ID: { [key: string]: string } = {
