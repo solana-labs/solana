@@ -22,14 +22,11 @@ export const TokenAccountInfo = pick({
   isNative: boolean(),
   mint: Pubkey,
   owner: Pubkey,
-  amount: optional(number()), // TODO remove when ui amount is deployed
-  tokenAmount: optional(
-    object({
-      decimals: number(),
-      uiAmount: number(),
-      amount: string(),
-    })
-  ),
+  tokenAmount: pick({
+    decimals: number(),
+    uiAmount: number(),
+    amount: string(),
+  }),
   delegate: nullable(optional(Pubkey)),
   delegatedAmount: optional(number()),
 });

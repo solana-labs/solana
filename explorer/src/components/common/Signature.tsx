@@ -42,7 +42,6 @@ export function Signature({ signature, alignRight, link }: Props) {
         {link ? (
           <Link className="" to={clusterPath(`/tx/${signature}`)}>
             {signature}
-            <span className="fe fe-external-link ml-2"></span>
           </Link>
         ) : (
           signature

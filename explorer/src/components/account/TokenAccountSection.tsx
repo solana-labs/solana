@@ -12,6 +12,8 @@ import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
 import { useFetchTokenSupply, useTokenSupply } from "providers/mints/supply";
 import { FetchStatus } from "providers/cache";
+import { TokenRegistry } from "tokenRegistry";
+import { useCluster } from "providers/cluster";
 
 export function TokenAccountSection({
   account,
@@ -46,6 +48,7 @@ function MintAccountCard({
   account: Account;
   info: MintAccountInfo;
 }) {
+  const { cluster } = useCluster();
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
   const supply = useTokenSupply(mintAddress);
@@ -70,18 +73,20 @@ function MintAccountCard({
       renderSupply = "Fetch failed";
     }
   } else {
-    renderSupply = supplyTotal;
+    const unit = TokenRegistry.get(mintAddress, cluster)?.symbol;
+    renderSupply = unit ? `${supplyTotal} ${unit}` : supplyTotal;
   }
 
   React.useEffect(() => {
     if (!supply) refreshSupply();
   }, [mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const tokenInfo = TokenRegistry.get(mintAddress, cluster);
   return (
     <div className="card">
       <div className="card-header">
         <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Token Mint Account
+          {tokenInfo ? "Overview" : "Token Mint"}
         </h3>
         <button className="btn btn-white btn-sm" onClick={refresh}>
           <span className="fe fe-refresh-cw mr-2"></span>
@@ -100,6 +105,21 @@ function MintAccountCard({
           <td>Total Supply</td>
           <td className="text-lg-right">{renderSupply}</td>
         </tr>
+        {tokenInfo && (
+          <tr>
+            <td>Website</td>
+            <td className="text-lg-right">
+              <a
+                rel="noopener noreferrer"
+                target="_blank"
+                href={tokenInfo.website}
+              >
+                {tokenInfo.website}
+                <span className="fe fe-external-link ml-2"></span>
+              </a>
+            </td>
+          </tr>
+        )}
         <tr>
           <td>Decimals</td>
           <td className="text-lg-right">{info.decimals}</td>
@@ -131,13 +151,11 @@ function TokenAccountCard({
   info: TokenAccountInfo;
 }) {
   const refresh = useFetchAccountInfo();
+  const { cluster } = useCluster();
 
-  let balance;
-  if ("amount" in info) {
-    balance = info.amount;
-  } else {
-    balance = info.tokenAmount?.uiAmount;
-  }
+  const balance = info.tokenAmount?.uiAmount;
+  const unit =
+    TokenRegistry.get(info.mint.toBase58(), cluster)?.symbol || "tokens";
 
   return (
     <div className="card">
@@ -174,15 +192,15 @@ function TokenAccountCard({
           </td>
         </tr>
         <tr>
-          <td>Balance (tokens)</td>
+          <td>Balance ({unit})</td>
           <td className="text-lg-right">{balance}</td>
         </tr>
-        <tr>
-          <td>Status</td>
-          <td className="text-lg-right">
-            {info.isInitialized ? "Initialized" : "Uninitialized"}
-          </td>
-        </tr>
+        {!info.isInitialized && (
+          <tr>
+            <td>Status</td>
+            <td className="text-lg-right">Uninitialized</td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );
@@ -235,12 +253,12 @@ function MultisigAccountCard({
             </td>
           </tr>
         ))}
-        <tr>
-          <td>Status</td>
-          <td className="text-lg-right">
-            {info.isInitialized ? "Initialized" : "Uninitialized"}
-          </td>
-        </tr>
+        {!info.isInitialized && (
+          <tr>
+            <td>Status</td>
+            <td className="text-lg-right">Uninitialized</td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );

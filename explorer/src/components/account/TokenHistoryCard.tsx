@@ -233,7 +233,7 @@ function TokenTransactionRow({
                 </td>
 
                 <td>
-                  <Address pubkey={mint} link />
+                  <Address pubkey={mint} link truncate />
                 </td>
 
                 <td>{typeName}</td>
