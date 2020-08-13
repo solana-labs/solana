@@ -2047,8 +2047,9 @@ impl Blockstore {
                         && key_address == address
                         && slot >= first_available_block
                     {
-                        println!("{:?} {:?}", i, slot);
-                        address_signatures.push((slot, signature));
+                        if self.is_root(slot) {
+                            address_signatures.push((slot, signature));
+                        }
                         continue;
                     }
                 }
@@ -2079,8 +2080,9 @@ impl Blockstore {
                     && key_address == address
                     && slot >= first_available_block
                 {
-                    println!("{:?} {:?}", i, slot);
-                    address_signatures.push((slot, signature));
+                    if self.is_root(slot) {
+                        address_signatures.push((slot, signature));
+                    }
                     continue;
                 }
             }
