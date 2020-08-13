@@ -173,3 +173,20 @@ h4.slot-pill {
 .search-bar__menu {
   border-radius: $border-radius !important;
 }
+
+.token-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.address-truncate {
+  @include media-breakpoint-down(md) {
+    max-width: 180px;
+    display: inline-block;
+    vertical-align: bottom;
+  }
+
+  @include media-breakpoint-down(sm) {
+    max-width: 120px;
+  }
+}

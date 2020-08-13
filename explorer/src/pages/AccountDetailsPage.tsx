@@ -18,6 +18,7 @@ import { OwnedTokensCard } from "components/account/OwnedTokensCard";
 import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
+import { TokenRegistry } from "tokenRegistry";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -31,8 +32,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
     <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <h6 className="header-pretitle">Details</h6>
-          <h4 className="header-title">Account</h4>
+          <AccountHeader address={address} />
         </div>
       </div>
       {!pubkey ? (
@@ -41,6 +41,38 @@ export function AccountDetailsPage({ address, tab }: Props) {
         <DetailsSections pubkey={pubkey} tab={tab} />
       )}
     </div>
+  );
+}
+
+export function AccountHeader({ address }: { address: string }) {
+  const { cluster } = useCluster();
+  const tokenDetails = TokenRegistry.get(address, cluster);
+  if (tokenDetails) {
+    return (
+      <div className="row align-items-end">
+        <div className="col-auto">
+          <div className="avatar avatar-lg header-avatar-top">
+            <img
+              src={tokenDetails.logo}
+              alt="token logo"
+              className="avatar-img rounded-circle border border-4 border-body"
+            />
+          </div>
+        </div>
+
+        <div className="col mb-3 ml-n3 ml-md-n2">
+          <h6 className="header-pretitle">Token</h6>
+          <h2 className="header-title">{tokenDetails.name}</h2>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <h6 className="header-pretitle">Details</h6>
+      <h2 className="header-title">Account</h2>
+    </>
   );
 }
 
@@ -79,9 +111,9 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
   if (data && data?.name === "spl-token") {
     if (data.parsed.type === "mint") {
       tabs.push({
-        slug: "holders",
-        title: "Holders",
-        path: "/holders",
+        slug: "largest",
+        title: "Distribution",
+        path: "/largest",
       });
     }
   } else {
@@ -139,7 +171,7 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "holders";
+type MoreTabs = "history" | "tokens" | "largest";
 function MoreSection({
   account,
   tab,
@@ -180,7 +212,7 @@ function MoreSection({
         </>
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
-      {tab === "holders" && <TokenLargestAccountsCard pubkey={pubkey} />}
+      {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
     </>
   );
 }

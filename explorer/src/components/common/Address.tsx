@@ -4,6 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
 import { displayAddress } from "utils/tx";
 import { Pubkey } from "solana-sdk-wasm";
+import { useCluster } from "providers/cluster";
 
 type CopyState = "copy" | "copied";
 type Props = {
@@ -11,11 +12,13 @@ type Props = {
   alignRight?: boolean;
   link?: boolean;
   raw?: boolean;
+  truncate?: boolean;
 };
 
-export function Address({ pubkey, alignRight, link, raw }: Props) {
+export function Address({ pubkey, alignRight, link, raw, truncate }: Props) {
   const [state, setState] = useState<CopyState>("copy");
   const address = pubkey.toBase58();
+  const { cluster } = useCluster();
 
   const copyToClipboard = () => navigator.clipboard.writeText(address);
   const handleClick = () =>
@@ -36,14 +39,16 @@ export function Address({ pubkey, alignRight, link, raw }: Props) {
       <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
       <span className="text-monospace">
         {link ? (
-          <Link className="" to={clusterPath(`/address/${address}`)}>
-            {raw ? address : displayAddress(address)}
-            <span className="fe fe-external-link ml-2"></span>
+          <Link
+            className={truncate ? "text-truncate address-truncate" : ""}
+            to={clusterPath(`/address/${address}`)}
+          >
+            {raw ? address : displayAddress(address, cluster)}
           </Link>
-        ) : raw ? (
-          address
         ) : (
-          displayAddress(address)
+          <span className={truncate ? "text-truncate address-truncate" : ""}>
+            {raw ? address : displayAddress(address, cluster)}
+          </span>
         )}
       </span>
     </>

@@ -3,13 +3,16 @@ import bs58 from "bs58";
 import { useHistory, useLocation } from "react-router-dom";
 import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
-import { PROGRAM_IDS, SYSVAR_IDS } from "utils/tx";
+import { PROGRAM_IDS, SYSVAR_IDS, ProgramName } from "utils/tx";
+import { TokenRegistry } from "tokenRegistry";
+import { Cluster, useCluster } from "providers/cluster";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
   const selectRef = React.useRef<StateManager<any> | null>(null);
   const history = useHistory();
   const location = useLocation();
+  const { cluster } = useCluster();
 
   const onChange = ({ pathname }: ValueType<any>, meta: ActionMeta<any>) => {
     if (meta.action === "select-option") {
@@ -29,9 +32,9 @@ export function SearchBar() {
         <div className="col">
           <Select
             ref={(ref) => (selectRef.current = ref)}
-            options={buildOptions(search)}
+            options={buildOptions(search, cluster)}
             noOptionsMessage={() => "No Results"}
-            placeholder="Search by address or signature"
+            placeholder="Search for accounts, transactions, programs, and tokens"
             value={resetValue}
             inputValue={search}
             blurInputOnSelect
@@ -47,22 +50,31 @@ export function SearchBar() {
   );
 }
 
-const SEARCHABLE_PROGRAMS = ["Config", "Stake", "System", "Vote", "Token"];
+const SEARCHABLE_PROGRAMS: ProgramName[] = [
+  "Config Program",
+  "Stake Program",
+  "System Program",
+  "Vote Program",
+  "SPL Token",
+];
 
 function buildProgramOptions(search: string) {
-  const matchedPrograms = Object.entries(PROGRAM_IDS).filter(([, name]) => {
-    return (
-      SEARCHABLE_PROGRAMS.includes(name) &&
-      name.toLowerCase().includes(search.toLowerCase())
-    );
-  });
+  const matchedPrograms = Object.entries(PROGRAM_IDS).filter(
+    ([address, name]) => {
+      return (
+        SEARCHABLE_PROGRAMS.includes(name) &&
+        (name.toLowerCase().includes(search.toLowerCase()) ||
+          address.includes(search))
+      );
+    }
+  );
 
   if (matchedPrograms.length > 0) {
     return {
       label: "Programs",
       options: matchedPrograms.map(([id, name]) => ({
         label: name,
-        value: name,
+        value: [name, id],
         pathname: "/address/" + id,
       })),
     };
@@ -70,23 +82,52 @@ function buildProgramOptions(search: string) {
 }
 
 function buildSysvarOptions(search: string) {
-  const matchedSysvars = Object.entries(SYSVAR_IDS).filter(([, name]) => {
-    return name.toLowerCase().includes(search.toLowerCase());
-  });
+  const matchedSysvars = Object.entries(SYSVAR_IDS).filter(
+    ([address, name]) => {
+      return (
+        name.toLowerCase().includes(search.toLowerCase()) ||
+        address.includes(search)
+      );
+    }
+  );
 
   if (matchedSysvars.length > 0) {
     return {
       label: "Sysvars",
       options: matchedSysvars.map(([id, name]) => ({
         label: name,
-        value: name,
+        value: [name, id],
         pathname: "/address/" + id,
       })),
     };
   }
 }
 
-function buildOptions(search: string) {
+function buildTokenOptions(search: string, cluster: Cluster) {
+  const matchedTokens = Object.entries(TokenRegistry.all(cluster)).filter(
+    ([address, details]) => {
+      const searchLower = search.toLowerCase();
+      return (
+        details.name.toLowerCase().includes(searchLower) ||
+        details.symbol.toLowerCase().includes(searchLower) ||
+        address.includes(search)
+      );
+    }
+  );
+
+  if (matchedTokens.length > 0) {
+    return {
+      label: "Tokens",
+      options: matchedTokens.map(([id, details]) => ({
+        label: details.name,
+        value: [details.name, details.symbol, id],
+        pathname: "/address/" + id,
+      })),
+    };
+  }
+}
+
+function buildOptions(search: string, cluster: Cluster) {
   if (search.length === 0) return [];
 
   const options = [];
@@ -100,6 +141,14 @@ function buildOptions(search: string) {
   if (sysvarOptions) {
     options.push(sysvarOptions);
   }
+
+  const tokenOptions = buildTokenOptions(search, cluster);
+  if (tokenOptions) {
+    options.push(tokenOptions);
+  }
+
+  // Prefer nice suggestions over raw suggestions
+  if (options.length > 0) return options;
 
   try {
     const decoded = bs58.decode(search);

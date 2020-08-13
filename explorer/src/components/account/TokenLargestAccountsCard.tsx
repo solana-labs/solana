@@ -9,6 +9,8 @@ import {
   useFetchTokenLargestAccounts,
 } from "providers/mints/largest";
 import { FetchStatus } from "providers/cache";
+import { TokenRegistry } from "tokenRegistry";
+import { useCluster } from "providers/cluster";
 
 export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const mintAddress = pubkey.toBase58();
@@ -16,6 +18,9 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const largestAccounts = useTokenLargestTokens(mintAddress);
   const fetchLargestAccounts = useFetchTokenLargestAccounts();
   const refreshLargest = () => fetchLargestAccounts(pubkey);
+  const { cluster } = useCluster();
+  const unit = TokenRegistry.get(mintAddress, cluster)?.symbol;
+  const unitLabel = unit ? `(${unit})` : "";
 
   React.useEffect(() => {
     if (!largestAccounts) refreshLargest();
@@ -61,7 +66,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
               <tr>
                 <th className="text-muted">Rank</th>
                 <th className="text-muted">Address</th>
-                <th className="text-muted text-right">Balance</th>
+                <th className="text-muted text-right">Balance {unitLabel}</th>
                 <th className="text-muted text-right">% of Total Supply</th>
               </tr>
             </thead>

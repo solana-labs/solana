@@ -12,17 +12,30 @@ import {
   TransactionInstruction,
   Transaction,
 } from "@solana/web3.js";
+import { TokenRegistry } from "tokenRegistry";
+import { Cluster } from "providers/cluster";
 
-export const PROGRAM_IDS = {
-  Budget1111111111111111111111111111111111111: "Budget",
-  Config1111111111111111111111111111111111111: "Config",
-  Exchange11111111111111111111111111111111111: "Exchange",
-  [StakeProgram.programId.toBase58()]: "Stake",
-  Storage111111111111111111111111111111111111: "Storage",
-  [SystemProgram.programId.toBase58()]: "System",
-  Vest111111111111111111111111111111111111111: "Vest",
-  [VOTE_PROGRAM_ID.toBase58()]: "Vote",
-  TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o: "Token",
+export type ProgramName =
+  | "Budget Program"
+  | "Config Program"
+  | "Exchange Program"
+  | "Stake Program"
+  | "Storage Program"
+  | "System Program"
+  | "Vest Program"
+  | "Vote Program"
+  | "SPL Token";
+
+export const PROGRAM_IDS: { [key: string]: ProgramName } = {
+  Budget1111111111111111111111111111111111111: "Budget Program",
+  Config1111111111111111111111111111111111111: "Config Program",
+  Exchange11111111111111111111111111111111111: "Exchange Program",
+  [StakeProgram.programId.toBase58()]: "Stake Program",
+  Storage111111111111111111111111111111111111: "Storage Program",
+  [SystemProgram.programId.toBase58()]: "System Program",
+  Vest111111111111111111111111111111111111111: "Vest Program",
+  [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
+  TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o: "SPL Token",
 };
 
 const LOADER_IDS = {
@@ -48,12 +61,13 @@ export const SYSVAR_IDS = {
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "SYSVAR_STAKE_HISTORY",
 };
 
-export function displayAddress(address: string): string {
+export function displayAddress(address: string, cluster: Cluster): string {
   return (
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
+    TokenRegistry.get(address, cluster)?.name ||
     address
   );
 }
