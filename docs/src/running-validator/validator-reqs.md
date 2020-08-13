@@ -15,10 +15,10 @@ title: Validator Requirements
 - GPUs
   - While a CPU-only node may be able to keep up with the initial idling network, once transaction throughput increases, GPUs will be necessary
   - What kind of GPU?
-    - We recommend Nvidia 2080Ti or 1080Ti series consumer GPU or Tesla series server GPUs.
+    - We recommend Nvidia Turing and volta family GPUs 1660ti to 2080ti series consumer GPU or Tesla series server GPUs.
     - We do not currently support OpenCL and therefore do not support AMD GPUs. We have a bounty out for someone to port us to OpenCL. Interested? [Check out our GitHub.](https://github.com/solana-labs/solana)
 - Power Consumption
-  - Approximate power consumption for a validator node running an AMD Threadripper 2950W and 2x 2080Ti GPUs is 800-1000W.
+  - Approximate power consumption for a validator node running an AMD Threadripper 3950x and 2x 2080Ti GPUs is 800-1000W.
 
 ### Preconfigured Setups
 
@@ -26,11 +26,11 @@ Here are our recommendations for low, medium, and high end machine specification
 
 |                     | Low end                                               | Medium end             | High end               | Notes                                                                                  |
 | :------------------ | :---------------------------------------------------- | :--------------------- | :--------------------- | :------------------------------------------------------------------------------------- |
-| CPU                 | AMD Threadripper 1900x                                | AMD Threadripper 2920x | AMD Threadripper 2950x | Consider a 10Gb-capable motherboard with as many PCIe lanes and m.2 slots as possible. |
-| RAM                 | 16GB                                                  | 32GB                   | 64GB                   |                                                                                        |
+| CPU                 | AMD Ryzen 3950x                                       | AMD Threadripper 3960x | AMD Threadripper 3990x | Consider a 10Gb-capable motherboard with as many PCIe lanes and m.2 slots as possible. |
+| RAM                 | 16GB                                                  | 64GB                   | 128GB                  |                                                                                        |
 | OS Drive            | Samsung 860 Evo 2TB                                   | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | Or equivalent SSD                                                                      |
 | Accounts Drive\(s\) | None                                                  | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                        |
-| GPU                 | 4x Nvidia 1070 or 2x Nvidia 1080 Ti or 2x Nvidia 2070 | 2x Nvidia 2080 Ti      | 4x Nvidia 2080 Ti      | Any number of cuda-capable GPUs are supported on Linux platforms.                      |
+| GPU                 | Nvidia 1660ti                                         | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Any number of cuda-capable GPUs are supported on Linux platforms.                      |
 
 ## Software
 
