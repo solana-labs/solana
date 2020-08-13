@@ -218,12 +218,7 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                CommitmentSlots {
-                    slot: bank.slot(),
-                    root: 0,
-                    highest_confirmed_slot: 0,
-                    highest_confirmed_root: 0,
-                },
+                CommitmentSlots::new_from_slot(bank.slot()),
             ))),
             blockstore,
             validator_exit: create_validator_exit(&exit),
@@ -2547,12 +2542,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             10,
-            CommitmentSlots {
-                slot: bank.slot(),
-                root: 0,
-                highest_confirmed_slot: 0,
-                highest_confirmed_root: 0,
-            },
+            CommitmentSlots::new_from_slot(bank.slot()),
         )));
 
         // Add timestamp vote to blockstore
@@ -4153,12 +4143,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             42,
-            CommitmentSlots {
-                slot: bank_forks.read().unwrap().highest_slot(),
-                root: 0,
-                highest_confirmed_slot: 0,
-                highest_confirmed_root: 0,
-            },
+            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         )));
 
         let mut config = JsonRpcConfig::default();
@@ -4502,12 +4487,7 @@ pub mod tests {
         let mut new_block_commitment = BlockCommitmentCache::new(
             HashMap::new(),
             0,
-            CommitmentSlots {
-                root: 0,
-                slot: bank_forks.read().unwrap().highest_slot(),
-                highest_confirmed_slot: 0,
-                highest_confirmed_root: 0,
-            },
+            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         );
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
@@ -4707,9 +4687,8 @@ pub mod tests {
             50,
             CommitmentSlots {
                 slot: bank.slot(),
-                root: 0,
-                highest_confirmed_slot: 0,
                 highest_confirmed_root,
+                ..CommitmentSlots::default()
             },
         );
 

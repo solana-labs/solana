@@ -88,12 +88,7 @@ impl BanksServer {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             HashMap::default(),
             0,
-            CommitmentSlots {
-                slot,
-                root: 0,
-                highest_confirmed_slot: 0,
-                highest_confirmed_root: 0,
-            },
+            CommitmentSlots::new_from_slot(slot),
         )));
         Builder::new()
             .name("solana-bank-forks-client".to_string())

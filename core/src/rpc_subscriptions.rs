@@ -1228,9 +1228,7 @@ pub(crate) mod tests {
             10,
             CommitmentSlots {
                 slot: bank1.slot(),
-                root: 0,
-                highest_confirmed_slot: 0,
-                highest_confirmed_root: 0,
+                ..CommitmentSlots::default()
             },
         );
 
