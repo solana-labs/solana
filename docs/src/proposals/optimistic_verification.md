@@ -24,9 +24,9 @@ We detect optimistic confirmation on `84` has been violated by the root on `88`.
 
 * 1) The validator(s) that catch this violation should upload a proof of the violation by uploading to the verification server a `Proof of Violation`:
     * a) A snapshot root
-    * b) Claim of a `volated_optimistic_slot` (`84` in this case), and an `illegal_slot > violated_optimistic_slot` on a different fork which caused the violation (`88` in this case), and the hashes of both.
-    * a) All the blocks from some snapshot root to the to the block `X` that contains the votes optimistically confirming `volated_optimistic_slot`.
-    * b) All the blocks from the snapshot root to the the block `X'` that contains the first `> 2/3` votes on the fork containing `illegal_slot` (i.e. `X'` confirmed `illegal_slot`).
+    * b) Claim of a `violated_optimistic_slot` (`84` in this case), and an `illegal_slot > violated_optimistic_slot` on a different fork which caused the violation (`88` in this case), and the hashes of both.
+    * c) Vote transactions from `>2/3` staked validators voting for `violated_optimistic_slot` as the last slot in the transaction vote stack, proving the slot was optimistically confirmed.
+    * d) All the blocks from the snapshot root to the the block `X'` that contains the first `> 2/3` votes on the fork containing `illegal_slot` (i.e. `X'` confirmed `illegal_slot`).
 
 * 2) Other validators that are notified of this violation must verify:
     * a) The snapshot root is valid
@@ -35,137 +35,305 @@ We detect optimistic confirmation on `84` has been violated by the root on `88`.
 
 # Switch Proof Contents
 Each validator's switching proof contains:
-* a) A starting `root` snapshot
-* b) A `switching vote` they claim is the *earliest* vote they made on a slot `>84` onto any other fork (so either `87` or `88` in this case).
-* c) All the other votes on other forks they claim allowed them to make this switching vote. These votes in the proof are of the form
+* a) A starting `root_snapshot` snapshot
+* b) A `switching_vote` they claim is the *earliest* vote they made on a slot `>84` onto any other fork (so either `87` or `88` in this case).
+* c) The `authorized_voter_pubkey` of the node at the epoch they made the `switching_vote`
+* d) A list of `proof_votes`, which are all the other votes on other forks this validator claims allowed them to make this switching vote. These votes in the proof are of the form
 `(vote_slot, vote_pubkey, vote_observed_slot, num_confirmations)`, where `vote_pubkey` made a vote for slot `vote_slot`, and
 `vote_observed_slot` is the slot at which `vote_slot` was observed to have confirmations == num_confirmations.
 This vote implies the vaildator with vote pubkey == `vote_pubkey` was locked out at slot 84, i.e. `vote_slot + 2^num_confirmations >=84`.
-* d) To verify ancestor/descendant relationships, the proof will also need to provide:
+* e) To verify ancestor/descendant relationships, the proof will also need to contain some blocks:
      * i) All the blocks from the `root` snapshot to `vote_observed_slot` for each vote included in the proof.
-     * ii) All the blocks from the `root` snapshot to the slot that violated optimistic confirmation, slot, `84` in this case.
+     * ii) All the blocks from the `root` snapshot to the block that shows optimistic confirmation was achieved, i.e. the block that violated optimistic confirmation, slot, `84` in this case.
+* f) The `potential_violators_vote_transactions` set, which is vote transactions from `>2/3` staked validators voting for `violated_optimistic_slot` as the last slot in the transaction vote stack, proving the slot was optimistically confirmed. (Redundant with the `Proof of Violation` as these are already included there, but necessary until `Proof of Violation`'s are implemented).
 
 # Switch Proof Verification
 Verification (Valid Switching Proof): Wait for all the validators to upload their proofs in some window of time on the order of an epoch.
 
-* 1) Iterate through all the provided proofs, and find the one with the lowest snapshot root `snapshot_lowest`. From above, we know this proof includes all the ancestors, `a` of the violated optimistic slot `84`, in the range `snapshot_lowest <= a < 84`. Add all
-these ancestors to a set called `optimistic_slot_ancestors`.
+Our goal is to find the set of `invalid_proofs`.
 
-* 2) We also want to preprocess the proofs for all the votes included in the proofs to
-generate `proof_vote_slots` and `last_vote_slots` like so:
+* 1) First, we iterate through each `proof` in all the proofs, parsing the `proof.potential_violators_vote_transactions` set until we get to the first valid proof that successfully builds a `potential_violators_authorized_voting_keys`. Invalid proofs are added to `invalid_proofs`.
+
+The procedure is as follows:
 
 ```
-    type LastVoteSlot = u64;
+fn potential_violators_authorized_voting_keys(
+    // Bank hash of the `violated_optimistic_slot`. Should be given by the violation
+    // detection mechanism
+    violated_optimistic_hash: Hash,
+    proof: SwitchProof,
+    invalid_proofs: &mut HashSet<Pubkey>,
+) -> Option<HashSet<Pubkey>> {
+    // Parse the proof
+    let potential_violators_vote_transactions = proof.potential_violators_vote_transactions;
+    let violated_optimistic_slot = proof.violated_optimistic_slot;
 
-    // A validator that submitted a proof and their last vote
-    type ProvingValidator = (Pubkey, LastVoteSlot);
+    // Load the snapshot
+    let root_bank = load_bank_from_snapshot(proof.root_snapshot);
+    let violated_optimistic_slot_epoch = bank.epoch_schedule().get_epoch(violated_optimistic_slot);
 
-    // Sorted map from a validator `V` to votes made by `V` that were included in
-    // proofs by some other proving validator
-    type ValidatorVotes =  HashMap<Pubkey, Vec<ProvingValidator>>;
+    // Verify the vote transactions
+    let mut potential_violators_authorized_voting_keys = HashSet::new();
+    for vote_transaction in potential_violators_vote_transactions {
+        let vote = vote_from_tx(&vote_transaction);
 
-    // Sorted map of any vote slots included in any proof
-    let mut proof_vote_slots = BTreeMap<(Slot, Hash), ValidatorVotes>;
-
-    // Map from each validator to their last votes on the 
-    let mut last_vote_slots = BTreeMap<(Slot, Hash), ValidatorVotes>;
-
-    for proof in proofs {
-        // Validator that generated this proof
-        let proving_validator = proof.validator_id;
-
-        // Validator that generated this proof's last vote slot
-        // before they switched forks
-        let last_vote_slot = proof.last_vote_slot;
-
-        for vote in proof.votes {
-            let vote_pubkey = vote.pubkey;
-            proof_vote_slots.entry((vote.slot, vote.hash))
-                .or_default()
-                .entry(vote_pubkey)
-                .or_default()
-                .push((proving_validator, last_vote_slot))
+        // Check the vote is for the right slot and bank hash
+        if !vote.slots.last() == violated_optimistic_slot_epoch || vote.hash != violated_optimistic_hash {
+            invalid_proofs.insert(proof.authorized_voter_pubkey);
+            return None;
         }
+
+        // Get authorized voter for the epoch == `violated_optimistic_slot_epoch`
+        // This information should exist in `root_bank` as long as the `root_bank`
+        // is not more than an epoch behind `violated_optimistic_slot`, which should be
+        // ok as long as validators have been snapshotting regularly (TODO: verify 
+        // if this is safe assumption).
+        let authorized_voter_pubkey = 
+                root_bank
+                .epoch_stakes
+                .get(violated_optimistic_slot_epoch)
+                .expect("Epoch stakes for bank's own epoch must exist")
+                .epoch_authorized_voters()
+                .get(vote_account)
+
+        // Verify signature
+        if !verify_signature(vote_transaction, authorized_voter_pubkey) {
+            invalid_proofs.insert(proof.authorized_voter_pubkey);
+            return None;
+        }
+
+        potential_violators_authorized_voting_keys.insert(authorizeed_voter_pubkey);
     }
+
+    Some(potential_violators_authorized_voting_keys)
+}
 ```
 
-* 3) We now start replaying the `optimistic_slot_ancestors`, starting from `lowest_snapshot`.
-
+* 2) Next, we take each key in `potential_violators_authorized_voting_keys` and iterate through
+their uploaded proofs to build  `lowest_switch_votes` mapping each of the validators to the `switching_vote` in their proof.
 ```
-    let bank_forks = load_snapshot(lowest_snapshot);
-    
-    for optimistic_slot_ancestor in optimistic_slot_ancestors {
-        // Pop all vote slots in `proof_vote_slots` < optimistic_slot_ancestor
-        let lesser_votes = proof_vote_slots.pop_range(0, optimistic_slot_ancestor);
-
-        for vote_slot in lesser_votes {
-
+fn lowest_switch_votes(
+    // All the uploaded proofs
+    all_proofs: &HashMap<Pubkey, SwitchProof>,
+    potential_violators_authorized_voting_keys: &HashSet<Pubkey>,
+    violated_optimistic_slot: Slot,
+    invalid_proofs: &mut HashSet<Pubkey>,
+    missing_proofs: &mut HashSet<Pubkey>,
+) -> HashMap<Pubkey, Slot> {
+    let switch_votes: HashMap<Pubkey, Slot> = potential_violators_authorized_voting_keys.filter_map
+    (|pubkey| {
+        let validator_proof = all_proofs.get(pubkey);
+        if validator_proof.is_none() {
+            missing_proofs.insert(pubkey);
+            return None;
         }
 
-        bank_forks.set_root(optimistic_slot_ancestor);
-    }
-```
+        let validator_proof = validator_proof.unwrap();
+        let switching_vote = validator_proof.switching_vote;
 
-
-
-For each proof, 
-    ```
-        let mut possible_lockout_violaters = HashSet::new();
-        
-        // `switching_slots` are all the slots people claim were their earliest
-        let earliest_switching_slots: HashMap<Pubkey, Slot>
-
-        // Somebody may have lied that their proof was the *earliest*
-        // switching vote, i.e. they made a switching vote earlier than the
-        // switching slot they presented in their proof. To detect this we keep
-        // track of their `proclaimed`
-
-        for proof in proofs {
-            for (vote_slot, vote_pubkey, vote_observed_slot, num_confirmations) in proof {
-                possible_lockout_violaters.insert(vote_pubkey);
-
-                // 1) Check validator doesn't include a vote from himself in proof (self-incriminating)
-
-                // 2) Replay all blocks between `vote` and `vote_observed_slot` until
-                // the number of confirmations == `num_confirmations`
-
-                // 3) Check `vote_slot` is not a descendant or ancestor of `84`
-
-                // 4) Check that the switching proof 
-            }
+        // The switching vote must occur after the optimistic slot
+        if switching_vote < violated_optimistic_slot {
+            invalid_proofs.insert(validator_proof.authorized_voter_pubkey);
+            return None;
         }
-    ```
 
-* 3) Verification (Lockouts): From step 2, if everybody's proof is valid, then 
-somebody else must have violated lockout (everyone who generated a proof wasn't lying).
+        Some((pubkey, switching_vote))
+    }).collect();
 
-
-From step 2 we have replayed all the forks any validator included in a switching proof,
-and a list of possible malicious actors in `possible_lockout_violaters`. So:
-
+    switch_votes
+}
 ```
-    // `forks` is all the banks at the tip of each fork excluding any forks descended
-    // from `84`
-    let forks;
 
-    // `ancestors` are all the ancestors of slot `84`
-    let ancestors: HashSet<Slot>;
+* 3) We now start the heart of the verification process as follows:
+```
+    fn verify_proofs {
+        violated_optimistic_slot: Slot,
+        violated_optimistic_slot_hash: Hash;
+        // All the uploaded proofs
+        all_proofs: &HashMap<Pubkey, SwitchProof>,
+        // Built in step 1
+        potential_violators_authorized_voting_keys: &HashSet<Pubkey>,
+        // Build in step 2
+        lowest_switch_votes: &HashMap<Pubkey, Slot>,
+        invalid_proofs: &mut HashSet<Pubkey>,
+        missing_proofs: &mut HashSet<Pubkey>,
+        violated_lockouts: &mut HashSet<Pubkey>,
+    } {
+        let mut replayed_proof_keys: HashSet<Pubkey> = HashSet::new();
 
-    for fork_tip in forks {
-        for maybe_bad_validator in possible_lockout_violaters {
-            // Deserialize vote state for `maybe_bad_validator`
-
-            // Get lockouts for `maybe_bad_validator`
-
-            for (lockout_slot, num_confirmations) in lockouts {
-                if !ancestors.contains(lockout_slot) && lockout_slot + 2^(num_confirmations) > 84 {
-                    // Lockout violation detected!
-                    return maybe_bad_validator;
+        while !replayed_proof_keys.len() == all_proofs.len() {
+            let entry_proof = all_proofs.iter().find_map(|(k, v)| {
+                if !replayed_proof_keys.contains(k) {
+                    Some(v)
+                } else {
+                    None
                 }
+            }).unwrap();
+            verify_connected_proofs(
+                violated_optimistic_slot,
+                violated_optimistic_slot_hash,
+                all_proofs,
+                potential_violators_authorized_voting_keys,
+                lowest_switch_votes,
+                entry_proof,
+                invalid_proofs,
+                missing_proofs,
+                violated_lockouts,
+                &mut replayed_proof_keys,
+            )
+        }
+    }
+
+    // Verify all the proofs referenced/reachable from `entry_proof`
+    fn verify_connected_proofs(
+        violated_optimistic_slot: Slot,
+        violated_optimistic_slot_hash: Hash;
+        all_proofs: &HashMap<Pubkey, SwitchProof>,
+        potential_violators_authorized_voting_keys: &HashSet<Pubkey>,
+        lowest_switch_votes: &HashMap<Pubkey, Slot>,
+        entry_proof: &SwitchProof,
+        invalid_proofs: &mut HashSet<Pubkey>,
+        missing_proofs: &mut HashSet<Pubkey>,
+        violated_lockouts: &mut HashSet<Pubkey>,
+        replayed_proof_keys: &mut HashSet<Pubkey>,
+    ){
+        let mut unexplored_proof_keys: Vec<Pubkey> = vec![entry_proof];
+
+        while !unexplored_proof_keys.is_empty() {
+            let proof_key = unexplored_proof_keys.pop().unwrap();
+            assert!(!replayed_proof_keys.contains(&proof_key));
+            assert!(!violated_lockouts.contains(&proof_key));
+            assert!(!missing_proofs.contains(&proof_key));
+
+            let proof = all_proofs.get(&proof_key);
+            replayed_proof_keys.insert(proof.authorized_voter_pubkey);
+            if proof.is_none() {
+                missing_proofs.insert(&proof_key);
+                continue;
+            }
+
+            // Replay all the blocks in the proof
+            let bank_forks = new_banks_from_ledger(proof);
+            let violated_optimistic_slot_bank = bank_forks.get(&violated_optimistic_slot);
+
+            // Proof must provide all blocks from snapshot root to the correct 
+            // version of violated_optimistic_slot so that verifier can verify chaining
+            // relative to votes in the proof
+            if violated_optimistic_slot_bank.is_none() {
+                invalid_proofs.insert(proof.authorized_voter_pubkey);
+                continue;
+            }
+            let violated_optimistic_slot_bank = let violated_optimistic_slot_bank.unwrap();
+            if violated_optimistic_slot_bank.bank_hash() != violated_optimistic_slot_hash {
+                invalid_proofs.insert(proof.authorized_voter_pubkey);
+                continue;
+            }
+
+            // Iterate through the votes this validator claims were locked
+            // out past the `violated_optimistic_slot` when they switched
+            let total_proof_vote_stake = 0;
+            for (vote_slot, vote_pubkey, vote_observed_slot, num_confirmations) in proof.proof_votes {
+                // If this pubkey isn't in the potentially slashable set, ignore it
+                let vote_authorized_voter_pubkey = violated_optimistic_slot_bank.epoch_authorized_vote(vote_pubkey);
+                if !potential_violators_authorized_voting_keys.contains(vote_authorized_voter_pubkey) {
+                    continue;
+                }
+
+                // Verify the slot is not an ancestor or descendant of `violated_optimistic_slot`
+                if ancestors.contains(violated_optimistic_slot) {
+                    // Proof is invalid, no need to check the rest of it
+                    invalid_proofs.insert(proof.authorized_voter_pubkey);
+                    break;
+                }
+                if descendants.contains(violated_optimistic_slot) {
+                    // Proof is invalid, no need to check the rest of it
+                    invalid_proofs.insert(proof.authorized_voter_pubkey);
+                    break;
+                }
+
+                // Verify the lockout is past `violated_optimistic_slot`
+                let vote_observed_bank = bank_forks.get(&vote_observed_slot);
+                if vote_observed_bank.map(|vote_observed_bank|
+                    vote_observed_bank.get_vote_state(vote_pubkey)
+                ).and_then(|vote_state|
+                    vote_state.get_lockout(vote_slot)
+                ).and_then(|lockout|
+                    if lockout >= violated_optimistic_slot {
+                        Some(()))
+                    } else {
+                        None
+                    }
+                ).is_none() {
+                    // Proof is invalid, no need to check the rest of it
+                    invalid_proofs.insert(proof.authorized_voter_pubkey;
+                    break;
+                }
+
+                // Now to check for lockout violation, let's review what we know:
+                // 1) The `vote_pubkey` is in the `potential_violators_authorized_voting_keys` set,
+                // which means validator with vote account `vote_pubkey` must have voted on
+                // `violated_optimistic_slot`. 
+                //
+                // 2) The validator is locked out on `vote_slot` past `violated_optimistic_slot`, and 
+                // `vote_slot` is not on the same fork as `violated_optimistic_slot`.
+                //
+                // 3) This means it must be `vote_slot > violated_optimistic_slot`, otherwise,
+                // the validator with vote account `vote_pubkey` must have violated lockout.
+                if vote_slot <= violated_optimistic_slot {
+                    replayed_proof_keys.insert(authorized_voter);
+                    violated_lockouts.insert(authorized_voter);
+                }
+
+                // Otherwise this vote passed all the checks, so we check if we've already played a proof from the validator with vote account == `vote_pubkey`.
+                if replayed_proofs.contains_key(vote_authorized_voter_pubkey) {
+                    // This voter was in `potential_violators_authorized_voting_keys`, so if they're
+                    // not in the `missing_proofs` set they should exist here
+                    if !missing_proofs.contains(vote_authorized_voter_pubkey) {
+                        // The earliest switch slot, as claimed by this validator's uploaded proof
+                        let lowest_switch_slot = lowest_switch_votes.get(vote_authorized_voter_pubkey).unwrap();
+
+                        // We found a vote this validator made that was earlier than they're proclaimed
+                        // earliest vote, which is a slashable violation.
+                        if lowest_switch_slot > vote_observed_bank.get_vote_tx_for_slot(slot).last_switch_slot {
+                            invalid_proofs.insert(vote_authorized_voter_pubkey);
+                        }
+                    }
+                } else if !violated_lockouts.contains(vote_authorized_voter_pubkey) && !missing_proofs.contains(vote_authorized_voter_pubkey) {
+                    // Add validator with vote account == `vote_pubkey` to the list of proofs to check.
+                    unexplored_proofs.push(vote_authorized_voter_pubkey);
+                }
+
+                // Add the vote stake
+                total_proof_vote_stake += violated_optimistic_slot_bank.epoch_vote_account_stake(vote_pubkey);
+            }
+
+            // Check the vote stakes added up to more than the threshold
+            if total_proof_vote_stake / violated_optimistic_slot_bank.total_epoch_stake() < VOTE_SWITCH_THRESHOLD {
+                invalid_proofs.insert(proof.authorized_voter_pubkey);
             }
         }
     }
 ```
 
-# Examples of some malicious cases
+TODD: How to make sure the snapshots in the bank have verifiably correct state (i.e. things like mapping 
+vote_pubkeys -> authorized voters, so that we know the authorized voter is real so people can't "fake" other people's vote transactions?)
+
+# Examples of some tricky cases
+
+## Fake proofs
+```
+    /-----2 (Validator A, Validator B)
+
+   1 -------- 11 - 15 (Validator A)
+
+    \------5 (Validator C) - 8 (Validator B) - 9 (Validator B)
+```
+
+1) `A` didn't generate a switching proof, voted on `11 -> 15` illegally. `B` generated a valid proof using `A's` vote for `11`
+2) `B` didn't generate a switching proof, voted on `8->9` illegally. `A` generated a valid proof using `B's` vote for `9`
+
+
+
+
+
 
