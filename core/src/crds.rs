@@ -114,7 +114,7 @@ impl Crds {
     }
     /// insert the new value, returns the old value if insert succeeds
     pub fn insert_versioned(
-        &mut self,
+        &self,
         new_value: VersionedCrdsValue,
     ) -> Result<Option<VersionedCrdsValue>, CrdsError> {
         let label = new_value.value.label();
@@ -134,7 +134,7 @@ impl Crds {
         }
     }
     pub fn insert(
-        &mut self,
+        &self,
         value: CrdsValue,
         local_timestamp: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsError> {

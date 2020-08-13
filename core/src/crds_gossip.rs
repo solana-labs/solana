@@ -47,7 +47,7 @@ impl CrdsGossip {
 
     /// process a push message to the network
     pub fn process_push_message(
-        &mut self,
+        &self,
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
@@ -75,18 +75,18 @@ impl CrdsGossip {
 
     /// remove redundant paths in the network
     pub fn prune_received_cache(
-        &mut self,
+        &self,
         labels: Vec<CrdsValueLabel>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> HashMap<Pubkey, HashSet<Pubkey>> {
-        let id = &self.id;
+        let id = self.id.read().unwrap();
         let push = &mut self.push;
         let mut prune_map: HashMap<Pubkey, HashSet<_>> = HashMap::new();
         for origin in labels.iter().map(|k| k.pubkey()) {
             let peers = push
                 .write()
                 .unwrap()
-                .prune_received_cache(id, &origin, stakes);
+                .prune_received_cache(&id, &origin, stakes);
             for from in peers {
                 prune_map.entry(from).or_default().insert(origin);
             }
@@ -100,7 +100,7 @@ impl CrdsGossip {
             .write()
             .unwrap()
             .new_push_messages(&self.crds, now);
-        (self.id, push_messages)
+        (*self.id.read().unwrap(), push_messages)
     }
 
     /// add the `from` to the peer's filter of nodes
@@ -116,11 +116,12 @@ impl CrdsGossip {
         if expired {
             return Err(CrdsGossipError::PruneMessageTimeout);
         }
-        if self.id == *destination {
+        let id = *self.id.read().unwrap();
+        if id == *destination {
             self.push
                 .write()
                 .unwrap()
-                .process_prune_msg(&self.id, peer, origin);
+                .process_prune_msg(&id, peer, origin);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)
@@ -130,11 +131,13 @@ impl CrdsGossip {
     /// refresh the push active set
     /// * ratio - number of actives to rotate
     pub fn refresh_push_active_set(&self, stakes: &HashMap<Pubkey, u64>) {
+        let id = *self.id.read().unwrap();
+        let shred_version = *self.shred_version.read().unwrap();
         self.push.write().unwrap().refresh_push_active_set(
             &self.crds,
             stakes,
-            &self.id,
-            self.shred_version,
+            &id,
+            shred_version,
             self.pull.read().unwrap().pull_request_time.len(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
@@ -147,10 +150,12 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+        let id = *self.id.read().unwrap();
+        let shred_version = *self.shred_version.read().unwrap();
         self.pull.read().unwrap().new_pull_request(
             &self.crds,
-            &self.id,
-            self.shred_version,
+            &id,
+            shred_version,
             now,
             stakes,
             bloom_size,
@@ -226,7 +231,8 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
         epoch_ms: u64,
     ) -> HashMap<Pubkey, u64> {
-        self.pull.read().unwrap().make_timeouts(&self.id, stakes, epoch_ms)
+        let id = *self.id.read().unwrap();
+        self.pull.read().unwrap().make_timeouts(&id, stakes, epoch_ms)
     }
 
     pub fn purge(&mut self, now: u64, timeouts: &HashMap<Pubkey, u64>) -> usize {
@@ -243,8 +249,9 @@ impl CrdsGossip {
         let pull_crds_timeout = self.pull.read().unwrap().crds_timeout;
         if now > pull_crds_timeout {
             //sanity check
+            let id = *self.id.read().unwrap();
             let min = pull_crds_timeout;
-            assert_eq!(timeouts[&self.id], std::u64::MAX);
+            assert_eq!(timeouts[&id], std::u64::MAX);
             assert_eq!(timeouts[&Pubkey::default()], min);
             rv = self.pull.write().unwrap().purge_active(&mut self.crds, now, &timeouts);
         }
@@ -284,8 +291,8 @@ mod test {
     #[test]
     fn test_prune_errors() {
         let mut crds_gossip = CrdsGossip::default();
-        crds_gossip.id = Pubkey::new(&[0; 32]);
-        let id = crds_gossip.id;
+        crds_gossip.set_self(&Pubkey::new(&[0; 32]));
+        let id = *crds_gossip.id.read().unwrap();
         let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip

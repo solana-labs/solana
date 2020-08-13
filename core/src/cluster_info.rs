@@ -417,16 +417,14 @@ impl ClusterInfo {
 
     // Should only be used by tests and simulations
     pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let gossip = CrdsGossip::default();
+        let mut gossip = CrdsGossip::default();
         gossip.set_self(new_id);
         gossip.set_shred_version(*self.gossip.shred_version.read().unwrap());
-        for (_,v) in self.gossip.crds.table.into_iter() {
-            gossip.crds.insert_versioned(v);
-        }
+        gossip.crds.table = self.gossip.crds.table.clone();
         let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
         my_contact_info.id = *new_id;
         ClusterInfo {
-            gossip,
+            gossip: Arc::new(gossip),
             keypair: self.keypair.clone(),
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
             outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
@@ -751,12 +749,12 @@ impl ClusterInfo {
             .crds
             .table
             .into_iter()
-            .filter(|(_, x)| x.insert_timestamp > since)
-            .filter_map(|(label, x)| {
-                max_ts = std::cmp::max(x.insert_timestamp, max_ts);
-                x.value
+            .filter(|t| t.1.insert_timestamp > since)
+            .filter_map(|t| {
+                max_ts = std::cmp::max(t.1.insert_timestamp, max_ts);
+                t.1.value
                     .vote()
-                    .map(|v| (label.clone(), v.transaction.clone()))
+                    .map(|v| (t.0.clone(), v.transaction.clone()))
             })
             .unzip();
         inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
@@ -768,7 +766,7 @@ impl ClusterInfo {
             .crds
             .table
             .into_iter()
-            .filter_map(|(_, x)| x.value.snapshot_hash())
+            .filter_map(|(_, x)| x.value.snapshot_hash().cloned())
             .filter_map(|x| {
                 for (table_slot, hash) in &x.hashes {
                     if *table_slot == slot {
@@ -782,25 +780,25 @@ impl ClusterInfo {
 
     pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
     where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
+        F: FnOnce(Vec<(Slot, Hash)>) -> Y,
     {
         self.time_gossip_read_lock("get_accounts_hash", &self.stats.get_accounts_hash)
             .crds
             .table
             .get(&CrdsValueLabel::AccountsHashes(*pubkey))
-            .map(|x| &x.value.accounts_hash().unwrap().hashes)
+            .map(|x| x.value.accounts_hash().unwrap().hashes.clone())
             .map(map)
     }
 
     pub fn get_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
     where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
+        F: FnOnce(Vec<(Slot, Hash)>) -> Y,
     {
         self.gossip
             .crds
             .table
             .get(&CrdsValueLabel::SnapshotHashes(*pubkey))
-            .map(|x| &x.value.snapshot_hash().unwrap().hashes)
+            .map(|x| x.value.snapshot_hash().unwrap().hashes.clone())
             .map(map)
     }
 
@@ -859,9 +857,8 @@ impl ClusterInfo {
             .crds
             .table
             .into_iter()
-            .filter_map(|(_, x)| x.value.contact_info())
+            .filter_map(|(_, x)| x.value.contact_info().cloned())
             .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.rpc))
-            .cloned()
             .collect()
     }
 
