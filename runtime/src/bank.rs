@@ -624,7 +624,10 @@ impl Bank {
             fee_calculator: fields.fee_calculator,
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
-            rent_collector: fields.rent_collector,
+            // clone()-ing is needed to consider a gated behavior in rent_collector
+            rent_collector: fields
+                .rent_collector
+                .clone_with_epoch(fields.epoch, genesis_config.operating_mode),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes: RwLock::new(fields.stakes),
@@ -673,7 +676,7 @@ impl Bank {
                 &bank.epoch_schedule,
                 bank.slots_per_year,
                 &genesis_config.rent,
-                OperatingMode::Development,
+                genesis_config.operating_mode,
             )
         );
 
