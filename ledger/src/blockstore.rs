@@ -2047,7 +2047,9 @@ impl Blockstore {
                         && key_address == address
                         && slot >= first_available_block
                     {
-                        address_signatures.push((slot, signature));
+                        if self.is_root(slot) {
+                            address_signatures.push((slot, signature));
+                        }
                         continue;
                     }
                 }
@@ -2078,7 +2080,9 @@ impl Blockstore {
                     && key_address == address
                     && slot >= first_available_block
                 {
-                    address_signatures.push((slot, signature));
+                    if self.is_root(slot) {
+                        address_signatures.push((slot, signature));
+                    }
                     continue;
                 }
             }
@@ -6337,7 +6341,7 @@ pub mod tests {
             let address0 = Pubkey::new_rand();
             let address1 = Pubkey::new_rand();
 
-            for slot in 2..=7 {
+            for slot in 2..=8 {
                 let entries = make_slot_entries_with_transaction_addresses(&[
                     address0, address1, address0, address1,
                 ]);
@@ -6363,8 +6367,9 @@ pub mod tests {
                     }
                 }
             }
-            blockstore.set_roots(&[1, 2, 3, 4, 5, 6, 7]).unwrap();
-            let highest_confirmed_root = 7;
+            // Leave one slot unrooted to test only returns confirmed signatures
+            blockstore.set_roots(&[1, 2, 4, 5, 6, 7, 8]).unwrap();
+            let highest_confirmed_root = 8;
 
             // Fetch all signatures for address 0 at once...
             let all0 = blockstore
