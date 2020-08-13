@@ -378,7 +378,7 @@ impl LedgerStorage {
                     .get_bincode_cell("tx", before_signature.to_string())
                     .await?;
 
-                (slot, index + 1)
+                (slot, index)
             }
         };
 
@@ -413,7 +413,7 @@ impl LedgerStorage {
 
             for tx_by_addr_info in tx_by_addr_infos
                 .into_iter()
-                .skip(first_transaction_index as usize)
+                .filter(|tx_by_addr_info| tx_by_addr_info.index < first_transaction_index)
             {
                 infos.push(ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
@@ -426,7 +426,7 @@ impl LedgerStorage {
                 }
             }
 
-            first_transaction_index = 0;
+            first_transaction_index = u32::MAX;
         }
         Ok(infos)
     }
