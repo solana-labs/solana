@@ -268,12 +268,12 @@ function TokenTransactionRow({
       </td>
 
       <td>
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
+        <Address pubkey={mint} link />
       </td>
 
       <td>
-        <Address pubkey={mint} link />
+        <span className="spinner-grow spinner-grow-sm mr-2"></span>
+        Loading
       </td>
 
       <td>
