@@ -904,17 +904,21 @@ impl JsonRpcRequestProcessor {
                         before = results.last().map(|x| x.signature);
                     }
 
-                    let mut bigtable_results = self
-                        .runtime_handle
-                        .block_on(
-                            bigtable_ledger_storage.get_confirmed_signatures_for_address(
-                                &address,
-                                before.as_ref(),
-                                limit,
-                            ),
-                        )
-                        .map_err(|err| Error::invalid_params(format!("{}", err)))?;
-                    results.append(&mut bigtable_results)
+                    let bigtable_results = self.runtime_handle.block_on(
+                        bigtable_ledger_storage.get_confirmed_signatures_for_address(
+                            &address,
+                            before.as_ref(),
+                            limit,
+                        ),
+                    );
+                    match bigtable_results {
+                        Ok(mut bigtable_results) => {
+                            results.append(&mut bigtable_results);
+                        }
+                        Err(err) => {
+                            warn!("{:?}", err);
+                        }
+                    }
                 }
             }
 
