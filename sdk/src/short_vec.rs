@@ -38,6 +38,26 @@ impl Serialize for ShortU16 {
     }
 }
 
+enum VisitResult {
+    Done(usize, usize),
+    More(usize, usize),
+    Err,
+}
+
+fn visit_byte(elem: u8, len: usize, size: usize) -> VisitResult {
+    let len = len | (elem as usize & 0x7f) << (size * 7);
+    let size = size + 1;
+    let more = elem as usize & 0x80 == 0x80;
+
+    if size > size_of::<u16>() + 1 {
+        VisitResult::Err
+    } else if more {
+        VisitResult::More(len, size)
+    } else {
+        VisitResult::Done(len, size)
+    }
+}
+
 struct ShortLenVisitor;
 
 impl<'de> Visitor<'de> for ShortLenVisitor {
@@ -58,15 +78,16 @@ impl<'de> Visitor<'de> for ShortLenVisitor {
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(size, &self))?;
 
-            len |= (elem as usize & 0x7f) << (size * 7);
-            size += 1;
-
-            if elem as usize & 0x80 == 0 {
-                break;
-            }
-
-            if size > size_of::<u16>() + 1 {
-                return Err(de::Error::invalid_length(size, &self));
+            match visit_byte(elem, len, size) {
+                VisitResult::Done(l, _) => {
+                    len = l;
+                    break;
+                }
+                VisitResult::More(l, s) => {
+                    len = l;
+                    size = s;
+                }
+                VisitResult::Err => return Err(de::Error::invalid_length(size + 1, &self)),
             }
         }
 
