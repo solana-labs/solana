@@ -888,6 +888,7 @@ impl JsonRpcRequestProcessor {
                     address,
                     highest_confirmed_root,
                     before,
+                    None,
                     limit,
                 )
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
