@@ -28,8 +28,6 @@ export interface TransactionStatus {
   info: TransactionStatusInfo | null;
 }
 
-export const TX_ALIASES = ["tx", "txn", "transaction"];
-
 type State = Cache.State<TransactionStatus>;
 type Dispatch = Cache.Dispatch<TransactionStatus>;
 
