@@ -371,7 +371,7 @@ impl LedgerStorage {
         let address_prefix = format!("{}/", address);
 
         // Figure out where to start listing from based on `before_signature`
-        let (first_slot, mut first_transaction_index) = match before_signature {
+        let (first_slot, mut before_transaction_index) = match before_signature {
             None => (Slot::MAX, 0),
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
@@ -421,7 +421,7 @@ impl LedgerStorage {
 
             for tx_by_addr_info in tx_by_addr_infos
                 .into_iter()
-                .filter(|tx_by_addr_info| tx_by_addr_info.index < first_transaction_index)
+                .filter(|tx_by_addr_info| tx_by_addr_info.index < before_transaction_index)
             {
                 infos.push(ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
@@ -434,7 +434,7 @@ impl LedgerStorage {
                 }
             }
 
-            first_transaction_index = u32::MAX;
+            before_transaction_index = u32::MAX;
         }
         Ok(infos)
     }
