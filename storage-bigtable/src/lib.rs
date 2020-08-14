@@ -276,7 +276,7 @@ impl LedgerStorage {
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
         let mut bigtable = self.connection.client();
-        let blocks = bigtable.get_row_keys("blocks", None, 1).await?;
+        let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
         if blocks.is_empty() {
             return Ok(None);
         }
@@ -290,7 +290,7 @@ impl LedgerStorage {
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         let mut bigtable = self.connection.client();
         let blocks = bigtable
-            .get_row_keys("blocks", Some(slot_to_key(start_slot)), limit as i64)
+            .get_row_keys("blocks", Some(slot_to_key(start_slot)), None, limit as i64)
             .await?;
         Ok(blocks.into_iter().filter_map(|s| key_to_slot(&s)).collect())
     }
@@ -397,6 +397,7 @@ impl LedgerStorage {
             .get_row_keys(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
+                None,
                 limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
