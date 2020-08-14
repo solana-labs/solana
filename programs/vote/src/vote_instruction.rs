@@ -331,6 +331,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::same_item_push)]
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
         let mut accounts: Vec<_> = instruction
             .accounts

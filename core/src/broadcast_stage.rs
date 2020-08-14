@@ -203,6 +203,7 @@ impl BroadcastStage {
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::same_item_push)]
     fn new(
         socks: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,

@@ -3345,6 +3345,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_push_epoch_slots_large() {
         use rand::Rng;
         let node_keypair = Arc::new(Keypair::new());

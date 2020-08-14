@@ -638,6 +638,7 @@ pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Trans
     entry
 }
 
+#[allow(clippy::same_item_push)]
 pub fn create_ticks(num_ticks: u64, hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
     for _ in 0..num_ticks {
@@ -648,6 +649,7 @@ pub fn create_ticks(num_ticks: u64, hashes_per_tick: u64, mut hash: Hash) -> Vec
     ticks
 }
 
+#[allow(clippy::same_item_push)]
 pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
     for _ in 0..num_ticks {

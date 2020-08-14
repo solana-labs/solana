@@ -6600,6 +6600,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_get_last_hash() {
         let mut entries: Vec<Entry> = vec![];
         let empty_entries_iterator = entries.iter();

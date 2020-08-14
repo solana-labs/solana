@@ -27,6 +27,7 @@ use std::time::Duration;
 use test::Bencher;
 
 #[bench]
+#[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
     let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
