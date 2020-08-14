@@ -575,7 +575,7 @@ const GetBlockTimeRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
-  result: struct.union(['null', 'number']),
+  result: struct.union(['null', 'number', 'undefined']),
 });
 
 /**
