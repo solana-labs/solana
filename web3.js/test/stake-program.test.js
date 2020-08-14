@@ -264,7 +264,7 @@ test('live staking actions', async () => {
       fromPubkey: from.publicKey,
       stakePubkey: newStakeAccount.publicKey,
       authorized: new Authorized(authorized.publicKey, authorized.publicKey),
-      lockup: new Lockup(0, 0, new PublicKey('0x00')),
+      lockup: new Lockup(0, 0, new PublicKey(0)),
       lamports: minimumAmount + 42,
     });
 
@@ -303,7 +303,7 @@ test('live staking actions', async () => {
     basePubkey: from.publicKey,
     seed,
     authorized: new Authorized(authorized.publicKey, authorized.publicKey),
-    lockup: new Lockup(0, 0, new PublicKey('0x00')),
+    lockup: new Lockup(0, 0, new PublicKey(0)),
     lamports: 3 * minimumAmount + 42,
   });
 
