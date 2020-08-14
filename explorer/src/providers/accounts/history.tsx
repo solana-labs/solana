@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
@@ -101,7 +102,7 @@ async function fetchAccountHistory(
     };
     status = FetchStatus.Fetched;
   } catch (error) {
-    console.error("Failed to fetch account history", error);
+    Sentry.captureException(error, { tags: { url } });
     status = FetchStatus.FetchFailed;
   }
   dispatch({

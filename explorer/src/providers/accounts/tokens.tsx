@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
@@ -72,6 +73,7 @@ async function fetchAccountTokens(
     };
     status = FetchStatus.Fetched;
   } catch (error) {
+    Sentry.captureException(error, { tags: { url } });
     status = FetchStatus.FetchFailed;
   }
   dispatch({ type: ActionType.Update, url, status, data, key });

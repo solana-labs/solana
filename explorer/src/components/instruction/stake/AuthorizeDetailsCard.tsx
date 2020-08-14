@@ -20,7 +20,6 @@ export function AuthorizeDetailsCard(props: {
   try {
     params = StakeInstruction.decodeAuthorize(ix);
   } catch (err) {
-    console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
 

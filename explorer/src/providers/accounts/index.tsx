@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
 import { useCluster } from "../cluster";
@@ -111,7 +112,9 @@ async function fetchAccountInfo(
             parsed,
           };
         } catch (err) {
-          console.error("Failed to parse stake account", err);
+          Sentry.captureException(err, {
+            tags: { url, address: pubkey.toBase58() },
+          });
           // TODO store error state in Account info
         }
       } else if ("parsed" in result.data) {
@@ -124,6 +127,9 @@ async function fetchAccountInfo(
               parsed,
             };
           } catch (err) {
+            Sentry.captureException(err, {
+              tags: { url, address: pubkey.toBase58() },
+            });
             // TODO store error state in Account info
           }
         }
@@ -139,7 +145,7 @@ async function fetchAccountInfo(
     data = { pubkey, lamports, details };
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    console.error("Failed to fetch account info", error);
+    Sentry.captureException(error, { tags: { url } });
     fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({

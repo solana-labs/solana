@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import { clusterApiUrl, Connection } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
@@ -182,7 +183,9 @@ async function updateCluster(
       firstAvailableBlock,
     });
   } catch (error) {
-    console.error("Failed to update cluster", error);
+    Sentry.captureException(error, {
+      tags: { clusterUrl: clusterUrl(cluster, customUrl) },
+    });
     dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
   }
 }

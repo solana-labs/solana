@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import {
   TransactionSignature,
   Connection,
@@ -85,12 +86,7 @@ export async function fetchTransactionStatus(
         try {
           blockTime = await connection.getBlockTime(value.slot);
         } catch (error) {
-          console.error(
-            "Failed to fetch block time for slot ",
-            value.slot,
-            ":",
-            error
-          );
+          Sentry.captureException(error, { tags: { slot: `${value.slot}` } });
         }
         let timestamp: Timestamp =
           blockTime !== null ? blockTime : "unavailable";
@@ -112,7 +108,7 @@ export async function fetchTransactionStatus(
       data = { signature, info };
       fetchStatus = FetchStatus.Fetched;
     } catch (error) {
-      console.error("Failed to fetch transaction status", error);
+      Sentry.captureException(error, { tags: { url } });
       fetchStatus = FetchStatus.FetchFailed;
     }
   }
