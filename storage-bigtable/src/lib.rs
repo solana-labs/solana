@@ -365,6 +365,7 @@ impl LedgerStorage {
         &self,
         address: &Pubkey,
         before_signature: Option<&Signature>,
+        until_signature: Option<&Signature>,
         limit: usize,
     ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
         let mut bigtable = self.connection.client();
@@ -376,6 +377,18 @@ impl LedgerStorage {
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
                     .get_bincode_cell("tx", before_signature.to_string())
+                    .await?;
+
+                (slot, index)
+            }
+        };
+
+        // Figure out where to end listing from based on `until_signature`
+        let (last_slot, until_transaction_index) = match until_signature {
+            None => (0, u32::MAX),
+            Some(until_signature) => {
+                let TransactionInfo { slot, index, .. } = bigtable
+                    .get_bincode_cell("tx", until_signature.to_string())
                     .await?;
 
                 (slot, index)
@@ -397,7 +410,7 @@ impl LedgerStorage {
             .get_row_data(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
-                Some(format!("{}{}", address_prefix, slot_to_key(!0))),
+                Some(format!("{}{}", address_prefix, slot_to_key(!last_slot))),
                 limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
@@ -414,6 +427,10 @@ impl LedgerStorage {
             for tx_by_addr_info in cell_data.into_iter() {
                 // Filter out records before `before_transaction_index`
                 if slot == first_slot && tx_by_addr_info.index >= before_transaction_index {
+                    continue;
+                }
+                // Filter out records after `until_transaction_index`
+                if slot == last_slot && tx_by_addr_info.index <= until_transaction_index {
                     continue;
                 }
                 infos.push(ConfirmedTransactionStatusWithSignature {

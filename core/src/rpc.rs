@@ -903,6 +903,7 @@ impl JsonRpcRequestProcessor {
                         bigtable_ledger_storage.get_confirmed_signatures_for_address(
                             &address,
                             before.as_ref(),
+                            None,
                             limit,
                         ),
                     );
