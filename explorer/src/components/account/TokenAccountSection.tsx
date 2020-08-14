@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import {
   TokenAccount,
@@ -37,7 +38,13 @@ export function TokenAccountSection({
         return <MultisigAccountCard account={account} info={info} />;
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: {
+        address: account.pubkey.toBase58(),
+      },
+    });
+  }
   return <UnknownAccountCard account={account} />;
 }
 

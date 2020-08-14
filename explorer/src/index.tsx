@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { BrowserRouter as Router } from "react-router-dom";
+import * as Sentry from "@sentry/react";
 import "./scss/theme-dark.scss";
 import App from "./App";
-import * as serviceWorker from "./serviceWorker";
 import { ClusterProvider } from "./providers/cluster";
 import { RichListProvider } from "./providers/richList";
 import { SupplyProvider } from "./providers/supply";
@@ -11,6 +11,11 @@ import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
+
+Sentry.init({
+  dsn:
+    "https://5efdc15b4828434fbe949b5daed472be@o434108.ingest.sentry.io/5390542",
+});
 
 ReactDOM.render(
   <Router>
@@ -32,8 +37,3 @@ ReactDOM.render(
   </Router>,
   document.getElementById("root")
 );
-
-// If you want your app to work offline and load faster, you can change
-// unregister() to register() below. Note this comes with some pitfalls.
-// Learn more about service workers: https://bit.ly/CRA-PWA
-serviceWorker.unregister();

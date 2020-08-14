@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 import {
   Connection,
   TransactionSignature,
@@ -63,7 +64,7 @@ async function fetchDetails(
       );
       fetchStatus = FetchStatus.Fetched;
     } catch (error) {
-      console.error("Failed to fetch confirmed transaction", error);
+      Sentry.captureException(error, { tags: { url } });
       fetchStatus = FetchStatus.FetchFailed;
     }
   }

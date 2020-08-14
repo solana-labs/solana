@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 
 import { Supply, Connection } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "./cluster";
@@ -50,7 +51,7 @@ async function fetch(dispatch: Dispatch, url: string) {
       return supply;
     });
   } catch (err) {
-    console.error("Failed to fetch", err);
+    Sentry.captureException(err, { tags: { url } });
     dispatch("Failed to fetch supply");
   }
 }
