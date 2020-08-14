@@ -131,7 +131,8 @@ fn do_get_packet_offsets(
     }
 
     // read the length of Transaction.signatures (serialized with short_vec)
-    let (sig_len_untrusted, sig_size) = decode_len(&packet.data)?;
+    let (sig_len_untrusted, sig_size) =
+        decode_len(&packet.data).map_err(|_| PacketError::InvalidShortVec)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
@@ -156,8 +157,8 @@ fn do_get_packet_offsets(
     }
 
     // read the length of Message.account_keys (serialized with short_vec)
-    let (pubkey_len, pubkey_len_size) =
-        decode_len(&packet.data[message_account_keys_len_offset..])?;
+    let (pubkey_len, pubkey_len_size) = decode_len(&packet.data[message_account_keys_len_offset..])
+        .map_err(|_| PacketError::InvalidShortVec)?;
 
     if (message_account_keys_len_offset + pubkey_len * size_of::<Pubkey>() + pubkey_len_size)
         > packet.meta.size
