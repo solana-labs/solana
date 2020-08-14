@@ -93,7 +93,8 @@ macro_rules! declare_name {
 /// name: Name of the program
 /// filename: must match the library name in Cargo.toml
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
-/// id: Path to the program id access function, used if not called in `src/lib`
+/// id: Path to the program id access function, used if this macro is not
+///     called in `src/lib`
 ///
 /// # Examples
 ///
@@ -174,32 +175,9 @@ macro_rules! declare_program(
     )
 );
 
-/// Same as declare_program but for native loaders
-#[macro_export]
-macro_rules! declare_loader {
-    ($bs58_string:expr, $name:ident, $entrypoint:expr) => {
-        $crate::declare_loader!($bs58_string, $name, $entrypoint, $name, id);
-    };
-    ($bs58_string:expr, $name:ident, $entrypoint:expr, $filename:ident) => {
-        $crate::declare_loader!($bs58_string, $name, $entrypoint, $filename, id);
-    };
-    ($bs58_string:expr, $name:ident, $entrypoint:expr, $filename:ident, $id:path) => {
-        $crate::declare_id!($bs58_string);
-        $crate::declare_name!($name, $filename, $id);
-
-        #[no_mangle]
-        pub extern "C" fn $name(
-            program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &[$crate::account::KeyedAccount],
-            instruction_data: &[u8],
-            invoke_context: &mut dyn $crate::entrypoint_native::InvokeContext,
-        ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, instruction_data, invoke_context)
-        }
-    };
-}
-
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type ProcessInstructionWithContext =
+    fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {

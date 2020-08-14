@@ -13,6 +13,7 @@ pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
+pub mod builtins;
 pub mod clock;
 pub mod commitment_config;
 pub mod decode_error;
