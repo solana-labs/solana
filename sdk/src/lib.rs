@@ -12,6 +12,11 @@ pub mod abi_example;
 pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
+<<<<<<< HEAD
+=======
+pub mod bpf_loader_deprecated;
+pub mod builtins;
+>>>>>>> 7c736f71f... Make BPF Loader static (#11516)
 pub mod clock;
 pub mod commitment_config;
 pub mod decode_error;

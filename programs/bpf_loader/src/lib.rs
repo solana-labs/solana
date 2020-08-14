@@ -25,10 +25,14 @@ use solana_sdk::{
 use std::{io::prelude::*, mem};
 use thiserror::Error;
 
-solana_sdk::declare_loader!(
+solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
+<<<<<<< HEAD
     process_instruction
+=======
+    solana_bpf_loader_program::process_instruction
+>>>>>>> 7c736f71f... Make BPF Loader static (#11516)
 );
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -343,6 +347,7 @@ mod tests {
         }
     }
 
+<<<<<<< HEAD
     #[rustversion::since(1.46.0)]
     #[test]
     fn test_bpf_loader_same_crate() {
@@ -351,6 +356,8 @@ mod tests {
         solana_bpf_loader_program!();
     }
 
+=======
+>>>>>>> 7c736f71f... Make BPF Loader static (#11516)
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(10)")]
     fn test_bpf_loader_non_terminating_program() {

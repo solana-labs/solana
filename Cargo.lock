@@ -3368,7 +3368,6 @@ version = "1.3.5"
 dependencies = [
  "bincode",
  "byteorder",
- "jemalloc-sys",
  "num-derive 0.3.0",
  "num-traits",
  "rand 0.7.3",
@@ -3547,8 +3546,11 @@ dependencies = [
  "serial_test_derive",
  "solana-account-decoder",
  "solana-banks-server",
+<<<<<<< HEAD
  "solana-bpf-loader-program",
  "solana-budget-program",
+=======
+>>>>>>> 7c736f71f... Make BPF Loader static (#11516)
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
