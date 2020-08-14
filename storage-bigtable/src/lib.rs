@@ -371,7 +371,7 @@ impl LedgerStorage {
         let address_prefix = format!("{}/", address);
 
         // Figure out where to start listing from based on `before_signature`
-        let (first_slot, mut before_transaction_index) = match before_signature {
+        let (first_slot, before_transaction_index) = match before_signature {
             None => (Slot::MAX, 0),
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
@@ -391,51 +391,42 @@ impl LedgerStorage {
             )
             .await?;
 
-        // Return the next tx-by-addr keys of amount `limit` plus extra to account for the largest
+        // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
         // number that might be flitered out
-        let tx_by_addr_info_keys = bigtable
-            .get_row_keys(
+        let tx_by_addr_data = bigtable
+            .get_row_data(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
-                None,
+                Some(format!("{}{}", address_prefix, slot_to_key(!0))),
                 limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
 
-        // Read each tx-by-addr object until `limit` signatures have been found
-        'outer: for key in tx_by_addr_info_keys {
-            trace!("key is {}:  slot is {}", key, &key[address_prefix.len()..]);
-            if !key.starts_with(&address_prefix) {
-                break 'outer;
-            }
-
-            let slot = !key_to_slot(&key[address_prefix.len()..]).ok_or_else(|| {
+        'outer: for (row_key, data) in tx_by_addr_data {
+            let slot = !key_to_slot(&row_key[address_prefix.len()..]).ok_or_else(|| {
                 bigtable::Error::ObjectCorrupt(format!(
                     "Failed to convert key to slot: tx-by-addr/{}",
-                    key
+                    row_key
                 ))
             })?;
-
-            let tx_by_addr_infos = bigtable
-                .get_bincode_cell::<Vec<TransactionByAddrInfo>>("tx-by-addr", key)
-                .await?;
-
-            for tx_by_addr_info in tx_by_addr_infos
-                .into_iter()
-                .filter(|tx_by_addr_info| tx_by_addr_info.index < before_transaction_index)
-            {
+            let cell_data: Vec<TransactionByAddrInfo> =
+                bigtable::deserialize_cell_data(&data, "tx-by-addr", row_key)?;
+            for tx_by_addr_info in cell_data.into_iter() {
+                // Filter out records before `before_transaction_index`
+                if slot == first_slot && tx_by_addr_info.index >= before_transaction_index {
+                    continue;
+                }
                 infos.push(ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
                     slot,
                     err: tx_by_addr_info.err,
                     memo: tx_by_addr_info.memo,
                 });
+                // Respect limit
                 if infos.len() >= limit {
                     break 'outer;
                 }
             }
-
-            before_transaction_index = u32::MAX;
         }
         Ok(infos)
     }
