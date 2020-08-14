@@ -70,13 +70,13 @@ macro_rules! declare_builtin_name {
 ///
 /// ```
 /// use std::str::FromStr;
-/// # // wrapper is used so that the macro invocation occurs in the item position
-/// # // rather than in the statement position which isn't allowed.
-/// # mod item_wrapper {
+/// // wrapper is used so that the macro invocation occurs in the item position
+/// // rather than in the statement position which isn't allowed.
+/// mod item_wrapper {
 /// use solana_sdk::account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
-/// use solana_sdk::declare_builtin
+/// use solana_sdk::declare_builtin;
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
@@ -107,7 +107,7 @@ macro_rules! declare_builtin_name {
 /// use solana_sdk::account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
-/// use solana_sdk::declare_program;
+/// use solana_sdk::declare_builtin;
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
@@ -123,7 +123,7 @@ macro_rules! declare_builtin_name {
 ///     solana_my_program,
 ///     my_process_instruction
 /// );
-/// # }
+/// }
 ///
 /// # use item_wrapper::id;
 /// assert_eq!(id(), solana_sdk::system_program::ID);
