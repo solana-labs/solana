@@ -246,4 +246,17 @@ mod tests {
         let s = serde_json::to_string(&vec).unwrap();
         assert_eq!(s, "[[3],0,1,2]");
     }
+
+    #[test]
+    fn test_decode_len_aliased_values() {
+        let one1 = [0x01];
+        let one2 = [0x81, 0x00];
+        let one3 = [0x81, 0x80, 0x00];
+        let one4 = [0x81, 0x80, 0x80, 0x00];
+
+        assert_eq!(decode_len(&one1).unwrap(), (1, 1));
+        assert_eq!(decode_len(&one2).unwrap(), (1, 2));
+        assert_eq!(decode_len(&one3).unwrap(), (1, 3));
+        assert!(decode_len(&one4).is_err());
+    }
 }
