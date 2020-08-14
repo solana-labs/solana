@@ -16,9 +16,11 @@ pub struct RentCollector {
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
-    // arrange flag meaning so that for RentCollector to enable new behavior by bool::default()
+    // serde(skip) is needed not to break abi
+    // Also, wrap this with Option so that we can spot any uninitialized codepath (like
+    // snapshot restore)
     #[serde(skip)]
-    pub enable_old_behavior: bool,
+    pub operating_mode: Option<OperatingMode>,
 }
 
 impl Default for RentCollector {
@@ -29,7 +31,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
-            enable_old_behavior: bool::default(),
+            operating_mode: Option::default(),
         }
     }
 }
@@ -47,26 +49,24 @@ impl RentCollector {
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
-            enable_old_behavior: Self::enable_old_behavior(epoch, operating_mode),
+            operating_mode: Some(operating_mode),
         }
     }
 
     pub fn clone_with_epoch(&self, epoch: Epoch, operating_mode: OperatingMode) -> Self {
         Self {
             epoch,
-            enable_old_behavior: Self::enable_old_behavior(epoch, operating_mode),
+            operating_mode: Some(operating_mode),
             ..self.clone()
         }
     }
 
-    fn enable_old_behavior(epoch: Epoch, operating_mode: OperatingMode) -> bool {
-        let enable_new_behavior = match operating_mode {
+    fn enable_new_behavior(&self) -> bool {
+        match self.operating_mode.unwrap() {
             OperatingMode::Development => true,
-            OperatingMode::Preview => epoch >= Epoch::max_value(),
-            OperatingMode::Stable => epoch >= Epoch::max_value(),
-        };
-
-        !enable_new_behavior
+            OperatingMode::Preview => self.epoch >= Epoch::max_value(),
+            OperatingMode::Stable => self.epoch >= Epoch::max_value(),
+        }
     }
 
     // updates this account's lamports and status and returns
@@ -99,7 +99,7 @@ impl RentCollector {
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
                     account.rent_epoch = self.epoch
-                        + if !self.enable_old_behavior && exempt {
+                        + if self.enable_new_behavior() && exempt {
                             // Rent isn't collected for the next epoch
                             // Make sure to check exempt status later in curent epoch again
                             0
