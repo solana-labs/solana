@@ -1,6 +1,6 @@
 [package]
 name = "solana-account-decoder"
-version = "1.2.23"
+version = "1.2.24"
 description = "Solana account decoder"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,10 +15,10 @@ bs58 = "0.3.1"
 bv = "0.11.1"
 Inflector = "0.11.4"
 lazy_static = "1.4.0"
-solana-config-program = { path = "../programs/config", version = "1.2.23" }
-solana-sdk = { path = "../sdk", version = "1.2.23" }
-solana-stake-program = { path = "../programs/stake", version = "1.2.23" }
-solana-vote-program = { path = "../programs/vote", version = "1.2.23" }
+solana-config-program = { path = "../programs/config", version = "1.2.24" }
+solana-sdk = { path = "../sdk", version = "1.2.24" }
+solana-stake-program = { path = "../programs/stake", version = "1.2.24" }
+solana-vote-program = { path = "../programs/vote", version = "1.2.24" }
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 serde = "1.0.112"
 serde_derive = "1.0.103"

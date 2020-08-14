@@ -27,5 +27,5 @@ Alternatively, you can source it from within a script:
     local PATCH=0  
     local SPECIAL=""
     
-    semverParseInto "1.2.23" MAJOR MINOR PATCH SPECIAL
+    semverParseInto "1.2.24" MAJOR MINOR PATCH SPECIAL
     semverParseInto "3.2.1" MAJOR MINOR PATCH SPECIAL
