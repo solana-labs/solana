@@ -2,7 +2,6 @@ import React from "react";
 import { Switch, Route, Redirect } from "react-router-dom";
 
 import { ClusterModal } from "components/ClusterModal";
-import { TX_ALIASES } from "providers/transactions";
 import { MessageBanner } from "components/MessageBanner";
 import { Navbar } from "components/Navbar";
 import { ClusterStatusBanner } from "components/ClusterStatusButton";
@@ -13,7 +12,8 @@ import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 
-const ACCOUNT_ALIASES = ["account", "accounts", "addresses"];
+const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
+const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
 
 function App() {
   return (
@@ -30,19 +30,25 @@ function App() {
           </Route>
           <Route
             exact
-            path={TX_ALIASES.flatMap((tx) => [tx, tx + "s"]).map(
-              (tx) => `/${tx}/:signature`
-            )}
+            path={TX_ALIASES.map((tx) => `/${tx}/:signature`)}
+            render={({ match, location }) => {
+              let pathname = `/tx/${match.params.signature}`;
+              return <Redirect to={{ ...location, pathname }} />;
+            }}
+          />
+          <Route
+            exact
+            path={"/tx/:signature"}
             render={({ match }) => (
               <TransactionDetailsPage signature={match.params.signature} />
             )}
           />
           <Route
             exact
-            path={ACCOUNT_ALIASES.flatMap((account) => [
-              `/${account}/:address`,
-              `/${account}/:address/:tab`,
-            ])}
+            path={[
+              ...ADDRESS_ALIASES.map((path) => `/${path}/:address`),
+              ...ADDRESS_ALIASES.map((path) => `/${path}/:address/:tab`),
+            ]}
             render={({ match, location }) => {
               let pathname = `/address/${match.params.address}`;
               if (match.params.tab) {
