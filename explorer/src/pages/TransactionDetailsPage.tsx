@@ -45,7 +45,7 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
       <div className="header">
         <div className="header-body">
           <h6 className="header-pretitle">Details</h6>
-          <h4 className="header-title">Transaction</h4>
+          <h2 className="header-title">Transaction</h2>
         </div>
       </div>
       {signature === undefined ? (

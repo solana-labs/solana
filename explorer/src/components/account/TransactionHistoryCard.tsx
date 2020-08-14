@@ -70,7 +70,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
       detailsList.push(
         <tr key={signature}>
-          <td className="w-1">{slot}</td>
+          <td className="w-1 text-monospace">{slot.toLocaleString("en-US")}</td>
 
           <td>
             <span className={`badge badge-soft-${statusClass}`}>
