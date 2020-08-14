@@ -12,7 +12,7 @@ use solana_streamer::streamer;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -43,6 +43,7 @@ impl GossipService {
         );
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
+        let response_sender = Arc::new(Mutex::new(response_sender));
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
             bank_forks.clone(),

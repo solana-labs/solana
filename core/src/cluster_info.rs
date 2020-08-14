@@ -30,12 +30,11 @@ use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
+use std::sync::Mutex;
 
 use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::staking_utils;
 use solana_measure::measure::Measure;
@@ -1432,13 +1431,13 @@ impl ClusterInfo {
         &self,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
-        sender: &PacketSender,
+        sender: &Arc<Mutex<PacketSender>>,
         generate_pull_requests: bool,
     ) -> Result<()> {
         let reqs = self.generate_new_gossip_requests(&stakes, generate_pull_requests);
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
-            sender.send(packets)?;
+            sender.lock().unwrap().send(packets)?;
         }
         Ok(())
     }
@@ -1500,7 +1499,7 @@ impl ClusterInfo {
     pub fn gossip(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        sender: PacketSender,
+        sender: Arc<Mutex<PacketSender>>,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
@@ -1560,20 +1559,22 @@ impl ClusterInfo {
     #[allow(clippy::cognitive_complexity)]
     fn handle_packets(
         &self,
-        recycler: &PacketsRecycler,
-        stakes: &HashMap<Pubkey, u64>,
+        recycler: &Arc<PacketsRecycler>,
+        stakes: &Arc<RwLock<HashMap<Pubkey, u64>>>,
         packets: Packets,
-        response_sender: &PacketSender,
+        response_sender: Arc<Mutex<PacketSender>>,
         epoch_time_ms: u64,
     ) {
         // iter over the packets, collect pulls separately and process everything else
         let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
-        let timeouts = self
-            .gossip
-            .read()
-            .unwrap()
-            .make_timeouts(&stakes, epoch_time_ms);
+        let timeouts = {
+            let stakes = stakes.read().unwrap();
+            self.gossip
+                .read()
+                .unwrap()
+                .make_timeouts(&stakes, epoch_time_ms)
+        };
         let mut pull_responses = HashMap::new();
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
@@ -1641,9 +1642,12 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        let rsp = self.handle_push_message(recycler, &from, data, stakes);
+                        let rsp = {
+                            let stakes = stakes.read().unwrap();
+                            self.handle_push_message(recycler, &from, data, &stakes)
+                        };
                         if let Some(rsp) = rsp {
-                            let _ignore_disconnect = response_sender.send(rsp);
+                            let _ignore_disconnect = response_sender.lock().unwrap().send(rsp);
                         }
                         datapoint_debug!(
                             "solana-gossip-listen-memory",
@@ -1694,9 +1698,12 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(gossip_pull_data.len() as u64);
-            let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes);
+            let rsp = {
+                let stakes = stakes.read().unwrap();
+                self.handle_pull_requests(recycler, gossip_pull_data, &stakes)
+            };
             if let Some(rsp) = rsp {
-                let _ignore_disconnect = response_sender.send(rsp);
+                let _ignore_disconnect = response_sender.lock().unwrap().send(rsp);
             }
         }
     }
@@ -2025,31 +2032,38 @@ impl ClusterInfo {
     }
 
     fn process_packets(
-        &self,
+        self: Arc<Self>,
         requests: Vec<Packets>,
         thread_pool: &ThreadPool,
-        recycler: &PacketsRecycler,
-        response_sender: &PacketSender,
-        stakes: HashMap<Pubkey, u64>,
+        recycler: Arc<PacketsRecycler>,
+        response_sender: Arc<Mutex<PacketSender>>,
+        stakes: Arc<RwLock<HashMap<Pubkey, u64>>>,
         epoch_time_ms: u64,
     ) {
-        let sender = response_sender.clone();
-        thread_pool.install(|| {
-            requests.into_par_iter().for_each_with(sender, |s, reqs| {
-                self.handle_packets(&recycler, &stakes, reqs, s, epoch_time_ms)
+        for reqs in requests {
+            let new_self = self.clone();
+            let recycler2 = recycler.clone();
+            let stakes2 = stakes.clone();
+            let response_sender = response_sender.clone();
+            thread_pool.spawn(move || {
+                new_self.handle_packets(&recycler2, &stakes2, reqs, response_sender, epoch_time_ms)
             });
-        });
+        }
     }
 
     /// Process messages from the network
+    #[allow(clippy::too_many_arguments)]
     fn run_listen(
-        &self,
-        recycler: &PacketsRecycler,
+        self: &Arc<Self>,
+        recycler: &Arc<PacketsRecycler>,
         bank_forks: Option<&Arc<RwLock<BankForks>>>,
         requests_receiver: &PacketReceiver,
-        response_sender: &PacketSender,
+        response_sender: &Arc<Mutex<PacketSender>>,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
+        stakes: &Arc<RwLock<HashMap<Pubkey, u64>>>,
+        last_stakes_update: &mut Instant,
+        epoch_time_ms: &mut u64,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let mut requests = vec![requests_receiver.recv_timeout(timeout)?];
@@ -2069,15 +2083,21 @@ impl ClusterInfo {
             );
         }
 
-        let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
+        if last_stakes_update.elapsed().as_millis() > 1000 {
+            let (new_stakes, new_epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
+            let mut st = stakes.write().unwrap();
+            *st = new_stakes;
+            *epoch_time_ms = new_epoch_time_ms;
+            *last_stakes_update = Instant::now();
+        }
 
-        self.process_packets(
+        self.clone().process_packets(
             requests,
             thread_pool,
-            recycler,
-            response_sender,
-            stakes,
-            epoch_time_ms,
+            recycler.clone(),
+            response_sender.clone(),
+            stakes.clone(),
+            *epoch_time_ms,
         );
 
         self.print_reset_stats(last_print);
@@ -2279,11 +2299,11 @@ impl ClusterInfo {
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: PacketReceiver,
-        response_sender: PacketSender,
+        response_sender: Arc<Mutex<PacketSender>>,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::default();
+        let recycler = Arc::new(PacketsRecycler::default());
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || {
@@ -2293,6 +2313,10 @@ impl ClusterInfo {
                     .build()
                     .unwrap();
                 let mut last_print = Instant::now();
+                let mut last_stakes_update =
+                    Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+                let stakes = Arc::new(RwLock::new(HashMap::new()));
+                let mut epoch_time_ms: u64 = 0;
                 loop {
                     let e = self.run_listen(
                         &recycler,
@@ -2301,6 +2325,9 @@ impl ClusterInfo {
                         &response_sender,
                         &thread_pool,
                         &mut last_print,
+                        &stakes,
+                        &mut last_stakes_update,
+                        &mut epoch_time_ms,
                     );
                     if exit.load(Ordering::Relaxed) {
                         return;
