@@ -1,4 +1,5 @@
 import React from "react";
+import bs58 from "bs58";
 import {
   useFetchTransactionStatus,
   useTransactionStatus,
@@ -29,7 +30,16 @@ import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard"
 import { FetchStatus } from "providers/cache";
 
 type Props = { signature: TransactionSignature };
-export function TransactionDetailsPage({ signature }: Props) {
+export function TransactionDetailsPage({ signature: raw }: Props) {
+  let signature: TransactionSignature | undefined;
+
+  try {
+    const decoded = bs58.decode(raw);
+    if (decoded.length === 64) {
+      signature = raw;
+    }
+  } catch (err) {}
+
   return (
     <div className="container mt-n3">
       <div className="header">
@@ -38,10 +48,15 @@ export function TransactionDetailsPage({ signature }: Props) {
           <h4 className="header-title">Transaction</h4>
         </div>
       </div>
-
-      <StatusCard signature={signature} />
-      <AccountsCard signature={signature} />
-      <InstructionsSection signature={signature} />
+      {signature === undefined ? (
+        <ErrorCard text={`Signature "${raw}" is not valid`} />
+      ) : (
+        <>
+          <StatusCard signature={signature} />
+          <AccountsCard signature={signature} />
+          <InstructionsSection signature={signature} />
+        </>
+      )}
     </div>
   );
 }
