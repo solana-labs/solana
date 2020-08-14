@@ -1,6 +1,6 @@
 [package]
 name = "solana-transaction-status"
-version = "1.3.3"
+version = "1.3.4"
 description = "Solana transaction status types"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,10 +13,10 @@ bincode = "1.3.1"
 bs58 = "0.3.1"
 Inflector = "0.11.4"
 lazy_static = "1.4.0"
-solana-account-decoder = { path = "../account-decoder", version = "1.3.3" }
-solana-sdk = { path = "../sdk", version = "1.3.3" }
-solana-stake-program = { path = "../programs/stake", version = "1.3.3" }
-solana-vote-program = { path = "../programs/vote", version = "1.3.3" }
+solana-account-decoder = { path = "../account-decoder", version = "1.3.4" }
+solana-sdk = { path = "../sdk", version = "1.3.4" }
+solana-stake-program = { path = "../programs/stake", version = "1.3.4" }
+solana-vote-program = { path = "../programs/vote", version = "1.3.4" }
 spl-memo-v1-0 = { package = "spl-memo", version = "1.0.7", features = ["skip-no-mangle"] }
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 serde = "1.0.112"
