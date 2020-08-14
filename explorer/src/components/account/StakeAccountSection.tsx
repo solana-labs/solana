@@ -12,7 +12,7 @@ import {
 } from "validators/accounts/stake";
 import BN from "bn.js";
 
-const MAX_EPOCH = new BN(2).pow(new BN(64));
+const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
 export function StakeAccountSection({
   account,

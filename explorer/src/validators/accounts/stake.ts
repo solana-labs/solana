@@ -1,4 +1,4 @@
-import { object, StructType, number, optional, enums } from "superstruct";
+import { object, StructType, number, nullable, enums } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 import { BigNum } from "validators/bignum";
 
@@ -27,7 +27,7 @@ export const StakeMeta = object({
 export type StakeAccountInfo = StructType<typeof StakeAccountInfo>;
 export const StakeAccountInfo = object({
   meta: StakeMeta,
-  stake: optional(
+  stake: nullable(
     object({
       delegation: object({
         voter: Pubkey,
