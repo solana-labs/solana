@@ -299,17 +299,19 @@ impl RpcClient {
         &self,
         address: &Pubkey,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        self.get_confirmed_signatures_for_address2_with_config(address, None, None)
+        self.get_confirmed_signatures_for_address2_with_config(address, None, None, None)
     }
 
     pub fn get_confirmed_signatures_for_address2_with_config(
         &self,
         address: &Pubkey,
         before: Option<Signature>,
+        until: Option<Signature>,
         limit: Option<usize>,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         let config = RpcGetConfirmedSignaturesForAddress2Config {
             before: before.map(|signature| signature.to_string()),
+            until: until.map(|signature| signature.to_string()),
             limit,
         };
 
