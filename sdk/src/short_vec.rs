@@ -37,6 +37,26 @@ impl Serialize for ShortU16 {
     }
 }
 
+enum VisitResult {
+    Done(usize, usize),
+    More(usize, usize),
+    Err,
+}
+
+fn visit_byte(elem: u8, len: usize, size: usize) -> VisitResult {
+    let len = len | (elem as usize & 0x7f) << (size * 7);
+    let size = size + 1;
+    let more = elem as usize & 0x80 == 0x80;
+
+    if size > size_of::<u16>() + 1 {
+        VisitResult::Err
+    } else if more {
+        VisitResult::More(len, size)
+    } else {
+        VisitResult::Done(len, size)
+    }
+}
+
 struct ShortLenVisitor;
 
 impl<'de> Visitor<'de> for ShortLenVisitor {
@@ -57,15 +77,16 @@ impl<'de> Visitor<'de> for ShortLenVisitor {
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(size, &self))?;
 
-            len |= (elem as usize & 0x7f) << (size * 7);
-            size += 1;
-
-            if elem as usize & 0x80 == 0 {
-                break;
-            }
-
-            if size > size_of::<u16>() + 1 {
-                return Err(de::Error::invalid_length(size, &self));
+            match visit_byte(elem, len, size) {
+                VisitResult::Done(l, _) => {
+                    len = l;
+                    break;
+                }
+                VisitResult::More(l, s) => {
+                    len = l;
+                    size = s;
+                }
+                VisitResult::Err => return Err(de::Error::invalid_length(size + 1, &self)),
             }
         }
 
@@ -177,10 +198,20 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ShortVec<T> {
 }
 
 /// Return the decoded value and how many bytes it consumed.
-pub fn decode_len(bytes: &[u8]) -> Result<(usize, usize), Box<bincode::ErrorKind>> {
-    let short_len: ShortU16 = bincode::deserialize(bytes)?;
-    let num_bytes = bincode::serialized_size(&short_len)?;
-    Ok((short_len.0 as usize, num_bytes as usize))
+pub fn decode_len(bytes: &[u8]) -> Result<(usize, usize), ()> {
+    let mut len = 0;
+    let mut size = 0;
+    for byte in bytes.iter() {
+        match visit_byte(*byte, len, size) {
+            VisitResult::More(l, s) => {
+                len = l;
+                size = s;
+            }
+            VisitResult::Done(len, size) => return Ok((len, size)),
+            VisitResult::Err => return Err(()),
+        }
+    }
+    Err(())
 }
 
 #[cfg(test)]
@@ -244,5 +275,18 @@ mod tests {
         let vec = ShortVec(vec![0, 1, 2]);
         let s = serde_json::to_string(&vec).unwrap();
         assert_eq!(s, "[[3],0,1,2]");
+    }
+
+    #[test]
+    fn test_decode_len_aliased_values() {
+        let one1 = [0x01];
+        let one2 = [0x81, 0x00];
+        let one3 = [0x81, 0x80, 0x00];
+        let one4 = [0x81, 0x80, 0x80, 0x00];
+
+        assert_eq!(decode_len(&one1).unwrap(), (1, 1));
+        assert_eq!(decode_len(&one2).unwrap(), (1, 2));
+        assert_eq!(decode_len(&one3).unwrap(), (1, 3));
+        assert!(decode_len(&one4).is_err());
     }
 }
