@@ -371,25 +371,33 @@ impl LedgerStorage {
         let address_prefix = format!("{}/", address);
 
         // Figure out where to start listing from based on `before_signature`
-        let (first_slot, mut first_transaction_index) = match before_signature {
+        let (first_slot, mut before_transaction_index) = match before_signature {
             None => (Slot::MAX, 0),
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
                     .get_bincode_cell("tx", before_signature.to_string())
                     .await?;
 
-                (slot, index + 1)
+                (slot, index)
             }
         };
 
         let mut infos = vec![];
 
-        // Return the next `limit` tx-by-addr keys
+        let starting_slot_tx_by_addr_infos = bigtable
+            .get_bincode_cell::<Vec<TransactionByAddrInfo>>(
+                "tx-by-addr",
+                format!("{}{}", address_prefix, slot_to_key(!first_slot)),
+            )
+            .await?;
+
+        // Return the next tx-by-addr keys of amount `limit` plus extra to account for the largest
+        // number that might be flitered out
         let tx_by_addr_info_keys = bigtable
             .get_row_keys(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
-                limit as i64,
+                limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
 
@@ -413,7 +421,7 @@ impl LedgerStorage {
 
             for tx_by_addr_info in tx_by_addr_infos
                 .into_iter()
-                .skip(first_transaction_index as usize)
+                .filter(|tx_by_addr_info| tx_by_addr_info.index < before_transaction_index)
             {
                 infos.push(ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
@@ -426,7 +434,7 @@ impl LedgerStorage {
                 }
             }
 
-            first_transaction_index = 0;
+            before_transaction_index = u32::MAX;
         }
         Ok(infos)
     }
