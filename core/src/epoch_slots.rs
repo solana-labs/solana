@@ -451,6 +451,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_epoch_slots_fill_uncompressed_random_range() {
         use rand::Rng;
         for _ in 0..10 {
@@ -469,6 +470,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_epoch_slots_fill_compressed_random_range() {
         use rand::Rng;
         for _ in 0..10 {
@@ -489,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_epoch_slots_fill_random_range() {
         use rand::Rng;
         for _ in 0..10 {

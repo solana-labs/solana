@@ -109,6 +109,7 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
         .collect()
 }
 
+#[allow(clippy::same_item_push)]
 fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
     let progs = 4;
     (0..txes)
@@ -294,6 +295,7 @@ fn simulate_process_entries(
     process_entries(&bank, &[entry], randomize_txs, None, None).unwrap();
 }
 
+#[allow(clippy::same_item_push)]
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.

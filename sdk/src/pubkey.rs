@@ -158,8 +158,9 @@ impl Pubkey {
     /// Find a valid program address and its corresponding nonce which must be passed
     /// as an additional seed when calling `create_program_address`
     // #[cfg(not(feature = "program"))]
+    #[allow(clippy::same_item_push)]
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
-        let mut nonce = [255];
+        let mut nonce = [std::u8::MAX];
         for _ in 0..std::u8::MAX {
             {
                 let mut seeds_with_nonce = seeds.to_vec();

@@ -92,7 +92,7 @@ impl SnapshotVersion {
     }
 }
 
-#[derive(PartialEq, Ord, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: Slot,
     pub snapshot_file_path: PathBuf,
@@ -123,6 +123,12 @@ pub type Result<T> = std::result::Result<T, SnapshotError>;
 impl PartialOrd for SlotSnapshotPaths {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.slot.cmp(&other.slot))
+    }
+}
+
+impl Ord for SlotSnapshotPaths {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.slot.cmp(&other.slot)
     }
 }
 

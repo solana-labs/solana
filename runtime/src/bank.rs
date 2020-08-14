@@ -1966,6 +1966,7 @@ impl Bank {
         }
     }
 
+    #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,

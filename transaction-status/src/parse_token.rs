@@ -311,6 +311,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_parse_token() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
@@ -656,6 +657,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::same_item_push)]
     fn test_token_ix_not_enough_keys() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
