@@ -29,6 +29,7 @@ pub type RowKey = String;
 pub type CellName = String;
 pub type CellValue = Vec<u8>;
 pub type RowData = Vec<(CellName, CellValue)>;
+pub type RowDataSlice<'a> = &'a [(CellName, CellValue)];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -447,17 +448,7 @@ impl BigTable {
         let row_data = self.get_row_data(table, Some(key.clone()), None, 1).await?;
         let (row_key, data) = &row_data[0];
 
-        let value = &data
-            .into_iter()
-            .find(|(name, _)| name == "bin")
-            .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, row_key)))?
-            .1;
-
-        let data = decompress(&value)?;
-        bincode::deserialize(&data).map_err(|err| {
-            warn!("Failed to deserialize {}/{}: {}", table, key, err);
-            Error::ObjectCorrupt(format!("{}/{}", table, key))
-        })
+        deserialize_cell_data(data, table, row_key.to_string())
     }
 
     pub async fn put_bincode_cells<T>(
@@ -479,4 +470,25 @@ impl BigTable {
         self.put_row_data(table, "x", &new_row_data).await?;
         Ok(bytes_written)
     }
+}
+
+pub(crate) fn deserialize_cell_data<T>(
+    row_data: RowDataSlice,
+    table: &str,
+    key: RowKey,
+) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let value = &row_data
+        .iter()
+        .find(|(name, _)| name == "bin")
+        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .1;
+
+    let data = decompress(&value)?;
+    bincode::deserialize(&data).map_err(|err| {
+        warn!("Failed to deserialize {}/{}: {}", table, key, err);
+        Error::ObjectCorrupt(format!("{}/{}", table, key))
+    })
 }
