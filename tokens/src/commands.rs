@@ -1,5 +1,6 @@
 use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
 use crate::db::{self, TransactionInfo};
+use chrono::prelude::*;
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
@@ -17,7 +18,7 @@ use solana_sdk::{
     transport::{self, TransportError},
 };
 use solana_stake_program::{
-    stake_instruction,
+    stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use std::{
@@ -37,6 +38,7 @@ struct Bid {
 struct Allocation {
     recipient: String,
     amount: f64,
+    lockup_date: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -49,6 +51,8 @@ pub enum Error {
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
     TransportError(#[from] TransportError),
+    #[error("Missing lockup authority")]
+    MissingLockupAuthority,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -59,10 +63,17 @@ fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
             .or_insert(Allocation {
                 recipient: allocation.recipient.clone(),
                 amount: 0.0,
+                lockup_date: "".to_string(),
             })
             .amount += allocation.amount;
     }
     allocation_map.values().cloned().collect()
+}
+
+/// Return true if the recipient and lockups are the same
+fn has_same_recipient(allocation: &Allocation, transaction_info: &TransactionInfo) -> bool {
+    allocation.recipient == transaction_info.recipient.to_string()
+        && allocation.lockup_date.parse().ok() == transaction_info.lockup_date
 }
 
 fn apply_previous_transactions(
@@ -72,7 +83,7 @@ fn apply_previous_transactions(
     for transaction_info in transaction_infos {
         let mut amount = transaction_info.amount;
         for allocation in allocations.iter_mut() {
-            if allocation.recipient != transaction_info.recipient.to_string() {
+            if !has_same_recipient(&allocation, &transaction_info) {
                 continue;
             }
             if allocation.amount >= amount {
@@ -91,6 +102,7 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     Allocation {
         recipient: bid.primary_address.clone(),
         amount: bid.accepted_amount_dollars / dollars_per_sol,
+        lockup_date: "".to_string(),
     }
 }
 
@@ -126,8 +138,21 @@ async fn distribute_tokens(
             signers.push(&*stake_args.stake_authority);
             signers.push(&*stake_args.withdraw_authority);
             signers.push(&new_stake_account_keypair);
+            if allocation.lockup_date != "" {
+                if let Some(lockup_authority) = &stake_args.lockup_authority {
+                    signers.push(&**lockup_authority);
+                } else {
+                    return Err(Error::MissingLockupAuthority);
+                }
+            }
         }
         let signers = unique_signers(signers);
+
+        let lockup_date = if allocation.lockup_date == "" {
+            None
+        } else {
+            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
+        };
 
         println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
         let instructions = if let Some(stake_args) = &args.stake_args {
@@ -160,6 +185,25 @@ async fn distribute_tokens(
                 &recipient,
                 StakeAuthorize::Withdrawer,
             ));
+
+            // Add lockup
+            if let Some(lockup_date) = lockup_date {
+                let lockup_authority = stake_args
+                    .lockup_authority
+                    .as_ref()
+                    .map(|signer| signer.pubkey())
+                    .unwrap();
+                let lockup = LockupArgs {
+                    unix_timestamp: Some(lockup_date.timestamp()),
+                    epoch: None,
+                    custodian: None,
+                };
+                instructions.push(stake_instruction::set_lockup(
+                    &new_stake_account_address,
+                    &lockup,
+                    &lockup_authority,
+                ));
+            }
 
             instructions.push(system_instruction::transfer(
                 &sender_pubkey,
@@ -198,6 +242,7 @@ async fn distribute_tokens(
                     Some(&new_stake_account_address),
                     false,
                     last_valid_slot,
+                    lockup_date,
                 )?;
             }
             Err(e) => {
@@ -469,6 +514,7 @@ pub async fn test_process_distribute_tokens_with_client(
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: 1000.0,
+        lockup_date: "".to_string(),
     };
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
@@ -578,6 +624,7 @@ pub async fn test_process_distribute_stake_with_client(
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: 1000.0,
+        lockup_date: "".to_string(),
     };
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
@@ -597,6 +644,7 @@ pub async fn test_process_distribute_stake_with_client(
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
+        lockup_authority: None,
         sol_for_fees: 1.0,
     };
     let args = DistributeTokensArgs {
@@ -692,6 +740,7 @@ mod tests {
         let allocation = Allocation {
             recipient: alice_pubkey.to_string(),
             amount: 42.0,
+            lockup_date: "".to_string(),
         };
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
@@ -718,6 +767,7 @@ mod tests {
         let allocation = Allocation {
             recipient: bid.primary_address,
             amount: 84.0,
+            lockup_date: "".to_string(),
         };
         assert_eq!(
             read_allocations(&input_csv, true, Some(0.5)),
@@ -733,10 +783,12 @@ mod tests {
             Allocation {
                 recipient: alice.to_string(),
                 amount: 1.0,
+                lockup_date: "".to_string(),
             },
             Allocation {
                 recipient: bob.to_string(),
                 amount: 1.0,
+                lockup_date: "".to_string(),
             },
         ];
         let transaction_infos = vec![TransactionInfo {
@@ -750,5 +802,54 @@ mod tests {
         // Ensure that we applied the transaction to the allocation with
         // a matching recipient address (to bob, not alice).
         assert_eq!(allocations[0].recipient, alice.to_string());
+    }
+
+    #[test]
+    fn test_has_same_recipient() {
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let lockup0 = "2021-01-07T00:00:00Z".to_string();
+        let lockup1 = "9999-12-31T23:59:59Z".to_string();
+        let alice_alloc = Allocation {
+            recipient: alice_pubkey.to_string(),
+            amount: 1.0,
+            lockup_date: "".to_string(),
+        };
+        let alice_alloc_lockup0 = Allocation {
+            recipient: alice_pubkey.to_string(),
+            amount: 1.0,
+            lockup_date: lockup0.clone(),
+        };
+        let alice_info = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: None,
+            ..TransactionInfo::default()
+        };
+        let alice_info_lockup0 = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: lockup0.parse().ok(),
+            ..TransactionInfo::default()
+        };
+        let alice_info_lockup1 = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: lockup1.parse().ok(),
+            ..TransactionInfo::default()
+        };
+        let bob_info = TransactionInfo {
+            recipient: bob_pubkey,
+            lockup_date: None,
+            ..TransactionInfo::default()
+        };
+        assert!(!has_same_recipient(&alice_alloc, &bob_info)); // Different recipient, no lockup
+        assert!(!has_same_recipient(&alice_alloc, &alice_info_lockup0)); // One with no lockup, one locked up
+        assert!(!has_same_recipient(
+            &alice_alloc_lockup0,
+            &alice_info_lockup1
+        )); // Different lockups
+        assert!(has_same_recipient(&alice_alloc, &alice_info)); // Same recipient, no lockups
+        assert!(has_same_recipient(
+            &alice_alloc_lockup0,
+            &alice_info_lockup0
+        )); // Same recipient, same lockups
     }
 }
