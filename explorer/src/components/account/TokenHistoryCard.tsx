@@ -75,6 +75,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     return history?.status === FetchStatus.FetchFailed;
   });
 
+  const sigSet = new Set();
   const mintAndTxs = tokens
     .map((token) => ({
       mint: token.info.mint,
@@ -88,7 +89,12 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         mint,
         tx,
       }))
-    );
+    )
+    .filter(({ tx }) => {
+      if (sigSet.has(tx.signature)) return false;
+      sigSet.add(tx.signature);
+      return true;
+    });
 
   if (mintAndTxs.length === 0) {
     if (fetching) {
@@ -224,7 +230,9 @@ function TokenTransactionRow({
 
             return (
               <tr key={index}>
-                <td className="w-1">{tx.slot}</td>
+                <td className="w-1 text-monospace">
+                  {tx.slot.toLocaleString("en-US")}
+                </td>
 
                 <td>
                   <span className={`badge badge-soft-${statusClass}`}>
@@ -261,7 +269,7 @@ function TokenTransactionRow({
 
   return (
     <tr key={tx.signature}>
-      <td className="w-1">{tx.slot}</td>
+      <td className="w-1 text-monospace">{tx.slot.toLocaleString("en-US")}</td>
 
       <td>
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
