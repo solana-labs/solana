@@ -29,6 +29,7 @@ pub type RowKey = String;
 pub type CellName = String;
 pub type CellValue = Vec<u8>;
 pub type RowData = Vec<(CellName, CellValue)>;
+pub type RowDataSlice<'a> = &'a [(CellName, CellValue)];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -287,10 +288,14 @@ impl BigTable {
     ///
     /// If `start_at` is provided, the row key listing will start with key.
     /// Otherwise the listing will start from the start of the table.
+    ///
+    /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
+    /// continue until the `limit` is reached or the end of the table, whichever comes first.
     pub async fn get_row_keys(
         &mut self,
         table_name: &str,
         start_at: Option<RowKey>,
+        end_at: Option<RowKey>,
         rows_limit: i64,
     ) -> Result<Vec<RowKey>> {
         self.refresh_access_token().await;
@@ -301,16 +306,13 @@ impl BigTable {
                 rows_limit,
                 rows: Some(RowSet {
                     row_keys: vec![],
-                    row_ranges: if let Some(row_key) = start_at {
-                        vec![RowRange {
-                            start_key: Some(row_range::StartKey::StartKeyClosed(
-                                row_key.into_bytes(),
-                            )),
-                            end_key: None,
-                        }]
-                    } else {
-                        vec![]
-                    },
+                    row_ranges: vec![RowRange {
+                        start_key: start_at.map(|row_key| {
+                            row_range::StartKey::StartKeyClosed(row_key.into_bytes())
+                        }),
+                        end_key: end_at
+                            .map(|row_key| row_range::EndKey::EndKeyClosed(row_key.into_bytes())),
+                    }],
                 }),
                 filter: Some(RowFilter {
                     filter: Some(row_filter::Filter::Chain(row_filter::Chain {
@@ -339,21 +341,39 @@ impl BigTable {
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
-    /// Get latest data from `limit` rows of `table`, starting inclusively at the `row_key` row.
+    /// Get latest data from `table`.
     ///
     /// All column families are accepted, and only the latest version of each column cell will be
     /// returned.
-    pub async fn get_row_data(&mut self, table_name: &str, row_key: RowKey) -> Result<RowData> {
+    ///
+    /// If `start_at` is provided, the row key listing will start with key.
+    /// Otherwise the listing will start from the start of the table.
+    ///
+    /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
+    /// continue until the `limit` is reached or the end of the table, whichever comes first.
+    pub async fn get_row_data(
+        &mut self,
+        table_name: &str,
+        start_at: Option<RowKey>,
+        end_at: Option<RowKey>,
+        rows_limit: i64,
+    ) -> Result<Vec<(RowKey, RowData)>> {
         self.refresh_access_token().await;
 
         let response = self
             .client
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
-                rows_limit: 1,
+                rows_limit,
                 rows: Some(RowSet {
-                    row_keys: vec![row_key.into_bytes()],
-                    row_ranges: vec![],
+                    row_keys: vec![],
+                    row_ranges: vec![RowRange {
+                        start_key: start_at.map(|row_key| {
+                            row_range::StartKey::StartKeyClosed(row_key.into_bytes())
+                        }),
+                        end_key: end_at
+                            .map(|row_key| row_range::EndKey::EndKeyClosed(row_key.into_bytes())),
+                    }],
                 }),
                 filter: Some(RowFilter {
                     // Only return the latest version of each cell
@@ -364,11 +384,7 @@ impl BigTable {
             .await?
             .into_inner();
 
-        let rows = Self::decode_read_rows_response(response).await?;
-        rows.into_iter()
-            .next()
-            .map(|r| r.1)
-            .ok_or_else(|| Error::RowNotFound)
+        Self::decode_read_rows_response(response).await
     }
 
     /// Store data for one or more `table` rows in the `family_name` Column family
@@ -429,19 +445,10 @@ impl BigTable {
     where
         T: serde::de::DeserializeOwned,
     {
-        let row_data = self.get_row_data(table, key.clone()).await?;
+        let row_data = self.get_row_data(table, Some(key.clone()), None, 1).await?;
+        let (row_key, data) = &row_data[0];
 
-        let value = row_data
-            .into_iter()
-            .find(|(name, _)| name == "bin")
-            .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
-            .1;
-
-        let data = decompress(&value)?;
-        bincode::deserialize(&data).map_err(|err| {
-            warn!("Failed to deserialize {}/{}: {}", table, key, err);
-            Error::ObjectCorrupt(format!("{}/{}", table, key))
-        })
+        deserialize_cell_data(data, table, row_key.to_string())
     }
 
     pub async fn put_bincode_cells<T>(
@@ -463,4 +470,25 @@ impl BigTable {
         self.put_row_data(table, "x", &new_row_data).await?;
         Ok(bytes_written)
     }
+}
+
+pub(crate) fn deserialize_cell_data<T>(
+    row_data: RowDataSlice,
+    table: &str,
+    key: RowKey,
+) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let value = &row_data
+        .iter()
+        .find(|(name, _)| name == "bin")
+        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .1;
+
+    let data = decompress(&value)?;
+    bincode::deserialize(&data).map_err(|err| {
+        warn!("Failed to deserialize {}/{}: {}", table, key, err);
+        Error::ObjectCorrupt(format!("{}/{}", table, key))
+    })
 }

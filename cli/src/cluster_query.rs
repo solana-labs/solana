@@ -11,7 +11,7 @@ use solana_clap_utils::{
 };
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
-    rpc_client::RpcClient,
+    rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -444,12 +444,21 @@ pub fn parse_transaction_history(
         ),
         None => None,
     };
+    let until = match matches.value_of("until") {
+        Some(signature) => Some(
+            signature
+                .parse()
+                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {}", err)))?,
+        ),
+        None => None,
+    };
     let limit = value_t_or_exit!(matches, "limit", usize);
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
             address,
             before,
+            until,
             limit,
         },
         signers: vec![],
@@ -1311,12 +1320,16 @@ pub fn process_transaction_history(
     config: &CliConfig,
     address: &Pubkey,
     before: Option<Signature>,
+    until: Option<Signature>,
     limit: usize,
 ) -> ProcessResult {
     let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
         address,
-        before,
-        Some(limit),
+        GetConfirmedSignaturesForAddress2Config {
+            before,
+            until,
+            limit: Some(limit),
+        },
     )?;
 
     let transactions_found = format!("{} transactions found", results.len());

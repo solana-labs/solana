@@ -299,18 +299,21 @@ impl RpcClient {
         &self,
         address: &Pubkey,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        self.get_confirmed_signatures_for_address2_with_config(address, None, None)
+        self.get_confirmed_signatures_for_address2_with_config(
+            address,
+            GetConfirmedSignaturesForAddress2Config::default(),
+        )
     }
 
     pub fn get_confirmed_signatures_for_address2_with_config(
         &self,
         address: &Pubkey,
-        before: Option<Signature>,
-        limit: Option<usize>,
+        config: GetConfirmedSignaturesForAddress2Config,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         let config = RpcGetConfirmedSignaturesForAddress2Config {
-            before: before.map(|signature| signature.to_string()),
-            limit,
+            before: config.before.map(|signature| signature.to_string()),
+            until: config.until.map(|signature| signature.to_string()),
+            limit: config.limit,
         };
 
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
@@ -1132,6 +1135,13 @@ impl RpcClient {
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
     }
+}
+
+#[derive(Debug, Default)]
+pub struct GetConfirmedSignaturesForAddress2Config {
+    pub before: Option<Signature>,
+    pub until: Option<Signature>,
+    pub limit: Option<usize>,
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
