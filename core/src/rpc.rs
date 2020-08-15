@@ -873,6 +873,7 @@ impl JsonRpcRequestProcessor {
         &self,
         address: Pubkey,
         mut before: Option<Signature>,
+        until: Option<Signature>,
         mut limit: usize,
     ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         if self.config.enable_rpc_transaction_history {
@@ -888,6 +889,7 @@ impl JsonRpcRequestProcessor {
                     address,
                     highest_confirmed_root,
                     before,
+                    until,
                     limit,
                 )
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
@@ -903,6 +905,7 @@ impl JsonRpcRequestProcessor {
                         bigtable_ledger_storage.get_confirmed_signatures_for_address(
                             &address,
                             before.as_ref(),
+                            until.as_ref(),
                             limit,
                         ),
                     );
@@ -2312,6 +2315,11 @@ impl RpcSol for RpcSolImpl {
         } else {
             None
         };
+        let until = if let Some(until) = config.until {
+            Some(verify_signature(&until)?)
+        } else {
+            None
+        };
         let limit = config
             .limit
             .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
@@ -2323,7 +2331,7 @@ impl RpcSol for RpcSolImpl {
             )));
         }
 
-        meta.get_confirmed_signatures_for_address2(address, before, limit)
+        meta.get_confirmed_signatures_for_address2(address, before, until, limit)
     }
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {

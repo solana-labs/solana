@@ -276,7 +276,7 @@ impl LedgerStorage {
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
         let mut bigtable = self.connection.client();
-        let blocks = bigtable.get_row_keys("blocks", None, 1).await?;
+        let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
         if blocks.is_empty() {
             return Ok(None);
         }
@@ -290,7 +290,7 @@ impl LedgerStorage {
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         let mut bigtable = self.connection.client();
         let blocks = bigtable
-            .get_row_keys("blocks", Some(slot_to_key(start_slot)), limit as i64)
+            .get_row_keys("blocks", Some(slot_to_key(start_slot)), None, limit as i64)
             .await?;
         Ok(blocks.into_iter().filter_map(|s| key_to_slot(&s)).collect())
     }
@@ -365,17 +365,30 @@ impl LedgerStorage {
         &self,
         address: &Pubkey,
         before_signature: Option<&Signature>,
+        until_signature: Option<&Signature>,
         limit: usize,
     ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{}/", address);
 
         // Figure out where to start listing from based on `before_signature`
-        let (first_slot, mut before_transaction_index) = match before_signature {
+        let (first_slot, before_transaction_index) = match before_signature {
             None => (Slot::MAX, 0),
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
                     .get_bincode_cell("tx", before_signature.to_string())
+                    .await?;
+
+                (slot, index)
+            }
+        };
+
+        // Figure out where to end listing from based on `until_signature`
+        let (last_slot, until_transaction_index) = match until_signature {
+            None => (0, u32::MAX),
+            Some(until_signature) => {
+                let TransactionInfo { slot, index, .. } = bigtable
+                    .get_bincode_cell("tx", until_signature.to_string())
                     .await?;
 
                 (slot, index)
@@ -391,50 +404,46 @@ impl LedgerStorage {
             )
             .await?;
 
-        // Return the next tx-by-addr keys of amount `limit` plus extra to account for the largest
+        // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
         // number that might be flitered out
-        let tx_by_addr_info_keys = bigtable
-            .get_row_keys(
+        let tx_by_addr_data = bigtable
+            .get_row_data(
                 "tx-by-addr",
                 Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
+                Some(format!("{}{}", address_prefix, slot_to_key(!last_slot))),
                 limit as i64 + starting_slot_tx_by_addr_infos.len() as i64,
             )
             .await?;
 
-        // Read each tx-by-addr object until `limit` signatures have been found
-        'outer: for key in tx_by_addr_info_keys {
-            trace!("key is {}:  slot is {}", key, &key[address_prefix.len()..]);
-            if !key.starts_with(&address_prefix) {
-                break 'outer;
-            }
-
-            let slot = !key_to_slot(&key[address_prefix.len()..]).ok_or_else(|| {
+        'outer: for (row_key, data) in tx_by_addr_data {
+            let slot = !key_to_slot(&row_key[address_prefix.len()..]).ok_or_else(|| {
                 bigtable::Error::ObjectCorrupt(format!(
                     "Failed to convert key to slot: tx-by-addr/{}",
-                    key
+                    row_key
                 ))
             })?;
-
-            let tx_by_addr_infos = bigtable
-                .get_bincode_cell::<Vec<TransactionByAddrInfo>>("tx-by-addr", key)
-                .await?;
-
-            for tx_by_addr_info in tx_by_addr_infos
-                .into_iter()
-                .filter(|tx_by_addr_info| tx_by_addr_info.index < before_transaction_index)
-            {
+            let cell_data: Vec<TransactionByAddrInfo> =
+                bigtable::deserialize_cell_data(&data, "tx-by-addr", row_key)?;
+            for tx_by_addr_info in cell_data.into_iter() {
+                // Filter out records before `before_transaction_index`
+                if slot == first_slot && tx_by_addr_info.index >= before_transaction_index {
+                    continue;
+                }
+                // Filter out records after `until_transaction_index`
+                if slot == last_slot && tx_by_addr_info.index <= until_transaction_index {
+                    continue;
+                }
                 infos.push(ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
                     slot,
                     err: tx_by_addr_info.err,
                     memo: tx_by_addr_info.memo,
                 });
+                // Respect limit
                 if infos.len() >= limit {
                     break 'outer;
                 }
             }
-
-            before_transaction_index = u32::MAX;
         }
         Ok(infos)
     }
