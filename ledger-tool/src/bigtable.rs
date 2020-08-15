@@ -310,13 +310,19 @@ pub async fn transaction_history(
     address: &Pubkey,
     mut limit: usize,
     mut before: Option<Signature>,
+    until: Option<Signature>,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
     while limit > 0 {
         let results = bigtable
-            .get_confirmed_signatures_for_address(address, before.as_ref(), limit.min(1000))
+            .get_confirmed_signatures_for_address(
+                address,
+                before.as_ref(),
+                until.as_ref(),
+                limit.min(1000),
+            )
             .await?;
 
         if results.is_empty() {
@@ -481,6 +487,13 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Start with the first signature older than this one"),
                         )
                         .arg(
+                            Arg::with_name("until")
+                                .long("until")
+                                .value_name("TRANSACTION_SIGNATURE")
+                                .takes_value(true)
+                                .help("End with the last signature newer than this one"),
+                        )
+                        .arg(
                             Arg::with_name("verbose")
                                 .short("v")
                                 .long("verbose")
@@ -537,9 +550,12 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let before = arg_matches
                 .value_of("before")
                 .map(|signature| signature.parse().expect("Invalid signature"));
+            let until = arg_matches
+                .value_of("until")
+                .map(|signature| signature.parse().expect("Invalid signature"));
             let verbose = arg_matches.is_present("verbose");
 
-            runtime.block_on(transaction_history(&address, limit, before, verbose))
+            runtime.block_on(transaction_history(&address, limit, before, until, verbose))
         }
         _ => unreachable!(),
     };
