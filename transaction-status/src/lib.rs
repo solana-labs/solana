@@ -217,7 +217,8 @@ pub struct TransactionWithStatusMeta {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
-    Binary,
+    Binary,   // base-58 encoded string. SLOW! Avoid this encoding
+    Binary64, // base-64 encoded string
     Json,
     JsonParsed,
 }
@@ -225,17 +226,22 @@ pub enum UiTransactionEncoding {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
-    Binary(String),
+    LegacyBinary(String),
+    Binary(String, UiTransactionEncoding),
     Json(UiTransaction),
 }
 
 impl EncodedTransaction {
     pub fn encode(transaction: Transaction, encoding: UiTransactionEncoding) -> Self {
         match encoding {
-            UiTransactionEncoding::Binary => EncodedTransaction::Binary(
+            UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
             ),
-            _ => {
+            UiTransactionEncoding::Binary64 => EncodedTransaction::Binary(
+                base64::encode(bincode::serialize(&transaction).unwrap()),
+                encoding,
+            ),
+            UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
                 let message = if encoding == UiTransactionEncoding::Json {
                     UiMessage::Raw(UiRawMessage {
                         header: transaction.message.header,
@@ -298,10 +304,19 @@ impl EncodedTransaction {
     pub fn decode(&self) -> Option<Transaction> {
         match self {
             EncodedTransaction::Json(_) => None,
-            EncodedTransaction::Binary(blob) => bs58::decode(blob)
+            EncodedTransaction::LegacyBinary(blob) => bs58::decode(blob)
                 .into_vec()
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+            EncodedTransaction::Binary(blob, encoding) => {
+                if *encoding == UiTransactionEncoding::Binary64 {
+                    base64::decode(blob)
+                        .ok()
+                        .and_then(|bytes| bincode::deserialize(&bytes).ok())
+                } else {
+                    None
+                }
+            }
         }
     }
 }
