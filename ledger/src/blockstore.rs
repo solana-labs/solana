@@ -1959,7 +1959,7 @@ impl Blockstore {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
                         let confirmed_block = self
-                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Binary))
+                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Binary64))
                             .map_err(|err| {
                                 BlockstoreError::IO(IOError::new(
                                     ErrorKind::Other,
@@ -2013,7 +2013,7 @@ impl Blockstore {
                     None => (0, HashSet::new()),
                     Some((slot, _)) => {
                         let confirmed_block = self
-                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Binary))
+                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Binary64))
                             .map_err(|err| {
                                 BlockstoreError::IO(IOError::new(
                                     ErrorKind::Other,

@@ -134,7 +134,7 @@ async fn upload(
                 for (i, slot) in blocks_to_upload.iter().enumerate() {
                     let _ = match blockstore.get_confirmed_block(
                         *slot,
-                        Some(solana_transaction_status::UiTransactionEncoding::Binary),
+                        Some(solana_transaction_status::UiTransactionEncoding::Binary64),
                     ) {
                         Ok(confirmed_block) => sender.send((*slot, Some(confirmed_block))),
                         Err(err) => {
@@ -231,7 +231,7 @@ async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
     let block = bigtable
-        .get_confirmed_block(slot, UiTransactionEncoding::Binary)
+        .get_confirmed_block(slot, UiTransactionEncoding::Binary64)
         .await?;
 
     println!("Slot: {}", slot);
@@ -276,7 +276,7 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
 
     if verbose {
         match bigtable
-            .get_confirmed_transaction(signature, UiTransactionEncoding::Binary)
+            .get_confirmed_transaction(signature, UiTransactionEncoding::Binary64)
             .await
         {
             Ok(Some(confirmed_transaction)) => {
