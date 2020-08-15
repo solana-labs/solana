@@ -1068,7 +1068,7 @@ fn process_confirm(
             if let Some(transaction_status) = status {
                 if config.verbose {
                     match rpc_client
-                        .get_confirmed_transaction(signature, UiTransactionEncoding::Binary)
+                        .get_confirmed_transaction(signature, UiTransactionEncoding::Binary64)
                     {
                         Ok(confirmed_transaction) => {
                             println!(
