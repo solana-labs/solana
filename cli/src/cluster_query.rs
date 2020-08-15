@@ -11,7 +11,7 @@ use solana_clap_utils::{
 };
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
-    rpc_client::RpcClient,
+    rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -1325,9 +1325,11 @@ pub fn process_transaction_history(
 ) -> ProcessResult {
     let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
         address,
-        before,
-        until,
-        Some(limit),
+        GetConfirmedSignaturesForAddress2Config {
+            before,
+            until,
+            limit: Some(limit),
+        },
     )?;
 
     let transactions_found = format!("{} transactions found", results.len());
