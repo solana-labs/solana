@@ -14,7 +14,7 @@ if (!mockRpcEnabled) {
   jest.setTimeout(30000);
 }
 
-const expectedData = (authorizedPubkey: PublicKey): string => {
+const expectedData = (authorizedPubkey: PublicKey): [string, string] => {
   const expectedData = Buffer.alloc(NONCE_ACCOUNT_LENGTH);
   expectedData.writeInt32LE(0, 0); // Version, 4 bytes
   expectedData.writeInt32LE(1, 4); // State, 4 bytes
@@ -22,7 +22,7 @@ const expectedData = (authorizedPubkey: PublicKey): string => {
   const mockNonce = new Account();
   mockNonce.publicKey.toBuffer().copy(expectedData, 40); // Hash, 32 bytes
   expectedData.writeUInt16LE(5000, 72); // feeCalculator, 8 bytes
-  return expectedData.toString('base64');
+  return [expectedData.toString('base64'), 'binary64'];
 };
 
 test('create and query nonce account', async () => {
@@ -119,7 +119,10 @@ test('create and query nonce account', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [nonceAccount.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [
+        nonceAccount.publicKey.toBase58(),
+        {encoding: 'binary64', commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -243,7 +246,10 @@ test('create and query nonce account with seed', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [noncePubkey.toBase58(), {commitment: 'recent'}],
+      params: [
+        noncePubkey.toBase58(),
+        {encoding: 'binary64', commitment: 'recent'},
+      ],
     },
     {
       error: null,
