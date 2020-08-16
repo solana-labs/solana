@@ -32,17 +32,17 @@ pub struct UiAccount {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiAccountData {
-    Binary(String),
+    LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
     Json(ParsedAccount),
-    Binary64(String),
+    Binary(String, UiAccountEncoding),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
-    Binary, // SLOW! Avoid this encoding
+    Binary, // base-58 encoded string. SLOW! Avoid this encoding
     JsonParsed,
-    Binary64,
+    Binary64, // base-64 encoded string.
 }
 
 impl UiAccount {
@@ -54,20 +54,23 @@ impl UiAccount {
         data_slice_config: Option<UiDataSliceConfig>,
     ) -> Self {
         let data = match encoding {
-            UiAccountEncoding::Binary => UiAccountData::Binary(
+            UiAccountEncoding::Binary => UiAccountData::LegacyBinary(
                 bs58::encode(slice_data(&account.data, data_slice_config)).into_string(),
             ),
-            UiAccountEncoding::Binary64 => UiAccountData::Binary64(base64::encode(slice_data(
-                &account.data,
-                data_slice_config,
-            ))),
+            UiAccountEncoding::Binary64 => UiAccountData::Binary(
+                base64::encode(slice_data(&account.data, data_slice_config)),
+                encoding,
+            ),
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
                     parse_account_data(pubkey, &account.owner, &account.data, additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary64(base64::encode(&account.data))
+                    UiAccountData::Binary(
+                        base64::encode(&account.data),
+                        UiAccountEncoding::Binary64,
+                    )
                 }
             }
         };
@@ -83,8 +86,12 @@ impl UiAccount {
     pub fn decode(&self) -> Option<Account> {
         let data = match &self.data {
             UiAccountData::Json(_) => None,
-            UiAccountData::Binary(blob) => bs58::decode(blob).into_vec().ok(),
-            UiAccountData::Binary64(blob) => base64::decode(blob).ok(),
+            UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
+            UiAccountData::Binary(blob, encoding) => match encoding {
+                UiAccountEncoding::Binary => bs58::decode(blob).into_vec().ok(),
+                UiAccountEncoding::Binary64 => base64::decode(blob).ok(),
+                UiAccountEncoding::JsonParsed => None,
+            },
         }?;
         Some(Account {
             lamports: self.lamports,

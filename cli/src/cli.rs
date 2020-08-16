@@ -11,11 +11,15 @@ use crate::{
     vote::*,
 };
 <<<<<<< HEAD
+<<<<<<< HEAD
 use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 =======
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, value_t_or_exit};
 >>>>>>> 2ebc68a9e... decode-transaction now supports binary64
+=======
+use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+>>>>>>> 757e147b3... Rework UiAccountData encode/decode such that it works from Rust
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
@@ -853,13 +857,10 @@ pub fn parse_command(
             let encoding = match matches.value_of("encoding").unwrap() {
                 "binary" => UiTransactionEncoding::Binary,
                 "binary64" => UiTransactionEncoding::Binary64,
-                _ => unreachable!()
+                _ => unreachable!(),
             };
 
-            let encoded_transaction = EncodedTransaction::Binary(
-                blob,
-                encoding,
-            );
+            let encoded_transaction = EncodedTransaction::Binary(blob, encoding);
             if let Some(transaction) = encoded_transaction.decode() {
                 Ok(CliCommandInfo {
                     command: CliCommand::DecodeTransaction(transaction),
