@@ -63,7 +63,7 @@ test('get account info - not found', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), {encoding: 'binary64'}],
+      params: [account.publicKey.toBase58(), {encoding: 'base64'}],
     },
     {
       error: null,
@@ -255,7 +255,7 @@ test('get program accounts', async () => {
       method: 'getProgramAccounts',
       params: [
         programId.publicKey.toBase58(),
-        {commitment: 'recent', encoding: 'binary64'},
+        {commitment: 'recent', encoding: 'base64'},
       ],
     },
     {
@@ -263,7 +263,7 @@ test('get program accounts', async () => {
       result: [
         {
           account: {
-            data: ['', 'binary64'],
+            data: ['', 'base64'],
             executable: false,
             lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
             owner: programId.publicKey.toBase58(),
@@ -273,7 +273,7 @@ test('get program accounts', async () => {
         },
         {
           account: {
-            data: ['', 'binary64'],
+            data: ['', 'base64'],
             executable: false,
             lamports:
               0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
@@ -1681,7 +1681,7 @@ test('request airdrop', async () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        {commitment: 'recent', encoding: 'binary64'},
+        {commitment: 'recent', encoding: 'base64'},
       ],
     },
     {
@@ -1693,7 +1693,7 @@ test('request airdrop', async () => {
         value: {
           owner: '11111111111111111111111111111111',
           lamports: minimumAmount + 42,
-          data: ['', 'binary64'],
+          data: ['', 'base64'],
           executable: false,
         },
       },
@@ -1727,7 +1727,7 @@ test('request airdrop', async () => {
         value: {
           owner: '11111111111111111111111111111111',
           lamports: minimumAmount + 42,
-          data: ['', 'binary64'],
+          data: ['', 'base64'],
           executable: false,
         },
       },

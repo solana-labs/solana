@@ -713,7 +713,7 @@ const GetTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: 'boolean',
         owner: 'string',
         lamports: 'number',
-        data: ['string', struct.literal('binary64')],
+        data: ['string', struct.literal('base64')],
         rentEpoch: 'number?',
       }),
     }),
@@ -795,7 +795,7 @@ const ParsedAccountInfoResult = struct.object({
   owner: 'string',
   lamports: 'number',
   data: struct.union([
-    ['string', struct.literal('binary64')],
+    ['string', struct.literal('base64')],
     struct.pick({
       program: 'string',
       parsed: 'any',
@@ -1613,7 +1613,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._buildArgs(_args, commitment, 'binary64');
+    const args = this._buildArgs(_args, commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = GetTokenAccountsByOwner(unsafeRes);
     if (res.error) {
@@ -1632,7 +1632,7 @@ export class Connection {
     return {
       context,
       value: value.map(result => {
-        assert(result.account.data[1] === 'binary64');
+        assert(result.account.data[1] === 'base64');
         return {
           pubkey: new PublicKey(result.pubkey),
           account: {
@@ -1755,7 +1755,7 @@ export class Connection {
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
-      'binary64',
+      'base64',
     );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
@@ -1772,7 +1772,7 @@ export class Connection {
     let value = null;
     if (res.result.value) {
       const {executable, owner, lamports, data} = res.result.value;
-      assert(data[1] === 'binary64');
+      assert(data[1] === 'base64');
       value = {
         executable,
         owner: new PublicKey(owner),
@@ -1821,7 +1821,7 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        assert(data[1] === 'binary64');
+        assert(data[1] === 'base64');
         data = Buffer.from(data[0], 'base64');
       }
 
@@ -1869,7 +1869,7 @@ export class Connection {
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
-      'binary64',
+      'base64',
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
@@ -1886,7 +1886,7 @@ export class Connection {
     assert(typeof result !== 'undefined');
 
     return result.map(result => {
-      assert(result.account.data[1] === 'binary64');
+      assert(result.account.data[1] === 'base64');
       return {
         pubkey: new PublicKey(result.pubkey),
         account: {
@@ -1937,7 +1937,7 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        assert(data[1] === 'binary64');
+        assert(data[1] === 'base64');
         data = Buffer.from(data[0], 'base64');
       }
 
@@ -2783,7 +2783,7 @@ export class Connection {
       this._subscribe(
         sub,
         'accountSubscribe',
-        this._buildArgs([sub.publicKey], sub.commitment, 'binary64'),
+        this._buildArgs([sub.publicKey], sub.commitment, 'base64'),
       );
     }
 
@@ -2792,7 +2792,7 @@ export class Connection {
       this._subscribe(
         sub,
         'programSubscribe',
-        this._buildArgs([sub.programId], sub.commitment, 'binary64'),
+        this._buildArgs([sub.programId], sub.commitment, 'base64'),
       );
     }
 
@@ -2906,7 +2906,7 @@ export class Connection {
         const {result} = res;
         const {value, context} = result;
 
-        assert(value.account.data[1] === 'binary64');
+        assert(value.account.data[1] === 'base64');
         sub.callback(
           {
             accountId: value.pubkey,
@@ -3024,7 +3024,7 @@ export class Connection {
   _buildArgs(
     args: Array<any>,
     override: ?Commitment,
-    encoding?: 'jsonParsed' | 'binary64',
+    encoding?: 'jsonParsed' | 'base64',
   ): Array<any> {
     const commitment = override || this._commitment;
     if (commitment || encoding) {
