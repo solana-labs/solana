@@ -94,26 +94,25 @@ pub fn register_syscalls<'a>(
     )?;
     if invoke_context.is_cross_program_supported() {
         vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+
+        // Cross-program invocation syscalls
+
+        let invoke_context = Rc::new(RefCell::new(invoke_context));
+        vm.register_syscall_with_context_ex(
+            "sol_invoke_signed_c",
+            Box::new(SyscallProcessSolInstructionC {
+                callers_keyed_accounts,
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+        vm.register_syscall_with_context_ex(
+            "sol_invoke_signed_rust",
+            Box::new(SyscallProcessInstructionRust {
+                callers_keyed_accounts,
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
     }
-
-    // Cross-program invocation syscalls
-
-    let invoke_context = Rc::new(RefCell::new(invoke_context));
-
-    vm.register_syscall_with_context_ex(
-        "sol_invoke_signed_c",
-        Box::new(SyscallProcessSolInstructionC {
-            callers_keyed_accounts,
-            invoke_context: invoke_context.clone(),
-        }),
-    )?;
-    vm.register_syscall_with_context_ex(
-        "sol_invoke_signed_rust",
-        Box::new(SyscallProcessInstructionRust {
-            callers_keyed_accounts,
-            invoke_context: invoke_context.clone(),
-        }),
-    )?;
 
     // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
