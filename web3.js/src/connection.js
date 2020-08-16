@@ -713,7 +713,7 @@ const GetTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: 'boolean',
         owner: 'string',
         lamports: 'number',
-        data: 'string',
+        data: ['string', struct.literal('binary64')],
         rentEpoch: 'number?',
       }),
     }),
@@ -795,7 +795,7 @@ const ParsedAccountInfoResult = struct.object({
   owner: 'string',
   lamports: 'number',
   data: struct.union([
-    'string',
+    ['string', struct.literal('binary64')],
     struct.pick({
       program: 'string',
       parsed: 'any',
@@ -1631,15 +1631,18 @@ export class Connection {
 
     return {
       context,
-      value: value.map(result => ({
-        pubkey: new PublicKey(result.pubkey),
-        account: {
-          executable: result.account.executable,
-          owner: new PublicKey(result.account.owner),
-          lamports: result.account.lamports,
-          data: Buffer.from(result.account.data, 'base64'),
-        },
-      })),
+      value: value.map(result => {
+        assert(result.account.data[1] === 'binary64');
+        return {
+          pubkey: new PublicKey(result.pubkey),
+          account: {
+            executable: result.account.executable,
+            owner: new PublicKey(result.account.owner),
+            lamports: result.account.lamports,
+            data: Buffer.from(result.account.data[0], 'base64'),
+          },
+        };
+      }),
     };
   }
 
@@ -1769,11 +1772,12 @@ export class Connection {
     let value = null;
     if (res.result.value) {
       const {executable, owner, lamports, data} = res.result.value;
+      assert(data[1] === 'binary64');
       value = {
         executable,
         owner: new PublicKey(owner),
         lamports,
-        data: Buffer.from(data, 'base64'),
+        data: Buffer.from(data[0], 'base64'),
       };
     }
 
@@ -1817,7 +1821,8 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        data = Buffer.from(data, 'base64');
+        assert(data[1] === 'binary64');
+        data = Buffer.from(data[0], 'base64');
       }
 
       value = {
@@ -1881,13 +1886,14 @@ export class Connection {
     assert(typeof result !== 'undefined');
 
     return result.map(result => {
+      assert(result.account.data[1] === 'binary64');
       return {
         pubkey: new PublicKey(result.pubkey),
         account: {
           executable: result.account.executable,
           owner: new PublicKey(result.account.owner),
           lamports: result.account.lamports,
-          data: Buffer.from(result.account.data, 'base64'),
+          data: Buffer.from(result.account.data[0], 'base64'),
         },
       };
     });
@@ -1931,7 +1937,8 @@ export class Connection {
 
       let data = resultData;
       if (!data.program) {
-        data = Buffer.from(data, 'base64');
+        assert(data[1] === 'binary64');
+        data = Buffer.from(data[0], 'base64');
       }
 
       return {
@@ -2899,6 +2906,7 @@ export class Connection {
         const {result} = res;
         const {value, context} = result;
 
+        assert(value.account.data[1] === 'binary64');
         sub.callback(
           {
             accountId: value.pubkey,
@@ -2906,7 +2914,7 @@ export class Connection {
               executable: value.account.executable,
               owner: new PublicKey(value.account.owner),
               lamports: value.account.lamports,
-              data: Buffer.from(value.account.data, 'base64'),
+              data: Buffer.from(value.account.data[0], 'base64'),
             },
           },
           context,

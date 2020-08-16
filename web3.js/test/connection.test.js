@@ -263,7 +263,7 @@ test('get program accounts', async () => {
       result: [
         {
           account: {
-            data: '',
+            data: ['', 'binary64'],
             executable: false,
             lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
             owner: programId.publicKey.toBase58(),
@@ -273,7 +273,7 @@ test('get program accounts', async () => {
         },
         {
           account: {
-            data: '',
+            data: ['', 'binary64'],
             executable: false,
             lamports:
               0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
@@ -1693,7 +1693,7 @@ test('request airdrop', async () => {
         value: {
           owner: '11111111111111111111111111111111',
           lamports: minimumAmount + 42,
-          data: '',
+          data: ['', 'binary64'],
           executable: false,
         },
       },
@@ -1727,7 +1727,7 @@ test('request airdrop', async () => {
         value: {
           owner: '11111111111111111111111111111111',
           lamports: minimumAmount + 42,
-          data: '',
+          data: ['', 'binary64'],
           executable: false,
         },
       },
