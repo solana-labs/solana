@@ -10,7 +10,7 @@ use crate::{
     validator_info::*,
     vote::*,
 };
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, value_t_or_exit};
+use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
@@ -825,13 +825,10 @@ pub fn parse_command(
             let encoding = match matches.value_of("encoding").unwrap() {
                 "binary" => UiTransactionEncoding::Binary,
                 "binary64" => UiTransactionEncoding::Binary64,
-                _ => unreachable!()
+                _ => unreachable!(),
             };
 
-            let encoded_transaction = EncodedTransaction::Binary(
-                blob,
-                encoding,
-            );
+            let encoded_transaction = EncodedTransaction::Binary(blob, encoding);
             if let Some(transaction) = encoded_transaction.decode() {
                 Ok(CliCommandInfo {
                     command: CliCommand::DecodeTransaction(transaction),

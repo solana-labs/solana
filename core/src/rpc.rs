@@ -3097,13 +3097,13 @@ pub mod tests {
             "result": {
                 "context":{"slot":0},
                 "value":{
-                "owner": "11111111111111111111111111111111",
-                "lamports": 20,
-                "data": "",
-                "executable": false,
-                "rentEpoch": 0
-            },
+                    "owner": "11111111111111111111111111111111",
+                    "lamports": 20,
+                    "data": "",
+                    "executable": false,
+                    "rentEpoch": 0
                 },
+            },
             "id": 1,
         });
         let expected: Response =
@@ -3125,7 +3125,10 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        assert_eq!(result["result"]["value"]["data"], base64::encode(&data));
+        assert_eq!(
+            result["result"]["value"]["data"],
+            json!([base64::encode(&data), "binary64"]),
+        );
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary64", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
@@ -3136,7 +3139,7 @@ pub mod tests {
             .expect("actual response deserialization");
         assert_eq!(
             result["result"]["value"]["data"],
-            base64::encode(&data[1..3]),
+            json!([base64::encode(&data[1..3]), "binary64"]),
         );
 
         let req = format!(
@@ -4315,7 +4318,7 @@ pub mod tests {
         for TransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
         {
-            if let EncodedTransaction::Binary(transaction) = transaction {
+            if let EncodedTransaction::LegacyBinary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
