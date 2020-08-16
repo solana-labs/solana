@@ -139,16 +139,13 @@ impl Pubkey {
                     address_bytes_addr: *const u8,
                 ) -> u64;
             };
-            let bytes = [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ];
+            let mut bytes = [0; 32];
             let result = unsafe {
                 sol_create_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
-                    &bytes as *const _ as *const u8,
+                    &mut bytes as *mut _ as *mut u8,
                 )
             };
             match result {
