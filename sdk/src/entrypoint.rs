@@ -48,6 +48,7 @@ macro_rules! entrypoint {
     };
 }
 
+/// Maximum number of bytes a program may add to an account during realloc
 pub const MAX_REALLOC_SIZE: usize = 1_024 * 10;
 
 /// Deserialize the input arguments
