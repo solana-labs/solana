@@ -226,7 +226,7 @@ pub enum UiTransactionEncoding {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
-    LegacyBinary(String),
+    LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
     Binary(String, UiTransactionEncoding),
     Json(UiTransaction),
 }
