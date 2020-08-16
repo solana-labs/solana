@@ -823,8 +823,8 @@ pub fn parse_command(
         ("decode-transaction", Some(matches)) => {
             let blob = value_t_or_exit!(matches, "transaction", String);
             let encoding = match matches.value_of("encoding").unwrap() {
-                "binary" => UiTransactionEncoding::Binary,
-                "binary64" => UiTransactionEncoding::Binary64,
+                "base58" => UiTransactionEncoding::Binary,
+                "base64" => UiTransactionEncoding::Base64,
                 _ => unreachable!(),
             };
 
@@ -1073,7 +1073,7 @@ fn process_confirm(
             if let Some(transaction_status) = status {
                 if config.verbose {
                     match rpc_client
-                        .get_confirmed_transaction(signature, UiTransactionEncoding::Binary64)
+                        .get_confirmed_transaction(signature, UiTransactionEncoding::Base64)
                     {
                         Ok(confirmed_transaction) => {
                             println!(
@@ -1129,7 +1129,7 @@ fn process_show_account(
             account: UiAccount::encode(
                 account_pubkey,
                 account,
-                UiAccountEncoding::Binary64,
+                UiAccountEncoding::Base64,
                 None,
                 None,
             ),
@@ -2171,8 +2171,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("encoding")
                         .index(2)
                         .value_name("ENCODING")
-                        .possible_values(&["binary", "binary64"]) // Subset of `UiTransactionEncoding` enum
-                        .default_value("binary")
+                        .possible_values(&["base58", "base64"]) // Subset of `UiTransactionEncoding` enum
+                        .default_value("base58")
                         .takes_value(true)
                         .required(true)
                         .help("transaction encoding"),
