@@ -464,7 +464,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
         let config = RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Binary64),
+            encoding: Some(UiAccountEncoding::Base64),
             commitment: Some(commitment_config),
             data_slice: None,
         };

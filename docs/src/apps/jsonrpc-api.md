@@ -157,9 +157,9 @@ Returns all information associated with the account of provided Pubkey
 - `<string>` - Pubkey of account to query, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64", or jsonParsed". If parameter not provided, the default encoding is "binary". "binary" is base-58 encoded and limited to Account data of less than 128 bytes. "binary64" will return base64 encoded data for Account data of any size.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64", or jsonParsed". If parameter not provided, the default encoding is "binary". "binary" is base-58 encoded and limited to Account data of less than 128 bytes. "base64" will return base64 encoded data for Account data of any size.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "binary64" encoding.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "base64" encoding.
 
 #### Results:
 
@@ -307,7 +307,7 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 - `<u64>` - slot, as u64 integer
-- `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", "binary" (*slow*), or "binary64". If parameter not provided, the default encoding is JSON. **jsonParsed encoding is UNSTABLE**
+- `<string>` - (optional) encoding for each returned Transaction, either "json", "jsonParsed", "binary" (*slow*), or "base64". If parameter not provided, the default encoding is JSON. **jsonParsed encoding is UNSTABLE**
   Parsed-JSON encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
@@ -344,10 +344,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":{"blockTime":null,"blockhash":"3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA","parentSlot":429,"previousBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"transaction":{"message":{"accountKeys":["3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe","AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":1},"instructions":[{"accounts":[1,2,3,0],"data":"37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1","programIdIndex":4}],"recentBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"},"signatures":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"]}}]},"id":1}
 
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "binary64"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"blockTime":null,"blockhash":"3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA","parentSlot":429,"previousBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","binary64"]}]},"id":1}
+{"jsonrpc":"2.0","result":{"blockTime":null,"blockhash":"3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA","parentSlot":429,"previousBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","base64"]}]},"id":1}
 ```
 
 #### Transaction Structure
@@ -465,7 +465,7 @@ Returns transaction details for a confirmed transaction
 
 - `<string>` - transaction signature as base-58 encoded string
 N encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If parsed-JSON is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "binary" (*slow*), or "binary64". If parameter not provided, the default encoding is JSON. **jsonParsed encoding is UNSTABLE**
+- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "binary" (*slow*), or "base64". If parameter not provided, the default encoding is JSON. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
 
@@ -492,10 +492,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 {"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"slot":430,"transaction":{"message":{"accountKeys":["3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe","AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":1},"instructions":[{"accounts":[1,2,3,0],"data":"37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1","programIdIndex":4}],"recentBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"},"signatures":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"]}},"id":1}
 
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv", "binary64"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv", "base64"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"slot":430,"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","binary64"]},"id":1}
+{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"slot":430,"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","base64"]},"id":1}
 ```
 
 ### getEpochInfo
@@ -845,9 +845,9 @@ Returns all accounts owned by the provided program Pubkey
 - `<string>` - Pubkey of program, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "binary64" encoding.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "base64" encoding.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
 ##### Filters:
@@ -1100,9 +1100,9 @@ Returns all SPL Token accounts by approved Delegate. **UNSTABLE**
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "binary64" encoding.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "base64" encoding.
 
 #### Results:
 
@@ -1137,9 +1137,9 @@ Returns all SPL Token accounts by token owner. **UNSTABLE**
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "binary64" encoding.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "binary" or "base64" encoding.
 
 #### Results:
 
@@ -1457,7 +1457,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 - `<string>` - account Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
 
 #### Results:
@@ -1567,7 +1567,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 - `<string>` - program_id Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "binary64" or jsonParsed". If parameter not provided, the default encoding is binary.
+  - (optional) `encoding: <string>` - encoding for Account data, either "binary" (*slow*), "base64" or jsonParsed". If parameter not provided, the default encoding is binary.
     Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 

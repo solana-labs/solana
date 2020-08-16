@@ -32,7 +32,7 @@ pub struct UiAccount {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiAccountData {
-    LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
+    LegacyBinary(String), // Legacy. Retained for RPC backwards compatibility
     Json(ParsedAccount),
     Binary(String, UiAccountEncoding),
 }
@@ -40,9 +40,10 @@ pub enum UiAccountData {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
-    Binary, // base-58 encoded string. SLOW! Avoid this encoding
+    Binary, // Legacy. Retained for RPC backwards compatibility
+    Base58,
+    Base64,
     JsonParsed,
-    Binary64, // base-64 encoded string.
 }
 
 impl UiAccount {
@@ -57,7 +58,11 @@ impl UiAccount {
             UiAccountEncoding::Binary => UiAccountData::LegacyBinary(
                 bs58::encode(slice_data(&account.data, data_slice_config)).into_string(),
             ),
-            UiAccountEncoding::Binary64 => UiAccountData::Binary(
+            UiAccountEncoding::Base58 => UiAccountData::Binary(
+                bs58::encode(slice_data(&account.data, data_slice_config)).into_string(),
+                encoding,
+            ),
+            UiAccountEncoding::Base64 => UiAccountData::Binary(
                 base64::encode(slice_data(&account.data, data_slice_config)),
                 encoding,
             ),
@@ -67,10 +72,7 @@ impl UiAccount {
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary(
-                        base64::encode(&account.data),
-                        UiAccountEncoding::Binary64,
-                    )
+                    UiAccountData::Binary(base64::encode(&account.data), UiAccountEncoding::Base64)
                 }
             }
         };
@@ -88,9 +90,9 @@ impl UiAccount {
             UiAccountData::Json(_) => None,
             UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
             UiAccountData::Binary(blob, encoding) => match encoding {
-                UiAccountEncoding::Binary => bs58::decode(blob).into_vec().ok(),
-                UiAccountEncoding::Binary64 => base64::decode(blob).ok(),
-                UiAccountEncoding::JsonParsed => None,
+                UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
+                UiAccountEncoding::Base64 => base64::decode(blob).ok(),
+                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;
         Some(Account {
