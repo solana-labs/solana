@@ -308,15 +308,16 @@ impl EncodedTransaction {
                 .into_vec()
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-            EncodedTransaction::Binary(blob, encoding) => {
-                if *encoding == UiTransactionEncoding::Binary64 {
-                    base64::decode(blob)
-                        .ok()
-                        .and_then(|bytes| bincode::deserialize(&bytes).ok())
-                } else {
-                    None
-                }
-            }
+            EncodedTransaction::Binary(blob, encoding) => match *encoding {
+                UiTransactionEncoding::Binary64 => base64::decode(blob)
+                    .ok()
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+                UiTransactionEncoding::Binary => bs58::decode(blob)
+                    .into_vec()
+                    .ok()
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+                UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => None,
+            },
         }
     }
 }

@@ -10,7 +10,7 @@ use crate::{
     validator_info::*,
     vote::*,
 };
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, value_t_or_exit};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
@@ -821,8 +821,16 @@ pub fn parse_command(
             _ => Err(CliError::BadParameter("Invalid signature".to_string())),
         },
         ("decode-transaction", Some(matches)) => {
+            let blob = value_t_or_exit!(matches, "transaction", String);
+            let encoding = match matches.value_of("encoding").unwrap() {
+                "binary" => UiTransactionEncoding::Binary,
+                "binary64" => UiTransactionEncoding::Binary64,
+                _ => unreachable!()
+            };
+
             let encoded_transaction = EncodedTransaction::Binary(
-                matches.value_of("base58_transaction").unwrap().to_string(),
+                blob,
+                encoding,
             );
             if let Some(transaction) = encoded_transaction.decode() {
                 Ok(CliCommandInfo {
@@ -2155,12 +2163,22 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("decode-transaction")
                 .about("Decode a base-58 binary transaction")
                 .arg(
-                    Arg::with_name("base58_transaction")
+                    Arg::with_name("transaction")
                         .index(1)
-                        .value_name("BASE58_TRANSACTION")
+                        .value_name("TRANSACTION")
                         .takes_value(true)
                         .required(true)
-                        .help("The transaction to decode"),
+                        .help("transaction to decode"),
+                )
+                .arg(
+                    Arg::with_name("encoding")
+                        .index(2)
+                        .value_name("ENCODING")
+                        .possible_values(&["binary", "binary64"]) // Subset of `UiTransactionEncoding` enum
+                        .default_value("binary")
+                        .takes_value(true)
+                        .required(true)
+                        .help("transaction encoding"),
                 ),
         )
         .subcommand(
