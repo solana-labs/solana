@@ -217,8 +217,9 @@ pub struct TransactionWithStatusMeta {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
-    Binary,   // base-58 encoded string. SLOW! Avoid this encoding
-    Binary64, // base-64 encoded string
+    Binary, // Legacy. Retained for RPC backwards compatibility
+    Base64,
+    Base58,
     Json,
     JsonParsed,
 }
@@ -237,7 +238,11 @@ impl EncodedTransaction {
             UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
             ),
-            UiTransactionEncoding::Binary64 => EncodedTransaction::Binary(
+            UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
+                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
+                encoding,
+            ),
+            UiTransactionEncoding::Base64 => EncodedTransaction::Binary(
                 base64::encode(bincode::serialize(&transaction).unwrap()),
                 encoding,
             ),
@@ -309,14 +314,16 @@ impl EncodedTransaction {
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
             EncodedTransaction::Binary(blob, encoding) => match *encoding {
-                UiTransactionEncoding::Binary64 => base64::decode(blob)
-                    .ok()
-                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-                UiTransactionEncoding::Binary => bs58::decode(blob)
+                UiTransactionEncoding::Base58 => bs58::decode(blob)
                     .into_vec()
                     .ok()
                     .and_then(|bytes| bincode::deserialize(&bytes).ok()),
-                UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => None,
+                UiTransactionEncoding::Base64 => base64::decode(blob)
+                    .ok()
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+                UiTransactionEncoding::Binary
+                | UiTransactionEncoding::Json
+                | UiTransactionEncoding::JsonParsed => None,
             },
         }
     }
