@@ -79,6 +79,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_ex("abort", syscall_abort)?;
     if invoke_context.is_cross_program_supported() {
         vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+<<<<<<< HEAD
     }
 
     {
@@ -104,6 +105,12 @@ pub fn register_syscalls<'a>(
         )?;
 
         // Cross-program invocation syscalls
+=======
+
+        // Cross-program invocation syscalls
+
+        let invoke_context = Rc::new(RefCell::new(invoke_context));
+>>>>>>> 4196686ac... Feature check CPI up front (#11652)
         vm.register_syscall_with_context_ex(
             "sol_invoke_signed_c",
             Box::new(SyscallProcessSolInstructionC {
