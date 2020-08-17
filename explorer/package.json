@@ -12,7 +12,7 @@
     "@types/bn.js": "^4.11.6",
     "@types/bs58": "^4.0.1",
     "@types/chai": "^4.2.12",
-    "@types/jest": "^26.0.9",
+    "@types/jest": "^26.0.10",
     "@types/node": "^14.0.27",
     "@types/react": "^16.9.46",
     "@types/react-dom": "^16.9.8",
