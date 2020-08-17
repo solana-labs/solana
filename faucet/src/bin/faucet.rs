@@ -1,4 +1,5 @@
 use clap::{crate_description, crate_name, App, Arg};
+use solana_clap_utils::input_parsers::value_of;
 use solana_faucet::{
     faucet::{run_faucet, Faucet, FAUCET_PORT},
     socketaddr,
@@ -38,32 +39,31 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("cap")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("Request limit for time slice"),
+                .help("Request limit for time slice, in lamports"),
+        )
+        .arg(
+            Arg::with_name("c")
+                .long("per-request-cap")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Request limit for a single request, in lamports"),
         )
         .get_matches();
 
     let mint_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
         .expect("failed to read client keypair");
 
-    let time_slice: Option<u64>;
-    if let Some(secs) = matches.value_of("slice") {
-        time_slice = Some(secs.to_string().parse().expect("failed to parse slice"));
-    } else {
-        time_slice = None;
-    }
-    let request_cap: Option<u64>;
-    if let Some(c) = matches.value_of("cap") {
-        request_cap = Some(c.to_string().parse().expect("failed to parse cap"));
-    } else {
-        request_cap = None;
-    }
+    let time_slice = value_of(&matches, "slice");
+    let per_time_request_cap = value_of(&matches, "cap");
+    let per_request_cap = value_of(&matches, "per_request_cap");
 
     let faucet_addr = socketaddr!(0, FAUCET_PORT);
 
     let faucet = Arc::new(Mutex::new(Faucet::new(
         mint_keypair,
         time_slice,
-        request_cap,
+        per_time_request_cap,
+        per_request_cap,
     )));
 
     let faucet1 = faucet.clone();
