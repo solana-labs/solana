@@ -14,6 +14,7 @@ use solana_sdk::{
     bpf_loader,
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -345,7 +346,7 @@ fn test_program_bpf_invoke() {
         let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
 
         let argument_keypair = Keypair::new();
-        let account = Account::new(41, 100, &invoke_program_id);
+        let account = Account::new(42, 100, &invoke_program_id);
         bank.store_account(&argument_keypair.pubkey(), &account);
 
         let invoked_argument_keypair = Keypair::new();
@@ -353,7 +354,7 @@ fn test_program_bpf_invoke() {
         bank.store_account(&invoked_argument_keypair.pubkey(), &account);
 
         let from_keypair = Keypair::new();
-        let account = Account::new(43, 0, &solana_sdk::system_program::id());
+        let account = Account::new(84, 0, &solana_sdk::system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
 
         let (derived_key1, nonce1) =
@@ -443,5 +444,16 @@ fn test_program_bpf_invoke() {
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::Custom(194969602))
         );
+
+        assert_eq!(43, bank.get_balance(&derived_key1));
+        let account = bank.get_account(&derived_key1).unwrap();
+        assert_eq!(invoke_program_id, account.owner);
+        assert_eq!(
+            MAX_PERMITTED_DATA_INCREASE,
+            bank.get_account(&derived_key1).unwrap().data.len()
+        );
+        for i in 0..20 {
+            assert_eq!(i as u8, account.data[i]);
+        }
     }
 }

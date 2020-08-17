@@ -8,7 +8,7 @@ use solana_bpf_rust_invoked::instruction::*;
 use solana_sdk::{
     account_info::AccountInfo,
     entrypoint,
-    entrypoint::ProgramResult,
+    entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
     info,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
@@ -46,18 +46,52 @@ fn process_instruction(
 
     match instruction_data[0] {
         TEST_SUCCESS => {
-            info!("Call system program");
+            info!("Call system program create account");
             {
-                assert_eq!(accounts[FROM_INDEX].lamports(), 43);
-                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 41);
+                let from_lamports = accounts[FROM_INDEX].lamports();
+                let to_lamports = accounts[DERIVED_KEY1_INDEX].lamports();
+                assert_eq!(accounts[DERIVED_KEY1_INDEX].data_len(), 0);
+                assert!(solana_sdk::system_program::check_id(
+                    accounts[DERIVED_KEY1_INDEX].owner
+                ));
+
+                let instruction = system_instruction::create_account(
+                    accounts[FROM_INDEX].key,
+                    accounts[DERIVED_KEY1_INDEX].key,
+                    42,
+                    MAX_PERMITTED_DATA_INCREASE as u64,
+                    program_id,
+                );
+                invoke_signed(&instruction, accounts, &[&[b"You pass butter", &[nonce1]]])?;
+
+                assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 42);
+                assert_eq!(accounts[DERIVED_KEY1_INDEX].lamports(), to_lamports + 42);
+                assert_eq!(program_id, accounts[DERIVED_KEY1_INDEX].owner);
+                assert_eq!(
+                    accounts[DERIVED_KEY1_INDEX].data_len(),
+                    MAX_PERMITTED_DATA_INCREASE
+                );
+                let mut data = accounts[DERIVED_KEY1_INDEX].try_borrow_mut_data()?;
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0);
+                data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0x0f);
+                for i in 0..20 {
+                    data[i] = i as u8;
+                }
+            }
+
+            info!("Call system program transfer");
+            {
+                let from_lamports = accounts[FROM_INDEX].lamports();
+                let to_lamports = accounts[DERIVED_KEY1_INDEX].lamports();
                 let instruction = system_instruction::transfer(
                     accounts[FROM_INDEX].key,
-                    accounts[ARGUMENT_INDEX].key,
+                    accounts[DERIVED_KEY1_INDEX].key,
                     1,
                 );
                 invoke(&instruction, accounts)?;
-                assert_eq!(accounts[FROM_INDEX].lamports(), 42);
-                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42);
+                assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 1);
+                assert_eq!(accounts[DERIVED_KEY1_INDEX].lamports(), to_lamports + 1);
             }
 
             info!("Test data translation");

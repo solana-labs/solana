@@ -160,6 +160,7 @@ pub enum InstructionError {
     #[error("Provided seeds do not result in a valid address")]
     InvalidSeeds,
 
+<<<<<<< HEAD
     /// Failed to reallocate account data of this length
     #[error("Failed to reallocate account data")]
     InvalidRealloc,
@@ -173,6 +174,11 @@ impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
         SystemError::ResultWithNegativeLamports.into()
     }
+=======
+    // Failed to reallocate account data of this length
+    #[error("Failed to reallocate account data")]
+    InvalidRealloc,
+>>>>>>> e9b610b8d... Add SystemInstruction::CreateAccount support to CPI (#11649)
 }
 
 #[derive(Debug, PartialEq, Clone)]

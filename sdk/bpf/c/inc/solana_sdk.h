@@ -257,6 +257,11 @@ typedef struct {
 } SolParameters;
 
 /**
+ * Maximum number of bytes a program may add to an account during a single realloc
+ */
+#define MAX_PERMITTED_DATA_INCREASE (1024 * 10)
+
+/**
  * De-serializes the input parameters into usable types
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
@@ -297,6 +302,7 @@ static bool sol_deserialize(
         uint64_t data_len = *(uint64_t *) input;
         input += sizeof(uint64_t);
         input += data_len;
+        input += MAX_PERMITTED_DATA_INCREASE;
         input = (uint8_t*)(((uint64_t)input + 8 - 1) & ~(8 - 1)); // padding
         input += sizeof(uint64_t);
       }
@@ -334,6 +340,7 @@ static bool sol_deserialize(
       input += sizeof(uint64_t);
       params->ka[i].data = (uint8_t *) input;
       input += params->ka[i].data_len;
+      input += MAX_PERMITTED_DATA_INCREASE;
       input = (uint8_t*)(((uint64_t)input + 8 - 1) & ~(8 - 1)); // padding
 
       // rent epoch
