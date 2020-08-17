@@ -62,7 +62,8 @@ pub struct Faucet {
     mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     pub time_slice: Duration,
-    request_cap: u64,
+    per_time_cap: u64,
+    per_request_cap: Option<u64>,
     pub request_current: u64,
 }
 
@@ -70,27 +71,23 @@ impl Faucet {
     pub fn new(
         mint_keypair: Keypair,
         time_input: Option<u64>,
-        request_cap_input: Option<u64>,
+        per_time_cap: Option<u64>,
+        per_request_cap: Option<u64>,
     ) -> Faucet {
-        let time_slice = match time_input {
-            Some(time) => Duration::new(time, 0),
-            None => Duration::new(TIME_SLICE, 0),
-        };
-        let request_cap = match request_cap_input {
-            Some(cap) => cap,
-            None => REQUEST_CAP,
-        };
+        let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
+        let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
         Faucet {
             mint_keypair,
             ip_cache: Vec::new(),
             time_slice,
-            request_cap,
+            per_time_cap,
+            per_request_cap,
             request_current: 0,
         }
     }
 
-    pub fn check_request_limit(&mut self, request_amount: u64) -> bool {
-        (self.request_current + request_amount) <= self.request_cap
+    pub fn check_time_request_limit(&mut self, request_amount: u64) -> bool {
+        (self.request_current + request_amount) <= self.per_time_cap
     }
 
     pub fn clear_request_count(&mut self) {
@@ -116,7 +113,15 @@ impl Faucet {
                 to,
                 blockhash,
             } => {
-                if self.check_request_limit(lamports) {
+                if let Some(cap) = self.per_request_cap {
+                    if lamports > cap {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            format!("request too large; req: {} cap: {}", lamports, cap),
+                        ));
+                    }
+                }
+                if self.check_time_request_limit(lamports) {
                     self.request_current += lamports;
                     datapoint_info!(
                         "faucet-airdrop",
@@ -135,7 +140,7 @@ impl Faucet {
                         ErrorKind::Other,
                         format!(
                             "token limit reached; req: {} current: {} cap: {}",
-                            lamports, self.request_current, self.request_cap
+                            lamports, self.request_current, self.per_time_cap
                         ),
                     ))
                 }
@@ -248,14 +253,15 @@ pub fn request_airdrop_transaction(
 pub fn run_local_faucet(
     mint_keypair: Keypair,
     sender: Sender<SocketAddr>,
-    request_cap_input: Option<u64>,
+    per_time_cap: Option<u64>,
 ) {
     thread::spawn(move || {
         let faucet_addr = socketaddr!(0, 0);
         let faucet = Arc::new(Mutex::new(Faucet::new(
             mint_keypair,
             None,
-            request_cap_input,
+            per_time_cap,
+            None,
         )));
         run_faucet(faucet, faucet_addr, Some(sender));
     });
@@ -312,18 +318,18 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn test_check_request_limit() {
+    fn test_check_time_request_limit() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, Some(3));
-        assert!(faucet.check_request_limit(1));
+        let mut faucet = Faucet::new(keypair, None, Some(3), None);
+        assert!(faucet.check_time_request_limit(1));
         faucet.request_current = 3;
-        assert!(!faucet.check_request_limit(1));
+        assert!(!faucet.check_time_request_limit(1));
     }
 
     #[test]
     fn test_clear_request_count() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None);
         faucet.request_current += 256;
         assert_eq!(faucet.request_current, 256);
         faucet.clear_request_count();
@@ -333,7 +339,7 @@ mod tests {
     #[test]
     fn test_add_ip_to_cache() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(faucet.ip_cache.len(), 0);
         faucet.add_ip_to_cache(ip);
@@ -344,7 +350,7 @@ mod tests {
     #[test]
     fn test_clear_ip_cache() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(faucet.ip_cache.len(), 0);
         faucet.add_ip_to_cache(ip);
@@ -359,9 +365,10 @@ mod tests {
         let keypair = Keypair::new();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let faucet = Faucet::new(keypair, time_slice, request_cap);
+        let faucet = Faucet::new(keypair, time_slice, request_cap, Some(100));
         assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
-        assert_eq!(faucet.request_cap, REQUEST_CAP);
+        assert_eq!(faucet.per_time_cap, REQUEST_CAP);
+        assert_eq!(faucet.per_request_cap, Some(100));
     }
 
     #[test]
@@ -376,7 +383,7 @@ mod tests {
 
         let mint = Keypair::new();
         let mint_pubkey = mint.pubkey();
-        let mut faucet = Faucet::new(mint, None, None);
+        let mut faucet = Faucet::new(mint, None, None, None);
 
         let tx = faucet.build_airdrop_transaction(request).unwrap();
         let message = tx.message();
@@ -392,8 +399,15 @@ mod tests {
         let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
         assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
 
+        // Test per-time request cap
         let mint = Keypair::new();
-        faucet = Faucet::new(mint, None, Some(1));
+        faucet = Faucet::new(mint, None, Some(1), None);
+        let tx = faucet.build_airdrop_transaction(request);
+        assert!(tx.is_err());
+
+        // Test per-request cap
+        let mint = Keypair::new();
+        faucet = Faucet::new(mint, None, None, Some(1));
         let tx = faucet.build_airdrop_transaction(request);
         assert!(tx.is_err());
     }
@@ -421,7 +435,7 @@ mod tests {
         LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);
         expected_vec_with_length.extend_from_slice(&expected_bytes);
 
-        let mut faucet = Faucet::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None);
         let response = faucet.process_faucet_request(&bytes);
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
