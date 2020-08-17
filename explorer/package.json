@@ -19,7 +19,7 @@
     "@types/react-router-dom": "^5.1.5",
     "@types/react-select": "^3.0.19",
     "@types/socket.io-client": "^1.4.33",
-    "bn.js": "^5.1.2",
+    "bn.js": "^5.1.3",
     "bootstrap": "^4.5.2",
     "bs58": "^4.0.1",
     "chai": "^4.2.0",
