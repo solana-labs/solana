@@ -1,31 +1,32 @@
 // Long-running bank_forks tests
 
 macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
-    ($x:ident) => {
+    ($x:ident, $y:ident, $z:ident) => {
         #[allow(non_snake_case)]
-        mod $x {
+        mod $z {
             use super::*;
 
             const SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::$x;
+            const OPERATING_MODE: OperatingMode = OperatingMode::$y;
 
             #[test]
             fn test_bank_forks_status_cache_snapshot_n() {
-                run_test_bank_forks_status_cache_snapshot_n(SNAPSHOT_VERSION)
+                run_test_bank_forks_status_cache_snapshot_n(SNAPSHOT_VERSION, OPERATING_MODE)
             }
 
             #[test]
             fn test_bank_forks_snapshot_n() {
-                run_test_bank_forks_snapshot_n(SNAPSHOT_VERSION)
+                run_test_bank_forks_snapshot_n(SNAPSHOT_VERSION, OPERATING_MODE)
             }
 
             #[test]
             fn test_concurrent_snapshot_packaging() {
-                run_test_concurrent_snapshot_packaging(SNAPSHOT_VERSION)
+                run_test_concurrent_snapshot_packaging(SNAPSHOT_VERSION, OPERATING_MODE)
             }
 
             #[test]
             fn test_slots_to_snapshot() {
-                run_test_slots_to_snapshot(SNAPSHOT_VERSION)
+                run_test_slots_to_snapshot(SNAPSHOT_VERSION, OPERATING_MODE)
             }
         }
     };
@@ -52,7 +53,7 @@ mod tests {
     };
     use solana_sdk::{
         clock::Slot,
-        genesis_config::GenesisConfig,
+        genesis_config::{GenesisConfig, OperatingMode},
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -61,8 +62,12 @@ mod tests {
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
     use tempfile::TempDir;
 
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_1_0);
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_1_0, Development, V1_1_0_Development);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_1_0, Preview, V1_1_0_Preview);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_1_0, Stable, V1_1_0_Stable);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Development, V1_2_0_Development);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Preview, V1_2_0_Preview);
+    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Stable, V1_2_0_Stable);
 
     struct SnapshotTestConfig {
         accounts_dir: TempDir,
@@ -76,12 +81,14 @@ mod tests {
     impl SnapshotTestConfig {
         fn new(
             snapshot_version: SnapshotVersion,
+            operating_mode: OperatingMode,
             snapshot_interval_slots: u64,
         ) -> SnapshotTestConfig {
             let accounts_dir = TempDir::new().unwrap();
             let snapshot_dir = TempDir::new().unwrap();
             let snapshot_output_path = TempDir::new().unwrap();
-            let genesis_config_info = create_genesis_config(10_000);
+            let mut genesis_config_info = create_genesis_config(10_000);
+            genesis_config_info.genesis_config.operating_mode = operating_mode;
             let bank0 = Bank::new_with_paths(
                 &genesis_config_info.genesis_config,
                 vec![accounts_dir.path().to_path_buf()],
@@ -113,6 +120,7 @@ mod tests {
     fn restore_from_snapshot(
         old_bank_forks: &BankForks,
         old_last_slot: Slot,
+        old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
@@ -137,7 +145,7 @@ mod tests {
                 &CompressionType::Bzip2,
             ),
             CompressionType::Bzip2,
-            &GenesisConfig::default(),
+            old_genesis_config,
         )
         .unwrap();
 
@@ -161,6 +169,7 @@ mod tests {
     // `last_slot` bank
     fn run_bank_forks_snapshot_n<F>(
         snapshot_version: SnapshotVersion,
+        operating_mode: OperatingMode,
         last_slot: Slot,
         f: F,
         set_root_interval: u64,
@@ -169,10 +178,9 @@ mod tests {
     {
         solana_logger::setup();
         // Set up snapshotting config
-        let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, 1);
+        let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, operating_mode, 1);
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
-        let accounts_dir = &snapshot_test_config.accounts_dir;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (s, _r) = channel();
@@ -188,6 +196,7 @@ mod tests {
                 bank_forks.set_root(bank.slot(), &sender, None);
             }
         }
+
         // Generate a snapshot package for last bank
         let last_bank = bank_forks.get(last_slot).unwrap();
         let snapshot_config = &snapshot_test_config.snapshot_config;
@@ -206,17 +215,23 @@ mod tests {
             snapshot_version,
         )
         .unwrap();
-
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
-        restore_from_snapshot(bank_forks, last_slot, &[accounts_dir.path().to_path_buf()]);
+        // Restore bank from snapshot
+        let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
+        let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
+        restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
     }
 
-    fn run_test_bank_forks_snapshot_n(snapshot_version: SnapshotVersion) {
+    fn run_test_bank_forks_snapshot_n(
+        snapshot_version: SnapshotVersion,
+        operating_mode: OperatingMode,
+    ) {
         // create banks upto slot 4 and create 1 new account in each bank. test that bank 4 snapshots
         // and restores correctly
         run_bank_forks_snapshot_n(
             snapshot_version,
+            operating_mode,
             4,
             |bank, mint_keypair| {
                 let key1 = Keypair::new().pubkey();
@@ -247,11 +262,14 @@ mod tests {
         }
     }
 
-    fn run_test_concurrent_snapshot_packaging(snapshot_version: SnapshotVersion) {
+    fn run_test_concurrent_snapshot_packaging(
+        snapshot_version: SnapshotVersion,
+        operating_mode: OperatingMode,
+    ) {
         solana_logger::setup();
 
         // Set up snapshotting config
-        let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, 1);
+        let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, operating_mode, 1);
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let accounts_dir = &snapshot_test_config.accounts_dir;
@@ -396,7 +414,10 @@ mod tests {
         );
     }
 
-    fn run_test_slots_to_snapshot(snapshot_version: SnapshotVersion) {
+    fn run_test_slots_to_snapshot(
+        snapshot_version: SnapshotVersion,
+        operating_mode: OperatingMode,
+    ) {
         solana_logger::setup();
         let num_set_roots = MAX_CACHE_ENTRIES * 2;
 
@@ -405,6 +426,7 @@ mod tests {
             // Make sure this test never clears bank.slots_since_snapshot
             let mut snapshot_test_config = SnapshotTestConfig::new(
                 snapshot_version,
+                operating_mode,
                 (*add_root_interval * num_set_roots * 2) as u64,
             );
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
@@ -438,7 +460,10 @@ mod tests {
         }
     }
 
-    fn run_test_bank_forks_status_cache_snapshot_n(snapshot_version: SnapshotVersion) {
+    fn run_test_bank_forks_status_cache_snapshot_n(
+        snapshot_version: SnapshotVersion,
+        operating_mode: OperatingMode,
+    ) {
         // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
@@ -448,6 +473,7 @@ mod tests {
         for set_root_interval in &[1, 4] {
             run_bank_forks_snapshot_n(
                 snapshot_version,
+                operating_mode,
                 (MAX_CACHE_ENTRIES * 2 + 1) as u64,
                 |bank, mint_keypair| {
                     let tx = system_transaction::transfer(

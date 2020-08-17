@@ -418,7 +418,9 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
-            rent_collector: parent.rent_collector.clone_with_epoch(epoch),
+            rent_collector: parent
+                .rent_collector
+                .clone_with_epoch(epoch, parent.operating_mode()),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator: fee_rate_governor.create_fee_calculator(),
@@ -961,6 +963,7 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
+            self.operating_mode(),
         );
 
         // Add additional native programs specified in the genesis config
@@ -2329,6 +2332,25 @@ impl Bank {
         for program in builtin_programs.iter() {
             self.add_builtin_program(&program.name, program.id, program.process_instruction);
         }
+    }
+
+    pub fn init_rent_collector_after_deserialize(&mut self, genesis_config: &GenesisConfig) {
+        // clone()-ing is needed to consider a gated behavior in rent_collector
+        self.rent_collector = self
+            .rent_collector
+            .clone_with_epoch(self.epoch(), genesis_config.operating_mode);
+
+        // This is minimal backport of https://github.com/solana-labs/solana/pull/10581, needed by https://github.com/solana-labs/solana/pull/11349
+        assert_eq!(
+            self.rent_collector,
+            RentCollector::new(
+                self.epoch,
+                &self.epoch_schedule,
+                self.slots_per_year,
+                &genesis_config.rent,
+                genesis_config.operating_mode,
+            )
+        );
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -4428,7 +4450,7 @@ mod tests {
             bank.get_account(&rent_exempt_pubkey).unwrap().lamports,
             large_lamports
         );
-        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 6);
+        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 5);
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
             vec![genesis_slot, some_slot]
@@ -7643,19 +7665,19 @@ mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "DV3oAdp4qTQr9eU2s9F1mHMypGAHzSrRvkoSgc9Tgr5R"
+                    "9rsnmUCTg2wFnKVnaUSEQcSicvPUyXPTmbsakB2o3eTu"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "3hRFavWgtFfhKojc8hJqeJWMcyxdt8DbXWME3p6Zes36"
+                    "B1JNAeiR89kcqwqeSSQXFN3spcYW2qVJwuu9hQ9dxn1V"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4pXHMCcRwVJgkKNMysho5riYNhdS4JAj1budis41EopU"
+                    "9iUEmDnWQmjtkoMuR3hJAwQMpCGwHaJAEsfK131rww8y"
                 );
                 break;
             }

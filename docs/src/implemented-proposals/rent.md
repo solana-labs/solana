@@ -24,11 +24,11 @@ Even if those processes are out of scope of rent collection, all of manipulated 
 
 ## Actual processing of collecting rent
 
-Rent is due for one epoch's worth of time, and accounts always have `Account::rent_epoch` of `current_epoch + 1`.
+Rent is due for one epoch's worth of time, and accounts have `Account::rent_epoch` of `current_epoch` or `current_epoch + 1` depending on the rent regime.
 
-If the account is in the exempt regime, `Account::rent_epoch` is simply pushed to `current_epoch + 1`.
+If the account is in the exempt regime, `Account::rent_epoch` is simply updated to `current_epoch`.
 
-If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to the next epoch. If the amount of rent due is less than one lamport, no changes are made to the account.
+If the account is non-exempt, the difference between the next epoch and `Account::rent_epoch` is used to calculate the amount of rent owed by this account \(via `Rent::due()`\). Any fractional lamports of the calculation are truncated. Rent due is deducted from `Account::lamports` and `Account::rent_epoch` is updated to `current_epoch + 1` (= next epoch). If the amount of rent due is less than one lamport, no changes are made to the account.
 
 Accounts whose balance is insufficient to satisfy the rent that would be due simply fail to load.
 
