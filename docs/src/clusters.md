@@ -39,14 +39,14 @@ solana config set --url https://devnet.solana.com
 $ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
-    --trusted-validator 47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi \
+    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint devnet.solana.com:8001 \
-    --expected-genesis-hash HzyuivuNXMHJKjM6q6BE2qBsR3etqW21BSvuJTpJFj9A \
-    --expected-shred-version 61357 \
+    --entrypoint 35.197.53.105:8001 \
+    --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
+    --expected-shred-version 37460 \
     --limit-ledger-size
 ```
 
