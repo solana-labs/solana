@@ -506,143 +506,6 @@ impl Bank {
         new
     }
 
-<<<<<<< HEAD
-=======
-    /// Create a bank from explicit arguments and deserialized fields from snapshot
-    #[allow(clippy::float_cmp)]
-    pub(crate) fn new_from_fields(
-        bank_rc: BankRc,
-        genesis_config: &GenesisConfig,
-        fields: BankFieldsToDeserialize,
-    ) -> Self {
-        fn new<T: Default>() -> T {
-            T::default()
-        }
-        let mut bank = Self {
-            rc: bank_rc,
-            src: new(),
-            blockhash_queue: RwLock::new(fields.blockhash_queue),
-            ancestors: fields.ancestors,
-            hash: RwLock::new(fields.hash),
-            parent_hash: fields.parent_hash,
-            parent_slot: fields.parent_slot,
-            hard_forks: Arc::new(RwLock::new(fields.hard_forks)),
-            transaction_count: AtomicU64::new(fields.transaction_count),
-            tick_height: AtomicU64::new(fields.tick_height),
-            signature_count: AtomicU64::new(fields.signature_count),
-            capitalization: AtomicU64::new(fields.capitalization),
-            max_tick_height: fields.max_tick_height,
-            hashes_per_tick: fields.hashes_per_tick,
-            ticks_per_slot: fields.ticks_per_slot,
-            ns_per_slot: fields.ns_per_slot,
-            genesis_creation_time: fields.genesis_creation_time,
-            slots_per_year: fields.slots_per_year,
-            unused: genesis_config.unused,
-            slot: fields.slot,
-            epoch: fields.epoch,
-            block_height: fields.block_height,
-            collector_id: fields.collector_id,
-            collector_fees: AtomicU64::new(fields.collector_fees),
-            fee_calculator: fields.fee_calculator,
-            fee_rate_governor: fields.fee_rate_governor,
-            collected_rent: AtomicU64::new(fields.collected_rent),
-            // clone()-ing is needed to consider a gated behavior in rent_collector
-            rent_collector: fields
-                .rent_collector
-                .clone_with_epoch(fields.epoch, genesis_config.operating_mode),
-            epoch_schedule: fields.epoch_schedule,
-            inflation: Arc::new(RwLock::new(fields.inflation)),
-            stakes: RwLock::new(fields.stakes),
-            epoch_stakes: fields.epoch_stakes,
-            is_delta: AtomicBool::new(fields.is_delta),
-            message_processor: new(),
-            entered_epoch_callback: new(),
-            last_vote_sync: new(),
-            rewards: new(),
-            skip_drop: new(),
-            operating_mode: Some(genesis_config.operating_mode),
-            lazy_rent_collection: new(),
-        };
-        bank.finish_init();
-
-        // Sanity assertions between bank snapshot and genesis config
-        // Consider removing from serializable bank state ([Ref]BankFields) and initializing
-        // from the passed in genesis_config instead (as new()/new_with_paths() already do)
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.poh_config.hashes_per_tick
-        );
-        assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
-        assert_eq!(
-            bank.ns_per_slot,
-            genesis_config.poh_config.target_tick_duration.as_nanos()
-                * genesis_config.ticks_per_slot as u128
-        );
-        assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
-        assert_eq!(bank.unused, genesis_config.unused);
-        assert_eq!(bank.max_tick_height, (bank.slot + 1) * bank.ticks_per_slot);
-        assert_eq!(
-            bank.slots_per_year,
-            years_as_slots(
-                1.0,
-                &genesis_config.poh_config.target_tick_duration,
-                bank.ticks_per_slot,
-            )
-        );
-        assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
-        assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-        assert_eq!(
-            bank.rent_collector,
-            RentCollector::new(
-                bank.epoch,
-                &bank.epoch_schedule,
-                bank.slots_per_year,
-                &genesis_config.rent,
-                genesis_config.operating_mode,
-            )
-        );
-
-        bank
-    }
-
-    /// Return subset of bank fields representing serializable state
-    pub(crate) fn get_fields_to_serialize(&self) -> BankFieldsToSerialize {
-        BankFieldsToSerialize {
-            blockhash_queue: &self.blockhash_queue,
-            ancestors: &self.ancestors,
-            hash: *self.hash.read().unwrap(),
-            parent_hash: self.parent_hash,
-            parent_slot: self.parent_slot,
-            hard_forks: &*self.hard_forks,
-            transaction_count: self.transaction_count.load(Ordering::Relaxed),
-            tick_height: self.tick_height.load(Ordering::Relaxed),
-            signature_count: self.signature_count.load(Ordering::Relaxed),
-            capitalization: self.capitalization.load(Ordering::Relaxed),
-            max_tick_height: self.max_tick_height,
-            hashes_per_tick: self.hashes_per_tick,
-            ticks_per_slot: self.ticks_per_slot,
-            ns_per_slot: self.ns_per_slot,
-            genesis_creation_time: self.genesis_creation_time,
-            slots_per_year: self.slots_per_year,
-            unused: self.unused,
-            slot: self.slot,
-            epoch: self.epoch,
-            block_height: self.block_height,
-            collector_id: self.collector_id,
-            collector_fees: self.collector_fees.load(Ordering::Relaxed),
-            fee_calculator: self.fee_calculator.clone(),
-            fee_rate_governor: self.fee_rate_governor.clone(),
-            collected_rent: self.collected_rent.load(Ordering::Relaxed),
-            rent_collector: self.rent_collector.clone(),
-            epoch_schedule: self.epoch_schedule,
-            inflation: *self.inflation.read().unwrap(),
-            stakes: &self.stakes,
-            epoch_stakes: &self.epoch_stakes,
-            is_delta: self.is_delta.load(Ordering::Relaxed),
-        }
-    }
-
->>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
     pub fn collector_id(&self) -> &Pubkey {
         &self.collector_id
     }
@@ -2469,6 +2332,24 @@ impl Bank {
         for program in builtin_programs.iter() {
             self.add_builtin_program(&program.name, program.id, program.process_instruction);
         }
+    }
+
+    pub fn init_rent_collector_after_deserialize(&mut self, genesis_config: &GenesisConfig) {
+        self.rent_collector = self
+            .rent_collector
+            .clone_with_epoch(self.epoch(), genesis_config.operating_mode);
+
+        // This is minimal backport of https://github.com/solana-labs/solana/pull/10581, needed by https://github.com/solana-labs/solana/pull/11349
+        assert_eq!(
+            self.rent_collector,
+            RentCollector::new(
+                self.epoch,
+                &self.epoch_schedule,
+                self.slots_per_year,
+                &genesis_config.rent,
+                genesis_config.operating_mode,
+            )
+        );
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -7783,31 +7664,19 @@ mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "DV3oAdp4qTQr9eU2s9F1mHMypGAHzSrRvkoSgc9Tgr5R"
-=======
-                    "GDH7kUpcQuMT23pPeU9vZdmyMSPQPwzoqdNgFaLga7x3"
->>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
+                    "9rsnmUCTg2wFnKVnaUSEQcSicvPUyXPTmbsakB2o3eTu"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "3hRFavWgtFfhKojc8hJqeJWMcyxdt8DbXWME3p6Zes36"
-=======
-                    "J4L6bT3KnMMXSufcUSy6Lg9TNi2pFVsYNvQ1Fzms2j1Z"
->>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
+                    "B1JNAeiR89kcqwqeSSQXFN3spcYW2qVJwuu9hQ9dxn1V"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-<<<<<<< HEAD
-                    "4pXHMCcRwVJgkKNMysho5riYNhdS4JAj1budis41EopU"
-=======
-                    "BiCUyj8PsbsLW79waf1ifr3wDuZSFwLBhTkdbgHFjrtJ"
->>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
+                    "9iUEmDnWQmjtkoMuR3hJAwQMpCGwHaJAEsfK131rww8y"
                 );
                 break;
             }

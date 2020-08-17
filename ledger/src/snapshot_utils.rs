@@ -749,6 +749,7 @@ where
 
         bank.rc = bankrc;
         bank.operating_mode = Some(genesis_config.operating_mode);
+        bank.init_rent_collector_after_deserialize(genesis_config);
         bank.finish_init();
         Ok(bank)
     })?;

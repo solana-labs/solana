@@ -10,7 +10,7 @@ use solana_sdk::{
     sysvar,
 };
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,
