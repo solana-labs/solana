@@ -355,7 +355,8 @@ pub fn syscall_create_program_address(
     ro_regions: &[MemoryRegion],
     rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
-    let untranslated_seeds = translate_slice!(&[&str], seeds_addr, seeds_len, ro_regions)?;
+    let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+
     let seeds = untranslated_seeds
         .iter()
         .map(|untranslated_seed| {
@@ -368,8 +369,12 @@ pub fn syscall_create_program_address(
         })
         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
     let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
+
     let new_address =
-        Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds)?;
+        match Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds) {
+            Ok(address) => address,
+            Err(_) => return Ok(1),
+        };
     let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
     address.copy_from_slice(new_address.as_ref());
     Ok(0)
