@@ -45,7 +45,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[DERIVED_KEY1_INDEX].key, true, true}};
       uint8_t data[4 + 8 + 8 + 32];
       *(uint64_t *)(data + 4) = 42;
-      *(uint64_t *)(data + 4 + 8) = MAX_REALLOC_SIZE;
+      *(uint64_t *)(data + 4 + 8) = MAX_PERMITTED_DATA_INCREASE;
       sol_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
       const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
@@ -63,11 +63,15 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 42);
       sol_assert(SolPubkey_same(accounts[DERIVED_KEY1_INDEX].owner,
                                 params.program_id));
-      sol_assert(accounts[DERIVED_KEY1_INDEX].data_len == MAX_REALLOC_SIZE);
-      sol_assert(accounts[DERIVED_KEY1_INDEX].data[MAX_REALLOC_SIZE - 1] == 0);
-      accounts[DERIVED_KEY1_INDEX].data[MAX_REALLOC_SIZE - 1] = 0x0f;
-      sol_assert(accounts[DERIVED_KEY1_INDEX].data[MAX_REALLOC_SIZE - 1] ==
-                 0x0f);
+      sol_assert(accounts[DERIVED_KEY1_INDEX].data_len ==
+                 MAX_PERMITTED_DATA_INCREASE);
+      sol_assert(
+          accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
+          0);
+      accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
+      sol_assert(
+          accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
+          0x0f);
       for (uint8_t i = 0; i < 20; i++) {
         accounts[DERIVED_KEY1_INDEX].data[i] = i;
       }

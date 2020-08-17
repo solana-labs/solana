@@ -14,7 +14,7 @@ use solana_sdk::{
     bpf_loader,
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
-    entrypoint::MAX_REALLOC_SIZE,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -449,7 +449,7 @@ fn test_program_bpf_invoke() {
         let account = bank.get_account(&derived_key1).unwrap();
         assert_eq!(invoke_program_id, account.owner);
         assert_eq!(
-            MAX_REALLOC_SIZE,
+            MAX_PERMITTED_DATA_INCREASE,
             bank.get_account(&derived_key1).unwrap().data.len()
         );
         for i in 0..20 {

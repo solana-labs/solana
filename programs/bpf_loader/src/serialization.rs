@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    account::KeyedAccount, bpf_loader_deprecated, entrypoint::MAX_REALLOC_SIZE,
+    account::KeyedAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
     instruction::InstructionError, pubkey::Pubkey,
 };
 use std::{
@@ -147,7 +147,9 @@ pub fn serialize_parameters_aligned(
                 .unwrap();
             v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
             v.resize(
-                v.len() + MAX_REALLOC_SIZE + (v.len() as *const u8).align_offset(align_of::<u128>()),
+                v.len()
+                    + MAX_PERMITTED_DATA_INCREASE
+                    + (v.len() as *const u8).align_offset(align_of::<u128>()),
                 0,
             );
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
@@ -188,14 +190,16 @@ pub fn deserialize_parameters_aligned(
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
-            if post_len != pre_len && (post_len.saturating_sub(pre_len)) <= MAX_REALLOC_SIZE {
+            if post_len != pre_len
+                && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
+            {
                 account.data.resize(post_len, 0);
                 data_end = start + post_len;
             }
             account.data.clone_from_slice(&buffer[start..data_end]);
-            start += pre_len + MAX_REALLOC_SIZE; // data
+            start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
-            + size_of::<u64>(); // rent_epoch
+            start += size_of::<u64>(); // rent_epoch
         }
     }
     Ok(())

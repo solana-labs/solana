@@ -8,7 +8,7 @@ use solana_bpf_rust_invoked::instruction::*;
 use solana_sdk::{
     account_info::AccountInfo,
     entrypoint,
-    entrypoint::{ProgramResult, MAX_REALLOC_SIZE},
+    entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
     info,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
@@ -59,7 +59,7 @@ fn process_instruction(
                     accounts[FROM_INDEX].key,
                     accounts[DERIVED_KEY1_INDEX].key,
                     42,
-                    MAX_REALLOC_SIZE as u64,
+                    MAX_PERMITTED_DATA_INCREASE as u64,
                     program_id,
                 );
                 invoke_signed(&instruction, accounts, &[&[b"You pass butter", &[nonce1]]])?;
@@ -67,11 +67,14 @@ fn process_instruction(
                 assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 42);
                 assert_eq!(accounts[DERIVED_KEY1_INDEX].lamports(), to_lamports + 42);
                 assert_eq!(program_id, accounts[DERIVED_KEY1_INDEX].owner);
-                assert_eq!(accounts[DERIVED_KEY1_INDEX].data_len(), MAX_REALLOC_SIZE);
+                assert_eq!(
+                    accounts[DERIVED_KEY1_INDEX].data_len(),
+                    MAX_PERMITTED_DATA_INCREASE
+                );
                 let mut data = accounts[DERIVED_KEY1_INDEX].try_borrow_mut_data()?;
-                assert_eq!(data[MAX_REALLOC_SIZE - 1], 0);
-                data[MAX_REALLOC_SIZE - 1] = 0x0f;
-                assert_eq!(data[MAX_REALLOC_SIZE - 1], 0x0f);
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0);
+                data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0x0f);
                 for i in 0..20 {
                     data[i] = i as u8;
                 }

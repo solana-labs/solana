@@ -11,7 +11,7 @@ use solana_sdk::{
     account::KeyedAccount,
     account_info::AccountInfo,
     bpf_loader,
-    entrypoint::{MAX_REALLOC_SIZE, SUCCESS},
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     entrypoint_native::{InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
@@ -911,7 +911,7 @@ fn call<'a>(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
-                if account.data.len() > account_ref.data.len() + MAX_REALLOC_SIZE {
+                if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
                     return Err(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
