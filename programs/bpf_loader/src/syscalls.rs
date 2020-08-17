@@ -365,10 +365,10 @@ pub fn syscall_create_program_address(
             )
         })
         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-    let program_id = translate_type!(Pubkey, program_id_addr, rw_regions)?;
+    let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
     let new_address =
         Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds)?;
-    let address = translate_slice_mut!(u8, address_addr, 32, ro_regions)?;
+    let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
     address.copy_from_slice(new_address.as_ref());
     Ok(0)
 }
