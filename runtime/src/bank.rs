@@ -519,7 +519,9 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
-            rent_collector: parent.rent_collector.clone_with_epoch(epoch),
+            rent_collector: parent
+                .rent_collector
+                .clone_with_epoch(epoch, parent.operating_mode()),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator: fee_rate_governor.create_fee_calculator(),
@@ -640,7 +642,10 @@ impl Bank {
             fee_calculator: fields.fee_calculator,
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
-            rent_collector: fields.rent_collector,
+            // clone()-ing is needed to consider a gated behavior in rent_collector
+            rent_collector: fields
+                .rent_collector
+                .clone_with_epoch(fields.epoch, genesis_config.operating_mode),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes: RwLock::new(fields.stakes),
@@ -689,6 +694,7 @@ impl Bank {
                 &bank.epoch_schedule,
                 bank.slots_per_year,
                 &genesis_config.rent,
+                genesis_config.operating_mode,
             )
         );
 
@@ -1198,6 +1204,7 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
+            self.operating_mode(),
         );
 
         // Add additional native programs specified in the genesis config
@@ -4748,7 +4755,7 @@ mod tests {
             bank.get_account(&rent_exempt_pubkey).unwrap().lamports,
             large_lamports
         );
-        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 6);
+        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 5);
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
             vec![genesis_slot, some_slot]
@@ -7889,19 +7896,19 @@ mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "5yZDar5HaXypoeNnE9mEfVwJEEyDCP5W1pLwhuouPjqN"
+                    "GDH7kUpcQuMT23pPeU9vZdmyMSPQPwzoqdNgFaLga7x3"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "FmPBRC6AAZgXu1QiqZ445FhLYZXun9KTtjMMKqCim9Hd"
+                    "J4L6bT3KnMMXSufcUSy6Lg9TNi2pFVsYNvQ1Fzms2j1Z"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "Aqi2QcSoxaYu2QJHKaMHi9G8J2vNEtjpuKzjj5rHP9wr"
+                    "BiCUyj8PsbsLW79waf1ifr3wDuZSFwLBhTkdbgHFjrtJ"
                 );
                 break;
             }
