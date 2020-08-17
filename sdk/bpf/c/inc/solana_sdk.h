@@ -334,9 +334,7 @@ static bool sol_deserialize(
       input += sizeof(uint64_t);
       params->ka[i].data = (uint8_t *) input;
       input += params->ka[i].data_len;
-      sol_log_64(0, 0, 0, 0, (uint64_t)input);
       input = (uint8_t*)(((uint64_t)input + 8 - 1) & ~(8 - 1)); // padding
-      sol_log_64(0, 0, 0, 0, (uint64_t)input);
 
       // rent epoch
       params->ka[i].rent_epoch = *(uint64_t *) input;
