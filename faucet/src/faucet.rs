@@ -62,7 +62,7 @@ pub struct Faucet {
     mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     pub time_slice: Duration,
-    per_time_request_cap: u64,
+    per_time_cap: u64,
     per_request_cap: Option<u64>,
     pub request_current: u64,
 }
@@ -71,23 +71,23 @@ impl Faucet {
     pub fn new(
         mint_keypair: Keypair,
         time_input: Option<u64>,
-        per_time_request_cap: Option<u64>,
+        per_time_cap: Option<u64>,
         per_request_cap: Option<u64>,
     ) -> Faucet {
         let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
-        let per_time_request_cap = per_time_request_cap.unwrap_or(REQUEST_CAP);
+        let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
         Faucet {
             mint_keypair,
             ip_cache: Vec::new(),
             time_slice,
-            per_time_request_cap,
+            per_time_cap,
             per_request_cap,
             request_current: 0,
         }
     }
 
     pub fn check_time_request_limit(&mut self, request_amount: u64) -> bool {
-        (self.request_current + request_amount) <= self.per_time_request_cap
+        (self.request_current + request_amount) <= self.per_time_cap
     }
 
     pub fn clear_request_count(&mut self) {
@@ -140,7 +140,7 @@ impl Faucet {
                         ErrorKind::Other,
                         format!(
                             "token limit reached; req: {} current: {} cap: {}",
-                            lamports, self.request_current, self.per_time_request_cap
+                            lamports, self.request_current, self.per_time_cap
                         ),
                     ))
                 }
@@ -253,14 +253,14 @@ pub fn request_airdrop_transaction(
 pub fn run_local_faucet(
     mint_keypair: Keypair,
     sender: Sender<SocketAddr>,
-    per_time_request_cap: Option<u64>,
+    per_time_cap: Option<u64>,
 ) {
     thread::spawn(move || {
         let faucet_addr = socketaddr!(0, 0);
         let faucet = Arc::new(Mutex::new(Faucet::new(
             mint_keypair,
             None,
-            per_time_request_cap,
+            per_time_cap,
             None,
         )));
         run_faucet(faucet, faucet_addr, Some(sender));
@@ -367,7 +367,7 @@ mod tests {
         let request_cap: Option<u64> = None;
         let faucet = Faucet::new(keypair, time_slice, request_cap, Some(100));
         assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
-        assert_eq!(faucet.per_time_request_cap, REQUEST_CAP);
+        assert_eq!(faucet.per_time_cap, REQUEST_CAP);
         assert_eq!(faucet.per_request_cap, Some(100));
     }
 
