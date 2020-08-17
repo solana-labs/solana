@@ -509,7 +509,11 @@ function createRpcRequest(url): RpcRequest {
     try {
       const res = await fetch(url, options);
       const text = await res.text();
-      callback(null, text);
+      if (res.ok) {
+        callback(null, text);
+      } else {
+        callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+      }
     } catch (err) {
       callback(err);
     }
