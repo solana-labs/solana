@@ -5,7 +5,7 @@ use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubk
 use alloc::vec::Vec;
 use std::{
     cell::RefCell,
-    mem::size_of,
+    mem::{align_of, size_of},
     rc::Rc,
     // Hide Result from bindgen gets confused about generics in non-generic type declarations
     result::Result as ResultGeneric,
@@ -80,7 +80,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let executable = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
 
-            offset += 4; // padding
+            offset += size_of::<u32>(); // padding to u64
 
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
@@ -100,8 +100,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
             offset += data_len;
-
-            offset += 16 - (offset % 16); // padding
+            offset += (offset as *const u8).align_offset(align_of::<u128>()); // padding
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
