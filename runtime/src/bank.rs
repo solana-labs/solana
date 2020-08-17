@@ -2335,6 +2335,7 @@ impl Bank {
     }
 
     pub fn init_rent_collector_after_deserialize(&mut self, genesis_config: &GenesisConfig) {
+        // clone()-ing is needed to consider a gated behavior in rent_collector
         self.rent_collector = self
             .rent_collector
             .clone_with_epoch(self.epoch(), genesis_config.operating_mode);
