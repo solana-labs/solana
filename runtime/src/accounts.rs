@@ -778,6 +778,7 @@ mod tests {
         account::Account,
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeCalculator,
+        genesis_config::OperatingMode,
         hash::Hash,
         instruction::CompiledInstruction,
         message::Message,
@@ -1011,6 +1012,7 @@ mod tests {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
+            OperatingMode::Development,
         );
         let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
