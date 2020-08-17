@@ -1098,8 +1098,13 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
+<<<<<<< HEAD
                        "owner": "Budget1111111111111111111111111111111111111",
                        "rentEpoch": 1,
+=======
+                       "owner": "Stake11111111111111111111111111111111111111",
+                       "rentEpoch": 0,
+>>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
                     },
                },
                "subscription": 0,
@@ -1184,8 +1189,13 @@ pub(crate) mod tests {
                           "data": "1111111111111111",
                           "executable": false,
                           "lamports": 1,
+<<<<<<< HEAD
                           "owner": "Budget1111111111111111111111111111111111111",
                           "rentEpoch": 1,
+=======
+                          "owner": "Stake11111111111111111111111111111111111111",
+                          "rentEpoch": 0,
+>>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
                        },
                        "pubkey": alice.pubkey().to_string(),
                     },
@@ -1606,8 +1616,13 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
+<<<<<<< HEAD
                        "owner": "Budget1111111111111111111111111111111111111",
                        "rentEpoch": 1,
+=======
+                       "owner": "Stake11111111111111111111111111111111111111",
+                       "rentEpoch": 0,
+>>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
                     },
                },
                "subscription": 0,
@@ -1640,8 +1655,13 @@ pub(crate) mod tests {
                        "data": "1111111111111111",
                        "executable": false,
                        "lamports": 1,
+<<<<<<< HEAD
                        "owner": "Budget1111111111111111111111111111111111111",
                        "rentEpoch": 1,
+=======
+                       "owner": "Stake11111111111111111111111111111111111111",
+                       "rentEpoch": 0,
+>>>>>>> 23fa84b32... Re-do rent collection check on rent-exempt account (#11349)
                     },
                },
                "subscription": 1,
