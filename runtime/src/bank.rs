@@ -76,7 +76,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "3bFpd1M1YHHKFASfjUU5L9dUkg87TKuMzwUoUebwa8Pu")]
+#[frozen_abi(digest = "9qMSqhQjkhvvVL4bSoGek2VAnF9KdM9ARMXYA3G2f3iG")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;

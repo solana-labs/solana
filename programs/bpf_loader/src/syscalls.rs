@@ -11,7 +11,7 @@ use solana_sdk::{
     account::KeyedAccount,
     account_info::AccountInfo,
     bpf_loader,
-    entrypoint::SUCCESS,
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     entrypoint_native::{InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
@@ -382,7 +382,14 @@ pub fn syscall_create_program_address(
 
 // Cross-program invocation syscalls
 
-pub type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<(&'a mut u64, &'a mut [u8])>);
+struct AccountReferences<'a> {
+    lamports: &'a mut u64,
+    owner: &'a mut Pubkey,
+    data: &'a mut [u8],
+    ref_to_len_in_vm: &'a mut u64,
+    serialized_len_ptr: &'a mut u64,
+}
+type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<AccountReferences<'a>>);
 
 /// Implemented by language specific data structure translators
 trait SyscallProcessInstruction<'a> {
@@ -470,27 +477,43 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
             for account_info in account_infos.iter() {
                 let key = translate_type!(Pubkey, account_info.key as *const _, ro_regions)?;
                 if account_key == key {
-                    let lamports_ref = {
+                    let lamports = {
                         // Double translate lamports out of RefCell
                         let ptr = translate_type!(u64, account_info.lamports.as_ptr(), ro_regions)?;
                         translate_type_mut!(u64, *ptr, rw_regions)?
                     };
-                    let data = {
+                    let owner =
+                        translate_type_mut!(Pubkey, account_info.owner as *const _, ro_regions)?;
+                    let (data, ref_to_len_in_vm, serialized_len_ptr) = {
                         // Double translate data out of RefCell
                         let data = *translate_type!(&[u8], account_info.data.as_ptr(), ro_regions)?;
-                        translate_slice_mut!(u8, data.as_ptr(), data.len(), rw_regions)?
+                        let translated =
+                            translate!(account_info.data.as_ptr(), 8, ro_regions)? as *mut u64;
+                        let ref_to_len_in_vm = unsafe { &mut *translated.offset(1) };
+                        let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
+                        let serialized_len_ptr =
+                            translate_type_mut!(u64, ref_of_len_in_input_buffer, rw_regions)?;
+                        (
+                            translate_slice_mut!(u8, data.as_ptr(), data.len(), rw_regions)?,
+                            ref_to_len_in_vm,
+                            serialized_len_ptr,
+                        )
                     };
-                    let owner =
-                        translate_type!(Pubkey, account_info.owner as *const _, ro_regions)?;
 
                     accounts.push(Rc::new(RefCell::new(Account {
-                        lamports: *lamports_ref,
+                        lamports: *lamports,
                         data: data.to_vec(),
                         executable: account_info.executable,
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
                     })));
-                    refs.push((lamports_ref, data));
+                    refs.push(AccountReferences {
+                        lamports,
+                        owner,
+                        data,
+                        ref_to_len_in_vm,
+                        serialized_len_ptr,
+                    });
                     continue 'root;
                 }
             }
@@ -582,7 +605,7 @@ struct SolAccountMeta {
 struct SolAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
-    data_len: usize,
+    data_len: u64,
     data_addr: u64,
     owner_addr: u64,
     rent_epoch: u64,
@@ -672,24 +695,36 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
             for account_info in account_infos.iter() {
                 let key = translate_type!(Pubkey, account_info.key_addr, ro_regions)?;
                 if account_key == key {
-                    let lamports_ref =
+                    let lamports =
                         translate_type_mut!(u64, account_info.lamports_addr, rw_regions)?;
+                    let owner = translate_type_mut!(Pubkey, account_info.owner_addr, ro_regions)?;
                     let data = translate_slice_mut!(
                         u8,
                         account_info.data_addr,
                         account_info.data_len,
                         rw_regions
                     )?;
-                    let owner = translate_type!(Pubkey, account_info.owner_addr, ro_regions)?;
+                    let ref_to_len_in_vm =
+                        unsafe { &mut *(&account_info.data_len as *const u64 as u64 as *mut u64) };
+                    let ref_of_len_in_input_buffer =
+                        unsafe { (account_info.data_addr as *mut u8).offset(-8) };
+                    let serialized_len_ptr =
+                        translate_type_mut!(u64, ref_of_len_in_input_buffer, rw_regions)?;
 
                     accounts.push(Rc::new(RefCell::new(Account {
-                        lamports: *lamports_ref,
+                        lamports: *lamports,
                         data: data.to_vec(),
                         executable: account_info.executable,
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
                     })));
-                    refs.push((lamports_ref, data));
+                    refs.push(AccountReferences {
+                        lamports,
+                        owner,
+                        data,
+                        ref_to_len_in_vm,
+                        serialized_len_ptr,
+                    });
                     continue 'root;
                 }
             }
@@ -826,7 +861,7 @@ fn call<'a>(
     let message = Message::new(&[instruction], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
-    let (accounts, refs) = syscall.translate_accounts(
+    let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
         account_infos_len as usize,
@@ -860,17 +895,31 @@ fn call<'a>(
     }
 
     // Copy results back into caller's AccountInfos
-    for (i, (account, (lamport_ref, data))) in accounts.iter().zip(refs).enumerate() {
+
+    for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
         let account = account.borrow();
         if message.is_writable(i) && !account.executable {
-            *lamport_ref = account.lamports;
-            if data.len() != account.data.len() {
-                return Err(SyscallError::InstructionError(
-                    InstructionError::AccountDataSizeChanged,
-                )
-                .into());
+            *account_ref.lamports = account.lamports;
+            *account_ref.owner = account.owner;
+            if account_ref.data.len() != account.data.len() {
+                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                *account_ref.serialized_len_ptr = account.data.len() as u64;
+                if !account_ref.data.is_empty() {
+                    // Only support for `CreateAccount` at this time.
+                    // Need a way to limit total realloc size accross multiple CPI calls
+                    return Err(
+                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
+                    );
+                }
+                if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
+                    return Err(
+                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
+                    );
+                }
             }
-            data.clone_from_slice(&account.data);
+            account_ref
+                .data
+                .clone_from_slice(&account.data[0..account_ref.data.len()]);
         }
     }
 

@@ -36,21 +36,62 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
   switch (params.data[0]) {
   case TEST_SUCCESS: {
-    sol_log("Call system program");
+    sol_log("Call system program create account");
     {
-      sol_assert(*accounts[FROM_INDEX].lamports = 43);
-      sol_assert(*accounts[ARGUMENT_INDEX].lamports = 41);
+      uint64_t from_lamports = *accounts[FROM_INDEX].lamports;
+      uint64_t to_lamports = *accounts[DERIVED_KEY1_INDEX].lamports;
       SolAccountMeta arguments[] = {
-          {accounts[FROM_INDEX].key, false, true},
-          {accounts[ARGUMENT_INDEX].key, false, false}};
+          {accounts[FROM_INDEX].key, true, true},
+          {accounts[DERIVED_KEY1_INDEX].key, true, true}};
+      uint8_t data[4 + 8 + 8 + 32];
+      *(uint64_t *)(data + 4) = 42;
+      *(uint64_t *)(data + 4 + 8) = MAX_PERMITTED_DATA_INCREASE;
+      sol_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
+      const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+      uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
+                         ' ', 'b', 'u', 't', 't', 'e', 'r'};
+      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+                                      {&nonce1, 1}};
+      const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
+      sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
+                                              SOL_ARRAY_SIZE(accounts),
+                                              signers_seeds,
+                                              SOL_ARRAY_SIZE(signers_seeds)));
+      sol_assert(*accounts[FROM_INDEX].lamports == from_lamports - 42);
+      sol_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 42);
+      sol_assert(SolPubkey_same(accounts[DERIVED_KEY1_INDEX].owner,
+                                params.program_id));
+      sol_assert(accounts[DERIVED_KEY1_INDEX].data_len ==
+                 MAX_PERMITTED_DATA_INCREASE);
+      sol_assert(
+          accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
+          0);
+      accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
+      sol_assert(
+          accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
+          0x0f);
+      for (uint8_t i = 0; i < 20; i++) {
+        accounts[DERIVED_KEY1_INDEX].data[i] = i;
+      }
+    }
+
+    sol_log("Call system program transfer");
+    {
+      uint64_t from_lamports = *accounts[FROM_INDEX].lamports;
+      uint64_t to_lamports = *accounts[DERIVED_KEY1_INDEX].lamports;
+      SolAccountMeta arguments[] = {
+          {accounts[FROM_INDEX].key, true, true},
+          {accounts[DERIVED_KEY1_INDEX].key, true, false}};
       uint8_t data[] = {2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
       const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
       sol_assert(SUCCESS ==
                  sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-      sol_assert(*accounts[FROM_INDEX].lamports = 42);
-      sol_assert(*accounts[ARGUMENT_INDEX].lamports = 42);
+      sol_assert(*accounts[FROM_INDEX].lamports == from_lamports - 1);
+      sol_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 1);
     }
 
     sol_log("Test data translation");
@@ -92,8 +133,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
       const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
                                       {&nonce1, 1}};
       SolPubkey address;
-      sol_assert(SUCCESS == sol_create_program_address(seeds1, SOL_ARRAY_SIZE(seeds1),
-                                                 params.program_id, &address));
+      sol_assert(SUCCESS ==
+                 sol_create_program_address(seeds1, SOL_ARRAY_SIZE(seeds1),
+                                            params.program_id, &address));
       sol_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
     }
 
