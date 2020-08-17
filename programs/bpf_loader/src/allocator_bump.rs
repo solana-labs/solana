@@ -25,7 +25,14 @@ impl BPFAllocator {
 
 impl Alloc for BPFAllocator {
     fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr> {
-        if self.pos.saturating_add(layout.size() as u64) <= self.len {
+        let bytes_to_align = (self.pos as *const u8).align_offset(layout.align()) as u64;
+        if self
+            .pos
+            .saturating_add(layout.size() as u64)
+            .saturating_add(bytes_to_align)
+            <= self.len
+        {
+            self.pos += bytes_to_align;
             let addr = self.start + self.pos;
             self.pos += layout.size() as u64;
             Ok(addr)

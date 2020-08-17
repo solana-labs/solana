@@ -329,7 +329,10 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        let layout = Layout::from_size_align(size as usize, align_of::<u8>()).unwrap();
+        let layout = match Layout::from_size_align(size as usize, align_of::<u128>()) {
+            Ok(layout) => layout,
+            Err(_) => return Ok(0),
+        };
         if free_addr == 0 {
             match self.allocator.alloc(layout) {
                 Ok(addr) => Ok(addr as u64),
@@ -1095,6 +1098,12 @@ mod tests {
                     .unwrap(),
                 0
             );
+            assert_eq!(
+                syscall
+                    .call(u64::MAX, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
         }
         // many small allocs
         {
@@ -1104,7 +1113,7 @@ mod tests {
             let mut syscall = SyscallSolAllocFree {
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
-            for _ in 0..100 {
+            for _ in 0..12 {
                 assert_ne!(
                     syscall.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
                     0
@@ -1117,5 +1126,25 @@ mod tests {
                 0
             );
         }
+        // aligned allocs
+
+        fn check_alignment<T>() {
+            let heap = vec![0_u8; 100];
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
+            let mut syscall = SyscallSolAllocFree {
+                allocator: BPFAllocator::new(heap, MM_HEAP_START),
+            };
+            let address = syscall
+                .call(size_of::<u8>() as u64, 0, 0, 0, 0, ro_regions, rw_regions)
+                .unwrap();
+            assert_ne!(address, 0);
+            assert_eq!((address as *const u8).align_offset(align_of::<u8>()), 0);
+        }
+        check_alignment::<u8>();
+        check_alignment::<u16>();
+        check_alignment::<u32>();
+        check_alignment::<u64>();
+        check_alignment::<u128>();
     }
 }
