@@ -74,6 +74,9 @@ const mock: JestMockFn<any, any> = jest.fn((fetchUrl, fetchOptions) => {
     mockResponse,
   );
   return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
     text: () => {
       return Promise.resolve(JSON.stringify(response));
     },
