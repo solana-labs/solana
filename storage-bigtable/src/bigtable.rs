@@ -446,7 +446,7 @@ impl BigTable {
         T: serde::de::DeserializeOwned,
     {
         let row_data = self.get_row_data(table, Some(key.clone()), None, 1).await?;
-        let (row_key, data) = &row_data[0];
+        let (row_key, data) = &row_data.get(0).ok_or_else(|| Error::RowNotFound)?;
 
         deserialize_cell_data(data, table, row_key.to_string())
     }
