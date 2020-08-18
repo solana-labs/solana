@@ -163,6 +163,24 @@ fn process_instruction(
                     accounts,
                     &[&[b"You pass butter", &[nonce1]]],
                 )?;
+
+                let invoked_instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[
+                        (accounts[DERIVED_KEY1_INDEX].key, true, false),
+                        (accounts[DERIVED_KEY2_INDEX].key, true, true),
+                        (accounts[DERIVED_KEY3_INDEX].key, false, true),
+                    ],
+                    vec![TEST_VERIFY_NESTED_SIGNERS],
+                );
+                invoke_signed(
+                    &invoked_instruction,
+                    accounts,
+                    &[
+                        &[b"Lil'", b"Bits", &[nonce2]],
+                        &[accounts[DERIVED_KEY2_INDEX].key.as_ref(), &[nonce3]],
+                    ],
+                )?;
             }
 
             info!("Test readonly with writable account");
@@ -188,8 +206,6 @@ fn process_instruction(
                     &[
                         (accounts[ARGUMENT_INDEX].key, true, true),
                         (accounts[INVOKED_ARGUMENT_INDEX].key, true, true),
-                        (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
-                        (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                     ],
                     vec![TEST_NESTED_INVOKE],
                 );
@@ -197,11 +213,9 @@ fn process_instruction(
                 info!("2nd invoke from first program");
                 invoke(&instruction, accounts)?;
 
-                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 1 + 1 + 1 + 1);
-                assert_eq!(
-                    accounts[INVOKED_ARGUMENT_INDEX].lamports(),
-                    10 + 5 - 1 - 1 - 1 - 1
-                );
+                info!(line!(), 0, 0, 0, accounts[ARGUMENT_INDEX].lamports());
+                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 1 + 1);
+                assert_eq!(accounts[INVOKED_ARGUMENT_INDEX].lamports(), 10 + 5 - 1 - 1);
             }
 
             info!("Verify data values are retained and updated");

@@ -360,9 +360,9 @@ fn test_program_bpf_invoke() {
         let (derived_key1, nonce1) =
             Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
         let (derived_key2, nonce2) =
-            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
+            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoke_program_id);
         let (derived_key3, nonce3) =
-            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
+            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoke_program_id);
 
         let mint_pubkey = mint_keypair.pubkey();
         let account_metas = vec![
