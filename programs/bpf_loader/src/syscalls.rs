@@ -10,9 +10,15 @@ use solana_sdk::{
     account::Account,
     account::KeyedAccount,
     account_info::AccountInfo,
+<<<<<<< HEAD
     bpf_loader,
     entrypoint::SUCCESS,
     entrypoint_native::{ComputeMeter, InvokeContext, Logger},
+=======
+    bpf_loader, bpf_loader_deprecated,
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    entrypoint_native::{InvokeContext, Logger},
+>>>>>>> 46830124f... CPI support for bpf_loader_deprecated (#11695)
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -886,6 +892,7 @@ fn call<'a>(
         message_processor.add_program(*program_id, *process_instruction);
     }
     message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
+    message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
     message_processor.set_cross_program_support(invoke_context.is_cross_program_supported());
 
     #[allow(clippy::deref_addrof)]
