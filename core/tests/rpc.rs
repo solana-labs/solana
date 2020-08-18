@@ -103,7 +103,7 @@ fn test_rpc_send_tx() {
     use solana_account_decoder::UiAccountEncoding;
     use solana_client::rpc_config::RpcAccountInfoConfig;
     let config = RpcAccountInfoConfig {
-        encoding: Some(UiAccountEncoding::Binary64),
+        encoding: Some(UiAccountEncoding::Base64),
         commitment: None,
         data_slice: None,
     };
