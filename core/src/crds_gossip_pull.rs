@@ -589,14 +589,14 @@ mod test {
         crds.insert(node_123.clone(), 0).unwrap();
         crds.insert(node_456.clone(), 0).unwrap();
 
-        // shred version 123 should ignore 456 nodes
+        // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
             .pull_options(&crds, &me.label().pubkey(), 123, 0, &stakes)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
-        assert_eq!(options.len(), 2);
-        assert!(options.contains(&spy.pubkey()));
+        assert_eq!(options.len(), 1);
+        assert!(!options.contains(&spy.pubkey()));
         assert!(options.contains(&node_123.pubkey()));
 
         // spy nodes will see all
