@@ -217,7 +217,9 @@ pub struct TransactionWithStatusMeta {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
-    Binary,
+    Binary, // Legacy. Retained for RPC backwards compatibility
+    Base64,
+    Base58,
     Json,
     JsonParsed,
 }
@@ -225,17 +227,26 @@ pub enum UiTransactionEncoding {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
-    Binary(String),
+    LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
+    Binary(String, UiTransactionEncoding),
     Json(UiTransaction),
 }
 
 impl EncodedTransaction {
     pub fn encode(transaction: Transaction, encoding: UiTransactionEncoding) -> Self {
         match encoding {
-            UiTransactionEncoding::Binary => EncodedTransaction::Binary(
+            UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
             ),
-            _ => {
+            UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
+                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
+                encoding,
+            ),
+            UiTransactionEncoding::Base64 => EncodedTransaction::Binary(
+                base64::encode(bincode::serialize(&transaction).unwrap()),
+                encoding,
+            ),
+            UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
                 let message = if encoding == UiTransactionEncoding::Json {
                     UiMessage::Raw(UiRawMessage {
                         header: transaction.message.header,
@@ -298,10 +309,22 @@ impl EncodedTransaction {
     pub fn decode(&self) -> Option<Transaction> {
         match self {
             EncodedTransaction::Json(_) => None,
-            EncodedTransaction::Binary(blob) => bs58::decode(blob)
+            EncodedTransaction::LegacyBinary(blob) => bs58::decode(blob)
                 .into_vec()
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+            EncodedTransaction::Binary(blob, encoding) => match *encoding {
+                UiTransactionEncoding::Base58 => bs58::decode(blob)
+                    .into_vec()
+                    .ok()
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+                UiTransactionEncoding::Base64 => base64::decode(blob)
+                    .ok()
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok()),
+                UiTransactionEncoding::Binary
+                | UiTransactionEncoding::Json
+                | UiTransactionEncoding::JsonParsed => None,
+            },
         }
     }
 }
