@@ -46,15 +46,66 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ## System Tuning
 
-For Linux validators, the solana repo includes a daemon to adjust system settings to optimize
-performance (namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
+### Linux
+#### Automatic
+The solana repo includes a daemon to adjust system settings to optimize performance
+(namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
 
-The daemon (`solana-sys-tuner`) is included in the solana binary release.
+The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
+it, *before* restarting your validator, after each software upgrade to ensure that
+the latest recommended settings are applied.
 
 To run it:
 
 ```bash
 sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+```
+
+#### Manual
+If you would prefer to manage system settings on your own, you may do so with
+the following commands.
+
+##### **Increase UDP buffers**
+```bash
+sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
+# Increase UDP buffer size
+net.core.rmem_default = 134217728
+net.core.rmem_max = 134217728
+net.core.wmem_default = 134217728
+net.core.wmem_max = 134217728
+EOF"
+```
+```bash
+sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
+```
+
+##### **Increased memory mapped files limit**
+```bash
+sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
+# Increase memory mapped files limit
+vm.max_map_count = 500000
+EOF"
+```
+```bash
+sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
+```
+Add
+```
+LimitNOFILE=500000
+```
+to the `[Service]` section of your systemd service file, if you use one,
+otherwise add it to `/etc/systemd/system.conf`.
+```bash
+sudo systemctl daemon-reload
+```
+```bash
+sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
+# Increase process file descriptor count limit
+* - nofile 500000
+EOF"
+```
+```bash
+### Close all open sessions (log out then, in again) ###
 ```
 
 ## Generate identity
