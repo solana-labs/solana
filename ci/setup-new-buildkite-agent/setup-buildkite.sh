@@ -76,7 +76,7 @@ RestartForceExitStatus=SIGPIPE
 TimeoutStartSec=10
 TimeoutStopSec=0
 KillMode=process
-LimitNOFILE=65536
+LimitNOFILE=500000
 
 [Install]
 WantedBy=multi-user.target
