@@ -3257,7 +3257,7 @@ fn adjust_ulimit_nofile() -> Result<()> {
 fn adjust_ulimit_nofile() -> Result<()> {
     // Rocks DB likes to have many open files.  The default open file descriptor limit is
     // usually not enough
-    let desired_nofile = 65000;
+    let desired_nofile = 500000;
 
     fn get_nofile() -> libc::rlimit {
         let mut nofile = libc::rlimit {
