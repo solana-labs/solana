@@ -639,7 +639,7 @@ mod test {
         crds.insert(me.clone(), 0).unwrap();
         crds.insert(spy.clone(), 0).unwrap();
         crds.insert(node_123.clone(), 0).unwrap();
-        crds.insert(node_456.clone(), 0).unwrap();
+        crds.insert(node_456, 0).unwrap();
 
         // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
