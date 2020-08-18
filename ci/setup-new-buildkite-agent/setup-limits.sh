@@ -8,5 +8,5 @@ source "$HERE"/utils.sh
 ensure_env || exit 1
 
 # Allow more files to be opened by a user
-sed -i 's/^\(# End of file\)/* soft nofile 65535\n\n\1/' /etc/security/limits.conf
+echo "* - nofile 500000" > /etc/security/limits.d/90-solana-nofiles.conf
 
