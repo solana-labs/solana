@@ -43,7 +43,7 @@ function reconcile(
   history: AccountHistory | undefined,
   update: HistoryUpdate | undefined
 ) {
-  if (update?.history === undefined) return;
+  if (update?.history === undefined) return history;
   return {
     fetched: combineFetched(
       update.history.fetched,
