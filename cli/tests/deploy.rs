@@ -63,6 +63,7 @@ fn test_cli_deploy_program() {
     config.command = CliCommand::Deploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: None,
+        use_deprecated_loader: false,
     };
 
     let response = process_command(&config);
@@ -96,6 +97,7 @@ fn test_cli_deploy_program() {
     config.command = CliCommand::Deploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: Some(1),
+        use_deprecated_loader: false,
     };
     process_command(&config).unwrap();
     let account1 = rpc_client
