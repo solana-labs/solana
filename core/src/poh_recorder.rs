@@ -137,18 +137,13 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    fn received_any_previous_leader_data(&self, slot: Slot) -> bool {
-        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
-            // Check if we have received any data in previous leader's slots
-            if let Ok(slot_meta) = self.blockstore.meta(i as Slot) {
-                if let Some(slot_meta) = slot_meta {
-                    slot_meta.received > 0
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
+    fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {
+        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|slot| {
+            // Check if the last slot Poh reset to was any of the
+            // previous leader's slots.
+            // If so, PoH is currently building on the previous leader's blocks
+            // If not, PoH is building on a different fork
+            slot == self.start_slot
         })
     }
 
@@ -173,7 +168,7 @@ impl PohRecorder {
             || self.start_tick_height + self.grace_ticks == leader_first_tick_height
             || (self.tick_height >= ideal_target_tick_height
                 && (self.prev_slot_was_mine(current_slot)
-                    || !self.received_any_previous_leader_data(current_slot)))
+                    || !self.is_same_fork_as_previous_leader(current_slot)))
     }
 
     /// returns if leader slot has been reached, how many grace ticks were afforded,
