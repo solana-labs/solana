@@ -58,6 +58,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
+use spl_token_v1_0::state::{Account as TokenAccount, Mint};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -67,6 +68,7 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
+    str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -3178,6 +3180,61 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    pub fn get_token_account(
+        &self,
+        pubkey: &Pubkey,
+    ) -> std::result::Result<TokenAccount, &'static str> {
+        let account = self
+            .get_account(pubkey)
+            .ok_or_else(|| "could not find account")?;
+
+        if account.owner != Self::spl_token_id_v1_0() {
+            return Err("not a v1.0 Token account");
+        }
+        let mut data = account.data.to_vec();
+        let token_account = spl_token_v1_0::state::unpack::<TokenAccount>(&mut data)
+            .map_err(|_| "not a v1.0 Token account")?;
+        Ok(*token_account)
+    }
+
+    /// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
+    /// program_id) and decimals
+    pub fn get_mint_owner_and_decimals(
+        &self,
+        mint: &Pubkey,
+    ) -> std::result::Result<(Pubkey, u8), &'static str> {
+        if mint == &Self::spl_token_v1_0_native_mint() {
+            // Uncomment the following once spl_token is bumped to a version that includes native_mint::DECIMALS
+            // Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
+            Ok((Self::spl_token_id_v1_0(), 9))
+        } else {
+            let mint_account = self
+                .get_account(mint)
+                .ok_or_else(|| "could not find mint")?;
+            let decimals = Self::get_mint_decimals(&mint_account.data)?;
+            Ok((mint_account.owner, decimals))
+        }
+    }
+
+    fn get_mint_decimals(data: &[u8]) -> std::result::Result<u8, &'static str> {
+        let mut data = data.to_vec();
+        spl_token_v1_0::state::unpack(&mut data)
+            .map_err(|_| "Token mint could not be unpacked")
+            .map(|mint: &mut Mint| mint.decimals)
+    }
+
+    // A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to
+    // solana_sdk::pubkey::Pubkey
+    pub fn spl_token_id_v1_0() -> Pubkey {
+        Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
+    }
+
+    // A helper function to convert spl_token_v1_0::native_mint::id() as spl_sdk::pubkey::Pubkey to
+    // solana_sdk::pubkey::Pubkey
+    pub fn spl_token_v1_0_native_mint() -> Pubkey {
+        Pubkey::from_str(&spl_token_v1_0::native_mint::id().to_string()).unwrap()
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {

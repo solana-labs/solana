@@ -264,6 +264,18 @@ impl SyncClient for BankClient {
     fn get_epoch_info(&self) -> Result<EpochInfo> {
         Ok(self.bank.get_epoch_info())
     }
+
+    fn get_token_account_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<u64> {
+        let token_account = self
+            .bank
+            .get_token_account(pubkey)
+            .map_err(|e| TransportError::Custom(format!("Invalid param: {}", e)))?;
+        Ok(token_account.amount)
+    }
 }
 
 impl BankClient {

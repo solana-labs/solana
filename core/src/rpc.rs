@@ -11,8 +11,7 @@ use jsonrpc_derive::rpc;
 use solana_account_decoder::{
     parse_account_data::AccountAdditionalData,
     parse_token::{
-        get_token_account_mint, spl_token_id_v1_0, spl_token_v1_0_native_mint,
-        token_amount_to_ui_amount, UiTokenAmount,
+        get_token_account_mint, spl_token_id_v1_0, token_amount_to_ui_amount, UiTokenAmount,
     },
     UiAccount, UiAccountEncoding,
 };
@@ -58,7 +57,7 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use spl_token_v1_0::state::{Account as TokenAccount, Mint};
+use spl_token_v1_0::state::Account as TokenAccount;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -1016,23 +1015,14 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
-        let account = bank.get_account(pubkey).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find account".to_string())
-        })?;
-
-        if account.owner != spl_token_id_v1_0() {
-            return Err(Error::invalid_params(
-                "Invalid param: not a v1.0 Token account".to_string(),
-            ));
-        }
-        let mut data = account.data.to_vec();
-        let token_account =
-            spl_token_v1_0::state::unpack::<TokenAccount>(&mut data).map_err(|_| {
-                Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
-            })?;
+        let token_account = bank
+            .get_token_account(pubkey)
+            .map_err(|e| Error::invalid_params(format!("Invalid param: {}", e)))?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
-        let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
+        let (_, decimals) = bank
+            .get_mint_owner_and_decimals(&mint)
+            .map_err(|e| Error::invalid_params(format!("Invalid param: {}", e)))?;
         let balance = token_amount_to_ui_amount(token_account.amount, decimals);
         Ok(new_response(&bank, balance))
     }
@@ -1043,7 +1033,9 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
-        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        let (mint_owner, decimals) = bank
+            .get_mint_owner_and_decimals(mint)
+            .map_err(|e| Error::invalid_params(format!("Invalid param: {}", e)))?;
         if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
@@ -1078,7 +1070,9 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
         let bank = self.bank(commitment);
-        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
+        let (mint_owner, decimals) = bank
+            .get_mint_owner_and_decimals(mint)
+            .map_err(|e| Error::invalid_params(format!("Invalid param: {}", e)))?;
         if mint_owner != spl_token_id_v1_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v1.0 Token mint".to_string(),
@@ -1306,7 +1300,7 @@ pub(crate) fn get_parsed_token_account(
     account: Account,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(&account.data)
-        .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
+        .and_then(|mint_pubkey| bank.get_mint_owner_and_decimals(&mint_pubkey).ok())
         .map(|(_, decimals)| AccountAdditionalData {
             spl_token_decimals: Some(decimals),
         });
@@ -1331,7 +1325,7 @@ where
     keyed_accounts.map(move |(pubkey, account)| {
         let additional_data = get_token_account_mint(&account.data).map(|mint_pubkey| {
             let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
+                let (_, decimals) = bank.get_mint_owner_and_decimals(&mint_pubkey).ok()?;
                 mint_decimals.insert(mint_pubkey, decimals);
                 Some(decimals)
             });
@@ -1359,7 +1353,9 @@ fn get_token_program_id_and_mint(
 ) -> Result<(Pubkey, Option<Pubkey>)> {
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
-            let (mint_owner, _) = get_mint_owner_and_decimals(&bank, &mint)?;
+            let (mint_owner, _) = bank
+                .get_mint_owner_and_decimals(&mint)
+                .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))?;
             if mint_owner != spl_token_id_v1_0() {
                 return Err(Error::invalid_params(
                     "Invalid param: not a v1.0 Token mint".to_string(),
@@ -1377,31 +1373,6 @@ fn get_token_program_id_and_mint(
             }
         }
     }
-}
-
-/// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
-/// program_id) and decimals
-fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
-    if mint == &spl_token_v1_0_native_mint() {
-        // Uncomment the following once spl_token is bumped to a version that includes native_mint::DECIMALS
-        // Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
-        Ok((spl_token_id_v1_0(), 9))
-    } else {
-        let mint_account = bank.get_account(mint).ok_or_else(|| {
-            Error::invalid_params("Invalid param: could not find mint".to_string())
-        })?;
-        let decimals = get_mint_decimals(&mint_account.data)?;
-        Ok((mint_account.owner, decimals))
-    }
-}
-
-fn get_mint_decimals(data: &[u8]) -> Result<u8> {
-    let mut data = data.to_vec();
-    spl_token_v1_0::state::unpack(&mut data)
-        .map_err(|_| {
-            Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
-        })
-        .map(|mint: &mut Mint| mint.decimals)
 }
 
 #[rpc]

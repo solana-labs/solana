@@ -133,6 +133,12 @@ pub trait SyncClient {
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
 
     fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)>;
+
+    fn get_token_account_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<u64>;
 }
 
 pub trait AsyncClient {

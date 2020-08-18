@@ -23,7 +23,7 @@ use solana_sdk::{
     system_instruction,
     timing::duration_as_ms,
     transaction::{self, Transaction},
-    transport::Result as TransportResult,
+    transport::{Result as TransportResult, TransportError},
 };
 use std::{
     io,
@@ -545,6 +545,22 @@ impl SyncClient for ThinClient {
         self.rpc_client()
             .get_new_blockhash(blockhash)
             .map_err(|e| e.into())
+    }
+
+    fn get_token_account_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<u64> {
+        let string_amount: TransportResult<String> = self
+            .rpc_client()
+            .get_token_account_balance_with_commitment(pubkey, commitment_config)
+            .map(|res| res.value.amount)
+            .map_err(|e| e.into());
+
+        string_amount?
+            .parse::<u64>()
+            .map_err(|_| TransportError::Custom("Could not parse response amount".to_string()))
     }
 }
 
