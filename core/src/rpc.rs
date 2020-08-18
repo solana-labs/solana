@@ -195,11 +195,8 @@ impl JsonRpcRequestProcessor {
         if let Some(account) = bank.get_account(pubkey) {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
-            } else if (encoding == UiAccountEncoding::Binary
-                || encoding == UiAccountEncoding::Base58)
-                && account.data.len() > 128
-            {
-                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
+            } else if encoding == UiAccountEncoding::Binary && account.data.len() > 128 {
+                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Binary64 encoding.".to_string();
                 return Err(error::Error {
                     code: error::ErrorCode::InvalidRequest,
                     message,
@@ -1242,7 +1239,7 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
         UiAccountEncoding::JsonParsed => {
             if data_slice_is_some {
                 let message =
-                    "Sliced account data can only be encoded using binary (base 58) or base64 encoding."
+                    "Sliced account data can only be encoded using binary (base 58) or binary64 encoding."
                         .to_string();
                 Err(error::Error {
                     code: error::ErrorCode::InvalidRequest,
@@ -1253,7 +1250,7 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
                 Ok(())
             }
         }
-        UiAccountEncoding::Binary | UiAccountEncoding::Base58 | UiAccountEncoding::Base64 => Ok(()),
+        UiAccountEncoding::Binary | UiAccountEncoding::Binary64 => Ok(()),
     }
 }
 
@@ -3076,13 +3073,13 @@ pub mod tests {
             "result": {
                 "context":{"slot":0},
                 "value":{
-                    "owner": "11111111111111111111111111111111",
-                    "lamports": 20,
-                    "data": "",
-                    "executable": false,
-                    "rentEpoch": 0
-                },
+                "owner": "11111111111111111111111111111111",
+                "lamports": 20,
+                "data": "",
+                "executable": false,
+                "rentEpoch": 0
             },
+                },
             "id": 1,
         });
         let expected: Response =
@@ -3098,19 +3095,16 @@ pub mod tests {
         bank.store_account(&address, &account);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"base64"}}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary64"}}]}}"#,
             address
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        assert_eq!(
-            result["result"]["value"]["data"],
-            json!([base64::encode(&data), "base64"]),
-        );
+        assert_eq!(result["result"]["value"]["data"], base64::encode(&data));
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"base64", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"binary64", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
             address
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -3118,7 +3112,7 @@ pub mod tests {
             .expect("actual response deserialization");
         assert_eq!(
             result["result"]["value"]["data"],
-            json!([base64::encode(&data[1..3]), "base64"]),
+            base64::encode(&data[1..3]),
         );
 
         let req = format!(
@@ -4333,7 +4327,7 @@ pub mod tests {
         for TransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
         {
-            if let EncodedTransaction::LegacyBinary(transaction) = transaction {
+            if let EncodedTransaction::Binary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {

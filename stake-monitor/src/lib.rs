@@ -267,8 +267,6 @@ fn process_confirmed_block(
                                 ("err", "Transaction signature verification failed", String)
                             );
                         }
-                    } else {
-                        error!("Transaction decode failed");
                     }
                 }
             }
@@ -291,7 +289,7 @@ fn load_blocks(
     let mut blocks = vec![];
     for slot in slots.into_iter() {
         let block =
-            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Binary)?;
         blocks.push((slot, block));
     }
     Ok(blocks)

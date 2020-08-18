@@ -11,7 +11,7 @@ use crate::{
     vote::*,
 };
 use chrono::prelude::*;
-use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
@@ -845,14 +845,9 @@ pub fn parse_command(
             _ => Err(CliError::BadParameter("Invalid signature".to_string())),
         },
         ("decode-transaction", Some(matches)) => {
-            let blob = value_t_or_exit!(matches, "transaction", String);
-            let encoding = match matches.value_of("encoding").unwrap() {
-                "base58" => UiTransactionEncoding::Binary,
-                "base64" => UiTransactionEncoding::Base64,
-                _ => unreachable!(),
-            };
-
-            let encoded_transaction = EncodedTransaction::Binary(blob, encoding);
+            let encoded_transaction = EncodedTransaction::Binary(
+                matches.value_of("base58_transaction").unwrap().to_string(),
+            );
             if let Some(transaction) = encoded_transaction.decode() {
                 Ok(CliCommandInfo {
                     command: CliCommand::DecodeTransaction(transaction),
@@ -1183,7 +1178,7 @@ fn process_confirm(
             if let Some(transaction_status) = status {
                 if config.verbose {
                     match rpc_client
-                        .get_confirmed_transaction(signature, UiTransactionEncoding::Base64)
+                        .get_confirmed_transaction(signature, UiTransactionEncoding::Binary)
                     {
                         Ok(confirmed_transaction) => {
                             println!(
@@ -1239,7 +1234,7 @@ fn process_show_account(
             account: UiAccount::encode(
                 account_pubkey,
                 account,
-                UiAccountEncoding::Base64,
+                UiAccountEncoding::Binary64,
                 None,
                 None,
             ),
@@ -2554,22 +2549,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("decode-transaction")
                 .about("Decode a base-58 binary transaction")
                 .arg(
-                    Arg::with_name("transaction")
+                    Arg::with_name("base58_transaction")
                         .index(1)
-                        .value_name("TRANSACTION")
+                        .value_name("BASE58_TRANSACTION")
                         .takes_value(true)
                         .required(true)
-                        .help("transaction to decode"),
-                )
-                .arg(
-                    Arg::with_name("encoding")
-                        .index(2)
-                        .value_name("ENCODING")
-                        .possible_values(&["base58", "base64"]) // Subset of `UiTransactionEncoding` enum
-                        .default_value("base58")
-                        .takes_value(true)
-                        .required(true)
-                        .help("transaction encoding"),
+                        .help("The transaction to decode"),
                 ),
         )
         .subcommand(
