@@ -40,17 +40,9 @@ pub enum UiAccountData {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    Binary,
-=======
-    Binary, // base-58 encoded string. SLOW! Avoid this encoding
->>>>>>> 757e147b3... Rework UiAccountData encode/decode such that it works from Rust
-=======
     Binary, // Legacy. Retained for RPC backwards compatibility
     Base58,
     Base64,
->>>>>>> adc984a22... Rename Binary64 to Base64.  Establish Base58 encoding
     JsonParsed,
 }
 

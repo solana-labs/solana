@@ -10,16 +10,8 @@ use crate::{
     validator_info::*,
     vote::*,
 };
-<<<<<<< HEAD
-<<<<<<< HEAD
 use chrono::prelude::*;
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-=======
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, value_t_or_exit};
->>>>>>> 2ebc68a9e... decode-transaction now supports binary64
-=======
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
->>>>>>> 757e147b3... Rework UiAccountData encode/decode such that it works from Rust
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
