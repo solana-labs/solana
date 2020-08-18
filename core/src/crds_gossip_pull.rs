@@ -194,7 +194,6 @@ impl CrdsGossipPull {
                 v.id != *self_id
                     && ContactInfo::is_valid_address(&v.gossip)
                     && (self_shred_version == 0
-                        || v.shred_version == 0
                         || self_shred_version == v.shred_version)
             })
             .map(|item| {

@@ -344,9 +344,7 @@ impl CrdsGossipPush {
             .filter(|(info, _)| {
                 info.id != *self_id
                     && ContactInfo::is_valid_address(&info.gossip)
-                    && (self_shred_version == 0
-                        || info.shred_version == 0
-                        || self_shred_version == info.shred_version)
+                    && self_shred_version == info.shred_version
             })
             .map(|(info, value)| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
