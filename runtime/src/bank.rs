@@ -474,9 +474,6 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
-        if bank.operating_mode == Some(OperatingMode::Stable) {
-            bank.message_processor.set_cross_program_support(false);
-        }
         bank
     }
 
