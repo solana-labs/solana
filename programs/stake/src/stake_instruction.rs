@@ -131,6 +131,13 @@ pub enum StakeInstruction {
     ///   3. [] Stake history sysvar that carries stake warmup/cooldown history
     ///   4. [SIGNER] Stake authority
     Merge,
+
+    /// Authorize a key to manage stake or withdrawal with a derived key
+    ///
+    /// # Account references
+    ///   0. [WRITE] Stake account to be updated
+    ///   1. [SIGNER] Base key of stake or withdraw authority
+    AuthorizeWithSeed(Pubkey, StakeAuthorize, String),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -341,6 +348,25 @@ pub fn authorize(
     )
 }
 
+pub fn authorize_with_seed(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authorized_pubkey: &Pubkey,
+    stake_authorize: StakeAuthorize,
+    seed: String,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
+
+    Instruction::new(
+        id(),
+        &StakeInstruction::AuthorizeWithSeed(*new_authorized_pubkey, stake_authorize, seed),
+        account_metas,
+    )
+}
+
 pub fn delegate_stake(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
@@ -421,6 +447,10 @@ pub fn process_instruction(
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &signers)
+        }
+        StakeInstruction::AuthorizeWithSeed(authorized_pubkey, stake_authorize, seed) => {
+            let base = next_keyed_account(keyed_accounts)?;
+            me.authorize_with_seed(&authorized_pubkey, stake_authorize, &base, &seed)
         }
         StakeInstruction::DelegateStake => {
             let vote = next_keyed_account(keyed_accounts)?;

@@ -560,6 +560,13 @@ pub trait StakeAccount {
         stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
+    fn authorize_with_seed(
+        &self,
+        authority: &Pubkey,
+        stake_authorize: StakeAuthorize,
+        base: &KeyedAccount,
+        seed: &str,
+    ) -> Result<(), InstructionError>;
     fn delegate(
         &self,
         vote_account: &KeyedAccount,
@@ -644,6 +651,19 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
+    }
+    fn authorize_with_seed(
+        &self,
+        authority: &Pubkey,
+        stake_authorize: StakeAuthorize,
+        base: &KeyedAccount,
+        seed: &str,
+    ) -> Result<(), InstructionError> {
+        let mut signers = HashSet::default();
+        if let Some(base_pubkey) = base.signer_key() {
+            signers.insert(Pubkey::create_with_seed(base_pubkey, seed, &id())?);
+        }
+        self.authorize(&authority, stake_authorize, &signers)
     }
     fn delegate(
         &self,
@@ -2674,6 +2694,83 @@ mod tests {
                 None,
             ),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn test_authorize_with_seed() {
+        let base_pubkey = Pubkey::new_rand();
+        let seed = "42";
+        let withdrawer_pubkey = Pubkey::create_with_seed(&base_pubkey, &seed, &id()).unwrap();
+        let stake_lamports = 42;
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta::auto(&withdrawer_pubkey)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let base_account = Account::new_ref(1, 0, &id());
+        let base_keyed_account = KeyedAccount::new(&base_pubkey, true, &base_account);
+
+        let stake_keyed_account = KeyedAccount::new(&withdrawer_pubkey, true, &stake_account);
+
+        let stake_pubkey = Pubkey::new_rand();
+
+        // Wrong seed
+        assert_eq!(
+            stake_keyed_account.authorize_with_seed(
+                &stake_pubkey,
+                StakeAuthorize::Staker,
+                &base_keyed_account,
+                &""
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Wrong base
+        assert_eq!(
+            stake_keyed_account.authorize_with_seed(
+                &stake_pubkey,
+                StakeAuthorize::Staker,
+                &stake_keyed_account,
+                &seed
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Set stake authority
+        assert_eq!(
+            stake_keyed_account.authorize_with_seed(
+                &stake_pubkey,
+                StakeAuthorize::Staker,
+                &base_keyed_account,
+                &seed
+            ),
+            Ok(())
+        );
+
+        // Set withdraw authority
+        assert_eq!(
+            stake_keyed_account.authorize_with_seed(
+                &stake_pubkey,
+                StakeAuthorize::Withdrawer,
+                &base_keyed_account,
+                &seed
+            ),
+            Ok(())
+        );
+
+        // No longer withdraw authority
+        assert_eq!(
+            stake_keyed_account.authorize_with_seed(
+                &stake_pubkey,
+                StakeAuthorize::Withdrawer,
+                &stake_keyed_account,
+                &seed
+            ),
+            Err(InstructionError::MissingRequiredSignature)
         );
     }
 
