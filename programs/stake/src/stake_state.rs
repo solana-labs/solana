@@ -789,8 +789,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Initialized(meta) => meta,
             _ => return Err(InstructionError::InvalidAccountData),
         };
-        // Authorized staker is allowed to split/merge accounts
-        meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
         let source_meta = match source_stake.state()? {
             StakeState::Stake(meta, stake) => {
@@ -804,8 +802,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             _ => return Err(InstructionError::InvalidAccountData),
         };
 
-        // Meta must match for both accounts
-        if meta != source_meta {
+        // Authorized staker of source is allowed to split/merge accounts
+        source_meta
+            .authorized
+            .check(signers, StakeAuthorize::Staker)?;
+
+        // Withdrawer and lockup must match for both accounts
+        if meta.authorized.withdrawer != source_meta.authorized.withdrawer
+            || meta.lockup != source_meta.lockup
+        {
             return Err(StakeError::MergeMismatch.into());
         }
 
@@ -3161,12 +3166,16 @@ mod tests {
 
         let signers = vec![authorized_pubkey].into_iter().collect();
 
+        let mut dest_meta = Meta::auto(&authorized_pubkey);
+        dest_meta.authorized.staker = Pubkey::new_rand();
+
         for state in &[
             StakeState::Initialized(Meta::auto(&authorized_pubkey)),
             StakeState::Stake(
                 Meta::auto(&authorized_pubkey),
                 Stake::just_stake(stake_lamports),
             ),
+            StakeState::Initialized(dest_meta),
         ] {
             for source_state in &[
                 StakeState::Initialized(Meta::auto(&authorized_pubkey)),
@@ -3237,16 +3246,16 @@ mod tests {
         let wrong_signers = vec![wrong_authorized_pubkey].into_iter().collect();
 
         for state in &[
-            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
+            StakeState::Initialized(Meta::auto(&wrong_authorized_pubkey)),
             StakeState::Stake(
-                Meta::auto(&authorized_pubkey),
+                Meta::auto(&wrong_authorized_pubkey),
                 Stake::just_stake(stake_lamports),
             ),
         ] {
             for source_state in &[
-                StakeState::Initialized(Meta::auto(&wrong_authorized_pubkey)),
+                StakeState::Initialized(Meta::auto(&authorized_pubkey)),
                 StakeState::Stake(
-                    Meta::auto(&wrong_authorized_pubkey),
+                    Meta::auto(&authorized_pubkey),
                     Stake::just_stake(stake_lamports),
                 ),
             ] {
