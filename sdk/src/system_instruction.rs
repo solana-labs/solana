@@ -197,6 +197,23 @@ pub enum SystemInstruction {
         /// Owner program account
         owner: Pubkey,
     },
+
+    /// Transfer lamports from a derived address
+    ///
+    /// # Account references
+    ///   0. [WRITE] Funding account
+    ///   1. [SIGNER] Base for funding account
+    ///   2. [WRITE] Recipient account
+    TransferWithSeed {
+        /// Acount to transfer
+        lamports: u64,
+
+        /// Seed to use to derive the funding account address
+        seed: String,
+
+        /// Owner to use to derive the funding account address
+        address_owner: Pubkey,
+    },
 }
 
 pub fn create_account(
@@ -289,6 +306,30 @@ pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Inst
     Instruction::new(
         system_program::id(),
         &SystemInstruction::Transfer { lamports },
+        account_metas,
+    )
+}
+
+pub fn transfer_with_seed(
+    from_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    base_pubkey: &Pubkey,
+    seed: String,
+    address_owner: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_pubkey, false),
+        AccountMeta::new(*base_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
+    ];
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::TransferWithSeed {
+            lamports,
+            seed,
+            address_owner: *address_owner,
+        },
         account_metas,
     )
 }
