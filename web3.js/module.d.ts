@@ -936,6 +936,7 @@ declare module '@solana/web3.js' {
       payer: Account,
       program: Account,
       elfBytes: Buffer | Uint8Array | Array<number>,
+      version?: number,
     ): Promise<PublicKey>;
   }
 
