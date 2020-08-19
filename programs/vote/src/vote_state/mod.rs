@@ -556,7 +556,7 @@ impl VoteState {
         timestamp: UnixTimestamp,
     ) -> Result<(), VoteError> {
         if (slot < self.last_timestamp.slot || timestamp < self.last_timestamp.timestamp)
-            || ((slot == self.last_timestamp.slot || timestamp == self.last_timestamp.timestamp)
+            || (slot == self.last_timestamp.slot
                 && BlockTimestamp { slot, timestamp } != self.last_timestamp
                 && self.last_timestamp.slot != 0)
         {
@@ -1743,10 +1743,6 @@ mod tests {
             Err(VoteError::TimestampTooOld)
         );
         assert_eq!(
-            vote_state.process_timestamp(slot + 1, timestamp),
-            Err(VoteError::TimestampTooOld)
-        );
-        assert_eq!(
             vote_state.process_timestamp(slot, timestamp + 1),
             Err(VoteError::TimestampTooOld)
         );
@@ -1755,14 +1751,22 @@ mod tests {
             vote_state.last_timestamp,
             BlockTimestamp { slot, timestamp }
         );
+        assert_eq!(vote_state.process_timestamp(slot + 1, timestamp), Ok(()));
         assert_eq!(
-            vote_state.process_timestamp(slot + 1, timestamp + 1),
+            vote_state.last_timestamp,
+            BlockTimestamp {
+                slot: slot + 1,
+                timestamp
+            }
+        );
+        assert_eq!(
+            vote_state.process_timestamp(slot + 2, timestamp + 1),
             Ok(())
         );
         assert_eq!(
             vote_state.last_timestamp,
             BlockTimestamp {
-                slot: slot + 1,
+                slot: slot + 2,
                 timestamp: timestamp + 1
             }
         );
