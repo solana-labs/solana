@@ -344,9 +344,7 @@ impl CrdsGossipPush {
             .filter(|(info, _)| {
                 info.id != *self_id
                     && ContactInfo::is_valid_address(&info.gossip)
-                    && (self_shred_version == 0
-                        || info.shred_version == 0
-                        || self_shred_version == info.shred_version)
+                    && self_shred_version == info.shred_version
             })
             .map(|(info, value)| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
@@ -641,28 +639,25 @@ mod test {
         crds.insert(me.clone(), 0).unwrap();
         crds.insert(spy.clone(), 0).unwrap();
         crds.insert(node_123.clone(), 0).unwrap();
-        crds.insert(node_456.clone(), 0).unwrap();
+        crds.insert(node_456, 0).unwrap();
 
-        // shred version 123 should ignore 456 nodes
+        // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
             .push_options(&crds, &me.label().pubkey(), 123, &stakes)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
-        assert_eq!(options.len(), 2);
-        assert!(options.contains(&spy.pubkey()));
+        assert_eq!(options.len(), 1);
+        assert!(!options.contains(&spy.pubkey()));
         assert!(options.contains(&node_123.pubkey()));
 
-        // spy nodes will see all
+        // spy nodes should not push to people on different shred versions
         let options = node
             .push_options(&crds, &spy.label().pubkey(), 0, &stakes)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
-        assert_eq!(options.len(), 3);
-        assert!(options.contains(&me.pubkey()));
-        assert!(options.contains(&node_123.pubkey()));
-        assert!(options.contains(&node_456.pubkey()));
+        assert!(options.is_empty());
     }
     #[test]
     fn test_new_push_messages() {
