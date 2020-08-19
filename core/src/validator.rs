@@ -849,6 +849,8 @@ impl TestValidator {
         } = create_genesis_config_with_leader_ex(
             mint_lamports,
             &contact_info.id,
+            &Keypair::new(),
+            &Pubkey::new_rand(),
             42,
             bootstrap_validator_lamports,
         );

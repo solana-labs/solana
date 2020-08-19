@@ -53,13 +53,22 @@ pub fn create_genesis_config_with_vote_accounts(
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
     stake: u64,
 ) -> GenesisConfigInfo {
-    let mut genesis_config_info = create_genesis_config(mint_lamports);
-    for validator_voting_keypairs in voting_keypairs {
+    assert!(!voting_keypairs.is_empty());
+    let mut genesis_config_info = create_genesis_config_with_leader_ex(
+        mint_lamports,
+        &voting_keypairs[0].borrow().node_keypair.pubkey(),
+        &voting_keypairs[0].borrow().vote_keypair,
+        &voting_keypairs[0].borrow().stake_keypair.pubkey(),
+        stake,
+        BOOTSTRAP_VALIDATOR_LAMPORTS,
+    );
+    for validator_voting_keypairs in &voting_keypairs[1..] {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
         let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
+        let node_account = Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id());
         let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
@@ -71,7 +80,8 @@ pub fn create_genesis_config_with_vote_accounts(
 
         // Put newly created accounts into genesis
         genesis_config_info.genesis_config.accounts.extend(vec![
-            (vote_pubkey, vote_account.clone()),
+            (node_pubkey, node_account),
+            (vote_pubkey, vote_account),
             (stake_pubkey, stake_account),
         ]);
     }
@@ -87,6 +97,8 @@ pub fn create_genesis_config_with_leader(
     create_genesis_config_with_leader_ex(
         mint_lamports,
         bootstrap_validator_pubkey,
+        &Keypair::new(),
+        &Pubkey::new_rand(),
         bootstrap_validator_stake_lamports,
         BOOTSTRAP_VALIDATOR_LAMPORTS,
     )
@@ -95,12 +107,12 @@ pub fn create_genesis_config_with_leader(
 pub fn create_genesis_config_with_leader_ex(
     mint_lamports: u64,
     bootstrap_validator_pubkey: &Pubkey,
+    bootstrap_validator_voting_keypair: &Keypair,
+    bootstrap_validator_staking_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
     bootstrap_validator_lamports: u64,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
-    let bootstrap_validator_voting_keypair = Keypair::new();
-    let bootstrap_validator_staking_keypair = Keypair::new();
 
     let bootstrap_validator_vote_account = vote_state::create_account(
         &bootstrap_validator_voting_keypair.pubkey(),
@@ -112,7 +124,7 @@ pub fn create_genesis_config_with_leader_ex(
     let rent = Rent::free();
 
     let bootstrap_validator_stake_account = stake_state::create_account(
-        &bootstrap_validator_staking_keypair.pubkey(),
+        bootstrap_validator_staking_pubkey,
         &bootstrap_validator_voting_keypair.pubkey(),
         &bootstrap_validator_vote_account,
         &rent,
@@ -133,7 +145,7 @@ pub fn create_genesis_config_with_leader_ex(
             bootstrap_validator_vote_account,
         ),
         (
-            bootstrap_validator_staking_keypair.pubkey(),
+            *bootstrap_validator_staking_pubkey,
             bootstrap_validator_stake_account,
         ),
     ]
@@ -154,6 +166,7 @@ pub fn create_genesis_config_with_leader_ex(
     GenesisConfigInfo {
         genesis_config,
         mint_keypair,
-        voting_keypair: bootstrap_validator_voting_keypair,
+        voting_keypair: Keypair::from_bytes(&bootstrap_validator_voting_keypair.to_bytes())
+            .unwrap(),
     }
 }
