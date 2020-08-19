@@ -137,18 +137,13 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    fn received_any_previous_leader_data(&self, slot: Slot) -> bool {
-        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
-            // Check if we have received any data in previous leader's slots
-            if let Ok(slot_meta) = self.blockstore.meta(i as Slot) {
-                if let Some(slot_meta) = slot_meta {
-                    slot_meta.received > 0
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
+    fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {
+        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|slot| {
+            // Check if the last slot Poh reset to was any of the
+            // previous leader's slots.
+            // If so, PoH is currently building on the previous leader's blocks
+            // If not, PoH is building on a different fork
+            slot == self.start_slot
         })
     }
 
@@ -167,13 +162,13 @@ impl PohRecorder {
         let target_tick_height = leader_first_tick_height.saturating_sub(1);
         let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
         let current_slot = self.tick_height / self.ticks_per_slot;
-        // we've approached target_tick_height OR poh was reset to run immediately
+        // We've approached target_tick_height OR poh was reset to run immediately
         // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
         self.tick_height >= target_tick_height
             || self.start_tick_height + self.grace_ticks == leader_first_tick_height
             || (self.tick_height >= ideal_target_tick_height
                 && (self.prev_slot_was_mine(current_slot)
-                    || !self.received_any_previous_leader_data(current_slot)))
+                    || !self.is_same_fork_as_previous_leader(current_slot)))
     }
 
     /// returns if leader slot has been reached, how many grace ticks were afforded,
@@ -1159,28 +1154,29 @@ mod tests {
             }
 
             poh_recorder.grace_ticks = grace_ticks;
-            // True, as previous leader did not transmit in its slots
-            assert_eq!(
-                poh_recorder.reached_leader_tick(new_tick_height + grace_ticks),
-                true
-            );
 
-            let mut parent_meta = SlotMeta::default();
-            parent_meta.received = 1;
-            poh_recorder
-                .blockstore
-                .put_meta_bytes(0, &serialize(&parent_meta).unwrap())
-                .unwrap();
+            // False, because the Poh was reset on slot 0, which
+            // is a block produced by the previous leader, so a grace
+            // period must be given
+            assert!(!poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
 
-            // False, as previous leader transmitted in one of its recent slots
-            // and grace ticks have not expired
-            assert_eq!(
-                poh_recorder.reached_leader_tick(new_tick_height + grace_ticks),
-                false
-            );
+            // Tick `NUM_CONSECUTIVE_LEADER_SLOTS` more times
+            let new_tick_height = 2 * NUM_CONSECUTIVE_LEADER_SLOTS * bank.ticks_per_slot();
+            for _ in 0..new_tick_height {
+                poh_recorder.tick();
+            }
+            // True, because
+            // 1) the Poh was reset on slot 0
+            // 2) Our slot starts at 2 * NUM_CONSECUTIVE_LEADER_SLOTS, which means
+            // none of the previous leader's `NUM_CONSECUTIVE_LEADER_SLOTS` were slots
+            // this Poh built on (previous leader was on different fork). Thus, skip the
+            // grace period.
+            assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
 
             // From the bootstrap validator's perspective, it should have reached
-            // the tick
+            // the tick because the previous slot was also it's own slot (all slots
+            // belong to the bootstrap leader b/c it's the only staked node!), and
+            // validators don't give grace periods if previous slot was also their own.
             poh_recorder.id = bootstrap_validator_id;
             assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
         }
