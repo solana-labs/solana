@@ -1076,8 +1076,7 @@ fn main() {
                 Arg::with_name("end_slot")
                     .index(2)
                     .value_name("SLOT")
-                    .required(true)
-                    .help("Ending slot to stop purging (inclusive)"),
+                    .help("Ending slot to stop purging (inclusive) [default: the highest slot in the ledger]"),
             )
             .arg(
                 Arg::with_name("no_compaction")
@@ -1705,14 +1704,41 @@ fn main() {
         }
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
-            let end_slot = value_t_or_exit!(arg_matches, "end_slot", Slot);
+            let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
             let no_compaction = arg_matches.is_present("no-compaction");
             let blockstore =
                 open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
+
+            let end_slot = match end_slot {
+                Some(end_slot) => end_slot,
+                None => match blockstore.slot_meta_iterator(start_slot) {
+                    Ok(metas) => {
+                        let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                        if slots.is_empty() {
+                            eprintln!("Purge range is empty");
+                            exit(1);
+                        }
+                        *slots.last().unwrap()
+                    }
+                    Err(err) => {
+                        eprintln!("Unable to read the Ledger: {:?}", err);
+                        exit(1);
+                    }
+                },
+            };
+
+            if end_slot < start_slot {
+                eprintln!(
+                    "end slot {} is less than start slot {}",
+                    end_slot, start_slot
+                );
+                exit(1);
+            }
+            println!("Purging data from slots {} to {}", start_slot, end_slot);
             if no_compaction {
-                blockstore.purge_and_compact_slots(start_slot, end_slot);
-            } else {
                 blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+            } else {
+                blockstore.purge_and_compact_slots(start_slot, end_slot);
             }
             blockstore.purge_from_next_slots(start_slot, end_slot);
         }
