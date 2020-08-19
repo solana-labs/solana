@@ -132,12 +132,14 @@ test('authorizeWithSeed', () => {
   const stakePubkey = new Account().publicKey;
   const authorizedBasePubkey = new Account().publicKey;
   const seed = 'test string';
+  const addressOwner = new Account().publicKey;
   const newAuthorizedPubkey = new Account().publicKey;
   const stakeAuthorizationType = StakeAuthorizationLayout.Staker;
   const params = {
     stakePubkey,
     authorizedBasePubkey,
     seed,
+    addressOwner,
     newAuthorizedPubkey,
     stakeAuthorizationType,
   };

@@ -566,6 +566,7 @@ pub trait StakeAccount {
         stake_authorize: StakeAuthorize,
         base: &KeyedAccount,
         seed: &str,
+        address_owner: &Pubkey,
     ) -> Result<(), InstructionError>;
     fn delegate(
         &self,
@@ -658,10 +659,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_authorize: StakeAuthorize,
         base: &KeyedAccount,
         seed: &str,
+        address_owner: &Pubkey,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::default();
         if let Some(base_pubkey) = base.signer_key() {
-            signers.insert(Pubkey::create_with_seed(base_pubkey, seed, &id())?);
+            signers.insert(Pubkey::create_with_seed(base_pubkey, seed, address_owner)?);
         }
         self.authorize(&authority, stake_authorize, &signers)
     }
@@ -2724,7 +2726,8 @@ mod tests {
                 &stake_pubkey,
                 StakeAuthorize::Staker,
                 &base_keyed_account,
-                &""
+                &"",
+                &id(),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2735,7 +2738,8 @@ mod tests {
                 &stake_pubkey,
                 StakeAuthorize::Staker,
                 &stake_keyed_account,
-                &seed
+                &seed,
+                &id(),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2746,7 +2750,8 @@ mod tests {
                 &stake_pubkey,
                 StakeAuthorize::Staker,
                 &base_keyed_account,
-                &seed
+                &seed,
+                &id(),
             ),
             Ok(())
         );
@@ -2757,7 +2762,8 @@ mod tests {
                 &stake_pubkey,
                 StakeAuthorize::Withdrawer,
                 &base_keyed_account,
-                &seed
+                &seed,
+                &id(),
             ),
             Ok(())
         );
@@ -2768,7 +2774,8 @@ mod tests {
                 &stake_pubkey,
                 StakeAuthorize::Withdrawer,
                 &stake_keyed_account,
-                &seed
+                &seed,
+                &id(),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );

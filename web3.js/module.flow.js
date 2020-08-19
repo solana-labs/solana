@@ -708,6 +708,7 @@ declare module '@solana/web3.js' {
     stakePubkey: PublicKey,
     authorizedBasePubkey: PublicKey,
     seed: string,
+    addressOwner: PublicKey;
     newAuthorizedPubkey: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
   |};

@@ -130,6 +130,7 @@ export type AuthorizeStakeParams = {|
  * @property {PublicKey} stakePubkey
  * @property {PublicKey} authorizedBasePubkey
  * @property {string} seed
+ * @property {PublicKey} addressOwner
  * @property {PublicKey} newAuthorizedPubkey
  * @property {StakeAuthorizationType} stakeAuthorizationType
  */
@@ -137,6 +138,7 @@ export type AuthorizeWithSeedStakeParams = {|
   stakePubkey: PublicKey,
   authorizedBasePubkey: PublicKey,
   seed: string,
+  addressOwner: PublicKey,
   newAuthorizedPubkey: PublicKey,
   stakeAuthorizationType: StakeAuthorizationType,
 |};
@@ -287,7 +289,7 @@ export class StakeInstruction {
   ): AuthorizeWithSeedStakeParams {
     this.checkProgramId(instruction.programId);
     this.checkKeyLength(instruction.keys, 2);
-    const {newAuthorized, stakeAuthorizationType, seed} = decodeData(
+    const {newAuthorized, stakeAuthorizationType, seed, addressOwner} = decodeData(
       STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed,
       instruction.data,
     );
@@ -296,6 +298,7 @@ export class StakeInstruction {
       stakePubkey: instruction.keys[0].pubkey,
       authorizedBasePubkey: instruction.keys[1].pubkey,
       seed: seed,
+      addressOwner: new PublicKey(addressOwner),
       newAuthorizedPubkey: new PublicKey(newAuthorized),
       stakeAuthorizationType: {
         index: stakeAuthorizationType,
@@ -436,6 +439,7 @@ export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze({
       Layout.publicKey('newAuthorized'),
       BufferLayout.u32('stakeAuthorizationType'),
       Layout.rustString('seed'),
+      Layout.publicKey('addressOwner'),
     ]),
   },
 });
@@ -610,6 +614,7 @@ export class StakeProgram {
       stakePubkey,
       authorizedBasePubkey,
       seed,
+      addressOwner,
       newAuthorizedPubkey,
       stakeAuthorizationType,
     } = params;
@@ -619,6 +624,7 @@ export class StakeProgram {
       newAuthorized: newAuthorizedPubkey.toBuffer(),
       stakeAuthorizationType: stakeAuthorizationType.index,
       seed: seed,
+      addressOwner: addressOwner.toBuffer(),
     });
 
     return new Transaction().add({
