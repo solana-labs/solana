@@ -1684,8 +1684,6 @@ Subscribe to a transaction signature to receive notification when the transactio
 - `<string>` - Transaction Signature, as base-58 encoded string
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
-  Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
-
 #### Results:
 
 - `integer` - subscription id \(needed to unsubscribe\)
