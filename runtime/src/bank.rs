@@ -556,15 +556,14 @@ impl Bank {
         );
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-        if parent.epoch() < new.epoch() {
-            new.refresh_programs_and_inflation();
-        }
-
         new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
             new.ancestors.insert(p.slot(), i + 1);
         });
+        if parent.epoch() < new.epoch() {
+            new.refresh_programs_and_inflation();
+        }
 
         new.update_slot_hashes();
         new.update_rewards(parent.epoch());
@@ -574,6 +573,7 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
+
         new
     }
 
