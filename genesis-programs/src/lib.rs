@@ -66,13 +66,6 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Program> {
                 Program::Native(solana_budget_program!()),
                 Program::Native(solana_exchange_program!()),
             ]);
-
-            #[allow(clippy::absurd_extreme_comparisons)]
-            if epoch >= std::u64::MAX {
-                // The epoch of std::u64::MAX is a placeholder and is expected
-                // to be reduced in a future network update.
-                programs.extend(vec![Program::BuiltinLoader(solana_bpf_loader_program!())]);
-            }
         }
         OperatingMode::Preview => {
             #[allow(clippy::absurd_extreme_comparisons)]
@@ -86,6 +79,11 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Program> {
             }
         }
         OperatingMode::Stable => {
+            if epoch >= 34 {
+                programs.extend(vec![Program::BuiltinLoader(
+                    solana_bpf_loader_deprecated_program!(),
+                )]);
+            }
             // at which epoch, bpf_loader_program is enabled??
             #[allow(clippy::absurd_extreme_comparisons)]
             if epoch >= std::u64::MAX {
