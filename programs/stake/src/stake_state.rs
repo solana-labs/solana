@@ -562,11 +562,11 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
     fn authorize_with_seed(
         &self,
-        authority: &Pubkey,
+        authority_address: &Pubkey,
+        authority_base: &KeyedAccount,
+        authority_seed: &str,
+        authority_owner: &Pubkey,
         stake_authorize: StakeAuthorize,
-        base: &KeyedAccount,
-        seed: &str,
-        address_owner: &Pubkey,
     ) -> Result<(), InstructionError>;
     fn delegate(
         &self,
@@ -655,17 +655,21 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
     fn authorize_with_seed(
         &self,
-        authority: &Pubkey,
+        authority_address: &Pubkey,
+        authority_base: &KeyedAccount,
+        authority_seed: &str,
+        authority_owner: &Pubkey,
         stake_authorize: StakeAuthorize,
-        base: &KeyedAccount,
-        seed: &str,
-        address_owner: &Pubkey,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::default();
-        if let Some(base_pubkey) = base.signer_key() {
-            signers.insert(Pubkey::create_with_seed(base_pubkey, seed, address_owner)?);
+        if let Some(base_pubkey) = authority_base.signer_key() {
+            signers.insert(Pubkey::create_with_seed(
+                base_pubkey,
+                authority_seed,
+                authority_owner,
+            )?);
         }
-        self.authorize(&authority, stake_authorize, &signers)
+        self.authorize(&authority_address, stake_authorize, &signers)
     }
     fn delegate(
         &self,
@@ -2724,10 +2728,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_pubkey,
-                StakeAuthorize::Staker,
                 &base_keyed_account,
                 &"",
                 &id(),
+                StakeAuthorize::Staker,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2736,10 +2740,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_pubkey,
-                StakeAuthorize::Staker,
                 &stake_keyed_account,
                 &seed,
                 &id(),
+                StakeAuthorize::Staker,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -2748,10 +2752,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_pubkey,
-                StakeAuthorize::Staker,
                 &base_keyed_account,
                 &seed,
                 &id(),
+                StakeAuthorize::Staker,
             ),
             Ok(())
         );
@@ -2760,10 +2764,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_pubkey,
-                StakeAuthorize::Withdrawer,
                 &base_keyed_account,
                 &seed,
                 &id(),
+                StakeAuthorize::Withdrawer,
             ),
             Ok(())
         );
@@ -2772,10 +2776,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.authorize_with_seed(
                 &stake_pubkey,
-                StakeAuthorize::Withdrawer,
                 &stake_keyed_account,
                 &seed,
                 &id(),
+                StakeAuthorize::Withdrawer,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );

@@ -209,10 +209,10 @@ pub enum SystemInstruction {
         lamports: u64,
 
         /// Seed to use to derive the funding account address
-        seed: String,
+        from_seed: String,
 
         /// Owner to use to derive the funding account address
-        address_owner: Pubkey,
+        from_owner: Pubkey,
     },
 }
 
@@ -312,23 +312,23 @@ pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Inst
 
 pub fn transfer_with_seed(
     from_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
-    base_pubkey: &Pubkey,
-    seed: String,
-    address_owner: &Pubkey,
+    from_base: &Pubkey,
+    from_seed: String,
+    from_owner: &Pubkey,
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, false),
-        AccountMeta::new(*base_pubkey, true),
+        AccountMeta::new(*from_base, true),
         AccountMeta::new(*to_pubkey, false),
     ];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::TransferWithSeed {
             lamports,
-            seed,
-            address_owner: *address_owner,
+            from_seed,
+            from_owner: *from_owner,
         },
         account_metas,
     )

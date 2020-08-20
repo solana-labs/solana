@@ -128,17 +128,17 @@ export type AuthorizeStakeParams = {|
  * Authorize stake instruction params using a derived key
  * @typedef {Object} AuthorizeWithSeedStakeParams
  * @property {PublicKey} stakePubkey
- * @property {PublicKey} authorizedBasePubkey
- * @property {string} seed
- * @property {PublicKey} addressOwner
+ * @property {PublicKey} authorityBase
+ * @property {string} authoritySeed
+ * @property {PublicKey} authorityOwner
  * @property {PublicKey} newAuthorizedPubkey
  * @property {StakeAuthorizationType} stakeAuthorizationType
  */
 export type AuthorizeWithSeedStakeParams = {|
   stakePubkey: PublicKey,
-  authorizedBasePubkey: PublicKey,
-  seed: string,
-  addressOwner: PublicKey,
+  authorityBase: PublicKey,
+  authoritySeed: string,
+  authorityOwner: PublicKey,
   newAuthorizedPubkey: PublicKey,
   stakeAuthorizationType: StakeAuthorizationType,
 |};
@@ -289,16 +289,16 @@ export class StakeInstruction {
   ): AuthorizeWithSeedStakeParams {
     this.checkProgramId(instruction.programId);
     this.checkKeyLength(instruction.keys, 2);
-    const {newAuthorized, stakeAuthorizationType, seed, addressOwner} = decodeData(
+    const {newAuthorized, stakeAuthorizationType, authoritySeed, authorityOwner} = decodeData(
       STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed,
       instruction.data,
     );
 
     return {
       stakePubkey: instruction.keys[0].pubkey,
-      authorizedBasePubkey: instruction.keys[1].pubkey,
-      seed: seed,
-      addressOwner: new PublicKey(addressOwner),
+      authorityBase: instruction.keys[1].pubkey,
+      authoritySeed: authoritySeed,
+      authorityOwner: new PublicKey(authorityOwner),
       newAuthorizedPubkey: new PublicKey(newAuthorized),
       stakeAuthorizationType: {
         index: stakeAuthorizationType,
@@ -438,8 +438,8 @@ export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze({
       BufferLayout.u32('instruction'),
       Layout.publicKey('newAuthorized'),
       BufferLayout.u32('stakeAuthorizationType'),
-      Layout.rustString('seed'),
-      Layout.publicKey('addressOwner'),
+      Layout.rustString('authoritySeed'),
+      Layout.publicKey('authorityOwner'),
     ]),
   },
 });
@@ -612,9 +612,9 @@ export class StakeProgram {
   static authorizeWithSeed(params: AuthorizeWithSeedStakeParams): Transaction {
     const {
       stakePubkey,
-      authorizedBasePubkey,
-      seed,
-      addressOwner,
+      authorityBase,
+      authoritySeed,
+      authorityOwner,
       newAuthorizedPubkey,
       stakeAuthorizationType,
     } = params;
@@ -623,14 +623,14 @@ export class StakeProgram {
     const data = encodeData(type, {
       newAuthorized: newAuthorizedPubkey.toBuffer(),
       stakeAuthorizationType: stakeAuthorizationType.index,
-      seed: seed,
-      addressOwner: addressOwner.toBuffer(),
+      authoritySeed: authoritySeed,
+      authorityOwner: authorityOwner.toBuffer(),
     });
 
     return new Transaction().add({
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
-        {pubkey: authorizedBasePubkey, isSigner: true, isWritable: false},
+        {pubkey: authorityBase, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
       data,

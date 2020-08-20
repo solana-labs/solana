@@ -706,9 +706,9 @@ declare module '@solana/web3.js' {
 
   declare export type AuthorizeWithSeedStakeParams = {|
     stakePubkey: PublicKey,
-    authorizedBasePubkey: PublicKey,
-    seed: string,
-    addressOwner: PublicKey;
+    authorityBase: PublicKey,
+    authoritySeed: string,
+    authorityOwner: PublicKey;
     newAuthorizedPubkey: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
   |};

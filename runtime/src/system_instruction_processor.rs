@@ -183,9 +183,9 @@ fn transfer(from: &KeyedAccount, to: &KeyedAccount, lamports: u64) -> Result<(),
 
 fn transfer_with_seed(
     from: &KeyedAccount,
-    base: &KeyedAccount,
-    seed: &str,
-    address_owner: &Pubkey,
+    from_base: &KeyedAccount,
+    from_seed: &str,
+    from_owner: &Pubkey,
     to: &KeyedAccount,
     lamports: u64,
 ) -> Result<(), InstructionError> {
@@ -193,12 +193,14 @@ fn transfer_with_seed(
         return Ok(());
     }
 
-    if base.signer_key().is_none() {
+    if from_base.signer_key().is_none() {
         debug!("Transfer: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if *from.unsigned_key() != Pubkey::create_with_seed(base.unsigned_key(), seed, address_owner)? {
+    if *from.unsigned_key()
+        != Pubkey::create_with_seed(from_base.unsigned_key(), from_seed, from_owner)?
+    {
         return Err(SystemError::AddressWithSeedMismatch.into());
     }
 
@@ -254,13 +256,13 @@ pub fn process_instruction(
         }
         SystemInstruction::TransferWithSeed {
             lamports,
-            seed,
-            address_owner,
+            from_seed,
+            from_owner,
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let base = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            transfer_with_seed(from, base, &seed, &address_owner, to, lamports)
+            transfer_with_seed(from, base, &from_seed, &from_owner, to, lamports)
         }
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
@@ -910,10 +912,10 @@ mod tests {
     fn test_transfer_with_seed() {
         let base = Pubkey::new_rand();
         let base_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
-        let base_keyed_account = KeyedAccount::new(&base, true, &base_account);
-        let seed = "42";
-        let address_owner = system_program::id();
-        let from = Pubkey::create_with_seed(&base, seed, &address_owner).unwrap();
+        let from_base_keyed_account = KeyedAccount::new(&base, true, &base_account);
+        let from_seed = "42";
+        let from_owner = system_program::id();
+        let from = Pubkey::create_with_seed(&base, from_seed, &from_owner).unwrap();
         let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new(&[3; 32]);
         let to_account = Account::new_ref(1, 0, &to); // account owner should not matter
@@ -921,9 +923,9 @@ mod tests {
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
         transfer_with_seed(
             &from_keyed_account,
-            &base_keyed_account,
-            &seed,
-            &address_owner,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
             &to_keyed_account,
             50,
         )
@@ -937,9 +939,9 @@ mod tests {
         let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
         let result = transfer_with_seed(
             &from_keyed_account,
-            &base_keyed_account,
-            &seed,
-            &address_owner,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
             &to_keyed_account,
             100,
         );
@@ -951,9 +953,9 @@ mod tests {
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
         assert!(transfer_with_seed(
             &from_keyed_account,
-            &base_keyed_account,
-            &seed,
-            &address_owner,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
             &to_keyed_account,
             0,
         )
