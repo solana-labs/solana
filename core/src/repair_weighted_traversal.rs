@@ -151,6 +151,7 @@ pub mod test {
     use super::*;
     use solana_ledger::{get_tmp_ledger_path, shred::Shred};
     use solana_runtime::bank_utils;
+    use solana_sdk::hash::Hash;
     use trees::tr;
 
     #[test]
@@ -247,7 +248,13 @@ pub mod test {
         repairs = vec![];
         let best_overall_slot = heaviest_subtree_fork_choice.best_overall_slot();
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 4);
-        blockstore.add_tree(tr(best_overall_slot) / (tr(6) / tr(7)), true, false);
+        blockstore.add_tree(
+            tr(best_overall_slot) / (tr(6) / tr(7)),
+            true,
+            false,
+            2,
+            Hash::default(),
+        );
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -301,7 +308,7 @@ pub mod test {
         // Adding incomplete children with higher weighted parents, even if
         // the parents are complete should still be repaired
         repairs = vec![];
-        blockstore.add_tree(tr(2) / (tr(8)), true, false);
+        blockstore.add_tree(tr(2) / (tr(8)), true, false, 2, Hash::default());
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -323,7 +330,7 @@ pub mod test {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
         // Add a branch to slot 2, make sure it doesn't repair child
         // 4 again when the Unvisited(2) event happens
-        blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false);
+        blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
         let mut repairs = vec![];
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
@@ -369,7 +376,7 @@ pub mod test {
         // Adding slot 2 to ignore should not remove its unexplored children from
         // the repair set
         repairs = vec![];
-        blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false);
+        blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
         ignore_set.insert(2);
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
@@ -421,7 +428,7 @@ pub mod test {
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5))));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.add_tree(forks.clone(), false, false);
+        blockstore.add_tree(forks.clone(), false, false, 2, Hash::default());
 
         (blockstore, HeaviestSubtreeForkChoice::new_from_tree(forks))
     }
