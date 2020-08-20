@@ -17,8 +17,13 @@ lazy_static = "1.4.0"
 solana-account-decoder = { path = "../account-decoder", version = "1.2.26" }
 solana-sdk = { path = "../sdk", version = "1.2.26" }
 spl-memo-v1-0 = { package = "spl-memo", version = "1.0.7", features = ["skip-no-mangle"] }
+<<<<<<< HEAD
 spl-token-v1-0 = { package = "spl-token", version = "1.0.6", features = ["skip-no-mangle"] }
 serde = "1.0.110"
+=======
+spl-token-v1-0 = { package = "spl-token", version = "1.0.8", features = ["skip-no-mangle"] }
+serde = "1.0.112"
+>>>>>>> 2fd2aceeb... Bump spl-token to clean up magic number (#11726)
 serde_derive = "1.0.103"
 serde_json = "1.0.54"
 thiserror = "1.0"
