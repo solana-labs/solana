@@ -112,14 +112,6 @@ pub fn get_native_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<(
     native_programs
 }
 
-fn recheck_cross_program_support(bank: &mut Bank) {
-    if OperatingMode::Stable == bank.operating_mode() {
-        bank.set_cross_program_support(bank.epoch() >= 63);
-    } else {
-        bank.set_cross_program_support(true);
-    }
-}
-
 pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpochCallback {
     Box::new(move |bank: &mut Bank| {
         // Be careful to add arbitrary logic here; this should be idempotent and can be called
@@ -148,8 +140,6 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
 
         bank.set_max_invoke_depth(DEFAULT_MAX_INVOKE_DEPTH);
         bank.set_compute_budget(DEFAULT_COMPUTE_BUDGET);
-
-        recheck_cross_program_support(bank);
     })
 }
 
