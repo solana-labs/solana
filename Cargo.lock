@@ -4638,12 +4638,12 @@ dependencies = [
 
 [[package]]
 name = "spl-token"
-version = "1.0.6"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07c8482ae4aac6bb7d73aef79df5fb403a16a0cfbe200442532cff6b98613383"
+checksum = "7e8bee8b59279b46d0627490b544c3bc38e440ff4da9851a34a26ab0a24bfe7d"
 dependencies = [
  "cbindgen",
- "num-derive 0.2.5",
+ "num-derive 0.3.0",
  "num-traits",
  "remove_dir_all",
  "solana-sdk 1.2.17",
