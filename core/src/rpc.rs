@@ -1383,9 +1383,7 @@ fn get_token_program_id_and_mint(
 /// program_id) and decimals
 fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
     if mint == &spl_token_v1_0_native_mint() {
-        // Uncomment the following once spl_token is bumped to a version that includes native_mint::DECIMALS
-        // Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
-        Ok((spl_token_id_v1_0(), 9))
+        Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
     } else {
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
