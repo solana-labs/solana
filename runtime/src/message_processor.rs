@@ -364,6 +364,10 @@ impl MessageProcessor {
         self.is_cross_program_supported = is_supported;
     }
 
+    pub fn get_cross_program_support(&mut self) -> bool {
+        self.is_cross_program_supported
+    }
+
     /// Create the KeyedAccounts that will be passed to the program
     fn create_keyed_accounts<'a>(
         message: &'a Message,

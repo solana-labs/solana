@@ -3177,6 +3177,16 @@ impl Bank {
         for program in get_builtins(self.operating_mode(), self.epoch()) {
             self.add_builtin(&program.name, program.id, program.entrypoint);
         }
+
+        self.recheck_cross_program_support();
+    }
+
+    fn recheck_cross_program_support(self: &mut Bank) {
+        if OperatingMode::Stable == self.operating_mode() {
+            self.set_cross_program_support(self.epoch() >= 63);
+        } else {
+            self.set_cross_program_support(true);
+        }
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
@@ -8091,5 +8101,18 @@ mod tests {
             Err(TransactionError::ClusterMaintenance)
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
+    }
+
+    #[test]
+    fn test_finish_init() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let mut bank = Bank::new(&genesis_config);
+        bank.message_processor = MessageProcessor::default();
+        bank.message_processor.set_cross_program_support(false);
+
+        // simulate bank is just after deserialized from snapshot
+        bank.finish_init();
+
+        assert_eq!(bank.message_processor.get_cross_program_support(), true);
     }
 }
