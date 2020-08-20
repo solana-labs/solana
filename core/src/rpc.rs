@@ -630,7 +630,7 @@ impl JsonRpcRequestProcessor {
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok())
         } else {
-            Ok(None)
+            Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
     }
 
@@ -702,7 +702,7 @@ impl JsonRpcRequestProcessor {
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
-            Ok(None)
+            Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
     }
 
@@ -4499,7 +4499,7 @@ pub mod tests {
             slot
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = r#"{"jsonrpc":"2.0","result":null,"id":1}"#;
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32004,"message":"Block not available for slot 12345"},"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
