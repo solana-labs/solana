@@ -346,7 +346,7 @@ impl Tower {
     fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
         if current_slot > self.last_timestamp.slot {
             let timestamp = Utc::now().timestamp();
-            if timestamp > self.last_timestamp.timestamp {
+            if timestamp >= self.last_timestamp.timestamp {
                 self.last_timestamp = BlockTimestamp {
                     slot: current_slot,
                     timestamp,
