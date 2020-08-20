@@ -907,7 +907,7 @@ fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
         .vote_accounts()
         .into_iter()
         .filter_map(|(key, (stake, account))| {
-            if lamports == 0 {
+            if stake == 0 {
                 return None;
             }
 
@@ -924,7 +924,7 @@ fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
             vote_state
                 .unwrap()
                 .root_slot
-                .map(|root_slot| (root_slot, lamports))
+                .map(|root_slot| (root_slot, stake))
         })
         .collect();
 
@@ -1631,7 +1631,7 @@ pub mod tests {
         let epoch_schedule = get_epoch_schedule(&genesis_config, Vec::new());
         let last_slot = epoch_schedule.get_last_slot_in_epoch(1);
 
-        // Create a single chain of slots with all indexes in the range [0, v+ 1]
+        // Create a single chain of slots with all indexes in the range [0, v + 1]
         for i in 1..=last_slot + 1 {
             last_entry_hash = fill_blockstore_slot_with_ticks(
                 &blockstore,
@@ -3013,7 +3013,7 @@ pub mod tests {
             .get(last_main_fork_slot - 1)
             .unwrap()
             .last_blockhash();
-        let slots: Vec<_> = (expected_root_slot..=last_main_fork_slot - 1).collect();
+        let slots: Vec<_> = (expected_root_slot..last_main_fork_slot).collect();
         let vote_tx = vote_transaction::new_vote_transaction(
             slots,
             last_vote_bank_hash,
