@@ -472,11 +472,6 @@ impl Bank {
             }
         }
 
-        // HOTFIX
-        if new.epoch() >= 63 {
-            new.set_cross_program_support(true)
-        }
-
         new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
