@@ -29,6 +29,8 @@ import { intoTransactionInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
 
+const AUTO_REFRESH_TIMEOUT = 2000;
+
 type Props = { signature: TransactionSignature };
 export function TransactionDetailsPage({ signature: raw }: Props) {
   let signature: TransactionSignature | undefined;
@@ -67,9 +69,10 @@ function StatusCard({ signature }: Props) {
   const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
+  const [isAutoRefresh, setIsAutoRefresh] = React.useState(false);
   const refresh = React.useCallback(
-    (signature: string) => {
-      fetchStatus(signature);
+    (signature: string, isAutoRefresh: boolean = false) => {
+      fetchStatus(signature, isAutoRefresh);
       fetchDetails(signature);
     },
     [fetchStatus, fetchDetails]
@@ -82,7 +85,10 @@ function StatusCard({ signature }: Props) {
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!status || status.status === FetchStatus.Fetching) {
+  if (
+    !status ||
+    (status.status === FetchStatus.Fetching && !status.isAutoRefresh)
+  ) {
     return <LoadingCard />;
   } else if (status.status === FetchStatus.FetchFailed) {
     return (
@@ -102,6 +108,15 @@ function StatusCard({ signature }: Props) {
   }
 
   const { info } = status.data;
+
+  if (!isAutoRefresh && info.confirmations !== "max") {
+    setIsAutoRefresh(true);
+    setTimeout(() => {
+      refresh(signature, true);
+      setIsAutoRefresh(false);
+    }, AUTO_REFRESH_TIMEOUT);
+  }
+
   const renderResult = () => {
     let statusClass = "success";
     let statusText = "Success";
@@ -231,14 +246,20 @@ function AccountsCard({ signature }: Props) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details) {
+  } else if (
+    !details ||
+    (status.isAutoRefresh && status.data.info.confirmations !== "max")
+  ) {
     return (
       <ErrorCard
         retry={refreshStatus}
         text="Details are not available until the transaction reaches MAX confirmations"
       />
     );
-  } else if (details.status === FetchStatus.Fetching) {
+  } else if (
+    details.status === FetchStatus.Fetching &&
+    !details.isAutoRefresh
+  ) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
