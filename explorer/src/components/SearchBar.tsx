@@ -40,6 +40,11 @@ export function SearchBar() {
             blurInputOnSelect
             onMenuClose={() => selectRef.current?.blur()}
             onChange={onChange}
+            styles={{
+              /* work around for https://github.com/JedWatson/react-select/issues/3857 */
+              placeholder: (style) => ({ ...style, pointerEvents: "none" }),
+              input: (style) => ({ ...style, width: "100%" }),
+            }}
             onInputChange={onInputChange}
             components={{ DropdownIndicator }}
             classNamePrefix="search-bar"

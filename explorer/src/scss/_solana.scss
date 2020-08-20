@@ -190,3 +190,11 @@ h4.slot-pill {
     max-width: 120px;
   }
 }
+
+// work around for https://github.com/JedWatson/react-select/issues/3857
+.search-bar__input {
+  width: 100% !important;
+  input {
+    width: 100% !important;
+  }
+}
