@@ -574,7 +574,6 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
-        dbg!(&new.message_processor);
         new
     }
 
