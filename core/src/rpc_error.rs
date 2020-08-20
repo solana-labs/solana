@@ -5,6 +5,7 @@ const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
 const JSON_RPC_SERVER_ERROR_1: i64 = -32001;
 const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
 const JSON_RPC_SERVER_ERROR_3: i64 = -32003;
+const JSON_RPC_SERVER_ERROR_4: i64 = -32004;
 
 pub enum RpcCustomError {
     NonexistentClusterRoot {
@@ -19,6 +20,9 @@ pub enum RpcCustomError {
         message: String,
     },
     SendTransactionIsNotSigned,
+    BlockNotAvailable {
+        slot: Slot,
+    },
 }
 
 impl From<RpcCustomError> for Error {
@@ -54,6 +58,11 @@ impl From<RpcCustomError> for Error {
             RpcCustomError::SendTransactionIsNotSigned => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_3),
                 message: "Transaction is not signed".to_string(),
+                data: None,
+            },
+            RpcCustomError::BlockNotAvailable { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_4),
+                message: format!("Block not available for slot {}", slot,),
                 data: None,
             },
         }
