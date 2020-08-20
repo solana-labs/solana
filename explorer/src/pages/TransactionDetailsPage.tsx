@@ -31,6 +31,11 @@ import { FetchStatus } from "providers/cache";
 
 const AUTO_REFRESH_TIMEOUT = 2000;
 
+type AutoRefresh = {
+  isAutoRefresh: boolean;
+  timeout?: NodeJS.Timeout | false;
+};
+
 type Props = { signature: TransactionSignature };
 export function TransactionDetailsPage({ signature: raw }: Props) {
   let signature: TransactionSignature | undefined;
@@ -69,7 +74,10 @@ function StatusCard({ signature }: Props) {
   const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
-  const [isAutoRefresh, setIsAutoRefresh] = React.useState(false);
+  const [autoRefresh, setAutoRefresh] = React.useState<AutoRefresh>({
+    isAutoRefresh: false,
+  });
+
   const refresh = React.useCallback(
     (signature: string, isAutoRefresh: boolean = false) => {
       fetchStatus(signature, isAutoRefresh);
@@ -86,14 +94,32 @@ function StatusCard({ signature }: Props) {
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
-    if (!isAutoRefresh && status?.data?.info?.confirmations !== "max") {
-      setIsAutoRefresh(true);
-      setTimeout(() => {
+    return () => {
+      if (autoRefresh.timeout) {
+        clearTimeout(autoRefresh.timeout);
+      }
+    };
+  }, [autoRefresh]);
+
+  React.useEffect(() => {
+    if (
+      !autoRefresh.isAutoRefresh &&
+      status?.data?.info?.confirmations !== "max"
+    ) {
+      let timeout = setTimeout(() => {
         refresh(signature, true);
-        setIsAutoRefresh(false);
+        setAutoRefresh({
+          isAutoRefresh: false,
+          timeout: false,
+        });
       }, AUTO_REFRESH_TIMEOUT);
+
+      setAutoRefresh({
+        isAutoRefresh: true,
+        timeout: timeout,
+      });
     }
-  }, [isAutoRefresh, status, refresh, signature]);
+  }, [autoRefresh, status, refresh, signature]);
 
   if (
     !status ||
