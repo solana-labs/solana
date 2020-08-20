@@ -489,7 +489,6 @@ fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let default_limit_ledger_size = &DEFAULT_MAX_LEDGER_SHREDS.to_string();
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
@@ -732,7 +731,7 @@ pub fn main() {
                 .takes_value(true)
                 .min_values(0)
                 .max_values(1)
-                .default_value(default_limit_ledger_size)
+                /* .default_value() intentionally not used here! */
                 .help("Keep this amount of shreds in root slots."),
         )
         .arg(
@@ -1071,7 +1070,10 @@ pub fn main() {
     }
 
     if matches.is_present("limit_ledger_size") {
-        let limit_ledger_size = value_t_or_exit!(matches, "limit_ledger_size", u64);
+        let limit_ledger_size = match matches.value_of("limit_ledger_size") {
+            Some(_) => value_t_or_exit!(matches, "limit_ledger_size", u64),
+            None => DEFAULT_MAX_LEDGER_SHREDS,
+        };
         if limit_ledger_size < DEFAULT_MIN_MAX_LEDGER_SHREDS {
             eprintln!(
                 "The provided --limit-ledger-size value was too small, the minimum value is {}",
