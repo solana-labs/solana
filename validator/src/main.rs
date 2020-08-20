@@ -599,7 +599,7 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(port_validator)
-                .help("Use this port for JSON RPC, and the next port for the RPC websocket"),
+                .help("Use this port for JSON RPC, the next port for the RPC websocket, and the following for the RPC banks API"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -960,7 +960,7 @@ pub fn main() {
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
-            .map(|rpc_port| (rpc_port, rpc_port + 1)),
+            .map(|rpc_port| (rpc_port, rpc_port + 1, rpc_port + 2)),
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
@@ -1178,9 +1178,10 @@ pub fn main() {
     );
 
     if !private_rpc {
-        if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
+        if let Some((rpc_port, rpc_pubsub_port, rpc_banks_port)) = validator_config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_port);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_port);
+            node.info.rpc_banks = SocketAddr::new(node.info.gossip.ip(), rpc_banks_port);
         }
     }
 
@@ -1199,8 +1200,12 @@ pub fn main() {
 
         let mut tcp_listeners = vec![];
         if !private_rpc {
-            if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
-                for (purpose, port) in &[("RPC", rpc_port), ("RPC pubsub", rpc_pubsub_port)] {
+            if let Some((rpc_port, rpc_pubsub_port, rpc_banks_port)) = validator_config.rpc_ports {
+                for (purpose, port) in &[
+                    ("RPC", rpc_port),
+                    ("RPC pubsub", rpc_pubsub_port),
+                    ("RPC banks", rpc_banks_port),
+                ] {
                     tcp_listeners.push((
                         *port,
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
