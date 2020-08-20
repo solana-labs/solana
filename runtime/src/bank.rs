@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins::{get_builtins, get_epoch_activated_builtins},
+    builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
     message_processor::MessageProcessor,
@@ -557,17 +557,7 @@ impl Bank {
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         if parent.epoch() < new.epoch() {
-            if let Some(entered_epoch_callback) =
-                parent.entered_epoch_callback.read().unwrap().as_ref()
-            {
-                entered_epoch_callback(&mut new)
-            }
-
-            if let Some(builtins) = get_epoch_activated_builtins(new.operating_mode(), new.epoch) {
-                for program in builtins.iter() {
-                    new.add_builtin(&program.name, program.id, program.entrypoint);
-                }
-            }
+            new.refresh_programs_and_inflation();
         }
 
         new.update_epoch_stakes(leader_schedule_epoch);
@@ -584,6 +574,7 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
+        dbg!(&new.message_processor);
         new
     }
 
@@ -2607,10 +2598,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtins = get_builtins();
-        for program in builtins.iter() {
-            self.add_builtin(&program.name, program.id, program.entrypoint);
-        }
+        self.refresh_programs_and_inflation();
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -3185,6 +3173,20 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    // This is called from snapshot restore and for each epoch boundary
+    // The entire code path herein must be idempotent
+    pub fn refresh_programs_and_inflation(&mut self) {
+        if let Some(entered_epoch_callback) =
+            self.entered_epoch_callback.clone().read().unwrap().as_ref()
+        {
+            entered_epoch_callback(self)
+        }
+
+        for program in get_builtins(self.operating_mode(), self.epoch()) {
+            self.add_builtin(&program.name, program.id, program.entrypoint);
+        }
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
