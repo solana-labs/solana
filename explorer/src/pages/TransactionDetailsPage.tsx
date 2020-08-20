@@ -85,6 +85,16 @@ function StatusCard({ signature }: Props) {
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  React.useEffect(() => {
+    if (!isAutoRefresh && status?.data?.info?.confirmations !== "max") {
+      setIsAutoRefresh(true);
+      setTimeout(() => {
+        refresh(signature, true);
+        setIsAutoRefresh(false);
+      }, AUTO_REFRESH_TIMEOUT);
+    }
+  }, [isAutoRefresh, status, refresh, signature]);
+
   if (
     !status ||
     (status.status === FetchStatus.Fetching && !status.isAutoRefresh)
@@ -108,14 +118,6 @@ function StatusCard({ signature }: Props) {
   }
 
   const { info } = status.data;
-
-  if (!isAutoRefresh && info.confirmations !== "max") {
-    setIsAutoRefresh(true);
-    setTimeout(() => {
-      refresh(signature, true);
-      setIsAutoRefresh(false);
-    }, AUTO_REFRESH_TIMEOUT);
-  }
 
   const renderResult = () => {
     let statusClass = "success";
