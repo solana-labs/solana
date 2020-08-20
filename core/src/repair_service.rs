@@ -1082,7 +1082,7 @@ mod test {
         } = genesis_utils::create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &[&keypairs],
-            10000,
+            vec![10000],
         );
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let bank9 = Bank::new_from_parent(&bank0, &Pubkey::default(), duplicate_slot);
@@ -1144,7 +1144,7 @@ mod test {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 1_000_000_000,
                 &[keypairs],
-                100,
+                vec![100],
             );
         let bank0 = Bank::new(&genesis_config);
 

@@ -513,7 +513,11 @@ mod tests {
                 genesis_config,
                 mint_keypair,
                 voting_keypair: _,
-            } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, 100);
+            } = create_genesis_config_with_vote_accounts(
+                1_000_000_000,
+                &validator_keypairs,
+                vec![100; validator_keypairs.len()],
+            );
 
             let node_keypair = Keypair::from_bytes(&node_keypair).unwrap();
             let vote_keypair = Keypair::from_bytes(&vote_keypair).unwrap();

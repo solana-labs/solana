@@ -350,18 +350,39 @@ impl Blockstore {
         Ok((blockstore, signal_receiver, completed_slots_receiver))
     }
 
-    pub fn add_tree(&self, forks: Tree<Slot>, is_orphan: bool, is_slot_complete: bool) {
+    pub fn add_tree(
+        &self,
+        forks: Tree<Slot>,
+        is_orphan: bool,
+        is_slot_complete: bool,
+        num_ticks: u64,
+        starting_hash: Hash,
+    ) {
         let mut walk = TreeWalk::from(forks);
+        let mut blockhashes = HashMap::new();
         while let Some(visit) = walk.get() {
             let slot = visit.node().data;
             if self.meta(slot).unwrap().is_some() && self.orphan(slot).unwrap().is_none() {
-                // If slot exists and is not an orphan, then skip it
+                // If slot exists in blockstore and is not an orphan, then skip it
                 walk.forward();
                 continue;
             }
             let parent = walk.get_parent().map(|n| n.data);
             if parent.is_some() || !is_orphan {
-                let entries = create_ticks(2, 0, Hash::default());
+                let parent_hash = parent
+                    // parent won't exist for first node in a tree where
+                    // `is_orphan == true`
+                    .and_then(|parent| blockhashes.get(&parent))
+                    .unwrap_or(&starting_hash);
+                let mut entries = create_ticks(
+                    num_ticks * (std::cmp::max(1, slot - parent.unwrap_or(slot))),
+                    0,
+                    *parent_hash,
+                );
+                blockhashes.insert(slot, entries.last().unwrap().hash);
+                if !is_slot_complete {
+                    entries.pop().unwrap();
+                }
                 let shreds = entries_to_test_shreds(
                     entries.clone(),
                     slot,
@@ -405,6 +426,16 @@ impl Blockstore {
 
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
+    }
+
+    // Get max root or 0 if it doesn't exist
+    pub fn max_root(&self) -> Slot {
+        self.db
+            .iter::<cf::Root>(IteratorMode::End)
+            .expect("Couldn't get rooted iterator for max_root()")
+            .next()
+            .map(|(slot, _)| slot)
+            .unwrap_or(0)
     }
 
     pub fn slot_meta_iterator<'a>(
