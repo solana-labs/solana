@@ -259,6 +259,55 @@ pub struct MessageProcessor {
     #[serde(skip)]
     is_cross_program_supported: bool,
 }
+
+impl std::fmt::Debug for MessageProcessor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[derive(Debug)]
+        struct MessageProcessor<'a> {
+            programs: Vec<String>,
+            loaders: Vec<String>,
+            native_loader: &'a NativeLoader,
+            is_cross_program_supported: bool,
+        }
+        // rustc doesn't compile due to bug without this work around
+        // https://github.com/rust-lang/rust/issues/50280
+        // https://users.rust-lang.org/t/display-function-pointer/17073/2
+        let processor = MessageProcessor {
+            programs: self
+                .programs
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: fn(
+                        &'static Pubkey,
+                        &'static [KeyedAccount<'static>],
+                        &'static [u8],
+                    )
+                        -> Result<(), InstructionError> = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            loaders: self
+                .loaders
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: fn(
+                        &'static Pubkey,
+                        &'static [KeyedAccount<'static>],
+                        &'static [u8],
+                        &'static mut dyn InvokeContext,
+                    )
+                        -> Result<(), InstructionError> = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            native_loader: &self.native_loader,
+            is_cross_program_supported: self.is_cross_program_supported,
+        };
+
+        write!(f, "{:?}", processor)
+    }
+}
+
 impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
