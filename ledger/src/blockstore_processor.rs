@@ -906,7 +906,7 @@ fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
     let roots: BTreeMap<Slot, u64> = bank
         .vote_accounts()
         .into_iter()
-        .filter_map(|(key, (lamports, account))| {
+        .filter_map(|(key, (stake, account))| {
             if lamports == 0 {
                 return None;
             }
