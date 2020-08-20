@@ -241,7 +241,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getBlockTime
 
-Returns the estimated production time of a block.
+Returns the estimated production time of a confirmed block.
 
 Each validator reports their UTC time to the ledger on a regular interval by
 intermittently adding a timestamp to a Vote for a particular block. A requested
@@ -259,8 +259,8 @@ query a node that is built from genesis and retains the entire ledger.
 
 #### Results:
 
-- `<null>` - block has not yet been produced
-- `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+* `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+* `<null>` - timestamp is not available for this block
 
 #### Example:
 
