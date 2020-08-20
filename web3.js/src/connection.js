@@ -2832,12 +2832,13 @@ export class Connection {
         const {result} = res;
         const {value, context} = result;
 
+        assert(value.data[1] === 'base64');
         sub.callback(
           {
             executable: value.executable,
             owner: new PublicKey(value.owner),
             lamports: value.lamports,
-            data: Buffer.from(value.data, 'base64'),
+            data: Buffer.from(value.data[0], 'base64'),
           },
           context,
         );
