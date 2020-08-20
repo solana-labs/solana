@@ -9,6 +9,7 @@ export enum FetchStatus {
 export type CacheEntry<T> = {
   status: FetchStatus;
   data?: T;
+  isAutoRefresh?: boolean;
 };
 
 export type State<T> = {
@@ -29,6 +30,7 @@ export type Update<T> = {
   key: string;
   status: FetchStatus;
   data?: T;
+  isAutoRefresh?: boolean;
 };
 
 export type Clear = {
@@ -100,6 +102,7 @@ export function reducer<T, U>(
           ...entry,
           status: action.status,
           data: reconciler(entry?.data, action.data),
+          isAutoRefresh: action.isAutoRefresh,
         },
       };
       return { ...state, entries };
