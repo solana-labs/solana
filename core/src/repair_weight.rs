@@ -511,6 +511,7 @@ mod test {
     use super::*;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_runtime::{bank::Bank, bank_utils};
+    use solana_sdk::hash::Hash;
     use trees::tr;
 
     #[test]
@@ -658,7 +659,7 @@ mod test {
         assert_eq!(repair_weight.trees.get(&8).unwrap().ancestors(10), vec![8]);
 
         // Connect orphan back to main fork
-        blockstore.add_tree(tr(6) / (tr(8)), true, true);
+        blockstore.add_tree(tr(6) / (tr(8)), true, true, 2, Hash::default());
         assert_eq!(
             AncestorIterator::new(8, &blockstore).collect::<Vec<_>>(),
             vec![6, 5, 3, 1, 0]
@@ -742,8 +743,8 @@ mod test {
         assert!(repair_weight.trees.contains_key(&20));
 
         // Resolve orphans in blockstore
-        blockstore.add_tree(tr(6) / (tr(8)), true, true);
-        blockstore.add_tree(tr(11) / (tr(20)), true, true);
+        blockstore.add_tree(tr(6) / (tr(8)), true, true, 2, Hash::default());
+        blockstore.add_tree(tr(11) / (tr(20)), true, true, 2, Hash::default());
         // Call `update_orphan_ancestors` to resolve orphan
         repair_weight.update_orphan_ancestors(
             &blockstore,
@@ -853,8 +854,8 @@ mod test {
         // Resolve the orphans, should now return no
         // orphans
         repairs = vec![];
-        blockstore.add_tree(tr(6) / (tr(8)), true, true);
-        blockstore.add_tree(tr(11) / (tr(20)), true, true);
+        blockstore.add_tree(tr(6) / (tr(8)), true, true, 2, Hash::default());
+        blockstore.add_tree(tr(11) / (tr(20)), true, true, 2, Hash::default());
         repair_weight.get_best_orphans(
             &blockstore,
             &mut repairs,
@@ -889,7 +890,7 @@ mod test {
         // orphan in the `trees` map, we should search for
         // exactly one more of the remaining two
         let mut repairs = vec![];
-        blockstore.add_tree(tr(100) / (tr(101)), true, true);
+        blockstore.add_tree(tr(100) / (tr(101)), true, true, 2, Hash::default());
         repair_weight.get_best_orphans(
             &blockstore,
             &mut repairs,
@@ -991,7 +992,7 @@ mod test {
 
         // Chain orphan 8 back to the main fork, but don't
         // touch orphan 20
-        blockstore.add_tree(tr(4) / (tr(8)), true, true);
+        blockstore.add_tree(tr(4) / (tr(8)), true, true, 2, Hash::default());
 
         // Call `update_orphan_ancestors` to resolve orphan
         repair_weight.update_orphan_ancestors(
@@ -1061,10 +1062,10 @@ mod test {
             }
 
             // Chain orphan 8 back to slot `old_parent`
-            blockstore.add_tree(tr(*old_parent) / (tr(8)), true, true);
+            blockstore.add_tree(tr(*old_parent) / (tr(8)), true, true, 2, Hash::default());
 
             // Chain orphan 20 back to orphan 8
-            blockstore.add_tree(tr(8) / (tr(20)), true, true);
+            blockstore.add_tree(tr(8) / (tr(20)), true, true, 2, Hash::default());
 
             // Call `update_orphan_ancestors` to resolve orphan
             repair_weight.update_orphan_ancestors(
@@ -1089,7 +1090,13 @@ mod test {
 
             // Add a vote that chains back to `old_parent`, should be purged
             let new_vote_slot = 100;
-            blockstore.add_tree(tr(*old_parent) / tr(new_vote_slot), true, true);
+            blockstore.add_tree(
+                tr(*old_parent) / tr(new_vote_slot),
+                true,
+                true,
+                2,
+                Hash::default(),
+            );
             repair_weight.add_votes(
                 &blockstore,
                 vec![(new_vote_slot, vec![Pubkey::default()])].into_iter(),
@@ -1137,7 +1144,7 @@ mod test {
         );
 
         // Ancestors of slot 31 are [30], with no existing subtree
-        blockstore.add_tree(tr(30) / (tr(31)), true, true);
+        blockstore.add_tree(tr(30) / (tr(31)), true, true, 2, Hash::default());
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 31),
             (vec![30].into_iter().collect::<VecDeque<_>>(), None)
@@ -1155,7 +1162,7 @@ mod test {
 
         // Chain orphan 8 back to slot 4 on a different fork, ancestor search
         // should not return ancestors earlier than the root
-        blockstore.add_tree(tr(4) / (tr(8)), true, true);
+        blockstore.add_tree(tr(4) / (tr(8)), true, true, 2, Hash::default());
         assert_eq!(
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 8),
             (vec![4].into_iter().collect::<VecDeque<_>>(), None)
@@ -1242,8 +1249,8 @@ mod test {
         */
 
         let blockstore = setup_forks();
-        blockstore.add_tree(tr(8) / (tr(10) / (tr(11))), true, true);
-        blockstore.add_tree(tr(20) / (tr(22) / (tr(23))), true, true);
+        blockstore.add_tree(tr(8) / (tr(10) / (tr(11))), true, true, 2, Hash::default());
+        blockstore.add_tree(tr(20) / (tr(22) / (tr(23))), true, true, 2, Hash::default());
         assert!(blockstore.orphan(8).unwrap().is_some());
         blockstore
     }
@@ -1265,7 +1272,7 @@ mod test {
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.add_tree(forks, false, true);
+        blockstore.add_tree(forks, false, true, 2, Hash::default());
         blockstore
     }
 }
