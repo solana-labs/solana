@@ -277,12 +277,13 @@ impl std::fmt::Debug for MessageProcessor {
                 .programs
                 .iter()
                 .map(|(pubkey, instruction)| {
-                    let erased_instruction: fn(
+                    type ErasedProcessInstruction = fn(
                         &'static Pubkey,
                         &'static [KeyedAccount<'static>],
                         &'static [u8],
                     )
-                        -> Result<(), InstructionError> = *instruction;
+                        -> Result<(), InstructionError>;
+                    let erased_instruction: ErasedProcessInstruction = *instruction;
                     format!("{}: {:p}", pubkey, erased_instruction)
                 })
                 .collect::<Vec<_>>(),
@@ -290,13 +291,14 @@ impl std::fmt::Debug for MessageProcessor {
                 .loaders
                 .iter()
                 .map(|(pubkey, instruction)| {
-                    let erased_instruction: fn(
+                    type ErasedProcessInstructionWithContext = fn(
                         &'static Pubkey,
                         &'static [KeyedAccount<'static>],
                         &'static [u8],
                         &'static mut dyn InvokeContext,
                     )
-                        -> Result<(), InstructionError> = *instruction;
+                        -> Result<(), InstructionError>;
+                    let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
                     format!("{}: {:p}", pubkey, erased_instruction)
                 })
                 .collect::<Vec<_>>(),
