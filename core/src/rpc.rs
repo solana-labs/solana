@@ -4035,7 +4035,7 @@ pub mod tests {
         (
             Arc::new(RwLock::new(BankForks::new(bank))),
             mint_keypair,
-            voting_keypair,
+            Arc::new(voting_keypair),
         )
     }
 

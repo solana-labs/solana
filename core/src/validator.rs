@@ -863,8 +863,8 @@ impl TestValidator {
         } = create_genesis_config_with_leader_ex(
             mint_lamports,
             &contact_info.id,
-            Arc::new(Keypair::new()),
-            Arc::new(Keypair::new()),
+            &Keypair::new(),
+            &Pubkey::new_rand(),
             42,
             bootstrap_validator_lamports,
         );
@@ -882,12 +882,13 @@ impl TestValidator {
             )),
             ..ValidatorConfig::default()
         };
+        let vote_pubkey = voting_keypair.pubkey();
         let node = Validator::new(
             node,
             &node_keypair,
             &ledger_path,
             &voting_keypair.pubkey(),
-            vec![voting_keypair.clone()],
+            vec![Arc::new(voting_keypair)],
             None,
             true,
             &config,
@@ -899,7 +900,7 @@ impl TestValidator {
             alice: mint_keypair,
             ledger_path,
             genesis_hash: blockhash,
-            vote_pubkey: voting_keypair.pubkey(),
+            vote_pubkey,
         }
     }
 }
@@ -1117,7 +1118,7 @@ mod tests {
                         .genesis_config;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
-                let vote_account_keypair = Arc::new(Keypair::new());
+                let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),
@@ -1131,7 +1132,7 @@ mod tests {
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
-                    vec![vote_account_keypair.clone()],
+                    vec![Arc::new(vote_account_keypair)],
                     Some(&leader_node.info),
                     true,
                     &config,

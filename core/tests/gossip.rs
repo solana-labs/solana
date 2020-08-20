@@ -233,7 +233,9 @@ pub fn cluster_info_scale() {
 
     let nodes: Vec<_> = vote_keypairs
         .into_iter()
-        .map(|keypairs| test_node_with_bank(keypairs.node_keypair, &exit, bank_forks.clone()))
+        .map(|keypairs| {
+            test_node_with_bank(Arc::new(keypairs.node_keypair), &exit, bank_forks.clone())
+        })
         .collect();
     let ci0 = nodes[0].0.my_contact_info();
     for node in &nodes[1..] {
