@@ -137,7 +137,7 @@ pub enum StakeInstruction {
     /// # Account references
     ///   0. [WRITE] Stake account to be updated
     ///   1. [SIGNER] Base key of stake or withdraw authority
-    AuthorizeWithSeed(Pubkey, StakeAuthorize, String, Pubkey),
+    AuthorizeWithSeed(AuthorizeWithSeedArgs),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -145,6 +145,14 @@ pub struct LockupArgs {
     pub unix_timestamp: Option<UnixTimestamp>,
     pub epoch: Option<Epoch>,
     pub custodian: Option<Pubkey>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct AuthorizeWithSeedArgs {
+    pub new_authorized_pubkey: Pubkey,
+    pub stake_authorize: StakeAuthorize,
+    pub authority_seed: String,
+    pub authority_owner: Pubkey,
 }
 
 fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
@@ -361,14 +369,16 @@ pub fn authorize_with_seed(
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
 
+    let args = AuthorizeWithSeedArgs {
+        new_authorized_pubkey: *new_authorized_pubkey,
+        stake_authorize,
+        authority_seed,
+        authority_owner: *authority_owner,
+    };
+
     Instruction::new(
         id(),
-        &StakeInstruction::AuthorizeWithSeed(
-            *new_authorized_pubkey,
-            stake_authorize,
-            authority_seed,
-            *authority_owner,
-        ),
+        &StakeInstruction::AuthorizeWithSeed(args),
         account_metas,
     )
 }
@@ -454,19 +464,14 @@ pub fn process_instruction(
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &signers)
         }
-        StakeInstruction::AuthorizeWithSeed(
-            authorized_pubkey,
-            stake_authorize,
-            authority_seed,
-            authority_owner,
-        ) => {
+        StakeInstruction::AuthorizeWithSeed(args) => {
             let authority_base = next_keyed_account(keyed_accounts)?;
             me.authorize_with_seed(
-                &authorized_pubkey,
+                &args.new_authorized_pubkey,
                 &authority_base,
-                &authority_seed,
-                &authority_owner,
-                stake_authorize,
+                &args.authority_seed,
+                &args.authority_owner,
+                args.stake_authorize,
             )
         }
         StakeInstruction::DelegateStake => {
