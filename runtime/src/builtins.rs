@@ -4,9 +4,11 @@ use crate::{
 };
 use solana_sdk::{clock::Epoch, genesis_config::OperatingMode, system_program};
 
-/// All builtin programs that should be active at the given (operating_mode, epoch)
-pub fn get_builtins() -> Vec<Builtin> {
-    vec![
+/// The entire set of available builtin programs that should be active at the given (operating_mode, epoch)
+pub fn get_builtins(_operating_mode: OperatingMode, _epoch: Epoch) -> Vec<Builtin> {
+    let mut builtins = vec![];
+
+    builtins.extend(vec![
         Builtin::new(
             "system_program",
             system_program::id(),
@@ -27,13 +29,10 @@ pub fn get_builtins() -> Vec<Builtin> {
             solana_vote_program::id(),
             Entrypoint::Program(solana_vote_program::vote_instruction::process_instruction),
         ),
-    ]
-}
+    ]);
 
-/// Builtin programs that activate at the given (operating_mode, epoch)
-pub fn get_epoch_activated_builtins(
-    _operating_mode: OperatingMode,
-    _epoch: Epoch,
-) -> Option<Vec<Builtin>> {
-    None
+    // if we ever add gated builtins, add here like this
+    // if _epoch >= 10 { builtins.extend(....) }
+
+    builtins
 }

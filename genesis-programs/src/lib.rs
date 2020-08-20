@@ -49,102 +49,94 @@ enum Program {
     BuiltinLoader((String, Pubkey, ProcessInstructionWithContext)),
 }
 
-fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Program>> {
+// given operating_mode and epoch, return the entire set of enabled programs
+fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Program> {
+    let mut programs = vec![];
+
     match operating_mode {
         OperatingMode::Development => {
-            if epoch == 0 {
-                // Programs used for testing
-                Some(vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                    Program::Native(solana_vest_program!()),
-                    Program::Native(solana_budget_program!()),
-                    Program::Native(solana_exchange_program!()),
-                ])
-            } else if epoch == std::u64::MAX {
+            // Programs used for testing
+            programs.extend(vec![
+                Program::BuiltinLoader(solana_bpf_loader_program!()),
+                Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
+                Program::Native(solana_vest_program!()),
+                Program::Native(solana_budget_program!()),
+                Program::Native(solana_exchange_program!()),
+            ]);
+
+            if epoch >= std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
-                Some(vec![Program::BuiltinLoader(solana_bpf_loader_program!())])
-            } else {
-                None
-            }
-        }
-        OperatingMode::Stable => {
-            if epoch == std::u64::MAX {
-                // The epoch of std::u64::MAX is a placeholder and is expected
-                // to be reduced in a future network update.
-                Some(vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ])
-            } else {
-                None
+                programs.extend(vec![Program::BuiltinLoader(solana_bpf_loader_program!())]);
             }
         }
         OperatingMode::Preview => {
-            if epoch == std::u64::MAX {
+            if epoch >= std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
-                Some(vec![
+                programs.extend(vec![
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                 ])
-            } else {
-                None
             }
         }
-    }
+        OperatingMode::Stable => {
+            // at which epoch, bpf_loader_program is enabled??
+
+            if epoch >= std::u64::MAX {
+                // The epoch of std::u64::MAX is a placeholder and is expected
+                // to be reduced in a future network update.
+                programs.extend(vec![
+                    Program::BuiltinLoader(solana_bpf_loader_program!()),
+                    Program::Native(solana_vest_program!()),
+                ]);
+            }
+        }
+    };
+
+    programs
 }
 
-pub fn get_native_programs(
-    operating_mode: OperatingMode,
-    epoch: Epoch,
-) -> Option<Vec<(String, Pubkey)>> {
-    match get_programs(operating_mode, epoch) {
-        Some(programs) => {
-            let mut native_programs = vec![];
-            for program in programs {
-                if let Program::Native((string, key)) = program {
-                    native_programs.push((string, key));
-                }
-            }
-            Some(native_programs)
+pub fn get_native_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<(String, Pubkey)> {
+    let mut native_programs = vec![];
+    for program in get_programs(operating_mode, epoch) {
+        if let Program::Native((string, key)) = program {
+            native_programs.push((string, key));
         }
-        None => None,
+    }
+    native_programs
+}
+
+fn recheck_cross_program_support(bank: &mut Bank) {
+    if OperatingMode::Stable == bank.operating_mode() {
+        bank.set_cross_program_support(bank.epoch() >= 63);
+    } else {
+        bank.set_cross_program_support(true);
     }
 }
 
 pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpochCallback {
     Box::new(move |bank: &mut Bank| {
+        // Be careful to add arbitrary logic here; this should be idempotent and can be called
+        // at arbitrary point in an epoch not only epoch boundaries.
+        // This is because this closure need to be executed immediately after snapshot restoration,
+        // in addition to usual epoch boundaries
         if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
             info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
-        if let Some(programs) = get_programs(operating_mode, bank.epoch()) {
-            for program in programs {
-                match program {
-                    Program::Native((name, program_id)) => {
-                        bank.add_native_program(&name, &program_id);
-                    }
-                    Program::BuiltinLoader((
-                        name,
-                        program_id,
-                        process_instruction_with_context,
-                    )) => {
-                        bank.add_builtin_loader(
-                            &name,
-                            program_id,
-                            process_instruction_with_context,
-                        );
-                    }
+        for program in get_programs(operating_mode, bank.epoch()) {
+            match program {
+                Program::Native((name, program_id)) => {
+                    bank.add_native_program(&name, &program_id);
+                }
+                Program::BuiltinLoader((name, program_id, process_instruction_with_context)) => {
+                    bank.add_builtin_loader(&name, program_id, process_instruction_with_context);
                 }
             }
         }
-        if OperatingMode::Stable == operating_mode {
-            bank.set_cross_program_support(bank.epoch() >= 63);
-        } else {
-            bank.set_cross_program_support(true);
-        }
+
+        recheck_cross_program_support(bank);
     })
 }
 
@@ -156,7 +148,7 @@ mod tests {
     #[test]
     fn test_id_uniqueness() {
         let mut unique = HashSet::new();
-        let programs = get_programs(OperatingMode::Development, 0).unwrap();
+        let programs = get_programs(OperatingMode::Development, 0);
         for program in programs {
             match program {
                 Program::Native((name, id)) => assert!(unique.insert((name, id))),
@@ -176,22 +168,14 @@ mod tests {
 
     #[test]
     fn test_development_programs() {
-        assert_eq!(
-            get_programs(OperatingMode::Development, 0).unwrap().len(),
-            5
-        );
-        assert!(get_programs(OperatingMode::Development, 1).is_none());
+        assert_eq!(get_programs(OperatingMode::Development, 0).len(), 5);
+        assert_eq!(get_programs(OperatingMode::Development, 1).len(), 5);
     }
 
     #[test]
     fn test_native_development_programs() {
-        assert_eq!(
-            get_native_programs(OperatingMode::Development, 0)
-                .unwrap()
-                .len(),
-            3
-        );
-        assert!(get_native_programs(OperatingMode::Development, 1).is_none());
+        assert_eq!(get_native_programs(OperatingMode::Development, 0).len(), 3);
+        assert_eq!(get_native_programs(OperatingMode::Development, 0).len(), 3);
     }
 
     #[test]
@@ -209,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_softlaunch_programs() {
-        assert!(get_programs(OperatingMode::Stable, 1).is_none());
-        assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
+        assert!(get_programs(OperatingMode::Stable, 1).is_empty());
+        assert!(!get_programs(OperatingMode::Stable, std::u64::MAX).is_empty());
     }
 }
