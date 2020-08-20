@@ -21,7 +21,7 @@ use solana_sdk::{
 };
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -382,12 +382,20 @@ impl ServeRepair {
         repair_request: RepairType,
         cache: &mut RepairCache,
         repair_stats: &mut RepairStats,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
         if cache.get(&slot).is_none() {
-            let repair_peers: Vec<_> = self.cluster_info.repair_peers(slot);
+            let repair_peers: Vec<_> = if let Some(repair_validators) = repair_validators {
+                repair_validators
+                    .iter()
+                    .filter_map(|key| self.cluster_info.lookup_contact_info(key, |ci| ci.clone()))
+                    .collect()
+            } else {
+                self.cluster_info.repair_peers(slot)
+            };
             if repair_peers.is_empty() {
                 return Err(ClusterInfoError::NoPeers.into());
             }
@@ -733,6 +741,7 @@ mod tests {
             RepairType::Shred(0, 0),
             &mut HashMap::new(),
             &mut RepairStats::default(),
+            &None,
         );
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -759,6 +768,7 @@ mod tests {
                 RepairType::Shred(0, 0),
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
+                &None,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -791,6 +801,7 @@ mod tests {
                     RepairType::Shred(0, 0),
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
+                    &None,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {

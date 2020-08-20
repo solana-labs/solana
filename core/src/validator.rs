@@ -82,6 +82,7 @@ pub struct ValidatorConfig {
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
+    pub repair_validators: Option<HashSet<Pubkey>>,  // None = repair from all
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
@@ -110,6 +111,7 @@ impl Default for ValidatorConfig {
             wait_for_supermajority: None,
             new_hard_forks: None,
             trusted_validators: None,
+            repair_validators: None,
             halt_on_trusted_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
@@ -472,6 +474,7 @@ impl Validator {
                     .halt_on_trusted_validators_accounts_hash_mismatch,
                 shred_version: node.info.shred_version,
                 trusted_validators: config.trusted_validators.clone(),
+                repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
             },
         );

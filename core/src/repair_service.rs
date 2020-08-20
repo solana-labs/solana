@@ -18,7 +18,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     iter::Iterator,
     net::SocketAddr,
     net::UdpSocket,
@@ -108,6 +108,7 @@ pub struct RepairInfo {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub epoch_schedule: EpochSchedule,
     pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+    pub repair_validators: Option<HashSet<Pubkey>>,
 }
 
 pub struct RepairSlotRange {
@@ -263,6 +264,7 @@ impl RepairService {
                     repair_request,
                     &mut cache,
                     &mut repair_stats,
+                    &repair_info.repair_validators,
                 ) {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
