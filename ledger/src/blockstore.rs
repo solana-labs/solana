@@ -3311,7 +3311,10 @@ fn adjust_ulimit_nofile() -> Result<()> {
             );
 
             if cfg!(target_os = "macos") {
-                error!("On mac OS you may need to run |sudo launchctl limit maxfiles 65536 200000| first");
+                error!(
+                    "On mac OS you may need to run |sudo launchctl limit maxfiles {} {}| first",
+                    desired_nofile, desired_nofile,
+                );
             }
             return Err(BlockstoreError::UnableToSetOpenFileDescriptorLimit);
         }
