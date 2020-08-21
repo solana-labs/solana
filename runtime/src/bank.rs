@@ -562,7 +562,7 @@ impl Bank {
             new.ancestors.insert(p.slot(), i + 1);
         });
         if parent.epoch() < new.epoch() {
-            new.refresh_programs_and_inflation();
+            new.apply_feature_activations();
         }
 
         new.update_slot_hashes();
@@ -1201,8 +1201,27 @@ impl Bank {
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
-        let account = native_loader::create_loadable_account(name);
-        self.store_account(program_id, &account);
+        match self.get_account(&program_id) {
+            Some(account) => {
+                assert_eq!(
+                    account.owner,
+                    native_loader::id(),
+                    "Cannot overwrite non-native account"
+                );
+            }
+            None => {
+                assert!(
+                    !self.is_frozen(),
+                    "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+                    Maybe, inconsistent program activation is detected on snapshot restore?",
+                    name,
+                    program_id
+                );
+                // Add a bogus executable native account, which will be loaded and ignored.
+                let account = native_loader::create_loadable_account(name);
+                self.store_account(&program_id, &account);
+            }
+        }
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
@@ -2597,7 +2616,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        self.refresh_programs_and_inflation();
+        self.apply_feature_activations();
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -2612,8 +2631,9 @@ impl Bank {
         self.hard_forks.clone()
     }
 
-    pub fn set_entered_epoch_callback(&self, entered_epoch_callback: EnteredEpochCallback) {
+    pub fn set_entered_epoch_callback(&mut self, entered_epoch_callback: EnteredEpochCallback) {
         *self.entered_epoch_callback.write().unwrap() = Some(entered_epoch_callback);
+        self.apply_feature_activations();
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -3064,20 +3084,7 @@ impl Bank {
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
     pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
-        match self.get_account(&program_id) {
-            Some(account) => {
-                assert_eq!(
-                    account.owner,
-                    native_loader::id(),
-                    "Cannot overwrite non-native account"
-                );
-            }
-            None => {
-                // Add a bogus executable native account, which will be loaded and ignored.
-                let account = native_loader::create_loadable_account(name);
-                self.store_account(&program_id, &account);
-            }
-        }
+        self.add_native_program(name, &program_id);
         match entrypoint {
             Entrypoint::Program(process_instruction) => {
                 self.message_processor
@@ -3176,7 +3183,7 @@ impl Bank {
 
     // This is called from snapshot restore and for each epoch boundary
     // The entire code path herein must be idempotent
-    pub fn refresh_programs_and_inflation(&mut self) {
+    pub fn apply_feature_activations(&mut self) {
         if let Some(entered_epoch_callback) =
             self.entered_epoch_callback.clone().read().unwrap().as_ref()
         {
@@ -6360,16 +6367,18 @@ mod tests {
     #[test]
     fn test_bank_entered_epoch_callback() {
         let (genesis_config, _) = create_genesis_config(500);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank0 = Arc::new(Bank::new(&genesis_config));
         let callback_count = Arc::new(AtomicU64::new(0));
 
-        bank0.set_entered_epoch_callback({
-            let callback_count = callback_count.clone();
-            //Box::new(move |_bank: &mut Bank| {
-            Box::new(move |_| {
-                callback_count.fetch_add(1, Ordering::SeqCst);
-            })
-        });
+        Arc::get_mut(&mut bank0)
+            .unwrap()
+            .set_entered_epoch_callback({
+                let callback_count = callback_count.clone();
+                //Box::new(move |_bank: &mut Bank| {
+                Box::new(move |_| {
+                    callback_count.fetch_add(1, Ordering::SeqCst);
+                })
+            });
 
         let _bank1 =
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
@@ -7892,6 +7901,8 @@ mod tests {
 
     #[test]
     fn test_bank_hash_consistency() {
+        solana_logger::setup();
+
         let mut genesis_config = GenesisConfig::new(
             &[(
                 Pubkey::new(&[42; 32]),

@@ -13,8 +13,11 @@ use solana_runtime::{
     message_processor::{DEFAULT_COMPUTE_BUDGET, DEFAULT_MAX_INVOKE_DEPTH},
 };
 use solana_sdk::{
-    clock::Epoch, entrypoint_native::ProcessInstructionWithContext, genesis_config::OperatingMode,
-    inflation::Inflation, pubkey::Pubkey,
+    clock::Epoch,
+    entrypoint_native::{ErasedProcessInstructionWithContext, ProcessInstructionWithContext},
+    genesis_config::OperatingMode,
+    inflation::Inflation,
+    pubkey::Pubkey,
 };
 
 pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Inflation> {
@@ -50,6 +53,24 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
 enum Program {
     Native((String, Pubkey)),
     BuiltinLoader((String, Pubkey, ProcessInstructionWithContext)),
+}
+
+impl std::fmt::Debug for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[derive(Debug)]
+        enum Program {
+            Native((String, Pubkey)),
+            BuiltinLoader((String, Pubkey, String)),
+        }
+        let program = match self {
+            crate::Program::Native((string, pubkey)) => Program::Native((string.clone(), *pubkey)),
+            crate::Program::BuiltinLoader((string, pubkey, instruction)) => {
+                let erased: ErasedProcessInstructionWithContext = *instruction;
+                Program::BuiltinLoader((string.clone(), *pubkey, format!("{:p}", erased)))
+            }
+        };
+        write!(f, "{:?}", program)
+    }
 }
 
 // given operating_mode and epoch, return the entire set of enabled programs

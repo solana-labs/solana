@@ -340,7 +340,7 @@ pub fn process_blockstore(
 pub fn process_blockstore_from_root(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    bank: Arc<Bank>,
+    mut bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<TransactionStatusSender>,
@@ -355,9 +355,9 @@ pub fn process_blockstore_from_root(
     let now = Instant::now();
     let mut root = start_slot;
 
-    bank.set_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
-        genesis_config.operating_mode,
-    ));
+    Arc::get_mut(&mut bank).unwrap().set_entered_epoch_callback(
+        solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode),
+    );
 
     if let Some(ref new_hard_forks) = opts.new_hard_forks {
         let hard_forks = bank.hard_forks();

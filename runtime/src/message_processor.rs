@@ -7,7 +7,8 @@ use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
     entrypoint_native::{
-        ComputeMeter, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+        ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext, InvokeContext,
+        Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -311,12 +312,6 @@ impl std::fmt::Debug for MessageProcessor {
                 .programs
                 .iter()
                 .map(|(pubkey, instruction)| {
-                    type ErasedProcessInstruction = fn(
-                        &'static Pubkey,
-                        &'static [KeyedAccount<'static>],
-                        &'static [u8],
-                    )
-                        -> Result<(), InstructionError>;
                     let erased_instruction: ErasedProcessInstruction = *instruction;
                     format!("{}: {:p}", pubkey, erased_instruction)
                 })
@@ -325,13 +320,6 @@ impl std::fmt::Debug for MessageProcessor {
                 .loaders
                 .iter()
                 .map(|(pubkey, instruction)| {
-                    type ErasedProcessInstructionWithContext = fn(
-                        &'static Pubkey,
-                        &'static [KeyedAccount<'static>],
-                        &'static [u8],
-                        &'static mut dyn InvokeContext,
-                    )
-                        -> Result<(), InstructionError>;
                     let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
                     format!("{}: {:p}", pubkey, erased_instruction)
                 })
