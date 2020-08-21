@@ -1221,6 +1221,15 @@ impl Bank {
             .set_cross_program_support(is_supported);
     }
 
+    pub fn set_max_invoke_depth(&mut self, max_invoke_depth: usize) {
+        self.message_processor
+            .set_max_invoke_depth(max_invoke_depth);
+    }
+
+    pub fn set_compute_budget(&mut self, compute_units: u64) {
+        self.message_processor.set_compute_budget(compute_units);
+    }
+
     /// Return the last block hash registered.
     pub fn last_blockhash(&self) -> Hash {
         self.blockhash_queue.read().unwrap().last_hash()
