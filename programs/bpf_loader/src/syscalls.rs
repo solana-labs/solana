@@ -12,7 +12,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     bpf_loader, bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{InvokeContext, Logger},
+    entrypoint_native::{ComputeMeter, InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -59,6 +59,26 @@ impl From<SyscallError> for EbpfError<BPFError> {
     }
 }
 
+/// Sysval compute costs
+/// Note: `abort`, `sol_panic_`, and `sol_alloc_free_` do not currently incur a cost
+const COMPUTE_COST_LOG: u64 = 100;
+const COMPUTE_COST_LOG_64: u64 = 100;
+const COMPUTE_COST_CREATE_PROGRAM_ADDRESS: u64 = 1000;
+const COMPUTE_COST_INVOKE: u64 = 1000;
+
+trait SyscallConsume {
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BPFError>>;
+}
+impl SyscallConsume for Rc<RefCell<dyn ComputeMeter>> {
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BPFError>> {
+        self.try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
+            .consume(amount)
+            .map_err(SyscallError::InstructionError)?;
+        Ok(())
+    }
+}
+
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
 /// selectable at build-time.
@@ -76,24 +96,31 @@ pub fn register_syscalls<'a>(
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    // Syscall function common across languages
+    // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
     vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
+            compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
     vm.register_syscall_with_context_ex(
         "sol_log_64_",
         Box::new(SyscallLogU64 {
+            compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
     if invoke_context.is_cross_program_supported() {
-        vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+        vm.register_syscall_with_context_ex(
+            "sol_create_program_address",
+            Box::new(SyscallCreateProgramAddress {
+                compute_meter: invoke_context.get_compute_meter(),
+            }),
+        )?;
 
         // Cross-program invocation syscalls
 
@@ -253,6 +280,7 @@ pub fn syscall_sol_panic(
 
 /// Log a user's info message
 pub struct SyscallLog {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BPFError> for SyscallLog {
@@ -266,6 +294,7 @@ impl SyscallObject<BPFError> for SyscallLog {
         ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(COMPUTE_COST_LOG)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -282,6 +311,7 @@ impl SyscallObject<BPFError> for SyscallLog {
 
 /// Log 5 64-bit values
 pub struct SyscallLogU64 {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BPFError> for SyscallLogU64 {
@@ -295,6 +325,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(COMPUTE_COST_LOG_64)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -346,38 +377,47 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
 }
 
 /// Create a program address
-pub fn syscall_create_program_address(
-    seeds_addr: u64,
-    seeds_len: u64,
-    program_id_addr: u64,
-    address_addr: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+pub struct SyscallCreateProgramAddress {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+}
+impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
+    fn call(
+        &mut self,
+        seeds_addr: u64,
+        seeds_len: u64,
+        program_id_addr: u64,
+        address_addr: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter
+            .consume(COMPUTE_COST_CREATE_PROGRAM_ADDRESS)?;
 
-    let seeds = untranslated_seeds
-        .iter()
-        .map(|untranslated_seed| {
-            translate_slice!(
-                u8,
-                untranslated_seed.as_ptr(),
-                untranslated_seed.len(),
-                ro_regions
-            )
-        })
-        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-    let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
+        let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+        let seeds = untranslated_seeds
+            .iter()
+            .map(|untranslated_seed| {
+                translate_slice!(
+                    u8,
+                    untranslated_seed.as_ptr(),
+                    untranslated_seed.len(),
+                    ro_regions
+                )
+            })
+            .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+        let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
 
-    let new_address =
-        match Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds) {
+        let new_address = match Pubkey::create_program_address(&seeds, program_id)
+            .map_err(SyscallError::BadSeeds)
+        {
             Ok(address) => address,
             Err(_) => return Ok(1),
         };
-    let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
-    address.copy_from_slice(new_address.as_ref());
-    Ok(0)
+        let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
+        address.copy_from_slice(new_address.as_ref());
+        Ok(0)
+    }
 }
 
 // Cross-program invocation syscalls
@@ -844,6 +884,9 @@ fn call<'a>(
     rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
     let mut invoke_context = syscall.get_context_mut()?;
+    invoke_context
+        .get_compute_meter()
+        .consume(COMPUTE_COST_INVOKE)?;
 
     // Translate data passed from the VM
 
@@ -930,7 +973,7 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::MockLogger;
+    use crate::tests::{MockComputeMeter, MockLogger};
 
     #[test]
     fn test_translate() {
@@ -1081,17 +1124,24 @@ mod tests {
     fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: std::u64::MAX, // TODO also test error
+            }));
+        let log = Rc::new(RefCell::new(vec![]));
+        let logger: Rc<RefCell<dyn Logger>> =
+            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
+        let mut syscall_sol_log = SyscallLog {
+            compute_meter,
+            logger,
+        };
         let ro_regions = &[MemoryRegion {
             addr_host: addr,
             addr_vm: 100,
             len: string.len() as u64,
         }];
         let rw_regions = &[MemoryRegion::default()];
-
-        let log = Rc::new(RefCell::new(vec![]));
-        let mock_logger = MockLogger { log: log.clone() };
-        let logger: Rc<RefCell<dyn Logger>> = Rc::new(RefCell::new(mock_logger));
-        let mut syscall_sol_log = SyscallLog { logger };
 
         syscall_sol_log
             .call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
@@ -1115,10 +1165,16 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: std::u64::MAX, // TODO also test error
+            }));
         let log = Rc::new(RefCell::new(vec![]));
-        let mock_logger = MockLogger { log: log.clone() };
+        let logger: Rc<RefCell<dyn Logger>> =
+            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log_u64 = SyscallLogU64 {
-            logger: Rc::new(RefCell::new(mock_logger)),
+            compute_meter,
+            logger,
         };
         let ro_regions = &[MemoryRegion::default()];
         let rw_regions = &[MemoryRegion::default()];

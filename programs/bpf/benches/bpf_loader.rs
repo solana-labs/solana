@@ -6,7 +6,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
 use solana_sdk::{
     account::Account,
-    entrypoint_native::{InvokeContext, Logger, ProcessInstruction},
+    entrypoint_native::{ComputeMeter, InvokeContext, Logger, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -96,7 +96,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     bencher.iter(|| {
         vm.execute_program(&mut inner_iter, &[], &[]).unwrap();
     });
-    let instructions = vm.get_last_instruction_count();
+    let instructions = vm.get_total_instruction_count();
     let summary = bencher.bench(|_bencher| {}).unwrap();
     println!("  {:?} instructions", instructions);
     println!("  {:?} ns/iter median", summary.median as u64);
@@ -136,6 +136,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 pub struct MockInvokeContext {
     key: Pubkey,
     mock_logger: MockLogger,
+    mock_compute_meter: MockComputeMeter,
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -162,6 +163,9 @@ impl InvokeContext for MockInvokeContext {
     fn is_cross_program_supported(&self) -> bool {
         true
     }
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+        Rc::new(RefCell::new(self.mock_compute_meter.clone()))
+    }
 }
 #[derive(Debug, Default, Clone)]
 pub struct MockLogger {
@@ -173,5 +177,21 @@ impl Logger for MockLogger {
     }
     fn log(&mut self, message: &str) {
         self.log.borrow_mut().push(message.to_string());
+    }
+}
+#[derive(Debug, Default, Clone)]
+pub struct MockComputeMeter {
+    pub remaining: u64,
+}
+impl ComputeMeter for MockComputeMeter {
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+        self.remaining = self.remaining.saturating_sub(amount);
+        if self.remaining == 0 {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
     }
 }

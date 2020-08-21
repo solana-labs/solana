@@ -76,7 +76,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "9qMSqhQjkhvvVL4bSoGek2VAnF9KdM9ARMXYA3G2f3iG")]
+#[frozen_abi(digest = "EEFPLdPhngiBojqEnDMkoEGjyYYHNWPHnenRf8b9diqd")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
@@ -1219,6 +1219,15 @@ impl Bank {
     pub fn set_cross_program_support(&mut self, is_supported: bool) {
         self.message_processor
             .set_cross_program_support(is_supported);
+    }
+
+    pub fn set_max_invoke_depth(&mut self, max_invoke_depth: usize) {
+        self.message_processor
+            .set_max_invoke_depth(max_invoke_depth);
+    }
+
+    pub fn set_compute_budget(&mut self, compute_units: u64) {
+        self.message_processor.set_compute_budget(compute_units);
     }
 
     /// Return the last block hash registered.
