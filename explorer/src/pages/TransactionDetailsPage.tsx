@@ -106,17 +106,15 @@ function StatusCard({ signature }: Props) {
       !autoRefresh.isAutoRefresh &&
       status?.data?.info?.confirmations !== "max"
     ) {
-      let timeout = setTimeout(() => {
-        refresh(signature, true);
-        setAutoRefresh({
-          isAutoRefresh: false,
-          timeout: false,
-        });
-      }, AUTO_REFRESH_TIMEOUT);
-
       setAutoRefresh({
         isAutoRefresh: true,
-        timeout: timeout,
+        timeout: setTimeout(() => {
+          refresh(signature, true);
+          setAutoRefresh({
+            isAutoRefresh: false,
+            timeout: false,
+          });
+        }, AUTO_REFRESH_TIMEOUT),
       });
     }
   }, [autoRefresh, status, refresh, signature]);
