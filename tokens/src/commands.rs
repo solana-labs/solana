@@ -909,7 +909,7 @@ mod tests {
             assert_eq!(lockup_args.epoch, None); // Don't change the epoch
             assert_eq!(lockup_args.custodian, None); // Don't change the lockup authority
         } else {
-            assert!(false, "expected SetLockup instruction");
+            panic!("expected SetLockup instruction");
         }
     }
 }
