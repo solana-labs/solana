@@ -229,7 +229,8 @@ async fn distribute_allocations(
         };
 
         println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-        let instructions = distribution_instructions(allocation, &new_stake_account_address, args, lockup_date);
+        let instructions =
+            distribution_instructions(allocation, &new_stake_account_address, args, lockup_date);
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
         let result: transport::Result<(Transaction, u64)> = {
@@ -719,6 +720,7 @@ mod tests {
     use solana_banks_server::banks_server::start_local_server;
     use solana_runtime::{bank::Bank, bank_forks::BankForks};
     use solana_sdk::genesis_config::create_genesis_config;
+    use solana_stake_program::stake_instruction::StakeInstruction;
     use std::sync::{Arc, RwLock};
     use tokio::runtime::Runtime;
 
@@ -861,5 +863,53 @@ mod tests {
             &alice_alloc_lockup0,
             &alice_info_lockup0
         )); // Same recipient, same lockups
+    }
+
+    const SET_LOCKUP_INDEX: usize = 4;
+
+    #[test]
+    fn test_set_stake_lockup() {
+        let lockup_date_str = "2021-01-07T00:00:00Z";
+        let allocation = Allocation {
+            recipient: Pubkey::default().to_string(),
+            amount: 1.0,
+            lockup_date: lockup_date_str.to_string(),
+        };
+        let stake_account_address = Pubkey::new_rand();
+        let new_stake_account_address = Pubkey::new_rand();
+        let lockup_authority = Keypair::new();
+        let stake_args = StakeArgs {
+            stake_account_address,
+            stake_authority: Box::new(Keypair::new()),
+            withdraw_authority: Box::new(Keypair::new()),
+            lockup_authority: Some(Box::new(lockup_authority)),
+            sol_for_fees: 1.0,
+        };
+        let args = DistributeTokensArgs {
+            fee_payer: Box::new(Keypair::new()),
+            dry_run: false,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            stake_args: Some(stake_args),
+            from_bids: false,
+            sender_keypair: Box::new(Keypair::new()),
+            dollars_per_sol: None,
+        };
+        let lockup_date = lockup_date_str.parse().unwrap();
+        let instructions = distribution_instructions(
+            &allocation,
+            &new_stake_account_address,
+            &args,
+            Some(lockup_date),
+        );
+        let lockup_instruction =
+            bincode::deserialize(&instructions[SET_LOCKUP_INDEX].data).unwrap();
+        if let StakeInstruction::SetLockup(lockup_args) = lockup_instruction {
+            assert_eq!(lockup_args.unix_timestamp, Some(lockup_date.timestamp()));
+            assert_eq!(lockup_args.epoch, None); // Don't change the epoch
+            assert_eq!(lockup_args.custodian, None); // Don't change the lockup authority
+        } else {
+            assert!(false, "expected SetLockup instruction");
+        }
     }
 }
