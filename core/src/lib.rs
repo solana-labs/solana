@@ -73,15 +73,9 @@ pub mod weighted_shuffle;
 pub mod window_service;
 
 #[macro_use]
-<<<<<<< HEAD
-extern crate solana_bpf_loader_program;
-
-#[macro_use]
 extern crate solana_budget_program;
 
 #[macro_use]
-=======
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
 extern crate log;
 
 #[macro_use]

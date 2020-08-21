@@ -3546,11 +3546,8 @@ dependencies = [
  "serial_test_derive",
  "solana-account-decoder",
  "solana-banks-server",
-<<<<<<< HEAD
  "solana-bpf-loader-program",
  "solana-budget-program",
-=======
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",

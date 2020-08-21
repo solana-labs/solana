@@ -55,41 +55,16 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
         OperatingMode::Development => {
             if epoch == 0 {
                 Some(vec![
-<<<<<<< HEAD
-                    // Enable all Stable programs
-                    solana_bpf_loader_program!(),
-                    solana_vest_program!(),
-                    // Programs that are only available in Development mode
-                    solana_budget_program!(),
-                    solana_exchange_program!(),
-                ])
-=======
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
                     Program::Native(solana_vest_program!()),
                     Program::Native(solana_budget_program!()),
                     Program::Native(solana_exchange_program!()),
                 ])
-            } else if epoch == std::u64::MAX {
-                // The epoch of std::u64::MAX is a placeholder and is expected
-                // to be reduced in a future network update.
-                Some(vec![Program::BuiltinLoader(solana_bpf_loader_program!())])
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
             } else {
                 None
             }
         }
         OperatingMode::Stable => {
-<<<<<<< HEAD
-            if epoch == std::u64::MAX - 1 {
-                // The epoch of std::u64::MAX - 1 is a placeholder and is expected to be reduced in
-                // a future hard fork.
-                Some(vec![solana_bpf_loader_program!()])
-            } else if epoch == std::u64::MAX {
-                // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
-                // future hard fork.
-                Some(vec![solana_vest_program!()])
-=======
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
@@ -97,20 +72,11 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                 ])
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
             } else {
                 None
             }
         }
         OperatingMode::Preview => {
-<<<<<<< HEAD
-            if epoch == 0 {
-                Some(vec![solana_bpf_loader_program!()])
-            } else if epoch == std::u64::MAX {
-                // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
-                // future hard fork.
-                Some(vec![solana_vest_program!()])
-=======
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
@@ -118,7 +84,6 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
                     Program::Native(solana_vest_program!()),
                 ])
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
             } else {
                 None
             }
@@ -239,12 +204,7 @@ mod tests {
 
     #[test]
     fn test_softlaunch_programs() {
-<<<<<<< HEAD
-        assert_eq!(get_programs(OperatingMode::Stable, 1), None);
-        assert!(get_programs(OperatingMode::Stable, std::u64::MAX - 1).is_some());
-=======
         assert!(get_programs(OperatingMode::Stable, 1).is_none());
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
         assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }
