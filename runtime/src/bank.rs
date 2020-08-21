@@ -561,6 +561,8 @@ impl Bank {
         new.parents().iter().enumerate().for_each(|(i, p)| {
             new.ancestors.insert(p.slot(), i + 1);
         });
+
+        // Following code may touch AccountsDB, requiring proper ancestors
         if parent.epoch() < new.epoch() {
             new.apply_feature_activations();
         }

@@ -2610,7 +2610,8 @@ pub mod tests {
         blockstore.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank0 = Arc::new(Bank::new(&genesis_config));
+        initiate_callback(&mut bank0, &genesis_config);
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
@@ -2631,13 +2632,14 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (bank_forks, _leader_schedule) = process_blockstore_from_root(
+        let (bank_forks, _leader_schedule) = do_process_blockstore_from_root(
             &genesis_config,
             &blockstore,
             bank1,
             &opts,
             &recyclers,
             None,
+            false,
         )
         .unwrap();
 
