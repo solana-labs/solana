@@ -975,7 +975,7 @@ mod tests {
         let contact_info3 = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         cluster_info.insert_info(contact_info2.clone());
         cluster_info.insert_info(contact_info3.clone());
-        let serve_repair = ServeRepair::new(cluster_info.clone());
+        let serve_repair = ServeRepair::new(cluster_info);
 
         // If:
         // 1) repair validator set doesn't exist in gossip
