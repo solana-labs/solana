@@ -133,6 +133,7 @@ fn process_transaction(
                         );
                     }
                     StakeInstruction::Authorize(_, _)
+                    | StakeInstruction::AuthorizeWithSeed(_)
                     | StakeInstruction::DelegateStake
                     | StakeInstruction::Deactivate => {
                         // These instructions are always permitted
