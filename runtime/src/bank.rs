@@ -2631,8 +2631,15 @@ impl Bank {
         self.hard_forks.clone()
     }
 
-    pub fn set_entered_epoch_callback(&mut self, entered_epoch_callback: EnteredEpochCallback) {
-        *self.entered_epoch_callback.write().unwrap() = Some(entered_epoch_callback);
+    pub fn initiate_entered_epoch_callback(
+        &mut self,
+        entered_epoch_callback: EnteredEpochCallback,
+    ) {
+        {
+            let mut callback_w = self.entered_epoch_callback.write().unwrap();
+            assert!(callback_w.is_none(), "Already callback has been initiated");
+            *callback_w = Some(entered_epoch_callback);
+        }
         self.apply_feature_activations();
     }
 
@@ -6372,7 +6379,7 @@ mod tests {
 
         Arc::get_mut(&mut bank0)
             .unwrap()
-            .set_entered_epoch_callback({
+            .initiate_entered_epoch_callback({
                 let callback_count = callback_count.clone();
                 //Box::new(move |_bank: &mut Bank| {
                 Box::new(move |_| {

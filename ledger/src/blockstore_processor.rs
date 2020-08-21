@@ -309,6 +309,14 @@ pub struct ProcessOptions {
     pub frozen_accounts: Vec<Pubkey>,
 }
 
+fn initiate_callback(mut bank: &mut Arc<Bank>, genesis_config: &GenesisConfig) {
+    Arc::get_mut(&mut bank)
+        .unwrap()
+        .initiate_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
+            genesis_config.operating_mode,
+        ));
+}
+
 pub fn process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
@@ -325,25 +333,54 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let mut bank0 = Bank::new_with_paths(&genesis_config, account_paths, &opts.frozen_accounts);
-    let callback =
-        solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode);
-    callback(&mut bank0);
-    let bank0 = Arc::new(bank0);
+    let mut bank0 = Arc::new(Bank::new_with_paths(
+        &genesis_config,
+        account_paths,
+        &opts.frozen_accounts,
+    ));
+    initiate_callback(&mut bank0, genesis_config);
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
-    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts, &recyclers, None)
+    do_process_blockstore_from_root(
+        genesis_config,
+        blockstore,
+        bank0,
+        &opts,
+        &recyclers,
+        None,
+        false,
+    )
 }
 
 // Process blockstore from a known root bank
 pub fn process_blockstore_from_root(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
+    bank: Arc<Bank>,
+    opts: &ProcessOptions,
+    recyclers: &VerifyRecyclers,
+    transaction_status_sender: Option<TransactionStatusSender>,
+) -> BlockstoreProcessorResult {
+    do_process_blockstore_from_root(
+        genesis_config,
+        blockstore,
+        bank,
+        opts,
+        recyclers,
+        transaction_status_sender,
+        true,
+    )
+}
+
+fn do_process_blockstore_from_root(
+    genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
     mut bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<TransactionStatusSender>,
+    enable_callback: bool,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
@@ -355,9 +392,9 @@ pub fn process_blockstore_from_root(
     let now = Instant::now();
     let mut root = start_slot;
 
-    Arc::get_mut(&mut bank).unwrap().set_entered_epoch_callback(
-        solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode),
-    );
+    if enable_callback {
+        initiate_callback(&mut bank, genesis_config);
+    }
 
     if let Some(ref new_hard_forks) = opts.new_hard_forks {
         let hard_forks = bank.hard_forks();
@@ -2573,11 +2610,7 @@ pub mod tests {
         blockstore.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
-        let mut bank0 = Bank::new(&genesis_config);
-        let callback =
-            solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode);
-        callback(&mut bank0);
-        let bank0 = Arc::new(bank0);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
