@@ -145,16 +145,11 @@ fn create_account(
     transfer(from, to, lamports)
 }
 
-fn transfer(from: &KeyedAccount, to: &KeyedAccount, lamports: u64) -> Result<(), InstructionError> {
-    if lamports == 0 {
-        return Ok(());
-    }
-
-    if from.signer_key().is_none() {
-        debug!("Transfer: from must sign");
-        return Err(InstructionError::MissingRequiredSignature);
-    }
-
+fn transfer_verified(
+    from: &KeyedAccount,
+    to: &KeyedAccount,
+    lamports: u64,
+) -> Result<(), InstructionError> {
     if !from.data_is_empty()? {
         debug!("Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
@@ -171,6 +166,45 @@ fn transfer(from: &KeyedAccount, to: &KeyedAccount, lamports: u64) -> Result<(),
     from.try_account_ref_mut()?.lamports -= lamports;
     to.try_account_ref_mut()?.lamports += lamports;
     Ok(())
+}
+
+fn transfer(from: &KeyedAccount, to: &KeyedAccount, lamports: u64) -> Result<(), InstructionError> {
+    if lamports == 0 {
+        return Ok(());
+    }
+
+    if from.signer_key().is_none() {
+        debug!("Transfer: from must sign");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    transfer_verified(from, to, lamports)
+}
+
+fn transfer_with_seed(
+    from: &KeyedAccount,
+    from_base: &KeyedAccount,
+    from_seed: &str,
+    from_owner: &Pubkey,
+    to: &KeyedAccount,
+    lamports: u64,
+) -> Result<(), InstructionError> {
+    if lamports == 0 {
+        return Ok(());
+    }
+
+    if from_base.signer_key().is_none() {
+        debug!("Transfer: from must sign");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    if *from.unsigned_key()
+        != Pubkey::create_with_seed(from_base.unsigned_key(), from_seed, from_owner)?
+    {
+        return Err(SystemError::AddressWithSeedMismatch.into());
+    }
+
+    transfer_verified(from, to, lamports)
 }
 
 pub fn process_instruction(
@@ -219,6 +253,16 @@ pub fn process_instruction(
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
             transfer(from, to, lamports)
+        }
+        SystemInstruction::TransferWithSeed {
+            lamports,
+            from_seed,
+            from_owner,
+        } => {
+            let from = next_keyed_account(keyed_accounts_iter)?;
+            let base = next_keyed_account(keyed_accounts_iter)?;
+            let to = next_keyed_account(keyed_accounts_iter)?;
+            transfer_with_seed(from, base, &from_seed, &from_owner, to, lamports)
         }
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
@@ -860,6 +904,62 @@ mod tests {
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
         assert!(transfer(&from_keyed_account, &to_keyed_account, 0,).is_ok(),);
+        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+    }
+
+    #[test]
+    fn test_transfer_with_seed() {
+        let base = Pubkey::new_rand();
+        let base_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_base_keyed_account = KeyedAccount::new(&base, true, &base_account);
+        let from_seed = "42";
+        let from_owner = system_program::id();
+        let from = Pubkey::create_with_seed(&base, from_seed, &from_owner).unwrap();
+        let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let to = Pubkey::new(&[3; 32]);
+        let to_account = Account::new_ref(1, 0, &to); // account owner should not matter
+        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+        transfer_with_seed(
+            &from_keyed_account,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
+            &to_keyed_account,
+            50,
+        )
+        .unwrap();
+        let from_lamports = from_keyed_account.account.borrow().lamports;
+        let to_lamports = to_keyed_account.account.borrow().lamports;
+        assert_eq!(from_lamports, 50);
+        assert_eq!(to_lamports, 51);
+
+        // Attempt to move more lamports than remaining in from_account
+        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        let result = transfer_with_seed(
+            &from_keyed_account,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
+            &to_keyed_account,
+            100,
+        );
+        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
+        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+
+        // test unsigned transfer of zero
+        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
+        assert!(transfer_with_seed(
+            &from_keyed_account,
+            &from_base_keyed_account,
+            &from_seed,
+            &from_owner,
+            &to_keyed_account,
+            0,
+        )
+        .is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_keyed_account.account.borrow().lamports, 51);
     }
