@@ -2573,7 +2573,11 @@ pub mod tests {
         blockstore.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank0 = Bank::new(&genesis_config);
+        let callback =
+            solana_genesis_programs::get_entered_epoch_callback(genesis_config.operating_mode);
+        callback(&mut bank0);
+        let bank0 = Arc::new(bank0);
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
