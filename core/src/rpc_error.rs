@@ -46,7 +46,7 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::BlockNotAvailable { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_4),
-                message: format!("Block not available for slot {}", slot,),
+                message: format!("Block not available for slot {}", slot),
                 data: None,
             },
         }
