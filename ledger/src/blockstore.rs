@@ -41,7 +41,7 @@ use solana_transaction_status::{
     EncodedTransaction, Rewards, TransactionStatusMeta, TransactionWithStatusMeta,
     UiTransactionEncoding, UiTransactionStatusMeta,
 };
-use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     cmp,
@@ -78,6 +78,7 @@ thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::ne
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
+const TIMESTAMP_SLOT_INTERVAL: u64 = 4500;
 const TIMESTAMP_SLOT_RANGE: usize = 16;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
