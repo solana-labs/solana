@@ -385,7 +385,8 @@ impl CrdsGossipPull {
         let past = now.saturating_sub(msg_timeout);
         let recent: Vec<_> = filters
             .iter()
-            .filter(|(caller, _)| caller.wallclock() < future && caller.wallclock() >= past)
+            .enumerate()
+            .filter(|(_, (caller, _))| caller.wallclock() < future && caller.wallclock() >= past)
             .collect();
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
@@ -396,7 +397,7 @@ impl CrdsGossipPull {
         }
         let mut total_skipped = 0;
         for v in crds.table.values() {
-            recent.iter().enumerate().for_each(|(i, (caller, filter))| {
+            recent.iter().for_each(|(i, (caller, filter))| {
                 //skip values that are too new
                 if v.value.wallclock() > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
                 {
@@ -404,7 +405,7 @@ impl CrdsGossipPull {
                     return;
                 }
                 if !filter.contains(&v.value_hash) {
-                    ret[i].push(v.value.clone());
+                    ret[*i].push(v.value.clone());
                 }
             });
         }
@@ -710,15 +711,19 @@ mod test {
             dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
         assert_eq!(rsp[0].len(), 0);
 
+        assert_eq!(filters.len(), 1);
+        filters.push(filters[0].clone());
         //should return new value since caller is new
-        filters[0].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+        filters[1].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
         let rsp =
             dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
-        assert_eq!(rsp[0].len(), 1);
+        assert_eq!(rsp.len(), 2);
+        assert_eq!(rsp[0].len(), 0);
+        assert_eq!(rsp[1].len(), 1); // Orders are also preserved.
     }
 
     #[test]
