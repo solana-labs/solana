@@ -30,9 +30,10 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{
-        Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+        Epoch, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
+    genesis_config::ClusterType,
     poh_config::PohConfig,
     pubkey::Pubkey,
     timing::{duration_as_ms, timestamp},
@@ -724,6 +725,8 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
+        cluster_type: ClusterType,
+        epoch: Epoch,
     ) -> (Vec<Transaction>, Vec<usize>) {
         let packets = Packets::new(
             transaction_indexes
@@ -733,8 +736,27 @@ impl BankingStage {
         );
 
         let transactions = Self::deserialize_transactions(&packets);
+        let maybe_secp_verified_transactions: Vec<_> =
+            if solana_sdk::secp256k1::is_enabled(cluster_type, epoch) {
+                transactions
+                    .into_iter()
+                    .map(|tx| {
+                        if let Some(tx) = tx {
+                            if tx.verify_precompiles().is_ok() {
+                                Some(tx)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                transactions
+            };
 
-        Self::filter_transaction_indexes(transactions, &transaction_indexes)
+        Self::filter_transaction_indexes(maybe_secp_verified_transactions, &transaction_indexes)
     }
 
     /// This function filters pending packets that are still valid
@@ -783,8 +805,12 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (usize, usize, Vec<usize>) {
-        let (transactions, transaction_to_packet_indexes) =
-            Self::transactions_from_packets(msgs, &packet_indexes);
+        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
+            msgs,
+            &packet_indexes,
+            bank.cluster_type(),
+            bank.epoch(),
+        );
         debug!(
             "bank: {} filtered transactions {}",
             bank.slot(),
@@ -833,8 +859,12 @@ impl BankingStage {
             }
         }
 
-        let (transactions, transaction_to_packet_indexes) =
-            Self::transactions_from_packets(msgs, &transaction_indexes);
+        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
+            msgs,
+            &transaction_indexes,
+            bank.cluster_type(),
+            bank.epoch(),
+        );
 
         let tx_count = transaction_to_packet_indexes.len();
 
