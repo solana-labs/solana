@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use solana_banks_client::{BanksClient, BanksClientExt};
 use solana_sdk::{
     commitment_config::CommitmentLevel,
+    instruction::Instruction,
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
@@ -123,7 +124,80 @@ async fn transfer<S: Signer>(
     ))
 }
 
-async fn distribute_tokens(
+fn distribution_instructions(
+    allocation: &Allocation,
+    new_stake_account_address: &Pubkey,
+    args: &DistributeTokensArgs,
+    lockup_date: Option<DateTime<Utc>>,
+) -> Vec<Instruction> {
+    if args.stake_args.is_none() {
+        let from = args.sender_keypair.pubkey();
+        let to = allocation.recipient.parse().unwrap();
+        let lamports = sol_to_lamports(allocation.amount);
+        let instruction = system_instruction::transfer(&from, &to, lamports);
+        return vec![instruction];
+    }
+
+    let stake_args = args.stake_args.as_ref().unwrap();
+    let sol_for_fees = stake_args.sol_for_fees;
+    let sender_pubkey = args.sender_keypair.pubkey();
+    let stake_authority = stake_args.stake_authority.pubkey();
+    let withdraw_authority = stake_args.withdraw_authority.pubkey();
+
+    let mut instructions = stake_instruction::split(
+        &stake_args.stake_account_address,
+        &stake_authority,
+        sol_to_lamports(allocation.amount - sol_for_fees),
+        &new_stake_account_address,
+    );
+
+    let recipient = allocation.recipient.parse().unwrap();
+
+    // Make the recipient the new stake authority
+    instructions.push(stake_instruction::authorize(
+        &new_stake_account_address,
+        &stake_authority,
+        &recipient,
+        StakeAuthorize::Staker,
+    ));
+
+    // Make the recipient the new withdraw authority
+    instructions.push(stake_instruction::authorize(
+        &new_stake_account_address,
+        &withdraw_authority,
+        &recipient,
+        StakeAuthorize::Withdrawer,
+    ));
+
+    // Add lockup
+    if let Some(lockup_date) = lockup_date {
+        let lockup_authority = stake_args
+            .lockup_authority
+            .as_ref()
+            .map(|signer| signer.pubkey())
+            .unwrap();
+        let lockup = LockupArgs {
+            unix_timestamp: Some(lockup_date.timestamp()),
+            epoch: None,
+            custodian: None,
+        };
+        instructions.push(stake_instruction::set_lockup(
+            &new_stake_account_address,
+            &lockup,
+            &lockup_authority,
+        ));
+    }
+
+    instructions.push(system_instruction::transfer(
+        &sender_pubkey,
+        &recipient,
+        sol_to_lamports(sol_for_fees),
+    ));
+
+    instructions
+}
+
+async fn distribute_allocations(
     client: &mut BanksClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
@@ -155,71 +229,7 @@ async fn distribute_tokens(
         };
 
         println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-        let instructions = if let Some(stake_args) = &args.stake_args {
-            let sol_for_fees = stake_args.sol_for_fees;
-            let sender_pubkey = args.sender_keypair.pubkey();
-            let stake_authority = stake_args.stake_authority.pubkey();
-            let withdraw_authority = stake_args.withdraw_authority.pubkey();
-
-            let mut instructions = stake_instruction::split(
-                &stake_args.stake_account_address,
-                &stake_authority,
-                sol_to_lamports(allocation.amount - sol_for_fees),
-                &new_stake_account_address,
-            );
-
-            let recipient = allocation.recipient.parse().unwrap();
-
-            // Make the recipient the new stake authority
-            instructions.push(stake_instruction::authorize(
-                &new_stake_account_address,
-                &stake_authority,
-                &recipient,
-                StakeAuthorize::Staker,
-            ));
-
-            // Make the recipient the new withdraw authority
-            instructions.push(stake_instruction::authorize(
-                &new_stake_account_address,
-                &withdraw_authority,
-                &recipient,
-                StakeAuthorize::Withdrawer,
-            ));
-
-            // Add lockup
-            if let Some(lockup_date) = lockup_date {
-                let lockup_authority = stake_args
-                    .lockup_authority
-                    .as_ref()
-                    .map(|signer| signer.pubkey())
-                    .unwrap();
-                let lockup = LockupArgs {
-                    unix_timestamp: Some(lockup_date.timestamp()),
-                    epoch: None,
-                    custodian: None,
-                };
-                instructions.push(stake_instruction::set_lockup(
-                    &new_stake_account_address,
-                    &lockup,
-                    &lockup_authority,
-                ));
-            }
-
-            instructions.push(system_instruction::transfer(
-                &sender_pubkey,
-                &recipient,
-                sol_to_lamports(sol_for_fees),
-            ));
-
-            instructions
-        } else {
-            let from = args.sender_keypair.pubkey();
-            let to = allocation.recipient.parse().unwrap();
-            let lamports = sol_to_lamports(allocation.amount);
-            let instruction = system_instruction::transfer(&from, &to, lamports);
-            vec![instruction]
-        };
-
+        let instructions = distribution_instructions(allocation, &new_stake_account_address, args, lockup_date);
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
         let result: transport::Result<(Transaction, u64)> = {
@@ -280,7 +290,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub async fn process_distribute_tokens(
+pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
@@ -358,7 +368,7 @@ pub async fn process_distribute_tokens(
         );
     }
 
-    distribute_tokens(client, &mut db, &allocations, args).await?;
+    distribute_allocations(client, &mut db, &allocations, args).await?;
 
     let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
     Ok(opt_confirmations)
@@ -540,7 +550,7 @@ pub async fn test_process_distribute_tokens_with_client(
         dollars_per_sol: None,
         stake_args: None,
     };
-    let confirmations = process_distribute_tokens(client, &args).await.unwrap();
+    let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -559,7 +569,7 @@ pub async fn test_process_distribute_tokens_with_client(
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(client, &args).await.unwrap();
+    process_allocations(client, &args).await.unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -657,7 +667,7 @@ pub async fn test_process_distribute_stake_with_client(
         sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
-    let confirmations = process_distribute_tokens(client, &args).await.unwrap();
+    let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -681,7 +691,7 @@ pub async fn test_process_distribute_stake_with_client(
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(client, &args).await.unwrap();
+    process_allocations(client, &args).await.unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -713,7 +723,7 @@ mod tests {
     use tokio::runtime::Runtime;
 
     #[test]
-    fn test_process_distribute_tokens() {
+    fn test_process_token_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
@@ -724,7 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_distribute_stake() {
+    fn test_process_stake_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
