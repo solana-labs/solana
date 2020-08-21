@@ -235,6 +235,7 @@ impl RepairService {
                     blockstore,
                     &serve_repair,
                     &repair_info.duplicate_slots_reset_sender,
+                    &repair_info.repair_validators,
                 );
                 Self::generate_and_send_duplicate_repairs(
                     &mut duplicate_slot_repair_statuses,
@@ -243,6 +244,7 @@ impl RepairService {
                     &serve_repair,
                     &mut repair_stats,
                     &repair_socket,
+                    &repair_info.repair_validators,
                 );*/
 
                 repair_weight.get_best_weighted_repairs(
@@ -446,9 +448,16 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
-            Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
+            Self::update_duplicate_slot_repair_addr(
+                *slot,
+                status,
+                cluster_slots,
+                serve_repair,
+                repair_validators,
+            );
             if let Some((repair_pubkey, repair_addr)) = status.repair_pubkey_and_addr {
                 let repairs = Self::generate_duplicate_repairs_for_slot(&blockstore, *slot);
 
@@ -501,13 +510,17 @@ impl RepairService {
         status: &mut DuplicateSlotRepairStatus,
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) {
         let now = timestamp();
         if status.repair_pubkey_and_addr.is_none()
             || now.saturating_sub(status.start) >= MAX_DUPLICATE_WAIT_MS as u64
         {
-            let repair_pubkey_and_addr =
-                serve_repair.repair_request_duplicate_compute_best_peer(slot, cluster_slots);
+            let repair_pubkey_and_addr = serve_repair.repair_request_duplicate_compute_best_peer(
+                slot,
+                cluster_slots,
+                repair_validators,
+            );
             status.repair_pubkey_and_addr = repair_pubkey_and_addr.ok();
             status.start = timestamp();
         }
@@ -522,6 +535,7 @@ impl RepairService {
         blockstore: &Blockstore,
         serve_repair: &ServeRepair,
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) {
         for slot in new_duplicate_slots {
             warn!(
@@ -547,7 +561,7 @@ impl RepairService {
             // Mark this slot as special repair, try to download from single
             // validator to avoid corruption
             let repair_pubkey_and_addr = serve_repair
-                .repair_request_duplicate_compute_best_peer(*slot, cluster_slots)
+                .repair_request_duplicate_compute_best_peer(*slot, cluster_slots, repair_validators)
                 .ok();
             let new_duplicate_slot_repair_status = DuplicateSlotRepairStatus {
                 start: timestamp(),
@@ -955,6 +969,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &None,
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -978,6 +993,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &None,
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -994,6 +1010,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &None,
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }
@@ -1028,6 +1045,7 @@ mod test {
             &mut duplicate_status,
             &cluster_slots,
             &serve_repair,
+            &None,
         );
         assert_eq!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
 
@@ -1041,6 +1059,7 @@ mod test {
             &mut duplicate_status,
             &cluster_slots,
             &serve_repair,
+            &None,
         );
         assert!(duplicate_status.repair_pubkey_and_addr.is_some());
 
@@ -1054,6 +1073,7 @@ mod test {
             &mut duplicate_status,
             &cluster_slots,
             &serve_repair,
+            &None,
         );
         assert_ne!(duplicate_status.repair_pubkey_and_addr, dummy_addr);
     }
@@ -1110,6 +1130,7 @@ mod test {
             &blockstore,
             &serve_repair,
             &reset_sender,
+            &None,
         );
 
         // Blockstore should have been cleared
