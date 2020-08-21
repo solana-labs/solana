@@ -691,6 +691,11 @@ impl MessageProcessor {
         }
         Ok(())
     }
+
+    // only used for testing
+    pub fn loader_program_ids(&self) -> Vec<Pubkey> {
+        self.loaders.iter().map(|a| a.0).collect::<Vec<_>>()
+    }
 }
 
 #[cfg(test)]

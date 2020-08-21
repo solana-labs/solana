@@ -3104,4 +3104,92 @@ pub mod tests {
         run_test_process_blockstore_with_supermajority_root(None);
         run_test_process_blockstore_with_supermajority_root(Some(1))
     }
+
+    #[test]
+    fn test_process_blockstore_feature_activations_since_genesis() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+
+        let opts = ProcessOptions::default();
+        let (bank_forks, _leader_schedule) =
+            process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
+
+        assert_eq!(bank_forks.working_bank().slot(), 0);
+        assert_eq!(
+            bank_forks.working_bank().loader_program_ids(),
+            vec![
+                solana_sdk::bpf_loader::id(),
+                solana_sdk::bpf_loader_deprecated::id()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_process_blockstore_feature_activations_from_snapshot() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+
+        // Set up bank1
+        let mut bank0 = Arc::new(Bank::new(&genesis_config));
+        initiate_callback(&mut bank0, &genesis_config);
+        let recyclers = VerifyRecyclers::default();
+        let opts = ProcessOptions::default();
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers).unwrap();
+        let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(1);
+        let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), restored_slot);
+        bank1.squash();
+
+        // this is similar to snapshot deserialization
+        bank1.reset_callback_and_message_processor();
+        assert_eq!(bank1.loader_program_ids(), vec![]);
+
+        let bank1 = Arc::new(bank1);
+        let (bank_forks, _leader_schedule) = process_blockstore_from_root(
+            &genesis_config,
+            &blockstore,
+            bank1,
+            &opts,
+            &recyclers,
+            None,
+        )
+        .unwrap();
+        assert_eq!(bank_forks.working_bank().slot(), restored_slot);
+        assert_eq!(
+            bank_forks.working_bank().loader_program_ids(),
+            vec![
+                solana_sdk::bpf_loader::id(),
+                solana_sdk::bpf_loader_deprecated::id()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_process_blockstore_feature_activations_into_epoch_with_activation() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(123);
+
+        genesis_config.operating_mode = solana_sdk::genesis_config::OperatingMode::Stable;
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+
+        let opts = ProcessOptions::default();
+        let (bank_forks, _leader_schedule) =
+            process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
+        let bank = bank_forks.working_bank();
+        assert_eq!(bank.loader_program_ids(), vec![]);
+
+        let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(34);
+        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), restored_slot);
+
+        assert_eq!(bank.slot(), restored_slot);
+        assert_eq!(
+            bank.loader_program_ids(),
+            vec![solana_sdk::bpf_loader_deprecated::id()]
+        );
+    }
 }

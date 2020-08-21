@@ -190,6 +190,7 @@ impl StatusCacheRc {
 }
 
 pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) + Sync + Send>;
+type WrappedEnteredEpochCallback = Arc<RwLock<Option<EnteredEpochCallback>>>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
@@ -416,7 +417,7 @@ pub struct Bank {
 
     /// Callback to be notified when a bank enters a new Epoch
     /// (used to adjust cluster features over time)
-    entered_epoch_callback: Arc<RwLock<Option<EnteredEpochCallback>>>,
+    entered_epoch_callback: WrappedEnteredEpochCallback,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -3222,6 +3223,17 @@ impl Bank {
         };
 
         self.slot() >= activation_slot
+    }
+
+    // only used for testing
+    pub fn loader_program_ids(&self) -> Vec<Pubkey> {
+        self.message_processor.loader_program_ids()
+    }
+
+    // only used for testing
+    pub fn reset_callback_and_message_processor(&mut self) {
+        self.entered_epoch_callback = WrappedEnteredEpochCallback::default();
+        self.message_processor = MessageProcessor::default();
     }
 }
 
