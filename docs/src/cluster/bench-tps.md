@@ -6,25 +6,7 @@ The Solana git repository contains all the scripts you might need to spin up you
 
 For all four variations, you'd need the latest Rust toolchain and the Solana source code:
 
-First, install Rust's package manager Cargo.
-
-```bash
-$ curl https://sh.rustup.rs -sSf | sh
-  $ source $HOME/.cargo/env
-  $ rustup component add rustfmt
-```
-
-If your rustc version is lower than 1.39.0, please update it:
-
-```bash
-$ rustup update
-```
-On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, etc.  On Ubuntu:
-
-```bash
-$ sudo apt-get update
-$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang
-```
+First, setup Rust, Cargo and system packages as described in the Solana [README](https://github.com/solana-labs/solana#1-install-rustc-cargo-and-rustfmt)
 
 Now checkout the code from github:
 
