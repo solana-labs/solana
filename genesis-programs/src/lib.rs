@@ -89,6 +89,13 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Program> {
             ]);
         }
         OperatingMode::Preview => {
+            // tds enabled async cluster restart with smart contract being enabled
+            // at slot 2196960 (midway epoch 17) with v1.0.1 on Mar 1, 2020
+            if epoch >= 17 {
+                programs.extend(vec![Program::BuiltinLoader(
+                    solana_bpf_loader_deprecated_program!(),
+                )]);
+            }
             #[allow(clippy::absurd_extreme_comparisons)]
             if epoch >= std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
@@ -105,7 +112,6 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Program> {
                     solana_bpf_loader_deprecated_program!(),
                 )]);
             }
-            // at which epoch, bpf_loader_program is enabled??
             #[allow(clippy::absurd_extreme_comparisons)]
             if epoch >= std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
@@ -197,7 +203,7 @@ mod tests {
     #[test]
     fn test_native_development_programs() {
         assert_eq!(get_native_programs(OperatingMode::Development, 0).len(), 3);
-        assert_eq!(get_native_programs(OperatingMode::Development, 0).len(), 3);
+        assert_eq!(get_native_programs(OperatingMode::Development, 1).len(), 3);
     }
 
     #[test]

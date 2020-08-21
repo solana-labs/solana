@@ -6380,14 +6380,17 @@ mod tests {
                 })
             });
 
+        // set_entered_eepoc_callbak fires the initial call
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+
         let _bank1 =
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
         // No callback called while within epoch 0
-        assert_eq!(callback_count.load(Ordering::SeqCst), 0);
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
 
         let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
         // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
 
         callback_count.store(0, Ordering::SeqCst);
         let _bank1 = Bank::new_from_parent(
