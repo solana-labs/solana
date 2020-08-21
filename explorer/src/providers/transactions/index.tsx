@@ -56,15 +56,13 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 export async function fetchTransactionStatus(
   dispatch: Dispatch,
   signature: TransactionSignature,
-  url: string,
-  isAutoRefresh: boolean
+  url: string
 ) {
   dispatch({
     type: ActionType.Update,
     key: signature,
     status: FetchStatus.Fetching,
     url,
-    isAutoRefresh,
   });
 
   let fetchStatus;
@@ -119,7 +117,6 @@ export async function fetchTransactionStatus(
     status: fetchStatus,
     data,
     url,
-    isAutoRefresh,
   });
 }
 
@@ -156,7 +153,7 @@ export function useFetchTransactionStatus() {
   }
 
   const { url } = useCluster();
-  return (signature: TransactionSignature, isAutoRefresh = false) => {
-    fetchTransactionStatus(dispatch, signature, url, isAutoRefresh);
+  return (signature: TransactionSignature) => {
+    fetchTransactionStatus(dispatch, signature, url);
   };
 }

@@ -31,11 +31,6 @@ import { FetchStatus } from "providers/cache";
 
 const AUTO_REFRESH_TIMEOUT = 2000;
 
-type AutoRefresh = {
-  isAutoRefresh: boolean;
-  timeout?: NodeJS.Timeout | false;
-};
-
 type Props = { signature: TransactionSignature };
 export function TransactionDetailsPage({ signature: raw }: Props) {
   let signature: TransactionSignature | undefined;
@@ -74,17 +69,26 @@ function StatusCard({ signature }: Props) {
   const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
-  const [autoRefresh, setAutoRefresh] = React.useState<AutoRefresh>({
-    isAutoRefresh: false,
-  });
+  const autoRefreshTimeout = React.useRef<NodeJS.Timeout | null>(null);
+  const [autoRefreshInProcess, setAutoRefreshInProcess] = React.useState<
+    boolean
+  >(false);
 
   const refresh = React.useCallback(
-    (signature: string, isAutoRefresh: boolean = false) => {
-      fetchStatus(signature, isAutoRefresh);
+    (signature: string) => {
+      fetchStatus(signature);
       fetchDetails(signature);
     },
     [fetchStatus, fetchDetails]
   );
+
+  React.useEffect(() => {
+    return () => {
+      if (autoRefreshTimeout.current) {
+        clearTimeout(autoRefreshTimeout.current);
+      }
+    };
+  }, []);
 
   // Fetch transaction on load
   React.useEffect(() => {
@@ -94,34 +98,37 @@ function StatusCard({ signature }: Props) {
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
-    return () => {
-      if (autoRefresh.timeout) {
-        clearTimeout(autoRefresh.timeout);
-      }
-    };
-  }, [autoRefresh]);
-
-  React.useEffect(() => {
-    if (
-      !autoRefresh.isAutoRefresh &&
-      status?.data?.info?.confirmations !== "max"
-    ) {
-      setAutoRefresh({
-        isAutoRefresh: true,
-        timeout: setTimeout(() => {
-          refresh(signature, true);
-          setAutoRefresh({
-            isAutoRefresh: false,
-            timeout: false,
-          });
-        }, AUTO_REFRESH_TIMEOUT),
-      });
+    if (!status || !status.data?.info) {
+      return;
     }
-  }, [autoRefresh, status, refresh, signature]);
+
+    if (status.status !== FetchStatus.Fetching && autoRefreshInProcess) {
+      setAutoRefreshInProcess(false);
+    }
+
+    if (
+      !autoRefreshTimeout.current &&
+      status.data.info.confirmations !== "max"
+    ) {
+      autoRefreshTimeout.current = setTimeout(() => {
+        autoRefreshTimeout.current = null;
+        refresh(signature);
+        setAutoRefreshInProcess(true);
+      }, AUTO_REFRESH_TIMEOUT);
+    }
+
+    if (
+      autoRefreshTimeout.current &&
+      status.data.info.confirmations === "max"
+    ) {
+      clearTimeout(autoRefreshTimeout.current);
+      autoRefreshTimeout.current = null;
+    }
+  }, [autoRefreshInProcess, status, refresh, signature]);
 
   if (
     !status ||
-    (status.status === FetchStatus.Fetching && !status.isAutoRefresh)
+    (status.status === FetchStatus.Fetching && !autoRefreshInProcess)
   ) {
     return <LoadingCard />;
   } else if (status.status === FetchStatus.FetchFailed) {
@@ -175,13 +182,17 @@ function StatusCard({ signature }: Props) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(signature)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
+        {status.data.info.confirmations === "max" ? (
+          <button
+            className="btn btn-white btn-sm"
+            onClick={() => refresh(signature)}
+          >
+            <span className="fe fe-refresh-cw mr-2"></span>
+            Refresh
+          </button>
+        ) : (
+          <span className="spinner-grow spinner-grow-sm"></span>
+        )}
       </div>
 
       <TableCardBody>
@@ -272,20 +283,14 @@ function AccountsCard({ signature }: Props) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (
-    !details ||
-    (status.isAutoRefresh && status.data.info.confirmations !== "max")
-  ) {
+  } else if (!details || status.data.info.confirmations !== "max") {
     return (
       <ErrorCard
         retry={refreshStatus}
         text="Details are not available until the transaction reaches MAX confirmations"
       />
     );
-  } else if (
-    details.status === FetchStatus.Fetching &&
-    !details.isAutoRefresh
-  ) {
+  } else if (details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
