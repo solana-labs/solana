@@ -385,7 +385,8 @@ impl CrdsGossipPull {
         let past = now.saturating_sub(msg_timeout);
         let recent: Vec<_> = filters
             .iter()
-            .filter(|(caller, _)| caller.wallclock() < future && caller.wallclock() >= past)
+            .enumerate()
+            .filter(|(_, (caller, _))| caller.wallclock() < future && caller.wallclock() >= past)
             .collect();
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
@@ -395,6 +396,7 @@ impl CrdsGossipPull {
             return ret;
         }
         let mut total_skipped = 0;
+<<<<<<< HEAD
         for v in crds.table.values() {
             recent.iter().enumerate().for_each(|(i, (caller, filter))| {
                 //skip values that are too new
@@ -407,6 +409,33 @@ impl CrdsGossipPull {
                     ret[i].push(v.value.clone());
                 }
             });
+=======
+        let mask_ones: Vec<_> = recent
+            .iter()
+            .map(|(_i, (_caller, filter))| (!0u64).checked_shr(filter.mask_bits).unwrap_or(!0u64))
+            .collect();
+        for (label, mask) in crds.masks.iter() {
+            recent
+                .iter()
+                .zip(mask_ones.iter())
+                .for_each(|((i, (caller, filter)), mask_ones)| {
+                    if filter.test_mask_u64(*mask, *mask_ones) {
+                        let item = crds.table.get(label).unwrap();
+
+                        //skip values that are too new
+                        if item.value.wallclock()
+                            > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
+                        {
+                            total_skipped += 1;
+                            return;
+                        }
+
+                        if !filter.filter_contains(&item.value_hash) {
+                            ret[*i].push(item.value.clone());
+                        }
+                    }
+                });
+>>>>>>> 418b483af... Fix filter_crds_values output alignment with the inputs (#11734)
         }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
@@ -710,15 +739,19 @@ mod test {
             dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
         assert_eq!(rsp[0].len(), 0);
 
+        assert_eq!(filters.len(), 1);
+        filters.push(filters[0].clone());
         //should return new value since caller is new
-        filters[0].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+        filters[1].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
         let rsp =
             dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
-        assert_eq!(rsp[0].len(), 1);
+        assert_eq!(rsp.len(), 2);
+        assert_eq!(rsp[0].len(), 0);
+        assert_eq!(rsp[1].len(), 1); // Orders are also preserved.
     }
 
     #[test]
