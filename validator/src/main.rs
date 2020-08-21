@@ -352,24 +352,24 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
-fn trusted_validators_set(
+fn validators_set(
     identity_pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
     matches_name: &str,
     arg_name: &str,
 ) -> Option<HashSet<Pubkey>> {
     if matches.is_present(matches_name) {
-        let trusted_validators: HashSet<_> = values_t_or_exit!(matches, matches_name, Pubkey)
+        let validators_set: HashSet<_> = values_t_or_exit!(matches, matches_name, Pubkey)
             .into_iter()
             .collect();
-        if trusted_validators.contains(identity_pubkey) {
+        if validators_set.contains(identity_pubkey) {
             eprintln!(
                 "The validator's identity pubkey cannot be a {}: {}",
                 arg_name, identity_pubkey
             );
             exit(1);
         }
-        Some(trusted_validators)
+        Some(validators_set)
     } else {
         None
     }
@@ -843,7 +843,7 @@ pub fn main() {
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to request repairs from. If specified, repair will not \
-                       request from validators outside this set")
+                       request from validators outside this set [default: request repairs from all validators]")
         )
         .arg(
             Arg::with_name("no_rocksdb_compaction")
@@ -947,13 +947,13 @@ pub fn main() {
     });
 
     let no_untrusted_rpc = matches.is_present("no_untrusted_rpc");
-    let trusted_validators = trusted_validators_set(
+    let trusted_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
         "trusted_validators",
         "--trusted-validator",
     );
-    let repair_validators = trusted_validators_set(
+    let repair_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
         "repair_validators",
