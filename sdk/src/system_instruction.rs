@@ -205,7 +205,7 @@ pub enum SystemInstruction {
     ///   1. [SIGNER] Base for funding account
     ///   2. [WRITE] Recipient account
     TransferWithSeed {
-        /// Acount to transfer
+        /// Amount to transfer
         lamports: u64,
 
         /// Seed to use to derive the funding account address
@@ -320,7 +320,7 @@ pub fn transfer_with_seed(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, false),
-        AccountMeta::new(*from_base, true),
+        AccountMeta::new_readonly(*from_base, true),
         AccountMeta::new(*to_pubkey, false),
     ];
     Instruction::new(

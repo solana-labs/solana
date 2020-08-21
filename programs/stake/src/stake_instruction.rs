@@ -358,7 +358,7 @@ pub fn authorize(
 
 pub fn authorize_with_seed(
     stake_pubkey: &Pubkey,
-    authorized_pubkey: &Pubkey,
+    authority_base: &Pubkey,
     authority_seed: String,
     authority_owner: &Pubkey,
     new_authorized_pubkey: &Pubkey,
@@ -366,7 +366,7 @@ pub fn authorize_with_seed(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new_readonly(*authorized_pubkey, true),
+        AccountMeta::new_readonly(*authority_base, true),
     ];
 
     let args = AuthorizeWithSeedArgs {
@@ -462,15 +462,15 @@ pub fn process_instruction(
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            me.authorize(&authorized_pubkey, stake_authorize, &signers)
+            me.authorize(&signers, &authorized_pubkey, stake_authorize)
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
             let authority_base = next_keyed_account(keyed_accounts)?;
             me.authorize_with_seed(
-                &args.new_authorized_pubkey,
                 &authority_base,
                 &args.authority_seed,
                 &args.authority_owner,
+                &args.new_authorized_pubkey,
                 args.stake_authorize,
             )
         }
