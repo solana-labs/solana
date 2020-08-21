@@ -8147,4 +8147,132 @@ mod tests {
 
         assert_eq!(bank.message_processor.get_cross_program_support(), true);
     }
+
+    #[test]
+    fn test_add_builtin_program_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::Custom(42))
+        }
+
+        let slot = 123;
+        let program_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&program_id), None);
+
+        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
+            "mock_program",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
+            "mock_program",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+    }
+
+    #[test]
+    fn test_add_builtin_loader_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+            _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::Custom(42))
+        }
+
+        let slot = 123;
+        let loader_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&loader_id), None);
+
+        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
+            "mock_program",
+            loader_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
+            "mock_program",
+            loader_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
+    }
+
+    #[test]
+    fn test_add_native_program_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&program_id), None);
+
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Can't change frozen bank by adding not-existing new native \
+                   program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
+                   Maybe, inconsistent program activation is detected on snapshot restore?"
+    )]
+    fn test_add_native_program_after_frozen() {
+        use std::str::FromStr;
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        bank.freeze();
+
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
+    }
 }
