@@ -9,23 +9,19 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state;
-use std::{borrow::Borrow, sync::Arc};
+use std::borrow::Borrow;
 
 // The default stake placed with the bootstrap validator
 pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
 
 pub struct ValidatorVoteKeypairs {
-    pub node_keypair: Arc<Keypair>,
-    pub vote_keypair: Arc<Keypair>,
-    pub stake_keypair: Arc<Keypair>,
+    pub node_keypair: Keypair,
+    pub vote_keypair: Keypair,
+    pub stake_keypair: Keypair,
 }
 
 impl ValidatorVoteKeypairs {
-    pub fn new(
-        node_keypair: Arc<Keypair>,
-        vote_keypair: Arc<Keypair>,
-        stake_keypair: Arc<Keypair>,
-    ) -> Self {
+    pub fn new(node_keypair: Keypair, vote_keypair: Keypair, stake_keypair: Keypair) -> Self {
         Self {
             node_keypair,
             vote_keypair,
@@ -35,9 +31,9 @@ impl ValidatorVoteKeypairs {
 
     pub fn new_rand() -> Self {
         Self {
-            node_keypair: Arc::new(Keypair::new()),
-            vote_keypair: Arc::new(Keypair::new()),
-            stake_keypair: Arc::new(Keypair::new()),
+            node_keypair: Keypair::new(),
+            vote_keypair: Keypair::new(),
+            stake_keypair: Keypair::new(),
         }
     }
 }
@@ -45,7 +41,7 @@ impl ValidatorVoteKeypairs {
 pub struct GenesisConfigInfo {
     pub genesis_config: GenesisConfig,
     pub mint_keypair: Keypair,
-    pub voting_keypair: Arc<Keypair>,
+    pub voting_keypair: Keypair,
 }
 
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
@@ -57,31 +53,32 @@ pub fn create_genesis_config_with_vote_accounts(
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
     stakes: Vec<u64>,
 ) -> GenesisConfigInfo {
+    assert!(!voting_keypairs.is_empty());
     assert_eq!(voting_keypairs.len(), stakes.len());
 
     let mut genesis_config_info = create_genesis_config_with_leader_ex(
         mint_lamports,
         &voting_keypairs[0].borrow().node_keypair.pubkey(),
-        voting_keypairs[0].borrow().vote_keypair.clone(),
-        voting_keypairs[0].borrow().stake_keypair.clone(),
+        &voting_keypairs[0].borrow().vote_keypair,
+        &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
         BOOTSTRAP_VALIDATOR_LAMPORTS,
     );
 
-    for (validator_voting_keypairs, stake) in voting_keypairs.iter().zip(stakes) {
+    for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
         let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
         let node_account = Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id());
-        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, stake);
+        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
             &vote_pubkey,
             &vote_account,
             &genesis_config_info.genesis_config.rent,
-            stake,
+            *stake,
         );
 
         // Put newly created accounts into genesis
@@ -103,8 +100,8 @@ pub fn create_genesis_config_with_leader(
     create_genesis_config_with_leader_ex(
         mint_lamports,
         bootstrap_validator_pubkey,
-        Arc::new(Keypair::new()),
-        Arc::new(Keypair::new()),
+        &Keypair::new(),
+        &Pubkey::new_rand(),
         bootstrap_validator_stake_lamports,
         BOOTSTRAP_VALIDATOR_LAMPORTS,
     )
@@ -113,8 +110,8 @@ pub fn create_genesis_config_with_leader(
 pub fn create_genesis_config_with_leader_ex(
     mint_lamports: u64,
     bootstrap_validator_pubkey: &Pubkey,
-    bootstrap_validator_voting_keypair: Arc<Keypair>,
-    bootstrap_validator_staking_keypair: Arc<Keypair>,
+    bootstrap_validator_voting_keypair: &Keypair,
+    bootstrap_validator_staking_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
     bootstrap_validator_lamports: u64,
 ) -> GenesisConfigInfo {
@@ -129,7 +126,7 @@ pub fn create_genesis_config_with_leader_ex(
     let rent = Rent::free();
 
     let bootstrap_validator_stake_account = stake_state::create_account(
-        &bootstrap_validator_staking_keypair.pubkey(),
+        bootstrap_validator_staking_pubkey,
         &bootstrap_validator_voting_keypair.pubkey(),
         &bootstrap_validator_vote_account,
         &rent,
@@ -150,7 +147,7 @@ pub fn create_genesis_config_with_leader_ex(
             bootstrap_validator_vote_account,
         ),
         (
-            bootstrap_validator_staking_keypair.pubkey(),
+            *bootstrap_validator_staking_pubkey,
             bootstrap_validator_stake_account,
         ),
     ]
@@ -171,6 +168,7 @@ pub fn create_genesis_config_with_leader_ex(
     GenesisConfigInfo {
         genesis_config,
         mint_keypair,
-        voting_keypair: bootstrap_validator_voting_keypair,
+        voting_keypair: Keypair::from_bytes(&bootstrap_validator_voting_keypair.to_bytes())
+            .unwrap(),
     }
 }
