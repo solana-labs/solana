@@ -4,13 +4,19 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
     SubCommand,
 };
-use solana_clap_utils::input_validators::{is_port, is_pubkey};
+use solana_clap_utils::{
+    input_parsers::keypair_of,
+    input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
+};
 use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
-use std::error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::process::exit;
+use std::{
+    error,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    process::exit,
+    sync::Arc,
+};
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
@@ -90,7 +96,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("HOST")
                         .takes_value(true)
                         .validator(solana_net_utils::is_host)
-                        .help("Gossip DNS name or IP address for the node [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                        .help("Gossip DNS name or IP address for the node \
+                               [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                )
+                .arg(
+                    Arg::with_name("identity")
+                        .short("i")
+                        .long("identity")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .validator(is_keypair_or_ask_keyword)
+                        .help("Identity keypair [default: ephemeral keypair]"),
                 )
                 .arg(
                     Arg::with_name("num_nodes")
@@ -160,6 +176,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             })
         })
     }
+<<<<<<< HEAD
 
     match matches.subcommand() {
         ("spy", Some(matches)) => {
@@ -177,6 +194,52 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
             let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+=======
+}
+
+fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
+    let num_nodes_exactly = matches
+        .value_of("num_nodes_exactly")
+        .map(|num| num.to_string().parse().unwrap());
+    let num_nodes = matches
+        .value_of("num_nodes")
+        .map(|num| num.to_string().parse().unwrap())
+        .or(num_nodes_exactly);
+    let timeout = matches
+        .value_of("timeout")
+        .map(|secs| secs.to_string().parse().unwrap());
+    let pubkey = matches
+        .value_of("node_pubkey")
+        .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
+    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let identity_keypair = keypair_of(&matches, "identity").map(Arc::new);
+
+    let entrypoint_addr = parse_entrypoint(matches);
+
+    let gossip_host = parse_gossip_host(matches, entrypoint_addr);
+
+    let gossip_addr = SocketAddr::new(
+        gossip_host,
+        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
+            solana_net_utils::find_available_port_in_range(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                (0, 1),
+            )
+            .expect("unable to find an available gossip port")
+        }),
+    );
+
+    let (_all_peers, validators) = discover(
+        identity_keypair,
+        entrypoint_addr.as_ref(),
+        num_nodes,
+        timeout,
+        pubkey,
+        None,
+        Some(&gossip_addr),
+        shred_version,
+    )?;
+>>>>>>> a1e2357d1... `solana-gossip spy` can now be given an identity keypair (`--identity` argument)
 
             let entrypoint_addr = parse_entrypoint(&matches);
 
@@ -215,6 +278,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }),
             );
 
+<<<<<<< HEAD
             let (_all_peers, validators) = discover(
                 entrypoint_addr.as_ref(),
                 num_nodes,
@@ -224,6 +288,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(&gossip_addr),
                 shred_version,
             )?;
+=======
+fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
+    let any = matches.is_present("any");
+    let all = matches.is_present("all");
+    let entrypoint_addr = parse_entrypoint(&matches);
+    let timeout = value_t_or_exit!(matches, "timeout", u64);
+    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let (_all_peers, validators) = discover(
+        None,
+        entrypoint_addr.as_ref(),
+        Some(1),
+        Some(timeout),
+        None,
+        entrypoint_addr.as_ref(),
+        None,
+        shred_version,
+    )?;
+>>>>>>> a1e2357d1... `solana-gossip spy` can now be given an identity keypair (`--identity` argument)
 
             if timeout.is_some() {
                 if let Some(num) = num_nodes {
@@ -257,6 +339,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }
             }
         }
+<<<<<<< HEAD
         ("rpc-url", Some(matches)) => {
             let any = matches.is_present("any");
             let all = matches.is_present("all");
@@ -272,6 +355,50 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None,
                 shred_version,
             )?;
+=======
+    }
+
+    Ok(())
+}
+
+fn process_stop(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
+    let entrypoint_addr = parse_entrypoint(&matches);
+    let pubkey = matches
+        .value_of("node_pubkey")
+        .unwrap()
+        .parse::<Pubkey>()
+        .unwrap();
+    let (_all_peers, validators) = discover(
+        None,
+        entrypoint_addr.as_ref(),
+        None,
+        None,
+        Some(pubkey),
+        None,
+        None,
+        0,
+    )?;
+    let validator = validators.iter().find(|x| x.id == pubkey).unwrap();
+
+    if !ContactInfo::is_valid_address(&validator.rpc) {
+        eprintln!(
+            "Error: RPC service is not enabled on validator {:?}",
+            pubkey
+        );
+        exit(1);
+    }
+    println!("\nSending stop request to validator {:?}", pubkey);
+
+    let result = RpcClient::new_socket(validator.rpc).validator_exit()?;
+    if result {
+        println!("Stop signal accepted");
+    } else {
+        eprintln!("Error: Stop signal ignored");
+    }
+
+    Ok(())
+}
+>>>>>>> a1e2357d1... `solana-gossip spy` can now be given an identity keypair (`--identity` argument)
 
             let rpc_addrs: Vec<_> = validators
                 .iter()
