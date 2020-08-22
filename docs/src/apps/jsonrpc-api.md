@@ -1353,6 +1353,7 @@ Before submitting, the following preflight checks are performed:
 - `<string>` - fully-signed Transaction, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following field:
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
+  - `preflightCommitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: max).
 
 #### Results:
 
@@ -1377,6 +1378,7 @@ Simulate sending a transaction
 - `<string>` - Transaction, as base-58 encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+  - `commitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: max).
 
 #### Results:
 
