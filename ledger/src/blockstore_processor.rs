@@ -3180,15 +3180,18 @@ pub mod tests {
         let opts = ProcessOptions::default();
         let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
-        let bank = bank_forks.working_bank();
-        assert_eq!(bank.loader_program_ids(), vec![]);
+        let bank0 = bank_forks.working_bank();
+        assert_eq!(bank0.loader_program_ids(), vec![]);
 
         let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(34);
-        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), restored_slot);
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), restored_slot);
 
-        assert_eq!(bank.slot(), restored_slot);
+        assert_eq!(bank0.slot(), 0);
+        assert_eq!(bank0.loader_program_ids(), vec![]);
+
+        assert_eq!(bank1.slot(), restored_slot);
         assert_eq!(
-            bank.loader_program_ids(),
+            bank1.loader_program_ids(),
             vec![solana_sdk::bpf_loader_deprecated::id()]
         );
     }
