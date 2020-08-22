@@ -12,6 +12,7 @@ pub mod abi_example;
 pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
+pub mod builtins;
 pub mod clock;
 pub mod commitment_config;
 pub mod decode_error;
