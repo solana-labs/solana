@@ -590,6 +590,19 @@ impl CliConfig<'_> {
             ))
         }
     }
+<<<<<<< HEAD
+=======
+
+    pub fn recent_for_tests() -> Self {
+        let mut config = Self::default();
+        config.commitment = CommitmentConfig::recent();
+        config.send_transaction_config = RpcSendTransactionConfig {
+            skip_preflight: true,
+            ..RpcSendTransactionConfig::default()
+        };
+        config
+    }
+>>>>>>> b660704fa... Allow the sendTransaction preflight commitment level to be configured
 }
 
 impl Default for CliConfig<'_> {
@@ -1290,6 +1303,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     &transaction,
                     RpcSendTransactionConfig {
                         skip_preflight: true,
+                        ..RpcSendTransactionConfig::default()
                     },
                 )
                 .ok();
@@ -1442,6 +1456,7 @@ fn process_deploy(
             &finalize_tx,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                ..RpcSendTransactionConfig::default()
             },
         )
         .map_err(|e| {

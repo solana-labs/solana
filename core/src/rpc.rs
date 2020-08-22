@@ -2101,7 +2101,13 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
+<<<<<<< HEAD
             if let (Err(err), _log_output) = run_transaction_simulation(&bank, transaction.clone())
+=======
+            let preflight_bank = &*meta.bank(config.preflight_commitment);
+            if let (Err(err), _log_output) =
+                preflight_bank.simulate_transaction(transaction.clone())
+>>>>>>> b660704fa... Allow the sendTransaction preflight commitment level to be configured
             {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
@@ -2134,7 +2140,11 @@ impl RpcSol for RpcSolImpl {
             Ok(())
         };
 
+<<<<<<< HEAD
         let bank = &*meta.bank(None)?;
+=======
+        let bank = &*meta.bank(config.commitment);
+>>>>>>> b660704fa... Allow the sendTransaction preflight commitment level to be configured
         let logs = if result.is_ok() {
             let sim_result = run_transaction_simulation(&bank, transaction);
             result = sim_result.0;
