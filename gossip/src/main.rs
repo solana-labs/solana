@@ -4,13 +4,19 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
     SubCommand,
 };
-use solana_clap_utils::input_validators::{is_port, is_pubkey};
+use solana_clap_utils::{
+    input_parsers::keypair_of,
+    input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
+};
 use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
-use std::error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::process::exit;
+use std::{
+    error,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    process::exit,
+    sync::Arc,
+};
 
 fn parse_matches() -> ArgMatches<'static> {
     let shred_version_arg = Arg::with_name("shred_version")
@@ -88,7 +94,17 @@ fn parse_matches() -> ArgMatches<'static> {
                         .value_name("HOST")
                         .takes_value(true)
                         .validator(solana_net_utils::is_host)
-                        .help("Gossip DNS name or IP address for the node [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                        .help("Gossip DNS name or IP address for the node \
+                               [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                )
+                .arg(
+                    Arg::with_name("identity")
+                        .short("i")
+                        .long("identity")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .validator(is_keypair_or_ask_keyword)
+                        .help("Identity keypair [default: ephemeral keypair]"),
                 )
                 .arg(
                     Arg::with_name("num_nodes")
@@ -230,6 +246,7 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
         .value_of("node_pubkey")
         .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let identity_keypair = keypair_of(&matches, "identity").map(Arc::new);
 
     let entrypoint_addr = parse_entrypoint(matches);
 
@@ -247,6 +264,7 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
     );
 
     let (_all_peers, validators) = discover(
+        identity_keypair,
         entrypoint_addr.as_ref(),
         num_nodes,
         timeout,
@@ -277,6 +295,7 @@ fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let (_all_peers, validators) = discover(
+        None,
         entrypoint_addr.as_ref(),
         Some(1),
         Some(timeout),
@@ -321,6 +340,7 @@ fn process_stop(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
         .parse::<Pubkey>()
         .unwrap();
     let (_all_peers, validators) = discover(
+        None,
         entrypoint_addr.as_ref(),
         None,
         None,
