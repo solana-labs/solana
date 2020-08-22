@@ -12,12 +12,14 @@ pub struct RpcSignatureStatusConfig {
 #[serde(rename_all = "camelCase")]
 pub struct RpcSendTransactionConfig {
     pub skip_preflight: bool,
+    pub preflight_commitment: Option<CommitmentConfig>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSimulateTransactionConfig {
     pub sig_verify: bool,
+    pub commitment: Option<CommitmentConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
