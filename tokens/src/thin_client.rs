@@ -35,6 +35,7 @@ impl Client for RpcClient {
             &transaction,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                ..RpcSendTransactionConfig::default()
             },
         )
         .map_err(|e| TransportError::Custom(e.to_string()))
