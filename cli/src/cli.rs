@@ -590,19 +590,6 @@ impl CliConfig<'_> {
             ))
         }
     }
-<<<<<<< HEAD
-=======
-
-    pub fn recent_for_tests() -> Self {
-        let mut config = Self::default();
-        config.commitment = CommitmentConfig::recent();
-        config.send_transaction_config = RpcSendTransactionConfig {
-            skip_preflight: true,
-            ..RpcSendTransactionConfig::default()
-        };
-        config
-    }
->>>>>>> b660704fa... Allow the sendTransaction preflight commitment level to be configured
 }
 
 impl Default for CliConfig<'_> {
