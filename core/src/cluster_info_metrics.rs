@@ -65,6 +65,8 @@ pub(crate) struct GossipStats {
     pub(crate) handle_batch_pull_requests_time: Counter,
     pub(crate) handle_batch_pull_responses_time: Counter,
     pub(crate) handle_batch_push_messages_time: Counter,
+    pub(crate) handle_pull_requests_no_budget: Counter,
+    pub(crate) handle_pull_requests_time: Counter,
     pub(crate) mark_pull_request: Counter,
     pub(crate) new_pull_requests: Counter,
     pub(crate) new_pull_requests_count: Counter,
@@ -251,6 +253,16 @@ pub(crate) fn submit_gossip_stats(stats: &GossipStats, gossip: &RwLock<CrdsGossi
         (
             "generate_pull_responses",
             stats.generate_pull_responses.clear(),
+            i64
+        ),
+        (
+            "handle_pull_requests_time",
+            stats.handle_pull_requests_time.clear(),
+            i64
+        ),
+        (
+            "handle_pull_requests_no_budget",
+            stats.handle_pull_requests_no_budget.clear(),
             i64
         ),
         ("process_prune", stats.process_prune.clear(), i64),

@@ -25,6 +25,7 @@ use crate::{
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
+    fixed_window::FixedWindow,
     ping_pong::{self, PingCache, Pong},
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
@@ -123,6 +124,8 @@ pub(crate) const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
 const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 /// Minimum number of staked nodes for enforcing stakes in gossip.
 const MIN_NUM_STAKED_NODES: usize = 500;
+/// Lookback window duration of bandwidth usage of pull requests.
+const BANDWIDTH_USAGE_LOOKBACK_DURATION: Duration = Duration::from_secs(7200);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -222,6 +225,10 @@ pub struct ClusterInfo {
     contact_save_interval: u64,  // milliseconds, 0 = disabled
     instance: NodeInstance,
     contact_info_path: PathBuf,
+    /// Maintains bandwidth usage from the pull requests over a fixed lookback
+    /// window. This is used along with the stakes to prioritize which pull
+    /// requests to handle.
+    bandwidth_usage: RwLock<FixedWindow<Pubkey, u64>>,
 }
 
 impl Default for ClusterInfo {
@@ -305,10 +312,26 @@ impl Signable for PruneData {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 struct PullData {
     from_addr: SocketAddr,
     caller: CrdsValue,
     filter: CrdsFilter,
+}
+
+impl PullData {
+    /// New random PullData for tests and simulations.
+    #[cfg(test)]
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> PullData {
+        let caller = ContactInfo::new_rand(rng, pubkey);
+        let num_items = rng.gen_range(2048, 4096);
+        let max_bytes = rng.gen_range(512, 1024);
+        PullData {
+            from_addr: tests::new_rand_socket_addr(rng),
+            caller: CrdsValue::new_unsigned(CrdsData::ContactInfo(caller)),
+            filter: CrdsFilter::new_rand(num_items, max_bytes),
+        }
+    }
 }
 
 pub fn make_accounts_hashes_message(
@@ -428,17 +451,6 @@ impl Sanitize for Protocol {
     }
 }
 
-// Rating for pull requests
-// A response table is generated as a
-// 2-d table arranged by target nodes and a
-// list of responses for that node,
-// to/responses_index is a location in that table.
-struct ResponseScore {
-    to: usize,              // to, index of who the response is to
-    responses_index: usize, // index into the list of responses for a given to
-    score: u64,             // Relative score of the response
-}
-
 // Retains only CRDS values associated with nodes with enough stake.
 // (some crds types are exempted)
 fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
@@ -492,6 +504,10 @@ impl ClusterInfo {
             instance: NodeInstance::new(&mut thread_rng(), id, timestamp()),
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
+            bandwidth_usage: RwLock::new(FixedWindow::new(
+                Instant::now(),
+                BANDWIDTH_USAGE_LOOKBACK_DURATION,
+            )),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -529,6 +545,10 @@ impl ClusterInfo {
             instance: NodeInstance::new(&mut thread_rng(), *new_id, timestamp()),
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
+            bandwidth_usage: RwLock::new(FixedWindow::new(
+                Instant::now(),
+                BANDWIDTH_USAGE_LOOKBACK_DURATION,
+            )),
         }
     }
 
@@ -2065,102 +2085,57 @@ impl ClusterInfo {
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
-        let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
+        let requests: Vec<_> = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
                 self.check_pull_request(Instant::now(), &mut rng, &mut packets);
-            requests
-                .into_iter()
-                .filter(check_pull_request)
-                .map(|r| ((r.caller, r.filter), r.from_addr))
-                .unzip()
+            requests.into_iter().filter(check_pull_request).collect()
         };
-        let now = timestamp();
-        let self_id = self.id();
 
-        let mut pull_responses = self
-            .time_gossip_read_lock(
-                "generate_pull_responses",
-                &self.stats.generate_pull_responses,
-            )
-            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
-        if require_stake_for_gossip {
-            for resp in &mut pull_responses {
-                retain_staked(resp, stakes);
-            }
-        }
-        let pull_responses: Vec<_> = pull_responses
-            .into_iter()
-            .zip(addrs.into_iter())
-            .filter(|(response, _)| !response.is_empty())
-            .collect();
-
-        if pull_responses.is_empty() {
-            return packets;
-        }
-
-        let stats: Vec<_> = pull_responses
-            .iter()
-            .enumerate()
-            .map(|(i, (responses, _from_addr))| {
-                responses
-                    .iter()
-                    .enumerate()
-                    .map(|(j, response)| {
-                        let score = if stakes.contains_key(&response.pubkey()) {
-                            2
-                        } else {
-                            1
-                        };
-                        let score = match response.data {
-                            CrdsData::ContactInfo(_) => 2 * score,
-                            _ => score,
-                        };
-                        ResponseScore {
-                            to: i,
-                            responses_index: j,
-                            score,
-                        }
-                    })
-                    .collect::<Vec<ResponseScore>>()
-            })
-            .flatten()
-            .collect();
-
-        let mut seed = [0; 32];
-        rand::thread_rng().fill(&mut seed[..]);
-        let weights: Vec<_> = stats.iter().map(|stat| stat.score).collect();
+        let now = Instant::now();
+        let timestamp = timestamp();
+        let num_requests = requests.len();
+        let requests = self.reorder_pull_requests(now, requests, stakes);
 
         let mut total_bytes = 0;
-        let mut sent = 0;
-        for index in weighted_shuffle(&weights, seed) {
-            let stat = &stats[index];
-            let from_addr = pull_responses[stat.to].1;
-            let response = pull_responses[stat.to].0[stat.responses_index].clone();
-            let protocol = Protocol::PullResponse(self_id, vec![response]);
-            match Packet::from_data(Some(&from_addr), protocol) {
-                Err(err) => error!("failed to write pull-response packet: {:?}", err),
-                Ok(packet) => {
-                    if self.outbound_budget.take(packet.meta.size) {
-                        total_bytes += packet.meta.size;
-                        packets.packets.push(packet);
-                        sent += 1;
-                    } else {
-                        inc_new_counter_info!("gossip_pull_request-no_budget", 1);
-                        break;
-                    }
-                }
+        let mut sent_requests = 0;
+        let mut sent_packets = 0;
+
+        for request in requests {
+            let caller_pubkey = request.caller.pubkey();
+            let (responses, done) = self.make_reponse_packets(
+                request,
+                output_size_limit,
+                timestamp,
+                stakes,
+                require_stake_for_gossip,
+            );
+            let bytes: usize = responses.iter().map(|packet| packet.meta.size).sum();
+            sent_packets += responses.len();
+            total_bytes += bytes;
+            for packet in responses {
+                packets.packets.push(packet);
             }
+            self.bandwidth_usage
+                .write()
+                .unwrap()
+                .add(now, caller_pubkey, bytes as u64);
+            if !done {
+                self.stats.handle_pull_requests_no_budget.add_relaxed(1);
+                break;
+            }
+            sent_requests += 1;
         }
+
         time.stop();
-        inc_new_counter_info!("gossip_pull_request-sent_requests", sent);
-        inc_new_counter_info!("gossip_pull_request-dropped_requests", stats.len() - sent);
+        inc_new_counter_info!("gossip_pull_request-sent_requests", sent_packets);
+        inc_new_counter_info!(
+            "gossip_pull_request-dropped_requests",
+            num_requests - sent_requests
+        );
         debug!(
             "handle_pull_requests: {} sent: {} total: {} total_bytes: {}",
-            time,
-            sent,
-            stats.len(),
-            total_bytes
+            time, sent_requests, num_requests, total_bytes
         );
         packets
     }
@@ -2228,6 +2203,74 @@ impl ClusterInfo {
                 self.handle_pull_response(&from, data, &timeouts);
             }
         }
+    }
+
+    // Reorders pull requests prioritizing based on stakes
+    // and bandwidth usage over a lookback window.
+    fn reorder_pull_requests(
+        &self,
+        now: Instant,
+        requests: Vec<PullData>,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Vec<PullData> {
+        let mut scored_requests: Vec<_> = {
+            let bandwidth_usage = self.bandwidth_usage.read().unwrap();
+            let score = |pull_data: &PullData| -> (u64, u64) {
+                let caller = pull_data.caller.pubkey();
+                let stake = stakes.get(&caller).unwrap_or(&0);
+                let usage = bandwidth_usage.get(now, &caller).unwrap_or(&0);
+                (u64::max(*stake, 1), u64::max(*usage, 1))
+            };
+            requests
+                .into_iter()
+                .map(|request| (score(&request), request))
+                .collect()
+        };
+        // Sort in descending order of stake / bandwidth usage.
+        scored_requests.sort_unstable_by(|((s1, u1), _), ((s2, u2), _)| (s2 * u1).cmp(&(s1 * u2)));
+        scored_requests
+            .into_iter()
+            .map(|(_, request)| request)
+            .collect()
+    }
+
+    // Generates response packets for the given pull request.
+    // The second value of tuple is true if all the responses are generated.
+    // Otherwise it indicates no outbound budget.
+    fn make_reponse_packets(
+        &self,
+        request: PullData,
+        output_size_limit: usize, // Limit number of crds values returned.
+        now: u64,
+        stakes: &HashMap<Pubkey, u64>,
+        require_stake_for_gossip: bool,
+    ) -> (Vec<Packet>, bool) {
+        let mut responses = self
+            .time_gossip_read_lock(
+                "generate_pull_responses",
+                &self.stats.generate_pull_responses,
+            )
+            .generate_pull_responses(&[(request.caller, request.filter)], output_size_limit, now);
+        if require_stake_for_gossip {
+            for resp in &mut responses {
+                retain_staked(resp, stakes);
+            }
+        }
+        let mut packets = vec![];
+        let self_pubkey = self.id();
+        for response in responses.into_iter().flatten() {
+            let protocol = Protocol::PullResponse(self_pubkey, vec![response]);
+            match Packet::from_data(Some(&request.from_addr), protocol) {
+                Err(err) => error!("failed to write pull-response packet: {:?}", err),
+                Ok(packet) => {
+                    if !self.outbound_budget.take(packet.meta.size) {
+                        return (packets, false);
+                    }
+                    packets.push(packet);
+                }
+            }
+        }
+        (packets, true)
     }
 
     // Returns (failed, timeout, success)
@@ -3098,7 +3141,7 @@ mod tests {
         duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
     };
     use itertools::izip;
-    use rand::{seq::SliceRandom, SeedableRng};
+    use rand::{seq::SliceRandom, thread_rng, Rng, SeedableRng};
     use rand_chacha::ChaChaRng;
     use solana_ledger::shred::Shredder;
     use solana_sdk::signature::{Keypair, Signer};
@@ -3146,7 +3189,7 @@ mod tests {
         );
     }
 
-    fn new_rand_socket_addr<R: Rng>(rng: &mut R) -> SocketAddr {
+    pub(super) fn new_rand_socket_addr<R: Rng>(rng: &mut R) -> SocketAddr {
         let addr = if rng.gen_bool(0.5) {
             IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()))
         } else {
@@ -3984,6 +4027,42 @@ mod tests {
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         let protocol = Protocol::PullRequest(filter, value);
         assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
+    }
+
+    #[test]
+    fn test_reorder_pull_requests() {
+        let node = Node::new_localhost();
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
+        let mut rng = thread_rng();
+        let requests: Vec<_> = repeat_with(|| PullData::new_rand(&mut rng, None))
+            .take(3)
+            .collect();
+        let mut stakes = HashMap::<Pubkey, u64>::new();
+        stakes.insert(requests[0].caller.pubkey(), 11);
+        stakes.insert(requests[1].caller.pubkey(), 23);
+        stakes.insert(requests[2].caller.pubkey(), 47);
+        let now = Instant::now();
+        {
+            let mut bandwidth_usage = cluster_info.bandwidth_usage.write().unwrap();
+            bandwidth_usage.add(now, requests[0].caller.pubkey(), 2);
+            bandwidth_usage.add(now, requests[1].caller.pubkey(), 7);
+            bandwidth_usage.add(now, requests[2].caller.pubkey(), 5);
+        }
+        let reordered_requests = cluster_info.reorder_pull_requests(
+            now + Duration::from_secs(235),
+            requests.clone(),
+            &stakes,
+        );
+        // Stakes over bandwidth usage is: 11 / 2, 23 / 7, 47 / 5.
+        // So the ordering would be: 2, 0, 1.
+        assert_eq!(
+            reordered_requests,
+            vec![
+                requests[2].clone(),
+                requests[0].clone(),
+                requests[1].clone(),
+            ]
+        );
     }
 
     #[test]
