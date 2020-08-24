@@ -143,18 +143,14 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
         // at arbitrary point in an epoch not only epoch boundaries.
         // This is because this closure need to be executed immediately after snapshot restoration,
         // in addition to usual epoch boundaries
-        let (epoch, slot_index) = bank.get_epoch_and_slot_index(bank.slot());
-        if slot_index != 0 {
-            // bank should be frozen (restored from snapshot) unless entering into a new epoch
-            assert!(bank.is_frozen());
-        }
-        // we must initialize some skip(serde) fields here, regardless frozen or not
+        // In other words, this callback initializes some skip(serde) fields, regardless
+        // frozen or not
 
-        if let Some(inflation) = get_inflation(operating_mode, epoch) {
+        if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
             info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
-        for program in get_programs(operating_mode, epoch) {
+        for program in get_programs(operating_mode, bank.epoch()) {
             match program {
                 Program::Native((name, program_id)) => {
                     bank.add_native_program(&name, &program_id);
