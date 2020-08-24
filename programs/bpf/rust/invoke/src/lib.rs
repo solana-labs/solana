@@ -12,7 +12,7 @@ use solana_sdk::{
     info,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
-    pubkey::Pubkey,
+    pubkey::{Pubkey, PubkeyError},
     system_instruction,
 };
 
@@ -97,9 +97,15 @@ fn process_instruction(
 
             info!("Test create_program_address");
             {
-                let address =
-                    Pubkey::create_program_address(&[b"You pass butter", &[nonce1]], program_id)?;
-                assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
+                assert_eq!(
+                    &Pubkey::create_program_address(&[b"You pass butter", &[nonce1]], program_id)?,
+                    accounts[DERIVED_KEY1_INDEX].key
+                );
+                assert_eq!(
+                    Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default())
+                        .unwrap_err(),
+                    PubkeyError::InvalidSeeds
+                );
             }
 
             info!("Test derived signers");
