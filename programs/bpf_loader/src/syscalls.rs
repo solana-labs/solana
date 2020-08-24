@@ -343,7 +343,6 @@ pub fn syscall_create_program_address(
     rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
     let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
-
     let seeds = untranslated_seeds
         .iter()
         .map(|untranslated_seed| {
