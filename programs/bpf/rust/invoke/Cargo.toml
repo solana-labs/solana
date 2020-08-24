@@ -12,13 +12,8 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-<<<<<<< HEAD
-solana-bpf-rust-invoked = { path = "../invoked"}
-solana-sdk = { path = "../../../../sdk/", version = "1.3.5", default-features = false }
-=======
 solana-bpf-rust-invoked = { path = "../invoked", default-features = false }
-solana-sdk = { path = "../../../../sdk/", version = "1.4.0", default-features = false }
->>>>>>> 9a366281d... sdk: Make PubKey::create_program_address available in program unit tests (#11745)
+solana-sdk = { path = "../../../../sdk/", version = "1.3.5", default-features = false }
 
 [features]
 program = ["solana-sdk/program"]
