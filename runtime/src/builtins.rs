@@ -34,8 +34,9 @@ pub fn get_builtins(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Builtin>
         ),
     ]);
 
+    // repurpose Preview for test_get_builtins because the Development is overloaded...
     #[cfg(test)]
-    if operating_mode == OperatingMode::Development && epoch >= 2 {
+    if operating_mode == OperatingMode::Preview && epoch >= 2 {
         use solana_sdk::instruction::InstructionError;
         use solana_sdk::{account::KeyedAccount, pubkey::Pubkey};
         use std::str::FromStr;
@@ -61,14 +62,18 @@ pub fn get_builtins(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Builtin>
 mod tests {
     use super::*;
     use crate::bank::Bank;
-    use solana_sdk::{genesis_config::create_genesis_config, pubkey::Pubkey};
+    use solana_sdk::{
+        genesis_config::{create_genesis_config, OperatingMode},
+        pubkey::Pubkey,
+    };
 
     use std::str::FromStr;
     use std::sync::Arc;
 
     #[test]
     fn test_get_builtins() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        genesis_config.operating_mode = OperatingMode::Preview;
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
         let restored_slot1 = genesis_config.epoch_schedule.get_first_slot_in_epoch(2);
