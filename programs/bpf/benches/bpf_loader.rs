@@ -6,6 +6,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
 use solana_sdk::{
     account::Account,
+    bpf_loader,
     entrypoint_native::{ComputeMeter, InvokeContext, Logger, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -80,7 +81,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf().unwrap();
-    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf, &[], &mut invoke_context).unwrap();
+    let (mut vm, _) =
+        solana_bpf_loader_program::create_vm(&bpf_loader::id(), &elf, &[], &mut invoke_context)
+            .unwrap();
 
     println!("Interpreted:");
     assert_eq!(
