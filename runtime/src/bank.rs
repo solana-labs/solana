@@ -76,11 +76,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
-<<<<<<< HEAD
-#[frozen_abi(digest = "3bFpd1M1YHHKFASfjUU5L9dUkg87TKuMzwUoUebwa8Pu")]
-=======
 #[frozen_abi(digest = "EEFPLdPhngiBojqEnDMkoEGjyYYHNWPHnenRf8b9diqd")]
->>>>>>> 8d362f682... The constraints on compute power a program can consume is limited only to its instruction count (#11717)
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;

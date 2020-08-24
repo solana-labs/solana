@@ -10,15 +10,9 @@ use solana_sdk::{
     account::Account,
     account::KeyedAccount,
     account_info::AccountInfo,
-<<<<<<< HEAD
     bpf_loader,
     entrypoint::SUCCESS,
-    entrypoint_native::{InvokeContext, Logger},
-=======
-    bpf_loader, bpf_loader_deprecated,
-    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     entrypoint_native::{ComputeMeter, InvokeContext, Logger},
->>>>>>> 8d362f682... The constraints on compute power a program can consume is limited only to its instruction count (#11717)
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -370,38 +364,6 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
 }
 
 /// Create a program address
-<<<<<<< HEAD
-pub fn syscall_create_program_address(
-    seeds_addr: u64,
-    seeds_len: u64,
-    program_id_addr: u64,
-    address_addr: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
-    let seeds = untranslated_seeds
-        .iter()
-        .map(|untranslated_seed| {
-            translate_slice!(
-                u8,
-                untranslated_seed.as_ptr(),
-                untranslated_seed.len(),
-                ro_regions
-            )
-        })
-        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-    let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
-    let new_address =
-        match Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds) {
-            Ok(address) => address,
-            Err(_) => return Ok(1),
-        };
-    let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
-    address.copy_from_slice(new_address.as_ref());
-    Ok(0)
-=======
 pub struct SyscallCreateProgramAddress {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
@@ -443,7 +405,6 @@ impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
         address.copy_from_slice(new_address.as_ref());
         Ok(0)
     }
->>>>>>> 8d362f682... The constraints on compute power a program can consume is limited only to its instruction count (#11717)
 }
 
 // Cross-program invocation syscalls

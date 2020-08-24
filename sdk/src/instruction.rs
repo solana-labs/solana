@@ -159,14 +159,7 @@ pub enum InstructionError {
     /// Provided seeds do not result in a valid address
     #[error("Provided seeds do not result in a valid address")]
     InvalidSeeds,
-}
-
-<<<<<<< HEAD
-impl InstructionError {
-    pub fn new_result_with_negative_lamports() -> Self {
-        SystemError::ResultWithNegativeLamports.into()
-    }
-=======
+    
     /// Failed to reallocate account data of this length
     #[error("Failed to reallocate account data")]
     InvalidRealloc,
@@ -174,7 +167,12 @@ impl InstructionError {
     /// Computational budget exceeded
     #[error("Computational budget exceeded")]
     ComputationalBudgetExceeded,
->>>>>>> 8d362f682... The constraints on compute power a program can consume is limited only to its instruction count (#11717)
+}
+
+impl InstructionError {
+    pub fn new_result_with_negative_lamports() -> Self {
+        SystemError::ResultWithNegativeLamports.into()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

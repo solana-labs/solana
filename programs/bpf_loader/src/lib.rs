@@ -22,11 +22,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-<<<<<<< HEAD
-use std::{io::prelude::*, mem};
-=======
-use std::{cell::RefCell, rc::Rc};
->>>>>>> 8d362f682... The constraints on compute power a program can consume is limited only to its instruction count (#11717)
+use std::{cell::RefCell, io::prelude::*, mem, rc::Rc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
