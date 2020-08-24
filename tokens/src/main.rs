@@ -27,10 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match command_args.command {
         Command::DistributeTokens(args) => {
-            runtime.block_on(commands::process_distribute_tokens(
-                &mut banks_client,
-                &args,
-            ))?;
+            runtime.block_on(commands::process_allocations(&mut banks_client, &args))?;
         }
         Command::Balances(args) => {
             runtime.block_on(commands::process_balances(&mut banks_client, &args))?;
