@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 solana-sdk = { path = "../../../../sdk/", version = "1.4.0", default-features = false }
-solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "1.4.0" }
+solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "1.4.0", default-features = false }
 
 [features]
 program = ["solana-sdk/program"]

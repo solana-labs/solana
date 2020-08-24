@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 solana-sdk = { path = "../../../../sdk/", version = "1.4.0", default-features = false }
-solana-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.4.0" }
+solana-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.4.0", default-features = false }
 
 [features]
 program = ["solana-sdk/program"]
