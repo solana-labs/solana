@@ -4482,6 +4482,7 @@ dependencies = [
 name = "solana-tokens"
 version = "1.3.12"
 dependencies = [
+ "bincode",
  "chrono",
  "clap",
  "console",

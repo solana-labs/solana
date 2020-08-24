@@ -24,8 +24,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match command_args.command {
         Command::DistributeTokens(args) => {
+<<<<<<< HEAD
             let thin_client = ThinClient::new(client, args.dry_run);
             commands::process_distribute_tokens(&thin_client, &args)?;
+=======
+            runtime.block_on(commands::process_allocations(&mut banks_client, &args))?;
+>>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
         }
         Command::Balances(args) => {
             let thin_client = ThinClient::new(client, false);
