@@ -20,6 +20,8 @@ import {
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
+import { VoteAccount } from "validators/accounts/vote";
+import { NonceAccount } from "validators/accounts/nonce";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -33,7 +35,17 @@ export type TokenProgramData = {
   parsed: TokenAccount;
 };
 
-export type ProgramData = StakeProgramData | TokenProgramData;
+export type VoteProgramData = {
+  name: "vote";
+  parsed: VoteAccount;
+};
+
+export type NonceProgramData = {
+  name: "nonce";
+  parsed: NonceAccount;
+}
+
+export type ProgramData = StakeProgramData | TokenProgramData | VoteProgramData;
 
 export interface Details {
   executable: boolean;
