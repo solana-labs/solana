@@ -509,21 +509,23 @@ function createRpcRequest(url): RpcRequest {
     try {
       let too_many_requests_retries = 5;
       let res = {};
-
+      let waitTime = 500;
       for (;;) {
         res = await fetch(url, options);
         if (
-          res.status !== 429 /* Too many requests */ ||
-          too_many_requests_retries === 0
+            res.status !== 429 /* Too many requests */
         ) {
           break;
         }
-
-        console.log(
-          `Server responded with ${res.status} ${res.statusText}.  Retrying after brief delay...`,
-        );
-        await sleep(500);
         too_many_requests_retries -= 1;
+        if (too_many_requests_retries === 0) {
+          break;
+        }
+        console.log(
+            `Server responded with ${res.status} ${res.statusText}.  Retrying after ${waitTime}ms delay...`,
+        );
+        await sleep(waitTime);
+        waitTime *= 2;
       }
 
       const text = await res.text();
