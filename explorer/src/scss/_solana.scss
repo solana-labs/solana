@@ -198,3 +198,49 @@ h4.slot-pill {
     width: 100% !important;
   }
 }
+
+#chartjs-tooltip {
+  opacity: 1;
+  position: absolute;
+  -webkit-transition: all .1s ease;
+  transition: all .1s ease;
+  pointer-events: none;
+  -webkit-transform: translate(-50%, -105%);
+  transform: translate(-50%, -105%);
+
+  div.content {
+    font-size: 12px;
+    color: white;
+    margin: 0px;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 4px;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  div.label {
+    padding: 10px;
+    background: #111;
+  }
+
+  div.value {
+    padding: 10px;
+    background: black;
+    border-bottom: 1px solid #333;
+  }
+
+  &:after {
+    display: block;
+    position: relative;
+    width: 0;
+    height: 0;
+    left: 50%;
+    top: -1px;
+    border-right: 10px solid transparent;
+    border-top: 10px solid #111;
+    border-left: 10px solid transparent;
+    -webkit-transform: translate(-50%, 0);
+    transform: translate(-50%, 0);
+    content:'';
+  }
+}
