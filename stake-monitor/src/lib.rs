@@ -133,6 +133,7 @@ fn process_transaction(
                         );
                     }
                     StakeInstruction::Authorize(_, _)
+                    | StakeInstruction::AuthorizeWithSeed(_)
                     | StakeInstruction::DelegateStake
                     | StakeInstruction::Deactivate => {
                         // These instructions are always permitted
@@ -493,6 +494,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -548,6 +550,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -593,6 +596,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -631,6 +635,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();

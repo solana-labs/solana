@@ -624,11 +624,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
         {
             if balance != config.baseline_stake_amount {
-                error!(
+                info!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     baseline_stake_address, balance, config.baseline_stake_amount
                 );
-                process::exit(1);
             }
             if let Some(delegation) = stake_state.delegation() {
                 if epoch_info.epoch == delegation.activation_epoch {
@@ -662,11 +661,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &bonus_stake_address) {
             if balance != config.bonus_stake_amount {
-                error!(
+                info!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     bonus_stake_address, balance, config.bonus_stake_amount
                 );
-                process::exit(1);
             }
             if let Some(delegation) = stake_state.delegation() {
                 if epoch_info.epoch == delegation.activation_epoch {

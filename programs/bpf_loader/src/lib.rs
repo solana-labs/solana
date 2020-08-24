@@ -14,19 +14,20 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     ebpf::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
-    EbpfVm,
+    EbpfVm, InstructionMeter,
 };
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    entrypoint_native::InvokeContext,
+    entrypoint_native::{ComputeMeter, InvokeContext},
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
+use std::{cell::RefCell, rc::Rc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
@@ -65,7 +66,6 @@ pub fn create_vm<'a>(
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
     let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
-    vm.set_max_instruction_count(100_000)?;
     vm.set_elf(&prog)?;
 
     let heap_region = syscalls::register_syscalls(&mut vm, parameter_accounts, invoke_context)?;
@@ -105,6 +105,20 @@ macro_rules! log{
     };
 }
 
+struct ThisInstructionMeter {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+}
+impl InstructionMeter for ThisInstructionMeter {
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore error, Ebpf will bail if exceeded
+        let _ = self.compute_meter.borrow_mut().consume(amount);
+    }
+    fn get_remaining(&self) -> u64 {
+        self.compute_meter.borrow().get_remaining()
+    }
+}
+
 pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
@@ -132,6 +146,7 @@ pub fn process_instruction(
             &instruction_data,
         )?;
         {
+            let compute_meter = invoke_context.get_compute_meter();
             let program_account = program.try_account_ref_mut()?;
             let (mut vm, heap_region) =
                 match create_vm(&program_account.data, &parameter_accounts, invoke_context) {
@@ -143,7 +158,13 @@ pub fn process_instruction(
                 };
 
             log!(logger, "Call BPF program {}", program.unsigned_key());
-            match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
+            let instruction_meter = ThisInstructionMeter { compute_meter };
+            match vm.execute_program_metered(
+                parameter_bytes.as_slice(),
+                &[],
+                &[heap_region],
+                instruction_meter,
+            ) {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
@@ -228,17 +249,57 @@ mod tests {
     use rand::Rng;
     use solana_sdk::{
         account::Account,
-        entrypoint_native::{Logger, ProcessInstruction},
+        entrypoint_native::{ComputeMeter, Logger, ProcessInstruction},
         instruction::CompiledInstruction,
         message::Message,
         rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone)]
+    pub struct MockComputeMeter {
+        pub remaining: u64,
+    }
+    impl ComputeMeter for MockComputeMeter {
+        fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+            self.remaining = self.remaining.saturating_sub(amount);
+            if self.remaining == 0 {
+                return Err(InstructionError::ComputationalBudgetExceeded);
+            }
+            Ok(())
+        }
+        fn get_remaining(&self) -> u64 {
+            self.remaining
+        }
+    }
+    #[derive(Debug, Default, Clone)]
+    pub struct MockLogger {
+        pub log: Rc<RefCell<Vec<String>>>,
+    }
+    impl Logger for MockLogger {
+        fn log_enabled(&self) -> bool {
+            true
+        }
+        fn log(&mut self, message: &str) {
+            self.log.borrow_mut().push(message.to_string());
+        }
+    }
+    #[derive(Debug)]
     pub struct MockInvokeContext {
-        key: Pubkey,
-        mock_logger: MockLogger,
+        pub key: Pubkey,
+        pub logger: MockLogger,
+        pub compute_meter: MockComputeMeter,
+    }
+    impl Default for MockInvokeContext {
+        fn default() -> Self {
+            MockInvokeContext {
+                key: Pubkey::default(),
+                logger: MockLogger::default(),
+                compute_meter: MockComputeMeter {
+                    remaining: std::u64::MAX,
+                },
+            }
+        }
     }
     impl InvokeContext for MockInvokeContext {
         fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -260,22 +321,25 @@ mod tests {
             &[]
         }
         fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-            Rc::new(RefCell::new(self.mock_logger.clone()))
+            Rc::new(RefCell::new(self.logger.clone()))
         }
         fn is_cross_program_supported(&self) -> bool {
             true
         }
-    }
-    #[derive(Debug, Default, Clone)]
-    pub struct MockLogger {
-        pub log: Rc<RefCell<Vec<String>>>,
-    }
-    impl Logger for MockLogger {
-        fn log_enabled(&self) -> bool {
-            true
+        fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+            Rc::new(RefCell::new(self.compute_meter.clone()))
         }
-        fn log(&mut self, message: &str) {
-            self.log.borrow_mut().push(message.to_string());
+    }
+
+    struct TestInstructionMeter {
+        remaining: u64,
+    }
+    impl InstructionMeter for TestInstructionMeter {
+        fn consume(&mut self, amount: u64) {
+            self.remaining = self.remaining.saturating_sub(amount);
+        }
+        fn get_remaining(&self) -> u64 {
+            self.remaining
         }
     }
 
@@ -292,9 +356,10 @@ mod tests {
 
         let mut vm = EbpfVm::<BPFError>::new(None).unwrap();
         vm.set_verifier(bpf_verifier::check).unwrap();
-        vm.set_max_instruction_count(10).unwrap();
+        let instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.set_program(program).unwrap();
-        vm.execute_program(input, &[], &[]).unwrap();
+        vm.execute_program_metered(input, &[], &[], instruction_meter)
+            .unwrap();
     }
 
     #[test]

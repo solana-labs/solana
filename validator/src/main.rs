@@ -352,6 +352,29 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
+fn validators_set(
+    identity_pubkey: &Pubkey,
+    matches: &ArgMatches<'_>,
+    matches_name: &str,
+    arg_name: &str,
+) -> Option<HashSet<Pubkey>> {
+    if matches.is_present(matches_name) {
+        let validators_set: HashSet<_> = values_t_or_exit!(matches, matches_name, Pubkey)
+            .into_iter()
+            .collect();
+        if validators_set.contains(identity_pubkey) {
+            eprintln!(
+                "The validator's identity pubkey cannot be a {}: {}",
+                arg_name, identity_pubkey
+            );
+            exit(1);
+        }
+        Some(validators_set)
+    } else {
+        None
+    }
+}
+
 fn check_genesis_hash(
     genesis_config: &GenesisConfig,
     expected_genesis_hash: Option<Hash>,
@@ -489,7 +512,6 @@ fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let default_limit_ledger_size = &DEFAULT_MAX_LEDGER_SHREDS.to_string();
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
@@ -732,7 +754,7 @@ pub fn main() {
                 .takes_value(true)
                 .min_values(0)
                 .max_values(1)
-                .default_value(default_limit_ledger_size)
+                /* .default_value() intentionally not used here! */
                 .help("Keep this amount of shreds in root slots."),
         )
         .arg(
@@ -812,6 +834,16 @@ pub fn main() {
                 .long("no-untrusted-rpc")
                 .takes_value(false)
                 .help("Use the RPC service of trusted validators only")
+        )
+        .arg(
+            Arg::with_name("repair_validators")
+                .long("repair-validator")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to request repairs from. If specified, repair will not \
+                       request from validators outside this set [default: request repairs from all validators]")
         )
         .arg(
             Arg::with_name("no_rocksdb_compaction")
@@ -915,22 +947,18 @@ pub fn main() {
     });
 
     let no_untrusted_rpc = matches.is_present("no_untrusted_rpc");
-    let trusted_validators = if matches.is_present("trusted_validators") {
-        let trusted_validators: HashSet<_> =
-            values_t_or_exit!(matches, "trusted_validators", Pubkey)
-                .into_iter()
-                .collect();
-        if trusted_validators.contains(&identity_keypair.pubkey()) {
-            eprintln!(
-                "The validator's identity pubkey cannot be a --trusted-validator: {}",
-                identity_keypair.pubkey()
-            );
-            exit(1);
-        }
-        Some(trusted_validators)
-    } else {
-        None
-    };
+    let trusted_validators = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "trusted_validators",
+        "--trusted-validator",
+    );
+    let repair_validators = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "repair_validators",
+        "--repair-validator",
+    );
 
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
@@ -964,6 +992,7 @@ pub fn main() {
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
+        repair_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
         wal_recovery_mode,
@@ -1071,7 +1100,10 @@ pub fn main() {
     }
 
     if matches.is_present("limit_ledger_size") {
-        let limit_ledger_size = value_t_or_exit!(matches, "limit_ledger_size", u64);
+        let limit_ledger_size = match matches.value_of("limit_ledger_size") {
+            Some(_) => value_t_or_exit!(matches, "limit_ledger_size", u64),
+            None => DEFAULT_MAX_LEDGER_SHREDS,
+        };
         if limit_ledger_size < DEFAULT_MIN_MAX_LEDGER_SHREDS {
             eprintln!(
                 "The provided --limit-ledger-size value was too small, the minimum value is {}",

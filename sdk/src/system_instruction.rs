@@ -52,7 +52,7 @@ impl<E> DecodeError<E> for NonceError {
 /// maximum permitted size of data: 10 MB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
-#[frozen_abi(digest = "E343asdJPd3aEbHSsmeeGzvztc9X2maaHhWxVS4P6hvW")]
+#[frozen_abi(digest = "EpsptsKTYzMoQGSdoWRfPbwT3odGNfK3imEUTrxpLF1i")]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
 pub enum SystemInstruction {
     /// Create a new account
@@ -197,6 +197,23 @@ pub enum SystemInstruction {
         /// Owner program account
         owner: Pubkey,
     },
+
+    /// Transfer lamports from a derived address
+    ///
+    /// # Account references
+    ///   0. [WRITE] Funding account
+    ///   1. [SIGNER] Base for funding account
+    ///   2. [WRITE] Recipient account
+    TransferWithSeed {
+        /// Amount to transfer
+        lamports: u64,
+
+        /// Seed to use to derive the funding account address
+        from_seed: String,
+
+        /// Owner to use to derive the funding account address
+        from_owner: Pubkey,
+    },
 }
 
 pub fn create_account(
@@ -289,6 +306,30 @@ pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Inst
     Instruction::new(
         system_program::id(),
         &SystemInstruction::Transfer { lamports },
+        account_metas,
+    )
+}
+
+pub fn transfer_with_seed(
+    from_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    from_base: &Pubkey,
+    from_seed: String,
+    from_owner: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_pubkey, false),
+        AccountMeta::new_readonly(*from_base, true),
+        AccountMeta::new(*to_pubkey, false),
+    ];
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::TransferWithSeed {
+            lamports,
+            from_seed,
+            from_owner: *from_owner,
+        },
         account_metas,
     )
 }

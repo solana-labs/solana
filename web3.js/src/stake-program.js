@@ -125,6 +125,25 @@ export type AuthorizeStakeParams = {|
 |};
 
 /**
+ * Authorize stake instruction params using a derived key
+ * @typedef {Object} AuthorizeWithSeedStakeParams
+ * @property {PublicKey} stakePubkey
+ * @property {PublicKey} authorityBase
+ * @property {string} authoritySeed
+ * @property {PublicKey} authorityOwner
+ * @property {PublicKey} newAuthorizedPubkey
+ * @property {StakeAuthorizationType} stakeAuthorizationType
+ */
+export type AuthorizeWithSeedStakeParams = {|
+  stakePubkey: PublicKey,
+  authorityBase: PublicKey,
+  authoritySeed: string,
+  authorityOwner: PublicKey,
+  newAuthorizedPubkey: PublicKey,
+  stakeAuthorizationType: StakeAuthorizationType,
+|};
+
+/**
  * Split stake instruction params
  * @typedef {Object} SplitStakeParams
  * @property {PublicKey} stakePubkey
@@ -263,6 +282,31 @@ export class StakeInstruction {
   }
 
   /**
+   * Decode an authorize-with-seed stake instruction and retrieve the instruction params.
+   */
+  static decodeAuthorizeWithSeed(
+    instruction: TransactionInstruction,
+  ): AuthorizeWithSeedStakeParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 2);
+    const {newAuthorized, stakeAuthorizationType, authoritySeed, authorityOwner} = decodeData(
+      STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed,
+      instruction.data,
+    );
+
+    return {
+      stakePubkey: instruction.keys[0].pubkey,
+      authorityBase: instruction.keys[1].pubkey,
+      authoritySeed: authoritySeed,
+      authorityOwner: new PublicKey(authorityOwner),
+      newAuthorizedPubkey: new PublicKey(newAuthorized),
+      stakeAuthorizationType: {
+        index: stakeAuthorizationType,
+      },
+    };
+  }
+
+  /**
    * Decode a split stake instruction and retrieve the instruction params.
    */
   static decodeSplit(instruction: TransactionInstruction): SplitStakeParams {
@@ -341,7 +385,7 @@ export class StakeInstruction {
 
 /**
  * An enumeration of valid StakeInstructionType's
- * @typedef { 'Initialize' | 'Authorize' | 'Delegate' | 'Split' | 'Withdraw'
+ * @typedef { 'Initialize' | 'Authorize' | 'AuthorizeWithSeed' | 'Delegate' | 'Split' | 'Withdraw'
  | 'Deactivate' } StakeInstructionType
  */
 export type StakeInstructionType = $Keys<typeof STAKE_INSTRUCTION_LAYOUTS>;
@@ -387,6 +431,16 @@ export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze({
   Deactivate: {
     index: 5,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+  },
+  AuthorizeWithSeed: {
+    index: 8,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('newAuthorized'),
+      BufferLayout.u32('stakeAuthorizationType'),
+      Layout.rustString('authoritySeed'),
+      Layout.publicKey('authorityOwner'),
+    ]),
   },
 });
 
@@ -545,6 +599,38 @@ export class StakeProgram {
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: true},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that authorizes a new PublicKey as Staker
+   * or Withdrawer on the Stake account.
+   */
+  static authorizeWithSeed(params: AuthorizeWithSeedStakeParams): Transaction {
+    const {
+      stakePubkey,
+      authorityBase,
+      authoritySeed,
+      authorityOwner,
+      newAuthorizedPubkey,
+      stakeAuthorizationType,
+    } = params;
+
+    const type = STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed;
+    const data = encodeData(type, {
+      newAuthorized: newAuthorizedPubkey.toBuffer(),
+      stakeAuthorizationType: stakeAuthorizationType.index,
+      authoritySeed: authoritySeed,
+      authorityOwner: authorityOwner.toBuffer(),
+    });
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
+        {pubkey: authorityBase, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
       data,

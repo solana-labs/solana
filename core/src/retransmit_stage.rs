@@ -28,6 +28,7 @@ use solana_sdk::timing::timestamp;
 use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
+    collections::hash_set::HashSet,
     collections::{BTreeMap, HashMap},
     net::UdpSocket,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -417,6 +418,7 @@ impl RetransmitStage {
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
         verified_vote_receiver: VerifiedVoteReceiver,
+        repair_validators: Option<HashSet<Pubkey>>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -442,6 +444,7 @@ impl RetransmitStage {
             bank_forks,
             epoch_schedule,
             duplicate_slots_reset_sender,
+            repair_validators,
         };
         let window_service = WindowService::new(
             blockstore,

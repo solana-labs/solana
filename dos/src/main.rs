@@ -149,6 +149,7 @@ fn main() {
 
     info!("Finding cluster entry: {:?}", entrypoint_addr);
     let (nodes, _validators) = discover(
+        None,
         Some(&entrypoint_addr),
         None,
         Some(60),

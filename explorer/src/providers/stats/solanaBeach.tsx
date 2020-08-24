@@ -1,7 +1,7 @@
 import React from "react";
 import io from "socket.io-client";
 
-import { pick, number, is, StructType } from "superstruct";
+import { pick, array, nullable, number, is, StructType } from "superstruct";
 import { useCluster, Cluster } from "providers/cluster";
 
 const DashboardInfo = pick({
@@ -24,6 +24,11 @@ export const PERF_UPDATE_SEC = 5;
 
 const PerformanceInfo = pick({
   avgTPS: number(),
+  perfHistory: pick({
+    s: array(nullable(number())),
+    m: array(nullable(number())),
+    l: array(nullable(number())),
+  }),
   totalTransactionCount: number(),
 });
 
@@ -42,7 +47,17 @@ const DashboardContext = React.createContext<DashboardState | undefined>(
   undefined
 );
 
-export type PerformanceInfo = StructType<typeof PerformanceInfo>;
+export type PerformanceInfo = {
+  avgTps: number;
+  historyMaxTps: number;
+  perfHistory: {
+    short: (number | null)[];
+    medium: (number | null)[];
+    long: (number | null)[];
+  };
+  transactionCount: number;
+};
+
 type PerformanceState = { info: PerformanceInfo | undefined };
 const PerformanceContext = React.createContext<PerformanceState | undefined>(
   undefined
@@ -87,7 +102,39 @@ export function SolanaBeachProvider({ children }: Props) {
     });
     socket.on("performanceInfo", (data: any) => {
       if (is(data, PerformanceInfo)) {
-        setPerformanceInfo(data);
+        const trimSeries = (series: (number | null)[]) => {
+          return series.slice(series.length - 51, series.length - 1);
+        };
+
+        const seriesMax = (series: (number | null)[]) => {
+          return series.reduce((max: number, next) => {
+            if (next === null) return max;
+            return Math.max(max, next);
+          }, 0);
+        };
+
+        const normalize = (series: Array<number | null>, seconds: number) => {
+          return series.map((next) => {
+            if (next === null) return next;
+            return Math.round(next / seconds);
+          });
+        };
+
+        const short = normalize(trimSeries(data.perfHistory.s), 15);
+        const medium = normalize(trimSeries(data.perfHistory.m), 60);
+        const long = normalize(trimSeries(data.perfHistory.l), 180);
+        const historyMaxTps = Math.max(
+          seriesMax(short),
+          seriesMax(medium),
+          seriesMax(long)
+        );
+
+        setPerformanceInfo({
+          avgTps: data.avgTPS,
+          historyMaxTps,
+          perfHistory: { short, medium, long },
+          transactionCount: data.totalTransactionCount,
+        });
       }
     });
     socket.on("rootNotification", (data: any) => {

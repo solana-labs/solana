@@ -21,7 +21,7 @@ use solana_sdk::{
 };
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -382,12 +382,13 @@ impl ServeRepair {
         repair_request: RepairType,
         cache: &mut RepairCache,
         repair_stats: &mut RepairStats,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
         if cache.get(&slot).is_none() {
-            let repair_peers: Vec<_> = self.cluster_info.repair_peers(slot);
+            let repair_peers = self.repair_peers(&repair_validators, slot);
             if repair_peers.is_empty() {
                 return Err(ClusterInfoError::NoPeers.into());
             }
@@ -411,8 +412,9 @@ impl ServeRepair {
         &self,
         slot: Slot,
         cluster_slots: &ClusterSlots,
+        repair_validators: &Option<HashSet<Pubkey>>,
     ) -> Result<(Pubkey, SocketAddr)> {
-        let repair_peers: Vec<_> = self.cluster_info.repair_peers(slot);
+        let repair_peers: Vec<_> = self.repair_peers(repair_validators, slot);
         if repair_peers.is_empty() {
             return Err(ClusterInfoError::NoPeers.into());
         }
@@ -445,6 +447,27 @@ impl ServeRepair {
                 repair_stats.orphan.update(repair_peer_id, *slot, 0);
                 Ok(self.orphan_bytes(*slot, nonce)?)
             }
+        }
+    }
+
+    fn repair_peers(
+        &self,
+        repair_validators: &Option<HashSet<Pubkey>>,
+        slot: Slot,
+    ) -> Vec<ContactInfo> {
+        if let Some(repair_validators) = repair_validators {
+            repair_validators
+                .iter()
+                .filter_map(|key| {
+                    if *key != self.my_info.id {
+                        self.cluster_info.lookup_contact_info(key, |ci| ci.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            self.cluster_info.repair_peers(slot)
         }
     }
 
@@ -733,6 +756,7 @@ mod tests {
             RepairType::Shred(0, 0),
             &mut HashMap::new(),
             &mut RepairStats::default(),
+            &None,
         );
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -759,6 +783,7 @@ mod tests {
                 RepairType::Shred(0, 0),
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
+                &None,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -791,6 +816,7 @@ mod tests {
                     RepairType::Shred(0, 0),
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
+                    &None,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -936,5 +962,72 @@ mod tests {
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_repair_with_repair_validators() {
+        let cluster_slots = ClusterSlots::default();
+        let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me.clone()));
+
+        // Insert two peers on the network
+        let contact_info2 = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let contact_info3 = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        cluster_info.insert_info(contact_info2.clone());
+        cluster_info.insert_info(contact_info3.clone());
+        let serve_repair = ServeRepair::new(cluster_info);
+
+        // If:
+        // 1) repair validator set doesn't exist in gossip
+        // 2) repair validator set only includes our own id
+        // then no repairs should be generated
+        for pubkey in &[Pubkey::new_rand(), me.id] {
+            let trusted_validators = Some(vec![*pubkey].into_iter().collect());
+            assert!(serve_repair.repair_peers(&trusted_validators, 1).is_empty());
+            assert!(serve_repair
+                .repair_request(
+                    &cluster_slots,
+                    RepairType::Shred(0, 0),
+                    &mut HashMap::new(),
+                    &mut RepairStats::default(),
+                    &trusted_validators,
+                )
+                .is_err());
+        }
+
+        // If trusted validator exists in gossip, should return repair successfully
+        let trusted_validators = Some(vec![contact_info2.id].into_iter().collect());
+        let repair_peers = serve_repair.repair_peers(&trusted_validators, 1);
+        assert_eq!(repair_peers.len(), 1);
+        assert_eq!(repair_peers[0].id, contact_info2.id);
+        assert!(serve_repair
+            .repair_request(
+                &cluster_slots,
+                RepairType::Shred(0, 0),
+                &mut HashMap::new(),
+                &mut RepairStats::default(),
+                &trusted_validators,
+            )
+            .is_ok());
+
+        // Using no trusted validators should default to all
+        // validator's available in gossip, excluding myself
+        let repair_peers: HashSet<Pubkey> = serve_repair
+            .repair_peers(&None, 1)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(repair_peers.len(), 2);
+        assert!(repair_peers.contains(&contact_info2.id));
+        assert!(repair_peers.contains(&contact_info3.id));
+        assert!(serve_repair
+            .repair_request(
+                &cluster_slots,
+                RepairType::Shred(0, 0),
+                &mut HashMap::new(),
+                &mut RepairStats::default(),
+                &None,
+            )
+            .is_ok());
     }
 }

@@ -567,6 +567,7 @@ impl CliConfig<'_> {
         config.commitment = CommitmentConfig::recent();
         config.send_transaction_config = RpcSendTransactionConfig {
             skip_preflight: true,
+            ..RpcSendTransactionConfig::default()
         };
         config
     }
@@ -1183,6 +1184,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     &transaction,
                     RpcSendTransactionConfig {
                         skip_preflight: true,
+                        ..RpcSendTransactionConfig::default()
                     },
                 )
                 .ok();
@@ -1360,6 +1362,7 @@ fn process_deploy(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                ..RpcSendTransactionConfig::default()
             },
         )
         .map_err(|e| {

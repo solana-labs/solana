@@ -1,6 +1,6 @@
-#[cfg(feature = "program")]
+#[cfg(all(feature = "program", target_arch = "bpf"))]
 use crate::entrypoint::SUCCESS;
-#[cfg(not(feature = "program"))]
+#[cfg(not(all(feature = "program", target_arch = "bpf")))]
 use crate::hash::Hasher;
 use crate::{decode_error::DecodeError, hash::hashv};
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -107,7 +107,7 @@ impl Pubkey {
     ) -> Result<Pubkey, PubkeyError> {
         // Perform the calculation inline, calling this from within a program is
         // not supported
-        #[cfg(not(feature = "program"))]
+        #[cfg(not(all(feature = "program", target_arch = "bpf")))]
         {
             let mut hasher = Hasher::default();
             for seed in seeds.iter() {
@@ -129,7 +129,7 @@ impl Pubkey {
             Ok(Pubkey::new(hash.as_ref()))
         }
         // Call via a system call to perform the calculation
-        #[cfg(feature = "program")]
+        #[cfg(all(feature = "program", target_arch = "bpf"))]
         {
             extern "C" {
                 fn sol_create_program_address(

@@ -69,6 +69,7 @@ pub fn discover_cluster(
     num_nodes: usize,
 ) -> std::io::Result<Vec<ContactInfo>> {
     discover(
+        None,
         Some(entrypoint),
         Some(num_nodes),
         Some(30),
@@ -81,6 +82,7 @@ pub fn discover_cluster(
 }
 
 pub fn discover(
+    keypair: Option<Arc<Keypair>>,
     entrypoint: Option<&SocketAddr>,
     num_nodes: Option<usize>, // num_nodes only counts validators, excludes spy nodes
     timeout: Option<u64>,
@@ -89,9 +91,11 @@ pub fn discover(
     my_gossip_addr: Option<&SocketAddr>,
     my_shred_version: u16,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
+    let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
+
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, ip_echo, spy_ref) =
-        make_gossip_node(entrypoint, &exit, my_gossip_addr, my_shred_version);
+        make_gossip_node(keypair, entrypoint, &exit, my_gossip_addr, my_shred_version);
 
     let id = spy_ref.id();
     info!("Entrypoint: {:?}", entrypoint);
@@ -245,12 +249,12 @@ fn spy(
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
 fn make_gossip_node(
+    keypair: Arc<Keypair>,
     entrypoint: Option<&SocketAddr>,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
     shred_version: u16,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
-    let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr, shred_version)
     } else {

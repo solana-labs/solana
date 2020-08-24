@@ -241,7 +241,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getBlockTime
 
-Returns the estimated production time of a block.
+Returns the estimated production time of a confirmed block.
 
 Each validator reports their UTC time to the ledger on a regular interval by
 intermittently adding a timestamp to a Vote for a particular block. A requested
@@ -259,8 +259,8 @@ query a node that is built from genesis and retains the entire ledger.
 
 #### Results:
 
-- `<null>` - block has not yet been produced
-- `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+* `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+* `<null>` - timestamp is not available for this block
 
 #### Example:
 
@@ -1353,6 +1353,7 @@ Before submitting, the following preflight checks are performed:
 - `<string>` - fully-signed Transaction, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following field:
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
+  - `preflightCommitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: max).
 
 #### Results:
 
@@ -1377,6 +1378,7 @@ Simulate sending a transaction
 - `<string>` - Transaction, as base-58 encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
+  - `commitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: max).
 
 #### Results:
 

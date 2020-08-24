@@ -625,7 +625,7 @@ impl JsonRpcRequestProcessor {
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok())
         } else {
-            Ok(None)
+            Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
     }
 
@@ -697,7 +697,7 @@ impl JsonRpcRequestProcessor {
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
-            Ok(None)
+            Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
     }
 
@@ -2132,7 +2132,10 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            if let (Err(err), _log_output) = bank.simulate_transaction(transaction.clone()) {
+            let preflight_bank = &*meta.bank(config.preflight_commitment);
+            if let (Err(err), _log_output) =
+                preflight_bank.simulate_transaction(transaction.clone())
+            {
                 // Note: it's possible that the transaction simulation failed but the actual
                 // transaction would succeed, such as when a transaction depends on an earlier
                 // transaction that has yet to reach max confirmations. In these cases the user
@@ -2164,7 +2167,7 @@ impl RpcSol for RpcSolImpl {
             Ok(())
         };
 
-        let bank = &*meta.bank(None);
+        let bank = &*meta.bank(config.commitment);
         let logs = if result.is_ok() {
             let (transaction_result, log_messages) = bank.simulate_transaction(transaction);
             result = transaction_result;
@@ -4484,7 +4487,7 @@ pub mod tests {
             slot
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = r#"{"jsonrpc":"2.0","result":null,"id":1}"#;
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32004,"message":"Block not available for slot 12345"},"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

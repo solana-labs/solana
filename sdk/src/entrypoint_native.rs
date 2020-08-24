@@ -196,6 +196,16 @@ pub trait InvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Are cross program invocations supported
     fn is_cross_program_supported(&self) -> bool;
+    /// Get this invocation's compute meter
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+}
+
+/// Compute meter
+pub trait ComputeMeter {
+    /// Consume compute units
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError>;
+    /// Get the number of remaining compute units
+    fn get_remaining(&self) -> u64;
 }
 
 /// Log messages

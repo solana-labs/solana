@@ -66,6 +66,7 @@ pub struct TvuConfig {
     pub shred_version: u16,
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub trusted_validators: Option<HashSet<Pubkey>>,
+    pub repair_validators: Option<HashSet<Pubkey>>,
     pub accounts_hash_fault_injection_slots: u64,
 }
 
@@ -150,6 +151,7 @@ impl Tvu {
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
             verified_vote_receiver,
+            tvu_config.repair_validators,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();

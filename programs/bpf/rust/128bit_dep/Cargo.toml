@@ -16,7 +16,7 @@ solana-sdk = { path = "../../../../sdk/", version = "1.4.0", default-features = 
 
 [features]
 program = ["solana-sdk/program"]
-default = ["program"]
+default = ["program", "solana-sdk/default"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
