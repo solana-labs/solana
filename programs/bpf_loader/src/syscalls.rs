@@ -356,7 +356,6 @@ pub fn syscall_create_program_address(
         })
         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
     let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
-
     let new_address =
         match Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds) {
             Ok(address) => address,
