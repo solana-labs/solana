@@ -1204,26 +1204,36 @@ impl Bank {
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
-        match self.get_account(&program_id) {
-            Some(account) => {
-                assert_eq!(
-                    account.owner,
-                    native_loader::id(),
-                    "Cannot overwrite non-native account"
-                );
-            }
-            None => {
-                assert!(
-                    !self.is_frozen(),
-                    "Can't change frozen bank by adding not-existing new native program ({}, {}). \
-                    Maybe, inconsistent program activation is detected on snapshot restore?",
-                    name,
-                    program_id
-                );
-                // Add a bogus executable native account, which will be loaded and ignored.
-                let account = native_loader::create_loadable_account(name);
+        let mut already_genuine_program_exists = false;
+        if let Some(mut account) = self.get_account(&program_id) {
+            already_genuine_program_exists = native_loader::check_id(&account.owner);
+
+            if !already_genuine_program_exists {
+                // malicious account is pre-occupying at program_id
+                // forcibly burn and purge it
+
+                self.capitalization
+                    .fetch_sub(account.lamports, Ordering::Relaxed);
+
+                // Resetting account balance to 0 is needed to really purge from AccountsDB and
+                // flush the Stakes cache
+                account.lamports = 0;
                 self.store_account(&program_id, &account);
             }
+        }
+
+        if !already_genuine_program_exists {
+            assert!(
+                !self.is_frozen(),
+                "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+                Maybe, inconsistent program activation is detected on snapshot restore?",
+                name,
+                program_id
+            );
+
+            // Add a bogus executable native account, which will be loaded and ignored.
+            let account = native_loader::create_loadable_account(name);
+            self.store_account(&program_id, &account);
         }
         debug!("Added native program {} under {:?}", name, program_id);
     }
@@ -6860,9 +6870,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_add_instruction_processor_for_invalid_account() {
-        let (genesis_config, mint_keypair) = create_genesis_config(500);
+    fn test_add_instruction_processor_for_existing_unrelated_accounts() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
         fn mock_ix_processor(
@@ -6874,8 +6883,36 @@ mod tests {
         }
 
         // Non-native loader accounts can not be used for instruction processing
-        bank.add_builtin_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        let ((vote_id, vote_account), (stake_id, stake_account)) =
+            crate::stakes::tests::create_staked_node_accounts(1_0000);
+        bank.capitalization.fetch_add(
+            vote_account.lamports + stake_account.lamports,
+            Ordering::Relaxed,
+        );
+        bank.store_account(&vote_id, &vote_account);
+        bank.store_account(&stake_id, &stake_account);
+        assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        // Re-adding builtin programs should be no-op
+        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
     }
+
     #[test]
     fn test_recent_blockhashes_sysvar() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
