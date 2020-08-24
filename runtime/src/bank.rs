@@ -3191,7 +3191,7 @@ impl Bank {
         consumed_budget.saturating_sub(budget_recovery_delta)
     }
 
-    // This is called from snapshot restore and for each epoch boundary
+    // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     pub fn apply_feature_activations(&mut self) {
         if let Some(entered_epoch_callback) =
@@ -3226,8 +3226,13 @@ impl Bank {
     }
 
     // only used for testing
-    pub fn loader_program_ids(&self) -> Vec<Pubkey> {
-        self.message_processor.loader_program_ids()
+    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
+        self.message_processor.builtin_loader_ids()
+    }
+
+    // only used for testing
+    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
+        self.message_processor.builtin_program_ids()
     }
 
     // only used for testing
@@ -6395,7 +6400,6 @@ mod tests {
             .unwrap()
             .initiate_entered_epoch_callback({
                 let callback_count = callback_count.clone();
-                //Box::new(move |_bank: &mut Bank| {
                 Box::new(move |_| {
                     callback_count.fetch_add(1, Ordering::SeqCst);
                 })

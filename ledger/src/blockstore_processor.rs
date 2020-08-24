@@ -3118,7 +3118,7 @@ pub mod tests {
 
         assert_eq!(bank_forks.working_bank().slot(), 0);
         assert_eq!(
-            bank_forks.working_bank().loader_program_ids(),
+            bank_forks.working_bank().builtin_loader_ids(),
             vec![
                 solana_sdk::bpf_loader::id(),
                 solana_sdk::bpf_loader_deprecated::id()
@@ -3145,7 +3145,7 @@ pub mod tests {
 
         // this is similar to snapshot deserialization
         bank1.reset_callback_and_message_processor();
-        assert_eq!(bank1.loader_program_ids(), vec![]);
+        assert_eq!(bank1.builtin_loader_ids(), vec![]);
 
         let bank1 = Arc::new(bank1);
         let (bank_forks, _leader_schedule) = process_blockstore_from_root(
@@ -3159,7 +3159,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(bank_forks.working_bank().slot(), restored_slot);
         assert_eq!(
-            bank_forks.working_bank().loader_program_ids(),
+            bank_forks.working_bank().builtin_loader_ids(),
             vec![
                 solana_sdk::bpf_loader::id(),
                 solana_sdk::bpf_loader_deprecated::id()
@@ -3181,17 +3181,17 @@ pub mod tests {
         let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
         let bank0 = bank_forks.working_bank();
-        assert_eq!(bank0.loader_program_ids(), vec![]);
+        assert_eq!(bank0.builtin_loader_ids(), vec![]);
 
         let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(34);
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), restored_slot);
 
         assert_eq!(bank0.slot(), 0);
-        assert_eq!(bank0.loader_program_ids(), vec![]);
+        assert_eq!(bank0.builtin_loader_ids(), vec![]);
 
         assert_eq!(bank1.slot(), restored_slot);
         assert_eq!(
-            bank1.loader_program_ids(),
+            bank1.builtin_loader_ids(),
             vec![solana_sdk::bpf_loader_deprecated::id()]
         );
     }

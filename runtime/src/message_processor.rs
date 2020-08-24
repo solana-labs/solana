@@ -399,6 +399,7 @@ impl MessageProcessor {
         self.compute_budget = compute_budget;
     }
 
+    #[cfg(test)]
     pub fn get_cross_program_support(&mut self) -> bool {
         self.is_cross_program_supported
     }
@@ -693,8 +694,13 @@ impl MessageProcessor {
     }
 
     // only used for testing
-    pub fn loader_program_ids(&self) -> Vec<Pubkey> {
+    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
         self.loaders.iter().map(|a| a.0).collect::<Vec<_>>()
+    }
+
+    // only used for testing
+    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
+        self.programs.iter().map(|a| a.0).collect::<Vec<_>>()
     }
 }
 
