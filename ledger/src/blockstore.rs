@@ -1240,6 +1240,7 @@ impl Blockstore {
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
+        data_index.set_present(index, true);
         update_slot_meta(
             last_in_slot,
             last_in_data,
@@ -1247,6 +1248,7 @@ impl Blockstore {
             index as u32,
             new_consumed,
             shred.reference_tick(),
+            &data_index,
         );
         if slot_meta.is_full() {
             info!(
@@ -1254,7 +1256,6 @@ impl Blockstore {
                 slot_meta.slot, slot_meta.last_index
             );
         }
-        data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(())
     }
@@ -2601,6 +2602,89 @@ impl Blockstore {
     }
 }
 
+// Update the `completed_data_indexes` with a new shred `new_shred_index`. If a
+// data set is complete, return the range of shred indexes [start_index, end_index]
+// for that completed data set.
+fn update_completed_data_indexes(
+    is_last_in_data: bool,
+    new_shred_index: u32,
+    received_data_shreds: &ShredIndex,
+    // Sorted array of shred indexes marked data complete
+    completed_data_indexes: &mut Vec<u32>,
+) -> Vec<(u32, u32)> {
+    let mut first_greater_pos = None;
+    let mut prev_completed_shred_index = None;
+    // Find the first item in `completed_data_indexes > new_shred_index`
+    for (i, completed_data_index) in completed_data_indexes.iter().enumerate() {
+        // `completed_data_indexes` should be sorted from smallest to largest
+        assert!(
+            prev_completed_shred_index.is_none()
+                || *completed_data_index > prev_completed_shred_index.unwrap()
+        );
+        if *completed_data_index > new_shred_index {
+            first_greater_pos = Some(i);
+            break;
+        }
+        prev_completed_shred_index = Some(*completed_data_index);
+    }
+
+    // Consecutive entries i, k, j in this vector represent potential ranges [i, k),
+    // [k, j) that could be completed data ranges
+    let mut check_ranges: Vec<u32> = vec![prev_completed_shred_index
+        .map(|completed_data_shred_index| completed_data_shred_index + 1)
+        .unwrap_or(0)];
+    let mut first_greater_data_complete_index =
+        first_greater_pos.map(|i| completed_data_indexes[i]);
+
+    // `new_shred_index` is data complete, so need to insert here into the
+    // `completed_data_indexes`
+    if is_last_in_data {
+        if first_greater_pos.is_some() {
+            // If there exists a data complete shred greater than `new_shred_index`,
+            // and the new shred is marked data complete, then the range
+            // [new_shred_index, completed_data_indexes[pos]] may be complete,
+            // so add that range to check
+            check_ranges.push(new_shred_index + 1);
+        }
+        completed_data_indexes.insert(
+            first_greater_pos.unwrap_or_else(|| {
+                // If `first_greater_pos` is none, then there was no greater
+                // data complete index so mark this new shred's index as the latest data
+                // complete index
+                first_greater_data_complete_index = Some(new_shred_index);
+                completed_data_indexes.len()
+            }),
+            new_shred_index,
+        );
+    }
+
+    if first_greater_data_complete_index.is_none() {
+        // That means new_shred_index > all known completed data indexes and
+        // new shred not data complete, which means the data set of that new
+        // shred is not data complete
+        return vec![];
+    }
+
+    check_ranges.push(first_greater_data_complete_index.unwrap() + 1);
+    let mut completed_data_ranges = vec![];
+    for range in check_ranges.windows(2) {
+        let mut is_complete = true;
+        for shred_index in range[0]..range[1] {
+            // If we're missing any shreds, the data set cannot be confirmed
+            // to be completed, so check the next range
+            if !received_data_shreds.is_present(shred_index as u64) {
+                is_complete = false;
+                break;
+            }
+        }
+        if is_complete {
+            completed_data_ranges.push((range[0], range[1] - 1));
+        }
+    }
+
+    completed_data_ranges
+}
+
 fn update_slot_meta(
     is_last_in_slot: bool,
     is_last_in_data: bool,
@@ -2608,6 +2692,7 @@ fn update_slot_meta(
     index: u32,
     new_consumed: u64,
     reference_tick: u8,
+    received_data_shreds: &ShredIndex,
 ) {
     let maybe_first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
@@ -2633,16 +2718,21 @@ fn update_slot_meta(
         }
     };
 
-    if is_last_in_slot || is_last_in_data {
-        let position = slot_meta
-            .completed_data_indexes
-            .iter()
-            .position(|completed_data_index| *completed_data_index > index)
-            .unwrap_or_else(|| slot_meta.completed_data_indexes.len());
-
-        slot_meta.completed_data_indexes.insert(position, index);
+    for (first_data_set_shred_index, last_data_set_shred_index) in update_completed_data_indexes(
+        is_last_in_slot || is_last_in_data,
+        index,
+        received_data_shreds,
+        &mut slot_meta.completed_data_indexes,
+    ) {
+        notify_complete_data_set(
+            slot_meta.slot,
+            first_data_set_shred_index,
+            last_data_set_shred_index,
+        )
     }
 }
+
+fn notify_complete_data_set(_slot: Slot, _start_shred_index: u32, _end_shred_index: u32) {}
 
 fn get_index_meta_entry<'a>(
     db: &Database,
@@ -7048,5 +7138,65 @@ pub mod tests {
                 .is_none());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_update_completed_data_indexes() {
+        let mut completed_data_indexes: Vec<u32> = vec![];
+        let mut shred_index = ShredIndex::default();
+
+        for i in 0..10 {
+            shred_index.set_present(i as u64, true);
+            assert_eq!(
+                update_completed_data_indexes(true, i, &shred_index, &mut completed_data_indexes),
+                vec![(i, i)]
+            );
+            assert_eq!(completed_data_indexes, (0..=i).collect::<Vec<u32>>());
+        }
+    }
+
+    #[test]
+    fn test_update_completed_data_indexes_out_of_order() {
+        let mut completed_data_indexes = vec![];
+        let mut shred_index = ShredIndex::default();
+
+        shred_index.set_present(4, true);
+        assert!(
+            update_completed_data_indexes(false, 4, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert!(completed_data_indexes.is_empty());
+
+        shred_index.set_present(2, true);
+        assert!(
+            update_completed_data_indexes(false, 2, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert!(completed_data_indexes.is_empty());
+
+        shred_index.set_present(3, true);
+        assert!(
+            update_completed_data_indexes(true, 3, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert_eq!(completed_data_indexes, vec![3]);
+
+        // Inserting data complete shred 1 now confirms the range of shreds [2, 3]
+        // is part of the same data set
+        shred_index.set_present(1, true);
+        assert_eq!(
+            update_completed_data_indexes(true, 1, &shred_index, &mut completed_data_indexes),
+            vec![(2, 3)]
+        );
+        assert_eq!(completed_data_indexes, vec![1, 3]);
+
+        // Inserting data complete shred 0 now confirms the range of shreds [0]
+        // is part of the same data set
+        shred_index.set_present(0, true);
+        assert_eq!(
+            update_completed_data_indexes(true, 0, &shred_index, &mut completed_data_indexes),
+            vec![(0, 0), (1, 1)]
+        );
+        assert_eq!(completed_data_indexes, vec![0, 1, 3]);
     }
 }
