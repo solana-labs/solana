@@ -159,6 +159,14 @@ pub enum InstructionError {
     /// Provided seeds do not result in a valid address
     #[error("Provided seeds do not result in a valid address")]
     InvalidSeeds,
+
+    /// Failed to reallocate account data of this length
+    #[error("Failed to reallocate account data")]
+    InvalidRealloc,
+
+    /// Computational budget exceeded
+    #[error("Computational budget exceeded")]
+    ComputationalBudgetExceeded,
 }
 
 impl InstructionError {

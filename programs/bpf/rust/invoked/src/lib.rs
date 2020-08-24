@@ -8,13 +8,8 @@ extern crate solana_sdk;
 
 use crate::instruction::*;
 use solana_sdk::{
-    account_info::AccountInfo,
-    bpf_loader, entrypoint,
-    entrypoint::ProgramResult,
-    info,
-    program::{invoke, invoke_signed},
-    program_error::ProgramError,
-    pubkey::Pubkey,
+    account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, info,
+    program::invoke, program_error::ProgramError, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -111,7 +106,6 @@ fn process_instruction(
         }
         TEST_DERIVED_SIGNERS => {
             info!("verify derived signers");
-            const INVOKED_PROGRAM_INDEX: usize = 0;
             const DERIVED_KEY1_INDEX: usize = 1;
             const DERIVED_KEY2_INDEX: usize = 2;
             const DERIVED_KEY3_INDEX: usize = 3;
@@ -119,26 +113,6 @@ fn process_instruction(
             assert!(accounts[DERIVED_KEY1_INDEX].is_signer);
             assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
             assert!(!accounts[DERIVED_KEY3_INDEX].is_signer);
-
-            let nonce2 = instruction_data[1];
-            let nonce3 = instruction_data[2];
-            let invoked_instruction = create_instruction(
-                *accounts[INVOKED_PROGRAM_INDEX].key,
-                &[
-                    (accounts[DERIVED_KEY1_INDEX].key, true, false),
-                    (accounts[DERIVED_KEY2_INDEX].key, true, true),
-                    (accounts[DERIVED_KEY3_INDEX].key, false, true),
-                ],
-                vec![TEST_VERIFY_NESTED_SIGNERS],
-            );
-            invoke_signed(
-                &invoked_instruction,
-                accounts,
-                &[
-                    &[b"Lil'", b"Bits", &[nonce2]],
-                    &[accounts[DERIVED_KEY2_INDEX].key.as_ref(), &[nonce3]],
-                ],
-            )?;
         }
         TEST_VERIFY_NESTED_SIGNERS => {
             info!("verify nested derived signers");
