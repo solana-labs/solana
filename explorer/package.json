@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@react-hook/debounce": "^3.0.0",
-    "@sentry/react": "^5.21.1",
+    "@sentry/react": "^5.21.3",
     "@solana/web3.js": "^0.71.6",
     "@testing-library/jest-dom": "^5.11.3",
     "@testing-library/react": "^10.4.9",
