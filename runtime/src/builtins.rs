@@ -2,41 +2,50 @@ use crate::{
     bank::{Builtin, Entrypoint},
     system_instruction_processor,
 };
-use solana_sdk::{clock::Epoch, genesis_config::OperatingMode, system_program};
+use solana_sdk::{
+    clock::{Epoch, GENESIS_EPOCH},
+    genesis_config::OperatingMode,
+    system_program,
+};
 
 use log::*;
 
-/// The entire set of available builtin programs that should be active at the given (operating_mode, epoch)
-pub fn get_builtins(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Builtin> {
-    trace!("get_builtins: {:?}, {:?}", operating_mode, epoch);
+/// The entire set of available builtin programs that should be active at the given operating_mode
+pub fn get_builtins(operating_mode: OperatingMode) -> Vec<(Builtin, Epoch)> {
+    trace!("get_builtins: {:?}", operating_mode);
     let mut builtins = vec![];
 
-    builtins.extend(vec![
-        Builtin::new(
-            "system_program",
-            system_program::id(),
-            Entrypoint::Program(system_instruction_processor::process_instruction),
-        ),
-        Builtin::new(
-            "config_program",
-            solana_config_program::id(),
-            Entrypoint::Program(solana_config_program::config_processor::process_instruction),
-        ),
-        Builtin::new(
-            "stake_program",
-            solana_stake_program::id(),
-            Entrypoint::Program(solana_stake_program::stake_instruction::process_instruction),
-        ),
-        Builtin::new(
-            "vote_program",
-            solana_vote_program::id(),
-            Entrypoint::Program(solana_vote_program::vote_instruction::process_instruction),
-        ),
-    ]);
+    builtins.extend(
+        vec![
+            Builtin::new(
+                "system_program",
+                system_program::id(),
+                Entrypoint::Program(system_instruction_processor::process_instruction),
+            ),
+            Builtin::new(
+                "config_program",
+                solana_config_program::id(),
+                Entrypoint::Program(solana_config_program::config_processor::process_instruction),
+            ),
+            Builtin::new(
+                "stake_program",
+                solana_stake_program::id(),
+                Entrypoint::Program(solana_stake_program::stake_instruction::process_instruction),
+            ),
+            Builtin::new(
+                "vote_program",
+                solana_vote_program::id(),
+                Entrypoint::Program(solana_vote_program::vote_instruction::process_instruction),
+            ),
+        ]
+        .into_iter()
+        .map(|program| (program, GENESIS_EPOCH))
+        .collect::<Vec<_>>(),
+    );
 
     // repurpose Preview for test_get_builtins because the Development is overloaded...
     #[cfg(test)]
-    if operating_mode == OperatingMode::Preview && epoch >= 2 {
+    if operating_mode == OperatingMode::Preview {
         use solana_sdk::instruction::InstructionError;
         use solana_sdk::{account::KeyedAccount, pubkey::Pubkey};
         use std::str::FromStr;
@@ -48,10 +57,9 @@ pub fn get_builtins(operating_mode: OperatingMode, epoch: Epoch) -> Vec<Builtin>
             Err(InstructionError::Custom(42))
         }
         let program_id = Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap();
-        builtins.extend(vec![Builtin::new(
-            "mock",
-            program_id,
-            Entrypoint::Program(mock_ix_processor),
+        builtins.extend(vec![(
+            Builtin::new("mock", program_id, Entrypoint::Program(mock_ix_processor)),
+            2,
         )]);
     }
 
@@ -91,7 +99,7 @@ mod tests {
         ));
 
         let warped_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(999);
-        let warped_bank = Arc::new(Bank::new_from_parent(
+        let warped_bank = Arc::new(Bank::warp_from_parent(
             &bank0,
             &Pubkey::default(),
             warped_slot,

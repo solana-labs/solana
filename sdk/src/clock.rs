@@ -57,6 +57,8 @@ pub type Slot = u64;
 ///  some number of Slots.
 pub type Epoch = u64;
 
+pub const GENESIS_EPOCH: Epoch = 0;
+
 /// SlotIndex is an index to the slots of a epoch
 pub type SlotIndex = u64;
 

@@ -189,7 +189,7 @@ impl StatusCacheRc {
     }
 }
 
-pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) + Sync + Send>;
+pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank, bool) + Sync + Send>;
 type WrappedEnteredEpochCallback = Arc<RwLock<Option<EnteredEpochCallback>>>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
@@ -565,7 +565,7 @@ impl Bank {
 
         // Following code may touch AccountsDB, requiring proper ancestors
         if parent.epoch() < new.epoch() {
-            new.apply_feature_activations();
+            new.apply_feature_activations(false, false);
         }
 
         new.update_slot_hashes();
@@ -587,6 +587,7 @@ impl Bank {
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
+        new.apply_feature_activations(true, true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height
             .store(new.max_tick_height(), Ordering::Relaxed);
@@ -2629,7 +2630,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        self.apply_feature_activations();
+        self.apply_feature_activations(true, false);
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -2653,7 +2654,8 @@ impl Bank {
             assert!(callback_w.is_none(), "Already callback has been initiated");
             *callback_w = Some(entered_epoch_callback);
         }
-        self.apply_feature_activations();
+        // immedaitely fire the callback as initial invocation
+        self.reinvoke_entered_epoch_callback(true);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -3203,18 +3205,28 @@ impl Bank {
 
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
-    pub fn apply_feature_activations(&mut self) {
+    fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
+        self.ensure_builtins(init_finish_or_warp);
+        self.reinvoke_entered_epoch_callback(initiate_callback);
+        self.recheck_cross_program_support();
+    }
+
+    fn ensure_builtins(&mut self, init_or_warp: bool) {
+        for (program, start_epoch) in get_builtins(self.operating_mode()) {
+            let should_populate = init_or_warp && self.epoch() >= start_epoch
+                || !init_or_warp && self.epoch() == start_epoch;
+            if should_populate {
+                self.add_builtin(&program.name, program.id, program.entrypoint);
+            }
+        }
+    }
+
+    fn reinvoke_entered_epoch_callback(&mut self, initiate: bool) {
         if let Some(entered_epoch_callback) =
             self.entered_epoch_callback.clone().read().unwrap().as_ref()
         {
-            entered_epoch_callback(self)
+            entered_epoch_callback(self, initiate)
         }
-
-        for program in get_builtins(self.operating_mode(), self.epoch()) {
-            self.add_builtin(&program.name, program.id, program.entrypoint);
-        }
-
-        self.recheck_cross_program_support();
     }
 
     fn recheck_cross_program_support(self: &mut Bank) {
@@ -6410,7 +6422,7 @@ mod tests {
             .unwrap()
             .initiate_entered_epoch_callback({
                 let callback_count = callback_count.clone();
-                Box::new(move |_| {
+                Box::new(move |_, _| {
                     callback_count.fetch_add(1, Ordering::SeqCst);
                 })
             });
