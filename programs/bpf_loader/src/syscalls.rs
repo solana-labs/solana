@@ -92,6 +92,7 @@ use crate::allocator_bump::BPFAllocator;
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_syscalls<'a>(
+    loader_id: &Pubkey,
     vm: &mut EbpfVm<'a, BPFError>,
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
@@ -147,6 +148,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_alloc_free_",
         Box::new(SyscallSolAllocFree {
+            aligned: *loader_id != bpf_loader_deprecated::id(),
             allocator: BPFAllocator::new(heap, MM_HEAP_START),
         }),
     )?;
@@ -347,6 +349,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
 pub struct SyscallSolAllocFree {
+    aligned: bool,
     allocator: BPFAllocator,
 }
 impl SyscallObject<BPFError> for SyscallSolAllocFree {
@@ -360,7 +363,12 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        let layout = match Layout::from_size_align(size as usize, align_of::<u128>()) {
+        let align = if self.aligned {
+            align_of::<u128>()
+        } else {
+            align_of::<u8>()
+        };
+        let layout = match Layout::from_size_align(size as usize, align) {
             Ok(layout) => layout,
             Err(_) => return Ok(0),
         };
@@ -1195,6 +1203,7 @@ mod tests {
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             assert_ne!(
@@ -1216,12 +1225,35 @@ mod tests {
                 0
             );
         }
-        // many small allocs
+        // many small unaligned allocs
         {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: false,
+                allocator: BPFAllocator::new(heap, MM_HEAP_START),
+            };
+            for _ in 0..100 {
+                assert_ne!(
+                    syscall.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
+                    0
+                );
+            }
+            assert_eq!(
+                syscall
+                    .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
+        }
+        // many small aligned allocs
+        {
+            let heap = vec![0_u8; 100];
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
+            let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             for _ in 0..12 {
@@ -1244,6 +1276,7 @@ mod tests {
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             let address = syscall

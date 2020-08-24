@@ -60,6 +60,7 @@ pub enum BPFError {
 impl UserDefinedError for BPFError {}
 
 pub fn create_vm<'a>(
+    loader_id: &Pubkey,
     prog: &'a [u8],
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
@@ -68,7 +69,8 @@ pub fn create_vm<'a>(
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_elf(&prog)?;
 
-    let heap_region = syscalls::register_syscalls(&mut vm, parameter_accounts, invoke_context)?;
+    let heap_region =
+        syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
 
     Ok((vm, heap_region))
 }
@@ -148,14 +150,18 @@ pub fn process_instruction(
         {
             let compute_meter = invoke_context.get_compute_meter();
             let program_account = program.try_account_ref_mut()?;
-            let (mut vm, heap_region) =
-                match create_vm(&program_account.data, &parameter_accounts, invoke_context) {
-                    Ok(info) => info,
-                    Err(e) => {
-                        log!(logger, "Failed to create BPF VM: {}", e);
-                        return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
-                    }
-                };
+            let (mut vm, heap_region) = match create_vm(
+                program_id,
+                &program_account.data,
+                &parameter_accounts,
+                invoke_context,
+            ) {
+                Ok(info) => info,
+                Err(e) => {
+                    log!(logger, "Failed to create BPF VM: {}", e);
+                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                }
+            };
 
             log!(logger, "Call BPF program {}", program.unsigned_key());
             let instruction_meter = ThisInstructionMeter { compute_meter };
