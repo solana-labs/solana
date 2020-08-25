@@ -63,7 +63,7 @@ export type ProgramData =
   | VoteProgramData
   | NonceProgramData
   | SysvarProgramData
-  | ConfigAccount;
+  | ConfigProgramData;
 
 export interface Details {
   executable: boolean;
