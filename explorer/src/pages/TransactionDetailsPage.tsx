@@ -100,9 +100,10 @@ function StatusCard({ signature }: Props) {
   // Effect to set and clear interval for auto-refresh
   React.useEffect(() => {
     if (autoRefreshInProcess) {
-      let intervalHandle: NodeJS.Timeout = setInterval(() => {
-        fetchStatus(signature);
-      }, AUTO_REFRESH_TIMEOUT);
+      let intervalHandle: NodeJS.Timeout = setInterval(
+        () => fetchStatus(signature),
+        AUTO_REFRESH_TIMEOUT
+      );
 
       return () => {
         clearInterval(intervalHandle);
