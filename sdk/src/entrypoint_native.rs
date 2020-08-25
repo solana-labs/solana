@@ -207,17 +207,14 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
-<<<<<<< HEAD
-=======
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
+    /// Are cross program invocations supported
+    fn is_cross_program_supported(&self) -> bool;
 }
 
 /// Log messages
 pub trait Logger {
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
     fn log_enabled(&self) -> bool;
     fn log(&mut self, message: &str);
-    /// Are cross program invocations supported
-    fn is_cross_program_supported(&self) -> bool;
 }

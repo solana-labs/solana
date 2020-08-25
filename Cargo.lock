@@ -3371,11 +3371,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "rand 0.7.3",
-<<<<<<< HEAD
  "rustversion",
- "solana-logger 1.2.27",
-=======
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
  "solana-runtime",
  "solana-sdk 1.2.27",
  "solana_rbpf",

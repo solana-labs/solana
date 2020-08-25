@@ -171,11 +171,7 @@ impl Logger for MockLogger {
     fn log(&mut self, message: &str) {
         self.log.borrow_mut().push(message.to_string());
     }
-<<<<<<< HEAD
-    fn log(&mut self, _message: &str) {}
     fn is_cross_program_supported(&self) -> bool {
         true
     }
-=======
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
 }

@@ -75,16 +75,12 @@ pub fn register_syscalls<'a>(
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     // Syscall function common across languages
-
     vm.register_syscall_ex("abort", syscall_abort)?;
-<<<<<<< HEAD
     if invoke_context.is_cross_program_supported() {
         vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
     }
-=======
-    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
 
+    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {

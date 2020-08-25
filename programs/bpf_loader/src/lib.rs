@@ -326,6 +326,9 @@ mod tests {
         fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
             Rc::new(RefCell::new(self.mock_logger.clone()))
         }
+        fn is_cross_program_supported(&self) -> bool {
+            true
+        }
     }
     #[derive(Debug, Default, Clone)]
     pub struct MockLogger {
@@ -337,9 +340,6 @@ mod tests {
         }
         fn log(&mut self, message: &str) {
             self.log.borrow_mut().push(message.to_string());
-        }
-        fn is_cross_program_supported(&self) -> bool {
-            true
         }
     }
 

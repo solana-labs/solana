@@ -154,23 +154,13 @@ impl PreAccount {
     }
 }
 
-<<<<<<< HEAD
-#[derive(Default)]
-pub struct ThisInvokeContext<'a> {
-    pub program_ids: Vec<Pubkey>,
-    pub rent: Rent,
-    pub pre_accounts: Vec<PreAccount>,
-    pub programs: Vec<(Pubkey, ProcessInstruction)>,
-    pub log_collector: Option<&'a LogCollector>,
-    is_cross_program_supported: bool,
-=======
 pub struct ThisInvokeContext {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     programs: Vec<(Pubkey, ProcessInstruction)>,
     logger: Rc<RefCell<dyn Logger>>,
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
+    is_cross_program_supported: bool,
 }
 impl ThisInvokeContext {
     const MAX_INVOCATION_DEPTH: usize = 5;
@@ -179,12 +169,8 @@ impl ThisInvokeContext {
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
-<<<<<<< HEAD
-        log_collector: Option<&'a LogCollector>,
-        is_cross_program_supported: bool,
-=======
         log_collector: Option<Rc<LogCollector>>,
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
+        is_cross_program_supported: bool,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
         program_ids.push(*program_id);
@@ -193,12 +179,8 @@ impl ThisInvokeContext {
             rent,
             pre_accounts,
             programs,
-<<<<<<< HEAD
-            log_collector,
-            is_cross_program_supported,
-=======
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
+            is_cross_program_supported,
         }
     }
 }
@@ -243,17 +225,17 @@ impl InvokeContext for ThisInvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
         &self.programs
     }
-<<<<<<< HEAD
-=======
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
+    }
+    fn is_cross_program_supported(&self) -> bool {
+        self.is_cross_program_supported
     }
 }
 pub struct ThisLogger {
     log_collector: Option<Rc<LogCollector>>,
 }
 impl Logger for ThisLogger {
->>>>>>> b6a957374... Route all loader messages to log collector (#10528)
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
@@ -262,9 +244,6 @@ impl Logger for ThisLogger {
         if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
         }
-    }
-    fn is_cross_program_supported(&self) -> bool {
-        self.is_cross_program_supported
     }
 }
 
