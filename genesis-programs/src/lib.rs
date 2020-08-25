@@ -84,18 +84,11 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
                     Program::Native(solana_vest_program!()),
                     Program::Native(solana_budget_program!()),
                     Program::Native(solana_exchange_program!()),
-<<<<<<< HEAD
-                ])
-            } else {
-                None
-            }
-=======
                 ]
                 .into_iter()
                 .map(|program| (program, 0))
                 .collect::<Vec<_>>(),
             );
->>>>>>> db4bbb356... Switch programs activation to whole-set based gating (#11750)
         }
         OperatingMode::Preview => {
             // tds enabled async cluster restart with smart contract being enabled
