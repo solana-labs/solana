@@ -47,8 +47,9 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
 
   const status = useTransactionStatus(signature);
 
-  const autoRefreshInProcess = !(
-    status?.data?.info && status.data.info.confirmations === "max"
+  const autoRefreshInProcess = !!(
+    status?.data?.info &&
+    status.data.info.confirmations !== "max"
   );
 
   return (
