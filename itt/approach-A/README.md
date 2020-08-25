@@ -102,5 +102,5 @@ docker ps
 docker rm -f <CONTAINER ID>
 docker images
 docker rmi -f <IMAGE ID>
-docker
+docker logs
 ```
