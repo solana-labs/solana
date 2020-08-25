@@ -131,7 +131,7 @@ export function useTransactions() {
 }
 
 export function useTransactionStatus(
-  signature: TransactionSignature
+  signature: TransactionSignature | undefined
 ): Cache.CacheEntry<TransactionStatus> | undefined {
   const context = React.useContext(StateContext);
 
@@ -139,6 +139,10 @@ export function useTransactionStatus(
     throw new Error(
       `useTransactionStatus must be used within a TransactionsProvider`
     );
+  }
+
+  if (signature === undefined) {
+    return undefined;
   }
 
   return context.entries[signature];

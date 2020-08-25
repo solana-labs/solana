@@ -31,7 +31,10 @@ import { FetchStatus } from "providers/cache";
 
 const AUTO_REFRESH_TIMEOUT = 2000;
 
-type Props = { signature: TransactionSignature };
+type Props = {
+  signature: TransactionSignature;
+  autoRefreshInProcess?: boolean;
+};
 export function TransactionDetailsPage({ signature: raw }: Props) {
   let signature: TransactionSignature | undefined;
 
@@ -41,6 +44,12 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
       signature = raw;
     }
   } catch (err) {}
+
+  const status = useTransactionStatus(signature);
+
+  const autoRefreshInProcess = !(
+    status?.data?.info && status.data.info.confirmations === "max"
+  );
 
   return (
     <div className="container mt-n3">
@@ -54,8 +63,14 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
         <ErrorCard text={`Signature "${raw}" is not valid`} />
       ) : (
         <>
-          <StatusCard signature={signature} />
-          <AccountsCard signature={signature} />
+          <StatusCard
+            signature={signature}
+            autoRefreshInProcess={autoRefreshInProcess}
+          />
+          <AccountsCard
+            signature={signature}
+            autoRefreshInProcess={autoRefreshInProcess}
+          />
           <InstructionsSection signature={signature} />
         </>
       )}
@@ -63,21 +78,11 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
   );
 }
 
-function StatusCard({ signature }: Props) {
+function StatusCard({ signature, autoRefreshInProcess }: Props) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
-  const [autoRefreshInProcess, setAutoRefreshInProcess] = React.useState<
-    boolean
-  >(false);
-
-  const refresh = React.useCallback(
-    (signature: string) => {
-      fetchStatus(signature);
-    },
-    [fetchStatus]
-  );
 
   // Fetch transaction on load
   React.useEffect(() => {
@@ -85,17 +90,6 @@ function StatusCard({ signature }: Props) {
       fetchStatus(signature);
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Manage auto-refresh
-  React.useEffect(() => {
-    if (!status || !status.data?.info) {
-      return;
-    } else if (status.data.info.confirmations !== "max" && !autoRefreshInProcess) {
-      setAutoRefreshInProcess(true);
-    } else if (status.data.info.confirmations === 'max' && autoRefreshInProcess) {
-      setAutoRefreshInProcess(false);
-    }
-  }, [status, autoRefreshInProcess]);
 
   // Effect to set and clear interval for auto-refresh
   React.useEffect(() => {
@@ -170,7 +164,7 @@ function StatusCard({ signature }: Props) {
         {!autoRefreshInProcess ? (
           <button
             className="btn btn-white btn-sm"
-            onClick={() => refresh(signature)}
+            onClick={() => fetchStatus(signature)}
           >
             <span className="fe fe-refresh-cw mr-2"></span>
             Refresh
@@ -248,7 +242,7 @@ function StatusCard({ signature }: Props) {
   );
 }
 
-function AccountsCard({ signature }: Props) {
+function AccountsCard({ signature, autoRefreshInProcess }: Props) {
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
@@ -266,7 +260,11 @@ function AccountsCard({ signature }: Props) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details || details.status === FetchStatus.Fetching || status.data.info.confirmations !== "max") {
+  } else if (
+    !details ||
+    details.status === FetchStatus.Fetching ||
+    autoRefreshInProcess
+  ) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
