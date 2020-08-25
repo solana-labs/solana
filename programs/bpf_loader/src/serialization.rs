@@ -1,10 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    account::KeyedAccount, bpf_loader_deprecated, instruction::InstructionError, pubkey::Pubkey,
+    account::KeyedAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError, pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
-    mem::{self, align_of},
+    mem::{align_of, size_of},
 };
 
 /// Look for a duplicate account and return its position if found
@@ -47,7 +48,7 @@ pub fn serialize_parameters_unaligned(
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<Vec<u8>, InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
+    assert_eq!(32, size_of::<Pubkey>());
 
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
@@ -84,29 +85,29 @@ pub fn deserialize_parameters_unaligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
 ) -> Result<(), InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
+    assert_eq!(32, size_of::<Pubkey>());
 
-    let mut start = mem::size_of::<u64>(); // number of accounts
+    let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
         start += 1; // is_dup
         if !is_dup {
-            start += mem::size_of::<u8>(); // is_signer
-            start += mem::size_of::<u8>(); // is_writable
-            start += mem::size_of::<Pubkey>(); // pubkey
+            start += size_of::<u8>(); // is_signer
+            start += size_of::<u8>(); // is_writable
+            start += size_of::<Pubkey>(); // pubkey
             keyed_account.try_account_ref_mut()?.lamports =
                 LittleEndian::read_u64(&buffer[start..]);
-            start += mem::size_of::<u64>() // lamports
-                + mem::size_of::<u64>(); // data length
+            start += size_of::<u64>() // lamports
+                + size_of::<u64>(); // data length
             let end = start + keyed_account.data_len()?;
             keyed_account
                 .try_account_ref_mut()?
                 .data
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()? // data
-                + mem::size_of::<Pubkey>() // owner
-                + mem::size_of::<u8>() // executable
-                + mem::size_of::<u64>(); // rent_epoch
+                + size_of::<Pubkey>() // owner
+                + size_of::<u8>() // executable
+                + size_of::<u64>(); // rent_epoch
         }
     }
     Ok(())
@@ -117,14 +118,12 @@ pub fn serialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<Vec<u8>, InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
+    assert_eq!(32, size_of::<Pubkey>());
 
-    // TODO use with capacity would be nice, but don't know account data sizes...
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
 
-    // TODO panic?
     if v.as_ptr().align_offset(align_of::<u128>()) != 0 {
         panic!();
     }
@@ -148,7 +147,9 @@ pub fn serialize_parameters_aligned(
                 .unwrap();
             v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
             v.resize(
-                v.len() + (v.len() as *const u8).align_offset(align_of::<u128>()),
+                v.len()
+                    + MAX_PERMITTED_DATA_INCREASE
+                    + (v.len() as *const u8).align_offset(align_of::<u128>()),
                 0,
             );
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
@@ -166,33 +167,39 @@ pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
 ) -> Result<(), InstructionError> {
-    assert_eq!(32, mem::size_of::<Pubkey>());
+    assert_eq!(32, size_of::<Pubkey>());
 
-    let mut start = mem::size_of::<u64>(); // number of accounts
+    let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
-        start += 1; // is_dup
-        if !is_dup {
-            start += mem::size_of::<u8>() // is_signer
-            + mem::size_of::<u8>() // is_writable
-            + mem::size_of::<u8>() // executable
-            + 4 // padding
-            + mem::size_of::<Pubkey>() // pubkey
-            + mem::size_of::<Pubkey>(); // owner
-            keyed_account.try_account_ref_mut()?.lamports =
-                LittleEndian::read_u64(&buffer[start..]);
-            start += mem::size_of::<u64>() // lamports
-                + mem::size_of::<u64>(); // data length
-            let end = start + keyed_account.data_len()?;
-            keyed_account
-                .try_account_ref_mut()?
-                .data
-                .clone_from_slice(&buffer[start..end]);
-            start += keyed_account.data_len()?; // data
-            start += (start as *const u8).align_offset(align_of::<u128>());
-            start += mem::size_of::<u64>(); // rent_epoch
+        start += size_of::<u8>(); // position
+        if is_dup {
+            start += 7; // padding to 64-bit aligned
         } else {
-            start += 7; // padding
+            let mut account = keyed_account.try_account_ref_mut()?;
+            start += size_of::<u8>() // is_signer
+            + size_of::<u8>() // is_writable
+            + size_of::<u8>() // executable
+            + 4 // padding to 128-bit aligned
+            + size_of::<Pubkey>(); // key
+            account.owner = Pubkey::new(&buffer[start..start + size_of::<Pubkey>()]);
+            start += size_of::<Pubkey>(); // owner
+            account.lamports = LittleEndian::read_u64(&buffer[start..]);
+            start += size_of::<u64>(); // lamports
+            let pre_len = account.data.len();
+            let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
+            start += size_of::<u64>(); // data length
+            let mut data_end = start + pre_len;
+            if post_len != pre_len
+                && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
+            {
+                account.data.resize(post_len, 0);
+                data_end = start + post_len;
+            }
+            account.data.clone_from_slice(&buffer[start..data_end]);
+            start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
+            start += (start as *const u8).align_offset(align_of::<u128>());
+            start += size_of::<u64>(); // rent_epoch
         }
     }
     Ok(())
@@ -206,7 +213,6 @@ mod tests {
     };
     use std::{
         cell::RefCell,
-        mem::size_of,
         rc::Rc,
         // Hide Result from bindgen gets confused about generics in non-generic type declarations
         slice::{from_raw_parts, from_raw_parts_mut},

@@ -69,7 +69,7 @@ impl PreAccount {
 
         // An account not assigned to the program cannot have its balance decrease.
         if *program_id != self.owner // line coverage used to get branch coverage
-        && self.lamports > post.lamports
+         && self.lamports > post.lamports
         {
             return Err(InstructionError::ExternalAccountLamportSpend);
         }
@@ -133,6 +133,7 @@ impl PreAccount {
 
     pub fn update(&mut self, account: &Account) {
         self.lamports = account.lamports;
+        self.owner = account.owner;
         if self.data.len() != account.data.len() {
             // Only system account can change data size, copy with alloc
             self.data = account.data.clone();
