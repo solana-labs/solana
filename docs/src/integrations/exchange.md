@@ -100,6 +100,77 @@ greater security. If so, you will need to move SOL to hot accounts using our
 When a user wants to deposit SOL into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
+## Validating User-supplied Account Addresses for Withdrawals in SOL
+
+As withdrawals are irreversible, it may be a good practice to validate the
+account address before authorizing withdrawals into user-supplied accounts
+to prevent accidental user's fund loss.
+
+For a normal account in Solana, its address is simply a Base58-encoded
+actual 256-bit public key of ed25519. Because not all bit pattern is a valid
+public key for the ed25519, it's possible to make sure user-supplied
+account addresses are at least something that may be a correct ed25519 public
+key.
+
+### Java
+
+You can check Solana's normal account address validity by first decoding
+Base58 string and ensuring the decoded bytes are valid ed25519 public keys
+like this:
+
+The following code sample assumes you're using the Maven.
+
+`pom.xml`:
+
+```xml
+<repositories>
+  ...
+  <repository>
+    <id>spring</id>
+    <url>https://repo.spring.io/libs-release/</url>
+  </repository>
+</repositories>
+
+...
+
+<dependencies>
+  ...
+  <dependency>
+      <groupId>io.github.novacrypto</groupId>
+      <artifactId>Base58</artifactId>
+      <version>0.1.3</version>
+  </dependency>
+  <dependency>
+      <groupId>cafe.cryptography</groupId>
+      <artifactId>curve25519-elisabeth</artifactId>
+      <version>0.1.0</version>
+  </dependency>
+<dependencies>
+```
+
+```java
+import io.github.novacrypto.base58.Base58;
+import cafe.cryptography.curve25519.CompressedEdwardsY;
+
+public class PubkeyValidator
+{
+    public static boolean verifyPubkey(String userProvidedPubkey)
+    {
+        try {
+            return _verifyPubkeyInternal(userProvidedPubkey);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static boolean _verifyPubkeyInternal(String maybePubkey) throws Exception
+    {
+        byte[] bytes = Base58.base58Decode(maybePubkey);
+        return !(new CompressedEdwardsY(bytes)).decompress().isSmallOrder();
+    }
+}
+```
+
 ### Poll for Blocks
 
 The easiest way to track all the deposit accounts for your exchange is to poll
