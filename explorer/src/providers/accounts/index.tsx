@@ -22,6 +22,8 @@ import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 import { VoteAccount } from "validators/accounts/vote";
 import { NonceAccount } from "validators/accounts/nonce";
+import { SysvarAccount } from "validators/accounts/sysvar";
+import { ConfigAccount } from "validators/accounts/config";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -43,9 +45,25 @@ export type VoteProgramData = {
 export type NonceProgramData = {
   name: "nonce";
   parsed: NonceAccount;
-}
+};
 
-export type ProgramData = StakeProgramData | TokenProgramData | VoteProgramData;
+export type SysvarProgramData = {
+  name: "sysvar";
+  parsed: SysvarAccount;
+};
+
+export type ConfigProgramData = {
+  name: "config";
+  parsed: ConfigAccount;
+};
+
+export type ProgramData =
+  | StakeProgramData
+  | TokenProgramData
+  | VoteProgramData
+  | NonceProgramData
+  | SysvarProgramData
+  | ConfigAccount;
 
 export interface Details {
   executable: boolean;

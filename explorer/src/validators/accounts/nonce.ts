@@ -1,22 +1,20 @@
-import { StructType, object, string, enums } from "superstruct";
+import { StructType, object, string, enums, pick } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
 export type NonceAccountType = StructType<typeof NonceAccountType>;
-export const NonceAccountType = enums([
-  "initialized"
-]);
+export const NonceAccountType = enums(["uninitialized", "initialized"]);
 
 export type NonceAccountInfo = StructType<typeof NonceAccountInfo>;
-export const NonceAccountInfo = object({
+export const NonceAccountInfo = pick({
   authority: Pubkey,
   blockhash: string(),
   feeCalculator: object({
-    lamportsPerSignature: string() // this is coming through as a string? TODO: investigate.
-  })
+    lamportsPerSignature: string(),
+  }),
 });
 
 export type NonceAccount = StructType<typeof NonceAccount>;
 export const NonceAccount = object({
   type: NonceAccountType,
-  info: NonceAccountInfo
+  info: NonceAccountInfo,
 });
