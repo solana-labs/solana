@@ -13,6 +13,7 @@ import {
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
 import {newAccountWithLamports} from './new-account-with-lamports';
+import {BPF_LOADER_PROGRAM_ID} from '../src/bpf-loader';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
@@ -40,7 +41,7 @@ test('load BPF C program', async () => {
   const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
   const program = new Account();
-  await BpfLoader.load(connection, from, program, data);
+  await BpfLoader.load(connection, from, program, data, BPF_LOADER_PROGRAM_ID);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId: program.publicKey,
@@ -82,7 +83,13 @@ describe('load BPF Rust program', () => {
     );
 
     program = new Account();
-    await BpfLoader.load(connection, payerAccount, program, data);
+    await BpfLoader.load(
+      connection,
+      payerAccount,
+      program,
+      data,
+      BPF_LOADER_PROGRAM_ID,
+    );
     const transaction = new Transaction().add({
       keys: [
         {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},

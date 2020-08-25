@@ -1752,11 +1752,7 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._buildArgs(
-      [publicKey.toBase58()],
-      commitment,
-      'base64',
-    );
+    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
     if (res.error) {
@@ -1866,11 +1862,7 @@ export class Connection {
     programId: PublicKey,
     commitment: ?Commitment,
   ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
-    const args = this._buildArgs(
-      [programId.toBase58()],
-      commitment,
-      'base64',
-    );
+    const args = this._buildArgs([programId.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {

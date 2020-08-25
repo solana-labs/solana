@@ -5,21 +5,14 @@ import {PublicKey} from './publickey';
 import {Loader} from './loader';
 import type {Connection} from './connection';
 
+export const BPF_LOADER_PROGRAM_ID = new PublicKey(
+  'BPFLoader2111111111111111111111111111111111',
+);
+
 /**
  * Factory class for transactions to interact with a program loader
  */
 export class BpfLoader {
-  /**
-   * Public key that identifies the BpfLoader
-   */
-  static programId(version: number = 2): PublicKey {
-    if (version === 1) {
-      return new PublicKey('BPFLoader1111111111111111111111111111111111');
-    } else {
-      return new PublicKey('BPFLoader2111111111111111111111111111111111');
-    }
-  }
-
   /**
    * Minimum number of signatures required to load a program not including
    * retries
@@ -37,21 +30,15 @@ export class BpfLoader {
    * @param payer Account that will pay program loading fees
    * @param program Account to load the program into
    * @param elf The entire ELF containing the BPF program
-   * @param version The version of the BPF loader to use
+   * @param loaderProgramId The program id of the BPF loader to use
    */
   static load(
     connection: Connection,
     payer: Account,
     program: Account,
     elf: Buffer | Uint8Array | Array<number>,
-    version: number = 2,
+    loaderProgramId: PublicKey,
   ): Promise<void> {
-    return Loader.load(
-      connection,
-      payer,
-      program,
-      BpfLoader.programId(version),
-      elf,
-    );
+    return Loader.load(connection, payer, program, loaderProgramId, elf);
   }
 }

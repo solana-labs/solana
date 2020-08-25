@@ -938,17 +938,20 @@ declare module '@solana/web3.js' {
   }
 
   // === src/bpf-loader.js ===
+  export const BPF_LOADER_PROGRAM_ID: PublicKey;
   export class BpfLoader {
-    static programId(version?: number): PublicKey;
     static getMinNumSignatures(dataLength: number): number;
     static load(
       connection: Connection,
       payer: Account,
       program: Account,
       elfBytes: Buffer | Uint8Array | Array<number>,
-      version?: number,
+      loaderProgramId: PublicKey,
     ): Promise<PublicKey>;
   }
+
+  // === src/bpf-loader-deprecated.js ===
+  export const BPF_LOADER_DEPRECATED_PROGRAM_ID: PublicKey;
 
   // === src/util/send-and-confirm-transaction.js ===
   export function sendAndConfirmTransaction(
