@@ -10,15 +10,9 @@ use solana_sdk::{
     account::Account,
     account::KeyedAccount,
     account_info::AccountInfo,
-<<<<<<< HEAD
     bpf_loader, bpf_loader_deprecated,
-    entrypoint::SUCCESS,
-    entrypoint_native::{ComputeMeter, InvokeContext, Logger},
-=======
-    bpf_loader,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{InvokeContext, Logger},
->>>>>>> e9b610b8d... Add SystemInstruction::CreateAccount support to CPI (#11649)
+    entrypoint_native::{ComputeMeter, InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
