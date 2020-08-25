@@ -305,6 +305,13 @@ impl<T> AbiExample for Box<dyn Fn(&mut T) + Sync + Send> {
     }
 }
 
+impl<T, U> AbiExample for Box<dyn Fn(&mut T, U) + Sync + Send> {
+    fn example() -> Self {
+        info!("AbiExample for (Box<T, U>): {}", type_name::<Self>());
+        Box::new(move |_t: &mut T, _u: U| {})
+    }
+}
+
 impl<T: AbiExample> AbiExample for Box<[T]> {
     fn example() -> Self {
         info!("AbiExample for (Box<[T]>): {}", type_name::<Self>());

@@ -10,10 +10,10 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins::{get_builtins, get_epoch_activated_builtins},
+    builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
-    message_processor::MessageProcessor,
+    message_processor::{MessageProcessor, DEFAULT_COMPUTE_BUDGET, DEFAULT_MAX_INVOKE_DEPTH},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -189,7 +189,8 @@ impl StatusCacheRc {
     }
 }
 
-pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) + Sync + Send>;
+pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank, bool) + Sync + Send>;
+type WrappedEnteredEpochCallback = Arc<RwLock<Option<EnteredEpochCallback>>>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
@@ -416,7 +417,7 @@ pub struct Bank {
 
     /// Callback to be notified when a bank enters a new Epoch
     /// (used to adjust cluster features over time)
-    entered_epoch_callback: Arc<RwLock<Option<EnteredEpochCallback>>>,
+    entered_epoch_callback: WrappedEnteredEpochCallback,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -556,25 +557,16 @@ impl Bank {
         );
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-        if parent.epoch() < new.epoch() {
-            if let Some(entered_epoch_callback) =
-                parent.entered_epoch_callback.read().unwrap().as_ref()
-            {
-                entered_epoch_callback(&mut new)
-            }
-
-            if let Some(builtins) = get_epoch_activated_builtins(new.operating_mode(), new.epoch) {
-                for program in builtins.iter() {
-                    new.add_builtin(&program.name, program.id, program.entrypoint);
-                }
-            }
-        }
-
         new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
             new.ancestors.insert(p.slot(), i + 1);
         });
+
+        // Following code may touch AccountsDB, requiring proper ancestors
+        if parent.epoch() < new.epoch() {
+            new.apply_feature_activations(false, false);
+        }
 
         new.update_slot_hashes();
         new.update_rewards(parent.epoch());
@@ -584,6 +576,7 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
+
         new
     }
 
@@ -594,6 +587,7 @@ impl Bank {
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
+        new.apply_feature_activations(true, true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height
             .store(new.max_tick_height(), Ordering::Relaxed);
@@ -1212,8 +1206,37 @@ impl Bank {
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
-        let account = native_loader::create_loadable_account(name);
-        self.store_account(program_id, &account);
+        let mut already_genuine_program_exists = false;
+        if let Some(mut account) = self.get_account(&program_id) {
+            already_genuine_program_exists = native_loader::check_id(&account.owner);
+
+            if !already_genuine_program_exists {
+                // malicious account is pre-occupying at program_id
+                // forcibly burn and purge it
+
+                self.capitalization
+                    .fetch_sub(account.lamports, Ordering::Relaxed);
+
+                // Resetting account balance to 0 is needed to really purge from AccountsDB and
+                // flush the Stakes cache
+                account.lamports = 0;
+                self.store_account(&program_id, &account);
+            }
+        }
+
+        if !already_genuine_program_exists {
+            assert!(
+                !self.is_frozen(),
+                "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+                Maybe, inconsistent program activation is detected on snapshot restore?",
+                name,
+                program_id
+            );
+
+            // Add a bogus executable native account, which will be loaded and ignored.
+            let account = native_loader::create_loadable_account(name);
+            self.store_account(&program_id, &account);
+        }
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
@@ -2608,10 +2631,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtins = get_builtins();
-        for program in builtins.iter() {
-            self.add_builtin(&program.name, program.id, program.entrypoint);
-        }
+        self.apply_feature_activations(true, false);
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -2626,8 +2646,17 @@ impl Bank {
         self.hard_forks.clone()
     }
 
-    pub fn set_entered_epoch_callback(&self, entered_epoch_callback: EnteredEpochCallback) {
-        *self.entered_epoch_callback.write().unwrap() = Some(entered_epoch_callback);
+    pub fn initiate_entered_epoch_callback(
+        &mut self,
+        entered_epoch_callback: EnteredEpochCallback,
+    ) {
+        {
+            let mut callback_w = self.entered_epoch_callback.write().unwrap();
+            assert!(callback_w.is_none(), "Already callback has been initiated");
+            *callback_w = Some(entered_epoch_callback);
+        }
+        // immedaitely fire the callback as initial invocation
+        self.reinvoke_entered_epoch_callback(true);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -3078,20 +3107,7 @@ impl Bank {
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
     pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
-        match self.get_account(&program_id) {
-            Some(account) => {
-                assert_eq!(
-                    account.owner,
-                    native_loader::id(),
-                    "Cannot overwrite non-native account"
-                );
-            }
-            None => {
-                // Add a bogus executable native account, which will be loaded and ignored.
-                let account = native_loader::create_loadable_account(name);
-                self.store_account(&program_id, &account);
-            }
-        }
+        self.add_native_program(name, &program_id);
         match entrypoint {
             Entrypoint::Program(process_instruction) => {
                 self.message_processor
@@ -3188,6 +3204,42 @@ impl Bank {
         consumed_budget.saturating_sub(budget_recovery_delta)
     }
 
+    // This is called from snapshot restore AND for each epoch boundary
+    // The entire code path herein must be idempotent
+    fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
+        self.ensure_builtins(init_finish_or_warp);
+        self.reinvoke_entered_epoch_callback(initiate_callback);
+        self.recheck_cross_program_support();
+        self.set_max_invoke_depth(DEFAULT_MAX_INVOKE_DEPTH);
+        self.set_compute_budget(DEFAULT_COMPUTE_BUDGET);
+    }
+
+    fn ensure_builtins(&mut self, init_or_warp: bool) {
+        for (program, start_epoch) in get_builtins(self.operating_mode()) {
+            let should_populate = init_or_warp && self.epoch() >= start_epoch
+                || !init_or_warp && self.epoch() == start_epoch;
+            if should_populate {
+                self.add_builtin(&program.name, program.id, program.entrypoint);
+            }
+        }
+    }
+
+    fn reinvoke_entered_epoch_callback(&mut self, initiate: bool) {
+        if let Some(entered_epoch_callback) =
+            self.entered_epoch_callback.clone().read().unwrap().as_ref()
+        {
+            entered_epoch_callback(self, initiate)
+        }
+    }
+
+    fn recheck_cross_program_support(self: &mut Bank) {
+        if OperatingMode::Stable == self.operating_mode() {
+            self.set_cross_program_support(self.epoch() >= 63);
+        } else {
+            self.set_cross_program_support(true);
+        }
+    }
+
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
         let activation_slot = match self.operating_mode() {
             OperatingMode::Development => 0,
@@ -3196,6 +3248,22 @@ impl Bank {
         };
 
         self.slot() >= activation_slot
+    }
+
+    // only used for testing
+    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
+        self.message_processor.builtin_loader_ids()
+    }
+
+    // only used for testing
+    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
+        self.message_processor.builtin_program_ids()
+    }
+
+    // only used for testing
+    pub fn reset_callback_and_message_processor(&mut self) {
+        self.entered_epoch_callback = WrappedEnteredEpochCallback::default();
+        self.message_processor = MessageProcessor::default();
     }
 }
 
@@ -6350,25 +6418,29 @@ mod tests {
     #[test]
     fn test_bank_entered_epoch_callback() {
         let (genesis_config, _) = create_genesis_config(500);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank0 = Arc::new(Bank::new(&genesis_config));
         let callback_count = Arc::new(AtomicU64::new(0));
 
-        bank0.set_entered_epoch_callback({
-            let callback_count = callback_count.clone();
-            //Box::new(move |_bank: &mut Bank| {
-            Box::new(move |_| {
-                callback_count.fetch_add(1, Ordering::SeqCst);
-            })
-        });
+        Arc::get_mut(&mut bank0)
+            .unwrap()
+            .initiate_entered_epoch_callback({
+                let callback_count = callback_count.clone();
+                Box::new(move |_, _| {
+                    callback_count.fetch_add(1, Ordering::SeqCst);
+                })
+            });
+
+        // set_entered_eepoc_callbak fires the initial call
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
 
         let _bank1 =
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
         // No callback called while within epoch 0
-        assert_eq!(callback_count.load(Ordering::SeqCst), 0);
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
 
         let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
         // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
 
         callback_count.store(0, Ordering::SeqCst);
         let _bank1 = Bank::new_from_parent(
@@ -6813,9 +6885,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_add_instruction_processor_for_invalid_account() {
-        let (genesis_config, mint_keypair) = create_genesis_config(500);
+    fn test_add_instruction_processor_for_existing_unrelated_accounts() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
         fn mock_ix_processor(
@@ -6827,8 +6898,36 @@ mod tests {
         }
 
         // Non-native loader accounts can not be used for instruction processing
-        bank.add_builtin_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        let ((vote_id, vote_account), (stake_id, stake_account)) =
+            crate::stakes::tests::create_staked_node_accounts(1_0000);
+        bank.capitalization.fetch_add(
+            vote_account.lamports + stake_account.lamports,
+            Ordering::Relaxed,
+        );
+        bank.store_account(&vote_id, &vote_account);
+        bank.store_account(&stake_id, &stake_account);
+        assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+
+        // Re-adding builtin programs should be no-op
+        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
+        assert_eq!(bank.calculate_capitalization(), bank.capitalization());
     }
+
     #[test]
     fn test_recent_blockhashes_sysvar() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
@@ -7882,6 +7981,8 @@ mod tests {
 
     #[test]
     fn test_bank_hash_consistency() {
+        solana_logger::setup();
+
         let mut genesis_config = GenesisConfig::new(
             &[(
                 Pubkey::new(&[42; 32]),
@@ -8100,5 +8201,146 @@ mod tests {
             Err(TransactionError::ClusterMaintenance)
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
+    }
+
+    #[test]
+    fn test_finish_init() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let mut bank = Bank::new(&genesis_config);
+        bank.message_processor = MessageProcessor::default();
+        bank.message_processor.set_cross_program_support(false);
+
+        // simulate bank is just after deserialized from snapshot
+        bank.finish_init();
+
+        assert_eq!(bank.message_processor.get_cross_program_support(), true);
+    }
+
+    #[test]
+    fn test_add_builtin_program_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::Custom(42))
+        }
+
+        let slot = 123;
+        let program_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&program_id), None);
+
+        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
+            "mock_program",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
+            "mock_program",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+    }
+
+    #[test]
+    fn test_add_builtin_loader_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+            _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::Custom(42))
+        }
+
+        let slot = 123;
+        let loader_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&loader_id), None);
+
+        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
+            "mock_program",
+            loader_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
+            "mock_program",
+            loader_id,
+            mock_ix_processor,
+        );
+        assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
+    }
+
+    #[test]
+    fn test_add_native_program_no_overwrite() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        assert_eq!(bank.get_account_modified_slot(&program_id), None);
+
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
+        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Can't change frozen bank by adding not-existing new native \
+                   program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
+                   Maybe, inconsistent program activation is detected on snapshot restore?"
+    )]
+    fn test_add_native_program_after_frozen() {
+        use std::str::FromStr;
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+
+        let mut bank = Arc::new(Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        ));
+        bank.freeze();
+
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id);
     }
 }

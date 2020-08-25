@@ -7,7 +7,8 @@ use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
     entrypoint_native::{
-        ComputeMeter, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+        ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext, InvokeContext,
+        Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -293,6 +294,44 @@ pub struct MessageProcessor {
     #[serde(skip)]
     compute_budget: u64,
 }
+
+impl std::fmt::Debug for MessageProcessor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[derive(Debug)]
+        struct MessageProcessor<'a> {
+            programs: Vec<String>,
+            loaders: Vec<String>,
+            native_loader: &'a NativeLoader,
+            is_cross_program_supported: bool,
+        }
+        // rustc doesn't compile due to bug without this work around
+        // https://github.com/rust-lang/rust/issues/50280
+        // https://users.rust-lang.org/t/display-function-pointer/17073/2
+        let processor = MessageProcessor {
+            programs: self
+                .programs
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: ErasedProcessInstruction = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            loaders: self
+                .loaders
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            native_loader: &self.native_loader,
+            is_cross_program_supported: self.is_cross_program_supported,
+        };
+
+        write!(f, "{:?}", processor)
+    }
+}
+
 impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
@@ -358,6 +397,11 @@ impl MessageProcessor {
 
     pub fn set_compute_budget(&mut self, compute_budget: u64) {
         self.compute_budget = compute_budget;
+    }
+
+    #[cfg(test)]
+    pub fn get_cross_program_support(&mut self) -> bool {
+        self.is_cross_program_supported
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -647,6 +691,16 @@ impl MessageProcessor {
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
+    }
+
+    // only used for testing
+    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
+        self.loaders.iter().map(|a| a.0).collect::<Vec<_>>()
+    }
+
+    // only used for testing
+    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
+        self.programs.iter().map(|a| a.0).collect::<Vec<_>>()
     }
 }
 
