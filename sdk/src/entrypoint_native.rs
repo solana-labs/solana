@@ -90,7 +90,7 @@ macro_rules! declare_name {
 /// Convenience macro to declare a native program
 ///
 /// bs58_string: bs58 string representation the program's id
-/// name: Name of the program, must match the library name in Cargo.toml
+/// name: Name of the program
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
 /// id: Path to the program id access function, used if this macro is not
 ///     called in `src/lib`
