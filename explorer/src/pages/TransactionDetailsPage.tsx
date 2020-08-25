@@ -66,10 +66,8 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
 function StatusCard({ signature }: Props) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
-  const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
-  const autoRefreshTimeout = React.useRef<NodeJS.Timeout | null>(null);
   const [autoRefreshInProcess, setAutoRefreshInProcess] = React.useState<
     boolean
   >(false);
@@ -77,18 +75,9 @@ function StatusCard({ signature }: Props) {
   const refresh = React.useCallback(
     (signature: string) => {
       fetchStatus(signature);
-      fetchDetails(signature);
     },
-    [fetchStatus, fetchDetails]
+    [fetchStatus]
   );
-
-  React.useEffect(() => {
-    return () => {
-      if (autoRefreshTimeout.current) {
-        clearTimeout(autoRefreshTimeout.current);
-      }
-    };
-  }, []);
 
   // Fetch transaction on load
   React.useEffect(() => {
@@ -97,34 +86,29 @@ function StatusCard({ signature }: Props) {
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Manage auto-refresh
   React.useEffect(() => {
     if (!status || !status.data?.info) {
       return;
-    }
-
-    if (status.status !== FetchStatus.Fetching && autoRefreshInProcess) {
+    } else if (status.data.info.confirmations !== "max" && !autoRefreshInProcess) {
+      setAutoRefreshInProcess(true);
+    } else if (status.data.info.confirmations === 'max' && autoRefreshInProcess) {
       setAutoRefreshInProcess(false);
     }
+  }, [status, autoRefreshInProcess]);
 
-    if (
-      !autoRefreshTimeout.current &&
-      status.data.info.confirmations !== "max"
-    ) {
-      autoRefreshTimeout.current = setTimeout(() => {
-        autoRefreshTimeout.current = null;
-        refresh(signature);
-        setAutoRefreshInProcess(true);
+  // Effect to set and clear interval for auto-refresh
+  React.useEffect(() => {
+    if (autoRefreshInProcess) {
+      let intervalHandle: NodeJS.Timeout = setInterval(() => {
+        fetchStatus(signature);
       }, AUTO_REFRESH_TIMEOUT);
-    }
 
-    if (
-      autoRefreshTimeout.current &&
-      status.data.info.confirmations === "max"
-    ) {
-      clearTimeout(autoRefreshTimeout.current);
-      autoRefreshTimeout.current = null;
+      return () => {
+        clearInterval(intervalHandle);
+      };
     }
-  }, [autoRefreshInProcess, status, refresh, signature]);
+  }, [autoRefreshInProcess, fetchStatus, signature]);
 
   if (
     !status ||
@@ -182,7 +166,7 @@ function StatusCard({ signature }: Props) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        {status.data.info.confirmations === "max" ? (
+        {!autoRefreshInProcess ? (
           <button
             className="btn btn-white btn-sm"
             onClick={() => refresh(signature)}
@@ -266,9 +250,7 @@ function StatusCard({ signature }: Props) {
 function AccountsCard({ signature }: Props) {
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
-  const fetchStatus = useFetchTransactionStatus();
   const fetchDetails = useFetchTransactionDetails();
-  const refreshStatus = () => fetchStatus(signature);
   const refreshDetails = () => fetchDetails(signature);
   const transaction = details?.data?.transaction?.transaction;
   const message = transaction?.message;
@@ -283,14 +265,7 @@ function AccountsCard({ signature }: Props) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details || status.data.info.confirmations !== "max") {
-    return (
-      <ErrorCard
-        retry={refreshStatus}
-        text="Details are not available until the transaction reaches MAX confirmations"
-      />
-    );
-  } else if (details.status === FetchStatus.Fetching) {
+  } else if (!details || details.status === FetchStatus.Fetching || status.data.info.confirmations !== "max") {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
