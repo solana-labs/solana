@@ -1,6 +1,13 @@
-## **1. Approach A**
+## **Approach A**
 
-### Steps, Commands(c<1..n>) & Outputs (o<1..n>)
+### Steps
+- change your working directory
+- build docker image
+- list docker image
+- run docker image
+- check log files
+
+### Commands(c<1..n>) & Outputs (o<1..n>)
 
 c0
 ```bash
@@ -72,9 +79,18 @@ c3: run docker image
 docker run -it --rm -v /tmp/solana:/tmp/solana --name itt-solana itt:0.1
 ```
 
-c4: check the log files
+c4: check log files
 ```bash
 ls -abl /tmp/solana
+```
+o4
+```
+/tmp/solana
+├── itt-bench-tps.log
+├── itt-bootstrap-validator.log
+└── itt-faucet.log
+
+0 directories, 3 files
 ```
 
 **Some Docker commands**
