@@ -7,7 +7,8 @@
 - run docker image
 - check log files
 
-### Commands(c<1..n>) & Outputs (o<1..n>)
+
+### Commands & Outputs
 
 c0
 ```bash
@@ -92,6 +93,7 @@ o4
 
 0 directories, 3 files
 ```
+
 
 **Some Docker commands**
 
