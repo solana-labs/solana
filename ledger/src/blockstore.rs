@@ -766,24 +766,28 @@ impl Blockstore {
         let mut start = Measure::start("Shred insertion");
         let mut num_inserted = 0;
         let mut index_meta_time = 0;
+        let mut newly_completed_data_sets = vec![];
         shreds.into_iter().for_each(|shred| {
             if shred.is_data() {
-                if self
-                    .check_insert_data_shred(
-                        shred,
-                        &mut erasure_metas,
-                        &mut index_working_set,
-                        &mut slot_meta_working_set,
-                        &mut write_batch,
-                        &mut just_inserted_data_shreds,
-                        &mut index_meta_time,
-                        is_trusted,
-                        handle_duplicate,
-                        leader_schedule,
-                        false,
-                    )
-                    .is_ok()
-                {
+                let shred_slot = shred.slot();
+                if let Ok(completed_data_sets) = self.check_insert_data_shred(
+                    shred,
+                    &mut erasure_metas,
+                    &mut index_working_set,
+                    &mut slot_meta_working_set,
+                    &mut write_batch,
+                    &mut just_inserted_data_shreds,
+                    &mut index_meta_time,
+                    is_trusted,
+                    handle_duplicate,
+                    leader_schedule,
+                    false,
+                ) {
+                    newly_completed_data_sets.extend(
+                        completed_data_sets
+                            .into_iter()
+                            .map(|(start, end)| (shred_slot, start, end)),
+                    );
                     num_inserted += 1;
                 }
             } else if shred.is_code() {
@@ -820,6 +824,7 @@ impl Blockstore {
             num_recovered = recovered_data.len();
             recovered_data.into_iter().for_each(|shred| {
                 if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
+                    let shred_slot = shred.slot();
                     if shred.verify(&leader) {
                         match self.check_insert_data_shred(
                             shred,
@@ -841,7 +846,12 @@ impl Blockstore {
                                 num_recovered_failed_invalid += 1;
                             }
                             Err(InsertDataShredError::BlockstoreError(_)) => {}
-                            Ok(()) => {
+                            Ok(completed_data_sets) => {
+                                newly_completed_data_sets.extend(
+                                    completed_data_sets
+                                        .into_iter()
+                                        .map(|(start, end)| (shred_slot, start, end)),
+                                );
                                 num_recovered_inserted += 1;
                             }
                         }
@@ -897,6 +907,15 @@ impl Blockstore {
         start.stop();
         let write_batch_elapsed = start.as_us();
 
+        for (slot, first_data_set_shred_index, last_data_set_shred_index) in
+            newly_completed_data_sets
+        {
+            self.notify_complete_data_set(
+                slot,
+                first_data_set_shred_index,
+                last_data_set_shred_index,
+            );
+        }
         send_signals(
             &self.new_shreds_signals,
             &self.completed_slots_senders,
@@ -1064,7 +1083,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
-    ) -> std::result::Result<(), InsertDataShredError>
+    ) -> std::result::Result<Vec<(u32, u32)>, InsertDataShredError>
     where
         F: Fn(Shred),
     {
@@ -1096,7 +1115,8 @@ impl Blockstore {
         }
 
         let set_index = u64::from(shred.common_header.fec_set_index);
-        self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)?;
+        let newly_completed_data_sets =
+            self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)?;
         just_inserted_data_shreds.insert((slot, shred_index), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
@@ -1109,7 +1129,7 @@ impl Blockstore {
                 erasure_metas.insert((slot, set_index), meta);
             }
         }
-        Ok(())
+        Ok(newly_completed_data_sets)
     }
 
     fn should_insert_coding_shred(
@@ -1225,7 +1245,7 @@ impl Blockstore {
         data_index: &mut ShredIndex,
         shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) -> Result<()> {
+    ) -> Result<Vec<(u32, u32)>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
 
@@ -1261,7 +1281,7 @@ impl Blockstore {
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
         data_index.set_present(index, true);
-        for (first_data_set_shred_index, last_data_set_shred_index) in update_slot_meta(
+        let newly_completed_data_sets = update_slot_meta(
             last_in_slot,
             last_in_data,
             slot_meta,
@@ -1269,13 +1289,7 @@ impl Blockstore {
             new_consumed,
             shred.reference_tick(),
             &data_index,
-        ) {
-            self.notify_complete_data_set(
-                slot_meta.slot,
-                first_data_set_shred_index,
-                last_data_set_shred_index,
-            )
-        }
+        );
         if slot_meta.is_full() {
             info!(
                 "slot {} is full, last: {}",
@@ -1283,7 +1297,7 @@ impl Blockstore {
             );
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-        Ok(())
+        Ok(newly_completed_data_sets)
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
