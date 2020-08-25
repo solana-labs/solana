@@ -147,9 +147,10 @@ pub fn serialize_parameters_aligned(
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
             v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
-            for _ in 0..16 - (v.len() % 16) {
-                v.write_u8(0).unwrap(); // 128 bit aligned again
-            }
+            v.resize(
+                v.len() + (v.len() as *const u8).align_offset(align_of::<u128>()),
+                0,
+            );
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
                 .unwrap();
         }
@@ -188,7 +189,7 @@ pub fn deserialize_parameters_aligned(
                 .data
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()?; // data
-            start += 16 - (start % 16); // padding
+            start += (start as *const u8).align_offset(align_of::<u128>());
             start += mem::size_of::<u64>(); // rent_epoch
         } else {
             start += 7; // padding
