@@ -15,6 +15,7 @@ use crate::{
     shred::{Result as ShredResult, Shred, Shredder},
 };
 use bincode::deserialize;
+use crossbeam_channel::{bounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use log::*;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -89,6 +90,9 @@ pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 type CompletedRanges = Vec<(u32, u32)>;
 
+pub type CompletedDataSetReceiver = CrossbeamReceiver<(Slot, u32, u32)>;
+pub type CompletedDataSetSender = CrossbeamSender<(Slot, u32, u32)>;
+
 #[derive(Clone, Copy)]
 pub enum PurgeType {
     Exact,
@@ -106,6 +110,13 @@ impl std::fmt::Display for InsertDataShredError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "insert data shred error")
     }
+}
+
+pub struct BlockstoreSignals {
+    pub blockstore: Blockstore,
+    pub ledger_signal_receiver: Receiver<bool>,
+    pub completed_slots_receiver: CompletedSlotsReceiver,
+    pub completed_data_set_receiver: CompletedDataSetReceiver,
 }
 
 // ledger window
@@ -128,6 +139,7 @@ pub struct Blockstore {
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
+    pub completed_data_set_senders: Vec<CompletedDataSetSender>,
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
     no_compaction: bool,
 }
@@ -325,6 +337,7 @@ impl Blockstore {
             rewards_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            completed_data_set_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
             last_root,
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
@@ -339,16 +352,23 @@ impl Blockstore {
     pub fn open_with_signal(
         ledger_path: &Path,
         recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
+    ) -> Result<BlockstoreSignals> {
         let mut blockstore =
             Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly, recovery_mode)?;
-        let (signal_sender, signal_receiver) = sync_channel(1);
+        let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-        blockstore.new_shreds_signals = vec![signal_sender];
+        let (completed_data_set_sender, completed_data_set_receiver) = bounded(1);
+        blockstore.new_shreds_signals = vec![ledger_signal_sender];
         blockstore.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.completed_data_set_senders = vec![completed_data_set_sender];
 
-        Ok((blockstore, signal_receiver, completed_slots_receiver))
+        Ok(BlockstoreSignals {
+            blockstore,
+            ledger_signal_receiver,
+            completed_slots_receiver,
+            completed_data_set_receiver,
+        })
     }
 
     pub fn add_tree(
@@ -1241,7 +1261,7 @@ impl Blockstore {
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
         data_index.set_present(index, true);
-        update_slot_meta(
+        for (first_data_set_shred_index, last_data_set_shred_index) in update_slot_meta(
             last_in_slot,
             last_in_data,
             slot_meta,
@@ -1249,7 +1269,13 @@ impl Blockstore {
             new_consumed,
             shred.reference_tick(),
             &data_index,
-        );
+        ) {
+            self.notify_complete_data_set(
+                slot_meta.slot,
+                first_data_set_shred_index,
+                last_data_set_shred_index,
+            )
+        }
         if slot_meta.is_full() {
             info!(
                 "slot {} is full, last: {}",
@@ -1681,6 +1707,12 @@ impl Blockstore {
             }
         }
         Err(BlockstoreError::SlotNotRooted)
+    }
+
+    fn notify_complete_data_set(&self, slot: Slot, start_shred_index: u32, end_shred_index: u32) {
+        for sender in &self.completed_data_set_senders {
+            let _ = sender.try_send((slot, start_shred_index, end_shred_index));
+        }
     }
 
     fn map_transactions_to_statuses<'a>(
@@ -2693,7 +2725,7 @@ fn update_slot_meta(
     new_consumed: u64,
     reference_tick: u8,
     received_data_shreds: &ShredIndex,
-) {
+) -> Vec<(u32, u32)> {
     let maybe_first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
@@ -2718,21 +2750,13 @@ fn update_slot_meta(
         }
     };
 
-    for (first_data_set_shred_index, last_data_set_shred_index) in update_completed_data_indexes(
+    update_completed_data_indexes(
         is_last_in_slot || is_last_in_data,
         index,
         received_data_shreds,
         &mut slot_meta.completed_data_indexes,
-    ) {
-        notify_complete_data_set(
-            slot_meta.slot,
-            first_data_set_shred_index,
-            last_data_set_shred_index,
-        )
-    }
+    )
 }
-
-fn notify_complete_data_set(_slot: Slot, _start_shred_index: u32, _end_shred_index: u32) {}
 
 fn get_index_meta_entry<'a>(
     db: &Database,
@@ -4067,7 +4091,11 @@ pub mod tests {
     pub fn test_new_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, recvr, _) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            ledger_signal_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
@@ -4147,7 +4175,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4169,7 +4201,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4209,7 +4245,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;

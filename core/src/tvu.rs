@@ -85,7 +85,7 @@ impl Tvu {
         cluster_info: &Arc<ClusterInfo>,
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
-        ledger_signal_receiver: Receiver<bool>,
+        ledger_signaledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -195,7 +195,7 @@ impl Tvu {
             blockstore.clone(),
             bank_forks.clone(),
             cluster_info.clone(),
-            ledger_signal_receiver,
+            ledger_signaledger_signal_receiver,
             poh_recorder.clone(),
             vote_tracker,
             cluster_slots,
@@ -249,6 +249,7 @@ pub mod tests {
     };
     use serial_test_derive::serial;
     use solana_ledger::{
+        blockstore::BlockstoreSignals,
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
@@ -275,9 +276,13 @@ pub mod tests {
         let cref1 = Arc::new(cluster_info1);
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
-        let (blockstore, l_receiver, completed_slots_receiver) =
-            Blockstore::open_with_signal(&blockstore_path, None)
-                .expect("Expected to successfully open ledger");
+        let BlockstoreSignals {
+            blockstore,
+            ledger_signal_receiver,
+            completed_slots_receiver,
+            ..
+        } = Blockstore::open_with_signal(&blockstore_path, None)
+            .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
@@ -303,7 +308,7 @@ pub mod tests {
                 }
             },
             blockstore,
-            l_receiver,
+            ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new(
                 &exit,
                 bank_forks.clone(),

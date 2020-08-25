@@ -26,7 +26,7 @@ use rand::{thread_rng, Rng};
 use solana_banks_server::rpc_banks_service::RpcBanksService;
 use solana_ledger::{
     bank_forks_utils,
-    blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
+    blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
     create_new_tmp_ledger,
@@ -622,9 +622,13 @@ fn new_banks_from_ledger(
         }
     }
 
-    let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
-            .expect("Failed to open ledger database");
+    let BlockstoreSignals {
+        mut blockstore,
+        ledger_signal_receiver,
+        completed_slots_receiver,
+        ..
+    } = Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
+        .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {
