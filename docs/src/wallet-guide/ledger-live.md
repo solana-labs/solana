@@ -6,14 +6,9 @@ This document describes how to set up a
 [Ledger Nano S hardware wallet](https://shop.ledger.com/products/ledger-nano-s)
 with the [Ledger Live](https://www.ledger.com/ledger-live) software.
 
-**NOTE: While Solana tools are fully integrated with the Ledger Nano S device,
-and the Solana App can be installed on the Nano S using Ledger Live, adding and
-managing wallet accounts currently requires use of our command-line tools.
-Integration with Ledger Live to use Solana wallet accounts on Ledger Live
-will be available in the future.**
-
-Users may [use a Ledger Nano S with the Solana command
-line tools](hardware-wallets/ledger.md).
+Once the setup steps shown below are complete and the Solana app is installed
+on your Nano S device, users have several options of how to
+[use the Nano S to interact with the Solana Network](#interact-with-the-solana-network)
 
 ## Set up a Ledger Nano S
 
@@ -66,11 +61,20 @@ of the Solana App, please upgrade to version v0.2.2 by following these steps.
 
 ![Upgrade complete](/img/ledger-live-latest-version-installed.png)
 
-## Interact with Solana network
+## Interact with the Solana network
 
-- To interact with your Ledger wallet on our live network, please see our
-  instructions on how to
-  [use a Ledger Nano S with the Solana command line tools](hardware-wallets/ledger.md).
+Users can use any of the following options to sign and submit transactions with
+the Ledger Nano S to interact with the Solana network:
+
+- [SolFlare.com](https://solflare.com/) is a non-custodial web wallet built
+specifically for Solana and supports basic transfers and staking operations
+with the Ledger device.
+Check out our guide for [using a Ledger Nano S with SolFlare](solflare.md).
+
+- Developers and advanced users may
+[use a Ledger Nano S with the Solana command line tools](hardware-wallets/ledger.md).
+New wallet features are almost always supported in the native command line tools
+before being supported by third-party wallets.
 
 ## Support
 
