@@ -10,7 +10,7 @@ use solana_sdk::{
     account::Account,
     account::KeyedAccount,
     account_info::AccountInfo,
-    bpf_loader,
+    bpf_loader, bpf_loader_deprecated,
     entrypoint::SUCCESS,
     entrypoint_native::{ComputeMeter, InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
