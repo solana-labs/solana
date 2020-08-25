@@ -659,7 +659,8 @@ impl Bank {
         bank.finish_init();
 
         // Sanity assertions between bank snapshot and genesis config
-        // Consider removing from serializable bank state ([Ref]BankFields) and initializing
+        // Consider removing from serializable bank state
+        // (BankFieldsToSerialize/BankFieldsToDeserialize) and initializing
         // from the passed in genesis_config instead (as new()/new_with_paths() already do)
         assert_eq!(
             bank.hashes_per_tick,
