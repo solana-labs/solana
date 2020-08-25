@@ -161,7 +161,9 @@ function StatusCard({ signature, autoRefreshInProcess }: Props) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        {!autoRefreshInProcess ? (
+        {autoRefreshInProcess ? (
+          <span className="spinner-grow spinner-grow-sm"></span>
+        ) : (
           <button
             className="btn btn-white btn-sm"
             onClick={() => fetchStatus(signature)}
@@ -169,8 +171,6 @@ function StatusCard({ signature, autoRefreshInProcess }: Props) {
             <span className="fe fe-refresh-cw mr-2"></span>
             Refresh
           </button>
-        ) : (
-          <span className="spinner-grow spinner-grow-sm"></span>
         )}
       </div>
 
