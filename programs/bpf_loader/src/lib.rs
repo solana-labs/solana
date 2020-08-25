@@ -27,21 +27,13 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-<<<<<<< HEAD
-use std::{cell::RefCell, io::prelude::*, mem, rc::Rc};
-=======
->>>>>>> 9290e561e... Align host addresses (#11384)
+use std::{cell::RefCell, rc::Rc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
-<<<<<<< HEAD
     solana_bpf_loader_program::process_instruction
-=======
-    process_instruction,
-    solana_bpf_loader_program
->>>>>>> 9290e561e... Align host addresses (#11384)
 );
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -351,18 +343,6 @@ mod tests {
         }
     }
 
-<<<<<<< HEAD
-=======
-    #[rustversion::since(1.46.0)]
-    #[test]
-    fn test_bpf_loader_same_crate() {
-        // Ensure that we can invoke this macro from the same crate
-        // where it is defined.
-        solana_bpf_loader_program!();
-        solana_bpf_loader_deprecated_program!();
-    }
-
->>>>>>> 9290e561e... Align host addresses (#11384)
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(10)")]
     fn test_bpf_loader_non_terminating_program() {

@@ -12,11 +12,8 @@ pub mod abi_example;
 pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
-<<<<<<< HEAD
-pub mod builtins;
-=======
 pub mod bpf_loader_deprecated;
->>>>>>> 9290e561e... Align host addresses (#11384)
+pub mod builtins;
 pub mod clock;
 pub mod commitment_config;
 pub mod decode_error;
