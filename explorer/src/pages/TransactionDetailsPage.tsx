@@ -30,12 +30,17 @@ import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard"
 import { FetchStatus } from "providers/cache";
 
 const AUTO_REFRESH_TIMEOUT = 2000;
+const ZERO_CONFIRMATION_BAILOUT = 20;
 
-type Props = {
+type SignatureProps = {
   signature: TransactionSignature;
-  autoRefreshInProcess?: boolean;
 };
-export function TransactionDetailsPage({ signature: raw }: Props) {
+
+type AutoRefreshProps = {
+  autoRefreshInProcess: boolean;
+};
+
+export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   let signature: TransactionSignature | undefined;
 
   try {
@@ -47,10 +52,17 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
 
   const status = useTransactionStatus(signature);
 
-  const autoRefreshInProcess = !!(
+  let autoRefreshInProcess = false;
+
+  if (
     status?.data?.info &&
-    status.data.info.confirmations !== "max"
-  );
+    status.data.info.confirmations === 0 &&
+    status.attempts > ZERO_CONFIRMATION_BAILOUT
+  ) {
+    autoRefreshInProcess = false;
+  } else if (status?.data?.info && status.data.info.confirmations !== "max") {
+    autoRefreshInProcess = true;
+  }
 
   return (
     <div className="container mt-n3">
@@ -79,7 +91,10 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
   );
 }
 
-function StatusCard({ signature, autoRefreshInProcess }: Props) {
+function StatusCard({
+  signature,
+  autoRefreshInProcess,
+}: SignatureProps & AutoRefreshProps) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
@@ -243,7 +258,10 @@ function StatusCard({ signature, autoRefreshInProcess }: Props) {
   );
 }
 
-function AccountsCard({ signature, autoRefreshInProcess }: Props) {
+function AccountsCard({
+  signature,
+  autoRefreshInProcess,
+}: SignatureProps & AutoRefreshProps) {
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
@@ -344,7 +362,7 @@ function AccountsCard({ signature, autoRefreshInProcess }: Props) {
   );
 }
 
-function InstructionsSection({ signature }: Props) {
+function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();

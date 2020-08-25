@@ -9,6 +9,7 @@ export enum FetchStatus {
 export type CacheEntry<T> = {
   status: FetchStatus;
   data?: T;
+  attempts: number;
 };
 
 export type State<T> = {
@@ -94,12 +95,21 @@ export function reducer<T, U>(
     case ActionType.Update: {
       const key = action.key;
       const entry = state.entries[key];
+
+      if (entry && entry.attempts === undefined) {
+        entry.attempts = 0;
+      }
+
+      if (action.status === FetchStatus.Fetched) {
+        entry.attempts++;
+      }
+
       const entries = {
         ...state.entries,
         [key]: {
           ...entry,
           status: action.status,
-          data: reconciler(entry?.data, action.data),
+          data: reconciler(entry?.data, action.data)
         },
       };
       return { ...state, entries };
