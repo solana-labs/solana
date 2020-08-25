@@ -9,8 +9,9 @@ impl LogCollector {
     pub fn log(&self, message: &str) {
         self.messages.borrow_mut().push(message.to_string())
     }
-
-    pub fn output(self) -> Vec<String> {
+}
+impl Into<Vec<String>> for LogCollector {
+    fn into(self) -> Vec<String> {
         self.messages.into_inner()
     }
 }
