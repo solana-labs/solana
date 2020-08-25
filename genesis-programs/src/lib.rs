@@ -8,10 +8,7 @@ extern crate solana_exchange_program;
 extern crate solana_vest_program;
 
 use log::*;
-use solana_runtime::{
-    bank::{Bank, EnteredEpochCallback},
-    message_processor::{DEFAULT_COMPUTE_BUDGET, DEFAULT_MAX_INVOKE_DEPTH},
-};
+use solana_runtime::bank::{Bank, EnteredEpochCallback};
 use solana_sdk::{
     clock::{Epoch, GENESIS_EPOCH},
     entrypoint_native::{ErasedProcessInstructionWithContext, ProcessInstructionWithContext},
@@ -181,9 +178,6 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
                 }
             }
         }
-
-        bank.set_max_invoke_depth(DEFAULT_MAX_INVOKE_DEPTH);
-        bank.set_compute_budget(DEFAULT_COMPUTE_BUDGET);
     })
 }
 

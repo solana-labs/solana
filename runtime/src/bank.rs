@@ -13,7 +13,7 @@ use crate::{
     builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
-    message_processor::MessageProcessor,
+    message_processor::{MessageProcessor, DEFAULT_COMPUTE_BUDGET, DEFAULT_MAX_INVOKE_DEPTH},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -3209,6 +3209,8 @@ impl Bank {
         self.ensure_builtins(init_finish_or_warp);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
+        self.set_max_invoke_depth(DEFAULT_MAX_INVOKE_DEPTH);
+        self.set_compute_budget(DEFAULT_COMPUTE_BUDGET);
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
