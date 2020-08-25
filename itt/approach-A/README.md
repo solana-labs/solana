@@ -1,4 +1,4 @@
-## **Approach A**
+## Approach A
 
 ### Steps
 - change your working directory
@@ -95,8 +95,7 @@ o4
 ```
 
 
-**Some Docker commands**
-
+Some Docker commands
 ```bash
 docker ps
 docker rm -f <CONTAINER ID>
@@ -104,3 +103,12 @@ docker images
 docker rmi -f <IMAGE ID>
 docker logs
 ```
+
+
+### Setup, Run, Complete
+
+![setup](../../itt/images/itt-approach-A-setup.png)
+
+![run](../../itt/images/itt-approach-A-run.png)
+
+![setup](../../itt/images/itt-approach-A-complete.png)
