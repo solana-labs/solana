@@ -30,7 +30,7 @@ import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard"
 import { FetchStatus } from "providers/cache";
 
 const AUTO_REFRESH_TIMEOUT = 2000;
-const ZERO_CONFIRMATION_BAILOUT = 20;
+const ZERO_CONFIRMATION_BAILOUT = 5;
 
 type SignatureProps = {
   signature: TransactionSignature;
