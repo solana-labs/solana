@@ -109,7 +109,7 @@ export function reducer<T, U>(
         [key]: {
           ...entry,
           status: action.status,
-          data: reconciler(entry?.data, action.data)
+          data: reconciler(entry?.data, action.data),
         },
       };
       return { ...state, entries };
