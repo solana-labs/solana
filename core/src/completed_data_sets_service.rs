@@ -1,6 +1,7 @@
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
+use solana_sdk::signature::Signature;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -59,7 +60,13 @@ impl CompletedDataSetsService {
                 end_index,
             } = completed_set_info;
             match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
-                Ok(entries) => {}
+                Ok(entries) => rpc_subscriptions.notify_signatures_received((
+                    slot,
+                    entries
+                        .into_iter()
+                        .flat_map(|e| e.transactions.into_iter().map(|t| t.signatures[0]))
+                        .collect::<Vec<Signature>>(),
+                )),
                 Err(e) => warn!("completed-data-set-service deserialize error: {:?}", e),
             }
         }

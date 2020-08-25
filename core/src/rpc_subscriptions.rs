@@ -67,6 +67,7 @@ enum NotificationEntry {
     Frozen(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
+    SignaturesReceived((Slot, Vec<Signature>)),
 }
 
 impl std::fmt::Debug for NotificationEntry {
@@ -78,6 +79,9 @@ impl std::fmt::Debug for NotificationEntry {
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
             NotificationEntry::Bank(commitment_slots) => {
                 write!(f, "Bank({{slot: {:?}}})", commitment_slots.slot)
+            }
+            NotificationEntry::SignaturesReceived(slot_signatures) => {
+                write!(f, "SignaturesReceived({:?})", slot_signatures)
             }
             NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
         }
@@ -696,6 +700,10 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Slot(SlotInfo { slot, parent, root }));
     }
 
+    pub fn notify_signatures_received(&self, slot_signatures: (Slot, Vec<Signature>)) {
+        self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
+    }
+
     pub fn add_vote_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<RpcVote>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
@@ -840,6 +848,7 @@ impl RpcSubscriptions {
                             );
                         }
                     }
+                    NotificationEntry::SignaturesReceived(_slot_signatures) => {}
                 },
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again
