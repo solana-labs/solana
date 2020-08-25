@@ -1328,26 +1328,29 @@ where
     I: Iterator<Item = (Pubkey, Account)>,
 {
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-    keyed_accounts.map(move |(pubkey, account)| {
-        let additional_data = get_token_account_mint(&account.data).map(|mint_pubkey| {
-            let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
-                mint_decimals.insert(mint_pubkey, decimals);
-                Some(decimals)
+    keyed_accounts.filter_map(move |(pubkey, account)| {
+        let additional_data = get_token_account_mint(&account.data)
+            .and_then(|mint_pubkey| {
+                mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
+                    let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
+                    mint_decimals.insert(mint_pubkey, decimals);
+                    Some(decimals)
+                })
+            })
+            .map(|spl_token_decimals| AccountAdditionalData {
+                spl_token_decimals: Some(spl_token_decimals),
             });
-            AccountAdditionalData { spl_token_decimals }
-        });
 
-        RpcKeyedAccount {
+        additional_data.map(|additional_data| RpcKeyedAccount {
             pubkey: pubkey.to_string(),
             account: UiAccount::encode(
                 &pubkey,
                 account,
                 UiAccountEncoding::JsonParsed,
-                additional_data,
+                Some(additional_data),
                 None,
             ),
-        }
+        })
     })
 }
 
@@ -4870,6 +4873,24 @@ pub mod tests {
         let accounts: Vec<RpcKeyedAccount> =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         assert_eq!(accounts.len(), 3);
+
+        // Test getTokenAccountsByOwner with jsonParsed encoding doesn't return accounts with invalid mints
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getTokenAccountsByOwner",
+                "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
+            }}"#,
+            owner,
+            spl_token_id_v1_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"]["value"].clone()).unwrap();
+        assert_eq!(accounts.len(), 2);
 
         // Test returns only mint accounts
         let req = format!(
