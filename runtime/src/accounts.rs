@@ -437,18 +437,22 @@ impl Accounts {
         }
     }
 
+    fn is_loadable(account: &Account) -> bool {
+        // Don't ever load zero lamport accounts into runtime because
+        // the existence of zero-lamport accounts are never deterministic!!
+        account.lamports > 0
+    }
+
     fn load_while_filtering<F: Fn(&Account) -> bool>(
         collector: &mut Vec<(Pubkey, Account)>,
-        option: Option<(&Pubkey, Account, Slot)>,
+        some_account_tuple: Option<(&Pubkey, Account, Slot)>,
         filter: F,
     ) {
-        if let Some(data) = option
-            // Don't ever load zero lamport accounts into runtime because
-            // the existence of zero-lamport accounts are never deterministic!!
-            .filter(|(_, account, _)| account.lamports > 0 && filter(account))
+        if let Some(mapped_account_tuple) = some_account_tuple
+            .filter(|(_, account, _)| Self::is_loadable(account) && filter(account))
             .map(|(pubkey, account, _slot)| (*pubkey, account))
         {
-            collector.push(data)
+            collector.push(mapped_account_tuple)
         }
     }
 
@@ -459,10 +463,23 @@ impl Accounts {
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
             ancestors,
-            |collector: &mut Vec<(Pubkey, Account)>, option| {
-                Self::load_while_filtering(collector, option, |account| {
+            |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
+                Self::load_while_filtering(collector, some_account_tuple, |account| {
                     program_id.is_none() || Some(&account.owner) == program_id
                 })
+            },
+        )
+    }
+
+    pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
+        self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
+                if let Some((pubkey, account, slot)) =
+                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account))
+                {
+                    collector.push((*pubkey, account, slot))
+                }
             },
         )
     }
