@@ -10,10 +10,9 @@ If you don't have docker installed in your machine, do so by reading the referen
 
 All components required to run bench tests are contained within `Dockerfile` and docker runs the `solana_itt_script.sh` script
 
-<instructions to follow soon>
+You can find the step-by-step guide in folder approach-A
 
-## **Approach B**
+### Upon Completion
 
-All components required to run bench test are contained within `Dockerfile` and docker runs the `supervisord` command
+![setup](../itt/images/itt-approach-A-complete.png)
 
-<instructions to follow soon>
