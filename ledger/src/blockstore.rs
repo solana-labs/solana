@@ -111,8 +111,8 @@ impl std::fmt::Display for InsertDataShredError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompletedDataSetInfo {
     pub slot: Slot,
-    start_index: u32,
-    end_index: u32,
+    pub start_index: u32,
+    pub end_index: u32,
 }
 
 pub struct BlockstoreSignals {
@@ -2345,7 +2345,12 @@ impl Blockstore {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
+                        self.get_entries_in_data_block(
+                            slot,
+                            *start_index,
+                            *end_index,
+                            Some(&slot_meta),
+                        )
                     })
                     .collect()
             })
@@ -2410,12 +2415,12 @@ impl Blockstore {
         completed_data_ranges
     }
 
-    fn get_entries_in_data_block(
+    pub fn get_entries_in_data_block(
         &self,
         slot: Slot,
         start_index: u32,
         end_index: u32,
-        slot_meta: &SlotMeta,
+        slot_meta: Option<&SlotMeta>,
     ) -> Result<Vec<Entry>> {
         let data_shred_cf = self.db.column::<cf::ShredData>();
 
@@ -2425,23 +2430,33 @@ impl Blockstore {
                 data_shred_cf
                     .get_bytes((slot, u64::from(i)))
                     .and_then(|serialized_shred| {
-                        Shred::new_from_serialized_shred(serialized_shred.unwrap_or_else(|| {
-                            panic!(
-                                "Shred with
-                        slot: {},
-                        index: {},
-                        consumed: {},
-                        completed_indexes: {:?}
-                        must exist if shred index was included in a range: {} {}",
-                                slot,
-                                i,
-                                slot_meta.consumed,
-                                slot_meta.completed_data_indexes,
-                                start_index,
-                                end_index
-                            )
-                        }))
-                        .map_err(|err| {
+                        if serialized_shred.is_none() {
+                            if let Some(slot_meta) = slot_meta {
+                                panic!(
+                                    "Shred with
+                                    slot: {},
+                                    index: {},
+                                    consumed: {},
+                                    completed_indexes: {:?}
+                                    must exist if shred index was included in a range: {} {}",
+                                    slot,
+                                    i,
+                                    slot_meta.consumed,
+                                    slot_meta.completed_data_indexes,
+                                    start_index,
+                                    end_index
+                                );
+                            } else {
+                                return Err(BlockstoreError::InvalidShredData(Box::new(
+                                    bincode::ErrorKind::Custom(format!(
+                                        "Missing shred for slot {}, index {}",
+                                        slot, i
+                                    )),
+                                )));
+                            }
+                        }
+
+                        Shred::new_from_serialized_shred(serialized_shred.unwrap()).map_err(|err| {
                             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                                 format!(
                                     "Could not reconstruct shred from shred payload: {:?}",
@@ -2485,8 +2500,13 @@ impl Blockstore {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
-                            .unwrap_or_default()
+                        self.get_entries_in_data_block(
+                            slot,
+                            *start_index,
+                            *end_index,
+                            Some(&slot_meta),
+                        )
+                        .unwrap_or_default()
                     })
                     .collect()
             })
