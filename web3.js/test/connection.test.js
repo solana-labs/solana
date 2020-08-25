@@ -1238,7 +1238,7 @@ test('get block time', async () => {
     url,
     {
       method: 'getBlockTime',
-      params: [1],
+      params: [2],
     },
     {
       error: null,
@@ -1246,7 +1246,7 @@ test('get block time', async () => {
     },
   ]);
 
-  const blockTime = await connection.getBlockTime(1);
+  const blockTime = await connection.getBlockTime(2);
   if (blockTime === null) {
     expect(blockTime).not.toBeNull();
   } else {
