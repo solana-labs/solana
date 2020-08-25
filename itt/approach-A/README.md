@@ -1,4 +1,4 @@
-## **1. Approach A.**
+## **1. Approach A**
 
 ### Steps, Commands(c<1..n>) & Outputs (o<1..n>)
 
@@ -7,41 +7,52 @@ c0
 cd $HOME/solana/itt/approach-A
 ```
 
-c1
+c1 build docker solana image
 ```bash
-docker build --tag itt:0.1 .
+docker build --build-arg VAR_A=1 --tag itt:0.1 .
 ```
 o1
 ```bash
 Sending build context to Docker daemon  4.608kB
-Step 1/9 : FROM rust:latest
+Step 1/13 : FROM rust:latest
  ---> 53f7516d0379
-Step 2/9 : WORKDIR /usr/src/solana
+Step 2/13 : WORKDIR /usr/src/solana
  ---> Using cache
- ---> ba111c603655
-Step 3/9 : RUN apt-get update && apt-get install -y libudev-dev apt-utils clang gcc make
+ ---> d7fa2124d08a
+Step 3/13 : ARG VAR_A=1
  ---> Using cache
- ---> df81b10c6342
-Step 4/9 : RUN git clone https://github.com/solana-labs/solana.git
+ ---> 71651f9275d3
+Step 4/13 : ENV NDEBUG=$VAR_A
  ---> Using cache
- ---> 54b65d3dc56a
-Step 5/9 : RUN cd solana &&   TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) &&   git checkout $TAG &&   cargo build --release
+ ---> dbd3aa643075
+Step 5/13 : RUN echo "VAR_A: $VAR_A"
  ---> Using cache
- ---> 342d35d3f4a6
-Step 6/9 : RUN cd solana &&   NDEBUG=1 ./multinode-demo/setup.sh
+ ---> 41e00c984a8c
+Step 6/13 : RUN echo "NDEBUG: $NDEBUG"
  ---> Using cache
- ---> b2df59ba1db4
-Step 7/9 : COPY solana_itt_script.sh solana/solana_itt_script.sh
- ---> 0c4858ed9fee
-Step 8/9 : WORKDIR solana
- ---> Running in 43b9cec92b81
-Removing intermediate container 43b9cec92b81
- ---> fdc220b7c843
-Step 9/9 : CMD ./solana_itt_script.sh
- ---> Running in 4af49cdb8ada
-Removing intermediate container 4af49cdb8ada
- ---> 95f61620f037
-Successfully built 95f61620f037
+ ---> 9f48fbb4d15f
+Step 7/13 : RUN apt-get update && apt-get install -y apt-utils libudev-dev clang gcc make
+ ---> Using cache
+ ---> d1cc78cc1b01
+Step 8/13 : RUN git clone https://github.com/solana-labs/solana.git
+ ---> Using cache
+ ---> 39bb0c692925
+Step 9/13 : RUN cd solana &&   TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) &&   git checkout $TAG &&   cargo build --release
+ ---> Using cache
+ ---> aec985b44210
+Step 10/13 : RUN cd solana &&   NDEBUG=1 ./multinode-demo/setup.sh
+ ---> Using cache
+ ---> f2654df636d9
+Step 11/13 : COPY solana_itt_script.sh solana/solana_itt_script.sh
+ ---> Using cache
+ ---> fd0466c23fce
+Step 12/13 : WORKDIR solana
+ ---> Using cache
+ ---> 4e6c07ab7eee
+Step 13/13 : CMD ./solana_itt_script.sh
+ ---> Using cache
+ ---> f2b47aac511e
+Successfully built f2b47aac511e
 Successfully tagged itt:0.1
 ```
 
@@ -58,16 +69,12 @@ rust                latest              53f7516d0379        2 weeks ago         
 
 c3: run docker image
 ```bash
-docker run -it -d --rm --name itt itt:0.1
+docker run -it --rm -v /tmp/solana:/tmp/solana --name itt-solana itt:0.1
 ```
 
-Now that the solana-faucet and solana-single-node-validator is running inside a docker, let's run solana-bench-tps
-
-Open a new terminal and let's login to the running docker
-
-c4: login into running solana docker
+c4: check the log files
 ```bash
-docker run -it -rm --name itt-bench itt:0.1 /bin/bash
+ls -abl /tmp/solana
 ```
 
 **Some Docker commands**
