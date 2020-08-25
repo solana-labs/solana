@@ -172,8 +172,9 @@ impl LocalCluster {
         match genesis_config.operating_mode {
             OperatingMode::Stable | OperatingMode::Preview => {
                 genesis_config.native_instruction_processors =
-                    solana_genesis_programs::get_native_programs(genesis_config.operating_mode, 0)
-                        .unwrap_or_default()
+                    solana_genesis_programs::get_native_programs_for_genesis(
+                        genesis_config.operating_mode,
+                    )
             }
             _ => (),
         }
