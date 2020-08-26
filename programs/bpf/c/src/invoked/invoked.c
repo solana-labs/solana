@@ -23,6 +23,11 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(sol_deserialize(input, &params, 4));
 
     SolPubkey bpf_loader_id =
+        (SolPubkey){.x = {2,  168, 246, 145, 78,  136, 161, 110, 57,  90, 225,
+                          40, 148, 143, 250, 105, 86,  147, 55,  104, 24, 221,
+                          71, 67,  82,  33,  243, 198, 0,   0,   0,   0}};
+
+    SolPubkey bpf_loader_deprecated_id =
         (SolPubkey){.x = {2,   168, 246, 145, 78,  136, 161, 107, 189, 35,  149,
                           133, 95,  100, 4,   217, 180, 244, 86,  183, 130, 27,
                           176, 20,  87,  73,  66,  140, 0,   0,   0,   0}};
