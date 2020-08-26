@@ -90,6 +90,7 @@ pub trait RpcSolPubSub {
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
+        enable_received_notification: bool,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -249,6 +250,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
+        enable_received_notification: bool,
     ) {
         info!("signature_subscribe");
         match param::<Signature>(&signature_str, "signature") {
@@ -259,8 +261,13 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     "signature_subscribe: signature={:?} id={:?}",
                     signature, sub_id
                 );
-                self.subscriptions
-                    .add_signature_subscription(signature, commitment, sub_id, subscriber);
+                self.subscriptions.add_signature_subscription(
+                    signature,
+                    commitment,
+                    sub_id,
+                    subscriber,
+                    enable_received_notification,
+                );
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -359,6 +366,7 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
+    use solana_client::rpc_response::ProcessedSignatureResult;
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -436,13 +444,20 @@ mod tests {
 
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
-        rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string(), None);
+        rpc.signature_subscribe(
+            session,
+            subscriber,
+            tx.signatures[0].to_string(),
+            None,
+            false,
+        );
 
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 0).unwrap();
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res = RpcSignatureResult { err: None };
+        let expected_res =
+            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",

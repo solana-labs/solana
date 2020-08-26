@@ -12,7 +12,9 @@ use solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccoun
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::RpcFilterType,
-    rpc_response::{Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult},
+    rpc_response::{
+        ProcessedSignatureResult, Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
+    },
 };
 use solana_runtime::{
     bank::Bank,
@@ -112,7 +114,10 @@ type RpcProgramSubscriptions = RwLock<
     >,
 >;
 type RpcSignatureSubscriptions = RwLock<
-    HashMap<Signature, HashMap<SubscriptionId, SubscriptionData<Response<RpcSignatureResult>, ()>>>,
+    HashMap<
+        Signature,
+        HashMap<SubscriptionId, SubscriptionData<Response<RpcSignatureResult>, bool>>,
+    >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
 type RpcVoteSubscriptions = RwLock<HashMap<SubscriptionId, Sink<RpcVote>>>;
@@ -138,13 +143,11 @@ fn add_subscription<K, S, T>(
         last_notified_slot: RwLock::new(last_notified_slot),
         config,
     };
-    if let Some(current_hashmap) = subscriptions.get_mut(&hashmap_key) {
-        current_hashmap.insert(sub_id, subscription_data);
-        return;
-    }
-    let mut hashmap = HashMap::new();
-    hashmap.insert(sub_id, subscription_data);
-    subscriptions.insert(hashmap_key, hashmap);
+
+    subscriptions
+        .entry(hashmap_key)
+        .or_default()
+        .insert(sub_id, subscription_data);
 }
 
 fn remove_subscription<K, S, T>(
@@ -283,15 +286,15 @@ fn filter_signature_result(
     result: Option<transaction::Result<()>>,
     _signature: &Signature,
     last_notified_slot: Slot,
-    _config: Option<()>,
+    _config: Option<bool>,
     _bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
-        Box::new(
-            result
-                .into_iter()
-                .map(|result| RpcSignatureResult { err: result.err() }),
-        ),
+        Box::new(result.into_iter().map(|result| {
+            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult {
+                err: result.err(),
+            })
+        })),
         last_notified_slot,
     )
 }
@@ -636,6 +639,7 @@ impl RpcSubscriptions {
         commitment: Option<CommitmentConfig>,
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcSignatureResult>>,
+        enable_received_notification: bool,
     ) {
         let commitment_level = commitment
             .unwrap_or_else(CommitmentConfig::recent)
@@ -655,7 +659,7 @@ impl RpcSubscriptions {
             sub_id,
             subscriber,
             0, // last_notified_slot is not utilized for signature subscriptions
-            None,
+            Some(enable_received_notification),
         );
     }
 
@@ -848,7 +852,13 @@ impl RpcSubscriptions {
                             );
                         }
                     }
-                    NotificationEntry::SignaturesReceived(_slot_signatures) => {}
+                    NotificationEntry::SignaturesReceived(slot_signatures) => {
+                        RpcSubscriptions::process_signatures_received(
+                            &slot_signatures,
+                            &subscriptions.signature_subscriptions,
+                            &notifier,
+                        )
+                    }
                 },
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again
@@ -945,6 +955,40 @@ impl RpcSubscriptions {
                 &notifier,
                 &commitment_slots,
             );
+        }
+    }
+
+    fn process_signatures_received(
+        (received_slot, signatures): &(Slot, Vec<Signature>),
+        signature_subscriptions: &Arc<RpcSignatureSubscriptions>,
+        notifier: &RpcNotifier,
+    ) {
+        for signature in signatures {
+            if let Some(hashmap) = signature_subscriptions.read().unwrap().get(signature) {
+                for (
+                    _,
+                    SubscriptionData {
+                        sink,
+                        config: is_received_notification_enabled,
+                        ..
+                    },
+                ) in hashmap.iter()
+                {
+                    if is_received_notification_enabled
+                        .expect("All signature subscriptions must have this config field set")
+                    {
+                        notifier.notify(
+                            Response {
+                                context: RpcResponseContext {
+                                    slot: *received_slot,
+                                },
+                                value: RpcSignatureResult::ReceivedSignature,
+                            },
+                            &sink,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -1260,24 +1304,28 @@ pub(crate) mod tests {
             Some(CommitmentConfig::recent()),
             SubscriptionId::Number(1 as u64),
             past_bank_sub1,
+            false,
         );
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(CommitmentConfig::root()),
             SubscriptionId::Number(2 as u64),
             past_bank_sub2,
+            false,
         );
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
             Some(CommitmentConfig::recent()),
             SubscriptionId::Number(3 as u64),
             processed_sub,
+            false,
         );
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
             Some(CommitmentConfig::recent()),
             SubscriptionId::Number(4 as u64),
             Subscriber::new_test("signatureNotification").0,
+            false,
         );
 
         {
@@ -1293,7 +1341,8 @@ pub(crate) mod tests {
         let mut commitment_slots = CommitmentSlots::default();
         commitment_slots.slot = 1;
         subscriptions.notify_subscribers(commitment_slots);
-        let expected_res = RpcSignatureResult { err: None };
+        let expected_res =
+            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
 
         struct Notification {
             slot: Slot,

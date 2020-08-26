@@ -205,7 +205,7 @@ fn test_rpc_subscriptions() {
                     let status_sender = status_sender.clone();
                     tokio_01::spawn(
                         client
-                            .signature_subscribe(sig.clone(), None)
+                            .signature_subscribe(sig.clone(), None, false)
                             .and_then(move |sig_stream| {
                                 sig_stream.for_each(move |result| {
                                     status_sender.send((sig.clone(), result)).unwrap();
@@ -285,8 +285,12 @@ fn test_rpc_subscriptions() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
             Ok((sig, result)) => {
-                assert!(result.value.err.is_none());
-                assert!(signature_set.remove(&sig));
+                if let RpcSignatureResult::ProcessedSignatureResult(result) = result.value {
+                    assert!(result.err.is_none());
+                    assert!(signature_set.remove(&sig));
+                } else {
+                    panic!("Unexpected result");
+                }
             }
             Err(_err) => {
                 assert!(
