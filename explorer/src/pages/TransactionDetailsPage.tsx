@@ -29,15 +29,21 @@ import { intoTransactionInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
 
-const AUTO_REFRESH_TIMEOUT = 2000;
+const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
 
 type SignatureProps = {
   signature: TransactionSignature;
 };
 
+enum AutoRefresh {
+  Active,
+  Inactive,
+  BailedOut
+};
+
 type AutoRefreshProps = {
-  autoRefreshInProcess: boolean;
+  autoRefresh: AutoRefresh;
 };
 
 export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
@@ -51,17 +57,27 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   } catch (err) {}
 
   const status = useTransactionStatus(signature);
+  const [zeroConfirmationRetries, setZeroConfirmationRetries] = React.useState(0);
 
-  let autoRefreshInProcess = false;
+  React.useEffect(() => {
+    if (
+      status &&
+      status.status === FetchStatus.Fetched &&
+      status.data?.info && status.data.info.confirmations === 0
+    ) {
+      setZeroConfirmationRetries(retries => retries + 1);
+    }
+  }, [status]);
 
-  if (
+  let autoRefresh = AutoRefresh.Inactive;
+
+  if (zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT) {
+    autoRefresh = AutoRefresh.BailedOut;
+  } else if (
     status?.data?.info &&
-    status.data.info.confirmations === 0 &&
-    status.attempts > ZERO_CONFIRMATION_BAILOUT
+    status.data.info.confirmations !== "max"
   ) {
-    autoRefreshInProcess = false;
-  } else if (status?.data?.info && status.data.info.confirmations !== "max") {
-    autoRefreshInProcess = true;
+    autoRefresh = AutoRefresh.Active;
   }
 
   return (
@@ -78,11 +94,11 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <>
           <StatusCard
             signature={signature}
-            autoRefreshInProcess={autoRefreshInProcess}
+            autoRefresh={autoRefresh}
           />
           <AccountsCard
             signature={signature}
-            autoRefreshInProcess={autoRefreshInProcess}
+            autoRefresh={autoRefresh}
           />
           <InstructionsSection signature={signature} />
         </>
@@ -93,7 +109,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
 
 function StatusCard({
   signature,
-  autoRefreshInProcess,
+  autoRefresh,
 }: SignatureProps & AutoRefreshProps) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
@@ -109,21 +125,21 @@ function StatusCard({
 
   // Effect to set and clear interval for auto-refresh
   React.useEffect(() => {
-    if (autoRefreshInProcess) {
+    if (autoRefresh === AutoRefresh.Active) {
       let intervalHandle: NodeJS.Timeout = setInterval(
         () => fetchStatus(signature),
-        AUTO_REFRESH_TIMEOUT
+        AUTO_REFRESH_INTERVAL
       );
 
       return () => {
         clearInterval(intervalHandle);
       };
     }
-  }, [autoRefreshInProcess, fetchStatus, signature]);
+  }, [autoRefresh, fetchStatus, signature]);
 
   if (
     !status ||
-    (status.status === FetchStatus.Fetching && !autoRefreshInProcess)
+    (status.status === FetchStatus.Fetching && autoRefresh === AutoRefresh.Inactive)
   ) {
     return <LoadingCard />;
   } else if (status.status === FetchStatus.FetchFailed) {
@@ -177,7 +193,7 @@ function StatusCard({
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        {autoRefreshInProcess ? (
+        {autoRefresh === AutoRefresh.Active ? (
           <span className="spinner-grow spinner-grow-sm"></span>
         ) : (
           <button
@@ -260,7 +276,7 @@ function StatusCard({
 
 function AccountsCard({
   signature,
-  autoRefreshInProcess,
+  autoRefresh,
 }: SignatureProps & AutoRefreshProps) {
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
@@ -277,12 +293,12 @@ function AccountsCard({
     }
   }, [signature, details, status, fetchDetails]);
 
-  if (!status?.data?.info) {
+  if (autoRefresh === AutoRefresh.BailedOut || !status?.data?.info) {
     return null;
   } else if (
     !details ||
     details.status === FetchStatus.Fetching ||
-    autoRefreshInProcess
+    autoRefresh === AutoRefresh.Active
   ) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
