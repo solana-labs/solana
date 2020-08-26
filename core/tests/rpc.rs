@@ -205,7 +205,7 @@ fn test_rpc_subscriptions() {
                     let status_sender = status_sender.clone();
                     tokio_01::spawn(
                         client
-                            .signature_subscribe(sig.clone(), None, false)
+                            .signature_subscribe(sig.clone(), None)
                             .and_then(move |sig_stream| {
                                 sig_stream.for_each(move |result| {
                                     status_sender.send((sig.clone(), result)).unwrap();

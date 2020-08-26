@@ -95,7 +95,7 @@ pub struct RpcKeyedAccount {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type", content = "result")]
 pub enum RpcSignatureResult {
     ProcessedSignatureResult(ProcessedSignatureResult),
     ReceivedSignature,

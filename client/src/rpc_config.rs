@@ -71,6 +71,14 @@ pub enum RpcTokenAccountsFilter {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcSignatureSubscribeConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    pub enable_received_notification: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcGetConfirmedSignaturesForAddress2Config {
     pub before: Option<String>, // Signature as base-58 string
     pub until: Option<String>,  // Signature as base-58 string

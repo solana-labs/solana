@@ -10,7 +10,7 @@ use jsonrpc_pubsub::{
 use serde::Serialize;
 use solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding};
 use solana_client::{
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_filter::RpcFilterType,
     rpc_response::{
         ProcessedSignatureResult, Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
@@ -636,14 +636,18 @@ impl RpcSubscriptions {
     pub fn add_signature_subscription(
         &self,
         signature: Signature,
-        commitment: Option<CommitmentConfig>,
+        signature_subscribe_config: Option<RpcSignatureSubscribeConfig>,
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcSignatureResult>>,
-        enable_received_notification: bool,
     ) {
+        let (commitment, enable_received_notification) = signature_subscribe_config
+            .map(|config| (config.commitment, config.enable_received_notification))
+            .unwrap_or((None, Some(true)));
+
         let commitment_level = commitment
             .unwrap_or_else(CommitmentConfig::recent)
             .commitment;
+
         let mut subscriptions = if commitment_level == CommitmentLevel::SingleGossip {
             self.subscriptions
                 .gossip_signature_subscriptions
@@ -659,7 +663,7 @@ impl RpcSubscriptions {
             sub_id,
             subscriber,
             0, // last_notified_slot is not utilized for signature subscriptions
-            Some(enable_received_notification),
+            enable_received_notification,
         );
     }
 
@@ -1298,34 +1302,54 @@ pub(crate) mod tests {
             Subscriber::new_test("signatureNotification");
         let (processed_sub, _id_receiver, processed_recv) =
             Subscriber::new_test("signatureNotification");
+        let (processed_sub3, _id_receiver, processed_recv3) =
+            Subscriber::new_test("signatureNotification");
 
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
-            Some(CommitmentConfig::recent()),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                enable_received_notification: Some(false),
+            }),
             SubscriptionId::Number(1 as u64),
             past_bank_sub1,
-            false,
         );
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
-            Some(CommitmentConfig::root()),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::root()),
+                enable_received_notification: Some(false),
+            }),
             SubscriptionId::Number(2 as u64),
             past_bank_sub2,
-            false,
         );
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
-            Some(CommitmentConfig::recent()),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                enable_received_notification: Some(false),
+            }),
             SubscriptionId::Number(3 as u64),
             processed_sub,
-            false,
         );
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
-            Some(CommitmentConfig::recent()),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                enable_received_notification: Some(false),
+            }),
             SubscriptionId::Number(4 as u64),
             Subscriber::new_test("signatureNotification").0,
-            false,
+        );
+        // Add a subscription that gets `received` notifications
+        subscriptions.add_signature_subscription(
+            unprocessed_tx.signatures[0],
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                enable_received_notification: Some(true),
+            }),
+            SubscriptionId::Number(5 as u64),
+            processed_sub3,
         );
 
         {
@@ -1339,45 +1363,60 @@ pub(crate) mod tests {
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
         let mut commitment_slots = CommitmentSlots::default();
-        commitment_slots.slot = 1;
+        let received_slot = 1;
+        commitment_slots.slot = received_slot;
+        subscriptions
+            .notify_signatures_received((received_slot, vec![unprocessed_tx.signatures[0]]));
         subscriptions.notify_subscribers(commitment_slots);
         let expected_res =
             RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
-
+        let received_expected_res = RpcSignatureResult::ReceivedSignature;
         struct Notification {
             slot: Slot,
             id: u64,
         }
 
-        let expected_notification = |exp: Notification| -> String {
-            let json = json!({
-                "jsonrpc": "2.0",
-                "method": "signatureNotification",
-                "params": {
-                    "result": {
-                        "context": { "slot": exp.slot },
-                        "value": &expected_res,
-                    },
-                    "subscription": exp.id,
-                }
-            });
-            serde_json::to_string(&json).unwrap()
-        };
+        let expected_notification =
+            |exp: Notification, expected_res: &RpcSignatureResult| -> String {
+                let json = json!({
+                    "jsonrpc": "2.0",
+                    "method": "signatureNotification",
+                    "params": {
+                        "result": {
+                            "context": { "slot": exp.slot },
+                            "value": expected_res,
+                        },
+                        "subscription": exp.id,
+                    }
+                });
+                serde_json::to_string(&json).unwrap()
+            };
 
         // Expect to receive a notification from bank 1 because this subscription is
         // looking for 0 confirmations and so checks the current bank
-        let expected = expected_notification(Notification { slot: 1, id: 1 });
+        let expected = expected_notification(Notification { slot: 1, id: 1 }, &expected_res);
         let (response, _) = robust_poll_or_panic(past_bank_recv1);
         assert_eq!(expected, response);
 
         // Expect to receive a notification from bank 0 because this subscription is
         // looking for 1 confirmation and so checks the past bank
-        let expected = expected_notification(Notification { slot: 0, id: 2 });
+        let expected = expected_notification(Notification { slot: 0, id: 2 }, &expected_res);
         let (response, _) = robust_poll_or_panic(past_bank_recv2);
         assert_eq!(expected, response);
 
-        let expected = expected_notification(Notification { slot: 1, id: 3 });
+        let expected = expected_notification(Notification { slot: 1, id: 3 }, &expected_res);
         let (response, _) = robust_poll_or_panic(processed_recv);
+        assert_eq!(expected, response);
+
+        // Expect a "received" notification
+        let expected = expected_notification(
+            Notification {
+                slot: received_slot,
+                id: 5,
+            },
+            &received_expected_res,
+        );
+        let (response, _) = robust_poll_or_panic(processed_recv3);
         assert_eq!(expected, response);
 
         // Subscription should be automatically removed after notification
@@ -1392,7 +1431,7 @@ pub(crate) mod tests {
         // Unprocessed signature subscription should not be removed
         assert_eq!(
             sig_subs.get(&unprocessed_tx.signatures[0]).unwrap().len(),
-            1
+            2
         );
     }
 
