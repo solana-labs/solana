@@ -7,7 +7,7 @@ use solana_rbpf::EbpfVm;
 use solana_sdk::{
     account::Account,
     bpf_loader,
-    entrypoint_native::{ComputeMeter, InvokeContext, Logger, ProcessInstruction},
+    entrypoint_native::{ComputeBudget, ComputeMeter, InvokeContext, Logger, ProcessInstruction},
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -165,6 +165,9 @@ impl InvokeContext for MockInvokeContext {
     }
     fn is_cross_program_supported(&self) -> bool {
         true
+    }
+    fn get_compute_budget(&self) -> ComputeBudget {
+        ComputeBudget::default()
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.mock_compute_meter.clone()))
