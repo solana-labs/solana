@@ -12,7 +12,7 @@
     "@types/bn.js": "^4.11.6",
     "@types/bs58": "^4.0.1",
     "@types/chai": "^4.2.12",
-    "@types/chart.js": "^2.9.23",
+    "@types/chart.js": "^2.9.24",
     "@types/classnames": "^2.2.10",
     "@types/jest": "^26.0.10",
     "@types/node": "^14.6.0",
