@@ -344,7 +344,9 @@ impl Tower {
     }
 
     fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
-        if current_slot > self.last_timestamp.slot {
+        if current_slot > self.last_timestamp.slot
+            || self.last_timestamp.slot == 0 && current_slot == self.last_timestamp.slot
+        {
             let timestamp = Utc::now().timestamp();
             if timestamp >= self.last_timestamp.timestamp {
                 self.last_timestamp = BlockTimestamp {
@@ -1821,7 +1823,7 @@ pub mod test {
     #[test]
     fn test_maybe_timestamp() {
         let mut tower = Tower::default();
-        assert!(tower.maybe_timestamp(0).is_none());
+        assert!(tower.maybe_timestamp(0).is_some());
         assert!(tower.maybe_timestamp(1).is_some());
         assert!(tower.maybe_timestamp(0).is_none()); // Refuse to timestamp an older slot
         assert!(tower.maybe_timestamp(1).is_none()); // Refuse to timestamp the same slot twice
