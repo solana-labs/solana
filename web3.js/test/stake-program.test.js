@@ -146,7 +146,9 @@ test('authorizeWithSeed', () => {
   const transaction = StakeProgram.authorizeWithSeed(params);
   expect(transaction.instructions).toHaveLength(1);
   const [stakeInstruction] = transaction.instructions;
-  expect(params).toEqual(StakeInstruction.decodeAuthorizeWithSeed(stakeInstruction));
+  expect(params).toEqual(
+    StakeInstruction.decodeAuthorizeWithSeed(stakeInstruction),
+  );
 });
 
 test('split', () => {
