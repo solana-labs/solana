@@ -30,7 +30,7 @@ Chrome and Brave are supported when interacting with a Ledger Nano S.
 To create a wallet with a Keystore file, click on "Create a Wallet" and select
 "Using Keystore File".  Follow the prompts to create a password which will be
 used to encrypt your Keystore file, and then to download the new file to your
-compute.  You will be prompted to then upload the Keystore file back to the site
+computer.  You will be prompted to then upload the Keystore file back to the site
 to verify that the download was saved correctly.
 
 **NOTE: If you lose your Keystore file or the password used to encrypt it, any
@@ -116,8 +116,8 @@ about how staking on Solana works in general, check out our
 ### Create a Stake Account
 You can use some of the SOL tokens in your wallet to create a new stake account.
 From the wallet main page click "Staking" at the top of the page.  In the upper-
-right, click "Create Account".  Enter the amount of SOL you with which you want
-to fund your new stake account.  This amount will be withdrawn from your wallet
+right, click "Create Account".  Enter the amount of SOL you want to use to
+fund your new stake account.  This amount will be withdrawn from your wallet
 and transfered to the stake account.  Do not transfer your entire wallet balance
 to a stake account, as the wallet is still used to pay any transaction fees
 associated with your stake account.  Consider leaving at least 1 SOL in your
@@ -157,12 +157,13 @@ account, click the "Undelegate" button and follow the prompts.
 
 ### Split a Stake Account
 You may split an existing stake account into two stake accounts.  Click on the
-address of stake account controlled by your wallet, and under the Actions bar,
+address of a stake account controlled by your wallet, and under the Actions bar,
 click "Split".  Specify the amount of SOL tokens you want to split.  This will be
 the amount of tokens in your new stake account and your existing stake account
 balance will be reduced by the same amount.  Splitting your stake account
 allows you to delegate to multiple different validators with different amounts
-of tokens.
+of tokens. You may split a stake account as many times as you want, to create
+as many stake accounts as you want.
 
 ## Signing a Transaction
 Any time you submit a transaction such as sending tokens to another wallet or
