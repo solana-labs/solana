@@ -55,15 +55,10 @@ fn test_cli_deploy_program() {
     config.signers = vec![&keypair];
     process_command(&config).unwrap();
 
-<<<<<<< HEAD
-    config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
-=======
     config.command = CliCommand::Deploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
-        address: None,
         use_deprecated_loader: false,
     };
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
 
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -84,33 +79,7 @@ fn test_cli_deploy_program() {
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
 
-<<<<<<< HEAD
     assert_eq!(account.data, elf);
-=======
-    assert_eq!(account0.data, elf);
-
-    // Test custom address
-    let custom_address_keypair = Keypair::new();
-    config.signers = vec![&keypair, &custom_address_keypair];
-    config.command = CliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
-        address: Some(1),
-        use_deprecated_loader: false,
-    };
-    process_command(&config).unwrap();
-    let account1 = rpc_client
-        .get_account_with_commitment(&custom_address_keypair.pubkey(), CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
-    assert_eq!(account1.lamports, minimum_balance_for_rent_exemption);
-    assert_eq!(account1.owner, bpf_loader::id());
-    assert_eq!(account1.executable, true);
-    assert_eq!(account0.data, account1.data);
-
-    // Attempt to redeploy to the same address
-    process_command(&config).unwrap_err();
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

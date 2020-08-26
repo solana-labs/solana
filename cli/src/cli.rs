@@ -278,15 +278,10 @@ pub enum CliCommand {
         lamports: u64,
     },
     // Program Deployment
-<<<<<<< HEAD
-    Deploy(String),
-=======
     Deploy {
         program_location: String,
-        address: Option<SignerIndex>,
         use_deprecated_loader: bool,
     },
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
@@ -689,34 +684,22 @@ pub fn parse_command(
             parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
         }
         // Program Deployment
-        ("deploy", Some(matches)) => Ok(CliCommandInfo {
-            command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
-            signers: vec![signer_from_path(
-                matches,
-                default_signer_path,
-                "keypair",
-                wallet_manager,
-<<<<<<< HEAD
-            )?],
-        }),
-=======
-            )?];
-            let address = address_signer.map(|signer| {
-                signers.push(signer);
-                1
-            });
+        ("deploy", Some(matches)) => {
             let use_deprecated_loader = matches.is_present("use_deprecated_loader");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Deploy {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
-                    address,
                     use_deprecated_loader,
                 },
-                signers,
+                signers: vec![signer_from_path(
+                    matches,
+                    default_signer_path,
+                    "keypair",
+                    wallet_manager,
+                )?],
             })
         }
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
             parse_stake_create_account(matches, default_signer_path, wallet_manager)
@@ -1386,11 +1369,7 @@ fn process_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
-<<<<<<< HEAD
-=======
-    address: Option<SignerIndex>,
     use_deprecated_loader: bool,
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
 ) -> ProcessResult {
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
@@ -1963,23 +1942,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Program Deployment
 
         // Deploy a custom program to the chain
-<<<<<<< HEAD
-        CliCommand::Deploy(ref program_location) => {
-            process_deploy(&rpc_client, config, program_location)
-        }
-=======
         CliCommand::Deploy {
             program_location,
-            address,
             use_deprecated_loader,
         } => process_deploy(
             &rpc_client,
             config,
             program_location,
-            *address,
             *use_deprecated_loader,
         ),
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
 
         // Stake Commands
 
@@ -2666,16 +2637,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
-<<<<<<< HEAD
-=======
-                )
-                .arg(
-                    Arg::with_name("address_signer")
-                        .index(2)
-                        .value_name("SIGNER_KEYPAIR")
-                        .takes_value(true)
-                        .validator(is_valid_signer)
-                        .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(
                     Arg::with_name("use-deprecated-loader")
@@ -2683,7 +2644,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
                 ),
         )
         .subcommand(
@@ -3128,46 +3088,14 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-<<<<<<< HEAD
-                command: CliCommand::Deploy("/Users/test/program.o".to_string()),
-=======
                 command: CliCommand::Deploy {
                     program_location: "/Users/test/program.o".to_string(),
-                    address: None,
                     use_deprecated_loader: false,
                 },
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
-<<<<<<< HEAD
-=======
-        let custom_address = Keypair::new();
-        let custom_address_file = make_tmp_path("custom_address_file");
-        write_keypair_file(&custom_address, &custom_address_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
-            "test",
-            "deploy",
-            "/Users/test/program.o",
-            &custom_address_file,
-        ]);
-        assert_eq!(
-            parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: "/Users/test/program.o".to_string(),
-                    address: Some(1),
-                    use_deprecated_loader: false,
-                },
-                signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&custom_address_file).unwrap().into(),
-                ],
-            }
-        );
-
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
         // Test ResolveSigner Subcommand, KeypairUrl::Filepath
         let test_resolve_signer =
             test_commands
@@ -3887,15 +3815,10 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-<<<<<<< HEAD
-        config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
-=======
         config.command = CliCommand::Deploy {
             program_location: pathbuf.to_str().unwrap().to_string(),
-            address: None,
             use_deprecated_loader: false,
         };
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let program_id = json
@@ -3909,15 +3832,10 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-<<<<<<< HEAD
-        config.command = CliCommand::Deploy("bad/file/location.so".to_string());
-=======
         config.command = CliCommand::Deploy {
             program_location: "bad/file/location.so".to_string(),
-            address: None,
             use_deprecated_loader: false,
         };
->>>>>>> de736e00a... Add (hidden) --use-deprecated-loader flag to `solana deploy`
         assert!(process_command(&config).is_err());
     }
 
