@@ -13,7 +13,7 @@ use crate::{
     builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
-    message_processor::{MessageProcessor, DEFAULT_COMPUTE_BUDGET, DEFAULT_MAX_INVOKE_DEPTH},
+    message_processor::MessageProcessor,
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -35,7 +35,7 @@ use solana_sdk::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
-    entrypoint_native::{ProcessInstruction, ProcessInstructionWithContext},
+    entrypoint_native::{ComputeBudget, ProcessInstruction, ProcessInstructionWithContext},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1245,13 +1245,8 @@ impl Bank {
             .set_cross_program_support(is_supported);
     }
 
-    pub fn set_max_invoke_depth(&mut self, max_invoke_depth: usize) {
-        self.message_processor
-            .set_max_invoke_depth(max_invoke_depth);
-    }
-
-    pub fn set_compute_budget(&mut self, compute_units: u64) {
-        self.message_processor.set_compute_budget(compute_units);
+    pub fn set_compute_budget(&mut self, budget: ComputeBudget) {
+        self.message_processor.set_compute_budget(budget);
     }
 
     /// Return the last block hash registered.
@@ -3210,8 +3205,7 @@ impl Bank {
         self.ensure_builtins(init_finish_or_warp);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
-        self.set_max_invoke_depth(DEFAULT_MAX_INVOKE_DEPTH);
-        self.set_compute_budget(DEFAULT_COMPUTE_BUDGET);
+        self.recheck_compute_budget();
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
@@ -3238,6 +3232,27 @@ impl Bank {
         } else {
             self.set_cross_program_support(true);
         }
+    }
+
+    fn recheck_compute_budget(self: &mut Bank) {
+        let compute_budget = if OperatingMode::Stable == self.operating_mode() {
+            if self.epoch() >= u64::MAX - 1 {
+                ComputeBudget::default()
+            } else {
+                // Original
+                ComputeBudget {
+                    max_units: 100_000,
+                    log_units: 0,
+                    log_64_units: 0,
+                    create_program_address_units: 0,
+                    invoke_units: 0,
+                    max_invoke_depth: 2,
+                }
+            }
+        } else {
+            ComputeBudget::default()
+        };
+        self.set_compute_budget(compute_budget);
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {

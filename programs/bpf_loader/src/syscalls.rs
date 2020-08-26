@@ -30,7 +30,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 /// Error definitions
-#[derive(Debug, ThisError)]
+#[derive(Debug, ThisError, PartialEq)]
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
@@ -58,13 +58,6 @@ impl From<SyscallError> for EbpfError<BPFError> {
         EbpfError::UserError(error.into())
     }
 }
-
-/// Sysval compute costs
-/// Note: `abort`, `sol_panic_`, and `sol_alloc_free_` do not currently incur a cost
-const COMPUTE_COST_LOG: u64 = 100;
-const COMPUTE_COST_LOG_64: u64 = 100;
-const COMPUTE_COST_CREATE_PROGRAM_ADDRESS: u64 = 1000;
-const COMPUTE_COST_INVOKE: u64 = 1000;
 
 trait SyscallConsume {
     fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BPFError>>;
@@ -97,6 +90,7 @@ pub fn register_syscalls<'a>(
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
+    let compute_budget = invoke_context.get_compute_budget();
     // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
@@ -104,6 +98,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
+            cost: compute_budget.log_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
@@ -111,6 +106,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_log_64_",
         Box::new(SyscallLogU64 {
+            cost: compute_budget.log_64_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
@@ -119,6 +115,7 @@ pub fn register_syscalls<'a>(
         vm.register_syscall_with_context_ex(
             "sol_create_program_address",
             Box::new(SyscallCreateProgramAddress {
+                cost: compute_budget.create_program_address_units,
                 compute_meter: invoke_context.get_compute_meter(),
             }),
         )?;
@@ -282,6 +279,7 @@ pub fn syscall_sol_panic(
 
 /// Log a user's info message
 pub struct SyscallLog {
+    cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
@@ -296,7 +294,7 @@ impl SyscallObject<BPFError> for SyscallLog {
         ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        self.compute_meter.consume(COMPUTE_COST_LOG)?;
+        self.compute_meter.consume(self.cost)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -313,6 +311,7 @@ impl SyscallObject<BPFError> for SyscallLog {
 
 /// Log 5 64-bit values
 pub struct SyscallLogU64 {
+    cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
@@ -327,7 +326,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        self.compute_meter.consume(COMPUTE_COST_LOG_64)?;
+        self.compute_meter.consume(self.cost)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -386,6 +385,7 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
 
 /// Create a program address
 pub struct SyscallCreateProgramAddress {
+    cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
 impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
@@ -399,8 +399,7 @@ impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
         ro_regions: &[MemoryRegion],
         rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        self.compute_meter
-            .consume(COMPUTE_COST_CREATE_PROGRAM_ADDRESS)?;
+        self.compute_meter.consume(self.cost)?;
 
         let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
         let seeds = untranslated_seeds
@@ -894,7 +893,7 @@ fn call<'a>(
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
         .get_compute_meter()
-        .consume(COMPUTE_COST_INVOKE)?;
+        .consume(invoke_context.get_compute_budget().invoke_units)?;
 
     // Translate data passed from the VM
 
@@ -1134,13 +1133,12 @@ mod tests {
         let addr = string.as_ptr() as *const _ as u64;
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: std::u64::MAX, // TODO also test error
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 3 }));
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log = SyscallLog {
+            cost: 1,
             compute_meter,
             logger,
         };
@@ -1155,8 +1153,15 @@ mod tests {
             .call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
             .unwrap();
 
-        syscall_sol_log
-            .call(
+        assert_eq!(
+            Err(EbpfError::AccessViolation(
+                "programs/bpf_loader/src/syscalls.rs".to_string(),
+                238,
+                100,
+                32,
+                "  regions: \n0x64-0x73".to_string()
+            )),
+            syscall_sol_log.call(
                 100,
                 string.len() as u64 * 2, // AccessViolation
                 0,
@@ -1165,7 +1170,22 @@ mod tests {
                 ro_regions,
                 rw_regions,
             )
-            .unwrap_err();
+        );
+
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            syscall_sol_log.call(
+                100,
+                string.len() as u64 * 2, // AccessViolation
+                0,
+                0,
+                0,
+                ro_regions,
+                rw_regions,
+            )
+        );
 
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
@@ -1175,12 +1195,13 @@ mod tests {
     fn test_syscall_sol_log_u64() {
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
-                remaining: std::u64::MAX, // TODO also test error
+                remaining: std::u64::MAX,
             }));
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log_u64 = SyscallLogU64 {
+            cost: 0,
             compute_meter,
             logger,
         };

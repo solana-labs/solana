@@ -210,8 +210,41 @@ pub trait InvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Are cross program invocations supported
     fn is_cross_program_supported(&self) -> bool;
+    /// Get this invocation's compute budget
+    fn get_compute_budget(&self) -> ComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ComputeBudget {
+    /// Number of compute units that an instruction is allowed.  Compute units
+    /// are consumed by program execution, resources they use, etc...
+    pub max_units: u64,
+    /// Number of compute units consumed by a log call
+    pub log_units: u64,
+    /// Number of compute units consumed by a log_u64 call
+    pub log_64_units: u64,
+    /// Number of compute units consumed by a create_program_address call
+    pub create_program_address_units: u64,
+    /// Number of compute units consumed by an invoke call (not including the cost incured by
+    /// the called program)
+    pub invoke_units: u64,
+    /// Maximum cross-program invocation depth allowed including the orignal caller
+    pub max_invoke_depth: usize,
+}
+impl Default for ComputeBudget {
+    fn default() -> Self {
+        // Tuned for ~1ms
+        ComputeBudget {
+            max_units: 200_000,
+            log_units: 100,
+            log_64_units: 100,
+            create_program_address_units: 1500,
+            invoke_units: 1000,
+            max_invoke_depth: 2,
+        }
+    }
 }
 
 /// Compute meter
