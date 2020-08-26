@@ -846,7 +846,7 @@ Returns all accounts owned by the provided program Pubkey
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64" or jsonParsed".
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`. If parsed-JSON is requested for the SPL Token program, when a valid mint cannot be found for a particular account, that account will be filtered out from results. **jsonParsed encoding is UNSTABLE**
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58" or "base64" encoding.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 
@@ -1101,7 +1101,7 @@ Returns all SPL Token accounts by approved Delegate. **UNSTABLE**
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64" or jsonParsed".
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results. **jsonParsed encoding is UNSTABLE**
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58" or "base64" encoding.
 
 #### Results:
@@ -1138,7 +1138,7 @@ Returns all SPL Token accounts by token owner. **UNSTABLE**
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64" or jsonParsed".
-    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results. **jsonParsed encoding is UNSTABLE**
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58" or "base64" encoding.
 
 #### Results:
