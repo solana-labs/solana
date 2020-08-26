@@ -18,6 +18,14 @@ module.exports = {
       },
       {
         type: "category",
+        label: "Web Wallets",
+        items: [
+          "wallet-guide/web-wallets",
+          "wallet-guide/solflare",
+        ],
+      },
+      {
+        type: "category",
         label: "Command-line Wallets",
         items: [
           "wallet-guide/cli",
