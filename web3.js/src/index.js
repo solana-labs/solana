@@ -1,6 +1,7 @@
 // @flow
 export {Account} from './account';
-export {BpfLoader} from './bpf-loader';
+export {BPF_LOADER_DEPRECATED_PROGRAM_ID} from './bpf-loader-deprecated';
+export {BpfLoader, BPF_LOADER_PROGRAM_ID} from './bpf-loader';
 export {Connection} from './connection';
 export {Loader} from './loader';
 export {Message} from './message';
