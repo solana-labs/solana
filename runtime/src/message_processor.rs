@@ -665,7 +665,21 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
+        instruction_index: usize,
     ) -> Result<(), InstructionError> {
+        // Fixup the special instructions key if present
+        // before the account pre-values are taken care of
+        for (i, key) in message.account_keys.iter().enumerate() {
+            if solana_sdk::sysvar::instructions::check_id(key) {
+                let mut mut_account_ref = accounts[i].borrow_mut();
+                solana_sdk::sysvar::instructions::store_current_instruction(
+                    &mut mut_account_ref.data,
+                    instruction_index as u16,
+                );
+                break;
+            }
+        }
+
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let mut invoke_context = ThisInvokeContext::new(
             instruction.program_id(&message.account_keys),
@@ -712,6 +726,7 @@ impl MessageProcessor {
                 rent_collector,
                 log_collector.clone(),
                 executors.clone(),
+                instruction_index,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }

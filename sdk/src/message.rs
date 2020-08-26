@@ -1,6 +1,9 @@
 //! A library for generating a message from a sequence of instructions
 
 use crate::sanitize::{Sanitize, SanitizeError};
+use crate::serialize_utils::{
+    append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
+};
 use crate::{
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
@@ -321,6 +324,98 @@ impl Message {
             }
         }
         (writable_keys, readonly_keys)
+    }
+
+    // First encode the number of instructions:
+    // [0..2 - num_instructions
+    //
+    // Then a table of offsets of where to find them in the data
+    //  3..2*num_instructions table of instruction offsets
+    //
+    // Each instruction is then encoded as:
+    //   0..2 - num_accounts
+    //   3 - meta_byte -> (bit 0 signer, bit 1 is_writable)
+    //   4..36 - pubkey - 32 bytes
+    //   36..64 - program_id
+    //     33..34 - data len - u16
+    //     35..data_len - data
+    pub fn serialize_instructions(&self) -> Vec<u8> {
+        // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
+        let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
+        append_u16(&mut data, self.instructions.len() as u16);
+        for _ in 0..self.instructions.len() {
+            append_u16(&mut data, 0);
+        }
+        for (i, instruction) in self.instructions.iter().enumerate() {
+            let start_instruction_offset = data.len() as u16;
+            let start = 2 + (2 * i);
+            data[start..start + 2].copy_from_slice(&start_instruction_offset.to_le_bytes());
+            append_u16(&mut data, instruction.accounts.len() as u16);
+            for account_index in &instruction.accounts {
+                let account_index = *account_index as usize;
+                let is_signer = self.is_signer(account_index);
+                let is_writable = self.is_writable(account_index);
+                let mut meta_byte = 0;
+                if is_signer {
+                    meta_byte |= 1 << Self::IS_SIGNER_BIT;
+                }
+                if is_writable {
+                    meta_byte |= 1 << Self::IS_WRITABLE_BIT;
+                }
+                append_u8(&mut data, meta_byte);
+                append_slice(&mut data, self.account_keys[account_index].as_ref());
+            }
+
+            let program_id = &self.account_keys[instruction.program_id_index as usize];
+            append_slice(&mut data, program_id.as_ref());
+            append_u16(&mut data, instruction.data.len() as u16);
+            append_slice(&mut data, &instruction.data);
+        }
+        data
+    }
+
+    const IS_SIGNER_BIT: usize = 0;
+    const IS_WRITABLE_BIT: usize = 1;
+
+    pub fn deserialize_instruction(
+        index: usize,
+        data: &[u8],
+    ) -> Result<Instruction, SanitizeError> {
+        let mut current = 0;
+        let _num_instructions = read_u16(&mut current, &data)?;
+
+        // index into the instruction byte-offset table.
+        current += index * 2;
+        let start = read_u16(&mut current, &data)?;
+
+        current = start as usize;
+        let num_accounts = read_u16(&mut current, &data)?;
+        let mut accounts = Vec::with_capacity(num_accounts as usize);
+        for _ in 0..num_accounts {
+            let meta_byte = read_u8(&mut current, &data)?;
+            let mut is_signer = false;
+            let mut is_writable = false;
+            if meta_byte & (1 << Self::IS_SIGNER_BIT) != 0 {
+                is_signer = true;
+            }
+            if meta_byte & (1 << Self::IS_WRITABLE_BIT) != 0 {
+                is_writable = true;
+            }
+            let pubkey = read_pubkey(&mut current, &data)?;
+            accounts.push(AccountMeta {
+                pubkey,
+                is_signer,
+                is_writable,
+            });
+        }
+        let program_id = read_pubkey(&mut current, &data)?;
+        let data_len = read_u16(&mut current, &data)?;
+        let data = read_slice(&mut current, &data, data_len as usize)?;
+        Ok(Instruction {
+            program_id,
+            data,
+            accounts,
+        })
     }
 }
 
@@ -672,5 +767,31 @@ mod tests {
             message.get_account_keys_by_lock_type(),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
+    }
+
+    #[test]
+    fn test_decompile_instructions() {
+        solana_logger::setup();
+        let program_id0 = Pubkey::new_rand();
+        let program_id1 = Pubkey::new_rand();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let instructions = vec![
+            Instruction::new(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new(program_id1, &0, vec![AccountMeta::new_readonly(id2, false)]),
+            Instruction::new(program_id1, &0, vec![AccountMeta::new_readonly(id3, true)]),
+        ];
+
+        let message = Message::new(&instructions, Some(&id1));
+        let serialized = message.serialize_instructions();
+        for (i, instruction) in instructions.iter().enumerate() {
+            assert_eq!(
+                Message::deserialize_instruction(i, &serialized).unwrap(),
+                *instruction
+            );
+        }
     }
 }
