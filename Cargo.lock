@@ -3556,6 +3556,7 @@ dependencies = [
  "serial_test",
  "serial_test_derive",
  "solana-account-decoder",
+ "solana-budget-program",
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
