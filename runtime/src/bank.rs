@@ -679,16 +679,6 @@ impl Bank {
         );
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-        assert_eq!(
-            bank.rent_collector,
-            RentCollector::new(
-                bank.epoch,
-                &bank.epoch_schedule,
-                bank.slots_per_year,
-                &genesis_config.rent,
-                genesis_config.operating_mode,
-            )
-        );
 
         bank
     }
@@ -1247,6 +1237,14 @@ impl Bank {
 
     pub fn set_compute_budget(&mut self, budget: ComputeBudget) {
         self.message_processor.set_compute_budget(budget);
+    }
+
+    pub fn set_rent_burn_percentage(&mut self, burn_percent: u8) {
+        self.rent_collector.rent.burn_percent = burn_percent;
+    }
+
+    pub fn set_hashes_per_tick(&mut self, hashes_per_tick: Option<u64>) {
+        self.hashes_per_tick = hashes_per_tick;
     }
 
     /// Return the last block hash registered.
