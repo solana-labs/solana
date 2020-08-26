@@ -80,6 +80,16 @@ make sure to access the same address when using SolFlare to be able to access
 those funds.  If you connect to the incorrect address,
 simply click Logout and re-connect with the correct address.
 
+## Select a Network
+
+Solana maintains [three distinct networks](../clusters.md), each of which has
+its own purpose in supporting the Solana ecosystem.  Mainnet Beta is selected by
+default on SolFlare, as this is the permanent network where exchanges and other
+production apps are deployed.  To select a different network, click on the name
+of the currently selected network at the top of the wallet dashboard, either
+Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
+using.
+
 ## Sending and Receiving SOL Tokens
 
 ### Receiving
@@ -97,6 +107,62 @@ upper-right corner.  Enter the recipient address and the amount of SOL to
 transfer and click "Submit".  You will be prompted to confirm the details of the
 transaction before you [use your key to sign the transaction](#signing-a-transaction)
 and then it will be submitted to the network.
+
+## Staking SOL Tokens
+SolFlare supports creating and managing stake accounts and delegations.  To learn
+about how staking on Solana works in general, check out our
+[Staking Guide](../staking.md).
+
+### Create a Stake Account
+You can use some of the SOL tokens in your wallet to create a new stake account.
+From the wallet main page click "Staking" at the top of the page.  In the upper-
+right, click "Create Account".  Enter the amount of SOL you with which you want
+to fund your new stake account.  This amount will be withdrawn from your wallet
+and transfered to the stake account.  Do not transfer your entire wallet balance
+to a stake account, as the wallet is still used to pay any transaction fees
+associated with your stake account.  Consider leaving at least 1 SOL in your
+wallet account.
+
+After you submit and [sign the transaction](#signing-a-transaction) you will see
+your new stake account appear in the box labeled "Your Staking Accounts".
+
+Stake accounts created on SolFlare set your wallet address as the
+[staking and withdrawing authority](../staking/stake-accounts.md#understanding-account-authorities)
+for your new account, which gives your wallet's key the authority to sign
+for any transactions related to the new stake account.
+
+### View your Stake Accounts
+On the main Wallet dashboard page or on the Staking dashboard page, your stake
+accounts will be visible in the "Your Staking Accounts" box.  Stake accounts
+exist at a different address from your wallet.
+
+SolFlare will locate any display all stake accounts on the
+[selected network](#select-a-network)
+for which your wallet address is assigned as the
+[stake authority](../staking/stake-accounts.md#understanding-account-authorities).
+Stake accounts that were created outside of SolFlare will also be displayed and
+can be managed as long as the wallet you logged in with is assigned as the stake
+authority.
+
+### Delegate tokens in a Stake Account
+Once you have [selected a validator](../staking.md#select-a-validator), you may
+delegate the tokens in one of your stake accounts to them.  From the Staking
+dashboard, click "Delegate" at the right side of a displayed stake account.
+Select the validator you wish to delegate to from the drop down list and click
+Delegate.
+
+To un-delegate your staked tokens (also called deactivating your stake), the
+process is similar.  On the Staking page, at the right side of a delegated stake
+account, click the "Undelegate" button and follow the prompts. 
+
+### Split a Stake Account
+You may split an existing stake account into two stake accounts.  Click on the
+address of stake account controlled by your wallet, and under the Actions bar,
+click "Split".  Specify the amount of SOL tokens you want to split.  This will be
+the amount of tokens in your new stake account and your existing stake account
+balance will be reduced by the same amount.  Splitting your stake account
+allows you to delegate to multiple different validators with different amounts
+of tokens.
 
 ## Signing a Transaction
 Any time you submit a transaction such as sending tokens to another wallet or
