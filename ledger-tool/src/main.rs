@@ -5,7 +5,10 @@ use clap::{
 use log::*;
 use regex::Regex;
 use serde_json::json;
-use solana_clap_utils::input_validators::{is_parsable, is_slot};
+use solana_clap_utils::{
+    input_parsers::{pubkey_of, pubkeys_of},
+    input_validators::{is_parsable, is_pubkey_or_keypair, is_slot, is_valid_percentage},
+};
 use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -23,15 +26,22 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
+    account::Account,
     clock::{Epoch, Slot},
-    genesis_config::GenesisConfig,
+    genesis_config::{GenesisConfig, OperatingMode},
     hash::Hash,
     inflation::Inflation,
-    native_token::{lamports_to_sol, Sol},
+    native_token::{lamports_to_sol, sol_to_lamports, Sol},
     pubkey::Pubkey,
+    rent::Rent,
     shred_version::compute_shred_version,
+    system_program,
 };
-use solana_vote_program::vote_state::VoteState;
+use solana_stake_program::stake_state::{self, StakeState};
+use solana_vote_program::{
+    self,
+    vote_state::{self, VoteState},
+};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::{TryFrom, TryInto},
@@ -764,6 +774,15 @@ fn main() {
         .takes_value(true)
         .default_value(&default_genesis_archive_unpacked_size)
         .help("maximum total uncompressed size of unpacked genesis archive");
+    let hashes_per_tick = Arg::with_name("hashes_per_tick")
+        .long("hashes-per-tick")
+        .value_name("NUM_HASHES|\"sleep\"")
+        .takes_value(true)
+        .help(
+            "How many PoH hashes to roll before emitting the next tick. \
+             If \"sleep\", for development \
+             sleep for the target tick duration instead of hashing",
+        );
     let snapshot_version_arg = Arg::with_name("snapshot_version")
         .long("snapshot-version")
         .value_name("SNAPSHOT_VERSION")
@@ -771,6 +790,15 @@ fn main() {
         .takes_value(true)
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
+
+    let rent = Rent::default();
+    let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
+        .max(VoteState::get_rent_exempt_reserve(&rent))
+        .to_string();
+    let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
+        .max(StakeState::get_rent_exempt_reserve(&rent))
+        .to_string();
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -914,6 +942,23 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
+            SubCommand::with_name("modify-genesis")
+            .about("Modifies genesis parameters")
+            .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&hashes_per_tick)
+            .arg(
+                Arg::with_name("operating_mode")
+                    .long("operating-mode")
+                    .possible_value("development")
+                    .possible_value("preview")
+                    .possible_value("stable")
+                    .takes_value(true)
+                    .help(
+                        "Selects the features that will be enabled for the cluster"
+                    ),
+            )
+        )
+        .subcommand(
             SubCommand::with_name("shred-version")
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
@@ -1009,11 +1054,84 @@ fn main() {
                            which could be a slot in a galaxy far far away"),
             )
             .arg(
+                Arg::with_name("faucet_lamports")
+                    .short("t")
+                    .long("faucet-lamports")
+                    .value_name("LAMPORTS")
+                    .takes_value(true)
+                    .requires("faucet_pubkey")
+                    .help("Number of lamports to assign to the faucet"),
+            )
+            .arg(
+                Arg::with_name("faucet_pubkey")
+                    .short("m")
+                    .long("faucet-pubkey")
+                    .value_name("PUBKEY")
+                    .takes_value(true)
+                    .validator(is_pubkey_or_keypair)
+                    .requires("faucet_lamports")
+                    .help("Path to file containing the faucet's pubkey"),
+            )
+            .arg(
+                Arg::with_name("bootstrap_validator")
+                    .short("b")
+                    .long("bootstrap-validator")
+                    .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
+                    .takes_value(true)
+                    .validator(is_pubkey_or_keypair)
+                    .number_of_values(3)
+                    .multiple(true)
+                    .help("The bootstrap validator's identity, vote and stake pubkeys"),
+            )
+            .arg(
+                Arg::with_name("bootstrap_stake_authorized_pubkey")
+                    .long("bootstrap-stake-authorized-pubkey")
+                    .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
+                    .takes_value(true)
+                    .validator(is_pubkey_or_keypair)
+                    .help(
+                        "Path to file containing the pubkey authorized to manage the bootstrap \
+                         validator's stake [default: --bootstrap-validator IDENTITY_PUBKEY]",
+                    ),
+            )
+            .arg(
+                Arg::with_name("bootstrap_validator_lamports")
+                    .long("bootstrap-validator-lamports")
+                    .value_name("LAMPORTS")
+                    .takes_value(true)
+                    .default_value(default_bootstrap_validator_lamports)
+                    .help("Number of lamports to assign to the bootstrap validator"),
+            )
+            .arg(
+                Arg::with_name("bootstrap_validator_stake_lamports")
+                    .long("bootstrap-validator-stake-lamports")
+                    .value_name("LAMPORTS")
+                    .takes_value(true)
+                    .default_value(default_bootstrap_validator_stake_lamports)
+                    .help("Number of lamports to assign to the bootstrap validator's stake account"),
+            )
+            .arg(
+                Arg::with_name("rent_burn_percentage")
+                    .long("rent-burn-percentage")
+                    .value_name("NUMBER")
+                    .takes_value(true)
+                    .help("Adjust percentage of collected rent to burn")
+                    .validator(is_valid_percentage),
+            )
+            .arg(&hashes_per_tick)
+            .arg(
                 Arg::with_name("rehash")
                     .required(false)
                     .long("rehash")
                     .takes_value(false)
                     .help("Re-calculate the bank hash and overwrite the original bank hash."),
+            )
+            .arg(
+                Arg::with_name("remove_stake_accounts")
+                    .required(false)
+                    .long("remove-stake-accounts")
+                    .takes_value(false)
+                    .help("Remove all existing stake accounts from the new snapshot.")
             )
         ).subcommand(
             SubCommand::with_name("accounts")
@@ -1198,6 +1316,31 @@ fn main() {
                 "{}",
                 open_genesis_config_by(&ledger_path, arg_matches).hash()
             );
+        }
+        ("modify-genesis", Some(arg_matches)) => {
+            let mut genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+
+            if let Some(operating_mode) = arg_matches.value_of("operating_mode") {
+                genesis_config.operating_mode = match operating_mode {
+                    "development" => OperatingMode::Development,
+                    "stable" => OperatingMode::Stable,
+                    "preview" => OperatingMode::Preview,
+                    _ => unreachable!(),
+                };
+            }
+
+            if let Some(hashes_per_tick) = arg_matches.value_of("hashes_per_tick") {
+                genesis_config.poh_config.hashes_per_tick = match hashes_per_tick {
+                    // Note: Unlike `solana-genesis`, "auto" is not supported here.
+                    "sleep" => None,
+                    _ => Some(value_t_or_exit!(arg_matches, "hashes_per_tick", u64)),
+                }
+            }
+            genesis_config.write(&ledger_path).unwrap_or_else(|err| {
+                eprintln!("Failed to write genesis config: {:?}", err);
+                exit(1);
+            });
+            println!("{}", open_genesis_config_by(&ledger_path, arg_matches));
         }
         ("shred-version", Some(arg_matches)) => {
             let process_options = ProcessOptions {
@@ -1426,8 +1569,30 @@ fn main() {
         ("create-snapshot", Some(arg_matches)) => {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
-            let warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
-            let rehash = arg_matches.is_present("rehash");
+            let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
+            let mut rehash = arg_matches.is_present("rehash");
+            let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
+            let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
+
+            let faucet_pubkey = pubkey_of(&arg_matches, "faucet_pubkey");
+            let faucet_lamports = value_t!(arg_matches, "faucet_lamports", u64).unwrap_or(0);
+
+            let rent_burn_percentage = value_t!(arg_matches, "rent_burn_percentage", u8);
+            let hashes_per_tick = arg_matches.value_of("hashes_per_tick");
+
+            let bootstrap_stake_authorized_pubkey =
+                pubkey_of(&arg_matches, "bootstrap_stake_authorized_pubkey");
+            let bootstrap_validator_lamports =
+                value_t_or_exit!(arg_matches, "bootstrap_validator_lamports", u64);
+            let bootstrap_validator_stake_lamports =
+                value_t_or_exit!(arg_matches, "bootstrap_validator_stake_lamports", u64);
+            let minimum_stake_lamports = StakeState::get_rent_exempt_reserve(&rent);
+            if bootstrap_validator_stake_lamports < minimum_stake_lamports {
+                eprintln!("Error: insufficient --bootstrap-validator-stake-lamports.  Minimum amount is {}", minimum_stake_lamports);
+                exit(1);
+            }
+            let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
+
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -1439,7 +1604,7 @@ fn main() {
                     });
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(snapshot_slot),
-                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                new_hard_forks,
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
@@ -1454,13 +1619,143 @@ fn main() {
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
-                    let bank = bank_forks
+                    let mut bank = bank_forks
                         .get(snapshot_slot)
                         .unwrap_or_else(|| {
                             eprintln!("Error: Slot {} is not available", snapshot_slot);
                             exit(1);
                         })
                         .clone();
+
+                    if rent_burn_percentage.is_ok() || hashes_per_tick.is_some() {
+                        let mut child_bank =
+                            Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
+
+                        if let Ok(rent_burn_percentage) = rent_burn_percentage {
+                            child_bank.set_rent_burn_percentage(rent_burn_percentage);
+                        }
+
+                        if let Some(hashes_per_tick) = hashes_per_tick {
+                            child_bank.set_hashes_per_tick(match hashes_per_tick {
+                                // Note: Unlike `solana-genesis`, "auto" is not supported here.
+                                "sleep" => None,
+                                _ => Some(value_t_or_exit!(arg_matches, "hashes_per_tick", u64)),
+                            });
+                        }
+                        bank = Arc::new(child_bank);
+                    }
+
+                    if let Some(faucet_pubkey) = faucet_pubkey {
+                        rehash = true;
+                        bank.store_account(
+                            &faucet_pubkey,
+                            &Account::new(faucet_lamports, 0, &system_program::id()),
+                        );
+                    }
+
+                    if remove_stake_accounts {
+                        for (address, mut account) in bank
+                            .get_program_accounts(Some(&solana_stake_program::id()))
+                            .into_iter()
+                        {
+                            account.lamports = 0;
+                            bank.store_account(&address, &account);
+                        }
+                    }
+
+                    if let Some(bootstrap_validator_pubkeys) = bootstrap_validator_pubkeys {
+                        rehash = true;
+
+                        assert_eq!(bootstrap_validator_pubkeys.len() % 3, 0);
+
+                        // Ensure there are no duplicated pubkeys in the --bootstrap-validator list
+                        {
+                            let mut v = bootstrap_validator_pubkeys.clone();
+                            v.sort();
+                            v.dedup();
+                            if v.len() != bootstrap_validator_pubkeys.len() {
+                                eprintln!(
+                                    "Error: --bootstrap-validator pubkeys cannot be duplicated"
+                                );
+                                exit(1);
+                            }
+                        }
+
+                        // Delete existing vote accounts
+                        for (address, mut account) in bank
+                            .get_program_accounts(Some(&solana_vote_program::id()))
+                            .into_iter()
+                        {
+                            account.lamports = 0;
+                            bank.store_account(&address, &account);
+                        }
+
+                        // Add a new identity/vote/stake account for each of the provided bootstrap
+                        // validators
+                        let mut bootstrap_validator_pubkeys_iter =
+                            bootstrap_validator_pubkeys.iter();
+                        loop {
+                            let identity_pubkey = match bootstrap_validator_pubkeys_iter.next() {
+                                None => break,
+                                Some(identity_pubkey) => identity_pubkey,
+                            };
+                            let vote_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
+                            let stake_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
+
+                            bank.store_account(
+                                identity_pubkey,
+                                &Account::new(
+                                    bootstrap_validator_lamports,
+                                    0,
+                                    &system_program::id(),
+                                ),
+                            );
+
+                            let vote_account = vote_state::create_account_with_authorized(
+                                &identity_pubkey,
+                                &identity_pubkey,
+                                &identity_pubkey,
+                                100,
+                                VoteState::get_rent_exempt_reserve(&rent).max(1),
+                            );
+
+                            bank.store_account(
+                                stake_pubkey,
+                                &stake_state::create_account(
+                                    bootstrap_stake_authorized_pubkey
+                                        .as_ref()
+                                        .unwrap_or(&identity_pubkey),
+                                    &vote_pubkey,
+                                    &vote_account,
+                                    &rent,
+                                    bootstrap_validator_stake_lamports,
+                                ),
+                            );
+                            bank.store_account(vote_pubkey, &vote_account);
+                        }
+
+                        // Warp ahead at least two epochs to ensure that the leader schedule will be
+                        // updated to reflect the new bootstrap validator(s)
+                        let minimum_warp_slot =
+                            genesis_config.epoch_schedule.get_first_slot_in_epoch(
+                                genesis_config.epoch_schedule.get_epoch(snapshot_slot) + 2,
+                            );
+
+                        if let Some(warp_slot) = warp_slot {
+                            if warp_slot < minimum_warp_slot {
+                                eprintln!(
+                                    "Error: --warp-slot too close.  Must be >= {}",
+                                    minimum_warp_slot
+                                );
+                                exit(1);
+                            }
+                        } else {
+                            warn!("Warping to slot {}", minimum_warp_slot);
+                            warp_slot = Some(minimum_warp_slot);
+                        }
+                    }
+
+                    bank.set_capitalization();
 
                     let bank = if let Some(warp_slot) = warp_slot {
                         Arc::new(Bank::warp_from_parent(
