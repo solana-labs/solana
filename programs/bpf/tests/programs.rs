@@ -280,8 +280,6 @@ fn test_program_bpf_error_handling() {
                 result,
                 TransactionError::InstructionError(0, InstructionError::InvalidError)
             );
-<<<<<<< HEAD
-=======
         }
 
         let instruction = Instruction::new(program_id, &7u8, account_metas.clone());
@@ -293,7 +291,6 @@ fn test_program_bpf_error_handling() {
                 result,
                 TransactionError::InstructionError(0, InstructionError::AccountBorrowFailed)
             );
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
         }
 
         let instruction = Instruction::new(program_id, &8u8, account_metas.clone());
@@ -307,7 +304,7 @@ fn test_program_bpf_error_handling() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert_eq!(
             result.unwrap_err().unwrap(),
-            TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
+            TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
         );
     }
 }

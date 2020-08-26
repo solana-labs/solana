@@ -2348,7 +2348,7 @@ impl Bank {
     }
 
     pub fn finish_init(&mut self) {
-        let builtins = get_builtins();
+        let builtins = get_builtins(self.operating_mode(), self.epoch);
         for program in builtins.iter() {
             self.add_builtin(&program.name, program.id, program.entrypoint);
         }
@@ -2958,7 +2958,7 @@ mod tests {
     use super::*;
     use crate::{
         accounts_index::{AccountMap, Ancestors},
-        builtin_programs::new_system_program_activation_epoch,
+        builtins::new_system_program_activation_epoch,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },

@@ -7,12 +7,7 @@ pub mod bank_client;
 pub mod bank_utils;
 mod blockhash_queue;
 pub mod bloom;
-<<<<<<< HEAD
-pub mod builtin_programs;
-=======
 pub mod builtins;
-pub mod commitment;
->>>>>>> 7c736f71f... Make BPF Loader static (#11516)
 pub mod epoch_stakes;
 pub mod genesis_utils;
 mod legacy_system_instruction_processor0;
