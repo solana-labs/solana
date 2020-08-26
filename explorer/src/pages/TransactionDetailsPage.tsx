@@ -39,8 +39,8 @@ type SignatureProps = {
 enum AutoRefresh {
   Active,
   Inactive,
-  BailedOut
-};
+  BailedOut,
+}
 
 type AutoRefreshProps = {
   autoRefresh: AutoRefresh;
@@ -57,15 +57,18 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   } catch (err) {}
 
   const status = useTransactionStatus(signature);
-  const [zeroConfirmationRetries, setZeroConfirmationRetries] = React.useState(0);
+  const [zeroConfirmationRetries, setZeroConfirmationRetries] = React.useState(
+    0
+  );
 
   React.useEffect(() => {
     if (
       status &&
       status.status === FetchStatus.Fetched &&
-      status.data?.info && status.data.info.confirmations === 0
+      status.data?.info &&
+      status.data.info.confirmations === 0
     ) {
-      setZeroConfirmationRetries(retries => retries + 1);
+      setZeroConfirmationRetries((retries) => retries + 1);
     }
   }, [status]);
 
@@ -73,10 +76,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
 
   if (zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT) {
     autoRefresh = AutoRefresh.BailedOut;
-  } else if (
-    status?.data?.info &&
-    status.data.info.confirmations !== "max"
-  ) {
+  } else if (status?.data?.info && status.data.info.confirmations !== "max") {
     autoRefresh = AutoRefresh.Active;
   }
 
@@ -92,14 +92,8 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <ErrorCard text={`Signature "${raw}" is not valid`} />
       ) : (
         <>
-          <StatusCard
-            signature={signature}
-            autoRefresh={autoRefresh}
-          />
-          <AccountsCard
-            signature={signature}
-            autoRefresh={autoRefresh}
-          />
+          <StatusCard signature={signature} autoRefresh={autoRefresh} />
+          <AccountsCard signature={signature} autoRefresh={autoRefresh} />
           <InstructionsSection signature={signature} />
         </>
       )}
@@ -139,7 +133,8 @@ function StatusCard({
 
   if (
     !status ||
-    (status.status === FetchStatus.Fetching && autoRefresh === AutoRefresh.Inactive)
+    (status.status === FetchStatus.Fetching &&
+      autoRefresh === AutoRefresh.Inactive)
   ) {
     return <LoadingCard />;
   } else if (status.status === FetchStatus.FetchFailed) {
