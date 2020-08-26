@@ -153,7 +153,7 @@ Delegate.
 
 To un-delegate your staked tokens (also called deactivating your stake), the
 process is similar.  On the Staking page, at the right side of a delegated stake
-account, click the "Undelegate" button and follow the prompts. 
+account, click the "Undelegate" button and follow the prompts.
 
 ### Split a Stake Account
 You may split an existing stake account into two stake accounts.  Click on the
