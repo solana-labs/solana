@@ -7,8 +7,8 @@ use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
     entrypoint_native::{
-        ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext, InvokeContext,
-        Logger, ProcessInstruction, ProcessInstructionWithContext,
+        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
+        InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -19,9 +19,6 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 use std::{cell::RefCell, rc::Rc};
-
-pub const DEFAULT_MAX_INVOKE_DEPTH: usize = 2;
-pub const DEFAULT_COMPUTE_BUDGET: u64 = 100_000;
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
@@ -183,7 +180,7 @@ pub struct ThisInvokeContext {
     programs: Vec<(Pubkey, ProcessInstruction)>,
     logger: Rc<RefCell<dyn Logger>>,
     is_cross_program_supported: bool,
-    max_invoke_depth: usize,
+    compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
 impl ThisInvokeContext {
@@ -194,10 +191,9 @@ impl ThisInvokeContext {
         programs: Vec<(Pubkey, ProcessInstruction)>,
         log_collector: Option<Rc<LogCollector>>,
         is_cross_program_supported: bool,
-        max_invoke_depth: usize,
-        compute_budget: u64,
+        compute_budget: ComputeBudget,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(max_invoke_depth);
+        let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
         Self {
             program_ids,
@@ -206,16 +202,16 @@ impl ThisInvokeContext {
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             is_cross_program_supported,
-            max_invoke_depth,
+            compute_budget,
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: compute_budget,
+                remaining: compute_budget.max_units,
             })),
         }
     }
 }
 impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() >= self.max_invoke_depth {
+        if self.program_ids.len() >= self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -260,6 +256,9 @@ impl InvokeContext for ThisInvokeContext {
     fn is_cross_program_supported(&self) -> bool {
         self.is_cross_program_supported
     }
+    fn get_compute_budget(&self) -> ComputeBudget {
+        self.compute_budget
+    }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
     }
@@ -290,9 +289,7 @@ pub struct MessageProcessor {
     #[serde(skip)]
     is_cross_program_supported: bool,
     #[serde(skip)]
-    max_invoke_depth: usize,
-    #[serde(skip)]
-    compute_budget: u64,
+    compute_budget: ComputeBudget,
 }
 
 impl std::fmt::Debug for MessageProcessor {
@@ -339,11 +336,7 @@ impl Default for MessageProcessor {
             loaders: vec![],
             native_loader: NativeLoader::default(),
             is_cross_program_supported: true,
-            // Maximum cross-program invocation depth allowed including the orignal caller
-            max_invoke_depth: DEFAULT_MAX_INVOKE_DEPTH,
-            // Number of compute units that an instruction is allowed.  Compute units
-            // are consumed by program execution, resources they use, etc...
-            compute_budget: DEFAULT_COMPUTE_BUDGET,
+            compute_budget: ComputeBudget::default(),
         }
     }
 }
@@ -391,11 +384,7 @@ impl MessageProcessor {
         self.is_cross_program_supported = is_supported;
     }
 
-    pub fn set_max_invoke_depth(&mut self, max_invoke_depth: usize) {
-        self.max_invoke_depth = max_invoke_depth;
-    }
-
-    pub fn set_compute_budget(&mut self, compute_budget: u64) {
+    pub fn set_compute_budget(&mut self, compute_budget: ComputeBudget) {
         self.compute_budget = compute_budget;
     }
 
@@ -651,7 +640,6 @@ impl MessageProcessor {
             self.programs.clone(), // get rid of clone
             log_collector,
             self.is_cross_program_supported,
-            self.max_invoke_depth,
             self.compute_budget,
         );
         let keyed_accounts =
@@ -742,8 +730,7 @@ mod tests {
             vec![],
             None,
             true,
-            DEFAULT_MAX_INVOKE_DEPTH,
-            DEFAULT_COMPUTE_BUDGET,
+            ComputeBudget::default(),
         );
 
         // Check call depth increases and has a limit
@@ -1514,8 +1501,7 @@ mod tests {
             vec![],
             None,
             true,
-            DEFAULT_MAX_INVOKE_DEPTH,
-            DEFAULT_COMPUTE_BUDGET,
+            ComputeBudget::default(),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
