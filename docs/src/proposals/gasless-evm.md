@@ -26,24 +26,31 @@ Solidity methods.
 ### Developer Experience
 
 ```bash
-solc --bin sourceFile.sol > hello-world.bin
-solana-keygen new -o hello-world.json
-solana deploy hello-world.json hello-world.bin
+solc --bin sourceFile.sol > lib-hello.bin
+solana-keygen new -o lib-hello.json
+solana deploy lib-hello.json lib-hello.bin
 ```
 
 ```bash
-solana-keygen new -o greeting.json
-solana evm hello-world.json HelloWorld "Hello world!" greeting.json
-solana evm hello-world.json update "Goodbye cruel world!" greeting.json
+solana-keygen new -o hello-world.json
+solana-evm lib-hello.json HelloWorld "Hello world!" -a hello-world.json
+solana-evm lib-hello.json update "Goodbye cruel world!" -a hello-world.json
+```
+
+### EvmInstruction
+
+```
+///   0. `[]` Clock sysvar
+///   1. `[]` Contract library containing method
+///   *. `[writable]` Contract accounts
+Invoke { method_id: Hash, args: Vec<u8> },
 ```
 
 ### Contract to account mapping
 
 A Solana instruction includes a list of public keys corresponding to any account
 it references. The EVM then receives an ordered key-value store, mapping those
-public keys to accounts, which we'll call *account store*. Because the account store
-is ordered, it can be used as a stack. Because it includes the public keys, it can
-be used as a heap.
+public keys to accounts, which we'll call *account store*.
 
 Let's use the `HelloWorld` contract to show how the account store is laid out:
 
@@ -64,44 +71,23 @@ contract HelloWorld {
 ```
 
 To call the constructor, the contract is sent an
-`EvmInstruction::InitializeContract` that contains a serialized string in
-`Instruction.data`.
+`EvmInstruction::Invoke` that contains a hash of the contract name, and a
+serialized string in `EvmInstruction::args`.
 
 When the EVM starts executing the `HelloWorld` constructor, it uses the first
-account from the account store to host the contents of `initMessage`. It then
-uses the second account to host all member variables. For `HelloWorld`, that
-second account holds a hash of the contract name, `"HelloWorld"`, and the
-address to the first account in its `message` field.
+account from the account store to host all member variables. Since the user
+controls what accounts are passed in, the account must also hold type
+information, including the address of the contract library, and a hash of the
+contract name.
 
 When the `update()` function is called, the EVM reallocates memory for the
-message account, as-needed, and copies `newMessage` into it.
+`HelloWorld` account, as-needed, and copies `newMessage` into it.
 
 ### Runtime data as sysvars mapping
 
 The EVM has special instructions to access runtime data, such as TIMESTAMP. To
 access the timestamp, the EVM will query the account store for
 `sysvar::clock::id()`.
-
-### Collecting input account addresses
-
-There are three levels of method complexity that determine how to collect the
-list of input account addresses to pass into them:
-
-1. Methods that reference accounts defined by the method signature
-2. Methods that reference accounts defined by the method implementation
-3. Methods that use account values to determine what accounts it needs next
-
-In the first case, use the ABI file to calculate the account list.
-
-In the second case, the layout of the instruction's address list depends on the
-method implementation. To generate the account expectations, you need to
-execute the smart contract locally.
-
-In the third case, executing locally will stop early, because the
-implementation depends on the value of an account. To get the remaining account
-expectations, you need to invoke the method again locally, this time passing in
-the first set of accounts. You will need to continue that process until the
-transaction completes successfully.
 
 ### Going gasless
 
@@ -134,8 +120,3 @@ the scope of this proposal.
 * Solana's UDP packets must stay under the MTU limit, 1,500 bytes. Complex
   Solidity contracts may implicitly reference many accounts and therefore
   exceed that limit.
-
-### Security risks
-
-* Pre-executing smart contracts to acquire account keys implies the client
-  needs to trust the tool producing account keys.
