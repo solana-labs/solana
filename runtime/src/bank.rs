@@ -2685,6 +2685,10 @@ impl Bank {
             .load_by_program(&self.ancestors, program_id)
     }
 
+    pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, Account, Slot)> {
+        self.rc.accounts.load_all(&self.ancestors)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
