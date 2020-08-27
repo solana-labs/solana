@@ -289,7 +289,12 @@ export class StakeInstruction {
   ): AuthorizeWithSeedStakeParams {
     this.checkProgramId(instruction.programId);
     this.checkKeyLength(instruction.keys, 2);
-    const {newAuthorized, stakeAuthorizationType, authoritySeed, authorityOwner} = decodeData(
+    const {
+      newAuthorized,
+      stakeAuthorizationType,
+      authoritySeed,
+      authorityOwner,
+    } = decodeData(
       STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed,
       instruction.data,
     );

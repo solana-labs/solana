@@ -1028,6 +1028,12 @@ fn main() {
                     .takes_value(false)
                     .help("Include sysvars too"),
             )
+            .arg(
+                Arg::with_name("exclude_account_data")
+                    .long("exclude-account-data")
+                    .takes_value(false)
+                    .help("Exclude account data (useful for large number of accounts)"),
+            )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
@@ -1537,6 +1543,7 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
+            let exclude_account_data = arg_matches.is_present("exclude_account_data");
             match load_bank_forks(
                 arg_matches,
                 &ledger_path,
@@ -1554,21 +1561,26 @@ fn main() {
                     });
 
                     let accounts: BTreeMap<_, _> = bank
-                        .get_program_accounts(None)
+                        .get_all_accounts_with_modified_slots()
                         .into_iter()
-                        .filter(|(pubkey, _account)| {
+                        .filter(|(pubkey, _account, _slot)| {
                             include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
                         })
+                        .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
                         .collect();
 
                     println!("---");
-                    for (pubkey, account) in accounts.into_iter() {
+                    for (pubkey, (account, slot)) in accounts.into_iter() {
                         let data_len = account.data.len();
                         println!("{}:", pubkey);
                         println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
                         println!("  - owner: '{}'", account.owner);
                         println!("  - executable: {}", account.executable);
-                        println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                        println!("  - slot: {}", slot);
+                        println!("  - rent_epoch: {}", account.rent_epoch);
+                        if !exclude_account_data {
+                            println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                        }
                         println!("  - data_len: {}", data_len);
                     }
                 }

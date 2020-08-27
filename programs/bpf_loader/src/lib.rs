@@ -50,7 +50,7 @@ impl<E> DecodeError<E> for BPFLoaderError {
 }
 
 /// Errors returned by functions the BPF Loader registers with the vM
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum BPFError {
     #[error("{0}")]
     VerifierError(#[from] VerifierError),
@@ -253,9 +253,10 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use rand::Rng;
+    use solana_runtime::message_processor::ThisInvokeContext;
     use solana_sdk::{
         account::Account,
-        entrypoint_native::{ComputeMeter, Logger, ProcessInstruction},
+        entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
         instruction::CompiledInstruction,
         message::Message,
         rent::Rent,
@@ -331,6 +332,9 @@ mod tests {
         }
         fn is_cross_program_supported(&self) -> bool {
             true
+        }
+        fn get_compute_budget(&self) -> ComputeBudget {
+            ComputeBudget::default()
         }
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
             Rc::new(RefCell::new(self.compute_meter.clone()))
@@ -560,6 +564,29 @@ mod tests {
                 &[],
                 &mut MockInvokeContext::default()
             )
+        );
+
+        // Case: limited budget
+        let program_id = Pubkey::default();
+        let mut invoke_context = ThisInvokeContext::new(
+            &program_id,
+            Rent::default(),
+            vec![],
+            vec![],
+            None,
+            true,
+            ComputeBudget {
+                max_units: 1,
+                log_units: 100,
+                log_64_units: 100,
+                create_program_address_units: 1500,
+                invoke_units: 1000,
+                max_invoke_depth: 2,
+            },
+        );
+        assert_eq!(
+            Err(InstructionError::Custom(194969602)),
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
 
         // Case: With duplicate accounts

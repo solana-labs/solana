@@ -1377,6 +1377,7 @@ export class Connection {
     transactionSignatures: Array<string>,
   };
   _disableBlockhashCaching: boolean = false;
+  _pollingBlockhash: boolean = false;
   _accountChangeSubscriptions: {[number]: AccountSubscriptionInfo} = {};
   _accountChangeSubscriptionCounter: number = 0;
   _programAccountChangeSubscriptions: {
@@ -2478,6 +2479,10 @@ export class Connection {
 
   async _recentBlockhash(disableCache: boolean): Promise<Blockhash> {
     if (!disableCache) {
+      // Wait for polling to finish
+      while (this._pollingBlockhash) {
+        await sleep(100);
+      }
       // Attempt to use a recent blockhash for up to 30 seconds
       const expired =
         Date.now() - this._blockhashInfo.lastFetch >=
@@ -2491,27 +2496,32 @@ export class Connection {
   }
 
   async _pollNewBlockhash(): Promise<Blockhash> {
-    const startTime = Date.now();
-    for (let i = 0; i < 50; i++) {
-      const {blockhash} = await this.getRecentBlockhash('max');
+    this._pollingBlockhash = true;
+    try {
+      const startTime = Date.now();
+      for (let i = 0; i < 50; i++) {
+        const {blockhash} = await this.getRecentBlockhash('max');
 
-      if (this._blockhashInfo.recentBlockhash != blockhash) {
-        this._blockhashInfo = {
-          recentBlockhash: blockhash,
-          lastFetch: new Date(),
-          transactionSignatures: [],
-          simulatedSignatures: [],
-        };
-        return blockhash;
+        if (this._blockhashInfo.recentBlockhash != blockhash) {
+          this._blockhashInfo = {
+            recentBlockhash: blockhash,
+            lastFetch: new Date(),
+            transactionSignatures: [],
+            simulatedSignatures: [],
+          };
+          return blockhash;
+        }
+
+        // Sleep for approximately half a slot
+        await sleep(MS_PER_SLOT / 2);
       }
 
-      // Sleep for approximately half a slot
-      await sleep(MS_PER_SLOT / 2);
+      throw new Error(
+        `Unable to obtain a new blockhash after ${Date.now() - startTime}ms`,
+      );
+    } finally {
+      this._pollingBlockhash = false;
     }
-
-    throw new Error(
-      `Unable to obtain a new blockhash after ${Date.now() - startTime}ms`,
-    );
   }
 
   /**
