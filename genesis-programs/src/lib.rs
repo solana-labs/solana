@@ -91,22 +91,22 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
             );
         }
         OperatingMode::Preview => {
-            // tds enabled async cluster restart with smart contract being enabled
-            // at slot 2196960 (midway epoch 17) with v1.0.1 on Mar 1, 2020
-            programs.extend(vec![(
-                Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                17,
-            )]);
-            // The epoch of Epoch::max_value() is a placeholder and is expected
-            // to be reduced in a future network update.
             programs.extend(
                 vec![
                     Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
+                    Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
                 ]
                 .into_iter()
-                .map(|program| (program, Epoch::MAX))
+                .map(|program| (program, 0))
                 .collect::<Vec<_>>(),
+            );
+            // The epoch of Epoch::max_value() is a placeholder and is expected
+            // to be reduced in a future network update.
+            programs.extend(
+                vec![Program::Native(solana_vest_program!())]
+                    .into_iter()
+                    .map(|program| (program, Epoch::MAX))
+                    .collect::<Vec<_>>(),
             );
         }
         OperatingMode::Stable => {
