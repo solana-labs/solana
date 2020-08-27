@@ -76,16 +76,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let is_writable = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
 
-            #[allow(clippy::cast_ptr_alignment)]
-            let executable = *(input.add(offset) as *const u8) != 0;
-            offset += size_of::<u8>();
-
-            offset += 4; // padding
-
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
-            offset += size_of::<Pubkey>();
-
-            let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
 
             #[allow(clippy::cast_ptr_alignment)]
@@ -101,7 +92,12 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             }));
             offset += data_len;
 
-            offset += 16 - (offset % 16); // padding
+            let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
+            offset += size_of::<Pubkey>();
+
+            #[allow(clippy::cast_ptr_alignment)]
+            let executable = *(input.add(offset) as *const u8) != 0;
+            offset += size_of::<u8>();
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
@@ -118,8 +114,6 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 rent_epoch,
             });
         } else {
-            offset += 7; // padding
-
             // Duplicate account, clone the original
             accounts.push(accounts[dup_info as usize].clone());
         }
