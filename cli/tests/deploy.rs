@@ -55,7 +55,10 @@ fn test_cli_deploy_program() {
     config.signers = vec![&keypair];
     process_command(&config).unwrap();
 
-    config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
+    config.command = CliCommand::Deploy {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        use_deprecated_loader: false,
+    };
 
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();

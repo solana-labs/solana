@@ -37,7 +37,7 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    bpf_loader,
+    bpf_loader, bpf_loader_deprecated,
     clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
@@ -278,7 +278,10 @@ pub enum CliCommand {
         lamports: u64,
     },
     // Program Deployment
-    Deploy(String),
+    Deploy {
+        program_location: String,
+        use_deprecated_loader: bool,
+    },
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
@@ -681,15 +684,22 @@ pub fn parse_command(
             parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
         }
         // Program Deployment
-        ("deploy", Some(matches)) => Ok(CliCommandInfo {
-            command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
-            signers: vec![signer_from_path(
-                matches,
-                default_signer_path,
-                "keypair",
-                wallet_manager,
-            )?],
-        }),
+        ("deploy", Some(matches)) => {
+            let use_deprecated_loader = matches.is_present("use_deprecated_loader");
+
+            Ok(CliCommandInfo {
+                command: CliCommand::Deploy {
+                    program_location: matches.value_of("program_location").unwrap().to_string(),
+                    use_deprecated_loader,
+                },
+                signers: vec![signer_from_path(
+                    matches,
+                    default_signer_path,
+                    "keypair",
+                    wallet_manager,
+                )?],
+            })
+        }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
             parse_stake_create_account(matches, default_signer_path, wallet_manager)
@@ -1359,6 +1369,7 @@ fn process_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
+    use_deprecated_loader: bool,
 ) -> ProcessResult {
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
@@ -1369,6 +1380,12 @@ fn process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
+    let loader_id = if use_deprecated_loader {
+        bpf_loader_deprecated::id()
+    } else {
+        bpf_loader::id()
+    };
+
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
@@ -1378,7 +1395,7 @@ fn process_deploy(
         &program_id.pubkey(),
         minimum_balance.max(1),
         program_data.len() as u64,
-        &bpf_loader::id(),
+        &loader_id,
     );
     let message = Message::new(&[ix], Some(&config.signers[0].pubkey()));
     let mut create_account_tx = Transaction::new_unsigned(message);
@@ -1389,7 +1406,7 @@ fn process_deploy(
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
             &program_id.pubkey(),
-            &bpf_loader::id(),
+            &loader_id,
             (i * DATA_CHUNK_SIZE) as u32,
             chunk.to_vec(),
         );
@@ -1402,7 +1419,7 @@ fn process_deploy(
     }
     messages.append(&mut write_message_refs);
 
-    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
+    let instruction = loader_instruction::finalize(&program_id.pubkey(), &loader_id);
     let finalize_message = Message::new(&[instruction], Some(&signers[0].pubkey()));
     messages.push(&finalize_message);
 
@@ -1925,9 +1942,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Program Deployment
 
         // Deploy a custom program to the chain
-        CliCommand::Deploy(ref program_location) => {
-            process_deploy(&rpc_client, config, program_location)
-        }
+        CliCommand::Deploy {
+            program_location,
+            use_deprecated_loader,
+        } => process_deploy(
+            &rpc_client,
+            config,
+            program_location,
+            *use_deprecated_loader,
+        ),
 
         // Stake Commands
 
@@ -2614,6 +2637,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
+                )
+                .arg(
+                    Arg::with_name("use-deprecated-loader")
+                        .long("use_deprecated_loader")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Use the deprecated BPF loader")
                 ),
         )
         .subcommand(
@@ -3058,7 +3088,10 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy("/Users/test/program.o".to_string()),
+                command: CliCommand::Deploy {
+                    program_location: "/Users/test/program.o".to_string(),
+                    use_deprecated_loader: false,
+                },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
@@ -3782,7 +3815,10 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-        config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
+        config.command = CliCommand::Deploy {
+            program_location: pathbuf.to_str().unwrap().to_string(),
+            use_deprecated_loader: false,
+        };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let program_id = json
@@ -3796,7 +3832,10 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Deploy("bad/file/location.so".to_string());
+        config.command = CliCommand::Deploy {
+            program_location: "bad/file/location.so".to_string(),
+            use_deprecated_loader: false,
+        };
         assert!(process_command(&config).is_err());
     }
 
