@@ -3367,6 +3367,7 @@ version = "1.2.27"
 dependencies = [
  "bincode",
  "byteorder",
+ "jemalloc-sys",
  "num-derive 0.3.0",
  "num-traits",
  "rand 0.7.3",
@@ -3556,6 +3557,7 @@ dependencies = [
  "serial_test",
  "serial_test_derive",
  "solana-account-decoder",
+ "solana-bpf-loader-program",
  "solana-budget-program",
  "solana-clap-utils",
  "solana-client",

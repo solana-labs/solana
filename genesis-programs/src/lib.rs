@@ -1,3 +1,7 @@
+use solana_sdk::{
+    clock::Epoch, genesis_config::OperatingMode, inflation::Inflation, pubkey::Pubkey,
+};
+
 #[macro_use]
 extern crate solana_bpf_loader_program;
 #[macro_use]
@@ -9,10 +13,6 @@ extern crate solana_vest_program;
 
 use log::*;
 use solana_runtime::bank::{Bank, EnteredEpochCallback};
-use solana_sdk::{
-    clock::Epoch, entrypoint_native::ProcessInstructionWithContext, genesis_config::OperatingMode,
-    inflation::Inflation, pubkey::Pubkey,
-};
 
 pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Inflation> {
     match operating_mode {
@@ -44,27 +44,22 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
     }
 }
 
-enum Program {
-    Native((String, Pubkey)),
-    BuiltinLoader((String, Pubkey, ProcessInstructionWithContext)),
-}
-
-fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Program>> {
+pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(String, Pubkey)>> {
     match operating_mode {
         OperatingMode::Development => {
             if epoch == 0 {
                 // Programs used for testing
                 Some(vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                    Program::Native(solana_vest_program!()),
-                    Program::Native(solana_budget_program!()),
-                    Program::Native(solana_exchange_program!()),
+                    solana_bpf_loader_program!(),
+                    solana_bpf_loader_deprecated_program!(),
+                    solana_vest_program!(),
+                    solana_budget_program!(),
+                    solana_exchange_program!(),
                 ])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
-                Some(vec![Program::BuiltinLoader(solana_bpf_loader_program!())])
+                Some(vec![solana_bpf_loader_program!()])
             } else {
                 None
             }
@@ -73,10 +68,7 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
-                Some(vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ])
+                Some(vec![solana_bpf_loader_program!(), solana_vest_program!()])
             } else {
                 None
             }
@@ -85,10 +77,7 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
             if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected
                 // to be reduced in a future network update.
-                Some(vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ])
+                Some(vec![solana_bpf_loader_program!(), solana_vest_program!()])
             } else {
                 None
             }
@@ -96,48 +85,21 @@ fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<Progr
     }
 }
 
-pub fn get_native_programs(
-    operating_mode: OperatingMode,
-    epoch: Epoch,
-) -> Option<Vec<(String, Pubkey)>> {
-    match get_programs(operating_mode, epoch) {
-        Some(programs) => {
-            let mut native_programs = vec![];
-            for program in programs {
-                if let Program::Native((string, key)) = program {
-                    native_programs.push((string, key));
-                }
-            }
-            Some(native_programs)
-        }
-        None => None,
-    }
-}
-
 pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpochCallback {
     Box::new(move |bank: &mut Bank| {
+        info!(
+            "Entering epoch {} with operating_mode {:?}",
+            bank.epoch(),
+            operating_mode
+        );
         if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
             info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
-        if let Some(programs) = get_programs(operating_mode, bank.epoch()) {
-            for program in programs {
-                match program {
-                    Program::Native((name, program_id)) => {
-                        bank.add_native_program(&name, &program_id);
-                    }
-                    Program::BuiltinLoader((
-                        name,
-                        program_id,
-                        process_instruction_with_context,
-                    )) => {
-                        bank.add_builtin_loader(
-                            &name,
-                            program_id,
-                            process_instruction_with_context,
-                        );
-                    }
-                }
+        if let Some(new_programs) = get_programs(operating_mode, bank.epoch()) {
+            for (name, program_id) in new_programs.iter() {
+                info!("Registering {} at {}", name, program_id);
+                bank.add_native_program(name, program_id);
             }
         }
         if OperatingMode::Stable == operating_mode {
@@ -156,13 +118,8 @@ mod tests {
     #[test]
     fn test_id_uniqueness() {
         let mut unique = HashSet::new();
-        let programs = get_programs(OperatingMode::Development, 0).unwrap();
-        for program in programs {
-            match program {
-                Program::Native((name, id)) => assert!(unique.insert((name, id))),
-                Program::BuiltinLoader((name, id, _)) => assert!(unique.insert((name, id))),
-            }
-        }
+        let ids = get_programs(OperatingMode::Development, 0).unwrap();
+        assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
 
     #[test]
@@ -180,18 +137,7 @@ mod tests {
             get_programs(OperatingMode::Development, 0).unwrap().len(),
             5
         );
-        assert!(get_programs(OperatingMode::Development, 1).is_none());
-    }
-
-    #[test]
-    fn test_native_development_programs() {
-        assert_eq!(
-            get_native_programs(OperatingMode::Development, 0)
-                .unwrap()
-                .len(),
-            3
-        );
-        assert!(get_native_programs(OperatingMode::Development, 1).is_none());
+        assert_eq!(get_programs(OperatingMode::Development, 1), None);
     }
 
     #[test]
@@ -209,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_softlaunch_programs() {
-        assert!(get_programs(OperatingMode::Stable, 1).is_none());
+        assert_eq!(get_programs(OperatingMode::Stable, 1), None);
         assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }
