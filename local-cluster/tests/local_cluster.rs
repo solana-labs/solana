@@ -1370,7 +1370,8 @@ fn test_no_voting() {
 }
 
 #[test]
-fn test_optimistic_confirmation_violation() {
+#[serial]
+fn test_optimistic_confirmation_violation_with_no_tower() {
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
@@ -1471,6 +1472,86 @@ fn test_optimistic_confirmation_violation() {
     let mut output = String::new();
     buf.read_to_string(&mut output).unwrap();
     assert!(output.contains(&expected_log));
+}
+
+#[test]
+#[serial]
+fn test_no_optimistic_confirmation_violation_with_tower() {
+    solana_logger::setup();
+    let mut buf = BufferRedirect::stderr().unwrap();
+
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![50, 51];
+    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
+        .take(node_stakes.len())
+        .collect();
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: vec![51, 50],
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+    let entry_point_id = cluster.entry_point_info.id;
+    // Let the nodes run for a while. Wait for validators to vote on slot `S`
+    // so that the vote on `S-1` is definitely in gossip and optimistic confirmation is
+    // detected on slot `S-1` for sure, then stop the heavier of the two
+    // validators
+    let client = cluster.get_validator_client(&entry_point_id).unwrap();
+    let mut prev_voted_slot = 0;
+    loop {
+        let last_voted_slot = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        if last_voted_slot > 50 {
+            if prev_voted_slot == 0 {
+                prev_voted_slot = last_voted_slot;
+            } else {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    let exited_validator_info = cluster.exit_node(&entry_point_id);
+
+    // Mark fork as dead on the heavier validator, this should make the fork effectively
+    // dead, even though it was optimistically confirmed. The smaller validator should
+    // jump over to the new fork
+    // Also, remove saved tower to intentionally make the restarted validator to violate the
+    // optimistic confirmation
+    {
+        let blockstore = Blockstore::open_with_access_type(
+            &exited_validator_info.info.ledger_path,
+            AccessType::PrimaryOnly,
+            None,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to open ledger at {:?}, err: {}",
+                exited_validator_info.info.ledger_path, e
+            );
+        });
+        info!(
+            "Setting slot: {} on main fork as dead, should cause fork",
+            prev_voted_slot
+        );
+        blockstore.set_dead_slot(prev_voted_slot).unwrap();
+    }
+    cluster.restart_node(&entry_point_id, exited_validator_info);
+
+    cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
+    // Check to see that validator didn't detected optimistic confirmation for
+    // `prev_voted_slot` failed
+    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
+    let mut output = String::new();
+    buf.read_to_string(&mut output).unwrap();
+    assert!(!output.contains(&expected_log));
 }
 
 #[test]

@@ -509,8 +509,8 @@ impl Tower {
         self.last_voted_slot()
             .map(|last_voted_slot| {
                 // NOTE: Update use_stray_restored_ancestors() as well when updating this!
-                let last_vote_ancestors = if !self.is_stray_last_vote() {
-                    ancestors.get(&last_voted_slot).unwrap()
+                let (last_vote_ancestors, is_restored) = if !self.is_stray_last_vote() {
+                    (ancestors.get(&last_voted_slot).unwrap(), false)
                 } else {
                     // Use stray restored ancestors because we couldn't derive last_vote_ancestors
                     // from given ancestors (=bank_forks)
@@ -519,10 +519,10 @@ impl Tower {
                     // in this fn.
                     stray_restored_ancestors = self.stray_restored_ancestors();
                     info!(
-                        "returning restored slots {:?} because of stray last vote ({})...",
+                        "using restored ancestors {:?} because of stray last vote ({})...",
                         stray_restored_ancestors, last_voted_slot
                     );
-                    &stray_restored_ancestors
+                    (&stray_restored_ancestors, true)
                 };
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
@@ -534,8 +534,8 @@ impl Tower {
                 }
 
                 // Should never consider switching to an ancestor
-                // of your last vote
-                assert!(!last_vote_ancestors.contains(&switch_slot));
+                // of your last vote unless the ancestor is restored from stray slots
+                assert!(is_restored || !last_vote_ancestors.contains(&switch_slot));
 
                 // By this point, we know the `switch_slot` is on a different fork
                 // (is neither an ancestor nor descendant of `last_vote`), so a
@@ -575,8 +575,8 @@ impl Tower {
 
                     // By the time we reach here, any ancestors of the `last_vote`,
                     // should have been filtered out, as they all have a descendant,
-                    // namely the `last_vote` itself.
-                    assert!(!last_vote_ancestors.contains(candidate_slot));
+                    // namely the `last_vote` itself, unless the ancestors are restored from stray slots.
+                    assert!(is_restored || !last_vote_ancestors.contains(candidate_slot));
 
                     // Evaluate which vote accounts in the bank are locked out
                     // in the interval candidate_slot..last_vote, which means
@@ -848,25 +848,21 @@ impl Tower {
                 anchored_slot = checked_slot;
             } else if anchored_slot.is_some() && check == Check::NotFound {
                 // this can't happen unless we're fed with bogus snapshot
-                return Err(TowerError::InconsistentWithSlotHistory(
-                    "diverged ancestor?".to_owned(),
-                ));
+                return Err(TowerError::FatallyInconsistent("diverged ancestor?"));
             }
 
             if still_in_future && check != Check::Future {
                 still_in_future = false;
             } else if !still_in_future && check == Check::Future {
                 // really odd cases: bad ordered votes?
-                return Err(TowerError::InconsistentWithSlotHistory(
-                    "time warped?".to_owned(),
-                ));
+                return Err(TowerError::FatallyInconsistent("time warped?"));
             }
             if !past_outside_history && check == Check::TooOld {
                 past_outside_history = true;
             } else if past_outside_history && check != Check::TooOld {
                 // really odd cases: bad ordered votes?
-                return Err(TowerError::InconsistentWithSlotHistory(
-                    "not too old once after got too old?".to_owned(),
+                return Err(TowerError::FatallyInconsistent(
+                    "not too old once after got too old?",
                 ));
             }
 
@@ -882,17 +878,28 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.pop();
         }
 
-        // All of votes in an unrooted (= !root_checked) warming-up vote account may
-        // not be anchored. In that case, this fn will be Ok(_).
-        // Anyway always check for the too-old-slot-history error if not anchored,
-        // regardless root_checked or not.
-        let oldest_slot_in_tower = checked_slot.unwrap();
-        let within_range = oldest_slot_in_tower <= slot_history.newest();
-        if anchored_slot.is_none() && !within_range {
-            return Err(TowerError::TooOldSlotHistory(
-                oldest_slot_in_tower,
-                slot_history.newest(),
-            ));
+        // Check for errors if not anchored
+        // Being not anchored doesn't always equate to errors: All of votes in
+        // an unrooted (= !root_checked) warming-up vote account may legally not
+        // be anchored.
+        if anchored_slot.is_none() {
+            let oldest_slot_in_tower = checked_slot.unwrap();
+            let with_no_overlap_slots = oldest_slot_in_tower > slot_history.newest();
+            if with_no_overlap_slots {
+                // we couldn't find an anchor... And this was indeed due to too much gap between
+                // tower and blockstore, so return error here.
+                // Generally, this shouldn't occur unless bad external backup/restore is conducted...
+                return Err(TowerError::TooOldSlotHistory(
+                    oldest_slot_in_tower,
+                    slot_history.newest(),
+                ));
+            } else if root_checked {
+                // this error really shouldn't happen unless ledger/tower is corrupted so check
+                // after the TooOldSlotHistory...
+                return Err(TowerError::FatallyInconsistent(
+                    "no common slot for rooted tower",
+                ));
+            }
         }
 
         let mut retain_flags_for_each_vote =
@@ -920,7 +927,8 @@ impl Tower {
                 self.voted_slots()
             );
 
-            // Updating root is needed to correctly restore from newly-saved towers
+            // Updating root is needed to correctly restore from newly-saved tower for the next
+            // boot
             self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
                 self.last_vote.last_voted_slot().unwrap(),
@@ -1061,8 +1069,8 @@ pub enum TowerError {
     )]
     TooOldSlotHistory(Slot, Slot),
 
-    #[error("The tower is inconsistent with slot history: {0}")]
-    InconsistentWithSlotHistory(String),
+    #[error("The tower is fatally inconsistent with blockstore: {0}")]
+    FatallyInconsistent(&'static str),
 }
 
 #[frozen_abi(digest = "Gaxfwvx5MArn52mKZQgzHmDCyn5YfCuTHvp5Et3rFfpp")]
@@ -2797,6 +2805,28 @@ pub mod test {
     }
 
     #[test]
+    fn test_adjust_lockouts_after_replay_all_not_found_even_if_rooted() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.root_slot = Some(4);
+        tower.record_vote(5, Hash::default());
+        tower.record_vote(6, Hash::default());
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(1);
+        slot_history.add(2);
+        slot_history.add(7);
+
+        let replayed_root_slot = 7;
+        let result = tower.adjust_lockouts_after_replay(replayed_root_slot, &slot_history);
+
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The tower is fatally inconsistent with blockstore: no common slot for rooted tower"
+        );
+    }
+
+    #[test]
     fn test_adjust_lockouts_after_replay_all_future_votes_only_root_found() {
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.lockouts.root_slot = Some(2);
@@ -2894,7 +2924,7 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(0, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is inconsistent with slot history: time warped?"
+            "The tower is fatally inconsistent with blockstore: time warped?"
         );
     }
 
@@ -2913,7 +2943,7 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(2, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is inconsistent with slot history: diverged ancestor?"
+            "The tower is fatally inconsistent with blockstore: diverged ancestor?"
         );
     }
 
@@ -2937,7 +2967,7 @@ pub mod test {
         let result = tower.adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "The tower is inconsistent with slot history: not too old once after got too old?"
+            "The tower is fatally inconsistent with blockstore: not too old once after got too old?"
         );
     }
 
