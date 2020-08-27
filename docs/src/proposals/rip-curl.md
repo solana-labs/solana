@@ -1,4 +1,6 @@
-# RiP Curl: low-latency, transaction-oriented RPC
+---
+title: RiP Curl - low-latency, transaction-oriented RPC
+---
 
 ## Problem
 
