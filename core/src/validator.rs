@@ -642,22 +642,32 @@ fn post_process_restored_tower(
             tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
         .unwrap_or_else(|err| {
-            let is_already_active =
+            let voting_has_been_active =
                 active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
-            if config.require_tower && is_already_active {
-                error!("Requested mandatory tower restore failed: {:?}", err);
+            let saved_tower_is_missing = if let TowerError::IOError(io_err) = &err {
+                io_err.kind() == std::io::ErrorKind::NotFound
+            } else {
+                false
+            };
+            if !saved_tower_is_missing {
+                datapoint_error!(
+                    "tower_error",
+                    (
+                        "error",
+                        format!("Unable to restore tower: {}", err),
+                        String
+                    ),
+                );
+            }
+            if config.require_tower && voting_has_been_active {
+                error!("Requested mandatory tower restore failed: {}", err);
                 error!(
                     "And there is an existing vote_account containing actual votes. \
                        Aborting due to possible conflicting duplicate votes"
                 );
                 process::exit(1);
             }
-            let not_found = if let TowerError::IOError(io_err) = &err {
-                io_err.kind() == std::io::ErrorKind::NotFound
-            } else {
-                false
-            };
-            if not_found && !is_already_active {
+            if saved_tower_is_missing && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
                 info!(
                     "Ignoring expected failed tower restore because this is the initial \
@@ -665,7 +675,7 @@ fn post_process_restored_tower(
                 );
             } else {
                 error!(
-                    "Rebuilding tower from the latest vote account due to failed tower restore: {}",
+                    "Rebuilding a new tower from the latest vote account due to failed tower restore: {}",
                     err
                 );
             }
