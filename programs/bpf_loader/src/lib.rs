@@ -29,11 +29,10 @@ use solana_sdk::{
 };
 use thiserror::Error;
 
-solana_sdk::declare_loader!(
+solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
-    process_instruction,
-    solana_bpf_loader_program
+    solana_bpf_loader_program::process_instruction
 );
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -278,15 +277,6 @@ mod tests {
         fn log(&mut self, message: &str) {
             self.log.borrow_mut().push(message.to_string());
         }
-    }
-
-    #[rustversion::since(1.46.0)]
-    #[test]
-    fn test_bpf_loader_same_crate() {
-        // Ensure that we can invoke this macro from the same crate
-        // where it is defined.
-        solana_bpf_loader_program!();
-        solana_bpf_loader_deprecated_program!();
     }
 
     #[test]

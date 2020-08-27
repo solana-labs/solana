@@ -72,9 +72,6 @@ pub mod weighted_shuffle;
 pub mod window_service;
 
 #[macro_use]
-extern crate solana_bpf_loader_program;
-
-#[macro_use]
 extern crate solana_budget_program;
 
 #[macro_use]

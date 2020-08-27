@@ -43,7 +43,6 @@ serde = "1.0.110"
 serde_derive = "1.0.103"
 serde_json = "1.0.53"
 solana-account-decoder = { path = "../account-decoder", version = "1.2.27" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.2.27" }
 solana-budget-program = { path = "../programs/budget", version = "1.2.27" }
 solana-clap-utils = { path = "../clap-utils", version = "1.2.27" }
 solana-client = { path = "../client", version = "1.2.27" }
