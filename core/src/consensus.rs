@@ -515,7 +515,7 @@ impl Tower {
                 }
 
                 // Should never consider switching to an ancestor
-                // of your last vote unless the ancestor is restored from stray slots
+                // of your last vote
                 assert!(!last_vote_ancestors.contains(&switch_slot));
 
                 // By this point, we know the `switch_slot` is on a different fork
@@ -556,7 +556,7 @@ impl Tower {
 
                     // By the time we reach here, any ancestors of the `last_vote`,
                     // should have been filtered out, as they all have a descendant,
-                    // namely the `last_vote` itself, unless the ancestors are restored from stray slots.
+                    // namely the `last_vote` itself.
                     assert!(!last_vote_ancestors.contains(candidate_slot));
 
                     // Evaluate which vote accounts in the bank are locked out
