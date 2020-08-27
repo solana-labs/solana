@@ -372,15 +372,8 @@ impl HeaviestSubtreeForkChoice {
             stake_voted_subtree = fork_info.stake_voted_at;
             let mut best_child_stake_voted_subtree = 0;
             let mut best_child_slot = slot;
-            let should_print = fork_info.children.len() > 1;
             for &child in &fork_info.children {
                 let child_stake_voted_subtree = self.stake_voted_subtree(child).unwrap();
-                if should_print {
-                    info!(
-                        "child: {} of slot: {} has weight: {}",
-                        child, slot, child_stake_voted_subtree
-                    );
-                }
                 stake_voted_subtree += child_stake_voted_subtree;
                 if best_child_slot == slot ||
                 child_stake_voted_subtree > best_child_stake_voted_subtree ||

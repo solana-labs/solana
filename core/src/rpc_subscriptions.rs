@@ -642,7 +642,7 @@ impl RpcSubscriptions {
     ) {
         let (commitment, enable_received_notification) = signature_subscribe_config
             .map(|config| (config.commitment, config.enable_received_notification))
-            .unwrap_or((None, Some(true)));
+            .unwrap_or((None, Some(false)));
 
         let commitment_level = commitment
             .unwrap_or_else(CommitmentConfig::recent)
