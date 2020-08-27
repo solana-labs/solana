@@ -1416,7 +1416,7 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
 
     // Mark fork as dead on the heavier validator, this should make the fork effectively
     // dead, even though it was optimistically confirmed. The smaller validator should
-    // jump over to the new fork
+    // create and jump over to a new fork
     // Also, remove saved tower to intentionally make the restarted validator to violate the
     // optimistic confirmation
     {
@@ -1522,9 +1522,7 @@ fn test_no_optimistic_confirmation_violation_with_tower() {
 
     // Mark fork as dead on the heavier validator, this should make the fork effectively
     // dead, even though it was optimistically confirmed. The smaller validator should
-    // jump over to the new fork
-    // Also, remove saved tower to intentionally make the restarted validator to violate the
-    // optimistic confirmation
+    // create and jump over to a new fork
     {
         let blockstore = Blockstore::open_with_access_type(
             &exited_validator_info.info.ledger_path,
@@ -1546,6 +1544,10 @@ fn test_no_optimistic_confirmation_violation_with_tower() {
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
     cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
+
+    // at this moment, the validator should be dead because of tower assertion
+    cluster.remove_dead_node(&entry_point_id);
+
     // Check to see that validator didn't detected optimistic confirmation for
     // `prev_voted_slot` failed
     let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);

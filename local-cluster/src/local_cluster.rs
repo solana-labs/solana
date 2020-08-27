@@ -621,6 +621,16 @@ impl Cluster for LocalCluster {
         node
     }
 
+    fn remove_dead_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {
+        let mut node = self.validators.remove(&pubkey).unwrap();
+
+        // Shut down the validator
+        let mut validator = node.validator.take().expect("Validator must be running");
+        validator.exit();
+        validator.join().unwrap_err();
+        node
+    }
+
     fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);

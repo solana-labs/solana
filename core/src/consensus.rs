@@ -21,7 +21,7 @@ use solana_vote_program::{
 };
 use std::{
     cmp::Ordering,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
     ops::Bound::{Included, Unbounded},
@@ -96,19 +96,11 @@ pub struct Tower {
     #[serde(skip)]
     tmp_path: PathBuf, // used before atomic fs::rename()
     #[serde(skip)]
-    // Restored voted slots which cannot be found in SlotHistory at replayed root
-    // (This's kind of special field for slashing-free validator restart with edge cases).
-    // Those voted slots means they are/were on a different fork (which may not be available
-    // in bank_forks after validator restart) or are unrooted slots following the replayed
-    // rooted slot.
-    // This is only used to construct synthesized ancestors for the last vote, if restored
-    // last_vote's ancestors cannot be found in bank_forks. That's because fork choice
-    // and switch threshold requires that information.
-    // That way we avoid mangling bank_forks or relaxing bank_forks invariants just for
-    // validator's restart porpose.
+    // Restored last voted slot which cannot be found in SlotHistory at replayed root
+    // (This is a special field for slashing-free validator restart with edge cases).
     // This could be emptied after some time; but left intact indefinitely for easier
     // implementation
-    stray_restored_slots: BTreeSet<Slot>,
+    stray_restored_slot: Option<Slot>,
 }
 
 impl Default for Tower {
@@ -122,7 +114,7 @@ impl Default for Tower {
             last_timestamp: BlockTimestamp::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
-            stray_restored_slots: BTreeSet::default(),
+            stray_restored_slot: Option::default(),
         }
     }
 }
@@ -412,6 +404,10 @@ impl Tower {
         self.last_vote().last_voted_slot()
     }
 
+    pub fn stray_restored_slot(&self) -> Option<Slot> {
+        self.stray_restored_slot
+    }
+
     pub fn last_vote_and_timestamp(&mut self) -> Vote {
         let mut last_vote = self.last_vote.clone();
         last_vote.timestamp = self.maybe_timestamp(last_vote.last_voted_slot().unwrap_or(0));
@@ -485,15 +481,6 @@ impl Tower {
         false
     }
 
-    #[cfg(test)]
-    fn use_stray_restored_ancestors(
-        &self,
-        ancestors: &HashMap<Slot, HashSet<Slot>>,
-        slot: Slot,
-    ) -> bool {
-        !ancestors.contains_key(&slot) && self.is_stray_last_vote()
-    }
-
     pub(crate) fn check_switch_threshold(
         &self,
         switch_slot: u64,
@@ -504,26 +491,20 @@ impl Tower {
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
         let root = self.lockouts.root_slot.unwrap_or(0);
-        let mut stray_restored_ancestors = HashSet::default();
 
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                // NOTE: Update use_stray_restored_ancestors() as well when updating this!
-                let (last_vote_ancestors, is_restored) = if !self.is_stray_last_vote() {
-                    (ancestors.get(&last_voted_slot).unwrap(), false)
-                } else {
-                    // Use stray restored ancestors because we couldn't derive last_vote_ancestors
-                    // from given ancestors (=bank_forks)
-                    // Also, can't just return empty ancestors because we should exclude
-                    // lockouts on stray last vote's ancestors in the lockout_intervals later
-                    // in this fn.
-                    stray_restored_ancestors = self.stray_restored_ancestors();
-                    info!(
-                        "using restored ancestors {:?} because of stray last vote ({})...",
-                        stray_restored_ancestors, last_voted_slot
-                    );
-                    (&stray_restored_ancestors, true)
-                };
+                let last_vote_ancestors =
+                    ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+                        if !self.is_stray_last_vote() {
+                            panic!("no ancestors found with slot: {}", last_voted_slot);
+                        } else {
+                            // bank_forks doesn't have corresponding data for the stray restored last vote,
+                            // meaning severe inconsistentcy between saved tower and ledger.
+                            // (corrupted or pruned ledger, or only saved tower is moved over to new setup?)
+                            panic!("Unable to get ancestors for stray last vote {:?}", self.stray_restored_slot());
+                        }
+                    });
 
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
@@ -535,7 +516,7 @@ impl Tower {
 
                 // Should never consider switching to an ancestor
                 // of your last vote unless the ancestor is restored from stray slots
-                assert!(is_restored || !last_vote_ancestors.contains(&switch_slot));
+                assert!(!last_vote_ancestors.contains(&switch_slot));
 
                 // By this point, we know the `switch_slot` is on a different fork
                 // (is neither an ancestor nor descendant of `last_vote`), so a
@@ -576,7 +557,7 @@ impl Tower {
                     // By the time we reach here, any ancestors of the `last_vote`,
                     // should have been filtered out, as they all have a descendant,
                     // namely the `last_vote` itself, unless the ancestors are restored from stray slots.
-                    assert!(is_restored || !last_vote_ancestors.contains(candidate_slot));
+                    assert!(!last_vote_ancestors.contains(candidate_slot));
 
                     // Evaluate which vote accounts in the bank are locked out
                     // in the interval candidate_slot..last_vote, which means
@@ -747,21 +728,12 @@ impl Tower {
 
     pub fn is_stray_last_vote(&self) -> bool {
         if let Some(last_voted_slot) = self.last_voted_slot() {
-            if let Some(max_stray_slot) = self.stray_restored_slots.iter().next_back() {
-                return *max_stray_slot == last_voted_slot;
+            if let Some(stray_restored_slot) = self.stray_restored_slot {
+                return stray_restored_slot == last_voted_slot;
             }
         }
 
         false
-    }
-
-    fn stray_restored_ancestors(&self) -> HashSet<Slot> {
-        let mut ancestors: HashSet<_> = self.stray_restored_slots.clone().into_iter().collect();
-        if let Some(last_voted_slot) = self.last_voted_slot() {
-            assert!(ancestors.contains(&last_voted_slot));
-            ancestors.remove(&last_voted_slot);
-        }
-        ancestors
     }
 
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
@@ -934,13 +906,7 @@ impl Tower {
                 self.last_vote.last_voted_slot().unwrap(),
                 *self.voted_slots().last().unwrap()
             );
-            if let Some(anchored_slot) = anchored_slot {
-                self.stray_restored_slots = std::iter::once(anchored_slot)
-                    .chain(self.voted_slots().into_iter())
-                    .collect();
-            } else {
-                self.stray_restored_slots = self.voted_slots().into_iter().collect();
-            }
+            self.stray_restored_slot = Some(self.last_vote.last_voted_slot().unwrap());
         }
 
         Ok(self)
@@ -2445,7 +2411,11 @@ pub mod test {
             / (tr(1)
                 / (tr(2)
                     / tr(10)
-                    / (tr(43) / (tr(44) / (tr(45) / tr(222)) / (tr(110) / tr(111))))));
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                            / (tr(110) / tr(111))))));
         let replayed_root_slot = 44;
 
         // Fill the BankForks according to the above fork structure
@@ -2735,7 +2705,7 @@ pub mod test {
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
         assert_eq!(tower.root(), None);
-        assert_eq!(tower.stray_restored_slots, vec![].into_iter().collect());
+        assert_eq!(tower.stray_restored_slot, None);
     }
 
     #[test]
@@ -2969,43 +2939,5 @@ pub mod test {
             format!("{}", result.unwrap_err()),
             "The tower is fatally inconsistent with blockstore: not too old once after got too old?"
         );
-    }
-
-    #[test]
-    fn test_stray_restored_ancestors() {
-        let ancestors = vec![(0, HashSet::new())].into_iter().collect();
-
-        let tower_root = 2;
-        let mut tower = Tower::new_for_tests(10, 0.9);
-        tower.lockouts.root_slot = Some(tower_root);
-        tower.record_vote(3, Hash::default());
-        tower.record_vote(4, Hash::default());
-        tower.record_vote(5, Hash::default());
-        assert!(!tower.is_stray_last_vote());
-        assert!(!tower.use_stray_restored_ancestors(&ancestors, 0));
-        assert!(!tower.use_stray_restored_ancestors(&ancestors, 1));
-
-        let ledger_root = 10;
-        let mut slot_history = SlotHistory::default();
-        slot_history.add(0);
-        slot_history.add(1);
-        slot_history.add(tower_root);
-        slot_history.add(ledger_root);
-
-        let replayed_root_slot = ledger_root;
-        tower = tower
-            .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
-            .unwrap();
-
-        assert_eq!(tower.voted_slots(), vec![3, 4, 5]);
-        assert_eq!(tower.last_voted_slot(), Some(5));
-        assert!(tower.is_stray_last_vote());
-        assert_eq!(tower.lockouts.root_slot, Some(ledger_root));
-        assert_eq!(
-            tower.stray_restored_ancestors(),
-            vec![tower_root, 3, 4].into_iter().collect()
-        );
-        assert!(!tower.use_stray_restored_ancestors(&ancestors, 0));
-        assert!(tower.use_stray_restored_ancestors(&ancestors, 1));
     }
 }
