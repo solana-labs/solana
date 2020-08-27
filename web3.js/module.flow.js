@@ -708,7 +708,7 @@ declare module '@solana/web3.js' {
     stakePubkey: PublicKey,
     authorityBase: PublicKey,
     authoritySeed: string,
-    authorityOwner: PublicKey;
+    authorityOwner: PublicKey,
     newAuthorizedPubkey: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
   |};
@@ -953,17 +953,20 @@ declare module '@solana/web3.js' {
   }
 
   // === src/bpf-loader.js ===
+  declare export var BPF_LOADER_PROGRAM_ID;
   declare export class BpfLoader {
-    static programId(version: ?number): PublicKey;
     static getMinNumSignatures(dataLength: number): number;
     static load(
       connection: Connection,
       payer: Account,
       program: Account,
       elfBytes: Buffer | Uint8Array | Array<number>,
-      version: ?number,
+      loaderProgramId: PublicKey,
     ): Promise<PublicKey>;
   }
+
+  // === src/bpf-loader-deprecated.js ===
+  declare export var BPF_LOADER_DEPRECATED_PROGRAM_ID;
 
   // === src/util/send-and-confirm-transaction.js ===
   declare export function sendAndConfirmTransaction(

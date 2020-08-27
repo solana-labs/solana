@@ -494,6 +494,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -549,6 +550,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -594,6 +596,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();
@@ -632,6 +635,7 @@ mod test {
                 ),
                 RpcSendTransactionConfig {
                     skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
                 },
             )
             .unwrap();

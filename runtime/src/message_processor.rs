@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
-    entrypoint_native::{InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext},
+    entrypoint_native::{
+        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
+        InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+    },
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
@@ -155,6 +158,21 @@ impl PreAccount {
     }
 }
 
+pub struct ThisComputeMeter {
+    remaining: u64,
+}
+impl ComputeMeter for ThisComputeMeter {
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+        self.remaining = self.remaining.saturating_sub(amount);
+        if self.remaining == 0 {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
+    }
+}
 pub struct ThisInvokeContext {
     program_ids: Vec<Pubkey>,
     rent: Rent,
@@ -162,9 +180,10 @@ pub struct ThisInvokeContext {
     programs: Vec<(Pubkey, ProcessInstruction)>,
     logger: Rc<RefCell<dyn Logger>>,
     is_cross_program_supported: bool,
+    compute_budget: ComputeBudget,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
 impl ThisInvokeContext {
-    const MAX_INVOCATION_DEPTH: usize = 5;
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
@@ -172,8 +191,9 @@ impl ThisInvokeContext {
         programs: Vec<(Pubkey, ProcessInstruction)>,
         log_collector: Option<Rc<LogCollector>>,
         is_cross_program_supported: bool,
+        compute_budget: ComputeBudget,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
+        let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
         Self {
             program_ids,
@@ -182,12 +202,16 @@ impl ThisInvokeContext {
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             is_cross_program_supported,
+            compute_budget,
+            compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
+                remaining: compute_budget.max_units,
+            })),
         }
     }
 }
 impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() >= Self::MAX_INVOCATION_DEPTH {
+        if self.program_ids.len() >= self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -232,6 +256,12 @@ impl InvokeContext for ThisInvokeContext {
     fn is_cross_program_supported(&self) -> bool {
         self.is_cross_program_supported
     }
+    fn get_compute_budget(&self) -> ComputeBudget {
+        self.compute_budget
+    }
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+        self.compute_meter.clone()
+    }
 }
 pub struct ThisLogger {
     log_collector: Option<Rc<LogCollector>>,
@@ -258,7 +288,47 @@ pub struct MessageProcessor {
     native_loader: NativeLoader,
     #[serde(skip)]
     is_cross_program_supported: bool,
+    #[serde(skip)]
+    compute_budget: ComputeBudget,
 }
+
+impl std::fmt::Debug for MessageProcessor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[derive(Debug)]
+        struct MessageProcessor<'a> {
+            programs: Vec<String>,
+            loaders: Vec<String>,
+            native_loader: &'a NativeLoader,
+            is_cross_program_supported: bool,
+        }
+        // rustc doesn't compile due to bug without this work around
+        // https://github.com/rust-lang/rust/issues/50280
+        // https://users.rust-lang.org/t/display-function-pointer/17073/2
+        let processor = MessageProcessor {
+            programs: self
+                .programs
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: ErasedProcessInstruction = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            loaders: self
+                .loaders
+                .iter()
+                .map(|(pubkey, instruction)| {
+                    let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
+                    format!("{}: {:p}", pubkey, erased_instruction)
+                })
+                .collect::<Vec<_>>(),
+            native_loader: &self.native_loader,
+            is_cross_program_supported: self.is_cross_program_supported,
+        };
+
+        write!(f, "{:?}", processor)
+    }
+}
+
 impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
@@ -266,6 +336,7 @@ impl Default for MessageProcessor {
             loaders: vec![],
             native_loader: NativeLoader::default(),
             is_cross_program_supported: true,
+            compute_budget: ComputeBudget::default(),
         }
     }
 }
@@ -275,7 +346,7 @@ impl Clone for MessageProcessor {
             programs: self.programs.clone(),
             loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
-            is_cross_program_supported: self.is_cross_program_supported,
+            ..*self
         }
     }
 }
@@ -311,6 +382,15 @@ impl MessageProcessor {
 
     pub fn set_cross_program_support(&mut self, is_supported: bool) {
         self.is_cross_program_supported = is_supported;
+    }
+
+    pub fn set_compute_budget(&mut self, compute_budget: ComputeBudget) {
+        self.compute_budget = compute_budget;
+    }
+
+    #[cfg(test)]
+    pub fn get_cross_program_support(&mut self) -> bool {
+        self.is_cross_program_supported
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -560,6 +640,7 @@ impl MessageProcessor {
             self.programs.clone(), // get rid of clone
             log_collector,
             self.is_cross_program_supported,
+            self.compute_budget,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -598,6 +679,16 @@ impl MessageProcessor {
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
+    }
+
+    // only used for testing
+    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
+        self.loaders.iter().map(|a| a.0).collect::<Vec<_>>()
+    }
+
+    // only used for testing
+    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
+        self.programs.iter().map(|a| a.0).collect::<Vec<_>>()
     }
 }
 
@@ -639,6 +730,7 @@ mod tests {
             vec![],
             None,
             true,
+            ComputeBudget::default(),
         );
 
         // Check call depth increases and has a limit
@@ -1409,6 +1501,7 @@ mod tests {
             vec![],
             None,
             true,
+            ComputeBudget::default(),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

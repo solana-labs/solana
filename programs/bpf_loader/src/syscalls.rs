@@ -12,7 +12,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     bpf_loader, bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{InvokeContext, Logger},
+    entrypoint_native::{ComputeMeter, InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -30,7 +30,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 /// Error definitions
-#[derive(Debug, ThisError)]
+#[derive(Debug, ThisError, PartialEq)]
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
@@ -59,6 +59,19 @@ impl From<SyscallError> for EbpfError<BPFError> {
     }
 }
 
+trait SyscallConsume {
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BPFError>>;
+}
+impl SyscallConsume for Rc<RefCell<dyn ComputeMeter>> {
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BPFError>> {
+        self.try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
+            .consume(amount)
+            .map_err(SyscallError::InstructionError)?;
+        Ok(())
+    }
+}
+
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
 /// selectable at build-time.
@@ -72,28 +85,40 @@ use crate::allocator_bump::BPFAllocator;
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_syscalls<'a>(
+    loader_id: &Pubkey,
     vm: &mut EbpfVm<'a, BPFError>,
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    // Syscall function common across languages
+    let compute_budget = invoke_context.get_compute_budget();
+    // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
     vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
+            cost: compute_budget.log_units,
+            compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
     vm.register_syscall_with_context_ex(
         "sol_log_64_",
         Box::new(SyscallLogU64 {
+            cost: compute_budget.log_64_units,
+            compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
     if invoke_context.is_cross_program_supported() {
-        vm.register_syscall_ex("sol_create_program_address", syscall_create_program_address)?;
+        vm.register_syscall_with_context_ex(
+            "sol_create_program_address",
+            Box::new(SyscallCreateProgramAddress {
+                cost: compute_budget.create_program_address_units,
+                compute_meter: invoke_context.get_compute_meter(),
+            }),
+        )?;
 
         // Cross-program invocation syscalls
 
@@ -120,6 +145,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_alloc_free_",
         Box::new(SyscallSolAllocFree {
+            aligned: *loader_id != bpf_loader_deprecated::id(),
             allocator: BPFAllocator::new(heap, MM_HEAP_START),
         }),
     )?;
@@ -253,6 +279,8 @@ pub fn syscall_sol_panic(
 
 /// Log a user's info message
 pub struct SyscallLog {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BPFError> for SyscallLog {
@@ -266,6 +294,7 @@ impl SyscallObject<BPFError> for SyscallLog {
         ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -282,6 +311,8 @@ impl SyscallObject<BPFError> for SyscallLog {
 
 /// Log 5 64-bit values
 pub struct SyscallLogU64 {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BPFError> for SyscallLogU64 {
@@ -295,6 +326,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -316,6 +348,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
 pub struct SyscallSolAllocFree {
+    aligned: bool,
     allocator: BPFAllocator,
 }
 impl SyscallObject<BPFError> for SyscallSolAllocFree {
@@ -329,7 +362,12 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
-        let layout = match Layout::from_size_align(size as usize, align_of::<u128>()) {
+        let align = if self.aligned {
+            align_of::<u128>()
+        } else {
+            align_of::<u8>()
+        };
+        let layout = match Layout::from_size_align(size as usize, align) {
             Ok(layout) => layout,
             Err(_) => return Ok(0),
         };
@@ -346,38 +384,47 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
 }
 
 /// Create a program address
-pub fn syscall_create_program_address(
-    seeds_addr: u64,
-    seeds_len: u64,
-    program_id_addr: u64,
-    address_addr: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+pub struct SyscallCreateProgramAddress {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+}
+impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
+    fn call(
+        &mut self,
+        seeds_addr: u64,
+        seeds_len: u64,
+        program_id_addr: u64,
+        address_addr: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
 
-    let seeds = untranslated_seeds
-        .iter()
-        .map(|untranslated_seed| {
-            translate_slice!(
-                u8,
-                untranslated_seed.as_ptr(),
-                untranslated_seed.len(),
-                ro_regions
-            )
-        })
-        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-    let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
+        let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+        let seeds = untranslated_seeds
+            .iter()
+            .map(|untranslated_seed| {
+                translate_slice!(
+                    u8,
+                    untranslated_seed.as_ptr(),
+                    untranslated_seed.len(),
+                    ro_regions
+                )
+            })
+            .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+        let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
 
-    let new_address =
-        match Pubkey::create_program_address(&seeds, program_id).map_err(SyscallError::BadSeeds) {
+        let new_address = match Pubkey::create_program_address(&seeds, program_id)
+            .map_err(SyscallError::BadSeeds)
+        {
             Ok(address) => address,
             Err(_) => return Ok(1),
         };
-    let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
-    address.copy_from_slice(new_address.as_ref());
-    Ok(0)
+        let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
+        address.copy_from_slice(new_address.as_ref());
+        Ok(0)
+    }
 }
 
 // Cross-program invocation syscalls
@@ -844,6 +891,9 @@ fn call<'a>(
     rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
     let mut invoke_context = syscall.get_context_mut()?;
+    invoke_context
+        .get_compute_meter()
+        .consume(invoke_context.get_compute_budget().invoke_units)?;
 
     // Translate data passed from the VM
 
@@ -930,7 +980,7 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::MockLogger;
+    use crate::tests::{MockComputeMeter, MockLogger};
 
     #[test]
     fn test_translate() {
@@ -1081,6 +1131,17 @@ mod tests {
     fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 3 }));
+        let log = Rc::new(RefCell::new(vec![]));
+        let logger: Rc<RefCell<dyn Logger>> =
+            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
+        let mut syscall_sol_log = SyscallLog {
+            cost: 1,
+            compute_meter,
+            logger,
+        };
         let ro_regions = &[MemoryRegion {
             addr_host: addr,
             addr_vm: 100,
@@ -1088,17 +1149,19 @@ mod tests {
         }];
         let rw_regions = &[MemoryRegion::default()];
 
-        let log = Rc::new(RefCell::new(vec![]));
-        let mock_logger = MockLogger { log: log.clone() };
-        let logger: Rc<RefCell<dyn Logger>> = Rc::new(RefCell::new(mock_logger));
-        let mut syscall_sol_log = SyscallLog { logger };
-
         syscall_sol_log
             .call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
             .unwrap();
 
-        syscall_sol_log
-            .call(
+        assert_eq!(
+            Err(EbpfError::AccessViolation(
+                "programs/bpf_loader/src/syscalls.rs".to_string(),
+                238,
+                100,
+                32,
+                "  regions: \n0x64-0x73".to_string()
+            )),
+            syscall_sol_log.call(
                 100,
                 string.len() as u64 * 2, // AccessViolation
                 0,
@@ -1107,7 +1170,22 @@ mod tests {
                 ro_regions,
                 rw_regions,
             )
-            .unwrap_err();
+        );
+
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            syscall_sol_log.call(
+                100,
+                string.len() as u64 * 2, // AccessViolation
+                0,
+                0,
+                0,
+                ro_regions,
+                rw_regions,
+            )
+        );
 
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
@@ -1115,10 +1193,17 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: std::u64::MAX,
+            }));
         let log = Rc::new(RefCell::new(vec![]));
-        let mock_logger = MockLogger { log: log.clone() };
+        let logger: Rc<RefCell<dyn Logger>> =
+            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log_u64 = SyscallLogU64 {
-            logger: Rc::new(RefCell::new(mock_logger)),
+            cost: 0,
+            compute_meter,
+            logger,
         };
         let ro_regions = &[MemoryRegion::default()];
         let rw_regions = &[MemoryRegion::default()];
@@ -1139,6 +1224,7 @@ mod tests {
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             assert_ne!(
@@ -1160,12 +1246,35 @@ mod tests {
                 0
             );
         }
-        // many small allocs
+        // many small unaligned allocs
         {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: false,
+                allocator: BPFAllocator::new(heap, MM_HEAP_START),
+            };
+            for _ in 0..100 {
+                assert_ne!(
+                    syscall.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
+                    0
+                );
+            }
+            assert_eq!(
+                syscall
+                    .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
+        }
+        // many small aligned allocs
+        {
+            let heap = vec![0_u8; 100];
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
+            let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             for _ in 0..12 {
@@ -1188,6 +1297,7 @@ mod tests {
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
             let mut syscall = SyscallSolAllocFree {
+                aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             let address = syscall

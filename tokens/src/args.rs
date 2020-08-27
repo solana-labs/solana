@@ -16,6 +16,7 @@ pub struct StakeArgs {
     pub stake_account_address: Pubkey,
     pub stake_authority: Box<dyn Signer>,
     pub withdraw_authority: Box<dyn Signer>,
+    pub lockup_authority: Option<Box<dyn Signer>>,
 }
 
 pub struct BalancesArgs {

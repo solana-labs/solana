@@ -509,21 +509,23 @@ function createRpcRequest(url): RpcRequest {
     try {
       let too_many_requests_retries = 5;
       let res = {};
-
+      let waitTime = 500;
       for (;;) {
         res = await fetch(url, options);
         if (
-          res.status !== 429 /* Too many requests */ ||
-          too_many_requests_retries === 0
+            res.status !== 429 /* Too many requests */
         ) {
           break;
         }
-
-        console.log(
-          `Server responded with ${res.status} ${res.statusText}.  Retrying after brief delay...`,
-        );
-        await sleep(500);
         too_many_requests_retries -= 1;
+        if (too_many_requests_retries === 0) {
+          break;
+        }
+        console.log(
+            `Server responded with ${res.status} ${res.statusText}.  Retrying after ${waitTime}ms delay...`,
+        );
+        await sleep(waitTime);
+        waitTime *= 2;
       }
 
       const text = await res.text();
@@ -1375,6 +1377,7 @@ export class Connection {
     transactionSignatures: Array<string>,
   };
   _disableBlockhashCaching: boolean = false;
+  _pollingBlockhash: boolean = false;
   _accountChangeSubscriptions: {[number]: AccountSubscriptionInfo} = {};
   _accountChangeSubscriptionCounter: number = 0;
   _programAccountChangeSubscriptions: {
@@ -1752,11 +1755,7 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._buildArgs(
-      [publicKey.toBase58()],
-      commitment,
-      'base64',
-    );
+    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
     if (res.error) {
@@ -1866,11 +1865,7 @@ export class Connection {
     programId: PublicKey,
     commitment: ?Commitment,
   ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
-    const args = this._buildArgs(
-      [programId.toBase58()],
-      commitment,
-      'base64',
-    );
+    const args = this._buildArgs([programId.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {
@@ -2484,6 +2479,10 @@ export class Connection {
 
   async _recentBlockhash(disableCache: boolean): Promise<Blockhash> {
     if (!disableCache) {
+      // Wait for polling to finish
+      while (this._pollingBlockhash) {
+        await sleep(100);
+      }
       // Attempt to use a recent blockhash for up to 30 seconds
       const expired =
         Date.now() - this._blockhashInfo.lastFetch >=
@@ -2497,27 +2496,32 @@ export class Connection {
   }
 
   async _pollNewBlockhash(): Promise<Blockhash> {
-    const startTime = Date.now();
-    for (let i = 0; i < 50; i++) {
-      const {blockhash} = await this.getRecentBlockhash('max');
+    this._pollingBlockhash = true;
+    try {
+      const startTime = Date.now();
+      for (let i = 0; i < 50; i++) {
+        const {blockhash} = await this.getRecentBlockhash('max');
 
-      if (this._blockhashInfo.recentBlockhash != blockhash) {
-        this._blockhashInfo = {
-          recentBlockhash: blockhash,
-          lastFetch: new Date(),
-          transactionSignatures: [],
-          simulatedSignatures: [],
-        };
-        return blockhash;
+        if (this._blockhashInfo.recentBlockhash != blockhash) {
+          this._blockhashInfo = {
+            recentBlockhash: blockhash,
+            lastFetch: new Date(),
+            transactionSignatures: [],
+            simulatedSignatures: [],
+          };
+          return blockhash;
+        }
+
+        // Sleep for approximately half a slot
+        await sleep(MS_PER_SLOT / 2);
       }
 
-      // Sleep for approximately half a slot
-      await sleep(MS_PER_SLOT / 2);
+      throw new Error(
+        `Unable to obtain a new blockhash after ${Date.now() - startTime}ms`,
+      );
+    } finally {
+      this._pollingBlockhash = false;
     }
-
-    throw new Error(
-      `Unable to obtain a new blockhash after ${Date.now() - startTime}ms`,
-    );
   }
 
   /**
