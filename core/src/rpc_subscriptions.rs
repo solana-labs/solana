@@ -8,7 +8,7 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_account_decoder::{parse_token::spl_token_id_v1_0, UiAccount, UiAccountEncoding};
+use solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::RpcFilterType,
@@ -256,7 +256,7 @@ fn filter_account_result(
         // and should notify that the account state has been reverted.
         if fork != last_notified_slot {
             let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
                 return (
                     Box::new(iter::once(get_parsed_token_account(bank, pubkey, account))),
