@@ -163,6 +163,9 @@ pub struct VoteState {
     pub commission: u8,
 
     pub votes: VecDeque<Lockout>,
+
+    // This usually the last Lockout which was popped from self.votes.
+    // However, it can be arbitrary slot, when being used inside Tower
     pub root_slot: Option<Slot>,
 
     /// the signer for vote transactions

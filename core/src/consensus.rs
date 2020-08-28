@@ -105,7 +105,7 @@ pub struct Tower {
 
 impl Default for Tower {
     fn default() -> Self {
-        Self {
+        let mut tower = Self {
             node_pubkey: Pubkey::default(),
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
@@ -115,7 +115,10 @@ impl Default for Tower {
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
             stray_restored_slot: Option::default(),
-        }
+        };
+        // VoteState::root_slot is ensured to be Some in Tower
+        tower.lockouts.root_slot = Some(Slot::default());
+        tower
     }
 }
 
@@ -124,7 +127,7 @@ impl Tower {
         node_pubkey: &Pubkey,
         vote_account_pubkey: &Pubkey,
         root: Slot,
-        heaviest_bank: &Bank,
+        bank: &Bank,
         path: &Path,
     ) -> Self {
         let path = Self::get_filename(&path, node_pubkey);
@@ -135,7 +138,7 @@ impl Tower {
             tmp_path,
             ..Tower::default()
         };
-        tower.initialize_lockouts_from_bank_forks(vote_account_pubkey, root, heaviest_bank);
+        tower.initialize_lockouts_from_bank(vote_account_pubkey, root, bank);
 
         tower
     }
@@ -396,12 +399,8 @@ impl Tower {
         self.record_bank_vote(vote)
     }
 
-    pub fn last_vote(&self) -> &Vote {
-        &self.last_vote
-    }
-
     pub fn last_voted_slot(&self) -> Option<Slot> {
-        self.last_vote().last_voted_slot()
+        self.last_vote.last_voted_slot()
     }
 
     pub fn stray_restored_slot(&self) -> Option<Slot> {
@@ -430,6 +429,7 @@ impl Tower {
         None
     }
 
+    // root may be forcibly set by arbitrary replay root slot
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
     }
@@ -752,8 +752,9 @@ impl Tower {
 
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
+        assert!(self.root().is_some());
         assert!(
-            self.root().is_none() || self.root().unwrap() <= replayed_root_slot,
+            self.root().unwrap() <= replayed_root_slot,
             format!(
                 "tower root: {:?} >= replayed root slot: {}",
                 self.root().unwrap(),
@@ -771,7 +772,6 @@ impl Tower {
 
         // return immediately if votes are empty...
         if self.lockouts.votes.is_empty() {
-            assert_eq!(self.root(), None);
             return Ok(self);
         }
 
@@ -879,9 +879,9 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
         let original_votes_len = self.lockouts.votes.len();
-        self.lockouts
-            .votes
-            .retain(move |_| retain_flags_for_each_vote.next().unwrap());
+        self.do_initialize_lockouts(replayed_root_slot, move |_| {
+            retain_flags_for_each_vote.next().unwrap()
+        });
 
         if self.lockouts.votes.is_empty() {
             info!(
@@ -890,7 +890,6 @@ impl Tower {
             );
             // we might not have banks for those votes so just reset.
             // That's because the votes may well past replayed_root_slot
-            self.lockouts.root_slot = None;
             self.last_vote = Vote::default();
         } else {
             info!(
@@ -900,9 +899,6 @@ impl Tower {
                 self.voted_slots()
             );
 
-            // Updating root is needed to correctly restore from newly-saved tower for the next
-            // boot
-            self.lockouts.root_slot = Some(replayed_root_slot);
             assert_eq!(
                 self.last_vote.last_voted_slot().unwrap(),
                 *self.voted_slots().last().unwrap()
@@ -913,35 +909,40 @@ impl Tower {
         Ok(self)
     }
 
-    fn initialize_lockouts_from_bank_forks(
+    fn initialize_lockouts_from_bank(
         &mut self,
         vote_account_pubkey: &Pubkey,
         root: Slot,
-        heaviest_bank: &Bank,
+        bank: &Bank,
     ) {
-        if let Some((_stake, vote_account)) = heaviest_bank.vote_accounts().get(vote_account_pubkey)
-        {
-            let mut vote_state = VoteState::deserialize(&vote_account.data)
+        if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
+            let vote_state = VoteState::deserialize(&vote_account.data)
                 .expect("vote_account isn't a VoteState?");
-            vote_state.root_slot = Some(root);
-            vote_state.votes.retain(|v| v.slot > root);
+            self.lockouts = vote_state;
+            self.do_initialize_lockouts(root, |v| v.slot > root);
             trace!(
                 "{} lockouts initialized to {:?}",
                 self.node_pubkey,
-                vote_state
+                self.lockouts
             );
             assert_eq!(
-                vote_state.node_pubkey, self.node_pubkey,
+                self.lockouts.node_pubkey, self.node_pubkey,
                 "vote account's node_pubkey doesn't match",
             );
-            self.lockouts = vote_state;
         } else {
             info!(
-                "vote account({}) not found in heaviest bank (slot={})",
+                "vote account({}) not found in bank (slot={})",
                 vote_account_pubkey,
-                heaviest_bank.slot()
+                bank.slot()
             );
         }
+    }
+
+    fn do_initialize_lockouts<F: FnMut(&Lockout) -> bool>(&mut self, root: Slot, should_retain: F) {
+        // Updating root is needed to correctly restore from newly-saved tower for the next
+        // boot
+        self.lockouts.root_slot = Some(root);
+        self.lockouts.votes.retain(should_retain);
     }
 
     pub fn get_filename(path: &Path, node_pubkey: &Pubkey) -> PathBuf {
@@ -2394,7 +2395,7 @@ pub mod test {
             tower.record_vote(110, Hash::default());
             tower.record_vote(111, Hash::default());
             assert_eq!(tower.voted_slots(), vec![43, 110, 111]);
-            assert_eq!(tower.lockouts.root_slot, None);
+            assert_eq!(tower.lockouts.root_slot, Some(0));
         }
 
         // Prepare simulated validator restart!
@@ -2705,7 +2706,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), None);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
         assert_eq!(tower.stray_restored_slot, None);
     }
 
@@ -2728,7 +2729,7 @@ pub mod test {
             .adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history)
             .unwrap();
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), None);
+        assert_eq!(tower.root(), Some(MAX_ENTRIES));
     }
 
     #[test]
@@ -2832,7 +2833,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), None);
+        assert_eq!(tower.root(), Some(replayed_root_slot));
     }
 
     #[test]
@@ -2861,12 +2862,15 @@ pub mod test {
         tower.lockouts.votes.push_back(Lockout::new(101));
         let vote = Vote::new(vec![101], Hash::default());
         tower.last_vote = vote;
+        tower.lockouts.root_slot = None;
 
         let mut slot_history = SlotHistory::default();
         slot_history.add(0);
         slot_history.add(2);
 
-        let result = tower.clone().adjust_lockouts_after_replay(2, &slot_history);
+        let result = tower
+            .clone()
+            .do_adjust_lockouts_after_replay(2, &slot_history);
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "The slot history is too old: oldest slot in tower (100) >> newest slot in available history (2)"
