@@ -21,6 +21,7 @@ import { TokenLargestAccountsCard } from "components/account/TokenLargestAccount
 import { TokenRegistry } from "tokenRegistry";
 import { VoteAccountSection } from "components/account/VoteAccountSection";
 import { NonceAccountSection } from "components/account/NonceAccountSection";
+import { VotesCard } from "components/account/VotesCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -120,6 +121,12 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
         path: "/largest",
       });
     }
+  } else if (data && data.name === 'vote') {
+    tabs.push({
+      slug: "votes",
+      title: "Votes",
+      path: "/votes",
+    });
   } else {
     tabs.push({
       slug: "tokens",
@@ -181,7 +188,7 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "largest";
+type MoreTabs = "history" | "tokens" | "largest" | "votes";
 function MoreSection({
   account,
   tab,
@@ -193,7 +200,7 @@ function MoreSection({
 }) {
   const pubkey = account.pubkey;
   const address = account.pubkey.toBase58();
-
+  const data = account?.details?.data;
   return (
     <>
       <div className="container">
@@ -223,6 +230,7 @@ function MoreSection({
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
+      {tab === "votes" && data?.name === "vote" && <VotesCard voteAccount={data.parsed} />}
     </>
   );
 }

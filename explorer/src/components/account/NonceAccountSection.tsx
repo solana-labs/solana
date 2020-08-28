@@ -23,6 +23,7 @@ function NonceAccountCard({
   account: Account;
   nonceAccount: NonceAccount;
 }) {
+  const { details } = account;
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
@@ -43,18 +44,21 @@ function NonceAccountCard({
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
+        
         <tr>
           <td>Authority</td>
           <td className="text-lg-right">
             <Address pubkey={nonceAccount.info.authority} alignRight raw link />
           </td>
         </tr>
+        
         <tr>
           <td>Blockhash</td>
           <td className="text-lg-right">
             <code>{nonceAccount.info.blockhash}</code>
           </td>
         </tr>
+        
         <tr>
           <td>Fee</td>
           <td className="text-lg-right">
@@ -62,6 +66,15 @@ function NonceAccountCard({
             signature
           </td>
         </tr>
+
+        {details && (
+          <tr>
+            <td>Owner</td>
+            <td className="text-lg-right">
+              <Address pubkey={details.owner} alignRight link />
+            </td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );
