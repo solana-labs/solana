@@ -498,6 +498,14 @@ impl Tower {
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                         if !self.is_stray_last_vote() {
+                            // Unless last vote is stray, we always must be able to fetch last_voted_slot's
+                            // ancestors, justifying to panic! here.
+                            // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
+                            // if all votes are older than replayed_root_slot. So this code shoun't be
+                            // touched in that case as well.
+                            // In other words, except being stray, all other slots have been voted on while
+                            // this validator has been running, so we must be able to fetch ancestors for
+                            // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
                             // bank_forks doesn't have corresponding data for the stray restored last vote,
@@ -814,11 +822,10 @@ impl Tower {
         // iterate over votes in the newest => oldest order
         // bail out early if bad condition is found
         for voted_slot in checked_slots.iter().rev() {
-            checked_slot = Some(*voted_slot);
-            let check = slot_history.check(checked_slot.unwrap());
+            let check = slot_history.check(*voted_slot);
 
             if anchored_slot.is_none() && check == Check::Found {
-                anchored_slot = checked_slot;
+                anchored_slot = Some(*voted_slot);
             } else if anchored_slot.is_some() && check == Check::NotFound {
                 // this can't happen unless we're fed with bogus snapshot
                 return Err(TowerError::FatallyInconsistent("diverged ancestor?"));
@@ -838,6 +845,15 @@ impl Tower {
                     "not too old once after got too old?",
                 ));
             }
+
+            assert!(checked_slot
+                .map(
+                    |checked_slot| (*voted_slot == checked_slot && *voted_slot == 0)
+                        || *voted_slot < checked_slot
+                )
+                .unwrap_or(true));
+
+            checked_slot = Some(*voted_slot);
 
             retain_flags_for_each_vote_in_reverse.push(anchored_slot.is_none());
         }
