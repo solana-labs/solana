@@ -1044,31 +1044,19 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
-        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        if mint_owner != spl_token_id_v2_0() {
+        let mint_account = bank.get_account(mint).ok_or_else(|| {
+            Error::invalid_params("Invalid param: could not find account".to_string())
+        })?;
+        if mint_account.owner != spl_token_id_v2_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
+        let mint = Mint::unpack_from_slice(&mint_account.data).map_err(|_| {
+            Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
+        })?;
 
-        let filters = vec![
-            // Filter on Mint address
-            RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                encoding: None,
-            }),
-            // Filter on Token Account state
-            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
-        ];
-        let supply = get_filtered_program_accounts(&bank, &mint_owner, filters)
-            .map(|(_pubkey, account)| {
-                TokenAccount::unpack_from_slice(&account.data)
-                    .map(|account| account.amount)
-                    .unwrap_or(0)
-            })
-            .sum();
-        let supply = token_amount_to_ui_amount(supply, decimals);
+        let supply = token_amount_to_ui_amount(mint.supply, mint.decimals);
         Ok(new_response(&bank, supply))
     }
 
@@ -4811,10 +4799,7 @@ pub mod tests {
             .expect("actual response deserialization");
         assert!(result.get("error").is_some());
 
-        // Add another token account to ensure getTokenSupply sums all mint accounts
-        let other_token_account_pubkey = Pubkey::new_rand();
-        bank.store_account(&other_token_account_pubkey, &token_account);
-
+        // Test get token supply, pulls supply from mint
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
             mint,
@@ -4825,8 +4810,8 @@ pub mod tests {
         let supply: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
-        assert!((supply.ui_amount - 2.0 * 4.2).abs() < error);
-        assert_eq!(supply.amount, (2 * 420).to_string());
+        assert!((supply.ui_amount - 5.0).abs() < error);
+        assert_eq!(supply.amount, 500.to_string());
         assert_eq!(supply.decimals, 2);
 
         // Test non-existent mint address
@@ -4838,6 +4823,10 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert!(result.get("error").is_some());
+
+        // Add another token account with the same owner, delegate, and mint
+        let other_token_account_pubkey = Pubkey::new_rand();
+        bank.store_account(&other_token_account_pubkey, &token_account);
 
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = [0; size_of::<TokenAccount>()];
