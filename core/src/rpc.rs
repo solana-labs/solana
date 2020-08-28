@@ -998,17 +998,11 @@ impl JsonRpcRequestProcessor {
         mint: &Pubkey,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<UiTokenAmount>> {
-<<<<<<< HEAD
         let bank = self.bank(commitment)?;
-        let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        if mint_owner != spl_token_id_v1_0() {
-=======
-        let bank = self.bank(commitment);
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
         if mint_account.owner != spl_token_id_v2_0() {
->>>>>>> 76be36c9c... Update spl-token to v2.0 (#11884)
             return Err(Error::invalid_params(
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
@@ -1017,31 +1011,8 @@ impl JsonRpcRequestProcessor {
             Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
         })?;
 
-<<<<<<< HEAD
-        let filters = vec![
-            // Filter on Mint address
-            RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                encoding: None,
-            }),
-            // Filter on Token Account state
-            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
-        ];
-        let supply = get_filtered_program_accounts(&bank, &mint_owner, filters)
-            .map(|(_pubkey, account)| {
-                let mut data = account.data.to_vec();
-                spl_token_v1_0::state::unpack(&mut data)
-                    .map(|account: &mut TokenAccount| account.amount)
-                    .unwrap_or(0)
-            })
-            .sum();
-        let supply = token_amount_to_ui_amount(supply, decimals);
-        new_response(&bank, supply)
-=======
         let supply = token_amount_to_ui_amount(mint.supply, mint.decimals);
-        Ok(new_response(&bank, supply))
->>>>>>> 76be36c9c... Update spl-token to v2.0 (#11884)
+        new_response(&bank, supply)
     }
 
     pub fn get_token_largest_accounts(
