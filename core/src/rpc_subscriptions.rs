@@ -52,7 +52,7 @@ pub struct SlotInfo {
     pub root: Slot,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CacheSlotInfo {
     pub current_slot: Slot,
     pub node_root: Slot,
@@ -497,6 +497,10 @@ impl RpcSubscriptions {
         notifier: &RpcNotifier,
         cache_slot_info: &CacheSlotInfo,
     ) {
+        info!(
+            "check_signature() for slot: {}, cache_slot_info: {:?}",
+            cache_slot_info.current_slot, cache_slot_info
+        );
         let mut subscriptions = signature_subscriptions.write().unwrap();
         let notified_ids = check_commitment_and_notify(
             &subscriptions,
@@ -507,6 +511,7 @@ impl RpcSubscriptions {
             filter_signature_result,
             notifier,
         );
+
         if let Some(subscription_ids) = subscriptions.get_mut(signature) {
             subscription_ids.retain(|k, _| !notified_ids.contains(k));
             if subscription_ids.is_empty() {
@@ -687,6 +692,7 @@ impl RpcSubscriptions {
     /// Notify subscribers of changes to any accounts or new signatures since
     /// the bank's last checkpoint.
     pub fn notify_subscribers(&self, cache_slot_info: CacheSlotInfo) {
+        info!("notify_subscribers: {:?}", cache_slot_info);
         self.enqueue_notification(NotificationEntry::Bank(cache_slot_info));
     }
 
@@ -779,83 +785,86 @@ impl RpcSubscriptions {
                 break;
             }
             match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
-                Ok(notification_entry) => match notification_entry {
-                    NotificationEntry::Slot(slot_info) => {
-                        let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
-                        for (_, sink) in subscriptions.iter() {
-                            notifier.notify(slot_info, sink);
+                Ok(notification_entry) => {
+                    info!("process_notifications(): {:?}", notification_entry);
+                    match notification_entry {
+                        NotificationEntry::Slot(slot_info) => {
+                            let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
+                            for (_, sink) in subscriptions.iter() {
+                                notifier.notify(slot_info, sink);
+                            }
                         }
-                    }
-                    // These notifications are only triggered by votes observed on gossip,
-                    // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
-                    // in VoteState's from bank states built in ReplayStage.
-                    NotificationEntry::Vote(ref vote_info) => {
-                        let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
-                        for (_, sink) in subscriptions.iter() {
-                            notifier.notify(
-                                RpcVote {
-                                    slots: vote_info.slots.clone(),
-                                    hash: bs58::encode(vote_info.hash).into_string(),
-                                    timestamp: vote_info.timestamp,
-                                },
-                                sink,
-                            );
+                        // These notifications are only triggered by votes observed on gossip,
+                        // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
+                        // in VoteState's from bank states built in ReplayStage.
+                        NotificationEntry::Vote(ref vote_info) => {
+                            let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
+                            for (_, sink) in subscriptions.iter() {
+                                notifier.notify(
+                                    RpcVote {
+                                        slots: vote_info.slots.clone(),
+                                        hash: bs58::encode(vote_info.hash).into_string(),
+                                        timestamp: vote_info.timestamp,
+                                    },
+                                    sink,
+                                );
+                            }
                         }
-                    }
-                    NotificationEntry::Root(root) => {
-                        let subscriptions = subscriptions.root_subscriptions.read().unwrap();
-                        for (_, sink) in subscriptions.iter() {
-                            notifier.notify(root, sink);
-                        }
+                        NotificationEntry::Root(root) => {
+                            let subscriptions = subscriptions.root_subscriptions.read().unwrap();
+                            for (_, sink) in subscriptions.iter() {
+                                notifier.notify(root, sink);
+                            }
 
-                        // Prune old pending notifications
-                        pending_gossip_notifications = pending_gossip_notifications
-                            .into_iter()
-                            .filter(|&s| s > root)
-                            .collect();
-                    }
-                    NotificationEntry::Bank(cache_slot_info) => {
-                        RpcSubscriptions::notify_accounts_programs_signatures(
-                            &subscriptions.account_subscriptions,
-                            &subscriptions.program_subscriptions,
-                            &subscriptions.signature_subscriptions,
-                            &bank_forks,
-                            &cache_slot_info,
-                            &notifier,
-                        )
-                    }
-                    NotificationEntry::Frozen(slot) => {
-                        if pending_gossip_notifications.remove(&slot) {
-                            Self::process_gossip_notification(
-                                slot,
-                                &notifier,
-                                &subscriptions,
-                                &bank_forks,
-                                &last_checked_slots,
-                            );
+                            // Prune old pending notifications
+                            pending_gossip_notifications = pending_gossip_notifications
+                                .into_iter()
+                                .filter(|&s| s > root)
+                                .collect();
                         }
-                    }
-                    NotificationEntry::Gossip(slot) => {
-                        let bank_frozen = bank_forks
-                            .read()
-                            .unwrap()
-                            .get(slot)
-                            .filter(|b| b.is_frozen())
-                            .is_some();
+                        NotificationEntry::Bank(cache_slot_info) => {
+                            RpcSubscriptions::notify_accounts_programs_signatures(
+                                &subscriptions.account_subscriptions,
+                                &subscriptions.program_subscriptions,
+                                &subscriptions.signature_subscriptions,
+                                &bank_forks,
+                                &cache_slot_info,
+                                &notifier,
+                            )
+                        }
+                        NotificationEntry::Frozen(slot) => {
+                            if pending_gossip_notifications.remove(&slot) {
+                                Self::process_gossip_notification(
+                                    slot,
+                                    &notifier,
+                                    &subscriptions,
+                                    &bank_forks,
+                                    &last_checked_slots,
+                                );
+                            }
+                        }
+                        NotificationEntry::Gossip(slot) => {
+                            let bank_frozen = bank_forks
+                                .read()
+                                .unwrap()
+                                .get(slot)
+                                .filter(|b| b.is_frozen())
+                                .is_some();
 
-                        if !bank_frozen {
-                            pending_gossip_notifications.insert(slot);
-                        } else {
-                            Self::process_gossip_notification(
-                                slot,
-                                &notifier,
-                                &subscriptions,
-                                &bank_forks,
-                                &last_checked_slots,
-                            );
+                            if !bank_frozen {
+                                pending_gossip_notifications.insert(slot);
+                            } else {
+                                Self::process_gossip_notification(
+                                    slot,
+                                    &notifier,
+                                    &subscriptions,
+                                    &bank_forks,
+                                    &last_checked_slots,
+                                );
+                            }
                         }
                     }
-                },
+                }
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again
                 }

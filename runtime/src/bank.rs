@@ -2464,6 +2464,13 @@ impl Bank {
     ) -> Option<Result<()>> {
         if let Some((slot, status)) = self.get_signature_status_slot(signature) {
             if slot <= self.slot() {
+                info!(
+                    "get_signature_status_processed_since_parent(): 
+                    found slot {} 
+                    contained signature: {:?},
+                    status: {:?}",
+                    slot, signature, status
+                );
                 return Some(status);
             }
         }

@@ -63,6 +63,13 @@ impl TransactionStatusService {
                 .zip(balances.pre_balances)
                 .zip(balances.post_balances)
         {
+            info!(
+                "slot: {}, tx signature: {}, status: {:?}, hash_age_kind: {:?}",
+                bank.slot(),
+                transaction.signatures[0],
+                status,
+                hash_age_kind,
+            );
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {

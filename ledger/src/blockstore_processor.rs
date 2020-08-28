@@ -854,6 +854,7 @@ pub fn send_transaction_status_batch(
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
+
     if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
         bank,
         transactions: transactions.to_vec(),
