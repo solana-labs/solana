@@ -3,32 +3,32 @@ use crate::{
     StringAmount,
 };
 use solana_sdk::pubkey::Pubkey;
-use spl_token_v1_0::{
+use spl_token_v2_0::{
     option::COption,
+    pack::Pack,
     solana_sdk::pubkey::Pubkey as SplTokenPubkey,
-    state::{unpack, Account, Mint, Multisig},
+    state::{Account, AccountState, Mint, Multisig},
 };
 use std::{mem::size_of, str::FromStr};
 
-// A helper function to convert spl_token_v1_0::id() as spl_sdk::pubkey::Pubkey to
+// A helper function to convert spl_token_v2_0::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-pub fn spl_token_id_v1_0() -> Pubkey {
-    Pubkey::from_str(&spl_token_v1_0::id().to_string()).unwrap()
+pub fn spl_token_id_v2_0() -> Pubkey {
+    Pubkey::from_str(&spl_token_v2_0::id().to_string()).unwrap()
 }
 
-// A helper function to convert spl_token_v1_0::native_mint::id() as spl_sdk::pubkey::Pubkey to
+// A helper function to convert spl_token_v2_0::native_mint::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-pub fn spl_token_v1_0_native_mint() -> Pubkey {
-    Pubkey::from_str(&spl_token_v1_0::native_mint::id().to_string()).unwrap()
+pub fn spl_token_v2_0_native_mint() -> Pubkey {
+    Pubkey::from_str(&spl_token_v2_0::native_mint::id().to_string()).unwrap()
 }
 
 pub fn parse_token(
     data: &[u8],
     mint_decimals: Option<u8>,
 ) -> Result<TokenAccountType, ParseAccountError> {
-    let mut data = data.to_vec();
     if data.len() == size_of::<Account>() {
-        let account: Account = *unpack(&mut data)
+        let account = Account::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         let decimals = mint_decimals.ok_or_else(|| {
             ParseAccountError::AdditionalDataMissing(
@@ -43,8 +43,12 @@ pub fn parse_token(
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
-            is_initialized: account.is_initialized,
-            is_native: account.is_native,
+            state: account.state.into(),
+            is_native: account.is_native(),
+            rent_exempt_reserve: match account.is_native {
+                COption::Some(reserve) => Some(token_amount_to_ui_amount(reserve, decimals)),
+                COption::None => None,
+            },
             delegated_amount: if account.delegate.is_none() {
                 None
             } else {
@@ -53,20 +57,29 @@ pub fn parse_token(
                     decimals,
                 ))
             },
-        }))
-    } else if data.len() == size_of::<Mint>() {
-        let mint: Mint = *unpack(&mut data)
-            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
-        Ok(TokenAccountType::Mint(UiMint {
-            owner: match mint.owner {
+            close_authority: match account.close_authority {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
+        }))
+    } else if data.len() == size_of::<Mint>() {
+        let mint = Mint::unpack(data)
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
+        Ok(TokenAccountType::Mint(UiMint {
+            mint_authority: match mint.mint_authority {
+                COption::Some(pubkey) => Some(pubkey.to_string()),
+                COption::None => None,
+            },
+            supply: mint.supply.to_string(),
             decimals: mint.decimals,
             is_initialized: mint.is_initialized,
+            freeze_authority: match mint.freeze_authority {
+                COption::Some(pubkey) => Some(pubkey.to_string()),
+                COption::None => None,
+            },
         }))
     } else if data.len() == size_of::<Multisig>() {
-        let multisig: Multisig = *unpack(&mut data)
+        let multisig = Multisig::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
             num_required_signers: multisig.m,
@@ -107,10 +120,32 @@ pub struct UiTokenAccount {
     pub token_amount: UiTokenAmount,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegate: Option<String>,
-    pub is_initialized: bool,
+    pub state: UiAccountState,
     pub is_native: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub rent_exempt_reserve: Option<UiTokenAmount>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_amount: Option<UiTokenAmount>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub close_authority: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum UiAccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+
+impl From<AccountState> for UiAccountState {
+    fn from(state: AccountState) -> Self {
+        match state {
+            AccountState::Uninitialized => UiAccountState::Uninitialized,
+            AccountState::Initialized => UiAccountState::Initialized,
+            AccountState::Frozen => UiAccountState::Frozen,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -134,9 +169,11 @@ pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMint {
-    pub owner: Option<String>,
+    pub mint_authority: Option<String>,
+    pub supply: StringAmount,
     pub decimals: u8,
     pub is_initialized: bool,
+    pub freeze_authority: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -159,18 +196,23 @@ pub fn get_token_account_mint(data: &[u8]) -> Option<Pubkey> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use spl_token_v1_0::state::unpack_unchecked;
 
     #[test]
     fn test_parse_token() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
         let mut account_data = [0; size_of::<Account>()];
-        let mut account: &mut Account = unpack_unchecked(&mut account_data).unwrap();
-        account.mint = mint_pubkey;
-        account.owner = owner_pubkey;
-        account.amount = 42;
-        account.is_initialized = true;
+        Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
+            account.mint = mint_pubkey;
+            account.owner = owner_pubkey;
+            account.amount = 42;
+            account.state = AccountState::Initialized;
+            account.is_native = COption::None;
+            account.close_authority = COption::Some(owner_pubkey);
+            Ok(())
+        })
+        .unwrap();
+
         assert!(parse_token(&account_data, None).is_err());
         assert_eq!(
             parse_token(&account_data, Some(2)).unwrap(),
@@ -183,23 +225,33 @@ mod test {
                     amount: "42".to_string()
                 },
                 delegate: None,
-                is_initialized: true,
+                state: UiAccountState::Initialized,
                 is_native: false,
+                rent_exempt_reserve: None,
                 delegated_amount: None,
+                close_authority: Some(owner_pubkey.to_string()),
             }),
         );
 
         let mut mint_data = [0; size_of::<Mint>()];
-        let mut mint: &mut Mint = unpack_unchecked(&mut mint_data).unwrap();
-        mint.owner = COption::Some(owner_pubkey);
-        mint.decimals = 3;
-        mint.is_initialized = true;
+        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
+            mint.mint_authority = COption::Some(owner_pubkey);
+            mint.supply = 42;
+            mint.decimals = 3;
+            mint.is_initialized = true;
+            mint.freeze_authority = COption::Some(owner_pubkey);
+            Ok(())
+        })
+        .unwrap();
+
         assert_eq!(
             parse_token(&mint_data, None).unwrap(),
             TokenAccountType::Mint(UiMint {
-                owner: Some(owner_pubkey.to_string()),
+                mint_authority: Some(owner_pubkey.to_string()),
+                supply: 42.to_string(),
                 decimals: 3,
                 is_initialized: true,
+                freeze_authority: Some(owner_pubkey.to_string()),
             }),
         );
 
@@ -207,15 +259,18 @@ mod test {
         let signer2 = SplTokenPubkey::new(&[2; 32]);
         let signer3 = SplTokenPubkey::new(&[3; 32]);
         let mut multisig_data = [0; size_of::<Multisig>()];
-        let mut multisig: &mut Multisig = unpack_unchecked(&mut multisig_data).unwrap();
         let mut signers = [SplTokenPubkey::default(); 11];
         signers[0] = signer1;
         signers[1] = signer2;
         signers[2] = signer3;
-        multisig.m = 2;
-        multisig.n = 3;
-        multisig.is_initialized = true;
-        multisig.signers = signers;
+        Multisig::unpack_unchecked_mut(&mut multisig_data, &mut |multisig: &mut Multisig| {
+            multisig.m = 2;
+            multisig.n = 3;
+            multisig.is_initialized = true;
+            multisig.signers = signers;
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(
             parse_token(&multisig_data, None).unwrap(),
             TokenAccountType::Multisig(UiMultisig {
@@ -238,8 +293,11 @@ mod test {
     fn test_get_token_account_mint() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let mut account_data = [0; size_of::<Account>()];
-        let mut account: &mut Account = unpack_unchecked(&mut account_data).unwrap();
-        account.mint = mint_pubkey;
+        Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
+            account.mint = mint_pubkey;
+            Ok(())
+        })
+        .unwrap();
 
         let expected_mint_pubkey = Pubkey::new(&[2; 32]);
         assert_eq!(
