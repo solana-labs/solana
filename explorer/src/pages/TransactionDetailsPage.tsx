@@ -290,11 +290,11 @@ function AccountsCard({
 
   if (autoRefresh === AutoRefresh.BailedOut || !status?.data?.info) {
     return null;
-  } else if (
-    !details ||
-    details.status === FetchStatus.Fetching ||
-    autoRefresh === AutoRefresh.Active
-  ) {
+  } else if (autoRefresh === AutoRefresh.Active) {
+    return (
+      <ErrorCard text="Details are not available until the transaction reaches MAX confirmations" />
+    );
+  } else if (!details || details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
