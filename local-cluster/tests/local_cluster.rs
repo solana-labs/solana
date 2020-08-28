@@ -1376,13 +1376,13 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
     let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![50, 51];
+    let node_stakes = vec![51, 50];
     let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
         .take(node_stakes.len())
         .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
-        node_stakes: vec![51, 50],
+        node_stakes: node_stakes.clone(),
         validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
         validator_keys: Some(validator_keys),
         slots_per_epoch,
@@ -1476,19 +1476,20 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_no_optimistic_confirmation_violation_with_tower() {
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![50, 51];
+    let node_stakes = vec![51, 50];
     let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
         .take(node_stakes.len())
         .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
-        node_stakes: vec![51, 50],
+        node_stakes: node_stakes.clone(),
         validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
         validator_keys: Some(validator_keys),
         slots_per_epoch,
@@ -1544,9 +1545,6 @@ fn test_no_optimistic_confirmation_violation_with_tower() {
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
     cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
-
-    // at this moment, the validator should be dead because of tower assertion
-    cluster.remove_dead_node(&entry_point_id);
 
     // Check to see that validator didn't detected optimistic confirmation for
     // `prev_voted_slot` failed

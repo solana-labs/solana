@@ -490,19 +490,20 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
-        let root = self.lockouts.root_slot.unwrap_or(0);
-
         self.last_voted_slot()
             .map(|last_voted_slot| {
+                let root = self.lockouts.root_slot.unwrap_or(0);
+                let empty_ancestors = HashSet::default();
+
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                         if !self.is_stray_last_vote() {
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
                             // bank_forks doesn't have corresponding data for the stray restored last vote,
-                            // meaning severe inconsistentcy between saved tower and ledger.
-                            // (corrupted or pruned ledger, or only saved tower is moved over to new setup?)
-                            panic!("Unable to get ancestors for stray last vote {:?}", self.stray_restored_slot());
+                            // meaning some inconsistency between saved tower and ledger.
+                            // (newer snapshot, or only a saved tower is moved over to new setup?)
+                            &empty_ancestors
                         }
                     });
 

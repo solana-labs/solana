@@ -496,24 +496,21 @@ impl HeaviestSubtreeForkChoice {
             .last_voted_slot()
             .map(|last_voted_slot| {
                 let heaviest_slot_on_same_voted_fork = self.best_slot(last_voted_slot);
-                let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork
-                    .unwrap_or_else(|| {
-                        if !tower.is_stray_last_vote() {
-                            panic!(
-                                "a bank at last_voted_slot({}) is a frozen bank so must have been\
-                                added to heaviest_subtree_fork_choice at time of freezing",
-                                last_voted_slot,
-                            )
-                        } else {
-                            // fork_infos doesn't have corresponding data for the stray restored last vote,
-                            // meaning severe inconsistentcy between saved tower and ledger.
-                            // (corrupted or pruned ledger, or only saved tower is moved over to new setup?)
-                            panic!(
-                                "Unable to get best_slot for stray last vote {:?}",
-                                tower.stray_restored_slot()
-                            );
-                        };
-                    });
+                if heaviest_slot_on_same_voted_fork.is_none() {
+                    if !tower.is_stray_last_vote() {
+                        panic!(
+                            "a bank at last_voted_slot({}) is a frozen bank so must have been\
+                            added to heaviest_subtree_fork_choice at time of freezing",
+                            last_voted_slot,
+                        )
+                    } else {
+                        // fork_infos doesn't have corresponding data for the stray restored last vote,
+                        // meaning some inconsistency between saved tower and ledger.
+                        // (newer snapshot, or only a saved tower is moved over to new setup?)
+                        return None;
+                    }
+                }
+                let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork.unwrap();
 
                 if heaviest_slot_on_same_voted_fork == last_voted_slot {
                     None
@@ -1516,7 +1513,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Unable to get best_slot for stray last vote Some(3)")]
     fn test_stray_restored_slot() {
         let forks = tr(0) / (tr(1) / tr(2));
         let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
@@ -1552,7 +1548,10 @@ mod test {
             .unwrap();
 
         assert_eq!(tower.is_stray_last_vote(), true);
-        heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower);
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            None
+        );
     }
 
     fn setup_forks() -> HeaviestSubtreeForkChoice {
