@@ -11,7 +11,7 @@ use jsonrpc_derive::rpc;
 use solana_account_decoder::{
     parse_account_data::AccountAdditionalData,
     parse_token::{
-        get_token_account_mint, spl_token_id_v1_0, spl_token_v1_0_native_mint,
+        get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
         token_amount_to_ui_amount, UiTokenAmount,
     },
     UiAccount, UiAccountEncoding,
@@ -58,7 +58,10 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
-use spl_token_v1_0::state::{Account as TokenAccount, Mint};
+use spl_token_v2_0::{
+    pack::Pack,
+    state::{Account as TokenAccount, Mint},
+};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
@@ -242,7 +245,7 @@ impl JsonRpcRequestProcessor {
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
         let mut response = None;
         if let Some(account) = bank.get_account(pubkey) {
-            if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
             } else if (encoding == UiAccountEncoding::Binary
                 || encoding == UiAccountEncoding::Base58)
@@ -290,7 +293,7 @@ impl JsonRpcRequestProcessor {
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
         let result =
-            if program_id == &spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
+            if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts).collect()
             } else {
                 keyed_accounts
@@ -1020,16 +1023,14 @@ impl JsonRpcRequestProcessor {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
 
-        if account.owner != spl_token_id_v1_0() {
+        if account.owner != spl_token_id_v2_0() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v1.0 Token account".to_string(),
+                "Invalid param: not a v2.0 Token account".to_string(),
             ));
         }
-        let mut data = account.data.to_vec();
-        let token_account =
-            spl_token_v1_0::state::unpack::<TokenAccount>(&mut data).map_err(|_| {
-                Error::invalid_params("Invalid param: not a v1.0 Token account".to_string())
-            })?;
+        let token_account = TokenAccount::unpack_from_slice(&account.data).map_err(|_| {
+            Error::invalid_params("Invalid param: not a v2.0 Token account".to_string())
+        })?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
         let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint)?;
@@ -1044,9 +1045,9 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<UiTokenAmount>> {
         let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        if mint_owner != spl_token_id_v1_0() {
+        if mint_owner != spl_token_id_v2_0() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v1.0 Token mint".to_string(),
+                "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
 
@@ -1062,9 +1063,8 @@ impl JsonRpcRequestProcessor {
         ];
         let supply = get_filtered_program_accounts(&bank, &mint_owner, filters)
             .map(|(_pubkey, account)| {
-                let mut data = account.data.to_vec();
-                spl_token_v1_0::state::unpack(&mut data)
-                    .map(|account: &mut TokenAccount| account.amount)
+                TokenAccount::unpack_from_slice(&account.data)
+                    .map(|account| account.amount)
                     .unwrap_or(0)
             })
             .sum();
@@ -1079,9 +1079,9 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
         let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        if mint_owner != spl_token_id_v1_0() {
+        if mint_owner != spl_token_id_v2_0() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v1.0 Token mint".to_string(),
+                "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
         let filters = vec![
@@ -1097,9 +1097,8 @@ impl JsonRpcRequestProcessor {
         let mut token_balances: Vec<RpcTokenAccountBalance> =
             get_filtered_program_accounts(&bank, &mint_owner, filters)
                 .map(|(address, account)| {
-                    let mut data = account.data.to_vec();
-                    let amount = spl_token_v1_0::state::unpack(&mut data)
-                        .map(|account: &mut TokenAccount| account.amount)
+                    let amount = TokenAccount::unpack_from_slice(&account.data)
+                        .map(|account| account.amount)
                         .unwrap_or(0);
                     let amount = token_amount_to_ui_amount(amount, decimals);
                     RpcTokenAccountBalance {
@@ -1363,15 +1362,15 @@ fn get_token_program_id_and_mint(
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
             let (mint_owner, _) = get_mint_owner_and_decimals(&bank, &mint)?;
-            if mint_owner != spl_token_id_v1_0() {
+            if mint_owner != spl_token_id_v2_0() {
                 return Err(Error::invalid_params(
-                    "Invalid param: not a v1.0 Token mint".to_string(),
+                    "Invalid param: not a v2.0 Token mint".to_string(),
                 ));
             }
             Ok((mint_owner, Some(mint)))
         }
         TokenAccountsFilter::ProgramId(program_id) => {
-            if program_id == spl_token_id_v1_0() {
+            if program_id == spl_token_id_v2_0() {
                 Ok((program_id, None))
             } else {
                 Err(Error::invalid_params(
@@ -1385,8 +1384,8 @@ fn get_token_program_id_and_mint(
 /// Analyze a mint Pubkey that may be the native_mint and get the mint-account owner (token
 /// program_id) and decimals
 fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubkey, u8)> {
-    if mint == &spl_token_v1_0_native_mint() {
-        Ok((spl_token_id_v1_0(), spl_token_v1_0::native_mint::DECIMALS))
+    if mint == &spl_token_v2_0_native_mint() {
+        Ok((spl_token_id_v2_0(), spl_token_v2_0::native_mint::DECIMALS))
     } else {
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
@@ -1397,12 +1396,11 @@ fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubke
 }
 
 fn get_mint_decimals(data: &[u8]) -> Result<u8> {
-    let mut data = data.to_vec();
-    spl_token_v1_0::state::unpack(&mut data)
+    Mint::unpack_from_slice(data)
         .map_err(|_| {
             Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
         })
-        .map(|mint: &mut Mint| mint.decimals)
+        .map(|mint| mint.decimals)
 }
 
 #[rpc]
@@ -1687,7 +1685,7 @@ pub trait RpcSol {
     ) -> Result<RpcStakeActivation>;
 
     // SPL Token-specific RPC endpoints
-    // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v1.0.0 for
+    // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
     // program details
 
     #[rpc(meta, name = "getTokenAccountBalance")]
@@ -2500,8 +2498,9 @@ pub mod tests {
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
-    use spl_token_v1_0::{
-        option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey, state::Mint,
+    use spl_token_v2_0::{
+        option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey,
+        state::AccountState as TokenAccountState, state::Mint,
     };
     use std::collections::HashMap;
 
@@ -4741,24 +4740,27 @@ pub mod tests {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount =
-            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        *account = TokenAccount {
-            mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 420,
-            is_initialized: true,
-            is_native: false,
-            delegated_amount: 30,
-        };
+        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
+            *account = TokenAccount {
+                mint,
+                owner,
+                delegate: COption::Some(delegate),
+                amount: 420,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         let token_account_pubkey = Pubkey::new_rand();
@@ -4766,17 +4768,21 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = [0; size_of::<Mint>()];
-        let mint_state: &mut Mint =
-            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
-        *mint_state = Mint {
-            owner: COption::Some(owner),
-            decimals: 2,
-            is_initialized: true,
-        };
+        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
+            *mint = Mint {
+                mint_authority: COption::Some(owner),
+                supply: 500,
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
@@ -4835,22 +4841,25 @@ pub mod tests {
 
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount =
-            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         let new_mint = SplTokenPubkey::new(&[5; 32]);
-        *account = TokenAccount {
-            mint: new_mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 42,
-            is_initialized: true,
-            is_native: false,
-            delegated_amount: 30,
-        };
+        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
+            *account = TokenAccount {
+                mint: new_mint,
+                owner,
+                delegate: COption::Some(delegate),
+                amount: 42,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         let token_with_different_mint_pubkey = Pubkey::new_rand();
@@ -4865,7 +4874,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             owner,
-            spl_token_id_v1_0(),
+            spl_token_id_v2_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -4883,7 +4892,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
             }}"#,
             owner,
-            spl_token_id_v1_0(),
+            spl_token_id_v2_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -4947,7 +4956,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             Pubkey::new_rand(),
-            spl_token_id_v1_0(),
+            spl_token_id_v2_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -4965,7 +4974,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             delegate,
-            spl_token_id_v1_0(),
+            spl_token_id_v2_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -5030,7 +5039,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             Pubkey::new_rand(),
-            spl_token_id_v1_0(),
+            spl_token_id_v2_0(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -5041,17 +5050,21 @@ pub mod tests {
 
         // Add new_mint, and another token account on new_mint with different balance
         let mut mint_data = [0; size_of::<Mint>()];
-        let mint_state: &mut Mint =
-            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
-        *mint_state = Mint {
-            owner: COption::Some(owner),
-            decimals: 2,
-            is_initialized: true,
-        };
+        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
+            *mint = Mint {
+                mint_authority: COption::Some(owner),
+                supply: 500,
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         bank.store_account(
@@ -5059,21 +5072,24 @@ pub mod tests {
             &mint_account,
         );
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount =
-            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
-        *account = TokenAccount {
-            mint: new_mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 10,
-            is_initialized: true,
-            is_native: false,
-            delegated_amount: 30,
-        };
+        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
+            *account = TokenAccount {
+                mint: new_mint,
+                owner,
+                delegate: COption::Some(delegate),
+                amount: 10,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         let token_with_smaller_balance = Pubkey::new_rand();
@@ -5117,24 +5133,27 @@ pub mod tests {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
         let mut account_data = [0; size_of::<TokenAccount>()];
-        let account: &mut TokenAccount =
-            spl_token_v1_0::state::unpack_unchecked(&mut account_data).unwrap();
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        *account = TokenAccount {
-            mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 420,
-            is_initialized: true,
-            is_native: false,
-            delegated_amount: 30,
-        };
+        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
+            *account = TokenAccount {
+                mint,
+                owner,
+                delegate: COption::Some(delegate),
+                amount: 420,
+                state: TokenAccountState::Initialized,
+                is_native: COption::Some(10),
+                delegated_amount: 30,
+                close_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         let token_account_pubkey = Pubkey::new_rand();
@@ -5142,17 +5161,21 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = [0; size_of::<Mint>()];
-        let mint_state: &mut Mint =
-            spl_token_v1_0::state::unpack_unchecked(&mut mint_data).unwrap();
-        *mint_state = Mint {
-            owner: COption::Some(owner),
-            decimals: 2,
-            is_initialized: true,
-        };
+        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
+            *mint = Mint {
+                mint_authority: COption::Some(owner),
+                supply: 500,
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(owner),
+            };
+            Ok(())
+        })
+        .unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v1_0(),
+            owner: spl_token_id_v2_0(),
             ..Account::default()
         };
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
@@ -5168,7 +5191,7 @@ pub mod tests {
             result["result"]["value"]["data"],
             json!({
                 "program": "spl-token",
-                "space": 120,
+                "space": 176,
                 "parsed": {
                     "type": "account",
                     "info": {
@@ -5180,13 +5203,19 @@ pub mod tests {
                             "amount": "420",
                         },
                         "delegate": delegate.to_string(),
-                        "isInitialized": true,
-                        "isNative": false,
+                        "state": "initialized",
+                        "isNative": true,
+                        "rentExemptReserve": {
+                            "uiAmount": 0.1,
+                            "decimals": 2,
+                            "amount": "10",
+                        },
                         "delegatedAmount": {
                             "uiAmount": 0.3,
                             "decimals": 2,
                             "amount": "30",
                         },
+                        "closeAuthority": owner.to_string(),
                     }
                 }
             })
@@ -5204,13 +5233,15 @@ pub mod tests {
             result["result"]["value"]["data"],
             json!({
                 "program": "spl-token",
-                "space": 40,
+                "space": 88,
                 "parsed": {
                     "type": "mint",
                     "info": {
-                        "owner": owner.to_string(),
+                        "mintAuthority": owner.to_string(),
                         "decimals": 2,
+                        "supply": "500".to_string(),
                         "isInitialized": true,
+                        "freezeAuthority": owner.to_string(),
                     }
                 }
             })
