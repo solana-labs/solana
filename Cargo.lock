@@ -4517,7 +4517,7 @@ dependencies = [
  "solana-stake-program",
  "solana-vote-program",
  "spl-memo",
- "spl-token 1.1.0",
+ "spl-token 2.0.0",
  "thiserror",
 ]
 

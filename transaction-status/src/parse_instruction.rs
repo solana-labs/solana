@@ -1,7 +1,7 @@
 use crate::parse_token::parse_token;
 use inflector::Inflector;
 use serde_json::Value;
-use solana_account_decoder::parse_token::spl_token_id_v1_0;
+use solana_account_decoder::parse_token::spl_token_id_v2_0;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 use std::{
     collections::HashMap,
@@ -12,7 +12,7 @@ use thiserror::Error;
 lazy_static! {
     static ref MEMO_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
-    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v1_0();
+    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(*MEMO_PROGRAM_ID, ParsableProgram::SplMemo);
