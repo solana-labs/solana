@@ -64,10 +64,15 @@ Different wallets will vary slightly in their process for this but the general
 description is below.
 
 #### Supported Wallets
-Currently, staking operation are only supported by wallets that can interact
-with the Solana command line tools, including Ledger Nano S and paper wallet.
+Staking operations are supported by the following wallet solutions:
 
-[Staking commands using the Solana Command Line Tools](cli/delegate-stake.md)
+ - SolFlare.com in conjunction with a keystore file or a Ledger Nano S.  Check
+ out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
+
+ - Solana command line tools can perform all stake operations in conjunction
+ with a CLI-generated keypair file wallet, a paper wallet, or with a connected
+ Ledger Nano S.
+ [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
 #### Create a Stake Account
 A stake account is a different type of account from a wallet address
