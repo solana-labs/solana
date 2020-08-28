@@ -61,17 +61,6 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
     0
   );
 
-  React.useEffect(() => {
-    if (
-      status &&
-      status.status === FetchStatus.Fetched &&
-      status.data?.info &&
-      status.data.info.confirmations === 0
-    ) {
-      setZeroConfirmationRetries((retries) => retries + 1);
-    }
-  }, [status]);
-
   let autoRefresh = AutoRefresh.Inactive;
 
   if (zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT) {
@@ -79,6 +68,25 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   } else if (status?.data?.info && status.data.info.confirmations !== "max") {
     autoRefresh = AutoRefresh.Active;
   }
+
+  React.useEffect(() => {
+    if (
+      status?.status === FetchStatus.Fetched &&
+      status.data?.info &&
+      status.data.info.confirmations === 0
+    ) {
+      setZeroConfirmationRetries((retries) => retries + 1);
+    }
+  }, [status]);
+
+  React.useEffect(() => {
+    if (
+      status?.status === FetchStatus.Fetching &&
+      autoRefresh === AutoRefresh.BailedOut
+    ) {
+      setZeroConfirmationRetries(0);
+    }
+  }, [status, autoRefresh, setZeroConfirmationRetries]);
 
   return (
     <div className="container mt-n3">
@@ -276,7 +284,9 @@ function AccountsCard({
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
+  const fetchStatus = useFetchTransactionStatus();
   const refreshDetails = () => fetchDetails(signature);
+  const refreshStatus = () => fetchStatus(signature);
   const transaction = details?.data?.transaction?.transaction;
   const message = transaction?.message;
   const status = useTransactionStatus(signature);
@@ -294,7 +304,7 @@ function AccountsCard({
     return (
       <ErrorCard
         text="Details are not available until the transaction reaches MAX confirmations"
-        retry={refreshDetails}
+        retry={refreshStatus}
       />
     );
   } else if (autoRefresh === AutoRefresh.Active) {
