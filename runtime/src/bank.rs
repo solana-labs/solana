@@ -1680,13 +1680,16 @@ impl Bank {
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
         );
+        write_time.stop();
+        if write_time.as_us() > 10000 {
+            info!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
+        }
+
         self.collect_rent(executed, loaded_accounts);
 
         self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
         // once committed there is no way to unroll
-        write_time.stop();
-        debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);

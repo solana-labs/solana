@@ -373,6 +373,45 @@ struct FrozenAccountInfo {
     pub lamports: u64, // Account balance cannot be lower than this amount
 }
 
+#[derive(Default)]
+struct FindStorageCandidateTiming {
+    slot: Slot,
+    storage_lock_elapsed: u64,
+    total_count_and_status_locks_elapsed: u64,
+    total_try_available_elapsed: u64,
+    total_create_and_insert_store_elapsed: u64,
+    slot_stores_len: usize,
+    create_and_insert_store_last_elapsed: u64,
+    try_available_last_elapsed: u64,
+    total_elapsed: u64,
+}
+
+impl FindStorageCandidateTiming {
+    fn report(&self) {
+        if self.total_elapsed > 10_000 {
+            info!(
+                "find_storage_candidate(),
+                slot: {},
+                storage_lock_elapsed: {},
+                total_count_and_status_locks_elapsed: {},
+                total_try_available_elapsed: {},
+                total_create_and_insert_store_elapsed: {},
+                slot_stores_len: {},
+                create_and_insert_store_last_elapsed: {},
+                try_available_last_elapsed: {}",
+                self.slot,
+                self.storage_lock_elapsed,
+                self.total_count_and_status_locks_elapsed,
+                self.total_try_available_elapsed,
+                self.total_create_and_insert_store_elapsed,
+                self.slot_stores_len,
+                self.create_and_insert_store_last_elapsed,
+                self.try_available_last_elapsed,
+            );
+        }
+    }
+}
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
@@ -939,6 +978,7 @@ impl AccountsDB {
                 &hashes,
                 |_| shrunken_store.clone(),
                 write_versions.into_iter(),
+                "do_shrink_slot",
             );
             let reclaims = self.update_index(slot, infos, &accounts);
 
@@ -1149,15 +1189,28 @@ impl AccountsDB {
     }
 
     fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {
+        let mut timing = FindStorageCandidateTiming::default();
+        timing.slot = slot;
+        let mut start = Measure::start("start");
         let mut create_extra = false;
+
+        let mut storage_lock_start = Measure::start("storage_lock");
         let stores = self.storage.read().unwrap();
+        storage_lock_start.stop();
+        timing.storage_lock_elapsed = storage_lock_start.as_us();
 
         if let Some(slot_stores) = stores.0.get(&slot) {
+            timing.slot_stores_len = slot_stores.len();
             if !slot_stores.is_empty() {
                 if slot_stores.len() <= self.min_num_stores {
                     let mut total_accounts = 0;
                     for store in slot_stores.values() {
+                        let mut count_and_status_lock_start =
+                            Measure::start("count_and_status_lock_start");
                         total_accounts += store.count_and_status.read().unwrap().0;
+                        count_and_status_lock_start.stop();
+                        timing.total_count_and_status_locks_elapsed +=
+                            count_and_status_lock_start.as_us();
                     }
 
                     // Create more stores so that when scanning the storage all CPUs have work
@@ -1170,12 +1223,25 @@ impl AccountsDB {
                 let to_skip = thread_rng().gen_range(0, slot_stores.len());
 
                 for (i, store) in slot_stores.values().cycle().skip(to_skip).enumerate() {
-                    if store.try_available() {
+                    let mut try_available_start = Measure::start("try_available_start");
+                    let available = store.try_available();
+                    try_available_start.stop();
+                    timing.total_try_available_elapsed += try_available_start.as_us();
+
+                    if available {
                         let ret = store.clone();
                         drop(stores);
                         if create_extra {
+                            let mut create_and_insert_store_start =
+                                Measure::start("create_and_insert_store_start");
                             self.create_and_insert_store(slot, self.file_size);
+                            create_and_insert_store_start.stop();
+                            timing.total_create_and_insert_store_elapsed +=
+                                create_and_insert_store_start.as_us();
                         }
+                        start.stop();
+                        timing.total_elapsed += start.as_us();
+                        timing.report();
                         return ret;
                     }
                     // looked at every store, bail...
@@ -1188,8 +1254,22 @@ impl AccountsDB {
 
         drop(stores);
 
+        let mut create_and_insert_store_last_start =
+            Measure::start("create_and_insert_store_start");
         let store = self.create_and_insert_store(slot, self.file_size);
+        create_and_insert_store_last_start.stop();
+
+        timing.create_and_insert_store_last_elapsed += create_and_insert_store_last_start.as_us();
+
+        let mut try_available_last_start = Measure::start("create_and_insert_store_start");
         store.try_available();
+        try_available_last_start.stop();
+        timing.try_available_last_elapsed += try_available_last_start.as_us();
+
+        start.stop();
+        timing.total_elapsed += start.as_us();
+
+        timing.report();
         store
     }
 
@@ -1375,6 +1455,7 @@ impl AccountsDB {
             hashes,
             storage_finder,
             write_version_producer,
+            "store_accounts()",
         )
     }
 
@@ -1385,8 +1466,10 @@ impl AccountsDB {
         hashes: &[Hash],
         mut storage_finder: F,
         mut write_version_producer: P,
+        caller: &str,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
+        let mut start = Measure::start("store_accounts_to");
         let with_meta: Vec<(StoredMeta, &Account)> = accounts
             .iter()
             .map(|(pubkey, account)| {
@@ -1406,11 +1489,30 @@ impl AccountsDB {
             })
             .collect();
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
+        start.stop();
+        let with_meta_us = start.as_us();
+
+        let mut start = Measure::start("store_accounts_to");
+        let mut total_iterations = 0;
+        let mut total_storage_finder_elapsed = 0;
+        let mut total_append_accounts_elapsed = 0;
+        let mut total_create_and_insert_store_start_elapsed = 0;
+        let mut total_storage_add_account_elapsed = 0;
         while infos.len() < with_meta.len() {
+            total_iterations += 1;
+            let mut storage_finder_start = Measure::start("storage_finder");
             let storage = storage_finder(slot);
+            storage_finder_start.stop();
+            total_storage_finder_elapsed += storage_finder_start.as_us();
+
+            let mut append_accounts_start = Measure::start("append_accounts");
             let rvs = storage
                 .accounts
                 .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);
+            append_accounts_start.stop();
+            total_append_accounts_elapsed += append_accounts_start.as_us();
+
+            let mut create_and_insert_store_start = Measure::start("create_and_insert_store");
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::Full);
 
@@ -1421,6 +1523,10 @@ impl AccountsDB {
                 }
                 continue;
             }
+            create_and_insert_store_start.stop();
+            total_create_and_insert_store_start_elapsed += create_and_insert_store_start.as_us();
+
+            let mut storage_add_account_start = Measure::start("storage_add_account_start");
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
                 infos.push(AccountInfo {
@@ -1429,8 +1535,33 @@ impl AccountsDB {
                     lamports: account.lamports,
                 });
             }
+            storage_add_account_start.stop();
+            total_storage_add_account_elapsed += storage_add_account_start.as_us();
+
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
+        }
+        start.stop();
+
+        if with_meta_us + start.as_us() > 10000 {
+            info!(
+                "{} -> store_accounts_to():
+            slot: {},
+            total_iterations: {}
+            with_meta: {}us,
+            total_storage_finder_elapsed: {},
+            total_append_accounts_elapsed: {},
+            total_create_and_insert_store_start_elapsed: {},
+            total_storage_add_account: {}",
+                caller,
+                slot,
+                total_iterations,
+                with_meta_us,
+                total_storage_finder_elapsed,
+                total_append_accounts_elapsed,
+                total_create_and_insert_store_start_elapsed,
+                total_storage_add_account_elapsed
+            );
         }
         infos
     }

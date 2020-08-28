@@ -14,6 +14,7 @@ use crate::{
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::slice::ParallelSliceMut;
+use solana_measure::measure::Measure;
 use solana_sdk::{
     account::Account,
     clock::Slot,
@@ -677,6 +678,7 @@ impl Accounts {
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
     ) {
+        let mut start = Measure::start("collect_accounts_to_store");
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
             txs_iteration_order,
@@ -686,6 +688,10 @@ impl Accounts {
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
         );
+        start.stop();
+        if start.as_us() > 10000 {
+            info!("collect_accounts_to_store(): {}us ", start.as_us());
+        }
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
