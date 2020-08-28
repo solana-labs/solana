@@ -29,8 +29,24 @@ import { intoTransactionInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
 
-type Props = { signature: TransactionSignature };
-export function TransactionDetailsPage({ signature: raw }: Props) {
+const AUTO_REFRESH_INTERVAL = 2000;
+const ZERO_CONFIRMATION_BAILOUT = 5;
+
+type SignatureProps = {
+  signature: TransactionSignature;
+};
+
+enum AutoRefresh {
+  Active,
+  Inactive,
+  BailedOut,
+}
+
+type AutoRefreshProps = {
+  autoRefresh: AutoRefresh;
+};
+
+export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
   let signature: TransactionSignature | undefined;
 
   try {
@@ -39,6 +55,38 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
       signature = raw;
     }
   } catch (err) {}
+
+  const status = useTransactionStatus(signature);
+  const [zeroConfirmationRetries, setZeroConfirmationRetries] = React.useState(
+    0
+  );
+
+  let autoRefresh = AutoRefresh.Inactive;
+
+  if (zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT) {
+    autoRefresh = AutoRefresh.BailedOut;
+  } else if (status?.data?.info && status.data.info.confirmations !== "max") {
+    autoRefresh = AutoRefresh.Active;
+  }
+
+  React.useEffect(() => {
+    if (
+      status?.status === FetchStatus.Fetched &&
+      status.data?.info &&
+      status.data.info.confirmations === 0
+    ) {
+      setZeroConfirmationRetries((retries) => retries + 1);
+    }
+  }, [status]);
+
+  React.useEffect(() => {
+    if (
+      status?.status === FetchStatus.Fetching &&
+      autoRefresh === AutoRefresh.BailedOut
+    ) {
+      setZeroConfirmationRetries(0);
+    }
+  }, [status, autoRefresh, setZeroConfirmationRetries]);
 
   return (
     <div className="container mt-n3">
@@ -52,8 +100,8 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
         <ErrorCard text={`Signature "${raw}" is not valid`} />
       ) : (
         <>
-          <StatusCard signature={signature} />
-          <AccountsCard signature={signature} />
+          <StatusCard signature={signature} autoRefresh={autoRefresh} />
+          <AccountsCard signature={signature} autoRefresh={autoRefresh} />
           <InstructionsSection signature={signature} />
         </>
       )}
@@ -61,19 +109,14 @@ export function TransactionDetailsPage({ signature: raw }: Props) {
   );
 }
 
-function StatusCard({ signature }: Props) {
+function StatusCard({
+  signature,
+  autoRefresh,
+}: SignatureProps & AutoRefreshProps) {
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
-  const fetchDetails = useFetchTransactionDetails();
   const details = useTransactionDetails(signature);
   const { firstAvailableBlock, status: clusterStatus } = useCluster();
-  const refresh = React.useCallback(
-    (signature: string) => {
-      fetchStatus(signature);
-      fetchDetails(signature);
-    },
-    [fetchStatus, fetchDetails]
-  );
 
   // Fetch transaction on load
   React.useEffect(() => {
@@ -82,7 +125,25 @@ function StatusCard({ signature }: Props) {
     }
   }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!status || status.status === FetchStatus.Fetching) {
+  // Effect to set and clear interval for auto-refresh
+  React.useEffect(() => {
+    if (autoRefresh === AutoRefresh.Active) {
+      let intervalHandle: NodeJS.Timeout = setInterval(
+        () => fetchStatus(signature),
+        AUTO_REFRESH_INTERVAL
+      );
+
+      return () => {
+        clearInterval(intervalHandle);
+      };
+    }
+  }, [autoRefresh, fetchStatus, signature]);
+
+  if (
+    !status ||
+    (status.status === FetchStatus.Fetching &&
+      autoRefresh === AutoRefresh.Inactive)
+  ) {
     return <LoadingCard />;
   } else if (status.status === FetchStatus.FetchFailed) {
     return (
@@ -102,6 +163,7 @@ function StatusCard({ signature }: Props) {
   }
 
   const { info } = status.data;
+
   const renderResult = () => {
     let statusClass = "success";
     let statusText = "Success";
@@ -134,13 +196,17 @@ function StatusCard({ signature }: Props) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(signature)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
+        {autoRefresh === AutoRefresh.Active ? (
+          <span className="spinner-grow spinner-grow-sm"></span>
+        ) : (
+          <button
+            className="btn btn-white btn-sm"
+            onClick={() => fetchStatus(signature)}
+          >
+            <span className="fe fe-refresh-cw mr-2"></span>
+            Refresh
+          </button>
+        )}
       </div>
 
       <TableCardBody>
@@ -211,13 +277,16 @@ function StatusCard({ signature }: Props) {
   );
 }
 
-function AccountsCard({ signature }: Props) {
+function AccountsCard({
+  signature,
+  autoRefresh,
+}: SignatureProps & AutoRefreshProps) {
   const { url } = useCluster();
   const details = useTransactionDetails(signature);
-  const fetchStatus = useFetchTransactionStatus();
   const fetchDetails = useFetchTransactionDetails();
-  const refreshStatus = () => fetchStatus(signature);
+  const fetchStatus = useFetchTransactionStatus();
   const refreshDetails = () => fetchDetails(signature);
+  const refreshStatus = () => fetchStatus(signature);
   const transaction = details?.data?.transaction?.transaction;
   const message = transaction?.message;
   const status = useTransactionStatus(signature);
@@ -231,14 +300,18 @@ function AccountsCard({ signature }: Props) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details) {
+  } else if (autoRefresh === AutoRefresh.BailedOut) {
     return (
       <ErrorCard
-        retry={refreshStatus}
         text="Details are not available until the transaction reaches MAX confirmations"
+        retry={refreshStatus}
       />
     );
-  } else if (details.status === FetchStatus.Fetching) {
+  } else if (autoRefresh === AutoRefresh.Active) {
+    return (
+      <ErrorCard text="Details are not available until the transaction reaches MAX confirmations" />
+    );
+  } else if (!details || details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
@@ -317,7 +390,7 @@ function AccountsCard({ signature }: Props) {
   );
 }
 
-function InstructionsSection({ signature }: Props) {
+function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
