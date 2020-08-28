@@ -288,8 +288,15 @@ function AccountsCard({
     }
   }, [signature, details, status, fetchDetails]);
 
-  if (autoRefresh === AutoRefresh.BailedOut || !status?.data?.info) {
+  if (!status?.data?.info) {
     return null;
+  } else if (autoRefresh === AutoRefresh.BailedOut) {
+    return (
+      <ErrorCard
+        text="Details are not available until the transaction reaches MAX confirmations"
+        retry={refreshDetails}
+      />
+    );
   } else if (autoRefresh === AutoRefresh.Active) {
     return (
       <ErrorCard text="Details are not available until the transaction reaches MAX confirmations" />
