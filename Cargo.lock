@@ -404,24 +404,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cbindgen"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "104ca409bbff8293739438c71820a2606111b5f8f81835536dc673dfd807369e"
-dependencies = [
- "clap",
- "heck",
- "log 0.4.8",
- "proc-macro2 1.0.19",
- "quote 1.0.6",
- "serde",
- "serde_json",
- "syn 1.0.27",
- "tempfile",
- "toml",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,15 +1248,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
 dependencies = [
  "autocfg 1.0.0",
-]
-
-[[package]]
-name = "heck"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
-dependencies = [
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -4676,12 +4649,11 @@ dependencies = [
 
 [[package]]
 name = "spl-token"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b16e8d0f427bfaac8164645381187323f3326de7d5f5bbc5ba5dd5108bcafafe"
+checksum = "89ee48031d5b189a9da7295076ba07bf0ccd407e0fee1279281fb2c3258fa9fb"
 dependencies = [
  "arrayref",
- "cbindgen",
  "num-derive 0.3.0",
  "num-traits",
  "num_enum",
@@ -5714,12 +5686,6 @@ checksum = "5479532badd04e128284890390c1e876ef7a993d0570b3597ae43dfa1d59afa4"
 dependencies = [
  "smallvec 1.4.0",
 ]
-
-[[package]]
-name = "unicode-segmentation"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e83e153d1053cbb5a118eeff7fd5be06ed99153f00dbcd8ae310c5fb2b22edc0"
 
 [[package]]
 name = "unicode-width"

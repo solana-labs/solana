@@ -1028,7 +1028,7 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token account".to_string(),
             ));
         }
-        let token_account = TokenAccount::unpack_from_slice(&account.data).map_err(|_| {
+        let token_account = TokenAccount::unpack(&account.data).map_err(|_| {
             Error::invalid_params("Invalid param: not a v2.0 Token account".to_string())
         })?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
@@ -1052,7 +1052,7 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
-        let mint = Mint::unpack_from_slice(&mint_account.data).map_err(|_| {
+        let mint = Mint::unpack(&mint_account.data).map_err(|_| {
             Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
         })?;
 
@@ -1085,7 +1085,7 @@ impl JsonRpcRequestProcessor {
         let mut token_balances: Vec<RpcTokenAccountBalance> =
             get_filtered_program_accounts(&bank, &mint_owner, filters)
                 .map(|(address, account)| {
-                    let amount = TokenAccount::unpack_from_slice(&account.data)
+                    let amount = TokenAccount::unpack(&account.data)
                         .map(|account| account.amount)
                         .unwrap_or(0);
                     let amount = token_amount_to_ui_amount(amount, decimals);
@@ -1384,7 +1384,7 @@ fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubke
 }
 
 fn get_mint_decimals(data: &[u8]) -> Result<u8> {
-    Mint::unpack_from_slice(data)
+    Mint::unpack(data)
         .map_err(|_| {
             Error::invalid_params("Invalid param: Token mint could not be unpacked".to_string())
         })

@@ -167,7 +167,7 @@ pub fn parse_token(
             }
             let owned = match authority_type {
                 AuthorityType::MintTokens | AuthorityType::FreezeAccount => "mint",
-                AuthorityType::AccountHolder | AuthorityType::CloseAccount => "account",
+                AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
                 owned: account_keys[instruction.accounts[0] as usize].to_string(),
@@ -427,7 +427,7 @@ pub fn parse_token(
 pub enum UiAuthorityType {
     MintTokens,
     FreezeAccount,
-    AccountHolder,
+    AccountOwner,
     CloseAccount,
 }
 
@@ -436,7 +436,7 @@ impl From<AuthorityType> for UiAuthorityType {
         match authority_type {
             AuthorityType::MintTokens => UiAuthorityType::MintTokens,
             AuthorityType::FreezeAccount => UiAuthorityType::FreezeAccount,
-            AuthorityType::AccountHolder => UiAuthorityType::AccountHolder,
+            AuthorityType::AccountOwner => UiAuthorityType::AccountOwner,
             AuthorityType::CloseAccount => UiAuthorityType::CloseAccount,
         }
     }

@@ -28,7 +28,7 @@ pub fn parse_token(
     mint_decimals: Option<u8>,
 ) -> Result<TokenAccountType, ParseAccountError> {
     if data.len() == size_of::<Account>() {
-        let account = Account::unpack_from_slice(data)
+        let account = Account::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         let decimals = mint_decimals.ok_or_else(|| {
             ParseAccountError::AdditionalDataMissing(
@@ -63,7 +63,7 @@ pub fn parse_token(
             },
         }))
     } else if data.len() == size_of::<Mint>() {
-        let mint = Mint::unpack_from_slice(data)
+        let mint = Mint::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Mint(UiMint {
             mint_authority: match mint.mint_authority {
@@ -79,7 +79,7 @@ pub fn parse_token(
             },
         }))
     } else if data.len() == size_of::<Multisig>() {
-        let multisig = Multisig::unpack_from_slice(data)
+        let multisig = Multisig::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
             num_required_signers: multisig.m,
