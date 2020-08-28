@@ -51,7 +51,9 @@ function NonceAccountCard({
         </tr>
         <tr>
           <td>Blockhash</td>
-          <td className="text-lg-right">{nonceAccount.info.blockhash}</td>
+          <td className="text-lg-right">
+            <code>{nonceAccount.info.blockhash}</code>
+          </td>
         </tr>
         <tr>
           <td>Fee</td>
