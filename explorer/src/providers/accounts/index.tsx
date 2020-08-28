@@ -164,7 +164,25 @@ async function fetchAccountInfo(
           reportError(err, { url, address: pubkey.toBase58() });
           // TODO store error state in Account info
         }
+      } else if (
+        "parsed" in result.data &&
+        result.owner.equals(TOKEN_PROGRAM_ID)
+      ) {
+        try {
+          const info = coerce(result.data.parsed, ParsedInfo);
+          const parsed = coerce(info, TokenAccount);
+          data = {
+            name: "spl-token",
+            parsed,
+          };
+        } catch (err) {
+          Sentry.captureException(err, {
+            tags: { url, address: pubkey.toBase58() },
+          });
+          // TODO store error state in Account info
+        }
       } else if ("parsed" in result.data) {
+<<<<<<< HEAD
         if (result.owner.equals(TOKEN_PROGRAM_ID)) {
           try {
             const info = coerce(result.data.parsed, ParsedInfo);
@@ -177,7 +195,42 @@ async function fetchAccountInfo(
           } catch (err) {
             reportError(err, { url, address: pubkey.toBase58() });
             // TODO store error state in Account info
+=======
+        try {
+          const info = coerce(result.data.parsed, ParsedInfo);
+          switch (result.data.program) {
+            case "vote":
+              data = {
+                name: result.data.program,
+                parsed: coerce(info, VoteAccount),
+              };
+              break;
+            case "nonce":
+              data = {
+                name: result.data.program,
+                parsed: coerce(info, NonceAccount),
+              };
+              break;
+            case "sysvar":
+              data = {
+                name: result.data.program,
+                parsed: coerce(info, SysvarAccount),
+              };
+              break;
+            case "config":
+              data = {
+                name: result.data.program,
+                parsed: coerce(info, ConfigAccount),
+              };
+              break;
+            default:
+              data = undefined;
+>>>>>>> introduce vote account section and nonce account section, clean up superstructs
           }
+        } catch (error) {
+          Sentry.captureException(error, {
+            tags: { url, address: pubkey.toBase58() },
+          });
         }
       }
 

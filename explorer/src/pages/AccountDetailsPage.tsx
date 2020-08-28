@@ -19,6 +19,8 @@ import { TransactionHistoryCard } from "components/account/TransactionHistoryCar
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
 import { TokenRegistry } from "tokenRegistry";
+import { VoteAccountSection } from "components/account/VoteAccountSection";
+import { NonceAccountSection } from "components/account/NonceAccountSection";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -164,6 +166,10 @@ function InfoSection({ account }: { account: Account }) {
     );
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
+  } else if (data && data.name === "nonce") {
+    return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
+  } else if (data && data.name === "vote") {
+    return <VoteAccountSection account={account} voteAccount={data.parsed} />;
   } else {
     return <UnknownAccountCard account={account} />;
   }

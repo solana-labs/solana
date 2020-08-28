@@ -22,7 +22,7 @@ export const AuthorizedVoter = object({
 export type PriorVoter = StructType<typeof PriorVoter>;
 export const PriorVoter = object({
   authorizedPubkey: Pubkey,
-  epochOfLastAuthroizedSwitch: number(),
+  epochOfLastAuthorizedSwitch: number(),
   targetEpoch: number(),
 });
 
@@ -30,13 +30,13 @@ export type EpochCredits = StructType<typeof EpochCredits>;
 export const EpochCredits = object({
   epoch: number(),
   credits: string(),
-  previous_credits: string(),
+  previousCredits: string(),
 });
 
 export type Vote = StructType<typeof Vote>;
 export const Vote = object({
   slot: number(),
-  confirmation_count: number(),
+  confirmationCount: number(),
 });
 
 export type VoteAccountInfo = StructType<typeof VoteAccountInfo>;
@@ -50,7 +50,7 @@ export const VoteAccountInfo = pick({
     timestamp: number(),
   }),
   nodePubkey: Pubkey,
-  priorVoters: array(AuthorizedVoter),
+  priorVoters: array(PriorVoter),
   rootSlot: nullable(number()),
   votes: array(Vote),
 });
