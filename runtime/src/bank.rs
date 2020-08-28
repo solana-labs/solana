@@ -2380,6 +2380,7 @@ impl Bank {
     }
 
     pub fn get_account_modified_slot(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
+        debug!("get_account_modified_slot {}", pubkey);
         self.rc.accounts.load_slow(&self.ancestors, pubkey)
     }
 

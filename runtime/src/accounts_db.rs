@@ -1183,9 +1183,34 @@ impl AccountsDB {
     }
 
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
+        let mut start = Measure::start("load");
+        let mut accounts_index_lock_start = Measure::start("accounts_index_lock_start");
         let accounts_index = self.accounts_index.read().unwrap();
+        accounts_index_lock_start.stop();
+
+        let mut storage_lock_start = Measure::start("storage_lock_start");
         let storage = self.storage.read().unwrap();
-        Self::load(&storage, ancestors, &accounts_index, pubkey)
+        storage_lock_start.stop();
+
+        let mut load_start = Measure::start("load_start");
+        let res = Self::load(&storage, ancestors, &accounts_index, pubkey);
+        load_start.stop();
+
+        start.stop();
+        if start.as_us() > 10_000 {
+            datapoint_info!(
+                "load_slow",
+                ("pubkey", pubkey.to_string(), String),
+                (
+                    "accounts_index_lock_elapsed",
+                    accounts_index_lock_start.as_us(),
+                    i64
+                ),
+                ("storage_lock_elapsed", storage_lock_start.as_us(), i64),
+                ("load_elapsed", load_start.as_us(), i64),
+            );
+        }
+        res
     }
 
     fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {

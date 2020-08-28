@@ -193,6 +193,7 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
         let mut response = None;
+        debug!("get_account_info: {}", pubkey);
         if let Some(account) = bank.get_account(pubkey) {
             if account.owner == spl_token_id_v1_0() && encoding == UiAccountEncoding::JsonParsed {
                 response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
