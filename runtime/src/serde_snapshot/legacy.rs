@@ -1,4 +1,4 @@
-use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
+use {super::*, bincode::config::Options, solana_measure::measure::Measure, std::cell::RefCell};
 
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -189,8 +189,10 @@ impl<'a> TypeContext<'a> for Context {
         );
 
         // (1st of 3 elements) read in map of slots to account storage entries
-        let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::config()
-            .limit(serialized_len)
+        let storage: HashMap<Slot, Vec<Self::SerializableAccountStorageEntry>> = bincode::options()
+            .with_limit(serialized_len)
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
             .deserialize_from(&mut stream)
             .map_err(accountsdb_to_io_error)?;
 
