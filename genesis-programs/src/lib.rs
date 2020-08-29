@@ -103,7 +103,7 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
             // The epoch of Epoch::max_value() is a placeholder and is expected
             // to be reduced in a future network update.
             programs.extend(
-                vec![Program::Native(solana_vest_program!())]
+                vec![]
                     .into_iter()
                     .map(|program| (program, Epoch::MAX))
                     .collect::<Vec<_>>(),
@@ -117,13 +117,10 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
             // The epoch of std::u64::MAX is a placeholder and is expected
             // to be reduced in a future network update.
             programs.extend(
-                vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ]
-                .into_iter()
-                .map(|program| (program, Epoch::MAX))
-                .collect::<Vec<_>>(),
+                vec![Program::BuiltinLoader(solana_bpf_loader_program!())]
+                    .into_iter()
+                    .map(|program| (program, Epoch::MAX))
+                    .collect::<Vec<_>>(),
             );
         }
     };
