@@ -13,7 +13,7 @@ use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
     bank_forks_utils,
-    blockstore::{Blockstore, PurgeType},
+    blockstore::{create_new_ledger, Blockstore, PurgeType},
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
     rooted_slot_iterator::RootedSlotIterator,
@@ -957,6 +957,13 @@ fn main() {
                         "Selects the features that will be enabled for the cluster"
                     ),
             )
+            .arg(
+                Arg::with_name("output_directory")
+                    .index(1)
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Output directory for the modified genesis config"),
+            )
         )
         .subcommand(
             SubCommand::with_name("shred-version")
@@ -1319,6 +1326,7 @@ fn main() {
         }
         ("modify-genesis", Some(arg_matches)) => {
             let mut genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+            let output_directory = PathBuf::from(arg_matches.value_of("output_directory").unwrap());
 
             if let Some(operating_mode) = arg_matches.value_of("operating_mode") {
                 genesis_config.operating_mode = match operating_mode {
@@ -1336,11 +1344,19 @@ fn main() {
                     _ => Some(value_t_or_exit!(arg_matches, "hashes_per_tick", u64)),
                 }
             }
-            genesis_config.write(&ledger_path).unwrap_or_else(|err| {
+
+            create_new_ledger(
+                &output_directory,
+                &genesis_config,
+                solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+                AccessType::PrimaryOnly,
+            )
+            .unwrap_or_else(|err| {
                 eprintln!("Failed to write genesis config: {:?}", err);
                 exit(1);
             });
-            println!("{}", open_genesis_config_by(&ledger_path, arg_matches));
+
+            println!("{}", open_genesis_config_by(&output_directory, arg_matches));
         }
         ("shred-version", Some(arg_matches)) => {
             let process_options = ProcessOptions {
