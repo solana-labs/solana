@@ -14,7 +14,7 @@ use solana_account_decoder::{
         get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
         token_amount_to_ui_amount, UiTokenAmount,
     },
-    UiAccount, UiAccountEncoding,
+    UiAccount, UiAccountData, UiAccountEncoding,
 };
 use solana_client::{
     rpc_config::*,
@@ -1315,28 +1315,30 @@ where
 {
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
     keyed_accounts.filter_map(move |(pubkey, account)| {
-        let additional_data = get_token_account_mint(&account.data)
-            .and_then(|mint_pubkey| {
-                mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
-                    let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
-                    mint_decimals.insert(mint_pubkey, decimals);
-                    Some(decimals)
-                })
-            })
-            .map(|spl_token_decimals| AccountAdditionalData {
-                spl_token_decimals: Some(spl_token_decimals),
+        let additional_data = get_token_account_mint(&account.data).map(|mint_pubkey| {
+            let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
+                let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
+                mint_decimals.insert(mint_pubkey, decimals);
+                Some(decimals)
             });
+            AccountAdditionalData { spl_token_decimals }
+        });
 
-        additional_data.map(|additional_data| RpcKeyedAccount {
-            pubkey: pubkey.to_string(),
-            account: UiAccount::encode(
-                &pubkey,
-                account,
-                UiAccountEncoding::JsonParsed,
-                Some(additional_data),
-                None,
-            ),
-        })
+        let maybe_encoded_account = UiAccount::encode(
+            &pubkey,
+            account,
+            UiAccountEncoding::JsonParsed,
+            additional_data,
+            None,
+        );
+        if let UiAccountData::Json(_) = &maybe_encoded_account.data {
+            Some(RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: maybe_encoded_account,
+            })
+        } else {
+            None
+        }
     })
 }
 
@@ -4888,6 +4890,23 @@ pub mod tests {
         let accounts: Vec<RpcKeyedAccount> =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         assert_eq!(accounts.len(), 2);
+
+        // Test getProgramAccounts with jsonParsed encoding returns mints, but doesn't return accounts with invalid mints
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0",
+                "id":1,
+                "method":"getProgramAccounts",
+                "params":["{}", {{"encoding": "jsonParsed"}}]
+            }}"#,
+            spl_token_id_v2_0(),
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(accounts.len(), 3);
 
         // Test returns only mint accounts
         let req = format!(
