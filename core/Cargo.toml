@@ -67,7 +67,7 @@ solana-transaction-status = { path = "../transaction-status", version = "1.4.0" 
 solana-version = { path = "../version", version = "1.4.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.4.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.4.0" }
-spl-token-v2-0 = { package = "spl-token", version = "2.0.1", features = ["skip-no-mangle"] }
+spl-token-v2-0 = { package = "spl-token", version = "2.0.2", features = ["skip-no-mangle"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = { version = "0.2.22", features = ["full"] }
