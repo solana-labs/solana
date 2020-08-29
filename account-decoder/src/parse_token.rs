@@ -9,7 +9,7 @@ use spl_token_v2_0::{
     solana_sdk::pubkey::Pubkey as SplTokenPubkey,
     state::{Account, AccountState, Mint, Multisig},
 };
-use std::{mem::size_of, str::FromStr};
+use std::str::FromStr;
 
 // A helper function to convert spl_token_v2_0::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
@@ -27,7 +27,7 @@ pub fn parse_token(
     data: &[u8],
     mint_decimals: Option<u8>,
 ) -> Result<TokenAccountType, ParseAccountError> {
-    if data.len() == size_of::<Account>() {
+    if data.len() == Account::get_packed_len() {
         let account = Account::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         let decimals = mint_decimals.ok_or_else(|| {
@@ -62,7 +62,7 @@ pub fn parse_token(
                 COption::None => None,
             },
         }))
-    } else if data.len() == size_of::<Mint>() {
+    } else if data.len() == Mint::get_packed_len() {
         let mint = Mint::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Mint(UiMint {
@@ -78,7 +78,7 @@ pub fn parse_token(
                 COption::None => None,
             },
         }))
-    } else if data.len() == size_of::<Multisig>() {
+    } else if data.len() == Multisig::get_packed_len() {
         let multisig = Multisig::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
@@ -186,7 +186,7 @@ pub struct UiMultisig {
 }
 
 pub fn get_token_account_mint(data: &[u8]) -> Option<Pubkey> {
-    if data.len() == size_of::<Account>() {
+    if data.len() == Account::get_packed_len() {
         Some(Pubkey::new(&data[0..32]))
     } else {
         None
@@ -201,7 +201,7 @@ mod test {
     fn test_parse_token() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
-        let mut account_data = [0; size_of::<Account>()];
+        let mut account_data = vec![0; Account::get_packed_len()];
         Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
             account.mint = mint_pubkey;
             account.owner = owner_pubkey;
@@ -233,7 +233,7 @@ mod test {
             }),
         );
 
-        let mut mint_data = [0; size_of::<Mint>()];
+        let mut mint_data = vec![0; Mint::get_packed_len()];
         Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
             mint.mint_authority = COption::Some(owner_pubkey);
             mint.supply = 42;
@@ -258,7 +258,7 @@ mod test {
         let signer1 = SplTokenPubkey::new(&[1; 32]);
         let signer2 = SplTokenPubkey::new(&[2; 32]);
         let signer3 = SplTokenPubkey::new(&[3; 32]);
-        let mut multisig_data = [0; size_of::<Multisig>()];
+        let mut multisig_data = vec![0; Multisig::get_packed_len()];
         let mut signers = [SplTokenPubkey::default(); 11];
         signers[0] = signer1;
         signers[1] = signer2;
@@ -292,7 +292,7 @@ mod test {
     #[test]
     fn test_get_token_account_mint() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
-        let mut account_data = [0; size_of::<Account>()];
+        let mut account_data = vec![0; Account::get_packed_len()];
         Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
             account.mint = mint_pubkey;
             Ok(())
