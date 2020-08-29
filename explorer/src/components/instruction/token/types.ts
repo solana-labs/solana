@@ -5,25 +5,29 @@ import {
   number,
   optional,
   array,
+  pick,
+  nullable,
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
-const InitializeMint = object({
+const InitializeMint = pick({
   mint: Pubkey,
-  amount: number(),
   decimals: number(),
-  owner: optional(Pubkey),
-  account: optional(Pubkey),
+  mintAuthority: Pubkey,
+  rentSysvar: Pubkey,
+  freezeAuthority: optional(Pubkey),
 });
 
-const InitializeAccount = object({
+const InitializeAccount = pick({
   account: Pubkey,
   mint: Pubkey,
   owner: Pubkey,
+  rentSysvar: Pubkey,
 });
 
-const InitializeMultisig = object({
+const InitializeMultisig = pick({
   multisig: Pubkey,
+  rentSysvar: Pubkey,
   signers: array(Pubkey),
   m: number(),
 });
@@ -53,11 +57,20 @@ const Revoke = object({
   signers: optional(array(Pubkey)),
 });
 
-const SetOwner = object({
-  owned: Pubkey,
-  newOwner: Pubkey,
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
+const AuthorityType = enums([
+  "mintTokens",
+  "freezeAccount",
+  "accountOwner",
+  "closeAccount",
+]);
+
+const SetAuthority = object({
+  mint: optional(Pubkey),
+  account: optional(Pubkey),
+  authorityType: AuthorityType,
+  newAuthority: nullable(Pubkey),
+  authority: optional(Pubkey),
+  multisigAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
 });
 
@@ -65,13 +78,14 @@ const MintTo = object({
   mint: Pubkey,
   account: Pubkey,
   amount: number(),
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
+  mintAuthority: optional(Pubkey),
+  multisigMintAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
 });
 
 const Burn = object({
   account: Pubkey,
+  mint: Pubkey,
   amount: number(),
   authority: optional(Pubkey),
   multisigAuthority: optional(Pubkey),
@@ -94,7 +108,7 @@ export const TokenInstructionType = enums([
   "transfer",
   "approve",
   "revoke",
-  "setOwner",
+  "setAuthority",
   "mintTo",
   "burn",
   "closeAccount",
@@ -107,7 +121,7 @@ export const IX_STRUCTS = {
   transfer: Transfer,
   approve: Approve,
   revoke: Revoke,
-  setOwner: SetOwner,
+  setAuthority: SetAuthority,
   mintTo: MintTo,
   burn: Burn,
   closeAccount: CloseAccount,
@@ -120,7 +134,7 @@ export const IX_TITLES = {
   transfer: "Transfer",
   approve: "Approve",
   revoke: "Revoke",
-  setOwner: "Set Owner",
+  setAuthority: "Set Authority",
   mintTo: "Mint To",
   burn: "Burn",
   closeAccount: "Close Account",

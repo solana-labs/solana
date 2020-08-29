@@ -108,7 +108,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
     },
   ];
 
-  if (data && data?.name === "spl-token") {
+  if (data && data?.program === "spl-token") {
     if (data.parsed.type === "mint") {
       tabs.push({
         slug: "largest",
@@ -141,7 +141,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
-  if (data && data.name === "stake") {
+  if (data && data.program === "stake") {
     let stakeAccountType, stakeAccount;
     if ("accountType" in data.parsed) {
       stakeAccount = data.parsed;
@@ -158,7 +158,7 @@ function InfoSection({ account }: { account: Account }) {
         stakeAccountType={stakeAccountType}
       />
     );
-  } else if (data && data.name === "spl-token") {
+  } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
   } else {
     return <UnknownAccountCard account={account} />;

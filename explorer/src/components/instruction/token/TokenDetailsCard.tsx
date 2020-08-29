@@ -13,6 +13,12 @@ import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { IX_STRUCTS, TokenInstructionType, IX_TITLES } from "./types";
 import { ParsedInfo } from "validators";
+import {
+  useTokenAccountInfo,
+  useMintAccountInfo,
+  useFetchAccountInfo,
+} from "providers/accounts";
+import { normalizeTokenAmount } from "utils";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -48,6 +54,50 @@ type InfoProps = {
 };
 
 function TokenInstruction(props: InfoProps) {
+  const { mintAddress: infoMintAddress, tokenAddress } = React.useMemo(() => {
+    let mintAddress: string | undefined;
+    let tokenAddress: string | undefined;
+
+    // No sense fetching accounts if we don't need to convert an amount
+    if (!("amount" in props.info)) return {};
+
+    if ("mint" in props.info && props.info.mint instanceof PublicKey) {
+      mintAddress = props.info.mint.toBase58();
+    } else if (
+      "account" in props.info &&
+      props.info.account instanceof PublicKey
+    ) {
+      tokenAddress = props.info.account.toBase58();
+    } else if (
+      "source" in props.info &&
+      props.info.source instanceof PublicKey
+    ) {
+      tokenAddress = props.info.source.toBase58();
+    }
+    return {
+      mintAddress,
+      tokenAddress,
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tokenInfo = useTokenAccountInfo(tokenAddress);
+  const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
+  const mintInfo = useMintAccountInfo(mintAddress);
+  const fetchAccountInfo = useFetchAccountInfo();
+
+  React.useEffect(() => {
+    if (tokenAddress && !tokenInfo) {
+      fetchAccountInfo(new PublicKey(tokenAddress));
+    }
+  }, [fetchAccountInfo, tokenAddress]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (mintAddress && !mintInfo) {
+      fetchAccountInfo(new PublicKey(mintAddress));
+    }
+  }, [fetchAccountInfo, mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const decimals = mintInfo?.decimals;
   const attributes = [];
   for (let key in props.info) {
     const value = props.info[key];
@@ -56,6 +106,12 @@ function TokenInstruction(props: InfoProps) {
     let tag;
     if (value instanceof PublicKey) {
       tag = <Address pubkey={value} alignRight link />;
+    } else if (key === "amount") {
+      if (decimals === undefined) {
+        tag = <>(raw) {value}</>;
+      } else {
+        tag = <>{normalizeTokenAmount(value, decimals).toFixed(decimals)}</>;
+      }
     } else {
       tag = <>{value}</>;
     }
