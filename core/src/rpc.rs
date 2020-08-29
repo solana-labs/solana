@@ -66,7 +66,6 @@ use spl_token_v2_0::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
-    mem::size_of,
     net::SocketAddr,
     rc::Rc,
     str::FromStr,
@@ -1035,7 +1034,7 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }),
             // Filter on Token Account state
-            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
         ];
         let mut token_balances: Vec<RpcTokenAccountBalance> =
             get_filtered_program_accounts(&bank, &mint_owner, filters)
@@ -1083,7 +1082,7 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }),
             // Filter on Token Account state
-            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
         ];
         if let Some(mint) = mint {
             // Optional filter on Mint address
@@ -1142,7 +1141,7 @@ impl JsonRpcRequestProcessor {
                 encoding: None,
             }),
             // Filter on Token Account state
-            RpcFilterType::DataSize(size_of::<TokenAccount>() as u64),
+            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
         ];
         if let Some(mint) = mint {
             // Optional filter on Mint address
@@ -4674,7 +4673,7 @@ pub mod tests {
     fn test_token_rpcs() {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
-        let mut account_data = [0; size_of::<TokenAccount>()];
+        let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
@@ -4702,7 +4701,7 @@ pub mod tests {
         bank.store_account(&token_account_pubkey, &token_account);
 
         // Add the mint
-        let mut mint_data = [0; size_of::<Mint>()];
+        let mut mint_data = vec![0; Mint::get_packed_len()];
         Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
             *mint = Mint {
                 mint_authority: COption::Some(owner),
@@ -4776,7 +4775,7 @@ pub mod tests {
         bank.store_account(&other_token_account_pubkey, &token_account);
 
         // Add another token account with the same owner and delegate but different mint
-        let mut account_data = [0; size_of::<TokenAccount>()];
+        let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let new_mint = SplTokenPubkey::new(&[5; 32]);
         TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
             *account = TokenAccount {
@@ -4985,7 +4984,7 @@ pub mod tests {
         assert!(accounts.is_empty());
 
         // Add new_mint, and another token account on new_mint with different balance
-        let mut mint_data = [0; size_of::<Mint>()];
+        let mut mint_data = vec![0; Mint::get_packed_len()];
         Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
             *mint = Mint {
                 mint_authority: COption::Some(owner),
@@ -5007,7 +5006,7 @@ pub mod tests {
             &Pubkey::from_str(&new_mint.to_string()).unwrap(),
             &mint_account,
         );
-        let mut account_data = [0; size_of::<TokenAccount>()];
+        let mut account_data = vec![0; TokenAccount::get_packed_len()];
         TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
             *account = TokenAccount {
                 mint: new_mint,
@@ -5068,7 +5067,7 @@ pub mod tests {
     fn test_token_parsing() {
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
-        let mut account_data = [0; size_of::<TokenAccount>()];
+        let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
@@ -5096,7 +5095,7 @@ pub mod tests {
         bank.store_account(&token_account_pubkey, &token_account);
 
         // Add the mint
-        let mut mint_data = [0; size_of::<Mint>()];
+        let mut mint_data = vec![0; Mint::get_packed_len()];
         Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
             *mint = Mint {
                 mint_authority: COption::Some(owner),
@@ -5127,7 +5126,7 @@ pub mod tests {
             result["result"]["value"]["data"],
             json!({
                 "program": "spl-token",
-                "space": 176,
+                "space": TokenAccount::get_packed_len(),
                 "parsed": {
                     "type": "account",
                     "info": {
@@ -5169,7 +5168,7 @@ pub mod tests {
             result["result"]["value"]["data"],
             json!({
                 "program": "spl-token",
-                "space": 88,
+                "space": Mint::get_packed_len(),
                 "parsed": {
                     "type": "mint",
                     "info": {
