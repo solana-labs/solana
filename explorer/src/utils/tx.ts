@@ -35,7 +35,7 @@ export const PROGRAM_IDS: { [key: string]: ProgramName } = {
   [SystemProgram.programId.toBase58()]: "System Program",
   Vest111111111111111111111111111111111111111: "Vest Program",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
-  TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o: "SPL Token",
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token",
 };
 
 const LOADER_IDS = {
@@ -47,6 +47,10 @@ const LOADER_IDS = {
 
 const SYSVAR_ID: { [key: string]: string } = {
   Sysvar1111111111111111111111111111111111111: "SYSVAR",
+};
+
+const WRAPPED_SOL: { [key: string]: string } = {
+  So11111111111111111111111111111111111111112: "Wrapped SOL",
 };
 
 export const SYSVAR_IDS = {
@@ -67,6 +71,7 @@ export function displayAddress(address: string, cluster: Cluster): string {
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
+    WRAPPED_SOL[address] ||
     TokenRegistry.get(address, cluster)?.name ||
     address
   );

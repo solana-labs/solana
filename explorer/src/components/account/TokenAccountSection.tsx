@@ -11,10 +11,9 @@ import { coerce } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
-import { useFetchTokenSupply, useTokenSupply } from "providers/mints/supply";
-import { FetchStatus } from "providers/cache";
 import { TokenRegistry } from "tokenRegistry";
 import { useCluster } from "providers/cluster";
+import { normalizeTokenAmount } from "utils";
 
 export function TokenAccountSection({
   account,
@@ -58,35 +57,7 @@ function MintAccountCard({
   const { cluster } = useCluster();
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
-  const supply = useTokenSupply(mintAddress);
-  const fetchSupply = useFetchTokenSupply();
-  const refreshSupply = () => fetchSupply(account.pubkey);
-  const refresh = () => {
-    fetchInfo(account.pubkey);
-    refreshSupply();
-  };
-
-  let renderSupply;
-  const supplyTotal = supply?.data?.uiAmount;
-  if (supplyTotal === undefined) {
-    if (!supply || supply?.status === FetchStatus.Fetching) {
-      renderSupply = (
-        <>
-          <span className="spinner-grow spinner-grow-sm mr-2"></span>
-          Loading
-        </>
-      );
-    } else {
-      renderSupply = "Fetch failed";
-    }
-  } else {
-    const unit = TokenRegistry.get(mintAddress, cluster)?.symbol;
-    renderSupply = unit ? `${supplyTotal} ${unit}` : supplyTotal;
-  }
-
-  React.useEffect(() => {
-    if (!supply) refreshSupply();
-  }, [mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
+  const refresh = () => fetchInfo(account.pubkey);
 
   const tokenInfo = TokenRegistry.get(mintAddress, cluster);
   return (
@@ -109,8 +80,14 @@ function MintAccountCard({
           </td>
         </tr>
         <tr>
-          <td>Total Supply</td>
-          <td className="text-lg-right">{renderSupply}</td>
+          <td>
+            {info.mintAuthority === null ? "Fixed Supply" : "Current Supply"}
+          </td>
+          <td className="text-lg-right">
+            {normalizeTokenAmount(info.supply, info.decimals).toFixed(
+              info.decimals
+            )}
+          </td>
         </tr>
         {tokenInfo && (
           <tr>
@@ -127,6 +104,22 @@ function MintAccountCard({
             </td>
           </tr>
         )}
+        {info.mintAuthority && (
+          <tr>
+            <td>Mint Authority</td>
+            <td className="text-lg-right">
+              <Address pubkey={info.mintAuthority} alignRight link />
+            </td>
+          </tr>
+        )}
+        {info.freezeAuthority && (
+          <tr>
+            <td>Freeze Authority</td>
+            <td className="text-lg-right">
+              <Address pubkey={info.freezeAuthority} alignRight link />
+            </td>
+          </tr>
+        )}
         <tr>
           <td>Decimals</td>
           <td className="text-lg-right">{info.decimals}</td>
@@ -135,14 +128,6 @@ function MintAccountCard({
           <tr>
             <td>Status</td>
             <td className="text-lg-right">Uninitialized</td>
-          </tr>
-        )}
-        {info.owner && (
-          <tr>
-            <td>Owner</td>
-            <td className="text-lg-right">
-              <Address pubkey={info.owner} alignRight link />
-            </td>
           </tr>
         )}
       </TableCardBody>
@@ -160,9 +145,23 @@ function TokenAccountCard({
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
 
-  const balance = info.tokenAmount?.uiAmount;
-  const unit =
-    TokenRegistry.get(info.mint.toBase58(), cluster)?.symbol || "tokens";
+  let unit, balance;
+  if (info.isNative) {
+    unit = "SOL";
+    balance = (
+      <>
+        ◎
+        <span className="text-monospace">
+          {new Intl.NumberFormat("en-US", { maximumFractionDigits: 9 }).format(
+            info.tokenAmount.uiAmount
+          )}
+        </span>
+      </>
+    );
+  } else {
+    balance = <>{info.tokenAmount.uiAmount}</>;
+    unit = TokenRegistry.get(info.mint.toBase58(), cluster)?.symbol || "tokens";
+  }
 
   return (
     <div className="card">
@@ -199,13 +198,28 @@ function TokenAccountCard({
           </td>
         </tr>
         <tr>
-          <td>Balance ({unit})</td>
+          <td>Token balance ({unit})</td>
           <td className="text-lg-right">{balance}</td>
         </tr>
-        {!info.isInitialized && (
+        {info.state === "uninitialized" && (
           <tr>
             <td>Status</td>
             <td className="text-lg-right">Uninitialized</td>
+          </tr>
+        )}
+        {info.rentExemptReserve && (
+          <tr>
+            <td>Rent-exempt reserve (SOL)</td>
+            <td className="text-lg-right">
+              <>
+                ◎
+                <span className="text-monospace">
+                  {new Intl.NumberFormat("en-US", {
+                    maximumFractionDigits: 9,
+                  }).format(info.rentExemptReserve.uiAmount)}
+                </span>
+              </>
+            </td>
           </tr>
         )}
       </TableCardBody>
