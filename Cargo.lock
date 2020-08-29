@@ -4649,9 +4649,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f6163bedb29690345acc9614295c8fdabc1251d4e87a3d72edf48487e937a0"
+checksum = "813ab51fcfeabfc60157e6556b96cf005bab55321508053ade8c9f9bcfe5ce0b"
 dependencies = [
  "arrayref",
  "num-derive 0.3.0",
