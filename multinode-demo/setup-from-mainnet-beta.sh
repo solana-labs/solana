@@ -4,6 +4,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
+set -e
 
 rm -rf "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
 mkdir -p "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
@@ -47,21 +48,17 @@ fi
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-account.json
 
-
-cp "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot/genesis.tar.bz2 \
-  "$SOLANA_CONFIG_DIR"/bootstrap-validator
-
-$solana_ledger_tool modify-genesis \
-  --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator \
-  --hashes-per-tick sleep \
-  #--operating-mode preview \
-
 $solana_ledger_tool create-snapshot \
-  --hashes-per-tick sleep \
   --ledger "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot \
   --faucet-pubkey "$SOLANA_CONFIG_DIR"/faucet.json \
   --faucet-lamports 500000000000000000 \
   --bootstrap-validator "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity.json \
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json \
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-account.json \
+  --hashes-per-tick sleep \
   "$snapshot_slot" "$SOLANA_CONFIG_DIR"/bootstrap-validator
+
+$solana_ledger_tool modify-genesis \
+  --ledger "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot \
+  --hashes-per-tick sleep \
+  "$SOLANA_CONFIG_DIR"/bootstrap-validator
