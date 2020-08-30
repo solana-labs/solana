@@ -89,7 +89,7 @@ function MintAccountCard({
             )}
           </td>
         </tr>
-        {tokenInfo && (
+        {tokenInfo?.website && (
           <tr>
             <td>Website</td>
             <td className="text-lg-right">
