@@ -1,6 +1,6 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
-import { useCluster } from "providers/cluster";
+import { useCluster, Cluster } from "providers/cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import {
@@ -41,6 +41,7 @@ export function LargestAccountsProvider({ children }: ProviderProps) {
 async function fetchLargestAccounts(
   dispatch: Dispatch,
   pubkey: PublicKey,
+  cluster: Cluster,
   url: string
 ) {
   dispatch({
@@ -60,7 +61,9 @@ async function fetchLargestAccounts(
     };
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    Sentry.captureException(error, { tags: { url } });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
+    }
     fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({
@@ -80,10 +83,13 @@ export function useFetchTokenLargestAccounts() {
     );
   }
 
-  const { url } = useCluster();
-  return (pubkey: PublicKey) => {
-    fetchLargestAccounts(dispatch, pubkey, url);
-  };
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (pubkey: PublicKey) => {
+      fetchLargestAccounts(dispatch, pubkey, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }
 
 export function useTokenLargestTokens(

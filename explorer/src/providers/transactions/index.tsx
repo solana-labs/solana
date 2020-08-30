@@ -5,7 +5,7 @@ import {
   Connection,
   SignatureResult,
 } from "@solana/web3.js";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
@@ -56,6 +56,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 export async function fetchTransactionStatus(
   dispatch: Dispatch,
   signature: TransactionSignature,
+  cluster: Cluster,
   url: string
 ) {
   dispatch({
@@ -84,7 +85,9 @@ export async function fetchTransactionStatus(
         try {
           blockTime = await connection.getBlockTime(value.slot);
         } catch (error) {
-          Sentry.captureException(error, { tags: { slot: `${value.slot}` } });
+          Sentry.captureException(error, {
+            tags: { slot: `${value.slot}`, url },
+          });
         }
         let timestamp: Timestamp =
           blockTime !== null ? blockTime : "unavailable";
@@ -106,7 +109,9 @@ export async function fetchTransactionStatus(
       data = { signature, info };
       fetchStatus = FetchStatus.Fetched;
     } catch (error) {
-      Sentry.captureException(error, { tags: { url } });
+      if (cluster !== Cluster.Custom) {
+        Sentry.captureException(error, { tags: { url } });
+      }
       fetchStatus = FetchStatus.FetchFailed;
     }
   }
@@ -156,8 +161,11 @@ export function useFetchTransactionStatus() {
     );
   }
 
-  const { url } = useCluster();
-  return (signature: TransactionSignature) => {
-    fetchTransactionStatus(dispatch, signature, url);
-  };
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (signature: TransactionSignature) => {
+      fetchTransactionStatus(dispatch, signature, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }
