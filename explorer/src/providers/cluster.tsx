@@ -183,9 +183,11 @@ async function updateCluster(
       firstAvailableBlock,
     });
   } catch (error) {
-    Sentry.captureException(error, {
-      tags: { clusterUrl: clusterUrl(cluster, customUrl) },
-    });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, {
+        tags: { clusterUrl: clusterUrl(cluster, customUrl) },
+      });
+    }
     dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
   }
 }

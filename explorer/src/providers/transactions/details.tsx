@@ -5,7 +5,7 @@ import {
   TransactionSignature,
   ParsedConfirmedTransaction,
 } from "@solana/web3.js";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import { CACHED_DETAILS, isCached } from "./cached";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
@@ -43,6 +43,7 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
 async function fetchDetails(
   dispatch: Dispatch,
   signature: TransactionSignature,
+  cluster: Cluster,
   url: string
 ) {
   dispatch({
@@ -64,7 +65,9 @@ async function fetchDetails(
       );
       fetchStatus = FetchStatus.Fetched;
     } catch (error) {
-      Sentry.captureException(error, { tags: { url } });
+      if (cluster !== Cluster.Custom) {
+        Sentry.captureException(error, { tags: { url } });
+      }
       fetchStatus = FetchStatus.FetchFailed;
     }
   }
@@ -85,10 +88,13 @@ export function useFetchTransactionDetails() {
     );
   }
 
-  const { url } = useCluster();
-  return (signature: TransactionSignature) => {
-    url && fetchDetails(dispatch, signature, url);
-  };
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (signature: TransactionSignature) => {
+      url && fetchDetails(dispatch, signature, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }
 
 export function useTransactionDetails(

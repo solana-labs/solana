@@ -6,7 +6,7 @@ import {
   TransactionSignature,
   Connection,
 } from "@solana/web3.js";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 
@@ -78,6 +78,7 @@ export function HistoryProvider({ children }: HistoryProviderProps) {
 async function fetchAccountHistory(
   dispatch: Dispatch,
   pubkey: PublicKey,
+  cluster: Cluster,
   url: string,
   options: { before?: TransactionSignature; limit: number }
 ) {
@@ -102,7 +103,9 @@ async function fetchAccountHistory(
     };
     status = FetchStatus.Fetched;
   } catch (error) {
-    Sentry.captureException(error, { tags: { url } });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
+    }
     status = FetchStatus.FetchFailed;
   }
   dispatch({
@@ -142,7 +145,7 @@ export function useAccountHistory(
 }
 
 export function useFetchAccountHistory() {
-  const { url } = useCluster();
+  const { cluster, url } = useCluster();
   const state = React.useContext(StateContext);
   const dispatch = React.useContext(DispatchContext);
   if (!state || !dispatch) {
@@ -151,15 +154,21 @@ export function useFetchAccountHistory() {
     );
   }
 
-  return (pubkey: PublicKey, refresh?: boolean) => {
-    const before = state.entries[pubkey.toBase58()];
-    if (!refresh && before?.data?.fetched && before.data.fetched.length > 0) {
-      if (before.data.foundOldest) return;
-      const oldest =
-        before.data.fetched[before.data.fetched.length - 1].signature;
-      fetchAccountHistory(dispatch, pubkey, url, { before: oldest, limit: 25 });
-    } else {
-      fetchAccountHistory(dispatch, pubkey, url, { limit: 25 });
-    }
-  };
+  return React.useCallback(
+    (pubkey: PublicKey, refresh?: boolean) => {
+      const before = state.entries[pubkey.toBase58()];
+      if (!refresh && before?.data?.fetched && before.data.fetched.length > 0) {
+        if (before.data.foundOldest) return;
+        const oldest =
+          before.data.fetched[before.data.fetched.length - 1].signature;
+        fetchAccountHistory(dispatch, pubkey, cluster, url, {
+          before: oldest,
+          limit: 25,
+        });
+      } else {
+        fetchAccountHistory(dispatch, pubkey, cluster, url, { limit: 25 });
+      }
+    },
+    [state, dispatch, cluster, url]
+  );
 }

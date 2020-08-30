@@ -4,7 +4,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { TokenAccountInfo } from "validators/accounts/token";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import { coerce } from "superstruct";
 
 export type TokenInfoWithPubkey = {
@@ -47,6 +47,7 @@ export const TOKEN_PROGRAM_ID = new PublicKey(
 async function fetchAccountTokens(
   dispatch: Dispatch,
   pubkey: PublicKey,
+  cluster: Cluster,
   url: string
 ) {
   const key = pubkey.toBase58();
@@ -73,7 +74,9 @@ async function fetchAccountTokens(
     };
     status = FetchStatus.Fetched;
   } catch (error) {
-    Sentry.captureException(error, { tags: { url } });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
+    }
     status = FetchStatus.FetchFailed;
   }
   dispatch({ type: ActionType.Update, url, status, data, key });
@@ -101,8 +104,11 @@ export function useFetchAccountOwnedTokens() {
     );
   }
 
-  const { url } = useCluster();
-  return (pubkey: PublicKey) => {
-    fetchAccountTokens(dispatch, pubkey, url);
-  };
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (pubkey: PublicKey) => {
+      fetchAccountTokens(dispatch, pubkey, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }

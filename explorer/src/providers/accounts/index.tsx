@@ -2,7 +2,7 @@ import React from "react";
 import * as Sentry from "@sentry/react";
 import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider, TOKEN_PROGRAM_ID } from "./tokens";
 import { coerce } from "superstruct";
@@ -72,6 +72,7 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
 async function fetchAccountInfo(
   dispatch: Dispatch,
   pubkey: PublicKey,
+  cluster: Cluster,
   url: string
 ) {
   dispatch({
@@ -149,7 +150,9 @@ async function fetchAccountInfo(
     data = { pubkey, lamports, details };
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    Sentry.captureException(error, { tags: { url } });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
+    }
     fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({
@@ -231,11 +234,11 @@ export function useFetchAccountInfo() {
     );
   }
 
-  const { url } = useCluster();
+  const { cluster, url } = useCluster();
   return React.useCallback(
     (pubkey: PublicKey) => {
-      fetchAccountInfo(dispatch, pubkey, url);
+      fetchAccountInfo(dispatch, pubkey, cluster, url);
     },
-    [dispatch, url]
+    [dispatch, cluster, url]
   );
 }
