@@ -24,7 +24,7 @@ export type ProgramName =
   | "System Program"
   | "Vest Program"
   | "Vote Program"
-  | "SPL Token";
+  | "SPL Token Program";
 
 export const PROGRAM_IDS: { [key: string]: ProgramName } = {
   Budget1111111111111111111111111111111111111: "Budget Program",
@@ -35,13 +35,13 @@ export const PROGRAM_IDS: { [key: string]: ProgramName } = {
   [SystemProgram.programId.toBase58()]: "System Program",
   Vest111111111111111111111111111111111111111: "Vest Program",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
-  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token",
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token Program",
 };
 
 const LOADER_IDS = {
   MoveLdr111111111111111111111111111111111111: "Move Loader",
   NativeLoader1111111111111111111111111111111: "Native Loader",
-  [BpfLoader.programId().toBase58()]: "BPF Loader",
+  [BpfLoader.programId(1).toBase58()]: "BPF Loader",
   [BpfLoader.programId(2).toBase58()]: "BPF Loader 2",
 };
 
@@ -65,16 +65,22 @@ export const SYSVAR_IDS = {
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "SYSVAR_STAKE_HISTORY",
 };
 
-export function displayAddress(address: string, cluster: Cluster): string {
+export function addressLabel(
+  address: string,
+  cluster: Cluster
+): string | undefined {
   return (
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
     WRAPPED_SOL[address] ||
-    TokenRegistry.get(address, cluster)?.name ||
-    address
+    TokenRegistry.get(address, cluster)?.name
   );
+}
+
+export function displayAddress(address: string, cluster: Cluster): string {
+  return addressLabel(address, cluster) || address;
 }
 
 export function intoTransactionInstruction(

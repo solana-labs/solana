@@ -3,11 +3,15 @@ import { Account } from "providers/accounts";
 import { lamportsToSolString } from "utils";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
+import { addressLabel } from "utils/tx";
+import { useCluster } from "providers/cluster";
 
 export function UnknownAccountCard({ account }: { account: Account }) {
   const { details, lamports } = account;
+  const { cluster } = useCluster();
   if (lamports === undefined) return null;
 
+  const label = addressLabel(account.pubkey.toBase58(), cluster);
   return (
     <div className="card">
       <div className="card-header align-items-center">
@@ -21,6 +25,12 @@ export function UnknownAccountCard({ account }: { account: Account }) {
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
+        {label && (
+          <tr>
+            <td>Address Label</td>
+            <td className="text-lg-right">{label}</td>
+          </tr>
+        )}
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-right text-uppercase">

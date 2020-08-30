@@ -50,15 +50,17 @@ export function AccountHeader({ address }: { address: string }) {
   if (tokenDetails) {
     return (
       <div className="row align-items-end">
-        <div className="col-auto">
-          <div className="avatar avatar-lg header-avatar-top">
-            <img
-              src={tokenDetails.logo}
-              alt="token logo"
-              className="avatar-img rounded-circle border border-4 border-body"
-            />
+        {tokenDetails.logo && (
+          <div className="col-auto">
+            <div className="avatar avatar-lg header-avatar-top">
+              <img
+                src={tokenDetails.logo}
+                alt="token logo"
+                className="avatar-img rounded-circle border border-4 border-body"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="col mb-3 ml-n3 ml-md-n2">
           <h6 className="header-pretitle">Token</h6>
