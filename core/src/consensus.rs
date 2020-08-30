@@ -474,7 +474,13 @@ impl Tower {
             // This case should never happen because bank forks purges all
             // non-descendants of the root every time root is set
             if slot != root_slot {
-                assert!(ancestors[&slot].contains(&root_slot));
+                assert!(
+                    ancestors[&slot].contains(&root_slot),
+                    "ancestors: {:?}, slot: {} root: {}",
+                    ancestors[&slot],
+                    slot,
+                    root_slot
+                );
             }
         }
 
@@ -946,6 +952,7 @@ impl Tower {
                 "vote account's node_pubkey doesn't match",
             );
         } else {
+            self.do_initialize_lockouts(root, |_| true);
             info!(
                 "vote account({}) not found in bank (slot={})",
                 vote_account_pubkey,
