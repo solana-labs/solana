@@ -972,6 +972,11 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
+            SubCommand::with_name("bank-hash")
+            .about("Prints the hash of the working bank after reading the ledger")
+            .arg(&max_genesis_archive_unpacked_size_arg)
+        )
+        .subcommand(
             SubCommand::with_name("bounds")
             .about("Print lowest and highest non-empty slots. Note that there may be empty slots within the bounds")
             .arg(
@@ -1383,6 +1388,32 @@ fn main() {
                             Some(&bank_forks.working_bank().hard_forks().read().unwrap())
                         )
                     );
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("bank-hash", Some(arg_matches)) => {
+            let process_options = ProcessOptions {
+                dev_halt_at_slot: Some(0),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
+                ..ProcessOptions::default()
+            };
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &genesis_config,
+                process_options,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+                snapshot_archive_path,
+            ) {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                    println!("{}", &bank_forks.working_bank().hash());
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
