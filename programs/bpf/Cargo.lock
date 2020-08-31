@@ -1670,6 +1670,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-deprecated_loader"
+version = "1.4.0"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-rust-dup-accounts"
 version = "1.4.0"
 dependencies = [
