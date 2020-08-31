@@ -43,7 +43,7 @@ $ solana-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint 35.197.53.105:8001 \
+    --entrypoint entrypoint.devnet.solana.com:8001 \
     --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
     --expected-shred-version 37460 \
     --limit-ledger-size
@@ -87,7 +87,7 @@ $ solana-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint 35.203.170.30:8001 \
+    --entrypoint entrypoint.testnet.solana.com:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --expected-shred-version 1579 \
     --limit-ledger-size
