@@ -621,7 +621,7 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(port_validator)
-                .help("Use this port for JSON RPC, the next port for the RPC websocket, and the following for the RPC banks API"),
+                .help("Use this port for JSON RPC, the next port for the RPC websocket, and then third port for the RPC banks API"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -988,7 +988,7 @@ pub fn main() {
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
-            .map(|rpc_port| (rpc_port, rpc_port + 1, rpc_port + 2)),
+            .map(|rpc_port| (rpc_port, rpc_port + 1, rpc_port + 3)),
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
