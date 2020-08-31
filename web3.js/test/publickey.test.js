@@ -1,4 +1,6 @@
 // @flow
+import BN from 'bn.js';
+
 import {PublicKey} from '../src/publickey';
 
 test('invalid', () => {
@@ -276,6 +278,23 @@ test('createProgramAddress', async () => {
     programId,
   );
   expect(programAddress.equals(programAddress2)).toBe(false);
+
+  // https://github.com/solana-labs/solana/issues/11950
+  {
+    let seeds = [
+      new PublicKey('H4snTKK9adiU15gP22ErfZYtro3aqR9BTMXiH3AwiUTQ').toBuffer(),
+      new BN(2).toArrayLike(Buffer, 'le', 8),
+    ];
+    let programId = new PublicKey(
+      '4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn',
+    );
+    programAddress = await PublicKey.createProgramAddress(seeds, programId);
+    expect(
+      programAddress.equals(
+        new PublicKey('12rqwuEgBYiGhBrDJStCiqEtzQpTTiZbh7teNVLuYcFA'),
+      ),
+    ).toBe(true);
+  }
 });
 
 test('findProgramAddress', async () => {
