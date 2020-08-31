@@ -51,15 +51,18 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     return <ErrorCard text="No holders found" />;
   }
 
-  const balanceFixedPoint = accounts.reduce((prev: number, current: TokenAccountBalancePair) => {
-    const amount = `${current.uiAmount}`;
-    const length = amount.length;
-    const decimalIndex = amount.indexOf('.');
-    if (decimalIndex >= 0 && (length - decimalIndex - 1) > prev) {
-      return length - decimalIndex - 1;
-    }
-    return prev;
-  }, 0);
+  const balanceFixedPoint = accounts.reduce(
+    (prev: number, current: TokenAccountBalancePair) => {
+      const amount = `${current.uiAmount}`;
+      const length = amount.length;
+      const decimalIndex = amount.indexOf(".");
+      if (decimalIndex >= 0 && length - decimalIndex - 1 > prev) {
+        return length - decimalIndex - 1;
+      }
+      return prev;
+    },
+    0
+  );
 
   const supplyTotal = normalizeTokenAmount(mintInfo.supply, mintInfo.decimals);
 
@@ -100,7 +103,7 @@ const renderAccountRow = (
   account: TokenAccountBalancePair,
   index: number,
   balanceFixedPoint: number,
-  supply: number,
+  supply: number
 ) => {
   let percent = "-";
   if (supply > 0) {
@@ -118,7 +121,9 @@ const renderAccountRow = (
       <td>
         <Address pubkey={account.address} link />
       </td>
-      <td className="text-right">{account.uiAmount.toFixed(balanceFixedPoint)}</td>
+      <td className="text-right">
+        {account.uiAmount.toFixed(balanceFixedPoint)}
+      </td>
       <td className="text-right">{percent}</td>
     </tr>
   );
