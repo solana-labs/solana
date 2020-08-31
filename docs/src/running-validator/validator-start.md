@@ -253,7 +253,7 @@ solana-validator \
   --ledger ~/validator-ledger \
   --rpc-port 8899 \
   --entrypoint devnet.solana.com:8001 \
-  --limit-ledger-size
+  --limit-ledger-size \
   --log ~/solana-validator.log
 ```
 
