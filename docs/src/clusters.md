@@ -23,7 +23,6 @@ Explorers:
   - Devnet includes a token faucet for airdrops for application testing
   - Devnet may be subject to ledger resets
   - Devnet typically runs a newer software version than Mainnet Beta
-  - Devnet may be maintained by different validators than Mainnet Beta
 - Gossip entrypoint for Devnet: `devnet.solana.com:8001`
 - RPC URL for Devnet: `https://devnet.solana.com`
 
@@ -62,9 +61,9 @@ The `--trusted-validator`s is operated by Solana
   squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
 - Testnet may be subject to ledger resets.
+- Testnet includes a token faucet for airdrops for application testing
 - Testnet typically runs a newer software release than both Devnet and
   Mainnet Beta
-- Testnet may be maintained by different validators than Mainnet Beta
 - Gossip entrypoint for Testnet: `35.203.170.30:8001`
 - RPC URL for Testnet: `https://testnet.solana.com`
 
@@ -81,6 +80,7 @@ $ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
+    --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --no-untrusted-rpc \
@@ -96,6 +96,7 @@ $ solana-validator \
 The identity of the `--trusted-validator`s are:
 
 - `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Solana)
+- `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - Break RPC node (Solana)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
