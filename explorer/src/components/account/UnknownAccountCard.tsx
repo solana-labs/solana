@@ -1,4 +1,5 @@
 import React from "react";
+
 import { Account } from "providers/accounts";
 import { lamportsToSolString } from "utils";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -10,6 +11,7 @@ export function UnknownAccountCard({ account }: { account: Account }) {
   const { details, lamports } = account;
   const { cluster } = useCluster();
   if (lamports === undefined) return null;
+  console.log(account);
 
   const label = addressLabel(account.pubkey.toBase58(), cluster);
   return (

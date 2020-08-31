@@ -1,4 +1,3 @@
-
 import React from "react";
 import { VoteAccount, Vote } from "validators/accounts/vote";
 
@@ -24,16 +23,17 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
               </tr>
             </thead>
             <tbody className="list">
-              {voteAccount.info.votes.length > 0 && voteAccount.info.votes.map((vote: Vote, index) => {
-                return renderAccountRow(vote, index);
-              })}
+              {voteAccount.info.votes.length > 0 &&
+                voteAccount.info.votes.map((vote: Vote, index) => {
+                  return renderAccountRow(vote, index);
+                })}
             </tbody>
           </table>
         </div>
 
         <div className="card-footer">
           <div className="text-muted text-center">
-            {voteAccount.info.votes.length > 0 ? '' : 'No votes found'}
+            {voteAccount.info.votes.length > 0 ? "" : "No votes found"}
           </div>
         </div>
       </div>
@@ -41,10 +41,7 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
   );
 }
 
-const renderAccountRow = (
-  vote: Vote,
-  index: number
-) => {
+const renderAccountRow = (vote: Vote, index: number) => {
   return (
     <tr key={index}>
       <td className="w-1 text-monospace">
@@ -55,9 +52,7 @@ const renderAccountRow = (
           Success
         </span>
       </td> */}
-      <td className="text-monospace">
-        {vote.confirmationCount}
-      </td>
+      <td className="text-monospace">{vote.confirmationCount}</td>
     </tr>
   );
 };

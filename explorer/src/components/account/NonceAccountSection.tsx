@@ -1,10 +1,14 @@
 import React from "react";
 
 import { Account, useFetchAccountInfo } from "providers/accounts";
-
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { NonceAccount } from "validators/accounts/nonce";
+import {
+  AccountHeader,
+  AccountAddressRow,
+  AccountOwnerRow,
+} from "components/common/Account";
 
 export function NonceAccountSection({
   account,
@@ -23,42 +27,31 @@ function NonceAccountCard({
   account: Account;
   nonceAccount: NonceAccount;
 }) {
-  const { details } = account;
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
-      <div className="card-header align-items-center">
-        <h3 className="card-header-title">Nonce Account</h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
-      </div>
+      <AccountHeader
+        title="Nonce Account"
+        refresh={() => refresh(account.pubkey)}
+      />
+
       <TableCardBody>
-        <tr>
-          <td>Address</td>
-          <td className="text-lg-right">
-            <Address pubkey={account.pubkey} alignRight raw />
-          </td>
-        </tr>
-        
+        <AccountAddressRow account={account} />
+
         <tr>
           <td>Authority</td>
           <td className="text-lg-right">
             <Address pubkey={nonceAccount.info.authority} alignRight raw link />
           </td>
         </tr>
-        
+
         <tr>
           <td>Blockhash</td>
           <td className="text-lg-right">
             <code>{nonceAccount.info.blockhash}</code>
           </td>
         </tr>
-        
+
         <tr>
           <td>Fee</td>
           <td className="text-lg-right">
@@ -67,14 +60,7 @@ function NonceAccountCard({
           </td>
         </tr>
 
-        {details && (
-          <tr>
-            <td>Owner</td>
-            <td className="text-lg-right">
-              <Address pubkey={details.owner} alignRight link />
-            </td>
-          </tr>
-        )}
+        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
