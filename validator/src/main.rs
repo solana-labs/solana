@@ -499,7 +499,7 @@ fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
 
     solana_logger::setup_with_default(
         &[
-            "solana=info", /* info logging for all solana modules */
+            "solana=info,solana_runtime::message_processor=error", /* info logging for all solana modules */
             "rpc=trace",   /* json_rpc request/response logging */
         ]
         .join(","),
