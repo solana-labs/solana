@@ -1651,6 +1651,53 @@ impl Blockstore {
         slots
     }
 
+    pub fn cache_block_time(
+        &self,
+        slot: Slot,
+        slot_duration: Duration,
+        stakes: &HashMap<Pubkey, (u64, Account)>,
+    ) -> Result<()> {
+        if !self.is_root(slot) {
+            return Err(BlockstoreError::SlotNotRooted);
+        }
+        let mut get_unique_timestamps = Measure::start("get_unique_timestamps");
+        let root_iterator = self
+            .db
+            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Reverse));
+        let mut timestamp_slots: Vec<Slot> = root_iterator
+            .unwrap()
+            .map(|(iter_slot, _)| iter_slot)
+            .take(TIMESTAMP_SLOT_RANGE)
+            .collect();
+        timestamp_slots.sort();
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = timestamp_slots
+            .into_iter()
+            .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
+            .collect();
+        get_unique_timestamps.stop();
+
+        let mut calculate_timestamp = Measure::start("calculate_timestamp");
+        let stake_weighted_timestamp =
+            calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
+                .ok_or(BlockstoreError::EmptyEpochStakes)?;
+        calculate_timestamp.stop();
+        datapoint_info!(
+            "blockstore-get-block-time",
+            ("slot", slot as i64, i64),
+            (
+                "get_unique_timestamps_us",
+                get_unique_timestamps.as_us() as i64,
+                i64
+            ),
+            (
+                "calculate_stake_weighted_timestamp_us",
+                calculate_timestamp.as_us() as i64,
+                i64
+            )
+        );
+        self.blocktime_cf.put(slot, &stake_weighted_timestamp)
+    }
+
     pub fn get_first_available_block(&self) -> Result<Slot> {
         let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot())?;
         Ok(root_iterator.next().unwrap_or_default())
