@@ -25,9 +25,8 @@ benchExchangeExtraArgs="${16}"
 genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
-GEOLOCATION_API_KEY="${20}"
-maybeWarpSlot="${21}"
-waitForNodeInit="${22}"
+maybeWarpSlot="${20}"
+waitForNodeInit="${21}"
 set +x
 
 missing() {
@@ -319,41 +318,6 @@ EOF
         sudo install -o $UID -m 400 /.cert.pem /.key.pem .
         ls -l .cert.pem .key.pem
       fi
-
-      cat > ~/solana/restart-explorer <<EOF
-#!/bin/bash -ex
-      cd ~/solana
-
-      export GEOLOCATION_API_KEY=$GEOLOCATION_API_KEY
-
-      if [[ -f blockexplorer.pid ]]; then
-        pgid=\$(ps opgid= \$(cat blockexplorer.pid) | tr -d '[:space:]')
-        if [[ -n \$pgid ]]; then
-          kill -- -\$pgid
-        fi
-      fi
-      killall node || true
-      npm install @solana/blockexplorer@1
-      export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
-      npx solana-blockexplorer > blockexplorer.log 2>&1 &
-      echo \$! > blockexplorer.pid
-
-      # Redirect port 80 to port 5000
-      sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-      sudo iptables -A INPUT -p tcp --dport 5000 -j ACCEPT
-      sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-port 5000
-
-      # Confirm the explorer is accessible
-      curl --head --retry 3 --retry-connrefused http://localhost:5000/
-
-      # Confirm the explorer is now globally accessible
-      curl --head "\$(curl ifconfig.io)"
-EOF
-      chmod +x ~/solana/restart-explorer
-
-cat >> ~/solana/on-reboot <<EOF
-      ~/solana/restart-explorer
-EOF
     fi
 
     args+=(--init-complete-file "$initCompleteFile")
