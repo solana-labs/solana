@@ -51,6 +51,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     return <ErrorCard text="No holders found" />;
   }
 
+  // Find largest fixed point in accounts array
   const balanceFixedPoint = accounts.reduce(
     (prev: number, current: TokenAccountBalancePair) => {
       const amount = `${current.uiAmount}`;
