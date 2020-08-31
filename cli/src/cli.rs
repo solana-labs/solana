@@ -2248,8 +2248,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(
-                    Arg::with_name("use-deprecated-loader")
-                        .long("use_deprecated_loader")
+                    Arg::with_name("use_deprecated_loader")
+                        .long("use-deprecated-loader")
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
