@@ -1875,7 +1875,7 @@ impl ReplayStage {
         if let Some(cache_block_time_sender) = cache_block_time_sender {
             for slot in rooted_slots {
                 if blockstore
-                    .get_block_time2(*slot)
+                    .get_block_time(*slot)
                     .unwrap_or_default()
                     .is_none()
                 {

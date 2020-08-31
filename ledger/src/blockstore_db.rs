@@ -68,6 +68,7 @@ pub enum BlockstoreError {
     UnableToSetOpenFileDescriptorLimit,
     TransactionStatusSlotMismatch,
     EmptyEpochStakes,
+    NoVoteTimestampsInRange,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
