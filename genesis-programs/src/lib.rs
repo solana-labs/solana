@@ -72,63 +72,40 @@ impl std::fmt::Debug for Program {
 
 // given operating_mode and epoch, return the entire set of enabled programs
 fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
-    let mut programs = vec![];
-
     match operating_mode {
-        OperatingMode::Development => {
+        OperatingMode::Development => vec![
             // Programs used for testing
-            programs.extend(
-                vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                    Program::Native(solana_vest_program!()),
-                    Program::Native(solana_budget_program!()),
-                    Program::Native(solana_exchange_program!()),
-                ]
-                .into_iter()
-                .map(|program| (program, 0))
-                .collect::<Vec<_>>(),
-            );
-        }
-        OperatingMode::Preview => {
-            // tds enabled async cluster restart with smart contract being enabled
-            // at slot 2196960 (midway epoch 17) with v1.0.1 on Mar 1, 2020
-            programs.extend(vec![(
+            Program::BuiltinLoader(solana_bpf_loader_program!()),
+            Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
+            Program::Native(solana_vest_program!()),
+            Program::Native(solana_budget_program!()),
+            Program::Native(solana_exchange_program!()),
+        ]
+        .into_iter()
+        .map(|program| (program, 0))
+        .collect::<Vec<_>>(),
+
+        OperatingMode::Preview => vec![
+            (
                 Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                17,
-            )]);
-            // The epoch of Epoch::max_value() is a placeholder and is expected
-            // to be reduced in a future network update.
-            programs.extend(
-                vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ]
-                .into_iter()
-                .map(|program| (program, Epoch::MAX))
-                .collect::<Vec<_>>(),
-            );
-        }
-        OperatingMode::Stable => {
-            programs.extend(vec![(
+                0,
+            ),
+            (Program::BuiltinLoader(solana_bpf_loader_program!()), 89),
+        ],
+
+        OperatingMode::Stable => vec![
+            (
                 Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
                 34,
-            )]);
-            // The epoch of std::u64::MAX is a placeholder and is expected
-            // to be reduced in a future network update.
-            programs.extend(
-                vec![
-                    Program::BuiltinLoader(solana_bpf_loader_program!()),
-                    Program::Native(solana_vest_program!()),
-                ]
-                .into_iter()
-                .map(|program| (program, Epoch::MAX))
-                .collect::<Vec<_>>(),
-            );
-        }
-    };
-
-    programs
+            ),
+            (
+                Program::BuiltinLoader(solana_bpf_loader_program!()),
+                // The epoch of std::u64::MAX is a placeholder and is expected
+                // to be reduced in a future cluster update.
+                Epoch::MAX,
+            ),
+        ],
+    }
 }
 
 pub fn get_native_programs_for_genesis(operating_mode: OperatingMode) -> Vec<(String, Pubkey)> {

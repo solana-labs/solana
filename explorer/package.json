@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@react-hook/debounce": "^3.0.0",
-    "@sentry/react": "^5.21.3",
+    "@sentry/react": "^5.22.3",
     "@solana/web3.js": "^0.71.6",
     "@testing-library/jest-dom": "^5.11.4",
     "@testing-library/react": "^10.4.9",
@@ -16,7 +16,7 @@
     "@types/classnames": "^2.2.10",
     "@types/jest": "^26.0.10",
     "@types/node": "^14.6.0",
-    "@types/react": "^16.9.47",
+    "@types/react": "^16.9.48",
     "@types/react-dom": "^16.9.8",
     "@types/react-router-dom": "^5.1.5",
     "@types/react-select": "^3.0.19",

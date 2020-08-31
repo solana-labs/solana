@@ -3,7 +3,6 @@ import { PublicKey, TokenAccountBalancePair } from "@solana/web3.js";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Address } from "components/common/Address";
-import { useTokenSupply } from "providers/mints/supply";
 import {
   useTokenLargestTokens,
   useFetchTokenLargestAccounts,
@@ -11,10 +10,12 @@ import {
 import { FetchStatus } from "providers/cache";
 import { TokenRegistry } from "tokenRegistry";
 import { useCluster } from "providers/cluster";
+import { useMintAccountInfo } from "providers/accounts";
+import { normalizeTokenAmount } from "utils";
 
 export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const mintAddress = pubkey.toBase58();
-  const supply = useTokenSupply(mintAddress);
+  const mintInfo = useMintAccountInfo(mintAddress);
   const largestAccounts = useTokenLargestTokens(mintAddress);
   const fetchLargestAccounts = useFetchTokenLargestAccounts();
   const refreshLargest = () => fetchLargestAccounts(pubkey);
@@ -26,10 +27,11 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     if (!largestAccounts) refreshLargest();
   }, [mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const supplyTotal = supply?.data?.uiAmount;
-  if (supplyTotal === undefined || !largestAccounts) {
-    return null;
-  }
+  // Largest accounts hasn't started fetching
+  if (largestAccounts === undefined) return null;
+
+  // This is not a mint account
+  if (mintInfo === undefined) return null;
 
   if (largestAccounts?.data === undefined) {
     if (largestAccounts.status === FetchStatus.Fetching) {
@@ -49,6 +51,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     return <ErrorCard text="No holders found" />;
   }
 
+  const supplyTotal = normalizeTokenAmount(mintInfo.supply, mintInfo.decimals);
   return (
     <>
       <div className="card">

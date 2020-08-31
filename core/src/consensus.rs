@@ -16,7 +16,7 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     ops::Bound::{Included, Unbounded},
     sync::{Arc, RwLock},
 };
@@ -126,9 +126,9 @@ impl Tower {
 
     pub(crate) fn collect_vote_lockouts<F>(
         node_pubkey: &Pubkey,
-        bank_slot: u64,
+        bank_slot: Slot,
         vote_accounts: F,
-        ancestors: &HashMap<Slot, HashSet<u64>>,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
         all_pubkeys: &mut PubkeyReferences,
     ) -> ComputedBankState
     where
@@ -139,13 +139,13 @@ impl Tower {
         let mut bank_weight = 0;
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
-        let mut lockout_intervals = BTreeMap::new();
+        let mut lockout_intervals = LockoutIntervals::new();
         let mut pubkey_votes = vec![];
-        for (key, (lamports, account)) in vote_accounts {
-            if lamports == 0 {
+        for (key, (voted_stake, account)) in vote_accounts {
+            if voted_stake == 0 {
                 continue;
             }
-            trace!("{} {} with stake {}", node_pubkey, key, lamports);
+            trace!("{} {} with stake {}", node_pubkey, key, voted_stake);
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
                 datapoint_warn!(
@@ -195,7 +195,7 @@ impl Tower {
             vote_state.process_slot_vote_unchecked(bank_slot);
 
             for vote in &vote_state.votes {
-                bank_weight += vote.lockout() as u128 * lamports as u128;
+                bank_weight += vote.lockout() as u128 * voted_stake as u128;
                 Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
             }
 
@@ -206,7 +206,7 @@ impl Tower {
                         slot: root,
                     };
                     trace!("ROOT: {}", vote.slot);
-                    bank_weight += vote.lockout() as u128 * lamports as u128;
+                    bank_weight += vote.lockout() as u128 * voted_stake as u128;
                     Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
                 }
             }
@@ -215,7 +215,7 @@ impl Tower {
                     confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                     slot: root,
                 };
-                bank_weight += vote.lockout() as u128 * lamports as u128;
+                bank_weight += vote.lockout() as u128 * voted_stake as u128;
                 Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
             }
 
@@ -237,11 +237,11 @@ impl Tower {
                 Self::update_ancestor_voted_stakes(
                     &mut voted_stakes,
                     vote.slot,
-                    lamports,
+                    voted_stake,
                     ancestors,
                 );
             }
-            total_stake += lamports;
+            total_stake += voted_stake;
         }
 
         ComputedBankState {
@@ -487,8 +487,12 @@ impl Tower {
                         .lockout_intervals;
                     // Find any locked out intervals in this bank with endpoint >= last_vote,
                     // implies they are locked out at last_vote
-                    for (_lockout_interval_end, value) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
-                        for (lockout_interval_start, vote_account_pubkey) in value {
+                    for (_lockout_interval_end, intervals_keyed_by_end) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
+                        for (lockout_interval_start, vote_account_pubkey) in intervals_keyed_by_end {
+                            if locked_out_vote_accounts.contains(vote_account_pubkey) {
+                                continue;
+                            }
+
                             // Only count lockouts on slots that are:
                             // 1) Not ancestors of `last_vote`
                             // 2) Not from before the current root as we can't determine if
@@ -499,7 +503,6 @@ impl Tower {
                                 // is an ancestor of the current root, because `candidate_slot` is a
                                 // descendant of the current root
                                 && *lockout_interval_start > root
-                                && !locked_out_vote_accounts.contains(vote_account_pubkey)
                             {
                                 let stake = epoch_vote_accounts
                                     .get(vote_account_pubkey)
@@ -601,21 +604,21 @@ impl Tower {
     /// Note, stake is the same for all the ancestor.
     fn update_ancestor_voted_stakes(
         voted_stakes: &mut VotedStakes,
-        slot: Slot,
-        lamports: u64,
+        voted_slot: Slot,
+        voted_stake: u64,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
     ) {
         // If there's no ancestors, that means this slot must be from
         // before the current root, so ignore this slot
-        let vote_slot_ancestors = ancestors.get(&slot);
+        let vote_slot_ancestors = ancestors.get(&voted_slot);
         if vote_slot_ancestors.is_none() {
             return;
         }
-        let mut slot_with_ancestors = vec![slot];
+        let mut slot_with_ancestors = vec![voted_slot];
         slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
         for slot in slot_with_ancestors {
             let current = voted_stakes.entry(slot).or_default();
-            *current += lamports;
+            *current += voted_stake;
         }
     }
 

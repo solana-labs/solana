@@ -1,5 +1,4 @@
 import {
-  object,
   StructType,
   number,
   optional,
@@ -16,30 +15,39 @@ import { Pubkey } from "validators/pubkey";
 export type TokenAccountType = StructType<typeof TokenAccountType>;
 export const TokenAccountType = enums(["mint", "account", "multisig"]);
 
+export type TokenAccountState = StructType<typeof AccountState>;
+const AccountState = enums(["initialized", "uninitialized", "frozen"]);
+
+const TokenAmount = pick({
+  decimals: number(),
+  uiAmount: number(),
+  amount: string(),
+});
+
 export type TokenAccountInfo = StructType<typeof TokenAccountInfo>;
 export const TokenAccountInfo = pick({
-  isInitialized: boolean(),
-  isNative: boolean(),
   mint: Pubkey,
   owner: Pubkey,
-  tokenAmount: pick({
-    decimals: number(),
-    uiAmount: number(),
-    amount: string(),
-  }),
-  delegate: nullable(optional(Pubkey)),
-  delegatedAmount: optional(number()),
+  tokenAmount: TokenAmount,
+  delegate: optional(Pubkey),
+  state: AccountState,
+  isNative: boolean(),
+  rentExemptReserve: optional(TokenAmount),
+  delegatedAmount: optional(TokenAmount),
+  closeAuthority: optional(Pubkey),
 });
 
 export type MintAccountInfo = StructType<typeof MintAccountInfo>;
-export const MintAccountInfo = object({
+export const MintAccountInfo = pick({
+  mintAuthority: nullable(Pubkey),
+  supply: string(),
   decimals: number(),
   isInitialized: boolean(),
-  owner: nullable(optional(Pubkey)),
+  freezeAuthority: nullable(Pubkey),
 });
 
 export type MultisigAccountInfo = StructType<typeof MultisigAccountInfo>;
-export const MultisigAccountInfo = object({
+export const MultisigAccountInfo = pick({
   numRequiredSigners: number(),
   numValidSigners: number(),
   isInitialized: boolean(),
@@ -47,7 +55,7 @@ export const MultisigAccountInfo = object({
 });
 
 export type TokenAccount = StructType<typeof TokenAccount>;
-export const TokenAccount = object({
+export const TokenAccount = pick({
   type: TokenAccountType,
   info: any(),
 });

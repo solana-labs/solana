@@ -41,12 +41,12 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     echo "$0:   [tree (for outdated Cargo.lock sync)|check (for compilation error)|update -p foo --precise x.y.z (for your Cargo.toml update)] ..." >&2
     exit "$check_status"
   fi
+    
+  # Ensure nightly and --benches
+  _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
-
-# Ensure nightly and --benches
-_ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets
 
 _ ci/order-crates-for-publishing.py
 _ cargo +"$rust_stable" fmt --all -- --check

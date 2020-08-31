@@ -282,7 +282,6 @@ startBootstrapLeader() {
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
-         \"$GEOLOCATION_API_KEY\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
       "
@@ -353,7 +352,6 @@ startNode() {
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
          \"$gpuMode\" \
-         \"$GEOLOCATION_API_KEY\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
       "

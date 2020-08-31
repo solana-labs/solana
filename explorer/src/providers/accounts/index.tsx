@@ -2,24 +2,28 @@ import React from "react";
 import * as Sentry from "@sentry/react";
 import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
-import { useCluster } from "../cluster";
+import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider, TOKEN_PROGRAM_ID } from "./tokens";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
 import { StakeAccount } from "validators/accounts/stake";
-import { TokenAccount } from "validators/accounts/token";
+import {
+  TokenAccount,
+  MintAccountInfo,
+  TokenAccountInfo,
+} from "validators/accounts/token";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
-  name: "stake";
+  program: "stake";
   parsed: StakeAccount | StakeAccountWasm;
 };
 
 export type TokenProgramData = {
-  name: "spl-token";
+  program: "spl-token";
   parsed: TokenAccount;
 };
 
@@ -68,6 +72,7 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
 async function fetchAccountInfo(
   dispatch: Dispatch,
   pubkey: PublicKey,
+  cluster: Cluster,
   url: string
 ) {
   dispatch({
@@ -108,7 +113,7 @@ async function fetchAccountInfo(
             parsed = wasm.StakeAccount.fromAccountData(result.data);
           }
           data = {
-            name: "stake",
+            program: "stake",
             parsed,
           };
         } catch (err) {
@@ -123,7 +128,7 @@ async function fetchAccountInfo(
             const info = coerce(result.data.parsed, ParsedInfo);
             const parsed = coerce(info, TokenAccount);
             data = {
-              name: "spl-token",
+              program: "spl-token",
               parsed,
             };
           } catch (err) {
@@ -145,7 +150,9 @@ async function fetchAccountInfo(
     data = { pubkey, lamports, details };
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    Sentry.captureException(error, { tags: { url } });
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
+    }
     fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({
@@ -166,15 +173,57 @@ export function useAccounts() {
 }
 
 export function useAccountInfo(
-  address: string
+  address: string | undefined
 ): Cache.CacheEntry<Account> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
     throw new Error(`useAccountInfo must be used within a AccountsProvider`);
   }
-
+  if (address === undefined) return;
   return context.entries[address];
+}
+
+export function useMintAccountInfo(
+  address: string | undefined
+): MintAccountInfo | undefined {
+  const accountInfo = useAccountInfo(address);
+  if (address === undefined) return;
+
+  try {
+    const data = accountInfo?.data?.details?.data;
+    if (!data) return;
+    if (data.program !== "spl-token" || data.parsed.type !== "mint") {
+      throw new Error("Expected mint");
+    }
+
+    return coerce(data.parsed.info, MintAccountInfo);
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { address },
+    });
+  }
+}
+
+export function useTokenAccountInfo(
+  address: string | undefined
+): TokenAccountInfo | undefined {
+  const accountInfo = useAccountInfo(address);
+  if (address === undefined) return;
+
+  try {
+    const data = accountInfo?.data?.details?.data;
+    if (!data) return;
+    if (data.program !== "spl-token" || data.parsed.type !== "account") {
+      throw new Error("Expected token account");
+    }
+
+    return coerce(data.parsed.info, TokenAccountInfo);
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { address },
+    });
+  }
 }
 
 export function useFetchAccountInfo() {
@@ -185,8 +234,11 @@ export function useFetchAccountInfo() {
     );
   }
 
-  const { url } = useCluster();
-  return (pubkey: PublicKey) => {
-    fetchAccountInfo(dispatch, pubkey, url);
-  };
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (pubkey: PublicKey) => {
+      fetchAccountInfo(dispatch, pubkey, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }
