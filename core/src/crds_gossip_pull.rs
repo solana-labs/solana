@@ -403,27 +403,15 @@ impl CrdsGossipPull {
             return ret;
         }
         let mut total_skipped = 0;
-<<<<<<< HEAD
-        for v in crds.table.values() {
-            recent.iter().for_each(|(i, (caller, filter))| {
-                //skip values that are too new
-                if v.value.wallclock() > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
-                {
-                    total_skipped += 1;
-                    return;
-                }
-                if !filter.contains(&v.value_hash) {
-                    ret[*i].push(v.value.clone());
-                }
-            });
-=======
         let mask_ones: Vec<_> = recent
             .iter()
-            .map(|(_caller, filter)| (!0u64).checked_shr(filter.mask_bits).unwrap_or(!0u64))
+            .map(|(_i, (_caller, filter))| (!0u64).checked_shr(filter.mask_bits).unwrap_or(!0u64))
             .collect();
         for (label, mask) in crds.masks.iter() {
-            recent.iter().zip(mask_ones.iter()).enumerate().for_each(
-                |(i, ((caller, filter), mask_ones))| {
+            recent
+                .iter()
+                .zip(mask_ones.iter())
+                .for_each(|((i, (caller, filter)), mask_ones)| {
                     if filter.test_mask_u64(*mask, *mask_ones) {
                         let item = crds.table.get(label).unwrap();
 
@@ -436,12 +424,10 @@ impl CrdsGossipPull {
                         }
 
                         if !filter.filter_contains(&item.value_hash) {
-                            ret[i].push(item.value.clone());
+                            ret[*i].push(item.value.clone());
                         }
                     }
-                },
-            );
->>>>>>> f519fdecc... generate_pull_response optimization (#11597)
+                });
         }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
