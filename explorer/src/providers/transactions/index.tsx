@@ -85,9 +85,11 @@ export async function fetchTransactionStatus(
         try {
           blockTime = await connection.getBlockTime(value.slot);
         } catch (error) {
-          Sentry.captureException(error, {
-            tags: { slot: `${value.slot}`, url },
-          });
+          if (cluster === Cluster.MainnetBeta) {
+            Sentry.captureException(error, {
+              tags: { slot: `${value.slot}` },
+            });
+          }
         }
         let timestamp: Timestamp =
           blockTime !== null ? blockTime : "unavailable";
