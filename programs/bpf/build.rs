@@ -68,6 +68,7 @@ fn main() {
             "128bit",
             "alloc",
             "dep_crate",
+            "deprecated_loader",
             "dup_accounts",
             "error_handling",
             "external_spend",

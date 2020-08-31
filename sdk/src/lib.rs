@@ -75,6 +75,7 @@ pub use solana_sdk_macro::respan;
 // On-chain program specific modules
 pub mod account_info;
 pub mod entrypoint;
+pub mod entrypoint_deprecated;
 pub mod log;
 pub mod program;
 pub mod program_error;

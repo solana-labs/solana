@@ -1,12 +1,13 @@
-//! @brief Solana Rust-based BPF program entry point supported by the latest
-//! BPFLoader.  For more information see './bpf_loader.rs'
+//! @brief Solana Rust-based BPF program entry point supported by the original
+//!  and now deprecated BPFLoader.  For more information see
+//!  './bpf_loader_deprecated.rs'
 
 extern crate alloc;
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 use alloc::vec::Vec;
 use std::{
     cell::RefCell,
-    mem::{align_of, size_of},
+    mem::size_of,
     rc::Rc,
     // Hide Result from bindgen gets confused about generics in non-generic type declarations
     result::Result as ResultGeneric,
@@ -33,24 +34,21 @@ pub const SUCCESS: u64 = 0;
 /// Users must call this macro otherwise an entry point for
 /// their program will not be created.
 #[macro_export]
-macro_rules! entrypoint {
+macro_rules! entrypoint_deprecated {
     ($process_instruction:ident) => {
         /// # Safety
         #[cfg(not(feature = "skip-no-mangle"))]
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             let (program_id, accounts, instruction_data) =
-                unsafe { $crate::entrypoint::deserialize(input) };
+                unsafe { $crate::entrypoint_deprecated::deserialize(input) };
             match $process_instruction(&program_id, &accounts, &instruction_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::entrypoint_deprecated::SUCCESS,
                 Err(error) => error.into(),
             }
         }
     };
 }
-
-/// Maximum number of bytes a program may add to an account during a single realloc
-pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
 /// Deserialize the input arguments
 ///
@@ -80,16 +78,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let is_writable = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
 
-            #[allow(clippy::cast_ptr_alignment)]
-            let executable = *(input.add(offset) as *const u8) != 0;
-            offset += size_of::<u8>();
-
-            offset += size_of::<u32>(); // padding to u64
-
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
-            offset += size_of::<Pubkey>();
-
-            let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
 
             #[allow(clippy::cast_ptr_alignment)]
@@ -103,8 +92,14 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let data = Rc::new(RefCell::new({
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
-            offset += data_len + MAX_PERMITTED_DATA_INCREASE;
-            offset += (offset as *const u8).align_offset(align_of::<u128>()); // padding
+            offset += data_len;
+
+            let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
+            offset += size_of::<Pubkey>();
+
+            #[allow(clippy::cast_ptr_alignment)]
+            let executable = *(input.add(offset) as *const u8) != 0;
+            offset += size_of::<u8>();
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
@@ -121,8 +116,6 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 rent_epoch,
             });
         } else {
-            offset += 7; // padding
-
             // Duplicate account, clone the original
             accounts.push(accounts[dup_info as usize].clone());
         }
