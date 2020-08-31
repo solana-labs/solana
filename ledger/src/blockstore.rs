@@ -1651,6 +1651,23 @@ impl Blockstore {
         slots
     }
 
+    pub fn get_block_time2(
+        &self,
+        slot: Slot,
+    ) -> Result<Option<UnixTimestamp>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_block_time".to_string(), String)
+        );
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+        self.blocktime_cf.get(slot)
+    }
+
     pub fn cache_block_time(
         &self,
         slot: Slot,

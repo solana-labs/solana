@@ -2,6 +2,7 @@
 
 use crate::{
     broadcast_stage::BroadcastStageType,
+    cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
@@ -149,6 +150,8 @@ struct TransactionHistoryServices {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
+    cache_block_time_sender: Option<CacheBlockTimeSender>,
+    cache_block_time_service: Option<CacheBlockTimeService>,
 }
 
 pub struct Validator {
@@ -157,6 +160,7 @@ pub struct Validator {
     rpc_service: Option<(JsonRpcService, PubSubService, RpcBanksService)>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
+    cache_block_time_service: Option<CacheBlockTimeService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -244,6 +248,8 @@ impl Validator {
                 transaction_status_service,
                 rewards_recorder_sender,
                 rewards_recorder_service,
+                cache_block_time_sender,
+                cache_block_time_service,
             },
         ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
 
@@ -477,6 +483,7 @@ impl Validator {
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
             rewards_recorder_sender,
+            cache_block_time_sender,
             snapshot_package_sender,
             vote_tracker.clone(),
             retransmit_slots_sender,
@@ -523,6 +530,7 @@ impl Validator {
             rpc_service,
             transaction_status_service,
             rewards_recorder_service,
+            cache_block_time_service,
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -585,6 +593,10 @@ impl Validator {
 
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
             rewards_recorder_service.join()?;
+        }
+
+        if let Some(cache_block_time_service) = self.cache_block_time_service {
+            cache_block_time_service.join()?;
         }
 
         if let Some(s) = self.snapshot_packager_service {
@@ -772,6 +784,14 @@ fn initialize_rpc_transaction_history_services(
     let rewards_recorder_sender = Some(rewards_recorder_sender);
     let rewards_recorder_service = Some(RewardsRecorderService::new(
         rewards_receiver,
+        blockstore.clone(),
+        exit,
+    ));
+
+    let (cache_block_time_sender, cache_block_time_receiver) = unbounded();
+    let cache_block_time_sender = Some(cache_block_time_sender);
+    let cache_block_time_service = Some(CacheBlockTimeService::new(
+        cache_block_time_receiver,
         blockstore,
         exit,
     ));
@@ -780,6 +800,8 @@ fn initialize_rpc_transaction_history_services(
         transaction_status_service,
         rewards_recorder_sender,
         rewards_recorder_service,
+        cache_block_time_sender,
+        cache_block_time_service,
     }
 }
 
