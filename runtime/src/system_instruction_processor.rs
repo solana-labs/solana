@@ -4,7 +4,7 @@ use solana_sdk::{
     account_utils::StateMut,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
-    nonce,
+    native_loader, nonce,
     nonce_keyed_account::NonceKeyedAccount,
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
@@ -102,8 +102,8 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // guard against sysvars being made
-    if sysvar::check_id(&owner) {
+    // guard against sysvars and native loader programs being made
+    if sysvar::check_id(&owner) || native_loader::check_id(&owner) {
         debug!("Assign: program id {} invalid", owner);
         return Err(SystemError::InvalidProgramId.into());
     }
@@ -898,6 +898,24 @@ mod tests {
     #[test]
     fn test_assign_to_sysvar() {
         let new_owner = sysvar::id();
+
+        let from = solana_sdk::pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
+
+        assert_eq!(
+            assign(
+                &mut from_account,
+                &from.into(),
+                &new_owner,
+                &[from].iter().cloned().collect::<HashSet<_>>(),
+            ),
+            Err(SystemError::InvalidProgramId.into())
+        );
+    }
+
+    #[test]
+    fn test_assign_to_native_loader() {
+        let new_owner = native_loader::id();
 
         let from = solana_sdk::pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
