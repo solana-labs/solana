@@ -154,7 +154,7 @@ pub enum BankHashVerificationError {
     MismatchedAccountHash,
     MismatchedBankHash,
     MissingBankHash,
-    MismatchedTotalLamports,
+    MismatchedTotalLamports(u64, u64),
 }
 
 /// Persistent storage structure holding the accounts
@@ -1649,11 +1649,24 @@ impl AccountsDB {
         res
     }
 
+    pub fn account_balance_for_capitalization(lamports: u64, owner: &Pubkey) -> u64 {
+        let is_specially_retained =
+            solana_sdk::native_loader::check_id(owner) || solana_sdk::sysvar::check_id(owner);
+
+        if is_specially_retained {
+            // specially retained accounts are ensured to exist by
+            // always having a balance of 1 lamports, which is
+            // outside the capitalization calculation.
+            lamports - 1
+        } else {
+            lamports
+        }
+    }
+
     fn calculate_accounts_hash(
         &self,
         ancestors: &Ancestors,
         check_hash: bool,
-        capitalization_exempt: &HashSet<Pubkey>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut scan = Measure::start("scan");
@@ -1674,12 +1687,13 @@ impl AccountsDB {
                             .and_then(|storage_map| storage_map.get(&account_info.store_id))
                             .and_then(|store| {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
-                                if !(solana_sdk::sysvar::check_id(&account.account_meta.owner)
-                                    || capitalization_exempt.contains(&pubkey))
-                                {
-                                    total_lamports
-                                        .fetch_add(account_info.lamports, Ordering::Relaxed);
-                                }
+                                total_lamports.fetch_add(
+                                    Self::account_balance_for_capitalization(
+                                        account_info.lamports,
+                                        &account.account_meta.owner,
+                                    ),
+                                    Ordering::Relaxed,
+                                );
 
                                 if check_hash {
                                     let hash = Self::hash_stored_account(
@@ -1734,15 +1748,8 @@ impl AccountsDB {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        capitalization_exempt: &HashSet<Pubkey>,
-    ) -> (Hash, u64) {
-        let (hash, total_lamports) = self
-            .calculate_accounts_hash(ancestors, false, capitalization_exempt)
-            .unwrap();
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+        let (hash, total_lamports) = self.calculate_accounts_hash(ancestors, false).unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
@@ -1754,19 +1761,18 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
-        capitalization_exempt: &HashSet<Pubkey>,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash(ancestors, true, capitalization_exempt)?;
+            self.calculate_accounts_hash(ancestors, true)?;
 
         if calculated_lamports != total_lamports {
             warn!(
                 "Mismatched total lamports: {} calculated: {}",
                 total_lamports, calculated_lamports
             );
-            return Err(MismatchedTotalLamports);
+            return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
         let bank_hashes = self.bank_hashes.read().unwrap();
@@ -3052,8 +3058,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(latest_slot, &ancestors, &HashSet::new()),
-            accounts.update_accounts_hash(latest_slot, &ancestors, &HashSet::new())
+            daccounts.update_accounts_hash(latest_slot, &ancestors),
+            accounts.update_accounts_hash(latest_slot, &ancestors)
         );
     }
 
@@ -3186,13 +3192,13 @@ pub mod tests {
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
-        let hash = accounts.update_accounts_hash(current_slot, &ancestors, &HashSet::new());
+        let hash = accounts.update_accounts_hash(current_slot, &ancestors);
 
         accounts.clean_accounts();
         accounts.process_dead_slots(None);
 
         assert_eq!(
-            accounts.update_accounts_hash(current_slot, &ancestors, &HashSet::new()),
+            accounts.update_accounts_hash(current_slot, &ancestors),
             hash
         );
 
@@ -3313,7 +3319,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(4, &HashMap::default(), &HashSet::new());
+        accounts.update_accounts_hash(4, &HashMap::default());
 
         let accounts = f(accounts, current_slot);
 
@@ -3325,7 +3331,7 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
         accounts
-            .verify_bank_hash_and_lamports(4, &HashMap::default(), 1222, &HashSet::new())
+            .verify_bank_hash_and_lamports(4, &HashMap::default(), 1222)
             .unwrap();
     }
 
@@ -3723,20 +3729,20 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash(some_slot, &ancestors, &HashSet::new());
+        db.update_accounts_hash(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, &HashSet::new()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, &HashSet::new()),
-            Err(MismatchedTotalLamports)
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
+            Err(MismatchedTotalLamports(_, _))
         );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, &HashSet::new()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MissingBankHash)
         );
 
@@ -3751,7 +3757,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, bank_hash_info);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, &HashSet::new()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedBankHash)
         );
     }
@@ -3769,9 +3775,9 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
-        db.update_accounts_hash(some_slot, &ancestors, &HashSet::new());
+        db.update_accounts_hash(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, &HashSet::new()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0),
             Ok(_)
         );
     }
@@ -3796,7 +3802,7 @@ pub mod tests {
         db.store_with_hashes(some_slot, accounts, &[some_hash]);
         db.add_root(some_slot);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, &HashSet::new()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedAccountHash)
         );
     }
@@ -4214,14 +4220,14 @@ pub mod tests {
         );
 
         let no_ancestors = HashMap::default();
-        accounts.update_accounts_hash(current_slot, &no_ancestors, &HashSet::new());
+        accounts.update_accounts_hash(current_slot, &no_ancestors);
         accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, &HashSet::new())
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, &HashSet::new())
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         // repeating should be no-op

@@ -458,10 +458,6 @@ pub struct Bank {
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
-
-    pub builtin_programs: Arc<RwLock<HashSet<Pubkey>>>,
-
-    pub genesis_cap_exempt_ids: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -581,8 +577,6 @@ impl Bank {
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
-            builtin_programs: parent.builtin_programs.clone(),
-            genesis_cap_exempt_ids: parent.genesis_cap_exempt_ids.clone(),
         };
 
         datapoint_info!(
@@ -685,8 +679,6 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            genesis_cap_exempt_ids: new(),
-            builtin_programs: new(),
         };
         bank.finish_init(genesis_config);
 
@@ -1194,7 +1186,6 @@ impl Bank {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, account);
-            self.genesis_cap_exempt_ids.write().unwrap().insert(*pubkey);
         }
 
         // highest staked node is the first collector
@@ -1267,11 +1258,8 @@ impl Bank {
             // Add a bogus executable native account, which will be loaded and ignored.
             let account = native_loader::create_loadable_account(name);
             self.store_account(&program_id, &account);
-            self.genesis_cap_exempt_ids
-                .write()
-                .unwrap()
-                .insert(*program_id);
         }
+        debug!("Added native program {} under {:?}", name, program_id);
     }
 
     pub fn set_cross_program_support(&mut self, is_supported: bool) {
@@ -2860,13 +2848,10 @@ impl Bank {
     /// snapshot.
     #[must_use]
     fn verify_bank_hash(&self) -> bool {
-        let mut capitalization_exempt = self.builtin_programs.read().unwrap().clone();
-        capitalization_exempt.extend(self.genesis_cap_exempt_ids.read().unwrap().iter());
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
             self.capitalization(),
-            &capitalization_exempt,
         )
     }
 
@@ -2897,22 +2882,7 @@ impl Bank {
     }
 
     pub fn calculate_capitalization(&self) -> u64 {
-        self.get_program_accounts(None)
-            .into_iter()
-            .map(|(_pubkey, account)| {
-                let is_specially_retained = solana_sdk::native_loader::check_id(&account.owner)
-                    || solana_sdk::sysvar::check_id(&account.owner);
-
-                if is_specially_retained {
-                    // specially retained accounts are ensured to exist by
-                    // always having a balance of 1 lamports, which is
-                    // outside the capitalization calculation.
-                    account.lamports - 1
-                } else {
-                    account.lamports
-                }
-            })
-            .sum()
+        self.rc.accounts.calculate_capitalization(&self.ancestors)
     }
 
     /// Forcibly overwrites current capitalization by actually recalculating accounts' balances.
@@ -2929,13 +2899,11 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        let mut capitalization_exempt = self.builtin_programs.read().unwrap().clone();
-        capitalization_exempt.extend(self.genesis_cap_exempt_ids.read().unwrap().iter());
-        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
-            self.slot(),
-            &self.ancestors,
-            &capitalization_exempt,
-        );
+        let (hash, total_lamports) = self
+            .rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash(self.slot(), &self.ancestors);
         assert_eq!(total_lamports, self.capitalization());
         hash
     }
@@ -3176,7 +3144,6 @@ impl Bank {
                 debug!("Added builtin loader {} under {:?}", name, program_id);
             }
         }
-        self.builtin_programs.write().unwrap().insert(program_id);
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {

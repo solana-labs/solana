@@ -428,20 +428,26 @@ impl Accounts {
         accounts_balances
     }
 
+    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
+        self.load_by_program(ancestors, None)
+            .into_iter()
+            .map(|(_pubkey, account)| {
+                AccountsDB::account_balance_for_capitalization(account.lamports, &account.owner)
+            })
+            .sum()
+    }
+
     #[must_use]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
-        capitalization_exempt: &HashSet<Pubkey>,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
-            slot,
-            ancestors,
-            total_lamports,
-            capitalization_exempt,
-        ) {
+        if let Err(err) =
+            self.accounts_db
+                .verify_bank_hash_and_lamports(slot, ancestors, total_lamports)
+        {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {

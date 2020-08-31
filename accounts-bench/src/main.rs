@@ -83,7 +83,6 @@ fn main() {
         ancestors.insert(i as u64, i - 1);
         accounts.add_root(i as u64);
     }
-    let cap_exempt = HashSet::new();
     for x in 0..iterations {
         if clean {
             let mut time = Measure::start("clean");
@@ -97,10 +96,7 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let hash = accounts
-                .accounts_db
-                .update_accounts_hash(0, &ancestors, &cap_exempt)
-                .0;
+            let hash = accounts.accounts_db.update_accounts_hash(0, &ancestors).0;
             time.stop();
             println!("hash: {} {}", hash, time);
             create_test_accounts(&accounts, &mut pubkeys, 1, 0);
