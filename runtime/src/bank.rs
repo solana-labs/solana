@@ -2647,7 +2647,7 @@ impl Bank {
             assert!(callback_w.is_none(), "Already callback has been initiated");
             *callback_w = Some(entered_epoch_callback);
         }
-        // immedaitely fire the callback as initial invocation
+        // immediately fire the callback as initial invocation
         self.reinvoke_entered_epoch_callback(true);
     }
 
