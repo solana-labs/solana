@@ -46,7 +46,8 @@ type OptionalOwner = {
   owner?: PublicKey;
 };
 
-export type TokenAccountBalancePairWithOwner = TokenAccountBalancePair & OptionalOwner;
+export type TokenAccountBalancePairWithOwner = TokenAccountBalancePair &
+  OptionalOwner;
 
 async function fetchLargestAccounts(
   dispatch: Dispatch,
@@ -70,23 +71,31 @@ async function fetchLargestAccounts(
       ).value,
     };
 
-    data.largest = await Promise.all(data.largest.map(async (account): Promise<TokenAccountBalancePairWithOwner> => {
-      try {
-        const accountInfo = (await new Connection(url, "single").getParsedAccountInfo(account.address)).value;
-        if (accountInfo && 'parsed' in accountInfo.data) {
-          const info = coerceParsedAccountInfo(accountInfo.data);
-          return {
-            ...account,
-            owner: info.owner
-          };
+    data.largest = await Promise.all(
+      data.largest.map(
+        async (account): Promise<TokenAccountBalancePairWithOwner> => {
+          try {
+            const accountInfo = (
+              await new Connection(url, "single").getParsedAccountInfo(
+                account.address
+              )
+            ).value;
+            if (accountInfo && "parsed" in accountInfo.data) {
+              const info = coerceParsedAccountInfo(accountInfo.data);
+              return {
+                ...account,
+                owner: info.owner,
+              };
+            }
+          } catch (error) {
+            if (cluster !== Cluster.Custom) {
+              Sentry.captureException(error, { tags: { url } });
+            }
+          }
+          return account;
         }
-      } catch(error) {
-        if (cluster !== Cluster.Custom) {
-          Sentry.captureException(error, { tags: { url } });
-        }
-      }
-      return account;
-    }));
+      )
+    );
 
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
@@ -135,12 +144,14 @@ export function useTokenLargestTokens(
   return context.entries[address];
 }
 
-function coerceParsedAccountInfo(parsedData: ParsedAccountData): TokenAccountInfo {
+function coerceParsedAccountInfo(
+  parsedData: ParsedAccountData
+): TokenAccountInfo {
   try {
     const data = coerce(parsedData.parsed, ParsedInfo);
     const parsed = coerce(data, TokenAccount);
     return coerce(parsed.info, TokenAccountInfo);
-  } catch(error) {
+  } catch (error) {
     throw error;
   }
 }
