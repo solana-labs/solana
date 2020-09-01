@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_id_uniqueness() {
+    fn test_uniqueness() {
         do_test_uniqueness(get_programs(OperatingMode::Development));
         do_test_uniqueness(get_programs(OperatingMode::Preview));
         do_test_uniqueness(get_programs(OperatingMode::Stable));
