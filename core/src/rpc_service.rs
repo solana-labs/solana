@@ -386,7 +386,7 @@ mod tests {
     use solana_runtime::{
         bank::Bank, bank_forks::CompressionType, snapshot_utils::SnapshotVersion,
     };
-    use solana_sdk::signature::Signer;
+    use solana_sdk::{genesis_config::OperatingMode, signature::Signer};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -438,7 +438,10 @@ mod tests {
     }
 
     fn create_bank_forks() -> Arc<RwLock<BankForks>> {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(10_000);
+        genesis_config.operating_mode = OperatingMode::Stable;
         let bank = Bank::new(&genesis_config);
         Arc::new(RwLock::new(BankForks::new(bank)))
     }
