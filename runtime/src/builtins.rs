@@ -75,8 +75,28 @@ mod tests {
         pubkey::Pubkey,
     };
 
+    use std::collections::HashSet;
     use std::str::FromStr;
     use std::sync::Arc;
+
+    fn do_test_uniqueness(builtins: Vec<(Builtin, Epoch)>) {
+        let mut unique_ids = HashSet::new();
+        let mut unique_names = HashSet::new();
+        let mut prev_start_epoch = 0;
+        for (builtin, next_start_epoch) in builtins {
+            assert!(next_start_epoch >= prev_start_epoch);
+            assert!(unique_ids.insert(builtin.name));
+            assert!(unique_names.insert(builtin.id));
+            prev_start_epoch = next_start_epoch;
+        }
+    }
+
+    #[test]
+    fn test_uniqueness() {
+        do_test_uniqueness(get_builtins(OperatingMode::Development));
+        do_test_uniqueness(get_builtins(OperatingMode::Preview));
+        do_test_uniqueness(get_builtins(OperatingMode::Stable));
+    }
 
     #[test]
     fn test_get_builtins() {
