@@ -2696,7 +2696,7 @@ fn update_completed_data_indexes(
         if first_greater_pos.is_some() {
             // If there exists a data complete shred greater than `new_shred_index`,
             // and the new shred is marked data complete, then the range
-            // [new_shred_index, completed_data_indexes[pos]] may be complete,
+            // [new_shred_index + 1, completed_data_indexes[pos]] may be complete,
             // so add that range to check
             check_ranges.push(new_shred_index + 1);
         }
