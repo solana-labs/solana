@@ -23,6 +23,7 @@ use crate::{
     append_vec::{AppendVec, StoredAccount, StoredMeta},
 };
 use byteorder::{ByteOrder, LittleEndian};
+use digest::Digest;
 use lazy_static::lazy_static;
 use log::*;
 use rand::{thread_rng, Rng};
@@ -36,6 +37,7 @@ use solana_sdk::{
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
+use std::convert::TryFrom;
 use std::{
     collections::{HashMap, HashSet},
     io::{Error as IOError, Result as IOResult},
@@ -1325,30 +1327,30 @@ impl AccountsDB {
             return Hash::default();
         }
 
-        let mut hasher = Hasher::default();
+        let mut hasher = blake3::Hasher::new();
         let mut buf = [0u8; 8];
 
         LittleEndian::write_u64(&mut buf[..], lamports);
-        hasher.hash(&buf);
+        hasher.update(&buf);
 
         LittleEndian::write_u64(&mut buf[..], slot);
-        hasher.hash(&buf);
+        hasher.update(&buf);
 
         LittleEndian::write_u64(&mut buf[..], rent_epoch);
-        hasher.hash(&buf);
+        hasher.update(&buf);
 
-        hasher.hash(&data);
+        hasher.update(&data);
 
         if executable {
-            hasher.hash(&[1u8; 1]);
+            hasher.update(&[1u8; 1]);
         } else {
-            hasher.hash(&[0u8; 1]);
+            hasher.update(&[0u8; 1]);
         }
 
-        hasher.hash(&owner.as_ref());
-        hasher.hash(&pubkey.as_ref());
+        hasher.update(&owner.as_ref());
+        hasher.update(&pubkey.as_ref());
 
-        hasher.result()
+        Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> u64 {
@@ -3510,7 +3512,7 @@ pub mod tests {
         };
         let account = stored_account.clone_account();
         let expected_account_hash =
-            Hash::from_str("5iRNZVcAnq9JLYjSF2ibFhGEeq48r9Eq9HXxwm3BxywN").unwrap();
+            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap();
 
         assert_eq!(
             AccountsDB::hash_stored_account(slot, &stored_account),
