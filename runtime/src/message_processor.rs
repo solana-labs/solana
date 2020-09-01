@@ -300,6 +300,7 @@ impl std::fmt::Debug for MessageProcessor {
             loaders: Vec<String>,
             native_loader: &'a NativeLoader,
             is_cross_program_supported: bool,
+            compute_budget: ComputeBudget,
         }
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -323,6 +324,7 @@ impl std::fmt::Debug for MessageProcessor {
                 .collect::<Vec<_>>(),
             native_loader: &self.native_loader,
             is_cross_program_supported: self.is_cross_program_supported,
+            compute_budget: self.compute_budget,
         };
 
         write!(f, "{:?}", processor)
@@ -1553,5 +1555,30 @@ mod tests {
                 case.1
             );
         }
+    }
+
+    #[test]
+    fn test_debug() {
+        let mut message_processor = MessageProcessor::default();
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _data: &[u8],
+        ) -> Result<(), InstructionError> {
+            Ok(())
+        }
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+            _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Ok(())
+        }
+        let program_id = Pubkey::new_rand();
+        message_processor.add_program(program_id, mock_process_instruction);
+        message_processor.add_loader(program_id, mock_ix_processor);
+
+        assert!(!format!("{:?}", message_processor).is_empty());
     }
 }
