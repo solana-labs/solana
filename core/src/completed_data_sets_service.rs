@@ -60,13 +60,15 @@ impl CompletedDataSetsService {
                 end_index,
             } = completed_set_info;
             match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
-                Ok(entries) => rpc_subscriptions.notify_signatures_received((
-                    slot,
-                    entries
+                Ok(entries) => {
+                    let transactions = entries
                         .into_iter()
                         .flat_map(|e| e.transactions.into_iter().map(|t| t.signatures[0]))
-                        .collect::<Vec<Signature>>(),
-                )),
+                        .collect::<Vec<Signature>>();
+                    if !transactions.is_empty() {
+                        rpc_subscriptions.notify_signatures_received((slot, transactions));
+                    }
+                }
                 Err(e) => warn!("completed-data-set-service deserialize error: {:?}", e),
             }
         }
