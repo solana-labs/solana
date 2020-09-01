@@ -44,7 +44,7 @@ use solana_vote_program::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    convert::{TryFrom, TryInto},
+    convert::TryInto,
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, BufRead, BufReader, Write},
@@ -708,16 +708,7 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 }
 
 fn assert_capitalization(bank: &Bank) {
-    let calculated_capitalization = bank.calculate_capitalization();
-    assert_eq!(
-        bank.capitalization(),
-        calculated_capitalization,
-        "Capitalization mismatch!?: +/-{}",
-        Sol(u64::try_from(
-            (i128::from(calculated_capitalization) - i128::from(bank.capitalization())).abs()
-        )
-        .unwrap()),
-    );
+    assert!(bank.calculate_and_verify_capitalization());
 }
 
 #[allow(clippy::cognitive_complexity)]

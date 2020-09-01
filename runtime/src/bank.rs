@@ -2885,6 +2885,20 @@ impl Bank {
         self.rc.accounts.calculate_capitalization(&self.ancestors)
     }
 
+    pub fn calculate_and_verify_capitalization(&self) -> bool {
+        let calculated = self.calculate_capitalization();
+        let expected = self.capitalization();
+        if calculated == expected {
+            true
+        } else {
+            warn!(
+                "Capitalization mismatch: calculated: {} != expected: {}",
+                calculated, expected
+            );
+            false
+        }
+    }
+
     /// Forcibly overwrites current capitalization by actually recalculating accounts' balances.
     /// This should only be used for developing purposes.
     pub fn set_capitalization(&self) -> u64 {
@@ -2913,10 +2927,6 @@ impl Bank {
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
         self.shrink_all_slots();
-        self.verify_bank()
-    }
-
-    pub fn verify_bank(&self) -> bool {
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
