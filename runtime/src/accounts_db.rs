@@ -22,8 +22,7 @@ use crate::{
     accounts_index::{AccountsIndex, Ancestors, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
 };
-use byteorder::{ByteOrder, LittleEndian};
-use digest::Digest;
+use blake3::traits::digest::Digest;
 use lazy_static::lazy_static;
 use log::*;
 use rand::{thread_rng, Rng};
@@ -1367,16 +1366,12 @@ impl AccountsDB {
         }
 
         let mut hasher = Hasher::default();
-        let mut buf = [0u8; 8];
 
-        LittleEndian::write_u64(&mut buf[..], lamports);
-        hasher.hash(&buf);
+        hasher.hash(&lamports.to_le_bytes());
 
-        LittleEndian::write_u64(&mut buf[..], slot);
-        hasher.hash(&buf);
+        hasher.hash(&slot.to_le_bytes());
 
-        LittleEndian::write_u64(&mut buf[..], rent_epoch);
-        hasher.hash(&buf);
+        hasher.hash(&rent_epoch.to_le_bytes());
 
         hasher.hash(&data);
 
@@ -1406,16 +1401,12 @@ impl AccountsDB {
         }
 
         let mut hasher = blake3::Hasher::new();
-        let mut buf = [0u8; 8];
 
-        LittleEndian::write_u64(&mut buf[..], lamports);
-        hasher.update(&buf);
+        hasher.update(&lamports.to_le_bytes());
 
-        LittleEndian::write_u64(&mut buf[..], slot);
-        hasher.update(&buf);
+        hasher.update(&slot.to_le_bytes());
 
-        LittleEndian::write_u64(&mut buf[..], rent_epoch);
-        hasher.update(&buf);
+        hasher.update(&rent_epoch.to_le_bytes());
 
         hasher.update(&data);
 
@@ -1435,7 +1426,7 @@ impl AccountsDB {
         match operating_mode {
             OperatingMode::Development => 0,
             OperatingMode::Stable => 32_100_000,
-            OperatingMode::Preview => 33_800_000,
+            OperatingMode::Preview => std::u64::MAX,
         }
     }
 

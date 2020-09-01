@@ -4176,7 +4176,6 @@ dependencies = [
  "byteorder",
  "bzip2",
  "crossbeam-channel",
- "digest 0.9.0",
  "dir-diff",
  "flate2",
  "fnv",

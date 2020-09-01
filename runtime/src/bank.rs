@@ -8095,19 +8095,19 @@ mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "GDH7kUpcQuMT23pPeU9vZdmyMSPQPwzoqdNgFaLga7x3"
+                    "Dkc1qupTvE6hSDoXoT3vsTFJBVqVtacRNxAYFhpQ9yQm"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "J4L6bT3KnMMXSufcUSy6Lg9TNi2pFVsYNvQ1Fzms2j1Z"
+                    "7RJNFMPFCgnYtrQYz8NC89cdLkU11j52R9etjmjFKPR9"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "BiCUyj8PsbsLW79waf1ifr3wDuZSFwLBhTkdbgHFjrtJ"
+                    "2idGBma2t2V96mdJCLfhxfkckHuXy9BZ2GHggcuSrkKK"
                 );
                 break;
             }
