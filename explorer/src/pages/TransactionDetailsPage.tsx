@@ -22,7 +22,6 @@ import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
 import { displayTimestamp } from "utils/date";
 import { InfoTooltip } from "components/common/InfoTooltip";
-import { isCached } from "providers/transactions/cached";
 import { Address } from "components/common/Address";
 import { Signature } from "components/common/Signature";
 import { intoTransactionInstruction } from "utils/tx";
@@ -281,7 +280,6 @@ function AccountsCard({
   signature,
   autoRefresh,
 }: SignatureProps & AutoRefreshProps) {
-  const { url } = useCluster();
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
   const fetchStatus = useFetchTransactionStatus();
@@ -314,17 +312,14 @@ function AccountsCard({
   } else if (!details || details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
-    return <ErrorCard retry={refreshDetails} text="Fetch Failed" />;
+    return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;
   } else if (!details.data?.transaction || !message) {
-    return <ErrorCard retry={refreshDetails} text="Not Found" />;
+    return <ErrorCard text="Details are not available" />;
   }
 
   const { meta } = details.data.transaction;
   if (!meta) {
-    if (isCached(url, signature)) {
-      return null;
-    }
-    return <ErrorCard retry={refreshDetails} text="Metadata Missing" />;
+    return <ErrorCard text="Transaction metadata is missing" />;
   }
 
   const accountRows = message.accountKeys.map((account, index) => {

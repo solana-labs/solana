@@ -9,7 +9,6 @@ import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
-import { CACHED_STATUSES, isCached } from "./cached";
 export { useTransactionDetails } from "./details";
 
 export type Confirmations = number | "max";
@@ -68,54 +67,47 @@ export async function fetchTransactionStatus(
 
   let fetchStatus;
   let data;
-  if (isCached(url, signature)) {
-    const info = CACHED_STATUSES[signature];
+  try {
+    const connection = new Connection(url);
+    const { value } = await connection.getSignatureStatus(signature, {
+      searchTransactionHistory: true,
+    });
+
+    let info = null;
+    if (value !== null) {
+      let blockTime = null;
+      try {
+        blockTime = await connection.getBlockTime(value.slot);
+      } catch (error) {
+        if (cluster === Cluster.MainnetBeta) {
+          Sentry.captureException(error, {
+            tags: { slot: `${value.slot}` },
+          });
+        }
+      }
+      let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
+
+      let confirmations: Confirmations;
+      if (typeof value.confirmations === "number") {
+        confirmations = value.confirmations;
+      } else {
+        confirmations = "max";
+      }
+
+      info = {
+        slot: value.slot,
+        timestamp,
+        confirmations,
+        result: { err: value.err },
+      };
+    }
     data = { signature, info };
     fetchStatus = FetchStatus.Fetched;
-  } else {
-    try {
-      const connection = new Connection(url);
-      const { value } = await connection.getSignatureStatus(signature, {
-        searchTransactionHistory: true,
-      });
-
-      let info = null;
-      if (value !== null) {
-        let blockTime = null;
-        try {
-          blockTime = await connection.getBlockTime(value.slot);
-        } catch (error) {
-          if (cluster === Cluster.MainnetBeta) {
-            Sentry.captureException(error, {
-              tags: { slot: `${value.slot}` },
-            });
-          }
-        }
-        let timestamp: Timestamp =
-          blockTime !== null ? blockTime : "unavailable";
-
-        let confirmations: Confirmations;
-        if (typeof value.confirmations === "number") {
-          confirmations = value.confirmations;
-        } else {
-          confirmations = "max";
-        }
-
-        info = {
-          slot: value.slot,
-          timestamp,
-          confirmations,
-          result: { err: value.err },
-        };
-      }
-      data = { signature, info };
-      fetchStatus = FetchStatus.Fetched;
-    } catch (error) {
-      if (cluster !== Cluster.Custom) {
-        Sentry.captureException(error, { tags: { url } });
-      }
-      fetchStatus = FetchStatus.FetchFailed;
+  } catch (error) {
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
     }
+    fetchStatus = FetchStatus.FetchFailed;
   }
 
   dispatch({
