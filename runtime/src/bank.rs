@@ -44,7 +44,9 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    native_loader, nonce,
+    native_loader,
+    native_token::sol_to_lamports,
+    nonce,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     sanitize::Sanitize,
@@ -70,6 +72,29 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
+
+// Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
+pub mod inline_spl_token_v2_0 {
+    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    pub mod native_mint {
+        solana_sdk::declare_id!("So11111111111111111111111111111111111111112");
+
+        /*
+            Mint {
+                mint_authority: COption::None,
+                supply: 0,
+                decimals: 9,
+                is_initialized: true,
+                freeze_authority: COption::None,
+            }
+        */
+        pub const ACCOUNT_DATA: [u8; 82] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+    }
+}
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -3208,6 +3233,7 @@ impl Bank {
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
+        self.reconfigure_token2_native_mint();
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
@@ -3255,6 +3281,49 @@ impl Bank {
             ComputeBudget::default()
         };
         self.set_compute_budget(compute_budget);
+    }
+
+    fn reconfigure_token2_native_mint(self: &mut Bank) {
+        let reconfigure_token2_native_mint = match self.operating_mode() {
+            OperatingMode::Development => true,
+            OperatingMode::Preview => self.epoch() == 95,
+            OperatingMode::Stable => self.epoch() == 75,
+        };
+
+        if reconfigure_token2_native_mint {
+            let mut native_mint_account = solana_sdk::account::Account {
+                owner: inline_spl_token_v2_0::id(),
+                data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
+                lamports: sol_to_lamports(1.),
+                executable: false,
+                rent_epoch: self.epoch() + 1,
+            };
+
+            // As a workaround for
+            // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
+            // spl-token 2 native mint account is owned by the spl-token 2 program.
+            let store = if let Some(existing_native_mint_account) =
+                self.get_account(&inline_spl_token_v2_0::native_mint::id())
+            {
+                if existing_native_mint_account.owner == solana_sdk::system_program::id() {
+                    native_mint_account.lamports = existing_native_mint_account.lamports;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                self.capitalization
+                    .fetch_add(native_mint_account.lamports, Ordering::Relaxed);
+                true
+            };
+
+            if store {
+                self.store_account(
+                    &inline_spl_token_v2_0::native_mint::id(),
+                    &native_mint_account,
+                );
+            }
+        }
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
@@ -3483,6 +3552,7 @@ mod tests {
             accounts: (0..42)
                 .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &Pubkey::default())))
                 .collect(),
+            operating_mode: OperatingMode::Stable,
             ..GenesisConfig::default()
         }));
         assert_eq!(bank.capitalization(), 42 * 42);
@@ -4948,6 +5018,7 @@ mod tests {
                 hashes_per_tick: None,
                 target_tick_count: None,
             },
+            operating_mode: OperatingMode::Stable,
 
             ..GenesisConfig::default()
         }));
@@ -5059,6 +5130,7 @@ mod tests {
                 hashes_per_tick: None,
                 target_tick_count: None,
             },
+            operating_mode: OperatingMode::Stable,
 
             ..GenesisConfig::default()
         }));
@@ -8008,6 +8080,7 @@ mod tests {
             &[],
         );
         genesis_config.creation_time = 0;
+        genesis_config.operating_mode = OperatingMode::Stable;
         let mut bank = Arc::new(Bank::new(&genesis_config));
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
@@ -8016,25 +8089,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "DJ5664svVgjZ8sRLZSrdYAjaAzJe3aEGVBDpZEeoZJ5u"
+                    "HrxvKJxPhzgXgoJ2Rg91acrXWki6SErJk1sfxfTDWsZt"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "GDH7kUpcQuMT23pPeU9vZdmyMSPQPwzoqdNgFaLga7x3"
+                    "AemCVcpsULuA76fpDYzs74futtMQtNNiF1gz3VSVP4AS"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "J4L6bT3KnMMXSufcUSy6Lg9TNi2pFVsYNvQ1Fzms2j1Z"
+                    "4ECxp4u4SRwn2w7YUj28nnADMx7kQ2gYRB7PA617eWu6"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "BiCUyj8PsbsLW79waf1ifr3wDuZSFwLBhTkdbgHFjrtJ"
+                    "AeHGi2VWQ7gWh6KkMQjrhY1ZrLUedgMxfvPRR82dyg6L"
                 );
                 break;
             }
@@ -8125,7 +8198,7 @@ mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
         consumed_budgets.sort();
-        assert_eq!(consumed_budgets, vec![0, 1, 8]);
+        assert_eq!(consumed_budgets, vec![0, 1, 9]);
     }
 
     #[test]
@@ -8359,5 +8432,71 @@ mod tests {
         Arc::get_mut(&mut bank)
             .unwrap()
             .add_native_program("mock_program", &program_id);
+    }
+
+    #[test]
+    fn test_reconfigure_token2_native_mint() {
+        solana_logger::setup();
+
+        let mut genesis_config =
+            create_genesis_config_with_leader(5, &Pubkey::new_rand(), 0).genesis_config;
+
+        // OperatingMode::Development - Native mint exists immediately
+        assert_eq!(genesis_config.operating_mode, OperatingMode::Development);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            1000000000
+        );
+
+        // OperatingMode::Preview - Native mint blinks into existence at epoch 95
+        genesis_config.operating_mode = OperatingMode::Preview;
+        let bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            0
+        );
+        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000);
+
+        let bank = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.get_first_slot_in_epoch(95),
+        );
+
+        let native_mint_account = bank
+            .get_account(&inline_spl_token_v2_0::native_mint::id())
+            .unwrap();
+        assert_eq!(native_mint_account.data.len(), 82);
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            4200000000
+        );
+        assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
+
+        // OperatingMode::Stable - Native mint blinks into existence at epoch 75
+        genesis_config.operating_mode = OperatingMode::Stable;
+        let bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            0
+        );
+        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000);
+
+        let bank = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.get_first_slot_in_epoch(75),
+        );
+
+        let native_mint_account = bank
+            .get_account(&inline_spl_token_v2_0::native_mint::id())
+            .unwrap();
+        assert_eq!(native_mint_account.data.len(), 82);
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            4200000000
+        );
+        assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
     }
 }
