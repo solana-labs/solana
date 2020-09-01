@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/react";
 import {
   Connection,
   TransactionSignature,
-  ParsedConfirmedTransaction
+  ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
@@ -58,7 +58,7 @@ async function fetchDetails(
     transaction = await new Connection(url).getParsedConfirmedTransaction(
       signature
     );
-    
+
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
