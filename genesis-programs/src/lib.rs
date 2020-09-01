@@ -70,7 +70,7 @@ impl std::fmt::Debug for Program {
     }
 }
 
-// given operating_mode and epoch, return the entire set of enabled programs
+// given operating_mode, return the entire set of enabled programs
 fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
     match operating_mode {
         OperatingMode::Development => vec![
@@ -82,13 +82,13 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
             Program::Native(solana_exchange_program!()),
         ]
         .into_iter()
-        .map(|program| (program, 0))
+        .map(|program| (program, GENESIS_EPOCH))
         .collect::<Vec<_>>(),
 
         OperatingMode::Preview => vec![
             (
                 Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-                0,
+                GENESIS_EPOCH,
             ),
             (Program::BuiltinLoader(solana_bpf_loader_program!()), 89),
         ],
@@ -163,16 +163,31 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_id_uniqueness() {
-        let mut unique = HashSet::new();
-        let programs = get_programs(OperatingMode::Development);
-        for (program, _start_epoch) in programs {
+    fn do_test_uniqueness(programs: Vec<(Program, Epoch)>) {
+        let mut unique_ids = HashSet::new();
+        let mut unique_names = HashSet::new();
+        let mut prev_start_epoch = GENESIS_EPOCH;
+        for (program, next_start_epoch) in programs {
+            assert!(next_start_epoch >= prev_start_epoch);
             match program {
-                Program::Native((name, id)) => assert!(unique.insert((name, id))),
-                Program::BuiltinLoader((name, id, _)) => assert!(unique.insert((name, id))),
+                Program::Native((name, id)) => {
+                    assert!(unique_ids.insert(id));
+                    assert!(unique_names.insert(name));
+                }
+                Program::BuiltinLoader((name, id, _)) => {
+                    assert!(unique_ids.insert(id));
+                    assert!(unique_names.insert(name));
+                }
             }
+            prev_start_epoch = next_start_epoch;
         }
+    }
+
+    #[test]
+    fn test_uniqueness() {
+        do_test_uniqueness(get_programs(OperatingMode::Development));
+        do_test_uniqueness(get_programs(OperatingMode::Preview));
+        do_test_uniqueness(get_programs(OperatingMode::Stable));
     }
 
     #[test]
@@ -213,5 +228,10 @@ mod tests {
     #[test]
     fn test_softlaunch_programs() {
         assert!(!get_programs(OperatingMode::Stable).is_empty());
+    }
+
+    #[test]
+    fn test_debug() {
+        assert!(!format!("{:?}", get_programs(OperatingMode::Development)).is_empty());
     }
 }
