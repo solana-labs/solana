@@ -1326,7 +1326,7 @@ test('get supply', async () => {
 });
 
 const TOKEN_PROGRAM_ID = new PublicKey(
-  'TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o',
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
 );
 
 describe('token methods', () => {
@@ -1353,27 +1353,29 @@ describe('token methods', () => {
 
     const mintOwner = new Account();
     const accountOwner = new Account();
-    const [token, tokenAccount] = await Token.createMint(
+    const token = await Token.createMint(
       connection,
       payerAccount,
       mintOwner.publicKey,
-      accountOwner.publicKey,
-      new u64(11111),
+      null,
       2,
       TOKEN_PROGRAM_ID,
-      false,
     );
 
-    await Token.createMint(
+    const tokenAccount = await token.createAccount(accountOwner.publicKey);
+    await token.mintTo(tokenAccount, mintOwner, [], 11111);
+
+    const token2 = await Token.createMint(
       connection,
       payerAccount,
       mintOwner.publicKey,
-      accountOwner.publicKey,
-      new u64(10000),
+      null,
       2,
       TOKEN_PROGRAM_ID,
-      false,
     );
+
+    const token2Account = await token2.createAccount(accountOwner.publicKey);
+    await token2.mintTo(token2Account, mintOwner, [], 100);
 
     const tokenAccountDest = await token.createAccount(accountOwner.publicKey);
     testSignature = await token.transfer(
