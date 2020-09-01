@@ -6,7 +6,6 @@ import {
   ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
-import { CACHED_DETAILS, isCached } from "./cached";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 
@@ -55,21 +54,16 @@ async function fetchDetails(
 
   let fetchStatus;
   let transaction;
-  if (isCached(url, signature)) {
-    transaction = CACHED_DETAILS[signature];
+  try {
+    transaction = await new Connection(url).getParsedConfirmedTransaction(
+      signature
+    );
     fetchStatus = FetchStatus.Fetched;
-  } else {
-    try {
-      transaction = await new Connection(url).getParsedConfirmedTransaction(
-        signature
-      );
-      fetchStatus = FetchStatus.Fetched;
-    } catch (error) {
-      if (cluster !== Cluster.Custom) {
-        Sentry.captureException(error, { tags: { url } });
-      }
-      fetchStatus = FetchStatus.FetchFailed;
+  } catch (error) {
+    if (cluster !== Cluster.Custom) {
+      Sentry.captureException(error, { tags: { url } });
     }
+    fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({
     type: ActionType.Update,
