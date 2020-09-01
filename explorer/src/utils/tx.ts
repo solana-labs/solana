@@ -26,6 +26,10 @@ export type ProgramName =
   | "Vote Program"
   | "SPL Token Program";
 
+export const EXTERNAL_PROGRAMS: { [ key: string ]: string } = {
+  Serum: "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn"
+};
+
 export const PROGRAM_IDS: { [key: string]: ProgramName } = {
   Budget1111111111111111111111111111111111111: "Budget Program",
   Config1111111111111111111111111111111111111: "Config Program",
@@ -125,5 +129,41 @@ export function intoParsedTransaction(tx: Transaction): ParsedTransaction {
       })),
       recentBlockhash: message.recentBlockhash,
     },
+  };
+}
+
+export function isSerumInstruction(instruction: TransactionInstruction) {
+  return instruction.programId.toBase58() === EXTERNAL_PROGRAMS["Serum"];
+}
+
+type ParsedSerumInstruction = {
+  code: number;
+  operation: string;
+};
+
+const SERUM_CODE_LOOKUP: { [key: number]: string } = {
+  0: "Initialize Market",
+  1: "New Order",
+  2: "Match Order",
+  3: "Consume Events",
+  4: "Cancel Order",
+  5: "Settle Funds",
+  6: "Cancel Order By Client Id",
+  7: "Disable Market",
+  8: "Sweep Fees"
+};
+
+export function parseSerumInstruction(instruction: TransactionInstruction): ParsedSerumInstruction {
+  const code = instruction.data.slice(1, 5).readUInt32LE(0);
+
+  let operation = "Unknown";
+
+  if (code in SERUM_CODE_LOOKUP) {
+    operation = SERUM_CODE_LOOKUP[code];
+  }
+
+  return {
+    code,
+    operation
   };
 }
