@@ -1,11 +1,12 @@
 import React from "react";
-import { PublicKey, TokenAccountBalancePair } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Address } from "components/common/Address";
 import {
   useTokenLargestTokens,
   useFetchTokenLargestAccounts,
+  TokenAccountBalancePairWithOwner,
 } from "providers/mints/largest";
 import { FetchStatus } from "providers/cache";
 import { TokenRegistry } from "tokenRegistry";
@@ -64,11 +65,12 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
         </div>
 
         <div className="table-responsive mb-0">
-          <table className="table table-sm table-nowrap card-table">
+          <table className="table table-sm card-table">
             <thead>
               <tr>
                 <th className="text-muted">Rank</th>
                 <th className="text-muted">Address</th>
+                <th className="text-muted">Owner</th>
                 <th className="text-muted text-right">Balance {unitLabel}</th>
                 <th className="text-muted text-right">% of Total Supply</th>
               </tr>
@@ -86,7 +88,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
 }
 
 const renderAccountRow = (
-  account: TokenAccountBalancePair,
+  account: TokenAccountBalancePairWithOwner,
   index: number,
   supply: number
 ) => {
@@ -99,8 +101,13 @@ const renderAccountRow = (
       <td>
         <span className="badge badge-soft-gray badge-pill">{index + 1}</span>
       </td>
+      <td className="td">
+        <Address pubkey={account.address} link truncate />
+      </td>
       <td>
-        <Address pubkey={account.address} link />
+        {account.owner && (
+          <Address pubkey={account.owner} alignRight link truncate />
+        )}
       </td>
       <td className="text-right">{account.uiAmount}</td>
       <td className="text-right">{percent}</td>

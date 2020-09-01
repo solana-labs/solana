@@ -127,6 +127,7 @@ async function fetchAccountInfo(
           try {
             const info = coerce(result.data.parsed, ParsedInfo);
             const parsed = coerce(info, TokenAccount);
+
             data = {
               program: "spl-token",
               parsed,
