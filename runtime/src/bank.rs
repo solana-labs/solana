@@ -2913,6 +2913,10 @@ impl Bank {
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
         self.shrink_all_slots();
+        self.verify_bank()
+    }
+
+    pub fn verify_bank(&self) -> bool {
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }

@@ -438,7 +438,7 @@ impl Accounts {
                     account.executable,
                 )
             })
-            .sum()
+            .fold(0, |a, b| a.checked_add(b).unwrap())
     }
 
     #[must_use]

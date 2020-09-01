@@ -1607,8 +1607,11 @@ impl AccountsDB {
         );
     }
 
-    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        let hashes: Vec<_> = hashes.into_iter().map(|(_pubkey, hash)| hash).collect();
+    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
+        let hashes: Vec<_> = hashes
+            .into_iter()
+            .map(|(_pubkey, hash, _lamports)| hash)
+            .collect();
         let mut hashes: Vec<_> = hashes.chunks(fanout).map(|x| x.to_vec()).collect();
         while hashes.len() > 1 {
             let mut time = Measure::start("time");
@@ -1633,20 +1636,44 @@ impl AccountsDB {
         hasher.result()
     }
 
-    fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
-        let mut sort = Measure::start("sort");
+    fn accumulate_account_hashes(hashes: Vec<(Pubkey, Hash, u64)>) -> Hash {
+        let (hash, ..) = Self::do_accumulate_account_hashes_and_capitalization(hashes, false);
+        hash
+    }
+
+    fn accumulate_account_hashes_and_capitalization(
+        hashes: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, u64) {
+        let (hash, cap) = Self::do_accumulate_account_hashes_and_capitalization(hashes, true);
+        (hash, cap.unwrap())
+    }
+
+    fn do_accumulate_account_hashes_and_capitalization(
+        mut hashes: Vec<(Pubkey, Hash, u64)>,
+        calculate_cap: bool,
+    ) -> (Hash, Option<u64>) {
+        let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
-        sort.stop();
+        sort_time.stop();
+
+        let mut sum_time = Measure::start("cap");
+        let cap = if calculate_cap {
+            Some(hashes.iter().fold(0, |acuum: u64, (_, _, lamports)| {
+                acuum.checked_add(*lamports).unwrap()
+            }))
+        } else {
+            None
+        };
+        sum_time.stop();
+
         let mut hash_time = Measure::start("hash");
-
         let fanout = 16;
-
         let res = Self::compute_merkle_root(hashes, fanout);
-
         hash_time.stop();
-        debug!("{} {}", sort, hash_time);
 
-        res
+        debug!("{} {} {}", sort_time, hash_time, sum_time);
+
+        (res, cap)
     }
 
     pub fn account_balance_for_capitalization(
@@ -1678,7 +1705,6 @@ impl AccountsDB {
         let storage = self.storage.read().unwrap();
         let keys: Vec<_> = accounts_index.account_maps.keys().collect();
         let mismatch_found = AtomicU64::new(0);
-        let total_lamports = AtomicU64::new(0);
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
@@ -1691,13 +1717,10 @@ impl AccountsDB {
                             .and_then(|storage_map| storage_map.get(&account_info.store_id))
                             .and_then(|store| {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
-                                total_lamports.fetch_add(
-                                    Self::account_balance_for_capitalization(
-                                        account_info.lamports,
-                                        &account.account_meta.owner,
-                                        account.account_meta.executable,
-                                    ),
-                                    Ordering::Relaxed,
+                                let balance = Self::account_balance_for_capitalization(
+                                    account_info.lamports,
+                                    &account.account_meta.owner,
+                                    account.account_meta.executable,
                                 );
 
                                 if check_hash {
@@ -1714,7 +1737,7 @@ impl AccountsDB {
                                     }
                                 }
 
-                                Some((**pubkey, *account.hash))
+                                Some((**pubkey, *account.hash, balance))
                             })
                     } else {
                         None
@@ -1736,7 +1759,8 @@ impl AccountsDB {
         let hash_total = hashes.len();
 
         let mut accumulate = Measure::start("accumulate");
-        let accumulated_hash = Self::accumulate_account_hashes(hashes);
+        let (accumulated_hash, total_lamports) =
+            Self::accumulate_account_hashes_and_capitalization(hashes);
         accumulate.stop();
         datapoint_info!(
             "update_accounts_hash",
@@ -1744,7 +1768,7 @@ impl AccountsDB {
             ("hash_accumulate", accumulate.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
-        Ok((accumulated_hash, total_lamports.load(Ordering::Relaxed)))
+        Ok((accumulated_hash, total_lamports))
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
@@ -1819,7 +1843,7 @@ impl AccountsDB {
         let mut accumulate = Measure::start("accumulate");
         let hashes: Vec<_> = account_maps
             .into_iter()
-            .map(|(pubkey, (_, hash))| (pubkey, hash))
+            .map(|(pubkey, (_, hash))| (pubkey, hash, 0))
             .collect();
         let ret = Self::accumulate_account_hashes(hashes);
         accumulate.stop();
