@@ -1688,6 +1688,7 @@ impl Blockstore {
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
 
                 let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(Vec::new);
+                let block_time = self.blocktime_cf.get(slot)?;
 
                 let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
@@ -1699,7 +1700,7 @@ impl Blockstore {
                         slot_transaction_iterator,
                     ),
                     rewards,
-                    block_time: None, // See https://github.com/solana-labs/solana/issues/10089
+                    block_time,
                 };
                 return Ok(block);
             }
@@ -5733,7 +5734,7 @@ pub mod tests {
         let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
-        let expected_block = ConfirmedBlock {
+        let mut expected_block = ConfirmedBlock {
             transactions: expected_transactions
                 .iter()
                 .cloned()
@@ -5752,6 +5753,14 @@ pub mod tests {
 
         let not_root = ledger.get_confirmed_block(slot + 2, None).unwrap_err();
         assert_matches!(not_root, BlockstoreError::SlotNotRooted);
+
+        // Test block_time returns, if available
+        let timestamp = 1_576_183_541;
+        ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
+        expected_block.block_time = Some(timestamp);
+
+        let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
+        assert_eq!(confirmed_block, expected_block);
 
         drop(ledger);
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
