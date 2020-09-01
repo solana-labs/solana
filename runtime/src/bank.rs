@@ -8242,7 +8242,7 @@ mod tests {
             _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
-            Err(InstructionError::Custom(42))
+            Ok(())
         }
 
         let slot = 123;
@@ -8281,7 +8281,7 @@ mod tests {
             _data: &[u8],
             _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            Err(InstructionError::Custom(42))
+            Ok(())
         }
 
         let slot = 123;
