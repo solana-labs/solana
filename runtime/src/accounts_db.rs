@@ -1425,7 +1425,8 @@ impl AccountsDB {
     fn get_blake3_slot(operating_mode: &OperatingMode) -> Slot {
         match operating_mode {
             OperatingMode::Development => 0,
-            OperatingMode::Stable => 32_100_000,
+            // Epoch 75
+            OperatingMode::Stable => 32_400_000,
             OperatingMode::Preview => std::u64::MAX,
         }
     }
