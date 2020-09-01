@@ -1649,9 +1649,13 @@ impl AccountsDB {
         res
     }
 
-    pub fn account_balance_for_capitalization(lamports: u64, owner: &Pubkey) -> u64 {
-        let is_specially_retained =
-            solana_sdk::native_loader::check_id(owner) || solana_sdk::sysvar::check_id(owner);
+    pub fn account_balance_for_capitalization(
+        lamports: u64,
+        owner: &Pubkey,
+        executable: bool,
+    ) -> u64 {
+        let is_specially_retained = (solana_sdk::native_loader::check_id(owner) && executable)
+            || solana_sdk::sysvar::check_id(owner);
 
         if is_specially_retained {
             // specially retained accounts are ensured to exist by
@@ -1691,6 +1695,7 @@ impl AccountsDB {
                                     Self::account_balance_for_capitalization(
                                         account_info.lamports,
                                         &account.account_meta.owner,
+                                        account.account_meta.executable,
                                     ),
                                     Ordering::Relaxed,
                                 );
@@ -3716,7 +3721,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_verify_bank_hash1() {
+    fn test_verify_bank_hash() {
         use BankHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
@@ -3733,11 +3738,6 @@ pub mod tests {
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Ok(_)
-        );
-
-        assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
-            Err(MismatchedTotalLamports(_, _))
         );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
@@ -3759,6 +3759,46 @@ pub mod tests {
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedBankHash)
+        );
+    }
+
+    #[test]
+    fn test_verify_bank_capitalization() {
+        use BankHashVerificationError::*;
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::new_rand();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = Account::new(1, some_data_len, &key);
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.store(some_slot, &[(&key, &account)]);
+        db.add_root(some_slot);
+        db.update_accounts_hash(some_slot, &ancestors);
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            Ok(_)
+        );
+
+        let native_account_pubkey = Pubkey::new_rand();
+        db.store(
+            some_slot,
+            &[(
+                &native_account_pubkey,
+                &solana_sdk::native_loader::create_loadable_account("foo"),
+            )],
+        );
+        db.update_accounts_hash(some_slot, &ancestors);
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            Ok(_)
+        );
+
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
+            Err(MismatchedTotalLamports(expected, actual)) if expected == 1 && actual == 10
         );
     }
 
@@ -4413,5 +4453,63 @@ pub mod tests {
             exit.store(true, Ordering::Relaxed);
             shrink_thread.join().unwrap();
         }
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_normal() {
+        // system accounts
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &Pubkey::default(), false),
+            10
+        );
+        // any random program data accounts
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &Pubkey::new_rand(), false),
+            10
+        );
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_sysvar() {
+        use solana_sdk::sysvar::Sysvar;
+
+        let normal_sysvar = solana_sdk::slot_history::SlotHistory::default().create_account(1);
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                normal_sysvar.lamports,
+                &normal_sysvar.owner,
+                normal_sysvar.executable
+            ),
+            0
+        );
+
+        // currently transactions can send any lamports to sysvars although this is not sensible.
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false),
+            9
+        );
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_native_program() {
+        let normal_native_program = solana_sdk::native_loader::create_loadable_account("foo");
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                normal_native_program.lamports,
+                &normal_native_program.owner,
+                normal_native_program.executable
+            ),
+            0
+        );
+
+        // test maliciously assigned bogus native loader account
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                1,
+                &solana_sdk::native_loader::id(),
+                false
+            ),
+            1
+        )
     }
 }

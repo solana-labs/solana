@@ -432,7 +432,11 @@ impl Accounts {
         self.load_by_program(ancestors, None)
             .into_iter()
             .map(|(_pubkey, account)| {
-                AccountsDB::account_balance_for_capitalization(account.lamports, &account.owner)
+                AccountsDB::account_balance_for_capitalization(
+                    account.lamports,
+                    &account.owner,
+                    account.executable,
+                )
             })
             .sum()
     }
