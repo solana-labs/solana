@@ -477,7 +477,7 @@ impl Bank {
         bank.operating_mode = Some(genesis_config.operating_mode);
         bank.ancestors.insert(bank.slot(), 0);
 
-        bank.rc.accounts = Arc::new(Accounts::new(paths));
+        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.operating_mode));
         bank.process_genesis_config(genesis_config);
         bank.finish_init();
 
@@ -8089,25 +8089,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "Gi39g5f6SBg9XXdpXRNFoaKgrYrdAoqiY5S1jonkZVr9"
+                    "DJ5664svVgjZ8sRLZSrdYAjaAzJe3aEGVBDpZEeoZJ5u"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "E8EbW1uA9nmNjivgvmcFgHGYE3MnPxmnJftjGMcjet8E"
+                    "GDH7kUpcQuMT23pPeU9vZdmyMSPQPwzoqdNgFaLga7x3"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "CtthEaEwh3VtNvu3ddtEMc7wZELbc724qX5hBc1j7wDb"
+                    "J4L6bT3KnMMXSufcUSy6Lg9TNi2pFVsYNvQ1Fzms2j1Z"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "5Lz5aqoP9RUUPHyE4s1m7TioUaUTB9d4jCitCTZUsfEj"
+                    "BiCUyj8PsbsLW79waf1ifr3wDuZSFwLBhTkdbgHFjrtJ"
                 );
                 break;
             }
