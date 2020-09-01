@@ -5,7 +5,7 @@
   "dependencies": {
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^5.22.3",
-    "@solana/web3.js": "^0.71.6",
+    "@solana/web3.js": "^0.71.9",
     "@testing-library/jest-dom": "^5.11.4",
     "@testing-library/react": "^10.4.9",
     "@testing-library/user-event": "^12.1.3",
