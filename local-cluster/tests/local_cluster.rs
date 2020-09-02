@@ -2,10 +2,14 @@ use assert_matches::assert_matches;
 use gag::BufferRedirect;
 use log::*;
 use serial_test_derive::serial;
-use solana_client::rpc_client::RpcClient;
-use solana_client::thin_client::create_client;
+use solana_client::{
+    pubsub_client::{PubsubClient, SignatureResult},
+    rpc_client::RpcClient,
+    thin_client::create_client,
+};
 use solana_core::{
     broadcast_stage::BroadcastStageType,
+    cluster_info::VALIDATOR_PORT_RANGE,
     consensus::{SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
     gossip_service::discover_cluster,
     validator::ValidatorConfig,
@@ -34,6 +38,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    system_transaction,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
@@ -130,6 +135,71 @@ fn test_spend_and_verify_all_nodes_3() {
         num_nodes,
         HashSet::new(),
     );
+}
+
+#[test]
+#[serial]
+fn test_local_cluster_signature_subscribe() {
+    solana_logger::setup();
+    let num_nodes = 2;
+    let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    let nodes = cluster.get_node_pubkeys();
+
+    // Get non leader
+    let non_bootstrap_id = nodes
+        .into_iter()
+        .find(|id| *id != cluster.entry_point_info.id)
+        .unwrap();
+    let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
+
+    let tx_client = create_client(
+        non_bootstrap_info.client_facing_addr(),
+        VALIDATOR_PORT_RANGE,
+    );
+    let (blockhash, _fee_calculator, _last_valid_slot) = tx_client
+        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+        .unwrap();
+
+    let mut transaction =
+        system_transaction::transfer(&cluster.funding_keypair, &Pubkey::new_rand(), 10, blockhash);
+
+    let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
+        &format!("ws://{}", &non_bootstrap_info.rpc_pubsub.to_string()),
+        &transaction.signatures[0],
+    )
+    .unwrap();
+
+    tx_client
+        .retry_transfer(&cluster.funding_keypair, &mut transaction, 5)
+        .unwrap();
+
+    let mut got_received_notification = false;
+    loop {
+        let responses: Vec<_> = receiver.try_iter().collect();
+        let mut should_break = false;
+        for response in responses {
+            match response.value {
+                SignatureResult::ProcessedSignatureResult(_) => {
+                    should_break = true;
+                    break;
+                }
+                SignatureResult::ReceivedSignature => {
+                    got_received_notification = true;
+                }
+            }
+        }
+
+        if should_break {
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `sig_subscribe_client` won't shut down
+    drop(cluster);
+    sig_subscribe_client.shutdown().unwrap();
+    assert!(got_received_notification);
 }
 
 #[test]

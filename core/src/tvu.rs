@@ -8,6 +8,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{VerifiedVoteReceiver, VoteTracker},
     cluster_slots::ClusterSlots,
+    completed_data_sets_service::CompletedDataSetsSender,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -100,6 +101,7 @@ impl Tvu {
         retransmit_slots_sender: RetransmitSlotsSender,
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
+        completed_data_sets_sender: CompletedDataSetsSender,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
@@ -152,6 +154,7 @@ impl Tvu {
             duplicate_slots_reset_sender,
             verified_vote_receiver,
             tvu_config.repair_validators,
+            completed_data_sets_sender,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -249,6 +252,7 @@ pub mod tests {
     };
     use serial_test_derive::serial;
     use solana_ledger::{
+        blockstore::BlockstoreSignals,
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
@@ -275,9 +279,13 @@ pub mod tests {
         let cref1 = Arc::new(cluster_info1);
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
-        let (blockstore, l_receiver, completed_slots_receiver) =
-            Blockstore::open_with_signal(&blockstore_path, None)
-                .expect("Expected to successfully open ledger");
+        let BlockstoreSignals {
+            blockstore,
+            ledger_signal_receiver,
+            completed_slots_receiver,
+            ..
+        } = Blockstore::open_with_signal(&blockstore_path, None)
+            .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
@@ -288,6 +296,7 @@ pub mod tests {
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+        let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -303,7 +312,7 @@ pub mod tests {
                 }
             },
             blockstore,
-            l_receiver,
+            ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new(
                 &exit,
                 bank_forks.clone(),
@@ -322,6 +331,7 @@ pub mod tests {
             retransmit_slots_sender,
             verified_vote_receiver,
             replay_vote_sender,
+            completed_data_sets_sender,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);

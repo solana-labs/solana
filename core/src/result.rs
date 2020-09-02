@@ -20,6 +20,7 @@ pub enum Error {
     ReadyTimeoutError,
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     CrossbeamSendError,
+    TryCrossbeamSendError,
     TryRecvError(std::sync::mpsc::TryRecvError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     TransactionError(transaction::TransactionError),
@@ -85,6 +86,11 @@ impl std::convert::From<cluster_info::ClusterInfoError> for Error {
 impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
     fn from(_e: crossbeam_channel::SendError<T>) -> Error {
         Error::CrossbeamSendError
+    }
+}
+impl<T> std::convert::From<crossbeam_channel::TrySendError<T>> for Error {
+    fn from(_e: crossbeam_channel::TrySendError<T>) -> Error {
+        Error::TryCrossbeamSendError
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {

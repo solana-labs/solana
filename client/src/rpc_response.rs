@@ -95,8 +95,15 @@ pub struct RpcKeyedAccount {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", tag = "type", content = "result")]
+pub enum RpcSignatureResult {
+    ProcessedSignatureResult(ProcessedSignatureResult),
+    ReceivedSignature,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcSignatureResult {
+pub struct ProcessedSignatureResult {
     pub err: Option<TransactionError>,
 }
 
