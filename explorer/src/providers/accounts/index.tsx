@@ -38,22 +38,22 @@ export type TokenProgramData = {
 };
 
 export type VoteProgramData = {
-  name: "vote";
+  program: "vote";
   parsed: VoteAccount;
 };
 
 export type NonceProgramData = {
-  name: "nonce";
+  program: "nonce";
   parsed: NonceAccount;
 };
 
 export type SysvarProgramData = {
-  name: "sysvar";
+  program: "sysvar";
   parsed: SysvarAccount;
 };
 
 export type ConfigProgramData = {
-  name: "config";
+  program: "config";
   parsed: ConfigAccount;
 };
 
@@ -172,7 +172,7 @@ async function fetchAccountInfo(
           const info = coerce(result.data.parsed, ParsedInfo);
           const parsed = coerce(info, TokenAccount);
           data = {
-            name: "spl-token",
+            program: "spl-token",
             parsed,
           };
         } catch (err) {
@@ -182,50 +182,35 @@ async function fetchAccountInfo(
           // TODO store error state in Account info
         }
       } else if ("parsed" in result.data) {
-<<<<<<< HEAD
-        if (result.owner.equals(TOKEN_PROGRAM_ID)) {
-          try {
-            const info = coerce(result.data.parsed, ParsedInfo);
-            const parsed = coerce(info, TokenAccount);
-
-            data = {
-              program: "spl-token",
-              parsed,
-            };
-          } catch (err) {
-            reportError(err, { url, address: pubkey.toBase58() });
-            // TODO store error state in Account info
-=======
         try {
           const info = coerce(result.data.parsed, ParsedInfo);
           switch (result.data.program) {
             case "vote":
               data = {
-                name: result.data.program,
+                program: result.data.program,
                 parsed: coerce(info, VoteAccount),
               };
               break;
             case "nonce":
               data = {
-                name: result.data.program,
+                program: result.data.program,
                 parsed: coerce(info, NonceAccount),
               };
               break;
             case "sysvar":
               data = {
-                name: result.data.program,
+                program: result.data.program,
                 parsed: coerce(info, SysvarAccount),
               };
               break;
             case "config":
               data = {
-                name: result.data.program,
+                program: result.data.program,
                 parsed: coerce(info, ConfigAccount),
               };
               break;
             default:
               data = undefined;
->>>>>>> introduce vote account section and nonce account section, clean up superstructs
           }
         } catch (error) {
           Sentry.captureException(error, {

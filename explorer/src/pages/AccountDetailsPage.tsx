@@ -122,7 +122,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
         path: "/largest",
       });
     }
-  } else if (data && data.name === "vote") {
+  } else if (data && data.program === "vote") {
     tabs.push({
       slug: "votes",
       title: "Votes",
@@ -174,11 +174,11 @@ function InfoSection({ account }: { account: Account }) {
     );
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
-  } else if (data && data.name === "nonce") {
+  } else if (data && data.program === "nonce") {
     return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
-  } else if (data && data.name === "vote") {
+  } else if (data && data.program === "vote") {
     return <VoteAccountSection account={account} voteAccount={data.parsed} />;
-  } else if (data && data.name === "sysvar") {
+  } else if (data && data.program === "sysvar") {
     return (
       <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
     );
@@ -235,7 +235,7 @@ function MoreSection({
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
-      {tab === "votes" && data?.name === "vote" && (
+      {tab === "votes" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
     </>
