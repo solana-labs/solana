@@ -35,7 +35,7 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 }
 
 fn main() {
-    let bpf_c = !env::var("CARGO_FEATURE_BPF_C").is_err();
+    let bpf_c = env::var("CARGO_FEATURE_BPF_C").is_ok();
     if bpf_c {
         let install_dir =
             "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
@@ -52,7 +52,7 @@ fn main() {
         rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"], &["/target/"]);
     }
 
-    let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
+    let bpf_rust = env::var("CARGO_FEATURE_BPF_RUST").is_ok();
     if bpf_rust {
         let install_dir =
             "target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
@@ -100,7 +100,7 @@ fn main() {
                 .arg(&src)
                 .arg(&install_dir)
                 .status()
-                .expect(&format!("Failed to cp {} to {}", src, install_dir))
+                .unwrap_or_else(|_| panic!("Failed to cp {} to {}", src, install_dir))
                 .success());
         }
 

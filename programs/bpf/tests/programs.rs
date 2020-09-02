@@ -26,8 +26,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
-    signature::Keypair,
-    signature::Signer,
+    signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
     transaction::TransactionError,
 };
