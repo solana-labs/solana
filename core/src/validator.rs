@@ -4,6 +4,7 @@ use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
+    completed_data_sets_service::CompletedDataSetsService,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -21,12 +22,12 @@ use crate::{
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
 };
-use crossbeam_channel::unbounded;
+use crossbeam_channel::{bounded, unbounded};
 use rand::{thread_rng, Rng};
 use solana_banks_server::rpc_banks_service::RpcBanksService;
 use solana_ledger::{
     bank_forks_utils,
-    blockstore::{Blockstore, CompletedSlotsReceiver, PurgeType},
+    blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
     create_new_tmp_ledger,
@@ -63,6 +64,8 @@ use std::{
     thread::{sleep, Result},
     time::Duration,
 };
+
+pub const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
@@ -156,6 +159,7 @@ pub struct Validator {
     rewards_recorder_service: Option<RewardsRecorderService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
+    completed_data_sets_service: CompletedDataSetsService,
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
@@ -283,6 +287,15 @@ impl Validator {
             bank_forks.clone(),
             block_commitment_cache.clone(),
         ));
+
+        let (completed_data_sets_sender, completed_data_sets_receiver) =
+            bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
+        let completed_data_sets_service = CompletedDataSetsService::new(
+            completed_data_sets_receiver,
+            blockstore.clone(),
+            subscriptions.clone(),
+            &exit,
+        );
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let rpc_service = config
@@ -468,6 +481,7 @@ impl Validator {
             retransmit_slots_sender,
             verified_vote_receiver,
             replay_vote_sender.clone(),
+            completed_data_sets_sender,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -509,6 +523,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             snapshot_packager_service,
+            completed_data_sets_service,
             tpu,
             tvu,
             poh_service,
@@ -579,6 +594,7 @@ impl Validator {
         self.serve_repair_service.join()?;
         self.tpu.join()?;
         self.tvu.join()?;
+        self.completed_data_sets_service.join()?;
         self.ip_echo_server.shutdown_now();
 
         Ok(())
@@ -622,9 +638,13 @@ fn new_banks_from_ledger(
         }
     }
 
-    let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
-            .expect("Failed to open ledger database");
+    let BlockstoreSignals {
+        mut blockstore,
+        ledger_signal_receiver,
+        completed_slots_receiver,
+        ..
+    } = Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
+        .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {

@@ -5,6 +5,7 @@ use crate::{
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     cluster_slots_service::ClusterSlotsService,
+    completed_data_sets_service::CompletedDataSetsSender,
     contact_info::ContactInfo,
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
@@ -419,6 +420,7 @@ impl RetransmitStage {
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
         verified_vote_receiver: VerifiedVoteReceiver,
         repair_validators: Option<HashSet<Pubkey>>,
+        completed_data_sets_sender: CompletedDataSetsSender,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -472,6 +474,7 @@ impl RetransmitStage {
             },
             cluster_slots,
             verified_vote_receiver,
+            completed_data_sets_sender,
         );
 
         let thread_hdls = t_retransmit;
