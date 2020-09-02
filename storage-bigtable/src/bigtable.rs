@@ -346,8 +346,9 @@ impl BigTable {
     /// All column families are accepted, and only the latest version of each column cell will be
     /// returned.
     ///
-    /// If `start_at` is provided, the row key listing will start with key.
-    /// Otherwise the listing will start from the start of the table.
+    /// If `start_at` is provided, the row key listing will start with key, or the next key in the
+    /// table if the explicit key does not exist. Otherwise the listing will start from the start
+    /// of the table.
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
     /// continue until the `limit` is reached or the end of the table, whichever comes first.
@@ -385,6 +386,43 @@ impl BigTable {
             .into_inner();
 
         Self::decode_read_rows_response(response).await
+    }
+
+    /// Get latest data from a single row of `table`, if that row exists. Returns an error if that
+    /// row does not exist.
+    ///
+    /// All column families are accepted, and only the latest version of each column cell will be
+    /// returned.
+    pub async fn get_single_row_data(
+        &mut self,
+        table_name: &str,
+        row_key: RowKey,
+    ) -> Result<RowData> {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                rows_limit: 1,
+                rows: Some(RowSet {
+                    row_keys: vec![row_key.into_bytes()],
+                    row_ranges: vec![],
+                }),
+                filter: Some(RowFilter {
+                    // Only return the latest version of each cell
+                    filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
+                }),
+                ..ReadRowsRequest::default()
+            })
+            .await?
+            .into_inner();
+
+        let rows = Self::decode_read_rows_response(response).await?;
+        rows.into_iter()
+            .next()
+            .map(|r| r.1)
+            .ok_or_else(|| Error::RowNotFound)
     }
 
     /// Store data for one or more `table` rows in the `family_name` Column family
@@ -445,10 +483,8 @@ impl BigTable {
     where
         T: serde::de::DeserializeOwned,
     {
-        let row_data = self.get_row_data(table, Some(key.clone()), None, 1).await?;
-        let (row_key, data) = &row_data.get(0).ok_or_else(|| Error::RowNotFound)?;
-
-        deserialize_cell_data(data, table, row_key.to_string())
+        let row_data = self.get_single_row_data(table, key.clone()).await?;
+        deserialize_cell_data(&row_data, table, key.to_string())
     }
 
     pub async fn put_bincode_cells<T>(
