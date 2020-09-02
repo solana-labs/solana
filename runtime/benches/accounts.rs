@@ -6,7 +6,11 @@ use solana_runtime::{
     accounts::{create_test_accounts, Accounts},
     bank::*,
 };
-use solana_sdk::{account::Account, genesis_config::create_genesis_config, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account,
+    genesis_config::{create_genesis_config, OperatingMode},
+    pubkey::Pubkey,
+};
 use std::{path::PathBuf, sync::Arc};
 use test::Bencher;
 
@@ -65,7 +69,10 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
-    let accounts = Accounts::new(vec![PathBuf::from("bench_accounts_hash_internal")]);
+    let accounts = Accounts::new(
+        vec![PathBuf::from("bench_accounts_hash_internal")],
+        &OperatingMode::Development,
+    );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 60000, 0);
     let ancestors = vec![(0, 0)].into_iter().collect();
@@ -76,7 +83,10 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(vec![PathBuf::from("update_accounts_hash")]);
+    let accounts = Accounts::new(
+        vec![PathBuf::from("update_accounts_hash")],
+        &OperatingMode::Development,
+    );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = vec![(0, 0)].into_iter().collect();
@@ -88,7 +98,10 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(vec![PathBuf::from("accounts_delta_hash")]);
+    let accounts = Accounts::new(
+        vec![PathBuf::from("accounts_delta_hash")],
+        &OperatingMode::Development,
+    );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
     bencher.iter(|| {
@@ -99,7 +112,10 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(vec![PathBuf::from("accounts_delete_deps")]);
+    let accounts = Accounts::new(
+        vec![PathBuf::from("accounts_delete_deps")],
+        &OperatingMode::Development,
+    );
     let mut old_pubkey = Pubkey::default();
     let zero_account = Account::new(0, 0, &Account::default().owner);
     for i in 0..1000 {

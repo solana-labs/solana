@@ -18,6 +18,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     fee_calculator::FeeCalculator,
+    genesis_config::OperatingMode,
     hash::Hash,
     message::Message,
     native_loader, nonce,
@@ -66,9 +67,16 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
+<<<<<<< HEAD
     pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
         Self {
             accounts_db: Arc::new(accounts_db),
+=======
+    pub fn new(paths: Vec<PathBuf>, operating_mode: &OperatingMode) -> Self {
+        Self {
+            slot: 0,
+            accounts_db: Arc::new(AccountsDB::new(paths, operating_mode)),
+>>>>>>> af08221ae... Switch account hashing to blake3 (#11969)
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
             ..Self::default()
@@ -818,7 +826,7 @@ mod tests {
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
@@ -1384,7 +1392,7 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
 
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = Pubkey::new_rand();
@@ -1407,7 +1415,7 @@ mod tests {
 
     #[test]
     fn test_accounts_account_not_found() {
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
@@ -1429,7 +1437,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         accounts.bank_hash_at(1);
     }
 
@@ -1445,7 +1453,7 @@ mod tests {
         let account2 = Account::new(3, 0, &Pubkey::default());
         let account3 = Account::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1557,7 +1565,7 @@ mod tests {
         let account1 = Account::new(2, 0, &Pubkey::default());
         let account2 = Account::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1687,7 +1695,7 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         {
             let mut readonly_locks = accounts.readonly_locks.write().unwrap();
             let readonly_locks = readonly_locks.as_mut().unwrap();
@@ -1738,7 +1746,7 @@ mod tests {
     #[test]
     fn huge_clean() {
         solana_logger::setup();
-        let accounts = Accounts::new(Vec::new());
+        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
         let mut old_pubkey = Pubkey::default();
         let zero_account = Account::new(0, 0, &Account::default().owner);
         info!("storing..");

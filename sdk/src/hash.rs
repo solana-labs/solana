@@ -8,7 +8,7 @@ use thiserror::Error;
 pub const HASH_BYTES: usize = 32;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
-pub struct Hash([u8; HASH_BYTES]);
+pub struct Hash(pub [u8; HASH_BYTES]);
 
 #[derive(Clone, Default)]
 pub struct Hasher {
