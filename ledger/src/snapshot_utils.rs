@@ -738,6 +738,7 @@ where
                 bank.slot(),
                 &mut stream,
                 &append_vecs_path,
+                genesis_config.operating_mode,
             ),
             SnapshotVersion::V1_2_0 => bankrc_from_stream(
                 SerdeStyle::NEWER,
@@ -745,6 +746,7 @@ where
                 bank.slot(),
                 &mut stream,
                 &append_vecs_path,
+                genesis_config.operating_mode,
             ),
         }?;
         Arc::get_mut(&mut Arc::get_mut(&mut bankrc.accounts).unwrap().accounts_db)

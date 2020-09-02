@@ -11,25 +11,11 @@ use {
     fs_extra::dir::CopyOptions,
     log::{info, warn},
     rand::{thread_rng, Rng},
-<<<<<<< HEAD
     serde::{
         de::{DeserializeOwned, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
-=======
-    serde::{de::DeserializeOwned, Deserialize, Serialize},
-    solana_sdk::{
-        clock::{Epoch, Slot, UnixTimestamp},
-        epoch_schedule::EpochSchedule,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
-        genesis_config::GenesisConfig,
-        genesis_config::OperatingMode,
-        hard_forks::HardForks,
-        hash::Hash,
-        inflation::Inflation,
-        pubkey::Pubkey,
->>>>>>> af08221ae... Switch account hashing to blake3 (#11969)
     },
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, genesis_config::OperatingMode},
     std::{
         cmp::min,
         collections::HashMap,
@@ -118,6 +104,7 @@ pub fn bankrc_from_stream<R, P>(
     slot: Slot,
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
+    operating_mode: OperatingMode,
 ) -> std::result::Result<BankRc, IoError>
 where
     R: Read,
@@ -130,6 +117,7 @@ where
                     $x::deserialize_accounts_db_fields(stream)?,
                     account_paths,
                     stream_append_vecs_path,
+                    operating_mode,
                 )?),
                 slot,
             ))
@@ -200,49 +188,12 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
     }
 }
 
-<<<<<<< HEAD
 fn context_accountsdb_from_fields<'a, C, P>(
     account_db_fields: AccountDBFields<C::SerializableAccountStorageEntry>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
+    operating_mode: OperatingMode,
 ) -> Result<AccountsDB, IoError>
-=======
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl<'a, C> IgnoreAsHelper for SerializableAccountsDB<'a, C> {}
-
-fn reconstruct_bank_from_fields<E, P>(
-    bank_fields: BankFieldsToDeserialize,
-    accounts_db_fields: AccountsDbFields<E>,
-    genesis_config: &GenesisConfig,
-    frozen_account_pubkeys: &[Pubkey],
-    account_paths: &[PathBuf],
-    append_vecs_path: P,
-) -> Result<Bank, Error>
-where
-    E: Into<AccountStorageEntry>,
-    P: AsRef<Path>,
-{
-    let mut accounts_db = reconstruct_accountsdb_from_fields(
-        accounts_db_fields,
-        account_paths,
-        append_vecs_path,
-        &genesis_config.operating_mode,
-    )?;
-    accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
-
-    let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
-    let bank = Bank::new_from_fields(bank_rc, genesis_config, bank_fields);
-
-    Ok(bank)
-}
-
-fn reconstruct_accountsdb_from_fields<E, P>(
-    accounts_db_fields: AccountsDbFields<E>,
-    account_paths: &[PathBuf],
-    stream_append_vecs_path: P,
-    operating_mode: &OperatingMode,
-) -> Result<AccountsDB, Error>
->>>>>>> af08221ae... Switch account hashing to blake3 (#11969)
 where
     C: TypeContext<'a>,
     P: AsRef<Path>,

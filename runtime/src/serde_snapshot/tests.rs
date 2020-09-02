@@ -68,7 +68,7 @@ where
         C::deserialize_accounts_db_fields(stream)?,
         account_paths,
         stream_append_vecs_path,
-        &OperatingMode::Development,
+        OperatingMode::Development,
     )
 }
 
@@ -136,7 +136,7 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new(paths, &OperatingMode::Development);
+    let accounts = Accounts::new(paths, OperatingMode::Development);
 
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);
@@ -228,6 +228,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
             dbank.slot(),
             &mut reader,
             copied_accounts.path(),
+            OperatingMode::Development,
         )
         .unwrap(),
         ref_sc,

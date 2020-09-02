@@ -54,7 +54,7 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts = Accounts::new(vec![path], &OperatingMode::Preview);
+    let accounts = Accounts::new(vec![path], OperatingMode::Preview);
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)

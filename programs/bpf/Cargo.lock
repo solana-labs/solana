@@ -252,8 +252,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,7 +267,6 @@ dependencies = [
 ]
 
 [[package]]
->>>>>>> af08221ae... Switch account hashing to blake3 (#11969)
 name = "crossbeam-channel"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -370,8 +367,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -390,7 +385,6 @@ dependencies = [
 ]
 
 [[package]]
->>>>>>> af08221ae... Switch account hashing to blake3 (#11969)
 name = "dtoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
