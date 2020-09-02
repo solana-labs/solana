@@ -477,7 +477,7 @@ impl Bank {
         bank.operating_mode = Some(genesis_config.operating_mode);
         bank.ancestors.insert(bank.slot(), 0);
 
-        bank.rc.accounts = Arc::new(Accounts::new(paths));
+        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.operating_mode));
         bank.process_genesis_config(genesis_config);
         bank.finish_init();
 
