@@ -14,6 +14,7 @@ import {
 } from "@solana/web3.js";
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
+import { SerumMarketRegistry } from "serumMarketRegistry";
 
 export type ProgramName =
   | "Budget Program"
@@ -73,8 +74,9 @@ export function addressLabel(
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
-    SYSVAR_ID[address] ||
-    TokenRegistry.get(address, cluster)?.name
+    SYSVAR_ID[address] ||    
+    TokenRegistry.get(address, cluster)?.name ||
+    SerumMarketRegistry.get(address, cluster)
   );
 }
 
