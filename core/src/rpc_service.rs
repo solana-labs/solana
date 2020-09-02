@@ -1,8 +1,9 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    bigtable_upload_service::BigTableUploadService, cluster_info::ClusterInfo, rpc::*,
-    rpc_health::*, validator::ValidatorExit,
+    bigtable_upload_service::BigTableUploadService, cluster_info::ClusterInfo,
+    poh_recorder::PohRecorder, rpc::*, rpc_health::*,
+    send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -14,7 +15,6 @@ use solana_ledger::blockstore::Blockstore;
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
-    send_transaction_service::SendTransactionService,
     snapshot_utils,
 };
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
@@ -23,7 +23,7 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
 use tokio::runtime;
@@ -239,6 +239,7 @@ impl JsonRpcService {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
+        poh_recorder: Arc<Mutex<PohRecorder>>,
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -302,7 +303,7 @@ impl JsonRpcService {
             blockstore,
             validator_exit.clone(),
             health.clone(),
-            cluster_info,
+            cluster_info.clone(),
             genesis_hash,
             &runtime,
             bigtable_ledger_storage,
@@ -312,6 +313,8 @@ impl JsonRpcService {
         let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,
+            &cluster_info,
+            Some(poh_recorder),
             &exit_send_transaction_service,
             receiver,
         ));
