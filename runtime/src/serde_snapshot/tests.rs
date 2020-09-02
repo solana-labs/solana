@@ -11,7 +11,7 @@ use {
     solana_sdk::{
         account::Account,
         clock::Slot,
-        genesis_config::create_genesis_config,
+        genesis_config::{create_genesis_config, OperatingMode},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -69,6 +69,7 @@ where
         C::deserialize_accounts_db_fields(stream)?,
         account_paths,
         stream_append_vecs_path,
+        &OperatingMode::Development,
     )
 }
 
@@ -120,7 +121,7 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new(paths);
+    let accounts = Accounts::new(paths, &OperatingMode::Development);
 
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);

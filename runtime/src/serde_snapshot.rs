@@ -22,6 +22,7 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::GenesisConfig,
+        genesis_config::OperatingMode,
         hard_forks::HardForks,
         hash::Hash,
         inflation::Inflation,
@@ -228,8 +229,12 @@ where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let mut accounts_db =
-        reconstruct_accountsdb_from_fields(accounts_db_fields, account_paths, append_vecs_path)?;
+    let mut accounts_db = reconstruct_accountsdb_from_fields(
+        accounts_db_fields,
+        account_paths,
+        append_vecs_path,
+        &genesis_config.operating_mode,
+    )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -242,12 +247,13 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     accounts_db_fields: AccountsDbFields<E>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
+    operating_mode: &OperatingMode,
 ) -> Result<AccountsDB, Error>
 where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let accounts_db = AccountsDB::new(account_paths.to_vec());
+    let accounts_db = AccountsDB::new(account_paths.to_vec(), operating_mode);
 
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
