@@ -6,14 +6,12 @@ use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_account_decoder::UiAccount;
 use solana_client::{
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult},
 };
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
-};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 #[cfg(test)]
 use std::sync::RwLock;
 use std::{
@@ -89,7 +87,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureSubscribeConfig>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -248,7 +246,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        commitment: Option<CommitmentConfig>,
+        signature_subscribe_config: Option<RpcSignatureSubscribeConfig>,
     ) {
         info!("signature_subscribe");
         match param::<Signature>(&signature_str, "signature") {
@@ -259,8 +257,12 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     "signature_subscribe: signature={:?} id={:?}",
                     signature, sub_id
                 );
-                self.subscriptions
-                    .add_signature_subscription(signature, commitment, sub_id, subscriber);
+                self.subscriptions.add_signature_subscription(
+                    signature,
+                    signature_subscribe_config,
+                    sub_id,
+                    subscriber,
+                );
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -359,6 +361,7 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
+    use solana_client::rpc_response::ProcessedSignatureResult;
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -369,6 +372,7 @@ mod tests {
         },
     };
     use solana_sdk::{
+        commitment_config::CommitmentConfig,
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
@@ -442,7 +446,8 @@ mod tests {
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res = RpcSignatureResult { err: None };
+        let expected_res =
+            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",
@@ -452,6 +457,38 @@ mod tests {
                    "value": expected_res,
                },
                "subscription": 0,
+           }
+        });
+
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        // Test "received"
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
+        rpc.signature_subscribe(
+            session,
+            subscriber,
+            tx.signatures[0].to_string(),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: None,
+                enable_received_notification: Some(true),
+            }),
+        );
+        let received_slot = 1;
+        rpc.subscriptions
+            .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
+        // Test signature confirmation notification
+        let (response, _) = robust_poll_or_panic(receiver);
+        let expected_res = RpcSignatureResult::ReceivedSignature;
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "signatureNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": received_slot },
+                   "value": expected_res,
+               },
+               "subscription": 1,
            }
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);

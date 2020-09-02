@@ -5,6 +5,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
+    completed_data_sets_service::CompletedDataSetsSender,
     repair_response,
     repair_service::{RepairInfo, RepairService},
     result::{Error, Result},
@@ -123,6 +124,7 @@ fn run_insert<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
+    completed_data_sets_sender: &CompletedDataSetsSender,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -138,13 +140,13 @@ where
     let mut i = 0;
     shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
 
-    blockstore.insert_shreds_handle_duplicate(
+    completed_data_sets_sender.try_send(blockstore.insert_shreds_handle_duplicate(
         shreds,
         Some(leader_schedule_cache),
         false,
         &handle_duplicate,
         metrics,
-    )?;
+    )?)?;
     Ok(())
 }
 
@@ -302,6 +304,7 @@ impl WindowService {
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
         verified_vote_receiver: VerifiedVoteReceiver,
+        completed_data_sets_sender: CompletedDataSetsSender,
     ) -> WindowService
     where
         F: 'static
@@ -333,6 +336,7 @@ impl WindowService {
             leader_schedule_cache,
             insert_receiver,
             duplicate_sender,
+            completed_data_sets_sender,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -387,6 +391,7 @@ impl WindowService {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         duplicate_sender: CrossbeamSender<Shred>,
+        completed_data_sets_sender: CompletedDataSetsSender,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -415,6 +420,7 @@ impl WindowService {
                         &leader_schedule_cache,
                         &handle_duplicate,
                         &mut metrics,
+                        &completed_data_sets_sender,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;

@@ -108,6 +108,19 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompletedDataSetInfo {
+    pub slot: Slot,
+    pub start_index: u32,
+    pub end_index: u32,
+}
+
+pub struct BlockstoreSignals {
+    pub blockstore: Blockstore,
+    pub ledger_signal_receiver: Receiver<bool>,
+    pub completed_slots_receiver: CompletedSlotsReceiver,
+}
+
 // ledger window
 pub struct Blockstore {
     db: Arc<Database>,
@@ -339,16 +352,20 @@ impl Blockstore {
     pub fn open_with_signal(
         ledger_path: &Path,
         recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
+    ) -> Result<BlockstoreSignals> {
         let mut blockstore =
             Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly, recovery_mode)?;
-        let (signal_sender, signal_receiver) = sync_channel(1);
+        let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-        blockstore.new_shreds_signals = vec![signal_sender];
+        blockstore.new_shreds_signals = vec![ledger_signal_sender];
         blockstore.completed_slots_senders = vec![completed_slots_sender];
 
-        Ok((blockstore, signal_receiver, completed_slots_receiver))
+        Ok(BlockstoreSignals {
+            blockstore,
+            ledger_signal_receiver,
+            completed_slots_receiver,
+        })
     }
 
     pub fn add_tree(
@@ -723,7 +740,7 @@ impl Blockstore {
         is_trusted: bool,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> Result<()>
+    ) -> Result<Vec<CompletedDataSetInfo>>
     where
         F: Fn(Shred),
     {
@@ -746,24 +763,30 @@ impl Blockstore {
         let mut start = Measure::start("Shred insertion");
         let mut num_inserted = 0;
         let mut index_meta_time = 0;
+        let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         shreds.into_iter().for_each(|shred| {
             if shred.is_data() {
-                if self
-                    .check_insert_data_shred(
-                        shred,
-                        &mut erasure_metas,
-                        &mut index_working_set,
-                        &mut slot_meta_working_set,
-                        &mut write_batch,
-                        &mut just_inserted_data_shreds,
-                        &mut index_meta_time,
-                        is_trusted,
-                        handle_duplicate,
-                        leader_schedule,
-                        false,
-                    )
-                    .is_ok()
-                {
+                let shred_slot = shred.slot();
+                if let Ok(completed_data_sets) = self.check_insert_data_shred(
+                    shred,
+                    &mut erasure_metas,
+                    &mut index_working_set,
+                    &mut slot_meta_working_set,
+                    &mut write_batch,
+                    &mut just_inserted_data_shreds,
+                    &mut index_meta_time,
+                    is_trusted,
+                    handle_duplicate,
+                    leader_schedule,
+                    false,
+                ) {
+                    newly_completed_data_sets.extend(completed_data_sets.into_iter().map(
+                        |(start_index, end_index)| CompletedDataSetInfo {
+                            slot: shred_slot,
+                            start_index,
+                            end_index,
+                        },
+                    ));
                     num_inserted += 1;
                 }
             } else if shred.is_code() {
@@ -800,6 +823,7 @@ impl Blockstore {
             num_recovered = recovered_data.len();
             recovered_data.into_iter().for_each(|shred| {
                 if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
+                    let shred_slot = shred.slot();
                     if shred.verify(&leader) {
                         match self.check_insert_data_shred(
                             shred,
@@ -821,7 +845,16 @@ impl Blockstore {
                                 num_recovered_failed_invalid += 1;
                             }
                             Err(InsertDataShredError::BlockstoreError(_)) => {}
-                            Ok(()) => {
+                            Ok(completed_data_sets) => {
+                                newly_completed_data_sets.extend(
+                                    completed_data_sets.into_iter().map(
+                                        |(start_index, end_index)| CompletedDataSetInfo {
+                                            slot: shred_slot,
+                                            start_index,
+                                            end_index,
+                                        },
+                                    ),
+                                );
                                 num_recovered_inserted += 1;
                             }
                         }
@@ -902,7 +935,7 @@ impl Blockstore {
         metrics.num_recovered_exists = num_recovered_exists;
         metrics.index_meta_time += index_meta_time;
 
-        Ok(())
+        Ok(newly_completed_data_sets)
     }
 
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
@@ -934,7 +967,7 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<CompletedDataSetInfo>> {
         self.insert_shreds_handle_duplicate(
             shreds,
             leader_schedule,
@@ -1044,7 +1077,7 @@ impl Blockstore {
         handle_duplicate: &F,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
-    ) -> std::result::Result<(), InsertDataShredError>
+    ) -> std::result::Result<Vec<(u32, u32)>, InsertDataShredError>
     where
         F: Fn(Shred),
     {
@@ -1076,7 +1109,8 @@ impl Blockstore {
         }
 
         let set_index = u64::from(shred.common_header.fec_set_index);
-        self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)?;
+        let newly_completed_data_sets =
+            self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)?;
         just_inserted_data_shreds.insert((slot, shred_index), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
@@ -1089,7 +1123,7 @@ impl Blockstore {
                 erasure_metas.insert((slot, set_index), meta);
             }
         }
-        Ok(())
+        Ok(newly_completed_data_sets)
     }
 
     fn should_insert_coding_shred(
@@ -1205,7 +1239,7 @@ impl Blockstore {
         data_index: &mut ShredIndex,
         shred: &Shred,
         write_batch: &mut WriteBatch,
-    ) -> Result<()> {
+    ) -> Result<Vec<(u32, u32)>> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
 
@@ -1240,13 +1274,15 @@ impl Blockstore {
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
-        update_slot_meta(
+        data_index.set_present(index, true);
+        let newly_completed_data_sets = update_slot_meta(
             last_in_slot,
             last_in_data,
             slot_meta,
             index as u32,
             new_consumed,
             shred.reference_tick(),
+            &data_index,
         );
         if slot_meta.is_full() {
             info!(
@@ -1254,9 +1290,8 @@ impl Blockstore {
                 slot_meta.slot, slot_meta.last_index
             );
         }
-        data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
-        Ok(())
+        Ok(newly_completed_data_sets)
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
@@ -2310,7 +2345,12 @@ impl Blockstore {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
+                        self.get_entries_in_data_block(
+                            slot,
+                            *start_index,
+                            *end_index,
+                            Some(&slot_meta),
+                        )
                     })
                     .collect()
             })
@@ -2375,12 +2415,12 @@ impl Blockstore {
         completed_data_ranges
     }
 
-    fn get_entries_in_data_block(
+    pub fn get_entries_in_data_block(
         &self,
         slot: Slot,
         start_index: u32,
         end_index: u32,
-        slot_meta: &SlotMeta,
+        slot_meta: Option<&SlotMeta>,
     ) -> Result<Vec<Entry>> {
         let data_shred_cf = self.db.column::<cf::ShredData>();
 
@@ -2390,23 +2430,33 @@ impl Blockstore {
                 data_shred_cf
                     .get_bytes((slot, u64::from(i)))
                     .and_then(|serialized_shred| {
-                        Shred::new_from_serialized_shred(serialized_shred.unwrap_or_else(|| {
-                            panic!(
-                                "Shred with
-                        slot: {},
-                        index: {},
-                        consumed: {},
-                        completed_indexes: {:?}
-                        must exist if shred index was included in a range: {} {}",
-                                slot,
-                                i,
-                                slot_meta.consumed,
-                                slot_meta.completed_data_indexes,
-                                start_index,
-                                end_index
-                            )
-                        }))
-                        .map_err(|err| {
+                        if serialized_shred.is_none() {
+                            if let Some(slot_meta) = slot_meta {
+                                panic!(
+                                    "Shred with
+                                    slot: {},
+                                    index: {},
+                                    consumed: {},
+                                    completed_indexes: {:?}
+                                    must exist if shred index was included in a range: {} {}",
+                                    slot,
+                                    i,
+                                    slot_meta.consumed,
+                                    slot_meta.completed_data_indexes,
+                                    start_index,
+                                    end_index
+                                );
+                            } else {
+                                return Err(BlockstoreError::InvalidShredData(Box::new(
+                                    bincode::ErrorKind::Custom(format!(
+                                        "Missing shred for slot {}, index {}",
+                                        slot, i
+                                    )),
+                                )));
+                            }
+                        }
+
+                        Shred::new_from_serialized_shred(serialized_shred.unwrap()).map_err(|err| {
                             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                                 format!(
                                     "Could not reconstruct shred from shred payload: {:?}",
@@ -2450,8 +2500,13 @@ impl Blockstore {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
-                            .unwrap_or_default()
+                        self.get_entries_in_data_block(
+                            slot,
+                            *start_index,
+                            *end_index,
+                            Some(&slot_meta),
+                        )
+                        .unwrap_or_default()
                     })
                     .collect()
             })
@@ -2601,6 +2656,89 @@ impl Blockstore {
     }
 }
 
+// Update the `completed_data_indexes` with a new shred `new_shred_index`. If a
+// data set is complete, return the range of shred indexes [start_index, end_index]
+// for that completed data set.
+fn update_completed_data_indexes(
+    is_last_in_data: bool,
+    new_shred_index: u32,
+    received_data_shreds: &ShredIndex,
+    // Sorted array of shred indexes marked data complete
+    completed_data_indexes: &mut Vec<u32>,
+) -> Vec<(u32, u32)> {
+    let mut first_greater_pos = None;
+    let mut prev_completed_shred_index = None;
+    // Find the first item in `completed_data_indexes > new_shred_index`
+    for (i, completed_data_index) in completed_data_indexes.iter().enumerate() {
+        // `completed_data_indexes` should be sorted from smallest to largest
+        assert!(
+            prev_completed_shred_index.is_none()
+                || *completed_data_index > prev_completed_shred_index.unwrap()
+        );
+        if *completed_data_index > new_shred_index {
+            first_greater_pos = Some(i);
+            break;
+        }
+        prev_completed_shred_index = Some(*completed_data_index);
+    }
+
+    // Consecutive entries i, k, j in this vector represent potential ranges [i, k),
+    // [k, j) that could be completed data ranges
+    let mut check_ranges: Vec<u32> = vec![prev_completed_shred_index
+        .map(|completed_data_shred_index| completed_data_shred_index + 1)
+        .unwrap_or(0)];
+    let mut first_greater_data_complete_index =
+        first_greater_pos.map(|i| completed_data_indexes[i]);
+
+    // `new_shred_index` is data complete, so need to insert here into the
+    // `completed_data_indexes`
+    if is_last_in_data {
+        if first_greater_pos.is_some() {
+            // If there exists a data complete shred greater than `new_shred_index`,
+            // and the new shred is marked data complete, then the range
+            // [new_shred_index + 1, completed_data_indexes[pos]] may be complete,
+            // so add that range to check
+            check_ranges.push(new_shred_index + 1);
+        }
+        completed_data_indexes.insert(
+            first_greater_pos.unwrap_or_else(|| {
+                // If `first_greater_pos` is none, then there was no greater
+                // data complete index so mark this new shred's index as the latest data
+                // complete index
+                first_greater_data_complete_index = Some(new_shred_index);
+                completed_data_indexes.len()
+            }),
+            new_shred_index,
+        );
+    }
+
+    if first_greater_data_complete_index.is_none() {
+        // That means new_shred_index > all known completed data indexes and
+        // new shred not data complete, which means the data set of that new
+        // shred is not data complete
+        return vec![];
+    }
+
+    check_ranges.push(first_greater_data_complete_index.unwrap() + 1);
+    let mut completed_data_ranges = vec![];
+    for range in check_ranges.windows(2) {
+        let mut is_complete = true;
+        for shred_index in range[0]..range[1] {
+            // If we're missing any shreds, the data set cannot be confirmed
+            // to be completed, so check the next range
+            if !received_data_shreds.is_present(shred_index as u64) {
+                is_complete = false;
+                break;
+            }
+        }
+        if is_complete {
+            completed_data_ranges.push((range[0], range[1] - 1));
+        }
+    }
+
+    completed_data_ranges
+}
+
 fn update_slot_meta(
     is_last_in_slot: bool,
     is_last_in_data: bool,
@@ -2608,7 +2746,8 @@ fn update_slot_meta(
     index: u32,
     new_consumed: u64,
     reference_tick: u8,
-) {
+    received_data_shreds: &ShredIndex,
+) -> Vec<(u32, u32)> {
     let maybe_first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
@@ -2633,15 +2772,12 @@ fn update_slot_meta(
         }
     };
 
-    if is_last_in_slot || is_last_in_data {
-        let position = slot_meta
-            .completed_data_indexes
-            .iter()
-            .position(|completed_data_index| *completed_data_index > index)
-            .unwrap_or_else(|| slot_meta.completed_data_indexes.len());
-
-        slot_meta.completed_data_indexes.insert(position, index);
-    }
+    update_completed_data_indexes(
+        is_last_in_slot || is_last_in_data,
+        index,
+        received_data_shreds,
+        &mut slot_meta.completed_data_indexes,
+    )
 }
 
 fn get_index_meta_entry<'a>(
@@ -3974,10 +4110,48 @@ pub mod tests {
     }
 
     #[test]
+    fn test_data_set_completed_on_insert() {
+        let ledger_path = get_tmp_ledger_path!();
+        let BlockstoreSignals { blockstore, .. } =
+            Blockstore::open_with_signal(&ledger_path, None).unwrap();
+
+        // Create enough entries to fill 2 shreds, only the later one is data complete
+        let slot = 0;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
+        let entries = create_ticks(num_entries, slot, Hash::default());
+        let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+        let num_shreds = shreds.len();
+        assert!(num_shreds > 1);
+        assert!(blockstore
+            .insert_shreds(shreds[1..].to_vec(), None, false)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            blockstore
+                .insert_shreds(vec![shreds[0].clone()], None, false)
+                .unwrap(),
+            vec![CompletedDataSetInfo {
+                slot,
+                start_index: 0,
+                end_index: num_shreds as u32 - 1
+            }]
+        );
+        // Inserting shreds again doesn't trigger notification
+        assert!(blockstore
+            .insert_shreds(shreds, None, false)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
     pub fn test_new_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, recvr, _) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            ledger_signal_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
@@ -4057,7 +4231,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4079,7 +4257,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4119,7 +4301,11 @@ pub mod tests {
     pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        let BlockstoreSignals {
+            blockstore: ledger,
+            completed_slots_receiver: recvr,
+            ..
+        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -7048,5 +7234,65 @@ pub mod tests {
                 .is_none());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_update_completed_data_indexes() {
+        let mut completed_data_indexes: Vec<u32> = vec![];
+        let mut shred_index = ShredIndex::default();
+
+        for i in 0..10 {
+            shred_index.set_present(i as u64, true);
+            assert_eq!(
+                update_completed_data_indexes(true, i, &shred_index, &mut completed_data_indexes),
+                vec![(i, i)]
+            );
+            assert_eq!(completed_data_indexes, (0..=i).collect::<Vec<u32>>());
+        }
+    }
+
+    #[test]
+    fn test_update_completed_data_indexes_out_of_order() {
+        let mut completed_data_indexes = vec![];
+        let mut shred_index = ShredIndex::default();
+
+        shred_index.set_present(4, true);
+        assert!(
+            update_completed_data_indexes(false, 4, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert!(completed_data_indexes.is_empty());
+
+        shred_index.set_present(2, true);
+        assert!(
+            update_completed_data_indexes(false, 2, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert!(completed_data_indexes.is_empty());
+
+        shred_index.set_present(3, true);
+        assert!(
+            update_completed_data_indexes(true, 3, &shred_index, &mut completed_data_indexes)
+                .is_empty()
+        );
+        assert_eq!(completed_data_indexes, vec![3]);
+
+        // Inserting data complete shred 1 now confirms the range of shreds [2, 3]
+        // is part of the same data set
+        shred_index.set_present(1, true);
+        assert_eq!(
+            update_completed_data_indexes(true, 1, &shred_index, &mut completed_data_indexes),
+            vec![(2, 3)]
+        );
+        assert_eq!(completed_data_indexes, vec![1, 3]);
+
+        // Inserting data complete shred 0 now confirms the range of shreds [0]
+        // is part of the same data set
+        shred_index.set_present(0, true);
+        assert_eq!(
+            update_completed_data_indexes(true, 0, &shred_index, &mut completed_data_indexes),
+            vec![(0, 0), (1, 1)]
+        );
+        assert_eq!(completed_data_indexes, vec![0, 1, 3]);
     }
 }
