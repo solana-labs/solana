@@ -908,7 +908,7 @@ fn call<'a>(
         ro_regions,
     )?;
     verify_instruction(syscall, &instruction, &signers)?;
-    let message = Message::new(&[instruction], None);
+    let message = Message::new(&[instruction.clone()], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
     let (accounts, account_refs) = syscall.translate_accounts(
@@ -973,6 +973,9 @@ fn call<'a>(
                 .clone_from_slice(&account.data[0..account_ref.data.len()]);
         }
     }
+
+    // We could record them at the beginning if we want to record failures.  Would miss recordings if the address translation, etc... failed
+    invoke_context.record_instruction(instruction);
 
     Ok(SUCCESS)
 }

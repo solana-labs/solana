@@ -2,7 +2,7 @@
 
 use crate::{
     account::Account, account::KeyedAccount, instruction::CompiledInstruction,
-    instruction::InstructionError, message::Message, pubkey::Pubkey,
+    instruction::Instruction, instruction::InstructionError, message::Message, pubkey::Pubkey,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -214,6 +214,8 @@ pub trait InvokeContext {
     fn get_compute_budget(&self) -> ComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+    /// Add Instruction
+    fn record_instruction(&self, instruction: Instruction);
 }
 
 #[derive(Clone, Copy, Debug)]

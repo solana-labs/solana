@@ -1829,6 +1829,10 @@ impl Bank {
         );
         load_time.stop();
 
+        // This is rough, doesn't have to be in this form, just needs to be able to be
+        // conveyed through `InvokeContext` to the CPI syscall handler
+        let cpi_instructions = Rc::new(RefCell::new(vec![]));
+
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
         let executed: Vec<TransactionProcessResult> = loaded_accounts
@@ -1848,6 +1852,7 @@ impl Bank {
                         &account_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
+                        cpi_instructions.clone(),
                     );
 
                     Self::refcells_to_accounts(
@@ -1866,6 +1871,11 @@ impl Bank {
             .collect();
 
         execution_time.stop();
+
+        // The instructions are available here
+        for (i, instruction) in cpi_instructions.borrow().iter().enumerate() {
+            println!("cpi instructions {:?}: {:?}\n", i, instruction);
+        }
 
         debug!(
             "load: {}us execute: {}us txs_len={}",

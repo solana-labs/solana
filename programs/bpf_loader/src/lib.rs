@@ -258,6 +258,7 @@ mod tests {
         account::Account,
         entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
         instruction::CompiledInstruction,
+        instruction::Instruction,
         message::Message,
         rent::Rent,
     };
@@ -339,6 +340,7 @@ mod tests {
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
             Rc::new(RefCell::new(self.compute_meter.clone()))
         }
+        fn record_instruction(&self, _instruction: Instruction) {}
     }
 
     struct TestInstructionMeter {
@@ -583,6 +585,7 @@ mod tests {
                 invoke_units: 1000,
                 max_invoke_depth: 2,
             },
+            Rc::new(RefCell::new(vec![])),
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),
