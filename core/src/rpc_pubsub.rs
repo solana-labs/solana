@@ -361,11 +361,8 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-<<<<<<< HEAD
     use solana_budget_program::{self, budget_instruction};
-=======
     use solana_client::rpc_response::ProcessedSignatureResult;
->>>>>>> 1c1a3f979... Detect and notify when deserializable shreds are available (#11816)
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
