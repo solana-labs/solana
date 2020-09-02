@@ -3254,7 +3254,7 @@ impl Bank {
         }
     }
 
-    fn recheck_cross_program_support(self: &mut Bank) {
+    fn recheck_cross_program_support(&mut self) {
         if OperatingMode::Stable == self.operating_mode() {
             self.set_cross_program_support(self.epoch() >= 63);
         } else {
@@ -3262,7 +3262,7 @@ impl Bank {
         }
     }
 
-    fn recheck_compute_budget(self: &mut Bank) {
+    fn recheck_compute_budget(&mut self) {
         let compute_budget = if OperatingMode::Stable == self.operating_mode() {
             if self.epoch() >= u64::MAX - 1 {
                 ComputeBudget::default()
@@ -3283,7 +3283,7 @@ impl Bank {
         self.set_compute_budget(compute_budget);
     }
 
-    fn reconfigure_token2_native_mint(self: &mut Bank) {
+    fn reconfigure_token2_native_mint(&mut self) {
         let reconfigure_token2_native_mint = match self.operating_mode() {
             OperatingMode::Development => true,
             OperatingMode::Preview => self.epoch() == 95,
