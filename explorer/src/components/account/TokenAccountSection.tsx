@@ -14,6 +14,7 @@ import { UnknownAccountCard } from "./UnknownAccountCard";
 import { TokenRegistry } from "tokenRegistry";
 import { useCluster } from "providers/cluster";
 import { normalizeTokenAmount } from "utils";
+import { addressLabel } from "utils/tx";
 
 export function TokenAccountSection({
   account,
@@ -145,6 +146,8 @@ function TokenAccountCard({
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
 
+  const label = addressLabel(account.pubkey.toBase58(), cluster);
+
   let unit, balance;
   if (info.isNative) {
     unit = "SOL";
@@ -185,6 +188,12 @@ function TokenAccountCard({
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
+        {label && (
+          <tr>
+            <td>Address Label</td>
+            <td className="text-lg-right">{label}</td>
+          </tr>
+        )}
         <tr>
           <td>Mint</td>
           <td className="text-lg-right">
