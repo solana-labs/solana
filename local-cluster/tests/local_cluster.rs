@@ -179,11 +179,11 @@ fn test_local_cluster_signature_subscribe() {
         let mut should_break = false;
         for response in responses {
             match response.value {
-                SignatureResult::ProcessedSignatureResult(_) => {
+                SignatureResult::ProcessedSignature(_) => {
                     should_break = true;
                     break;
                 }
-                SignatureResult::ReceivedSignature => {
+                SignatureResult::ReceivedSignature(_) => {
                     got_received_notification = true;
                 }
             }

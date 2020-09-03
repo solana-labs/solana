@@ -39,10 +39,10 @@ pub enum PubsubClientError {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase", tag = "type", content = "result")]
+#[serde(rename_all = "camelCase", untagged)]
 pub enum SignatureResult {
-    ProcessedSignatureResult(ProcessedSignatureResult),
-    ReceivedSignature,
+    ProcessedSignature(ProcessedSignatureResult),
+    ReceivedSignature(ReceivedSignatureResult),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -54,6 +54,12 @@ pub struct RpcResponseContext {
 #[serde(rename_all = "camelCase")]
 pub struct ProcessedSignatureResult {
     pub err: Option<TransactionError>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ReceivedSignatureResult {
+    ReceivedSignature,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

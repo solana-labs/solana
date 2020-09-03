@@ -13,7 +13,8 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_filter::RpcFilterType,
     rpc_response::{
-        ProcessedSignatureResult, Response, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
+        ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
+        RpcResponseContext, RpcSignatureResult,
     },
 };
 use solana_runtime::{
@@ -291,9 +292,7 @@ fn filter_signature_result(
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
         Box::new(result.into_iter().map(|result| {
-            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult {
-                err: result.err(),
-            })
+            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: result.err() })
         })),
         last_notified_slot,
     )
@@ -986,7 +985,9 @@ impl RpcSubscriptions {
                                 context: RpcResponseContext {
                                     slot: *received_slot,
                                 },
-                                value: RpcSignatureResult::ReceivedSignature,
+                                value: RpcSignatureResult::ReceivedSignature(
+                                    ReceivedSignatureResult::ReceivedSignature,
+                                ),
                             },
                             &sink,
                         );
@@ -1369,8 +1370,9 @@ pub(crate) mod tests {
             .notify_signatures_received((received_slot, vec![unprocessed_tx.signatures[0]]));
         subscriptions.notify_subscribers(commitment_slots);
         let expected_res =
-            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
-        let received_expected_res = RpcSignatureResult::ReceivedSignature;
+            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: None });
+        let received_expected_res =
+            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
         struct Notification {
             slot: Slot,
             id: u64,
