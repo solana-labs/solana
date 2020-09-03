@@ -17,51 +17,71 @@ cd $HOME/solana/itt/approach-A
 
 c1 build docker solana image
 ```bash
-docker build --build-arg VAR_A=1 --tag itt:0.1 .
+docker build --build-arg VAR_A=1 --build-arg VAR_B=$(id -u) --build-arg VAR_C=$(id -g) --tag itt-solana:0.3 .
 ```
 o1
 ```bash
-Sending build context to Docker daemon  4.608kB
-Step 1/13 : FROM rust:latest
- ---> 53f7516d0379
-Step 2/13 : WORKDIR /usr/src/solana
+Step 1/20 : FROM rust:latest
+ ---> 8bc1c343b904
+Step 2/20 : ARG VAR_A=1
  ---> Using cache
- ---> d7fa2124d08a
-Step 3/13 : ARG VAR_A=1
+ ---> f9e66b6c493d
+Step 3/20 : ENV NDEBUG=$VAR_A
  ---> Using cache
- ---> 71651f9275d3
-Step 4/13 : ENV NDEBUG=$VAR_A
+ ---> b2e721ee0147
+Step 4/20 : ARG VAR_B=1001
  ---> Using cache
- ---> dbd3aa643075
-Step 5/13 : RUN echo "VAR_A: $VAR_A"
+ ---> 8c73047fd450
+Step 5/20 : ENV USER_ID=$VAR_B
  ---> Using cache
- ---> 41e00c984a8c
-Step 6/13 : RUN echo "NDEBUG: $NDEBUG"
+ ---> c2b5418961fd
+Step 6/20 : ARG VAR_C=1001
  ---> Using cache
- ---> 9f48fbb4d15f
-Step 7/13 : RUN apt-get update && apt-get install -y apt-utils libudev-dev clang gcc make
+ ---> b1ff581df94d
+Step 7/20 : ENV GROUP_ID=$VAR_C
  ---> Using cache
- ---> d1cc78cc1b01
-Step 8/13 : RUN git clone https://github.com/solana-labs/solana.git
+ ---> 3811c468a5bc
+Step 8/20 : USER root
  ---> Using cache
- ---> 39bb0c692925
-Step 9/13 : RUN cd solana &&   TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) &&   git checkout $TAG &&   cargo build --release
+ ---> d2c60f28d5d8
+Step 9/20 : RUN apt-get update && apt-get install -y sudo apt-utils libudev-dev clang gcc make lolcat toilet toilet-fonts tree
  ---> Using cache
- ---> aec985b44210
-Step 10/13 : RUN cd solana &&   NDEBUG=1 ./multinode-demo/setup.sh
+ ---> 435043442695
+Step 10/20 : RUN addgroup --gid $GROUP_ID solana
  ---> Using cache
- ---> f2654df636d9
-Step 11/13 : COPY solana_itt_script.sh solana/solana_itt_script.sh
+ ---> e667e45bd6a3
+Step 11/20 : RUN adduser --disabled-password --gecos 'solana' --uid $USER_ID --gid $GROUP_ID solana &&   usermod -aG sudo solana
  ---> Using cache
- ---> fd0466c23fce
-Step 12/13 : WORKDIR solana
+ ---> a2e13917dee4
+Step 12/20 : RUN mkdir -p /tmp/solana/itt &&   chmod -R +w /tmp/solana
  ---> Using cache
- ---> 4e6c07ab7eee
-Step 13/13 : CMD ./solana_itt_script.sh
+ ---> 5ff17574818e
+Step 13/20 : WORKDIR /home/solana
  ---> Using cache
- ---> f2b47aac511e
-Successfully built f2b47aac511e
-Successfully tagged itt:0.1
+ ---> 6b1783b2563a
+Step 14/20 : RUN git clone https://github.com/solana-labs/solana.git
+ ---> Using cache
+ ---> b870f797999f
+Step 15/20 : RUN cd solana &&   TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) &&   git checkout $TAG &&   cargo build --release
+ ---> Using cache
+ ---> b4cb6c6f2bdb
+Step 16/20 : RUN cd solana &&   NDEBUG=$NDEBUG ./multinode-demo/setup.sh
+ ---> Using cache
+ ---> e2cf011a98db
+Step 17/20 : COPY --chown=$USER_ID:$GROUP_ID solana_itt_script.sh solana/solana_itt_script.sh
+ ---> Using cache
+ ---> 2f2d881d250c
+Step 18/20 : RUN chmod +x solana/solana_itt_script.sh
+ ---> Using cache
+ ---> 0b48460dc1ba
+Step 19/20 : WORKDIR solana
+ ---> Using cache
+ ---> b05b298df6c8
+Step 20/20 : CMD ./solana_itt_script.sh
+ ---> Using cache
+ ---> 3a840f7fe714
+Successfully built 3a840f7fe714
+Successfully tagged itt-solana:0.3
 ```
 
 c2: list docker images
@@ -70,19 +90,18 @@ docker images
 ```
 o2
 ```
-REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
-itt                 0.1                 fdb5f7f86639        5 minutes ago       4.34GB
-rust                latest              53f7516d0379        2 weeks ago         1.16GB
+REPOSITORY                               TAG                 IMAGE ID            CREATED             SIZE
+itt-solana                               0.3                 3a840f7fe714        29 minutes ago      4.38GB
 ```
 
 c3: run docker image
 ```bash
-docker run -it --rm -v /tmp/solana:/tmp/solana --name itt-solana itt:0.1
+docker run -it --rm -v /tmp/solana/itt:/tmp/solana/itt itt-solana:0.3
 ```
 
 c4: check log files
 ```bash
-ls -abl /tmp/solana
+tree /tmp/solana
 ```
 o4
 ```
@@ -95,7 +114,7 @@ o4
 ```
 
 
-Some Docker commands
+Some useful Docker commands
 ```bash
 docker ps
 docker rm -f <CONTAINER ID>
