@@ -14,7 +14,7 @@ use solana_account_decoder::{
         get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
         token_amount_to_ui_amount, UiTokenAmount,
     },
-    UiAccount, UiAccountData, UiAccountEncoding,
+    UiAccount, UiAccountData, UiAccountEncoding, UiDataSliceConfig,
 };
 use solana_client::{
     rpc_config::*,
@@ -23,7 +23,7 @@ use solana_client::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
-        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
+        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::Response as RpcResponse,
     rpc_response::*,
@@ -242,31 +242,8 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
-        let mut response = None;
-        if let Some(account) = bank.get_account(pubkey) {
-            if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
-            } else if (encoding == UiAccountEncoding::Binary
-                || encoding == UiAccountEncoding::Base58)
-                && account.data.len() > 128
-            {
-                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
-                return Err(error::Error {
-                    code: error::ErrorCode::InvalidRequest,
-                    message,
-                    data: None,
-                });
-            } else {
-                response = Some(UiAccount::encode(
-                    pubkey,
-                    account,
-                    encoding,
-                    None,
-                    config.data_slice,
-                ));
-            }
-        }
 
+        let response = get_encoded_account(&bank, pubkey, encoding, config.data_slice)?;
         Ok(new_response(&bank, response))
     }
 
@@ -279,36 +256,12 @@ impl JsonRpcRequestProcessor {
 
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
-        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Base64);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
 
         for pubkey in pubkeys {
-            let mut response_account = None;
-            if let Some(account) = bank.get_account(&pubkey) {
-                if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed
-                {
-                    response_account =
-                        Some(get_parsed_token_account(bank.clone(), &pubkey, account));
-                } else if (encoding == UiAccountEncoding::Binary
-                    || encoding == UiAccountEncoding::Base58)
-                    && account.data.len() > 128
-                {
-                    let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
-                    return Err(error::Error {
-                        code: error::ErrorCode::InvalidRequest,
-                        message,
-                        data: None,
-                    });
-                } else {
-                    response_account = Some(UiAccount::encode(
-                        &pubkey,
-                        account,
-                        encoding.clone(),
-                        None,
-                        config.data_slice,
-                    ));
-                }
-            }
+            let response_account =
+                get_encoded_account(&bank, &pubkey, encoding.clone(), config.data_slice)?;
             accounts.push(response_account)
         }
         Ok(Response {
@@ -1317,6 +1270,34 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
     }
 }
 
+fn get_encoded_account(
+    bank: &Arc<Bank>,
+    pubkey: &Pubkey,
+    encoding: UiAccountEncoding,
+    data_slice: Option<UiDataSliceConfig>,
+) -> Result<Option<UiAccount>> {
+    let mut response = None;
+    if let Some(account) = bank.get_account(pubkey) {
+        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
+            response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
+        } else if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
+            && account.data.len() > 128
+        {
+            let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
+            return Err(error::Error {
+                code: error::ErrorCode::InvalidRequest,
+                message,
+                data: None,
+            });
+        } else {
+            response = Some(UiAccount::encode(
+                pubkey, account, encoding, None, data_slice,
+            ));
+        }
+    }
+    Ok(response)
+}
+
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
 fn get_filtered_program_accounts(
     bank: &Arc<Bank>,
@@ -1831,10 +1812,10 @@ impl RpcSol for RpcSolImpl {
             "get_multiple_accounts rpc request received: {:?}",
             pubkey_strs.len()
         );
-        if pubkey_strs.len() > NUM_LARGEST_ACCOUNTS {
+        if pubkey_strs.len() > MAX_MULTIPLE_ACCOUNTS {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                NUM_LARGEST_ACCOUNTS
+                MAX_MULTIPLE_ACCOUNTS
             )));
         }
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -3263,7 +3244,7 @@ pub mod tests {
                 "value":[{
                     "owner": "11111111111111111111111111111111",
                     "lamports": 20,
-                    "data": "",
+                    "data": ["", "base64"],
                     "executable": false,
                     "rentEpoch": 0
                 },
@@ -3271,7 +3252,7 @@ pub mod tests {
                 {
                     "owner": "11111111111111111111111111111111",
                     "lamports": 42,
-                    "data": bs58::encode(&data).into_string(),
+                    "data": [base64::encode(&data), "base64"],
                     "executable": false,
                     "rentEpoch": 0
                 }],
@@ -3289,7 +3270,7 @@ pub mod tests {
             r#"{{
                 "jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[
                 ["{}", "{}", "{}"],
-                {{"encoding":"base64"}}
+                {{"encoding":"base58"}}
                 ]
             }}"#,
             bob_pubkey, non_existent_address, address,
@@ -3300,7 +3281,7 @@ pub mod tests {
         assert_eq!(result["result"]["value"].as_array().unwrap().len(), 3);
         assert_eq!(
             result["result"]["value"][2]["data"],
-            json!([base64::encode(&data), "base64"]),
+            json!([bs58::encode(&data).into_string(), "base58"]),
         );
 
         let req = format!(

@@ -868,16 +868,16 @@ An array of:
 
 ```bash
 // Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"dataSlice":{"offset":0,"length":0}}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["AAAAAAEAAAACtzNsyJrW0g==","base64"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base64"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
+
+// Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"encoding": "base58"}]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","base58"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":"","executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
-
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"encoding": "base64","dataSlice":{"offset":0,"length":0}}]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["AAAAAAEAAAACtzNsyJrW0g==","base64"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":"","executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","base58"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base58"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
 ```
 
 ### getProgramAccounts
