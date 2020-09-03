@@ -8570,8 +8570,19 @@ mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        assert_eq!(bank0.capitalization(), bank0.calculate_capitalization());
         assert_eq!(bank0.capitalization() + 1, bank1.capitalization());
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
+
+        // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
+        // So do some convolted setup; anyway this test itself will just be temporary
+        let bank0 = std::panic::AssertUnwindSafe(bank0);
+        let overflowing_capitalization =
+            std::panic::catch_unwind(|| bank0.calculate_capitalization());
+        if let Ok(overflowing_capitalization) = overflowing_capitalization {
+            info!("asserting overflowing capitalization for bank0");
+            assert_eq!(overflowing_capitalization, bank0.capitalization());
+        } else {
+            info!("NOT-asserting overflowing capitalization for bank0");
+        }
     }
 }
