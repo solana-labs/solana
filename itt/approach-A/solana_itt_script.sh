@@ -1,7 +1,13 @@
 #!/bin/bash
 
+# LOGZ
+LOGZ=/tmp/solana/itt
+
+# add +w
+chmod +w $LOGZ
+
 # Start the 1st process - faucet
-NDEBUG=1 ./multinode-demo/faucet.sh 2>&1 | tee /tmp/solana/itt-faucet.log &
+NDEBUG=1 ./multinode-demo/faucet.sh 2>&1 | tee $LOGZ/itt-faucet.log &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start faucet: $status"
@@ -11,7 +17,7 @@ fi
 sleep 15s
 
 # Start the 2nd process - bootstrap validator
-NDEBUG=1 ./multinode-demo/bootstrap-validator.sh 2>&1 | tee /tmp/solana/itt-bootstrap-validator.log &
+NDEBUG=1 ./multinode-demo/bootstrap-validator.sh 2>&1 | tee $LOGZ/itt-bootstrap-validator.log &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to bootstrap validator: $status"
@@ -21,7 +27,7 @@ fi
 sleep 15s
 
 # Start the 3rd process - bench tps
-NDEBUG=1 ./multinode-demo/bench-tps.sh 2>&1  | tee /tmp/solana/itt-bench-tps.log &
+NDEBUG=1 ./multinode-demo/bench-tps.sh 2>&1  | tee $LOGZ/itt-bench-tps.log &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to bench tps: $status"
@@ -41,15 +47,19 @@ while sleep 60; do
   # If the greps above find anything, they exit with 0 status
   # If they are not 0, then something is wrong
   if [ $P2_STATUS -ne 0 -o $P3_STATUS -ne 0 ]; then
+    sleep 25s
     echo
-    echo "Individual Time Trial (ITT) processes has exited"
-    echo "Look for your log files here: /tmp/solana"
-    echo "/tmp/solana/itt-faucet.log" | /usr/games/lolcat -f
-    echo "/tmp/solana/itt-bootstrap-validator.log" | /usr/games/lolcat -f
-    echo "/tmp/solana/itt-bench-tps.log" | /usr/games/lolcat -f
-    echo "Please share/upload them as guided"
+    echo "######################################################"
+    echo "# Individual Time Trial (ITT) processes has exited   #"
+    echo "######################################################"
+    tree $LOGZ | /usr/games/lolcat -f
+    echo "######################################################"
+    echo "# Please upload the appropriate files as guided      #"
+    echo "######################################################"
+    echo
     echo
     /usr/bin/toilet -f pagga "Solana is fast"
+    echo
     echo
     exit 1
   fi
