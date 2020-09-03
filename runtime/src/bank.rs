@@ -3288,7 +3288,7 @@ impl Bank {
     fn reconfigure_token2_native_mint(&mut self) {
         let reconfigure_token2_native_mint = match self.operating_mode() {
             OperatingMode::Development => true,
-            OperatingMode::Preview => self.epoch() == 95,
+            OperatingMode::Preview => self.epoch() == 93,
             OperatingMode::Stable => self.epoch() == 75,
         };
 
@@ -8451,7 +8451,7 @@ mod tests {
             1000000000
         );
 
-        // OperatingMode::Preview - Native mint blinks into existence at epoch 95
+        // OperatingMode::Preview - Native mint blinks into existence at epoch 93
         genesis_config.operating_mode = OperatingMode::Preview;
         let bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(
@@ -8463,7 +8463,7 @@ mod tests {
         let bank = Bank::new_from_parent(
             &bank,
             &Pubkey::default(),
-            genesis_config.epoch_schedule.get_first_slot_in_epoch(95),
+            genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
         );
 
         let native_mint_account = bank
