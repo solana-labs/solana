@@ -30,8 +30,8 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{
-        Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
-        MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+        Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+        MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -768,10 +768,7 @@ impl BankingStage {
             &filter,
             (MAX_PROCESSING_AGE)
                 .saturating_sub(max_tx_fwd_delay)
-                .saturating_sub(
-                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET * bank.ticks_per_slot()
-                        / DEFAULT_TICKS_PER_SECOND) as usize,
-                ),
+                .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
             &mut error_counters,
         );
 
