@@ -88,7 +88,7 @@ impl SendTransactionService {
                     .map(|ci| (ci.id, ci.tpu))
                     .collect()
             })
-            .unwrap_or(HashMap::new());
+            .unwrap_or_default();
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -144,7 +144,7 @@ impl SendTransactionService {
                                 .map(|ci| (ci.id, ci.tpu))
                                 .collect()
                         })
-                        .unwrap_or(HashMap::new());
+                        .unwrap_or_default();
                 }
             })
             .unwrap()
