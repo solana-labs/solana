@@ -14,7 +14,7 @@ use solana_client::{
     rpc_filter::RpcFilterType,
     rpc_response::{
         ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
-        RpcResponseContext, RpcSignatureResult,
+        RpcResponseContext, RpcSignatureResult, SlotInfo,
     },
 };
 use solana_runtime::{
@@ -47,13 +47,6 @@ use std::{
 use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub struct SlotInfo {
-    pub slot: Slot,
-    pub parent: Slot,
-    pub root: Slot,
-}
 
 // A more human-friendly version of Vote, with the bank state signature base58 encoded.
 #[derive(Serialize, Deserialize, Debug)]

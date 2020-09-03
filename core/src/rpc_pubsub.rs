@@ -1,13 +1,13 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
-    rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult},
+    rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult, SlotInfo},
 };
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
