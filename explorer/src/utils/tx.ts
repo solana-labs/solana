@@ -49,10 +49,6 @@ const SYSVAR_ID: { [key: string]: string } = {
   Sysvar1111111111111111111111111111111111111: "SYSVAR",
 };
 
-const WRAPPED_SOL: { [key: string]: string } = {
-  So11111111111111111111111111111111111111112: "Wrapped SOL",
-};
-
 export const SYSVAR_IDS = {
   [SYSVAR_CLOCK_PUBKEY.toBase58()]: "SYSVAR_CLOCK",
   SysvarEpochSchedu1e111111111111111111111111: "SYSVAR_EPOCH_SCHEDULE",
@@ -74,7 +70,6 @@ export function addressLabel(
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
-    WRAPPED_SOL[address] ||
     TokenRegistry.get(address, cluster)?.name
   );
 }

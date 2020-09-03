@@ -63,4 +63,8 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     symbol: "USDC",
     name: "Wrapped USDC",
   },
+  So11111111111111111111111111111111111111112: {
+    symbol: "SOL",
+    name: "Wrapped SOL",
+  },
 };
