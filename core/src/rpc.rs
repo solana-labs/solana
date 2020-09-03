@@ -269,10 +269,7 @@ impl JsonRpcRequestProcessor {
                 get_encoded_account(&bank, &pubkey, encoding.clone(), config.data_slice)?;
             accounts.push(response_account)
         }
-        Ok(Response {
-            context: RpcResponseContext { slot: bank.slot() },
-            value: accounts,
-        })
+        Ok(new_response(&bank, accounts))
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -784,10 +781,7 @@ impl JsonRpcRequestProcessor {
             };
             statuses.push(status);
         }
-        Ok(Response {
-            context: RpcResponseContext { slot: bank.slot() },
-            value: statuses,
-        })
+        Ok(new_response(&bank, statuses))
     }
 
     fn get_transaction_status(
