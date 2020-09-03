@@ -39,6 +39,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
 - [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 - [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
+- [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 - [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
@@ -834,6 +835,49 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":500,"id":1}
+```
+
+### getMultipleAccounts
+
+Returns the account information for a list of Pubkeys
+
+#### Parameters:
+
+- `<array>` - An array of Pubkeys to query, as base-58 encoded strings
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", or jsonParsed". "base58" is limited to Account data of less than 128 bytes. "base64" will return base64 encoded data for Account data of any size.
+    Parsed-JSON encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If parsed-JSON is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`. **jsonParsed encoding is UNSTABLE**
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58" or "base64" encoding.
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+An array of:
+
+- `<null>` - if the account at that Pubkey doesn't exist
+- `<object>` - otherwise, a JSON object containing:
+  - `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  - `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  - `data: <[string, encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
+  - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"dataSlice":{"offset":0,"length":0}}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["AAAAAAEAAAACtzNsyJrW0g==","base64"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base64"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
+
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"encoding": "base58"}]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","base58"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base58"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
 ```
 
 ### getProgramAccounts

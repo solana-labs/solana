@@ -499,6 +499,38 @@ impl RpcClient {
             })?
     }
 
+    pub fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
+        Ok(self
+            .get_multiple_accounts_with_commitment(pubkeys, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_multiple_accounts_with_commitment(
+        &self,
+        pubkeys: &[Pubkey],
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Vec<Option<Account>>> {
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::Base64),
+            commitment: Some(commitment_config),
+            data_slice: None,
+        };
+        let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey.to_string()).collect();
+        let response = self.send(RpcRequest::GetMultipleAccounts, json!([[pubkeys], config]))?;
+        let Response {
+            context,
+            value: accounts,
+        } = serde_json::from_value::<Response<Option<UiAccount>>>(response)?;
+        let accounts: Vec<Option<Account>> = accounts
+            .iter()
+            .map(|rpc_account| rpc_account.decode())
+            .collect();
+        Ok(Response {
+            context,
+            value: accounts,
+        })
+    }
+
     pub fn get_account_data(&self, pubkey: &Pubkey) -> ClientResult<Vec<u8>> {
         Ok(self.get_account(pubkey)?.data)
     }

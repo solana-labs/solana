@@ -14,7 +14,7 @@ use solana_account_decoder::{
         get_token_account_mint, spl_token_id_v2_0, spl_token_v2_0_native_mint,
         token_amount_to_ui_amount, UiTokenAmount,
     },
-    UiAccount, UiAccountData, UiAccountEncoding,
+    UiAccount, UiAccountData, UiAccountEncoding, UiDataSliceConfig,
 };
 use solana_client::{
     rpc_config::*,
@@ -23,7 +23,7 @@ use solana_client::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
-        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
+        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::Response as RpcResponse,
     rpc_response::*,
@@ -242,32 +242,32 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
-        let mut response = None;
-        if let Some(account) = bank.get_account(pubkey) {
-            if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
-            } else if (encoding == UiAccountEncoding::Binary
-                || encoding == UiAccountEncoding::Base58)
-                && account.data.len() > 128
-            {
-                let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
-                return Err(error::Error {
-                    code: error::ErrorCode::InvalidRequest,
-                    message,
-                    data: None,
-                });
-            } else {
-                response = Some(UiAccount::encode(
-                    pubkey,
-                    account,
-                    encoding,
-                    None,
-                    config.data_slice,
-                ));
-            }
-        }
 
+        let response = get_encoded_account(&bank, pubkey, encoding, config.data_slice)?;
         Ok(new_response(&bank, response))
+    }
+
+    pub fn get_multiple_accounts(
+        &self,
+        pubkeys: Vec<Pubkey>,
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Vec<Option<UiAccount>>>> {
+        let mut accounts: Vec<Option<UiAccount>> = vec![];
+
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
+        let encoding = config.encoding.unwrap_or(UiAccountEncoding::Base64);
+        check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
+
+        for pubkey in pubkeys {
+            let response_account =
+                get_encoded_account(&bank, &pubkey, encoding.clone(), config.data_slice)?;
+            accounts.push(response_account)
+        }
+        Ok(Response {
+            context: RpcResponseContext { slot: bank.slot() },
+            value: accounts,
+        })
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -1270,6 +1270,34 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
     }
 }
 
+fn get_encoded_account(
+    bank: &Arc<Bank>,
+    pubkey: &Pubkey,
+    encoding: UiAccountEncoding,
+    data_slice: Option<UiDataSliceConfig>,
+) -> Result<Option<UiAccount>> {
+    let mut response = None;
+    if let Some(account) = bank.get_account(pubkey) {
+        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
+            response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
+        } else if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
+            && account.data.len() > 128
+        {
+            let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
+            return Err(error::Error {
+                code: error::ErrorCode::InvalidRequest,
+                message,
+                data: None,
+            });
+        } else {
+            response = Some(UiAccount::encode(
+                pubkey, account, encoding, None, data_slice,
+            ));
+        }
+    }
+    Ok(response)
+}
+
 /// Use a set of filters to get an iterator of keyed program accounts from a bank
 fn get_filtered_program_accounts(
     bank: &Arc<Bank>,
@@ -1430,6 +1458,14 @@ pub trait RpcSol {
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Option<UiAccount>>>;
+
+    #[rpc(meta, name = "getMultipleAccounts")]
+    fn get_multiple_accounts(
+        &self,
+        meta: Self::Metadata,
+        pubkey_strs: Vec<String>,
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Vec<Option<UiAccount>>>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -1764,6 +1800,29 @@ impl RpcSol for RpcSolImpl {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         meta.get_account_info(&pubkey, config)
+    }
+
+    fn get_multiple_accounts(
+        &self,
+        meta: Self::Metadata,
+        pubkey_strs: Vec<String>,
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Vec<Option<UiAccount>>>> {
+        debug!(
+            "get_multiple_accounts rpc request received: {:?}",
+            pubkey_strs.len()
+        );
+        if pubkey_strs.len() > MAX_MULTIPLE_ACCOUNTS {
+            return Err(Error::invalid_params(format!(
+                "Too many inputs provided; max {}",
+                MAX_MULTIPLE_ACCOUNTS
+            )));
+        }
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        for pubkey_str in pubkey_strs {
+            pubkeys.push(verify_pubkey(pubkey_str)?);
+        }
+        meta.get_multiple_accounts(pubkeys, config)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -3152,6 +3211,123 @@ pub mod tests {
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding":"jsonParsed", "dataSlice": {{"length": 2, "offset": 1}}}}]}}"#,
             address
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+    }
+
+    #[test]
+    fn test_rpc_get_multiple_accounts() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let address = Pubkey::new(&[9; 32]);
+        let data = vec![1, 2, 3, 4, 5];
+        let mut account = Account::new(42, 5, &Pubkey::default());
+        account.data = data.clone();
+        bank.store_account(&address, &account);
+
+        let non_existent_address = Pubkey::new(&[8; 32]);
+
+        // Test 3 accounts, one non-existent, and one with data
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[["{}", "{}", "{}"]]}}"#,
+            bob_pubkey, non_existent_address, address,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":[{
+                    "owner": "11111111111111111111111111111111",
+                    "lamports": 20,
+                    "data": ["", "base64"],
+                    "executable": false,
+                    "rentEpoch": 0
+                },
+                null,
+                {
+                    "owner": "11111111111111111111111111111111",
+                    "lamports": 42,
+                    "data": [base64::encode(&data), "base64"],
+                    "executable": false,
+                    "rentEpoch": 0
+                }],
+            },
+            "id": 1,
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test config settings still work with multiple accounts
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[
+                ["{}", "{}", "{}"],
+                {{"encoding":"base58"}}
+                ]
+            }}"#,
+            bob_pubkey, non_existent_address, address,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result["result"]["value"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            result["result"]["value"][2]["data"],
+            json!([bs58::encode(&data).into_string(), "base58"]),
+        );
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[
+                ["{}", "{}", "{}"],
+                {{"encoding":"base64", "dataSlice": {{"length": 2, "offset": 1}}}}
+                ]
+            }}"#,
+            bob_pubkey, non_existent_address, address,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result["result"]["value"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            result["result"]["value"][2]["data"],
+            json!([base64::encode(&data[1..3]), "base64"]),
+        );
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[
+                ["{}", "{}", "{}"],
+                {{"encoding":"binary", "dataSlice": {{"length": 2, "offset": 1}}}}
+                ]
+            }}"#,
+            bob_pubkey, non_existent_address, address,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result["result"]["value"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            result["result"]["value"][2]["data"],
+            bs58::encode(&data[1..3]).into_string(),
+        );
+
+        let req = format!(
+            r#"{{
+                "jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[
+                ["{}", "{}", "{}"],
+                {{"encoding":"jsonParsed", "dataSlice": {{"length": 2, "offset": 1}}}}
+                ]
+            }}"#,
+            bob_pubkey, non_existent_address, address,
         );
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
