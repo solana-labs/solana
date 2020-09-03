@@ -272,20 +272,24 @@ impl JsonRpcService {
             .build()
             .expect("Runtime");
 
-        let bigtable_ledger_storage = if config.enable_bigtable_ledger_storage {
-            runtime
-                .block_on(solana_storage_bigtable::LedgerStorage::new(false))
-                .map(|x| {
-                    info!("BigTable ledger storage initialized");
-                    Some(x)
-                })
-                .unwrap_or_else(|err| {
-                    error!("Failed to initialize BigTable ledger storage: {:?}", err);
-                    None
-                })
-        } else {
-            None
-        };
+        let bigtable_ledger_storage =
+            if config.enable_bigtable_ledger_storage || config.enable_bigtable_ledger_upload {
+                runtime
+                    .block_on(solana_storage_bigtable::LedgerStorage::new(
+                        config.enable_bigtable_ledger_upload,
+                    ))
+                    .map(|x| {
+                        info!("BigTable ledger storage initialized");
+                        Some(x)
+                    })
+                    .unwrap_or_else(|err| {
+                        error!("Failed to initialize BigTable ledger storage: {:?}", err);
+                        None
+                    })
+            } else {
+                None
+            };
+
         let request_processor = JsonRpcRequestProcessor::new(
             config,
             bank_forks.clone(),
