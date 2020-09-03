@@ -58,48 +58,6 @@ impl CrdsFilter {
         }
     }
 
-    // CrdsFilter::new_complete_set returns a vector of filters. Given a hash
-    // value, this function returns the filter within that vector which
-    // corresponds to the item.
-    // TODO: Consider making Vec<CrdsFilter> a separate type, and implementing
-    // this (and new_complete_set) function as methods on that type.
-    pub fn get_crds_filter<'a>(
-        filters: &'a mut Vec<CrdsFilter>,
-        item: &Hash,
-    ) -> Option<&'a mut CrdsFilter> {
-        if let Some(filter) = filters.first() {
-            let shift = 64 - filter.mask_bits.min(64);
-            let index = CrdsFilter::hash_as_u64(item)
-                .checked_shr(shift)
-                .unwrap_or(0u64);
-            filters.get_mut(index as usize)
-        } else {
-            None
-        }
-    }
-
-    // generates a vec of filters that together hold a complete set of Hashes
-    pub fn new_complete_set(num_items: usize, max_bytes: usize) -> Vec<Self> {
-        // Note: get_crds_filter above relies on the order of filters and
-        // bit-mask pattern here. If changed, update get_crds_filter
-        // accordingly.
-        let max_bits = (max_bytes * 8) as f64;
-        let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
-        let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
-        // for each possible mask combination, generate a new filter.
-        let mut filters = vec![];
-        for seed in 0..2u64.pow(mask_bits) {
-            let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
-            let mask = Self::compute_mask(seed, mask_bits);
-            let filter = CrdsFilter {
-                filter,
-                mask,
-                mask_bits,
-            };
-            filters.push(filter)
-        }
-        filters
-    }
     fn compute_mask(seed: u64, mask_bits: u32) -> u64 {
         assert!(seed <= 2u64.pow(mask_bits));
         let seed: u64 = seed.checked_shl(64 - mask_bits).unwrap_or(0x0);
@@ -146,6 +104,39 @@ impl CrdsFilter {
     }
     pub fn filter_contains(&self, item: &Hash) -> bool {
         self.filter.contains(item)
+    }
+}
+
+/// A vector of crds filters that together hold a complete set of Hashes.
+struct CrdsFilterSet(Vec<CrdsFilter>);
+
+impl CrdsFilterSet {
+    fn new(num_items: usize, max_bytes: usize) -> Self {
+        let max_bits = (max_bytes * 8) as f64;
+        let max_items = CrdsFilter::max_items(max_bits, FALSE_RATE, KEYS);
+        let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items as f64);
+        // For each possible mask combination, generate a new filter.
+        let seeds = 0..2u64.pow(mask_bits);
+        let filters = seeds.map(|seed| {
+            let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
+            let mask = CrdsFilter::compute_mask(seed, mask_bits);
+            CrdsFilter {
+                filter,
+                mask,
+                mask_bits,
+            }
+        });
+        Self(filters.collect())
+    }
+
+    // Returns the filter within the vector of crds filters which corresponds
+    // to the given hash value.
+    fn get(&mut self, hash_value: &Hash) -> Option<&mut CrdsFilter> {
+        let shift = 64 - self.0.first()?.mask_bits.min(64);
+        let index = CrdsFilter::hash_as_u64(hash_value)
+            .checked_shr(shift)
+            .unwrap_or(0u64);
+        self.0.get_mut(index as usize)
     }
 }
 
@@ -385,9 +376,9 @@ impl CrdsGossipPull {
             CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
             crds.table.values().count() + self.purged_values.len(),
         );
-        let mut filters = CrdsFilter::new_complete_set(num, bloom_size);
+        let mut filters = CrdsFilterSet::new(num, bloom_size);
         let mut add_value_hash = |value_hash| {
-            if let Some(filter) = CrdsFilter::get_crds_filter(&mut filters, value_hash) {
+            if let Some(filter) = filters.get(value_hash) {
                 debug_assert!(filter.test_mask(value_hash));
                 filter.filter.add(value_hash);
             }
@@ -399,7 +390,7 @@ impl CrdsGossipPull {
             add_value_hash(&value_hash);
         }
 
-        filters
+        filters.0
     }
 
     /// filter values that fail the bloom filter up to max_bytes
@@ -643,23 +634,21 @@ mod test {
     }
 
     #[test]
-    fn test_crds_filter_get_crds_filter() {
-        let mut filters =
-            CrdsFilter::new_complete_set(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        assert_eq!(filters.len(), 1024);
-        let mut bytes = [0u8; HASH_BYTES];
+    fn test_crds_filter_set_get() {
+        let mut crds_filter_set =
+            CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
+        assert_eq!(crds_filter_set.0.len(), 1024);
         let mut rng = thread_rng();
         for _ in 0..100 {
+            let mut bytes = [0u8; HASH_BYTES];
             rng.fill_bytes(&mut bytes);
             let hash_value = Hash::new(&bytes);
-            let filter = CrdsFilter::get_crds_filter(&mut filters, &hash_value)
-                .unwrap()
-                .clone();
+            let filter = crds_filter_set.get(&hash_value).unwrap().clone();
             assert!(filter.test_mask(&hash_value));
             // Validate that the returned filter is the *unique* filter which
             // corresponds to the hash value (i.e. test_mask returns true).
             let mut num_hits = 0;
-            for f in &filters {
+            for f in &crds_filter_set.0 {
                 if *f == filter {
                     num_hits += 1;
                     assert!(f.test_mask(&hash_value));
@@ -672,11 +661,10 @@ mod test {
     }
 
     #[test]
-    fn test_crds_filter_new_complete_set() {
-        // Validates invariances required by CrdsFilter::get_crds_filter in the
-        // vector of filters generated by CrdsFilter::new_complete_set.
-        let filters =
-            CrdsFilter::new_complete_set(/*num_items=*/ 55345017, /*max_bytes=*/ 4098);
+    fn test_crds_filter_set_new() {
+        // Validates invariances required by CrdsFilterSet::get in the
+        // vector of filters generated by CrdsFilterSet::new.
+        let filters = CrdsFilterSet::new(/*num_items=*/ 55345017, /*max_bytes=*/ 4098).0;
         assert_eq!(filters.len(), 16384);
         let mask_bits = filters[0].mask_bits;
         let right_shift = 64 - mask_bits;
@@ -1039,7 +1027,7 @@ mod test {
     }
     #[test]
     fn test_crds_filter_complete_set_add_mask() {
-        let mut filters = CrdsFilter::new_complete_set(1000, 10);
+        let mut filters = CrdsFilterSet::new(1000, 10).0;
         assert!(filters.iter().all(|f| f.mask_bits > 0));
         let mut h: Hash = Hash::default();
         // rev to make the hash::default() miss on the first few test_masks
