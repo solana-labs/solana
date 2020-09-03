@@ -55,6 +55,7 @@ impl Inflation {
     }
     /// inflation rate at year
     pub fn total(&self, year: f64) -> f64 {
+        assert!(year >= 0.0);
         let tapered = self.initial * ((1.0 - self.taper).powf(year));
 
         if tapered > self.terminal {
