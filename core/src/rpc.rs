@@ -99,6 +99,7 @@ pub struct JsonRpcConfig {
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
+    pub enable_bigtable_ledger_upload: bool,
 }
 
 #[derive(Clone)]
