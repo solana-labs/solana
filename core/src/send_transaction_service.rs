@@ -53,8 +53,7 @@ impl SendTransactionService {
     pub fn new(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
-        cluster_info: &Arc<ClusterInfo>,
-        poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
+        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
         exit: &Arc<AtomicBool>,
         receiver: Receiver<TransactionInfo>,
     ) -> Self {
@@ -62,8 +61,7 @@ impl SendTransactionService {
             tpu_address,
             receiver,
             bank_forks.clone(),
-            cluster_info.clone(),
-            poh_recorder,
+            leader_info,
             exit.clone(),
         );
         Self { thread }
@@ -73,19 +71,18 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
+        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut transactions = HashMap::new();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut recent_peers: HashMap<Pubkey, SocketAddr> = cluster_info
-            .tpu_peers()
+        let mut recent_peers: HashMap<Pubkey, SocketAddr> = leader_info.as_ref().map(|cluster_info|
+            cluster_info.0.tpu_peers()
             .into_iter()
             .map(|ci| (ci.id, ci.tpu))
-            .collect();
+            .collect()).unwrap_or(HashMap::new());
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -95,9 +92,9 @@ impl SendTransactionService {
                 }
 
                 if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
-                    let address = poh_recorder
+                    let address = leader_info
                         .as_ref()
-                        .and_then(|recorder| recorder.lock().unwrap().leader_after_n_slots(0))
+                        .and_then(|recorder| recorder.1.lock().unwrap().leader_after_n_slots(0))
                         .and_then(|leader| recent_peers.get(&leader))
                         .unwrap_or(&tpu_address);
                     Self::send_transaction(
@@ -131,11 +128,11 @@ impl SendTransactionService {
                         );
                     }
                     last_status_check = Instant::now();
-                    recent_peers = cluster_info
-                        .tpu_peers()
-                        .into_iter()
-                        .map(|ci| (ci.id, ci.tpu))
-                        .collect();
+        recent_peers = leader_info.as_ref().map(|cluster_info|
+            cluster_info.0.tpu_peers()
+            .into_iter()
+            .map(|ci| (ci.id, ci.tpu))
+            .collect()).unwrap_or(HashMap::new());
                 }
             })
             .unwrap()
@@ -227,7 +224,7 @@ mod test {
         let (_sender, receiver) = channel();
 
         let send_tranaction_service =
-            SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
+            SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
 
         exit.store(true, Ordering::Relaxed);
         send_tranaction_service.join().unwrap();
