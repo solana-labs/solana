@@ -1,5 +1,6 @@
 use crate::parse_instruction::{ParsableProgram, ParseInstructionError, ParsedInstructionEnum};
 use serde_json::{json, Map, Value};
+use solana_account_decoder::parse_token::token_amount_to_ui_amount;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 use spl_token_v2_0::{
     instruction::{AuthorityType, TokenInstruction},
@@ -92,7 +93,7 @@ pub fn parse_token(
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
+                "amount": amount.to_string(),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -117,7 +118,7 @@ pub fn parse_token(
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "delegate": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
+                "amount": amount.to_string(),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -200,7 +201,7 @@ pub fn parse_token(
             let mut value = json!({
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
+                "amount": amount.to_string(),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -225,7 +226,7 @@ pub fn parse_token(
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
+                "amount": amount.to_string(),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -323,8 +324,7 @@ pub fn parse_token(
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[2] as usize].to_string(),
-                "amount": amount,
-                "decimals": decimals,
+                "tokenAmount": token_amount_to_ui_amount(amount, decimals),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -350,8 +350,7 @@ pub fn parse_token(
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
                 "delegate": account_keys[instruction.accounts[2] as usize].to_string(),
-                "amount": amount,
-                "decimals": decimals,
+                "tokenAmount": token_amount_to_ui_amount(amount, decimals),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -376,8 +375,7 @@ pub fn parse_token(
             let mut value = json!({
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
-                "decimals": decimals,
+                "tokenAmount": token_amount_to_ui_amount(amount, decimals),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -402,8 +400,7 @@ pub fn parse_token(
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
-                "amount": amount,
-                "decimals": decimals,
+                "tokenAmount": token_amount_to_ui_amount(amount, decimals),
             });
             let mut map = value.as_object_mut().unwrap();
             parse_signers(
@@ -621,7 +618,7 @@ mod test {
                    "source": keys[1].to_string(),
                    "destination": keys[2].to_string(),
                    "authority": keys[0].to_string(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -646,7 +643,7 @@ mod test {
                    "destination": keys[3].to_string(),
                    "multisigAuthority": keys[4].to_string(),
                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -671,7 +668,7 @@ mod test {
                    "source": keys[1].to_string(),
                    "delegate": keys[2].to_string(),
                    "owner": keys[0].to_string(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -696,7 +693,7 @@ mod test {
                    "delegate": keys[3].to_string(),
                    "multisigOwner": keys[4].to_string(),
                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -792,7 +789,7 @@ mod test {
                    "mint": keys[1].to_string(),
                    "account": keys[2].to_string(),
                    "mintAuthority": keys[0].to_string(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -817,7 +814,7 @@ mod test {
                    "account": keys[1].to_string(),
                    "mint": keys[2].to_string(),
                    "authority": keys[0].to_string(),
-                   "amount": 42,
+                   "amount": "42",
                 })
             }
         );
@@ -914,8 +911,11 @@ mod test {
                    "destination": keys[2].to_string(),
                    "mint": keys[3].to_string(),
                    "authority": keys[0].to_string(),
-                   "amount": 42,
-                   "decimals": 2,
+                   "tokenAmount": {
+                       "uiAmount": 0.42,
+                       "decimals": 2,
+                       "amount": "42"
+                   }
                 })
             }
         );
@@ -943,8 +943,11 @@ mod test {
                    "mint": keys[4].to_string(),
                    "multisigAuthority": keys[5].to_string(),
                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                   "amount": 42,
-                   "decimals": 2,
+                   "tokenAmount": {
+                       "uiAmount": 0.42,
+                       "decimals": 2,
+                       "amount": "42"
+                   }
                 })
             }
         );
@@ -972,8 +975,11 @@ mod test {
                    "mint": keys[2].to_string(),
                    "delegate": keys[3].to_string(),
                    "owner": keys[0].to_string(),
-                   "amount": 42,
-                   "decimals": 2,
+                   "tokenAmount": {
+                       "uiAmount": 0.42,
+                       "decimals": 2,
+                       "amount": "42"
+                   }
                 })
             }
         );
@@ -996,13 +1002,16 @@ mod test {
             ParsedInstructionEnum {
                 instruction_type: "approve2".to_string(),
                 info: json!({
-                   "source": keys[2].to_string(),
-                   "mint": keys[3].to_string(),
-                   "delegate": keys[4].to_string(),
-                   "multisigOwner": keys[5].to_string(),
-                   "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
-                   "amount": 42,
-                   "decimals": 2,
+                    "source": keys[2].to_string(),
+                    "mint": keys[3].to_string(),
+                    "delegate": keys[4].to_string(),
+                    "multisigOwner": keys[5].to_string(),
+                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
+                    "tokenAmount": {
+                        "uiAmount": 0.42,
+                        "decimals": 2,
+                        "amount": "42"
+                    }
                 })
             }
         );
@@ -1028,8 +1037,11 @@ mod test {
                    "mint": keys[1].to_string(),
                    "account": keys[2].to_string(),
                    "mintAuthority": keys[0].to_string(),
-                   "amount": 42,
-                   "decimals": 2,
+                   "tokenAmount": {
+                       "uiAmount": 0.42,
+                       "decimals": 2,
+                       "amount": "42"
+                   }
                 })
             }
         );
@@ -1055,8 +1067,11 @@ mod test {
                    "account": keys[1].to_string(),
                    "mint": keys[2].to_string(),
                    "authority": keys[0].to_string(),
-                   "amount": 42,
-                   "decimals": 2,
+                   "tokenAmount": {
+                       "uiAmount": 0.42,
+                       "decimals": 2,
+                       "amount": "42"
+                   }
                 })
             }
         );
