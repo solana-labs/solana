@@ -920,24 +920,26 @@ impl Bank {
     }
 
     // update reward for previous epoch
-    fn update_rewards(&mut self, epoch: Epoch) {
-        if epoch == self.epoch() {
+    fn update_rewards(&mut self, prev_epoch: Epoch) {
+        if prev_epoch == self.epoch() {
             return;
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
-        //  years_elapsed =         slots_elapsed                             /     slots/year
-        let year = (self.epoch_schedule.get_last_slot_in_epoch(epoch)) as f64 / self.slots_per_year;
+        // calculated as: prev_slot / (slots / year)
+        let slot_in_year =
+            (self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)) as f64 / self.slots_per_year;
 
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
-        //  years_elapsed =   slots_elapsed                               /  slots/year
-        let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
+        //  calculated as: slots_elapsed / (slots / year)
+        let period_in_year =
+            self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year;
 
         let validator_rewards = {
             let inflation = self.inflation.read().unwrap();
 
-            (*inflation).validator(year) * self.capitalization() as f64 * period
+            (*inflation).validator(slot_in_year) * self.capitalization() as f64 * period_in_year
         } as u64;
 
         let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
