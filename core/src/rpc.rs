@@ -730,10 +730,7 @@ impl JsonRpcRequestProcessor {
             };
             statuses.push(status);
         }
-        Ok(Response {
-            context: RpcResponseContext { slot: bank.slot() },
-            value: statuses,
-        })
+        new_response(&bank, statuses)
     }
 
     fn get_transaction_status(
