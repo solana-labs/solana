@@ -40,6 +40,39 @@ impl TransactionInfo {
     }
 }
 
+pub struct LeaderInfo {
+    cluster_info: Arc<ClusterInfo>,
+    poh_recorder: Arc<Mutex<PohRecorder>>,
+    recent_peers: HashMap<Pubkey, SocketAddr>,
+}
+
+impl LeaderInfo {
+    pub fn new(cluster_info: Arc<ClusterInfo>, poh_recorder: Arc<Mutex<PohRecorder>>) -> Self {
+        Self {
+            cluster_info,
+            poh_recorder,
+            recent_peers: HashMap::new(),
+        }
+    }
+
+    pub fn refresh_recent_peers(&mut self) {
+        self.recent_peers = self
+            .cluster_info
+            .tpu_peers()
+            .into_iter()
+            .map(|ci| (ci.id, ci.tpu))
+            .collect();
+    }
+
+    pub fn get_leader_tpu(&self) -> Option<&SocketAddr> {
+        self.poh_recorder
+            .lock()
+            .unwrap()
+            .leader_after_n_slots(0)
+            .and_then(|leader| self.recent_peers.get(&leader))
+    }
+}
+
 #[derive(Default, Debug, PartialEq)]
 struct ProcessTransactionsResult {
     rooted: u64,
@@ -53,7 +86,7 @@ impl SendTransactionService {
     pub fn new(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
-        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
+        leader_info: Option<LeaderInfo>,
         exit: &Arc<AtomicBool>,
         receiver: Receiver<TransactionInfo>,
     ) -> Self {
@@ -71,24 +104,16 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
-        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
+        mut leader_info: Option<LeaderInfo>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut transactions = HashMap::new();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut recent_peers: HashMap<Pubkey, SocketAddr> = leader_info
-            .as_ref()
-            .map(|cluster_info| {
-                cluster_info
-                    .0
-                    .tpu_peers()
-                    .into_iter()
-                    .map(|ci| (ci.id, ci.tpu))
-                    .collect()
-            })
-            .unwrap_or_default();
+        if let Some(leader_info) = leader_info.as_mut() {
+            leader_info.refresh_recent_peers();
+        }
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -100,8 +125,7 @@ impl SendTransactionService {
                 if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
                     let address = leader_info
                         .as_ref()
-                        .and_then(|recorder| recorder.1.lock().unwrap().leader_after_n_slots(0))
-                        .and_then(|leader| recent_peers.get(&leader))
+                        .and_then(|leader_info| leader_info.get_leader_tpu())
                         .unwrap_or(&tpu_address);
                     Self::send_transaction(
                         &send_socket,
@@ -131,20 +155,13 @@ impl SendTransactionService {
                             &send_socket,
                             &tpu_address,
                             &mut transactions,
+                            &leader_info,
                         );
                     }
                     last_status_check = Instant::now();
-                    recent_peers = leader_info
-                        .as_ref()
-                        .map(|cluster_info| {
-                            cluster_info
-                                .0
-                                .tpu_peers()
-                                .into_iter()
-                                .map(|ci| (ci.id, ci.tpu))
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                    if let Some(leader_info) = leader_info.as_mut() {
+                        leader_info.refresh_recent_peers();
+                    }
                 }
             })
             .unwrap()
@@ -156,6 +173,7 @@ impl SendTransactionService {
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
+        leader_info: &Option<LeaderInfo>,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
@@ -180,7 +198,10 @@ impl SendTransactionService {
                         inc_new_counter_info!("send_transaction_service-retry", 1);
                         Self::send_transaction(
                             &send_socket,
-                            &tpu_address,
+                            leader_info
+                                .as_ref()
+                                .and_then(|leader_info| leader_info.get_leader_tpu())
+                                .unwrap_or(&tpu_address),
                             &transaction_info.wire_transaction,
                         );
                         true
@@ -289,6 +310,7 @@ mod test {
             &send_socket,
             &tpu_address,
             &mut transactions,
+            &None,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -310,6 +332,7 @@ mod test {
             &send_socket,
             &tpu_address,
             &mut transactions,
+            &None,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -331,6 +354,7 @@ mod test {
             &send_socket,
             &tpu_address,
             &mut transactions,
+            &None,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -352,6 +376,7 @@ mod test {
             &send_socket,
             &tpu_address,
             &mut transactions,
+            &None,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -374,6 +399,7 @@ mod test {
             &send_socket,
             &tpu_address,
             &mut transactions,
+            &None,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(

@@ -1,9 +1,13 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    bigtable_upload_service::BigTableUploadService, cluster_info::ClusterInfo,
-    poh_recorder::PohRecorder, rpc::*, rpc_health::*,
-    send_transaction_service::SendTransactionService, validator::ValidatorExit,
+    bigtable_upload_service::BigTableUploadService,
+    cluster_info::ClusterInfo,
+    poh_recorder::PohRecorder,
+    rpc::*,
+    rpc_health::*,
+    send_transaction_service::{LeaderInfo, SendTransactionService},
+    validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -310,7 +314,8 @@ impl JsonRpcService {
         );
 
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
-        let leader_info = poh_recorder.map(|x| (cluster_info.clone(), x));
+        let leader_info =
+            poh_recorder.map(|recorder| LeaderInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,
