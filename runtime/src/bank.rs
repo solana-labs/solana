@@ -8570,7 +8570,10 @@ mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        assert_eq!(bank0.capitalization() + 1, bank1.capitalization());
+        assert_eq!(
+            bank0.capitalization() + 1 + 1_000_000_000,
+            bank1.capitalization()
+        );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
 
         // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
