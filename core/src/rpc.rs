@@ -195,12 +195,8 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
 
-<<<<<<< HEAD
-        new_response(&bank, response)
-=======
         let response = get_encoded_account(&bank, pubkey, encoding, config.data_slice)?;
-        Ok(new_response(&bank, response))
->>>>>>> b22de369b... Rpc: add getMultipleAccounts endpoint (#12005)
+        new_response(&bank, response)
     }
 
     pub fn get_multiple_accounts(
@@ -211,7 +207,7 @@ impl JsonRpcRequestProcessor {
         let mut accounts: Vec<Option<UiAccount>> = vec![];
 
         let config = config.unwrap_or_default();
-        let bank = self.bank(config.commitment);
+        let bank = self.bank(config.commitment)?;
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Base64);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
 
@@ -220,10 +216,7 @@ impl JsonRpcRequestProcessor {
                 get_encoded_account(&bank, &pubkey, encoding.clone(), config.data_slice)?;
             accounts.push(response_account)
         }
-        Ok(Response {
-            context: RpcResponseContext { slot: bank.slot() },
-            value: accounts,
-        })
+        new_response(&bank, accounts)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
