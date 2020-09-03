@@ -174,7 +174,7 @@ impl PubsubClient {
                     PubsubClientSubscription::read_message(&socket_clone);
 
                 if let Ok(msg) = message {
-                    match sender.send(msg.clone()) {
+                    match sender.send(msg) {
                         Ok(_) => (),
                         Err(err) => {
                             info!("receive error: {:?}", err);
