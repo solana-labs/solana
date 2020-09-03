@@ -65,6 +65,6 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
   },
   So11111111111111111111111111111111111111112: {
     symbol: "SOL",
-    name: "Wrapped SOL"
-  }
+    name: "Wrapped SOL",
+  },
 };
