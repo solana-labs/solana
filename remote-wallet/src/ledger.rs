@@ -241,14 +241,15 @@ impl LedgerWallet {
         Ok(message)
     }
 
-    fn send_apdu(
+    fn _send_apdu(
         &self,
         command: u8,
         p1: u8,
         p2: u8,
         data: &[u8],
+        outdated_app: bool,
     ) -> Result<Vec<u8>, RemoteWalletError> {
-        self.write(command, p1, p2, data, self.outdated_app())?;
+        self.write(command, p1, p2, data, outdated_app)?;
         if p1 == P1_CONFIRM && is_last_part(p2) {
             println!(
                 "Waiting for your approval on {} {}",
@@ -263,8 +264,18 @@ impl LedgerWallet {
         }
     }
 
+    fn send_apdu(
+        &self,
+        command: u8,
+        p1: u8,
+        p2: u8,
+        data: &[u8],
+    ) -> Result<Vec<u8>, RemoteWalletError> {
+        self._send_apdu(command, p1, p2, data, self.outdated_app())
+    }
+
     fn get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
-        if let Ok(version) = self.send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[]) {
+        if let Ok(version) = self._send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[], false) {
             if version.len() != 5 {
                 return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
             }
@@ -274,7 +285,8 @@ impl LedgerWallet {
                 version[4].into(),
             ))
         } else {
-            let version = self.send_apdu(commands::DEPRECATED_GET_APP_CONFIGURATION, 0, 0, &[])?;
+            let version =
+                self._send_apdu(commands::DEPRECATED_GET_APP_CONFIGURATION, 0, 0, &[], true)?;
             if version.len() != 4 {
                 return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
             }
