@@ -455,6 +455,9 @@ pub struct Bank {
     pub operating_mode: Option<OperatingMode>,
 
     pub lazy_rent_collection: AtomicBool,
+
+    // this is temporary field only to remove rewards_pool entirely
+    pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 }
 
 impl Default for BlockhashQueue {
@@ -479,7 +482,7 @@ impl Bank {
 
         bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.operating_mode));
         bank.process_genesis_config(genesis_config);
-        bank.finish_init();
+        bank.finish_init(genesis_config);
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
@@ -573,6 +576,7 @@ impl Bank {
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
+            rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
         };
 
         datapoint_info!(
@@ -674,8 +678,9 @@ impl Bank {
             skip_drop: new(),
             operating_mode: Some(genesis_config.operating_mode),
             lazy_rent_collection: new(),
+            rewards_pool_pubkeys: new(),
         };
-        bank.finish_init();
+        bank.finish_init(genesis_config);
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -2650,7 +2655,9 @@ impl Bank {
         self.src = status_cache_rc;
     }
 
-    pub fn finish_init(&mut self) {
+    pub fn finish_init(&mut self, genesis_config: &GenesisConfig) {
+        self.rewards_pool_pubkeys =
+            Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
         self.apply_feature_activations(true, false);
     }
 
@@ -3236,6 +3243,7 @@ impl Bank {
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
         self.reconfigure_token2_native_mint();
+        self.ensure_no_storage_rewards_pool();
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
@@ -3324,6 +3332,35 @@ impl Bank {
                     &inline_spl_token_v2_0::native_mint::id(),
                     &native_mint_account,
                 );
+            }
+        }
+    }
+
+    fn ensure_no_storage_rewards_pool(&mut self) {
+        let purge_window_epoch = match self.operating_mode() {
+            // never do this for testnet; we're pristine here. :)
+            OperatingMode::Development => false,
+            // schedule to remove at testnet/tds
+            OperatingMode::Preview => self.epoch() == 93,
+            // never do this for stable; we're pristine here. :)
+            OperatingMode::Stable => false,
+        };
+
+        if purge_window_epoch {
+            for reward_pubkey in self.rewards_pool_pubkeys.iter() {
+                if let Some(mut reward_account) = self.get_account(&reward_pubkey) {
+                    if reward_account.lamports == u64::MAX {
+                        reward_account.lamports = 0;
+                        self.store_account(&reward_pubkey, &reward_account);
+                        // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
+                        self.capitalization.fetch_add(1, Ordering::Relaxed);
+                        info!(
+                            "purged rewards pool accont: {}, new capitalization: {}",
+                            reward_pubkey,
+                            self.capitalization()
+                        );
+                    }
+                };
             }
         }
     }
@@ -8303,7 +8340,7 @@ mod tests {
         bank.message_processor.set_cross_program_support(false);
 
         // simulate bank is just after deserialized from snapshot
-        bank.finish_init();
+        bank.finish_init(&genesis_config);
 
         assert_eq!(bank.message_processor.get_cross_program_support(), true);
     }
@@ -8500,5 +8537,52 @@ mod tests {
             4200000000
         );
         assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
+    }
+
+    #[test]
+    fn test_ensure_no_storage_rewards_pool() {
+        solana_logger::setup();
+
+        let mut genesis_config =
+            create_genesis_config_with_leader(5, &Pubkey::new_rand(), 0).genesis_config;
+
+        // OperatingMode::Preview - Storage rewards pool is purged at epoch 93
+        // Also this is with bad capitalization
+        genesis_config.operating_mode = OperatingMode::Preview;
+        genesis_config.inflation = Inflation::default();
+        let reward_pubkey = Pubkey::new_rand();
+        genesis_config.rewards_pools.insert(
+            reward_pubkey,
+            Account::new(u64::MAX, 0, &Pubkey::new_rand()),
+        );
+        let bank0 = Bank::new(&genesis_config);
+        // because capitalization has been reset with bogus capitalization calculation allowing overflows,
+        // deliberately substract 1 lamport to simulate it
+        bank0.capitalization.fetch_sub(1, Ordering::Relaxed);
+        let bank0 = Arc::new(bank0);
+        assert_eq!(bank0.get_balance(&reward_pubkey), u64::MAX,);
+
+        let bank1 = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
+        );
+
+        // assert that everything gets in order....
+        assert!(bank1.get_account(&reward_pubkey).is_none());
+        assert_eq!(bank0.capitalization() + 1, bank1.capitalization());
+        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
+
+        // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
+        // So do some convolted setup; anyway this test itself will just be temporary
+        let bank0 = std::panic::AssertUnwindSafe(bank0);
+        let overflowing_capitalization =
+            std::panic::catch_unwind(|| bank0.calculate_capitalization());
+        if let Ok(overflowing_capitalization) = overflowing_capitalization {
+            info!("asserting overflowing capitalization for bank0");
+            assert_eq!(overflowing_capitalization, bank0.capitalization());
+        } else {
+            info!("NOT-asserting overflowing capitalization for bank0");
+        }
     }
 }
