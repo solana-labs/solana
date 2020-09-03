@@ -334,7 +334,6 @@ impl Validator {
             } else {
                 assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
             }
-            let tpu_address = cluster_info.my_contact_info().tpu;
             (
                 JsonRpcService::new(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
