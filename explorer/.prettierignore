@@ -1,2 +1,3 @@
 build
 wasm
+src/serumMarketRegistry.ts
