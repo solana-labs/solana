@@ -23,6 +23,8 @@ import { VoteAccountSection } from "components/account/VoteAccountSection";
 import { NonceAccountSection } from "components/account/NonceAccountSection";
 import { VotesCard } from "components/account/VotesCard";
 import { SysvarAccountSection } from "components/account/SysvarAccountSection";
+import { SlotHashesCard } from "components/account/SlotHashesCard";
+import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -128,6 +130,18 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       title: "Votes",
       path: "/votes",
     });
+  } else if (data && data.program === "sysvar" && data.parsed.type === "slotHashes") {
+    tabs.push({
+      slug: "hashes",
+      title: "Hashes",
+      path: "/hashes",
+    });
+  } else if (data && data.program === "sysvar" && data.parsed.type === "stakeHistory") {
+    tabs.push({
+      slug: "stake-history",
+      title: "Stake History",
+      path: "/stake-history",
+    });
   } else {
     tabs.push({
       slug: "tokens",
@@ -193,7 +207,7 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "largest" | "votes";
+type MoreTabs = "history" | "tokens" | "largest" | "votes" | "hashes" | "stake-history";
 function MoreSection({
   account,
   tab,
@@ -237,6 +251,12 @@ function MoreSection({
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "votes" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
+      )}
+      {tab === "hashes" && data?.program === "sysvar" && data.parsed.type === "slotHashes" && (
+        <SlotHashesCard sysvarAccount={data.parsed} />
+      )}
+      {tab === "stake-history" && data?.program === "sysvar" && data.parsed.type === "stakeHistory" && (
+        <StakeHistoryCard sysvarAccount={data.parsed} />
       )}
     </>
   );

@@ -59,6 +59,27 @@ export function SysvarAccountSection({
           sysvarAccount={sysvarAccount}
         />
       );
+    case "slotHashes":
+      return (
+        <SysvarAccountSlotHashes
+          account={account}
+          sysvarAccount={sysvarAccount}
+        />
+      );
+    case "slotHistory":
+      return (
+        <SysvarAccountSlotHistory
+          account={account}
+          sysvarAccount={sysvarAccount}
+        />
+      );
+    case "stakeHistory":
+      return (
+        <SysvarAccountStakeHistory
+          account={account}
+          sysvarAccount={sysvarAccount}
+        />
+      );
   }
 
   return <SysvarAccountCard account={account} sysvarAccount={sysvarAccount} />;
@@ -93,6 +114,87 @@ function SysvarAccountRecentBlockhashesCard({
             })}
           </td>
         </tr> */}
+
+        <AccountOwnerRow account={account} />
+      </TableCardBody>
+    </div>
+  );
+}
+
+function SysvarAccountSlotHashes({
+  account,
+  sysvarAccount
+}: {
+  account: Account;
+  sysvarAccount: SysvarAccount;
+}) {
+  const refresh = useFetchAccountInfo();
+  return (
+    <div className="card">
+      <AccountHeader
+        title="Slot Hashes"
+        refresh={() => refresh(account.pubkey)}
+      />
+
+      <TableCardBody>
+        <AccountAddressRow account={account} />
+
+        <AccountOwnerRow account={account} />
+      </TableCardBody>
+    </div>
+  );
+}
+
+function SysvarAccountSlotHistory({
+  account,
+  sysvarAccount
+}: {
+  account: Account;
+  sysvarAccount: SysvarAccount;
+}) {
+  console.log(sysvarAccount);
+  const refresh = useFetchAccountInfo();
+  return (
+    <div className="card">
+      <AccountHeader
+        title="Slot History"
+        refresh={() => refresh(account.pubkey)}
+      />
+
+      <TableCardBody>
+        <AccountAddressRow account={account} />
+
+        <tr>
+          <td>Next Slot</td>
+          <td className="text-lg-right">
+            {sysvarAccount.info.nextSlot}
+          </td>
+        </tr>
+
+        <AccountOwnerRow account={account} />
+      </TableCardBody>
+    </div>
+  );
+}
+
+function SysvarAccountStakeHistory({
+  account,
+  sysvarAccount
+}: {
+  account: Account;
+  sysvarAccount: SysvarAccount;
+}) {
+  console.log(sysvarAccount);
+  const refresh = useFetchAccountInfo();
+  return (
+    <div className="card">
+      <AccountHeader
+        title="Stake History"
+        refresh={() => refresh(account.pubkey)}
+      />
+
+      <TableCardBody>
+        <AccountAddressRow account={account} />
 
         <AccountOwnerRow account={account} />
       </TableCardBody>
