@@ -216,13 +216,7 @@ impl JsonRpcRequestProcessor {
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = channel();
-        SendTransactionService::new(
-            tpu_address,
-            &bank_forks,
-            None,
-            &exit,
-            receiver,
-        );
+        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
 
         Self {
             config: JsonRpcConfig::default(),
@@ -2698,13 +2692,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(
-            tpu_address,
-            &bank_forks,
-            None,
-            &exit,
-            receiver,
-        );
+        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,

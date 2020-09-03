@@ -78,11 +78,17 @@ impl SendTransactionService {
         let mut transactions = HashMap::new();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut recent_peers: HashMap<Pubkey, SocketAddr> = leader_info.as_ref().map(|cluster_info|
-            cluster_info.0.tpu_peers()
-            .into_iter()
-            .map(|ci| (ci.id, ci.tpu))
-            .collect()).unwrap_or(HashMap::new());
+        let mut recent_peers: HashMap<Pubkey, SocketAddr> = leader_info
+            .as_ref()
+            .map(|cluster_info| {
+                cluster_info
+                    .0
+                    .tpu_peers()
+                    .into_iter()
+                    .map(|ci| (ci.id, ci.tpu))
+                    .collect()
+            })
+            .unwrap_or(HashMap::new());
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -128,11 +134,17 @@ impl SendTransactionService {
                         );
                     }
                     last_status_check = Instant::now();
-        recent_peers = leader_info.as_ref().map(|cluster_info|
-            cluster_info.0.tpu_peers()
-            .into_iter()
-            .map(|ci| (ci.id, ci.tpu))
-            .collect()).unwrap_or(HashMap::new());
+                    recent_peers = leader_info
+                        .as_ref()
+                        .map(|cluster_info| {
+                            cluster_info
+                                .0
+                                .tpu_peers()
+                                .into_iter()
+                                .map(|ci| (ci.id, ci.tpu))
+                                .collect()
+                        })
+                        .unwrap_or(HashMap::new());
                 }
             })
             .unwrap()
