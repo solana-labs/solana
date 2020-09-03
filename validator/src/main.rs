@@ -660,6 +660,13 @@ pub fn main() {
                        as a fallback to local ledger data"),
         )
         .arg(
+            Arg::with_name("enable_bigtable_ledger_upload")
+                .long("enable-bigtable-ledger-upload")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Upload new confirmed blocks into a BigTable instance"),
+        )
+        .arg(
             Arg::with_name("health_check_slot_distance")
                 .long("health-check-slot-distance")
                 .value_name("SLOT_DISTANCE")
@@ -976,6 +983,7 @@ pub fn main() {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             enable_bigtable_ledger_storage: matches
                 .is_present("enable_rpc_bigtable_ledger_storage"),
+            enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
