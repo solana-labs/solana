@@ -105,9 +105,7 @@ const renderAccountRow = (
         <Address pubkey={account.address} link truncate />
       </td>
       <td>
-        {account.owner && (
-          <Address pubkey={account.owner} alignRight link truncate />
-        )}
+        {account.owner && <Address pubkey={account.owner} link truncate />}
       </td>
       <td className="text-right">{account.uiAmount}</td>
       <td className="text-right">{percent}</td>
