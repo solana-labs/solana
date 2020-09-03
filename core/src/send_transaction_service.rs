@@ -1,8 +1,9 @@
-use crate::cluster_info::ClusterInfo;
+use crate::{cluster_info::ClusterInfo, poh_recorder::PohRecorder};
+use log::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
-use solana_sdk::{clock::Slot, signature::Signature};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use std::{
     collections::HashMap,
     net::{SocketAddr, UdpSocket},
@@ -44,12 +45,19 @@ impl SendTransactionService {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         bank_forks: &Arc<RwLock<BankForks>>,
+        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (sender, receiver) = channel::<TransactionInfo>();
         let tpu_address = cluster_info.my_contact_info().tpu;
 
-        let thread = Self::retry_thread(receiver, bank_forks.clone(), tpu_address, exit.clone());
+        let thread = Self::retry_thread(
+            receiver,
+            bank_forks.clone(),
+            leader_info,
+            tpu_address,
+            exit.clone(),
+        );
         Self {
             thread,
             sender: Mutex::new(sender),
@@ -61,12 +69,25 @@ impl SendTransactionService {
     fn retry_thread(
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
+        leader_info: Option<(Arc<ClusterInfo>, Arc<Mutex<PohRecorder>>)>,
         tpu_address: SocketAddr,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut transactions = HashMap::new();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        let mut recent_peers: HashMap<Pubkey, SocketAddr> = leader_info
+            .as_ref()
+            .map(|cluster_info| {
+                cluster_info
+                    .0
+                    .tpu_peers()
+                    .into_iter()
+                    .map(|ci| (ci.id, ci.tpu))
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -76,6 +97,16 @@ impl SendTransactionService {
                 }
 
                 if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
+                    let address = leader_info
+                        .as_ref()
+                        .and_then(|recorder| recorder.1.lock().unwrap().leader_after_n_slots(0))
+                        .and_then(|leader| recent_peers.get(&leader))
+                        .unwrap_or(&tpu_address);
+                    Self::send_transaction(
+                        &send_socket,
+                        address,
+                        &transaction_info.wire_transaction,
+                    );
                     if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
                         transactions.insert(transaction_info.signature, transaction_info);
                     } else {
@@ -102,6 +133,17 @@ impl SendTransactionService {
                         );
                     }
                     last_status_check = Instant::now();
+                    recent_peers = leader_info
+                        .as_ref()
+                        .map(|cluster_info| {
+                            cluster_info
+                                .0
+                                .tpu_peers()
+                                .into_iter()
+                                .map(|ci| (ci.id, ci.tpu))
+                                .collect()
+                        })
+                        .unwrap_or_default();
                 }
             })
             .unwrap()
@@ -203,7 +245,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
 
         let send_tranaction_service =
-            SendTransactionService::new(&cluster_info, &bank_forks, &exit);
+            SendTransactionService::new(&cluster_info, &bank_forks, None, &exit);
 
         exit.store(true, Ordering::Relaxed);
         send_tranaction_service.join().unwrap();
@@ -211,8 +253,6 @@ mod test {
 
     #[test]
     fn process_transactions() {
-        solana_logger::setup();
-
         let (bank_forks, mint_keypair, _voting_keypair) = new_bank_forks();
         let cluster_info = ClusterInfo::default();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
