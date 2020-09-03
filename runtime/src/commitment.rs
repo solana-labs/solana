@@ -1,6 +1,7 @@
+use crate::bank::Bank;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
@@ -43,7 +44,7 @@ pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     /// Cache slot details. Cluster data is calculated from the block_commitment map, and cached in
     /// the struct to avoid the expense of recalculating on every call.
-    commitment_slots: CommitmentSlots,
+    commitment_banks: CommitmentBanks,
     /// Total stake active during the bank's epoch
     total_stake: u64,
 }
@@ -55,9 +56,9 @@ impl std::fmt::Debug for BlockCommitmentCache {
             .field("total_stake", &self.total_stake)
             .field(
                 "bank",
-                &format_args!("Bank({{current_slot: {:?}}})", self.commitment_slots.slot),
+                &format_args!("Bank({{current_slot: {:?}}})", self.commitment_banks.slot()),
             )
-            .field("root", &self.commitment_slots.root)
+            .field("root", &self.commitment_banks.root_slot())
             .finish()
     }
 }
@@ -66,12 +67,12 @@ impl BlockCommitmentCache {
     pub fn new(
         block_commitment: HashMap<Slot, BlockCommitment>,
         total_stake: u64,
-        commitment_slots: CommitmentSlots,
+        commitment_banks: CommitmentBanks,
     ) -> Self {
         Self {
             block_commitment,
             total_stake,
-            commitment_slots,
+            commitment_banks,
         }
     }
 
@@ -84,23 +85,23 @@ impl BlockCommitmentCache {
     }
 
     pub fn slot(&self) -> Slot {
-        self.commitment_slots.slot
+        self.commitment_banks.slot()
     }
 
     pub fn root(&self) -> Slot {
-        self.commitment_slots.root
+        self.commitment_banks.root_slot()
     }
 
     pub fn highest_confirmed_slot(&self) -> Slot {
-        self.commitment_slots.highest_confirmed_slot
+        self.commitment_banks.highest_confirmed_slot()
     }
 
     pub fn highest_confirmed_root(&self) -> Slot {
-        self.commitment_slots.highest_confirmed_root
+        self.commitment_banks.highest_confirmed_root_slot()
     }
 
     pub fn commitment_slots(&self) -> CommitmentSlots {
-        self.commitment_slots
+        self.commitment_banks.commitment_slots()
     }
 
     pub fn highest_gossip_confirmed_slot(&self) -> Slot {
@@ -128,7 +129,7 @@ impl BlockCommitmentCache {
                 }
             }
         }
-        self.commitment_slots.root
+        self.commitment_banks.root_slot()
     }
 
     pub fn calculate_highest_confirmed_slot(&self) -> Slot {
@@ -165,32 +166,32 @@ impl BlockCommitmentCache {
         }
     }
 
-    pub fn new_for_tests_with_slots(slot: Slot, root: Slot) -> Self {
+    pub fn new_for_tests_with_slots(bank: Arc<Bank>, root: Arc<Bank>) -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
         Self {
             block_commitment,
             total_stake: 42,
-            commitment_slots: CommitmentSlots {
-                slot,
-                root,
-                highest_confirmed_slot: root,
-                highest_confirmed_root: root,
+            commitment_banks: CommitmentBanks {
+                bank,
+                root: Some(root.clone()),
+                highest_confirmed_slot: Some(root.clone()),
+                highest_confirmed_root: Some(root),
             },
         }
     }
 
-    pub fn set_highest_confirmed_slot(&mut self, slot: Slot) {
-        self.commitment_slots.highest_confirmed_slot = slot;
+    pub fn set_highest_confirmed_slot(&mut self, bank: Arc<Bank>) {
+        self.commitment_banks.highest_confirmed_slot = Some(bank);
     }
 
-    pub fn set_highest_confirmed_root(&mut self, root: Slot) {
-        self.commitment_slots.highest_confirmed_root = root;
+    pub fn set_highest_confirmed_root(&mut self, root: Arc<Bank>) {
+        self.commitment_banks.highest_confirmed_root = Some(root);
     }
 
-    pub fn initialize_slots(&mut self, slot: Slot) {
-        self.commitment_slots.slot = slot;
-        self.commitment_slots.root = slot;
+    pub fn initialize_slots(&mut self, bank: Arc<Bank>) {
+        self.commitment_banks.bank = bank.clone();
+        self.commitment_banks.root = Some(bank);
     }
 }
 
@@ -212,6 +213,61 @@ impl CommitmentSlots {
             slot,
             ..Self::default()
         }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct CommitmentBanks {
+    /// The slot of the bank from which all other slots were calculated.
+    pub bank: Arc<Bank>,
+    /// The current node root
+    pub root: Option<Arc<Bank>>,
+    /// Highest cluster-confirmed slot
+    pub highest_confirmed_slot: Option<Arc<Bank>>,
+    /// Highest cluster-confirmed root
+    pub highest_confirmed_root: Option<Arc<Bank>>,
+}
+
+impl CommitmentBanks {
+    pub fn new_from_bank(bank: Arc<Bank>) -> Self {
+        Self {
+            bank,
+            ..Self::default()
+        }
+    }
+
+    pub fn commitment_slots(&self) -> CommitmentSlots {
+        CommitmentSlots {
+            slot: self.slot(),
+            root: self.root_slot(),
+            highest_confirmed_slot: self.highest_confirmed_slot(),
+            highest_confirmed_root: self.highest_confirmed_root_slot(),
+        }
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.bank.slot()
+    }
+
+    pub fn root_slot(&self) -> Slot {
+        self.root
+            .as_ref()
+            .map(|bank| bank.slot())
+            .unwrap_or(u64::MAX)
+    }
+
+    pub fn highest_confirmed_slot(&self) -> Slot {
+        self.highest_confirmed_slot
+            .as_ref()
+            .map(|bank| bank.slot())
+            .unwrap_or(u64::MAX)
+    }
+
+    pub fn highest_confirmed_root_slot(&self) -> Slot {
+        self.highest_confirmed_root
+            .as_ref()
+            .map(|bank| bank.slot())
+            .unwrap_or(u64::MAX)
     }
 }
 

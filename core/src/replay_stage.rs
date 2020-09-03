@@ -243,6 +243,7 @@ impl ReplayStage {
             &exit,
             block_commitment_cache.clone(),
             subscriptions.clone(),
+            bank_forks.clone(),
         );
 
         #[allow(clippy::cognitive_complexity)]
@@ -2495,8 +2496,12 @@ pub(crate) mod tests {
             bank_forks.clone(),
             block_commitment_cache.clone(),
         ));
-        let (lockouts_sender, _) =
-            AggregateCommitmentService::new(&exit, block_commitment_cache.clone(), subscriptions);
+        let (lockouts_sender, _) = AggregateCommitmentService::new(
+            &exit,
+            block_commitment_cache.clone(),
+            subscriptions,
+            bank_forks.clone(),
+        );
 
         assert!(block_commitment_cache
             .read()

@@ -7,7 +7,7 @@ use solana_banks_interface::{Banks, BanksRequest, BanksResponse, TransactionStat
 use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
-    commitment::{BlockCommitmentCache, CommitmentSlots},
+    commitment::{BlockCommitmentCache, CommitmentBanks},
     send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_sdk::{
@@ -84,11 +84,10 @@ impl BanksServer {
     fn new_loopback(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let (transaction_sender, transaction_receiver) = channel();
         let bank = bank_forks.read().unwrap().working_bank();
-        let slot = bank.slot();
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             HashMap::default(),
             0,
-            CommitmentSlots::new_from_slot(slot),
+            CommitmentBanks::new_from_bank(bank.clone()),
         )));
         Builder::new()
             .name("solana-bank-forks-client".to_string())

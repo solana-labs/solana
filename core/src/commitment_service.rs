@@ -3,6 +3,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::{
     bank::Bank,
+    bank_forks::BankForks,
     commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
 };
 use solana_sdk::clock::Slot;
@@ -54,12 +55,14 @@ impl AggregateCommitmentService {
         exit: &Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         subscriptions: Arc<RpcSubscriptions>,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> (Sender<CommitmentAggregationData>, Self) {
         let (sender, receiver): (
             Sender<CommitmentAggregationData>,
             Receiver<CommitmentAggregationData>,
         ) = channel();
         let exit_ = exit.clone();
+        let bank_forks_ = bank_forks.clone();
         (
             sender,
             Self {
@@ -70,9 +73,13 @@ impl AggregateCommitmentService {
                             break;
                         }
 
-                        if let Err(RecvTimeoutError::Disconnected) =
-                            Self::run(&receiver, &block_commitment_cache, &subscriptions, &exit_)
-                        {
+                        if let Err(RecvTimeoutError::Disconnected) = Self::run(
+                            &receiver,
+                            &block_commitment_cache,
+                            &subscriptions,
+                            &exit_,
+                            &bank_forks_,
+                        ) {
                             break;
                         }
                     })
@@ -86,6 +93,7 @@ impl AggregateCommitmentService {
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
         subscriptions: &Arc<RpcSubscriptions>,
         exit: &Arc<AtomicBool>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<(), RecvTimeoutError> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -104,8 +112,12 @@ impl AggregateCommitmentService {
             }
 
             let mut aggregate_commitment_time = Measure::start("aggregate-commitment-ms");
-            let update_commitment_slots =
-                Self::update_commitment_cache(block_commitment_cache, aggregation_data, ancestors);
+            let update_commitment_slots = Self::update_commitment_cache(
+                block_commitment_cache,
+                aggregation_data,
+                ancestors,
+                bank_forks,
+            );
             aggregate_commitment_time.stop();
             datapoint_info!(
                 "block-commitment-cache",
@@ -127,6 +139,7 @@ impl AggregateCommitmentService {
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
         aggregation_data: CommitmentAggregationData,
         ancestors: Vec<u64>,
+        _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> CommitmentSlots {
         let (block_commitment, rooted_stake) =
             Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
@@ -242,9 +255,8 @@ impl AggregateCommitmentService {
 mod tests {
     use super::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::{
-        bank_forks::BankForks,
-        genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
+    use solana_runtime::genesis_utils::{
+        create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{pubkey::Pubkey, signature::Signer};
     use solana_stake_program::stake_state;
@@ -548,6 +560,7 @@ mod tests {
             &working_bank,
         );
         let ancestors = working_bank.status_cache_ancestors();
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
             CommitmentAggregationData {
@@ -556,22 +569,29 @@ mod tests {
                 total_stake: 100,
             },
             ancestors,
+            &bank_forks,
         );
         let highest_confirmed_root = block_commitment_cache
             .read()
             .unwrap()
             .highest_confirmed_root();
-        bank_forks.set_root(root, &None, Some(highest_confirmed_root));
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(root, &None, Some(highest_confirmed_root));
+        assert!(bank_forks
+            .read()
+            .unwrap()
+            .get(highest_confirmed_root)
+            .is_some());
 
         // Add a forked bank. Because the vote for bank 33 landed in the non-ancestor, the vote
         // account's root (and thus the highest_confirmed_root) rolls back to slot 1
-        let bank33 = bank_forks.get(33).unwrap();
-        let bank35 = Bank::new_from_parent(bank33, &Pubkey::default(), 35);
-        bank_forks.insert(bank35);
+        let bank33 = bank_forks.read().unwrap().get(33).cloned().unwrap();
+        let bank35 = Bank::new_from_parent(&bank33, &Pubkey::default(), 35);
+        bank_forks.write().unwrap().insert(bank35);
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let ancestors = working_bank.status_cache_ancestors();
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
@@ -581,19 +601,23 @@ mod tests {
                 total_stake: 100,
             },
             ancestors,
+            &bank_forks,
         );
         let highest_confirmed_root = block_commitment_cache
             .read()
             .unwrap()
             .highest_confirmed_root();
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+        assert!(bank_forks
+            .read()
+            .unwrap()
+            .get(highest_confirmed_root)
+            .is_some());
 
         // Add additional banks beyond lockout built on the new fork to ensure that behavior
         // continues normally
         for x in 35..=37 {
-            let previous_bank = bank_forks.get(x).unwrap();
-            let bank = Bank::new_from_parent(previous_bank, &Pubkey::default(), x + 1);
+            let previous_bank = bank_forks.read().unwrap().get(x).cloned().unwrap();
+            let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
             let vote = vote_transaction::new_vote_transaction(
                 vec![x],
                 previous_bank.hash(),
@@ -604,10 +628,10 @@ mod tests {
                 None,
             );
             bank.process_transaction(&vote).unwrap();
-            bank_forks.insert(bank);
+            bank_forks.write().unwrap().insert(bank);
         }
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.read().unwrap().working_bank();
         let root = get_vote_account_root_slot(
             validator_vote_keypairs.vote_keypair.pubkey(),
             &working_bank,
@@ -621,13 +645,20 @@ mod tests {
                 total_stake: 100,
             },
             ancestors,
+            &bank_forks,
         );
         let highest_confirmed_root = block_commitment_cache
             .read()
             .unwrap()
             .highest_confirmed_root();
-        bank_forks.set_root(root, &None, Some(highest_confirmed_root));
-        let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
-        assert!(highest_confirmed_root_bank.is_some());
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(root, &None, Some(highest_confirmed_root));
+        assert!(bank_forks
+            .read()
+            .unwrap()
+            .get(highest_confirmed_root)
+            .is_some());
     }
 }
