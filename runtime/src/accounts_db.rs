@@ -1426,9 +1426,18 @@ impl AccountsDB {
 
     fn get_blake3_slot(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
+<<<<<<< HEAD
             OperatingMode::Development => std::u64::MAX,
             OperatingMode::Stable => std::u64::MAX,
             OperatingMode::Preview => std::u64::MAX,
+=======
+            // Epoch 400
+            OperatingMode::Development => 3_276_800,
+            // Epoch 78
+            OperatingMode::Stable => 33_696_000,
+            // Epoch 95
+            OperatingMode::Preview => 35_516_256,
+>>>>>>> a13efc52b... Add unlock epochs for blake3 (#12054)
         }
     }
 
