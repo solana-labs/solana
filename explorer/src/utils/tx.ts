@@ -74,7 +74,7 @@ export function addressLabel(
     PROGRAM_IDS[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
-    SYSVAR_ID[address] ||    
+    SYSVAR_ID[address] ||
     TokenRegistry.get(address, cluster)?.name ||
     SerumMarketRegistry.get(address, cluster)
   );
@@ -138,11 +138,6 @@ export function isSerumInstruction(instruction: TransactionInstruction) {
   return instruction.programId.toBase58() === EXTERNAL_PROGRAMS["Serum"];
 }
 
-type ParsedSerumInstruction = {
-  code: number;
-  operation: string;
-};
-
 const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   0: "Initialize Market",
   1: "New Order",
@@ -155,19 +150,16 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   8: "Sweep Fees",
 };
 
-export function parseSerumInstruction(
+export function parseSerumInstructionTitle(
   instruction: TransactionInstruction
-): ParsedSerumInstruction {
-  const code = instruction.data.slice(1, 5).readUInt32LE(0);
+): string {
+  try {
+    const code = instruction.data.slice(1, 5).readUInt32LE(0);
 
-  let operation = "Unknown";
+    if (code in SERUM_CODE_LOOKUP) {
+      return SERUM_CODE_LOOKUP[code];
+    }
+  } catch (error) {}
 
-  if (code in SERUM_CODE_LOOKUP) {
-    operation = SERUM_CODE_LOOKUP[code];
-  }
-
-  return {
-    code,
-    operation,
-  };
+  return "Unknown";
 }
