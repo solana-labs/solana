@@ -2906,7 +2906,7 @@ impl Bank {
 
     fn reconfigure_token2_native_mint(self: &mut Bank) {
         let reconfigure_token2_native_mint = match self.operating_mode() {
-            OperatingMode::Development => true,
+            OperatingMode::Development => self.epoch() == 317,
             OperatingMode::Preview => self.epoch() == 95,
             OperatingMode::Stable => self.epoch() == 75,
         };
@@ -7844,7 +7844,7 @@ mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
         consumed_budgets.sort();
-        assert_eq!(consumed_budgets, vec![0, 1, 9]);
+        assert_eq!(consumed_budgets, vec![0, 1, 8]);
     }
 
     #[test]
@@ -7945,14 +7945,6 @@ mod tests {
 
         let mut genesis_config =
             create_genesis_config_with_leader(5, &Pubkey::new_rand(), 0).genesis_config;
-
-        // OperatingMode::Development - Native mint exists immediately
-        assert_eq!(genesis_config.operating_mode, OperatingMode::Development);
-        let bank = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
-            1000000000
-        );
 
         // OperatingMode::Preview - Native mint blinks into existence at epoch 95
         genesis_config.operating_mode = OperatingMode::Preview;
