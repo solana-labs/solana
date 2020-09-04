@@ -1,4 +1,5 @@
 pub mod bank_forks_utils;
+pub mod bigtable_upload;
 pub mod block_error;
 #[macro_use]
 pub mod blockstore;
