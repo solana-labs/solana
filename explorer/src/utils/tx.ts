@@ -16,6 +16,7 @@ import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 
 export type ProgramName =
+  | "Break Solana Program"
   | "Budget Program"
   | "Config Program"
   | "Exchange Program"
@@ -27,6 +28,7 @@ export type ProgramName =
   | "SPL Token Program";
 
 export const PROGRAM_IDS: { [key: string]: ProgramName } = {
+  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: "Break Solana Program",
   Budget1111111111111111111111111111111111111: "Budget Program",
   Config1111111111111111111111111111111111111: "Config Program",
   Exchange11111111111111111111111111111111111: "Exchange Program",
