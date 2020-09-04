@@ -20,7 +20,7 @@ pub async fn upload_confirmed_blocks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire upload");
 
-    info!("Loading ledger slots...");
+    info!("Loading ledger slots starting at {}...", starting_slot);
     let blockstore_slots: Vec<_> = blockstore
         .slot_meta_iterator(starting_slot)
         .map_err(|err| {
@@ -40,8 +40,11 @@ pub async fn upload_confirmed_blocks(
         .collect();
 
     if blockstore_slots.is_empty() {
-        info!("Ledger has no slots in the specified range");
-        return Ok(());
+        return Err(format!(
+            "Ledger has no slots from {} to {:?}",
+            starting_slot, ending_slot
+        )
+        .into());
     }
 
     info!(
