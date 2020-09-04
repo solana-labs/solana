@@ -1,5 +1,5 @@
+use crate::commitment::BlockCommitmentCache;
 use solana_ledger::blockstore::Blockstore;
-use solana_runtime::commitment::BlockCommitmentCache;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -49,12 +49,12 @@ impl BigTableUploadService {
                 break;
             }
 
-            let max_confirmed_root = block_commitment_cache
+            let largest_confirmed_root = block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root();
+                .largest_confirmed_root();
 
-            if max_confirmed_root == starting_slot {
+            if largest_confirmed_root == starting_slot {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;
             }
@@ -63,13 +63,13 @@ impl BigTableUploadService {
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 starting_slot,
-                Some(max_confirmed_root),
+                Some(largest_confirmed_root),
                 true,
                 exit.clone(),
             ));
 
             match result {
-                Ok(()) => starting_slot = max_confirmed_root,
+                Ok(()) => starting_slot = largest_confirmed_root,
                 Err(err) => {
                     warn!("bigtable: upload_confirmed_blocks: {}", err);
                     std::thread::sleep(std::time::Duration::from_secs(2));
