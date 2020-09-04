@@ -1428,7 +1428,8 @@ impl AccountsDB {
             OperatingMode::Development => 3_276_800,
             // Epoch 78
             OperatingMode::Stable => 33_696_000,
-            OperatingMode::Preview => std::u64::MAX,
+            // Epoch 95
+            OperatingMode::Preview => 35_516_256,
         }
     }
 
