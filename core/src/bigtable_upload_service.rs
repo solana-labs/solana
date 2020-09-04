@@ -54,11 +54,16 @@ impl BigTableUploadService {
                 .unwrap()
                 .highest_confirmed_root();
 
+            if max_confirmed_root == starting_slot {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
+
             let result = runtime.block_on(solana_ledger::bigtable_upload::upload_confirmed_blocks(
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 starting_slot,
-                None,
+                Some(max_confirmed_root),
                 true,
             ));
 
