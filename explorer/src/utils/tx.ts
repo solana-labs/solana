@@ -156,10 +156,12 @@ export function parseSerumInstructionTitle(
   try {
     const code = instruction.data.slice(1, 5).readUInt32LE(0);
 
-    if (code in SERUM_CODE_LOOKUP) {
-      return SERUM_CODE_LOOKUP[code];
+    if (!(code in SERUM_CODE_LOOKUP)) {
+      throw new Error(`Unrecognized Serum instruction code: ${code}`);
     }
-  } catch (error) {}
 
-  return "Unknown";
+    return SERUM_CODE_LOOKUP[code];
+  } catch (error) {
+    throw error;
+  }
 }

@@ -429,7 +429,7 @@ function InstructionsSection({ signature }: SignatureProps) {
         );
       }
 
-      const props = { ix, result, index };
+      const props = { ix, result, index, signature };
       if (SystemProgram.programId.equals(ix.programId)) {
         return <SystemDetailsCard key={index} {...props} />;
       } else if (StakeProgram.programId.equals(ix.programId)) {
