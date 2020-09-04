@@ -1,13 +1,13 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
-    rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult},
+    rpc_response::{Response as RpcResponse, RpcKeyedAccount, RpcSignatureResult, SlotInfo},
 };
 #[cfg(test)]
 use solana_runtime::bank_forks::BankForks;
@@ -361,8 +361,12 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
+<<<<<<< HEAD
     use solana_budget_program::{self, budget_instruction};
     use solana_client::rpc_response::ProcessedSignatureResult;
+=======
+    use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
+>>>>>>> 39246f9dd... Revert signature-notification format change (#12032)
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -444,7 +448,7 @@ mod tests {
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
         let expected_res =
-            RpcSignatureResult::ProcessedSignatureResult(ProcessedSignatureResult { err: None });
+            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: None });
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",
@@ -476,7 +480,8 @@ mod tests {
             .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res = RpcSignatureResult::ReceivedSignature;
+        let expected_res =
+            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",
