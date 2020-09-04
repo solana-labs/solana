@@ -2908,7 +2908,7 @@ pub mod tests {
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
-        assert_eq!(largest_accounts.len(), 20);
+        assert_eq!(largest_accounts.len(), 19);
 
         // Get Alice balance
         let req = format!(
@@ -2945,7 +2945,7 @@ pub mod tests {
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
-        assert_eq!(largest_accounts.len(), 19);
+        assert_eq!(largest_accounts.len(), 18);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{"filter":"nonCirculating"}]}"#;
         let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
@@ -5023,7 +5023,7 @@ pub mod tests {
             .expect("actual response deserialization");
         let accounts: Vec<RpcKeyedAccount> =
             serde_json::from_value(result["result"].clone()).unwrap();
-        assert_eq!(accounts.len(), 4);
+        assert_eq!(accounts.len(), 3);
 
         // Test returns only mint accounts
         let req = format!(
