@@ -10,9 +10,10 @@ use solana_clap_utils::{
     commitment::commitment_arg, input_parsers::*, input_validators::*, keypair::signer_from_path,
 };
 use solana_client::{
-    pubsub_client::{PubsubClient, SlotInfoMessage},
+    pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
+    rpc_response::SlotInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1033,7 +1034,7 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
     })?;
     */
 
-    let mut current: Option<SlotInfoMessage> = None;
+    let mut current: Option<SlotInfo> = None;
     let mut message = "".to_string();
 
     let slot_progress = new_spinner_progress_bar();
