@@ -1,7 +1,4 @@
-use solana_client::{
-    pubsub_client::{PubsubClient, SlotInfoMessage},
-    rpc_client::RpcClient,
-};
+use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
 use solana_core::{
     rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
     validator::TestValidator,
@@ -105,7 +102,7 @@ fn test_slot_subscription() {
     let (mut client, receiver) =
         PubsubClient::slot_subscribe(&format!("ws://0.0.0.0:{}/", pubsub_addr.port())).unwrap();
 
-    let mut errors: Vec<(SlotInfoMessage, SlotInfoMessage)> = Vec::new();
+    let mut errors: Vec<(SlotInfo, SlotInfo)> = Vec::new();
 
     for i in 0..3 {
         subscriptions.notify_slot(i + 1, i, i);
@@ -114,7 +111,7 @@ fn test_slot_subscription() {
 
         match maybe_actual {
             Ok(actual) => {
-                let expected = SlotInfoMessage {
+                let expected = SlotInfo {
                     slot: i + 1,
                     parent: i,
                     root: i,

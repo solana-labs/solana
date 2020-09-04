@@ -94,17 +94,30 @@ pub struct RpcKeyedAccount {
     pub account: UiAccount,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct SlotInfo {
+    pub slot: Slot,
+    pub parent: Slot,
+    pub root: Slot,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase", tag = "type", content = "result")]
+#[serde(rename_all = "camelCase", untagged)]
 pub enum RpcSignatureResult {
-    ProcessedSignatureResult(ProcessedSignatureResult),
-    ReceivedSignature,
+    ProcessedSignature(ProcessedSignatureResult),
+    ReceivedSignature(ReceivedSignatureResult),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessedSignatureResult {
     pub err: Option<TransactionError>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum ReceivedSignatureResult {
+    ReceivedSignature,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

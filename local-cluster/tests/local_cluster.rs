@@ -3,8 +3,7 @@ use gag::BufferRedirect;
 use log::*;
 use serial_test_derive::serial;
 use solana_client::{
-    pubsub_client::{PubsubClient, SignatureResult},
-    rpc_client::RpcClient,
+    pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::RpcSignatureResult,
     thin_client::create_client,
 };
 use solana_core::{
@@ -179,11 +178,11 @@ fn test_local_cluster_signature_subscribe() {
         let mut should_break = false;
         for response in responses {
             match response.value {
-                SignatureResult::ProcessedSignatureResult(_) => {
+                RpcSignatureResult::ProcessedSignature(_) => {
                     should_break = true;
                     break;
                 }
-                SignatureResult::ReceivedSignature => {
+                RpcSignatureResult::ReceivedSignature(_) => {
                     got_received_notification = true;
                 }
             }
