@@ -21,6 +21,8 @@ sha2 = "0.8.2"
 flate2 = "1.0.14"
 zstd = "0.5.1"
 fs_extra = "1.1.0"
+futures = "0.3.5"
+futures-util = "0.3.5"
 itertools = "0.9.0"
 libc = "0.2.70"
 log = { version = "0.4.8" }
@@ -44,6 +46,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.2.27" }
 solana-runtime = { path = "../runtime", version = "1.2.27" }
 solana-sdk = { path = "../sdk", version = "1.2.27" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.27" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "1.2.27" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.27" }
 symlink = "0.1.0"
 tar = "0.4.28"
