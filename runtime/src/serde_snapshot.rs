@@ -15,7 +15,7 @@ use {
         de::{DeserializeOwned, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
     },
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, genesis_config::OperatingMode},
     std::{
         cmp::min,
         collections::HashMap,
@@ -104,6 +104,7 @@ pub fn bankrc_from_stream<R, P>(
     slot: Slot,
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
+    operating_mode: OperatingMode,
 ) -> std::result::Result<BankRc, IoError>
 where
     R: Read,
@@ -116,6 +117,7 @@ where
                     $x::deserialize_accounts_db_fields(stream)?,
                     account_paths,
                     stream_append_vecs_path,
+                    operating_mode,
                 )?),
                 slot,
             ))
@@ -190,12 +192,13 @@ fn context_accountsdb_from_fields<'a, C, P>(
     account_db_fields: AccountDBFields<C::SerializableAccountStorageEntry>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
+    operating_mode: OperatingMode,
 ) -> Result<AccountsDB, IoError>
 where
     C: TypeContext<'a>,
     P: AsRef<Path>,
 {
-    let accounts_db = AccountsDB::new(account_paths.to_vec());
+    let accounts_db = AccountsDB::new(account_paths.to_vec(), operating_mode);
 
     let AccountDBFields(storage, version, slot, bank_hash_info) = account_db_fields;
 
