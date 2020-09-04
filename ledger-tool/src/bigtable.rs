@@ -8,7 +8,12 @@ use solana_cli::display::println_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::UiTransactionEncoding;
-use std::{path::Path, process::exit, result::Result, sync::Arc};
+use std::{
+    path::Path,
+    process::exit,
+    result::Result,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 async fn upload(
     blockstore: Blockstore,
@@ -26,6 +31,7 @@ async fn upload(
         starting_slot,
         ending_slot,
         allow_missing_metadata,
+        Arc::new(AtomicBool::new(false)),
     )
     .await
 }

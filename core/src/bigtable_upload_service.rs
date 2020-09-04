@@ -65,6 +65,7 @@ impl BigTableUploadService {
                 starting_slot,
                 Some(max_confirmed_root),
                 true,
+                exit.clone(),
             ));
 
             match result {
