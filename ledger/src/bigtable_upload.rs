@@ -139,7 +139,7 @@ pub async fn upload_confirmed_blocks(
                         }
                     };
 
-                    if i % NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL == 0 {
+                    if i > 0 && i % NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL == 0 {
                         info!(
                             "{}% of blocks processed ({}/{})",
                             i * 100 / blocks_to_upload.len(),
