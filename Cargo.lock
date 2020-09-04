@@ -3855,6 +3855,8 @@ dependencies = [
  "dlopen_derive",
  "ed25519-dalek",
  "fs_extra",
+ "futures 0.3.5",
+ "futures-util",
  "itertools 0.9.0",
  "lazy_static",
  "libc",
@@ -3880,10 +3882,12 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.4.0",
  "solana-stake-program",
+ "solana-storage-bigtable",
  "solana-transaction-status",
  "solana-vote-program",
  "tempfile",
  "thiserror",
+ "tokio 0.2.22",
  "trees",
 ]
 
