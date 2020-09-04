@@ -325,7 +325,7 @@ type LeaderSchedule = {
 
 const GetLeaderScheduleResult = struct.record([
   'string',
-  struct.array(['number']),
+  'any', // validating struct.array(['number']) is extremely slow
 ]);
 
 /**
