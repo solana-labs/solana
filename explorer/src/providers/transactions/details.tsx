@@ -58,7 +58,6 @@ async function fetchDetails(
     transaction = await new Connection(url).getParsedConfirmedTransaction(
       signature
     );
-
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
