@@ -1,9 +1,10 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, poh_recorder::PohRecorder, rpc::*,
-    rpc_health::*, send_transaction_service::LeaderInfo,
-    send_transaction_service::SendTransactionService, validator::ValidatorExit,
+    bigtable_upload_service::BigTableUploadService, cluster_info::ClusterInfo,
+    commitment::BlockCommitmentCache, poh_recorder::PohRecorder, rpc::*, rpc_health::*,
+    send_transaction_service::LeaderInfo, send_transaction_service::SendTransactionService,
+    validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{
@@ -272,22 +273,36 @@ impl JsonRpcService {
             .build()
             .expect("Runtime");
 
-        let bigtable_ledger_storage =
+        let exit_bigtable_ledger_upload_service = Arc::new(AtomicBool::new(false));
+
+        let (bigtable_ledger_storage, _bigtable_ledger_upload_service) =
             if config.enable_bigtable_ledger_storage || config.enable_bigtable_ledger_upload {
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new(
                         config.enable_bigtable_ledger_upload,
                     ))
-                    .map(|x| {
+                    .map(|bigtable_ledger_storage| {
                         info!("BigTable ledger storage initialized");
-                        Some(x)
+
+                        let bigtable_ledger_upload_service = Arc::new(BigTableUploadService::new(
+                            runtime.handle().clone(),
+                            bigtable_ledger_storage.clone(),
+                            blockstore.clone(),
+                            block_commitment_cache.clone(),
+                            exit_bigtable_ledger_upload_service.clone(),
+                        ));
+
+                        (
+                            Some(bigtable_ledger_storage),
+                            Some(bigtable_ledger_upload_service),
+                        )
                     })
                     .unwrap_or_else(|err| {
                         error!("Failed to initialize BigTable ledger storage: {:?}", err);
-                        None
+                        (None, None)
                     })
             } else {
-                None
+                (None, None)
             };
 
         let request_processor = JsonRpcRequestProcessor::new(
@@ -349,6 +364,7 @@ impl JsonRpcService {
                 close_handle_sender.send(server.close_handle()).unwrap();
                 server.wait();
                 exit_send_transaction_service.store(true, Ordering::Relaxed);
+                exit_bigtable_ledger_upload_service.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
