@@ -63,8 +63,6 @@ pub async fn upload_confirmed_blocks(
         blockstore_slots.last().unwrap()
     );
 
-    let mut blockstore_slots_with_no_confirmed_block = HashSet::new();
-
     // Gather the blocks that are already present in bigtable, by slot
     let bigtable_slots = {
         let mut bigtable_slots = vec![];
@@ -106,9 +104,6 @@ pub async fn upload_confirmed_blocks(
         let bigtable_slots = bigtable_slots.into_iter().collect::<HashSet<_>>();
 
         let mut blocks_to_upload = blockstore_slots
-            .difference(&blockstore_slots_with_no_confirmed_block)
-            .cloned()
-            .collect::<HashSet<_>>()
             .difference(&bigtable_slots)
             .cloned()
             .collect::<Vec<_>>();
@@ -187,7 +182,6 @@ pub async fn upload_confirmed_blocks(
 
         let uploads = blocks.into_iter().filter_map(|(slot, block)| match block {
             None => {
-                blockstore_slots_with_no_confirmed_block.insert(slot);
                 num_blocks -= 1;
                 None
             }
