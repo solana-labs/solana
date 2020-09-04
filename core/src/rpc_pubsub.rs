@@ -361,12 +361,8 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-<<<<<<< HEAD
     use solana_budget_program::{self, budget_instruction};
-    use solana_client::rpc_response::ProcessedSignatureResult;
-=======
     use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
->>>>>>> 39246f9dd... Revert signature-notification format change (#12032)
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
