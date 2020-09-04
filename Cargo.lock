@@ -3440,6 +3440,8 @@ dependencies = [
  "chrono",
  "clap",
  "rpassword",
+ "serde",
+ "serde_json",
  "solana-remote-wallet",
  "solana-sdk 1.4.0",
  "thiserror",

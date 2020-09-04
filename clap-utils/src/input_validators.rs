@@ -257,6 +257,32 @@ where
         .map(|_| ())
 }
 
+pub fn is_rpc_limit<T, R>(endpoint_limit: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+    R: serde::de::DeserializeOwned,
+{
+    let parts: Vec<_> = endpoint_limit.as_ref().split(':').collect();
+    if parts.len() < 2 {
+        return Err("Expected : between RPC_ENDPOINT and LIMIT>".to_string());
+    }
+    let _endpoint = serde_json::to_value(parts[0])
+        .and_then(serde_json::from_value::<R>)
+        .map_err(|e| {
+            format!(
+                "Unable to parse input endpoint, provided: {}, err: {}",
+                parts[0], e
+            )
+        })?;
+    let _limit: usize = parts[1].parse().map_err(|e| {
+        format!(
+            "Unable to parse input limit, provided: {}, err: {}",
+            parts[1], e
+        )
+    })?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

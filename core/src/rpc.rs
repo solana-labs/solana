@@ -75,6 +75,16 @@ use std::{
 };
 use tokio::runtime;
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcConfigurableEndpoint {
+    GetConfirmedBlocks,
+    GetConfirmedSignaturesForAddress,
+    GetConfirmedSignaturesForAddress2,
+    GetMultipleAccounts,
+    GetSignatureStatuses,
+}
+
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
     Response { context, value }
@@ -99,6 +109,7 @@ pub struct JsonRpcConfig {
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
+    pub configured_limits: HashMap<RpcConfigurableEndpoint, usize>,
 }
 
 #[derive(Clone)]
@@ -643,10 +654,13 @@ impl JsonRpcRequestProcessor {
         if end_slot < start_slot {
             return Ok(vec![]);
         }
-        if end_slot - start_slot > MAX_GET_CONFIRMED_BLOCKS_RANGE {
+        let max_range = self
+            .input_limit(RpcConfigurableEndpoint::GetConfirmedBlocks)
+            .unwrap_or(MAX_GET_CONFIRMED_BLOCKS_RANGE);
+        if end_slot - start_slot > max_range as u64 {
             return Err(Error::invalid_params(format!(
                 "Slot range too large; max {}",
-                MAX_GET_CONFIRMED_BLOCKS_RANGE
+                max_range
             )));
         }
 
@@ -1208,6 +1222,10 @@ impl JsonRpcRequestProcessor {
                 .collect()
         };
         Ok(new_response(&bank, accounts))
+    }
+
+    fn input_limit(&self, endpoint: RpcConfigurableEndpoint) -> Option<usize> {
+        self.config.configured_limits.get(&endpoint).cloned()
     }
 }
 
@@ -1806,10 +1824,13 @@ impl RpcSol for RpcSolImpl {
             "get_multiple_accounts rpc request received: {:?}",
             pubkey_strs.len()
         );
-        if pubkey_strs.len() > MAX_MULTIPLE_ACCOUNTS {
+        let input_limit = meta
+            .input_limit(RpcConfigurableEndpoint::GetMultipleAccounts)
+            .unwrap_or(MAX_MULTIPLE_ACCOUNTS);
+        if pubkey_strs.len() > input_limit {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                MAX_MULTIPLE_ACCOUNTS
+                input_limit
             )));
         }
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -2050,10 +2071,13 @@ impl RpcSol for RpcSolImpl {
             "get_signature_statuses rpc request received: {:?}",
             signature_strs.len()
         );
-        if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
+        let input_limit = meta
+            .input_limit(RpcConfigurableEndpoint::GetSignatureStatuses)
+            .unwrap_or(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS);
+        if signature_strs.len() > input_limit {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS
+                input_limit
             )));
         }
         let mut signatures: Vec<Signature> = vec![];
@@ -2335,10 +2359,13 @@ impl RpcSol for RpcSolImpl {
                 start_slot, end_slot
             )));
         }
-        if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
+        let max_range = meta
+            .input_limit(RpcConfigurableEndpoint::GetConfirmedSignaturesForAddress)
+            .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE);
+        if end_slot - start_slot > max_range as u64 {
             return Err(Error::invalid_params(format!(
                 "Slot range too large; max {}",
-                MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
+                max_range
             )));
         }
         Ok(meta
@@ -2367,14 +2394,16 @@ impl RpcSol for RpcSolImpl {
         } else {
             None
         };
-        let limit = config
-            .limit
+        let max_limit = meta
+            .input_limit(RpcConfigurableEndpoint::GetConfirmedSignaturesForAddress2)
             .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
 
-        if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
+        let limit = config.limit.unwrap_or(max_limit);
+
+        if limit == 0 || limit > max_limit {
             return Err(Error::invalid_params(format!(
                 "Invalid limit; max {}",
-                MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
+                max_limit
             )));
         }
 
@@ -5423,5 +5452,126 @@ pub mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn test_rpc_configured_request_limits() {
+        let RpcHandler {
+            io,
+            mut meta,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(
+            &Pubkey::new_rand(),
+            vec![0, 1, 2, 3, 4, 5],
+            0,
+        );
+        let mut limits = HashMap::new();
+        limits.insert(RpcConfigurableEndpoint::GetConfirmedBlocks, 2);
+        limits.insert(
+            RpcConfigurableEndpoint::GetConfirmedSignaturesForAddress,
+            20_000,
+        );
+        limits.insert(
+            RpcConfigurableEndpoint::GetConfirmedSignaturesForAddress2,
+            2,
+        );
+        limits.insert(RpcConfigurableEndpoint::GetMultipleAccounts, 2);
+        limits.insert(RpcConfigurableEndpoint::GetSignatureStatuses, 2);
+        meta.config.configured_limits = limits;
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_highest_confirmed_root(8);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,3]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[1,3]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["result"].as_array().unwrap();
+
+        let pubkey = Pubkey::new_rand();
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["{}", 0, 20001]}}"#,
+            pubkey
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["{}", 1, 20001]}}"#,
+            pubkey
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["result"].as_array().unwrap();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["{}", {{"limit":3}}]}}"#,
+            pubkey
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["{}", {{"limit":2}}]}}"#,
+            pubkey
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["result"].as_array().unwrap();
+
+        let pubkey2 = Pubkey::new_rand();
+        let pubkey3 = Pubkey::new_rand();
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[["{}", "{}", "{}"]]}}"#,
+            pubkey, pubkey2, pubkey3,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts","params":[["{}", "{}"]]}}"#,
+            pubkey, pubkey2,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["result"]["value"].as_array().unwrap();
+
+        let signature = Signature::new(&[2; 64]);
+        let signature2 = Signature::new(&[2; 64]);
+        let signature3 = Signature::new(&[2; 64]);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}", "{}", "{}"]]}}"#,
+            signature, signature2, signature3,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["error"].as_object().unwrap();
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}", "{}"]]}}"#,
+            signature, signature2,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        result["result"]["value"].as_array().unwrap();
     }
 }

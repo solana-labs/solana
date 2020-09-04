@@ -5,9 +5,10 @@ use clap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
-    input_parsers::{keypair_of, keypairs_of, pubkey_of},
+    input_parsers::{keypair_of, keypairs_of, pubkey_of, rpc_limits_of},
     input_validators::{
-        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_rpc_limit,
+        is_slot,
     },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
@@ -19,7 +20,7 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    rpc::JsonRpcConfig,
+    rpc::{JsonRpcConfig, RpcConfigurableEndpoint},
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
@@ -515,7 +516,7 @@ pub fn main() {
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
-        .version(solana_version::version!())
+        // .version(solana_version::version!())
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
@@ -678,6 +679,15 @@ pub fn main() {
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
                 .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
+        )
+        .arg(
+            Arg::with_name("set_rpc_limit")
+                .long("set-rpc-limit")
+                .takes_value(true)
+                .validator(is_rpc_limit::<String, RpcConfigurableEndpoint>)
+                .value_name("RPC_ENDPOINT:LIMIT")
+                .multiple(true)
+                .help("Configure an RPC input limit")
         )
         .arg(
             Arg::with_name("signer_addr")
@@ -985,6 +995,7 @@ pub fn main() {
                 "health_check_slot_distance",
                 u64
             ),
+            configured_limits: rpc_limits_of(&matches, "set_rpc_limit"),
         },
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()

@@ -12,7 +12,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature, Signer},
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, hash::Hash, str::FromStr, sync::Arc};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
@@ -186,6 +186,23 @@ pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentC
         "single" => CommitmentConfig::single(),
         _ => CommitmentConfig::default(),
     })
+}
+
+pub fn rpc_limits_of<R>(matches: &ArgMatches<'_>, name: &str) -> HashMap<R, usize>
+where
+    R: serde::de::DeserializeOwned + Eq + Hash,
+{
+    let mut rpc_limits: HashMap<R, usize> = HashMap::new();
+    let endpoint_limit_inputs = matches.values_of(name).unwrap_or_default();
+    for endpoint_limit in endpoint_limit_inputs {
+        let parts: Vec<_> = endpoint_limit.split(':').collect();
+        let endpoint = serde_json::to_value(parts[0])
+            .and_then(serde_json::from_value::<R>)
+            .unwrap();
+        let limit: usize = parts[1].parse().unwrap();
+        rpc_limits.insert(endpoint, limit);
+    }
+    rpc_limits
 }
 
 #[cfg(test)]
