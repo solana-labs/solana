@@ -1,7 +1,8 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, rpc_health::*,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, poh_recorder::PohRecorder, rpc::*,
+    rpc_health::*, send_transaction_service::LeaderInfo,
     send_transaction_service::SendTransactionService, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
@@ -21,7 +22,7 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
 use tokio::runtime;
@@ -237,6 +238,7 @@ impl JsonRpcService {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
+        poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -254,9 +256,12 @@ impl JsonRpcService {
         ));
 
         let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
+        let leader_info =
+            poh_recorder.map(|recorder| LeaderInfo::new(cluster_info.clone(), recorder));
         let send_transaction_service = Arc::new(SendTransactionService::new(
             &cluster_info,
             &bank_forks,
+            leader_info,
             &exit_send_transaction_service,
         ));
 
@@ -418,6 +423,7 @@ mod tests {
             block_commitment_cache,
             blockstore,
             cluster_info,
+            None,
             Hash::default(),
             &PathBuf::from("farf"),
             validator_exit,
