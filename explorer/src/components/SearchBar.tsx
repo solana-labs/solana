@@ -3,7 +3,13 @@ import bs58 from "bs58";
 import { useHistory, useLocation } from "react-router-dom";
 import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
-import { PROGRAM_IDS, SYSVAR_IDS, ProgramName } from "utils/tx";
+import {
+  LOADER_IDS,
+  PROGRAM_IDS,
+  SYSVAR_IDS,
+  ProgramName,
+  LoaderName,
+} from "utils/tx";
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster, useCluster } from "providers/cluster";
 
@@ -87,6 +93,31 @@ function buildProgramOptions(search: string) {
   }
 }
 
+const SEARCHABLE_LOADERS: LoaderName[] = ["BPF Loader", "BPF Loader 2"];
+
+function buildLoaderOptions(search: string) {
+  const matchedLoaders = Object.entries(LOADER_IDS).filter(
+    ([address, name]) => {
+      return (
+        SEARCHABLE_LOADERS.includes(name) &&
+        (name.toLowerCase().includes(search.toLowerCase()) ||
+          address.includes(search))
+      );
+    }
+  );
+
+  if (matchedLoaders.length > 0) {
+    return {
+      label: "Program Loaders",
+      options: matchedLoaders.map(([id, name]) => ({
+        label: name,
+        value: [name, id],
+        pathname: "/address/" + id,
+      })),
+    };
+  }
+}
+
 function buildSysvarOptions(search: string) {
   const matchedSysvars = Object.entries(SYSVAR_IDS).filter(
     ([address, name]) => {
@@ -141,6 +172,11 @@ function buildOptions(search: string, cluster: Cluster) {
   const programOptions = buildProgramOptions(search);
   if (programOptions) {
     options.push(programOptions);
+  }
+
+  const loaderOptions = buildLoaderOptions(search);
+  if (loaderOptions) {
+    options.push(loaderOptions);
   }
 
   const sysvarOptions = buildSysvarOptions(search);

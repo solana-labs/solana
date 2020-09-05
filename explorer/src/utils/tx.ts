@@ -3,7 +3,8 @@ import {
   SystemProgram,
   StakeProgram,
   VOTE_PROGRAM_ID,
-  BpfLoader,
+  BPF_LOADER_PROGRAM_ID,
+  BPF_LOADER_DEPRECATED_PROGRAM_ID,
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SYSVAR_REWARDS_PUBKEY,
@@ -15,19 +16,8 @@ import {
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 
-export type ProgramName =
-  | "Break Solana Program"
-  | "Budget Program"
-  | "Config Program"
-  | "Exchange Program"
-  | "Stake Program"
-  | "Storage Program"
-  | "System Program"
-  | "Vest Program"
-  | "Vote Program"
-  | "SPL Token Program";
-
-export const PROGRAM_IDS: { [key: string]: ProgramName } = {
+export type ProgramName = typeof PROGRAM_IDS[keyof typeof PROGRAM_IDS];
+export const PROGRAM_IDS = {
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: "Break Solana Program",
   Budget1111111111111111111111111111111111111: "Budget Program",
   Config1111111111111111111111111111111111111: "Config Program",
@@ -38,14 +28,15 @@ export const PROGRAM_IDS: { [key: string]: ProgramName } = {
   Vest111111111111111111111111111111111111111: "Vest Program",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
   TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token Program",
-};
+} as const;
 
-const LOADER_IDS = {
+export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
+export const LOADER_IDS = {
   MoveLdr111111111111111111111111111111111111: "Move Loader",
   NativeLoader1111111111111111111111111111111: "Native Loader",
-  [BpfLoader.programId(1).toBase58()]: "BPF Loader",
-  [BpfLoader.programId(2).toBase58()]: "BPF Loader 2",
-};
+  [BPF_LOADER_DEPRECATED_PROGRAM_ID.toBase58()]: "BPF Loader",
+  [BPF_LOADER_PROGRAM_ID.toBase58()]: "BPF Loader 2",
+} as const;
 
 const SYSVAR_ID: { [key: string]: string } = {
   Sysvar1111111111111111111111111111111111111: "SYSVAR",
