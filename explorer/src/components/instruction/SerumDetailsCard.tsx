@@ -19,7 +19,6 @@ export function SerumDetailsCard({
   const { url } = useCluster();
 
   let title;
-
   try {
     title = parseSerumInstructionTitle(ix);
   } catch (error) {
