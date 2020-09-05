@@ -1426,9 +1426,12 @@ impl AccountsDB {
 
     fn get_blake3_slot(operating_mode: OperatingMode) -> Slot {
         match operating_mode {
-            OperatingMode::Development => std::u64::MAX,
-            OperatingMode::Stable => std::u64::MAX,
-            OperatingMode::Preview => std::u64::MAX,
+            // Epoch 400
+            OperatingMode::Development => 3_276_800,
+            // Epoch 78
+            OperatingMode::Stable => 33_696_000,
+            // Epoch 95
+            OperatingMode::Preview => 35_516_256,
         }
     }
 
@@ -3613,7 +3616,7 @@ pub mod tests {
         };
         let account = stored_account.clone_account();
         let expected_account_hash =
-            Hash::from_str("GGTsxvxwnMsNfN6yYbBVQaRgvbVLfxeWnGXNyB8iXDyE").unwrap();
+            Hash::from_str("DoLjP4cYoGFKn4unuxeSjwDkN3bZop8jpGWYfAnwnG5N").unwrap();
 
         assert_eq!(
             AccountsDB::hash_stored_account(
@@ -3638,7 +3641,7 @@ pub mod tests {
         );
 
         let expected_account_hash_with_owner =
-            Hash::from_str("5iRNZVcAnq9JLYjSF2ibFhGEeq48r9Eq9HXxwm3BxywN").unwrap();
+            Hash::from_str("4StuvYHFd7xuShVXB94uHHvpqGMCaacdZnYB74QQkPA1").unwrap();
 
         assert_eq!(
             AccountsDB::hash_stored_account(
