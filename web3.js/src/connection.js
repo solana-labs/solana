@@ -1947,7 +1947,10 @@ export class Connection {
   }
 
   /**
-   * Confirm the transaction identified by the specified signature
+   * Confirm the transaction identified by the specified signature.
+   *
+   * If `confirmations` count is not specified, wait for transaction to be finalized.
+   *
    */
   async confirmTransaction(
     signature: TransactionSignature,
@@ -1960,7 +1963,7 @@ export class Connection {
     for (;;) {
       const status = statusResponse.value;
       if (status) {
-        // Received a status, if not an error wait for confirmation
+        // 'status.confirmations === null' implies that the tx has been finalized
         if (
           status.err ||
           status.confirmations === null ||
