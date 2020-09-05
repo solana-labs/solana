@@ -218,6 +218,7 @@ pub enum CliCommand {
         before: Option<Signature>,
         until: Option<Signature>,
         limit: usize,
+        show_transactions: bool,
     },
     // Nonce commands
     AuthorizeNonceAccount {
@@ -1529,7 +1530,16 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             before,
             until,
             limit,
-        } => process_transaction_history(&rpc_client, config, address, *before, *until, *limit),
+            show_transactions,
+        } => process_transaction_history(
+            &rpc_client,
+            config,
+            address,
+            *before,
+            *until,
+            *limit,
+            *show_transactions,
+        ),
 
         // Nonce Commands
 
