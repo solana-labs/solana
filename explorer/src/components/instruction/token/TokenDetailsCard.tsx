@@ -104,23 +104,30 @@ function TokenInstruction(props: InfoProps) {
     if (value === undefined) continue;
 
     let tag;
+    let labelSuffix = "";
     if (value instanceof PublicKey) {
       tag = <Address pubkey={value} alignRight link />;
     } else if (key === "amount") {
+      let amount;
       if (decimals === undefined) {
-        tag = <>(raw) {value}</>;
+        labelSuffix = " (raw)";
+        amount = new Intl.NumberFormat("en-US").format(value);
       } else {
-        tag = <>{normalizeTokenAmount(value, decimals).toFixed(decimals)}</>;
+        amount = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        }).format(normalizeTokenAmount(value, decimals));
       }
+      tag = <>{amount}</>;
     } else {
       tag = <>{value}</>;
     }
 
-    key = key.charAt(0).toUpperCase() + key.slice(1);
+    let label = key.charAt(0).toUpperCase() + key.slice(1) + labelSuffix;
 
     attributes.push(
       <tr key={key}>
-        <td>{key}</td>
+        <td>{label}</td>
         <td className="text-lg-right">{tag}</td>
       </tr>
     );
