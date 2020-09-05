@@ -424,8 +424,9 @@ impl LedgerStorage {
                     row_key
                 ))
             })?;
-            let cell_data: Vec<TransactionByAddrInfo> =
+            let mut cell_data: Vec<TransactionByAddrInfo> =
                 bigtable::deserialize_cell_data(&data, "tx-by-addr", row_key)?;
+            cell_data.reverse();
             for tx_by_addr_info in cell_data.into_iter() {
                 // Filter out records before `before_transaction_index`
                 if slot == first_slot && tx_by_addr_info.index >= before_transaction_index {
