@@ -1,7 +1,9 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
-    display::{format_labeled_address, new_spinner_progress_bar, println_name_value},
+    display::{
+        format_labeled_address, new_spinner_progress_bar, println_name_value, println_transaction,
+    },
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -33,6 +35,7 @@ use solana_sdk::{
     },
     transaction::Transaction,
 };
+use solana_transaction_status::UiTransactionEncoding;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     net::SocketAddr,
@@ -283,6 +286,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Start with the first signature older than this one"),
                 )
+                .arg(
+                    Arg::with_name("show_transactions")
+                        .long("show-transactions")
+                        .takes_value(false)
+                        .help("Display the full transactions"),
+                )
         )
     }
 }
@@ -454,6 +463,7 @@ pub fn parse_transaction_history(
         None => None,
     };
     let limit = value_t_or_exit!(matches, "limit", usize);
+    let show_transactions = matches.is_present("show_transactions");
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
@@ -461,6 +471,7 @@ pub fn parse_transaction_history(
             before,
             until,
             limit,
+            show_transactions,
         },
         signers: vec![],
     })
@@ -1323,6 +1334,7 @@ pub fn process_transaction_history(
     before: Option<Signature>,
     until: Option<Signature>,
     limit: usize,
+    show_transactions: bool,
 ) -> ProcessResult {
     let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
         address,
@@ -1349,6 +1361,28 @@ pub fn process_transaction_history(
             );
         } else {
             println!("{}", result.signature);
+        }
+
+        if show_transactions {
+            if let Ok(signature) = result.signature.parse::<Signature>() {
+                match rpc_client
+                    .get_confirmed_transaction(&signature, UiTransactionEncoding::Base64)
+                {
+                    Ok(confirmed_transaction) => {
+                        println_transaction(
+                            &confirmed_transaction
+                                .transaction
+                                .transaction
+                                .decode()
+                                .expect("Successful decode"),
+                            &confirmed_transaction.transaction.meta,
+                            "  ",
+                        );
+                    }
+                    Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
+                }
+            }
+            println!();
         }
     }
     Ok(transactions_found)
