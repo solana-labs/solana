@@ -94,9 +94,9 @@ Operate a configured testnet
    --deploy-if-newer                  - Only deploy if newer software is
                                         available (requires -t or -T)
 
-   --operating-mode development|softlaunch
+   --cluster-type development|devnet|testnet|mainnet-beta
                                       - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
-                                        or "softlaunch" mode with some features disabled at epoch 0 (default: development)
+                                        or various other live clusters' feature set (default: development)
    --warp-slot WARP_SLOT              - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -779,12 +779,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --faucet-lamports ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
-    elif [[ $1 = --operating-mode ]]; then
+    elif [[ $1 = --cluster-type ]]; then
       case "$2" in
-        development|softlaunch)
+        development|devnet|testnet|mainnet-beta)
           ;;
         *)
-          echo "Unexpected operating mode: \"$2\""
+          echo "Unexpected cluster type: \"$2\""
           exit 1
           ;;
       esac

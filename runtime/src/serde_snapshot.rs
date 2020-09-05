@@ -21,8 +21,8 @@ use {
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
+        genesis_config::ClusterType,
         genesis_config::GenesisConfig,
-        genesis_config::OperatingMode,
         hard_forks::HardForks,
         hash::Hash,
         inflation::Inflation,
@@ -233,7 +233,7 @@ where
         accounts_db_fields,
         account_paths,
         append_vecs_path,
-        &genesis_config.operating_mode,
+        &genesis_config.cluster_type,
     )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
@@ -247,13 +247,13 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     accounts_db_fields: AccountsDbFields<E>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-    operating_mode: &OperatingMode,
+    cluster_type: &ClusterType,
 ) -> Result<AccountsDB, Error>
 where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let accounts_db = AccountsDB::new(account_paths.to_vec(), operating_mode);
+    let accounts_db = AccountsDB::new(account_paths.to_vec(), cluster_type);
 
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
