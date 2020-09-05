@@ -99,7 +99,7 @@ mod tests {
     use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
-        genesis_config::{GenesisConfig, OperatingMode},
+        genesis_config::{ClusterType, GenesisConfig},
     };
     use solana_stake_program::stake_state::{Authorized, Lockup, Meta, StakeState};
     use std::{collections::BTreeMap, sync::Arc};
@@ -150,7 +150,7 @@ mod tests {
         let genesis_config = GenesisConfig {
             accounts,
             epoch_schedule: EpochSchedule::new(slots_per_epoch),
-            operating_mode: OperatingMode::Stable,
+            cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         };
         let mut bank = Arc::new(Bank::new(&genesis_config));

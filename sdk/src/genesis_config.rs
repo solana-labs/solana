@@ -32,13 +32,14 @@ use std::{
 pub const UNUSED_DEFAULT: u64 = 1024;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, AbiEnumVisitor, AbiExample)]
-pub enum OperatingMode {
-    Preview,     // Next set of cluster features to be promoted to Stable
-    Stable,      // Stable cluster features
-    Development, // All features (including experimental features)
+pub enum ClusterType {
+    Testnet,
+    MainnetBeta,
+    Devnet,
+    Development,
 }
 
-#[frozen_abi(digest = "2KQs7m2DbLxkEx6pY9Z6qwYJAhN2Q4AdoNgUcULmscgB")]
+#[frozen_abi(digest = "AM75NxYJj5s45rtkFV5S1RCHg2kNMgACjTu5HPfEt4Fp")]
 #[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
@@ -65,7 +66,7 @@ pub struct GenesisConfig {
     /// how slots map to epochs
     pub epoch_schedule: EpochSchedule,
     /// network runlevel
-    pub operating_mode: OperatingMode,
+    pub cluster_type: ClusterType,
 }
 
 // useful for basic tests
@@ -101,7 +102,7 @@ impl Default for GenesisConfig {
             fee_rate_governor: FeeRateGovernor::default(),
             rent: Rent::default(),
             epoch_schedule: EpochSchedule::default(),
-            operating_mode: OperatingMode::Development,
+            cluster_type: ClusterType::Development,
         }
     }
 }
@@ -212,7 +213,7 @@ impl fmt::Display for GenesisConfig {
             f,
             "\
              Creation time: {}\n\
-             Operating mode: {:?}\n\
+             Cluster type: {:?}\n\
              Genesis hash: {}\n\
              Shred version: {}\n\
              Ticks per slot: {:?}\n\
@@ -225,7 +226,7 @@ impl fmt::Display for GenesisConfig {
              Capitalization: {} SOL in {} accounts\n\
              ",
             Utc.timestamp(self.creation_time, 0).to_rfc3339(),
-            self.operating_mode,
+            self.cluster_type,
             self.hash(),
             compute_shred_version(&self.hash(), None),
             self.ticks_per_slot,

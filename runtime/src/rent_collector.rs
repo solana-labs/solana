@@ -3,7 +3,7 @@ use solana_sdk::{
     account::Account,
     clock::Epoch,
     epoch_schedule::EpochSchedule,
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     incinerator,
     pubkey::Pubkey,
     rent::Rent,
@@ -20,7 +20,7 @@ pub struct RentCollector {
     // Also, wrap this with Option so that we can spot any uninitialized codepath (like
     // snapshot restore)
     #[serde(skip)]
-    pub operating_mode: Option<OperatingMode>,
+    pub cluster_type: Option<ClusterType>,
 }
 
 impl Default for RentCollector {
@@ -31,7 +31,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
-            operating_mode: Option::default(),
+            cluster_type: Option::default(),
         }
     }
 }
@@ -42,30 +42,31 @@ impl RentCollector {
         epoch_schedule: &EpochSchedule,
         slots_per_year: f64,
         rent: &Rent,
-        operating_mode: OperatingMode,
+        cluster_type: ClusterType,
     ) -> Self {
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
-            operating_mode: Some(operating_mode),
+            cluster_type: Some(cluster_type),
         }
     }
 
-    pub fn clone_with_epoch(&self, epoch: Epoch, operating_mode: OperatingMode) -> Self {
+    pub fn clone_with_epoch(&self, epoch: Epoch, cluster_type: ClusterType) -> Self {
         Self {
             epoch,
-            operating_mode: Some(operating_mode),
+            cluster_type: Some(cluster_type),
             ..self.clone()
         }
     }
 
     fn enable_new_behavior(&self) -> bool {
-        match self.operating_mode.unwrap() {
-            OperatingMode::Development => true,
-            OperatingMode::Preview => self.epoch >= Epoch::max_value(),
-            OperatingMode::Stable => self.epoch >= Epoch::max_value(),
+        match self.cluster_type.unwrap() {
+            ClusterType::Development => true,
+            ClusterType::Devnet => true,
+            ClusterType::Testnet => self.epoch >= Epoch::max_value(),
+            ClusterType::MainnetBeta => self.epoch >= Epoch::max_value(),
         }
     }
 
@@ -148,7 +149,7 @@ mod tests {
         };
 
         let rent_collector =
-            RentCollector::default().clone_with_epoch(new_epoch, OperatingMode::Development);
+            RentCollector::default().clone_with_epoch(new_epoch, ClusterType::Development);
 
         // collect rent on a newly-created account
         let collected =
@@ -183,7 +184,7 @@ mod tests {
 
         // create a tested rent collector
         let rent_collector =
-            RentCollector::default().clone_with_epoch(epoch, OperatingMode::Development);
+            RentCollector::default().clone_with_epoch(epoch, ClusterType::Development);
 
         // first mark account as being collected while being rent-exempt
         collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);

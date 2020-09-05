@@ -20,7 +20,7 @@ use solana_sdk::{
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -64,7 +64,7 @@ pub struct ClusterConfig {
     pub stakers_slot_offset: u64,
     pub skip_warmup_slots: bool,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
-    pub operating_mode: OperatingMode,
+    pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
 }
 
@@ -80,7 +80,7 @@ impl Default for ClusterConfig {
             slots_per_epoch: DEFAULT_DEV_SLOTS_PER_EPOCH,
             stakers_slot_offset: DEFAULT_DEV_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
-            operating_mode: OperatingMode::Development,
+            cluster_type: ClusterType::Development,
             poh_config: PohConfig::default(),
             skip_warmup_slots: false,
         }
@@ -166,21 +166,21 @@ impl LocalCluster {
             config.stakers_slot_offset,
             !config.skip_warmup_slots,
         );
-        genesis_config.operating_mode = config.operating_mode;
+        genesis_config.cluster_type = config.cluster_type;
         genesis_config.poh_config = config.poh_config.clone();
 
-        match genesis_config.operating_mode {
-            OperatingMode::Stable | OperatingMode::Preview => {
+        match genesis_config.cluster_type {
+            ClusterType::MainnetBeta | ClusterType::Testnet => {
                 genesis_config.native_instruction_processors =
                     solana_genesis_programs::get_native_programs_for_genesis(
-                        genesis_config.operating_mode,
+                        genesis_config.cluster_type,
                     )
             }
             _ => (),
         }
 
         genesis_config.inflation =
-            solana_genesis_programs::get_inflation(genesis_config.operating_mode, 0).unwrap();
+            solana_genesis_programs::get_inflation(genesis_config.cluster_type, 0).unwrap();
 
         genesis_config
             .native_instruction_processors

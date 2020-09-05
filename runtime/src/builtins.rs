@@ -4,15 +4,15 @@ use crate::{
 };
 use solana_sdk::{
     clock::{Epoch, GENESIS_EPOCH},
-    genesis_config::OperatingMode,
+    genesis_config::ClusterType,
     system_program,
 };
 
 use log::*;
 
-/// The entire set of available builtin programs that should be active at the given operating_mode
-pub fn get_builtins(operating_mode: OperatingMode) -> Vec<(Builtin, Epoch)> {
-    trace!("get_builtins: {:?}", operating_mode);
+/// The entire set of available builtin programs that should be active at the given cluster_type
+pub fn get_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
+    trace!("get_builtins: {:?}", cluster_type);
     let mut builtins = vec![];
 
     builtins.extend(
@@ -43,9 +43,9 @@ pub fn get_builtins(operating_mode: OperatingMode) -> Vec<(Builtin, Epoch)> {
         .collect::<Vec<_>>(),
     );
 
-    // repurpose Preview for test_get_builtins because the Development is overloaded...
+    // repurpose Testnet for test_get_builtins because the Development is overloaded...
     #[cfg(test)]
-    if operating_mode == OperatingMode::Preview {
+    if cluster_type == ClusterType::Testnet {
         use solana_sdk::instruction::InstructionError;
         use solana_sdk::{account::KeyedAccount, pubkey::Pubkey};
         use std::str::FromStr;
@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use solana_sdk::{
-        genesis_config::{create_genesis_config, OperatingMode},
+        genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
     };
 
@@ -93,15 +93,16 @@ mod tests {
 
     #[test]
     fn test_uniqueness() {
-        do_test_uniqueness(get_builtins(OperatingMode::Development));
-        do_test_uniqueness(get_builtins(OperatingMode::Preview));
-        do_test_uniqueness(get_builtins(OperatingMode::Stable));
+        do_test_uniqueness(get_builtins(ClusterType::Development));
+        do_test_uniqueness(get_builtins(ClusterType::Devnet));
+        do_test_uniqueness(get_builtins(ClusterType::Testnet));
+        do_test_uniqueness(get_builtins(ClusterType::MainnetBeta));
     }
 
     #[test]
     fn test_get_builtins() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        genesis_config.operating_mode = OperatingMode::Preview;
+        genesis_config.cluster_type = ClusterType::Testnet;
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
         let restored_slot1 = genesis_config.epoch_schedule.get_first_slot_in_epoch(2);

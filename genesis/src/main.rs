@@ -15,7 +15,7 @@ use solana_sdk::{
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -130,7 +130,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_tick_duration =
         timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
-    let default_operating_mode = "stable";
+    let default_cluster_type = "mainnet-beta";
     let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!())
@@ -327,13 +327,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The location of pubkey for primordial accounts and balance"),
         )
         .arg(
-            Arg::with_name("operating_mode")
-                .long("operating-mode")
+            Arg::with_name("cluster_type")
+                .long("cluster-type")
                 .possible_value("development")
-                .possible_value("preview")
-                .possible_value("stable")
+                .possible_value("devnet")
+                .possible_value("testnet")
+                .possible_value("mainnet-beta")
                 .takes_value(true)
-                .default_value(default_operating_mode)
+                .default_value(default_cluster_type)
                 .help(
                     "Selects the features that will be enabled for the cluster"
                 ),
@@ -426,21 +427,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Duration::from_micros(default_target_tick_duration)
     };
 
-    let operating_mode = match matches.value_of("operating_mode").unwrap() {
-        "development" => OperatingMode::Development,
-        "stable" => OperatingMode::Stable,
-        "preview" => OperatingMode::Preview,
+    let cluster_type = match matches.value_of("cluster_type").unwrap() {
+        "development" => ClusterType::Development,
+        "devnet" => ClusterType::Devnet,
+        "testnet" => ClusterType::Testnet,
+        "mainnet-beta" => ClusterType::MainnetBeta,
         _ => unreachable!(),
     };
 
     match matches.value_of("hashes_per_tick").unwrap() {
-        "auto" => match operating_mode {
-            OperatingMode::Development => {
+        "auto" => match cluster_type {
+            ClusterType::Development | ClusterType::Devnet => {
                 let hashes_per_tick =
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
                 poh_config.hashes_per_tick = Some(hashes_per_tick);
             }
-            OperatingMode::Stable | OperatingMode::Preview => {
+            ClusterType::Testnet | ClusterType::MainnetBeta => {
                 poh_config.hashes_per_tick =
                     Some(clock::DEFAULT_HASHES_PER_SECOND / clock::DEFAULT_TICKS_PER_SECOND);
             }
@@ -456,9 +458,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let slots_per_epoch = if matches.value_of("slots_per_epoch").is_some() {
         value_t_or_exit!(matches, "slots_per_epoch", u64)
     } else {
-        match operating_mode {
-            OperatingMode::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
-            OperatingMode::Stable | OperatingMode::Preview => clock::DEFAULT_SLOTS_PER_EPOCH,
+        match cluster_type {
+            ClusterType::Development | ClusterType::Devnet => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+            ClusterType::Testnet | ClusterType::MainnetBeta => clock::DEFAULT_SLOTS_PER_EPOCH,
         }
     };
     let epoch_schedule = EpochSchedule::custom(
@@ -468,8 +470,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let native_instruction_processors =
-        solana_genesis_programs::get_native_programs_for_genesis(operating_mode);
-    let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
+        solana_genesis_programs::get_native_programs_for_genesis(cluster_type);
+    let inflation = solana_genesis_programs::get_inflation(cluster_type, 0).unwrap();
 
     let mut genesis_config = GenesisConfig {
         native_instruction_processors,
@@ -479,7 +481,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         fee_rate_governor,
         rent,
         poh_config,
-        operating_mode,
+        cluster_type,
         ..GenesisConfig::default()
     };
 

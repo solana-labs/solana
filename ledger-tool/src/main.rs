@@ -28,7 +28,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
     inflation::Inflation,
     native_token::{lamports_to_sol, sol_to_lamports, Sol},
@@ -947,11 +947,12 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&hashes_per_tick)
             .arg(
-                Arg::with_name("operating_mode")
-                    .long("operating-mode")
+                Arg::with_name("cluster_type")
+                    .long("cluster-type")
                     .possible_value("development")
-                    .possible_value("preview")
-                    .possible_value("stable")
+                    .possible_value("devnet")
+                    .possible_value("testnet")
+                    .possible_value("mainnet-beta")
                     .takes_value(true)
                     .help(
                         "Selects the features that will be enabled for the cluster"
@@ -1333,11 +1334,12 @@ fn main() {
             let mut genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let output_directory = PathBuf::from(arg_matches.value_of("output_directory").unwrap());
 
-            if let Some(operating_mode) = arg_matches.value_of("operating_mode") {
-                genesis_config.operating_mode = match operating_mode {
-                    "development" => OperatingMode::Development,
-                    "stable" => OperatingMode::Stable,
-                    "preview" => OperatingMode::Preview,
+            if let Some(cluster_type) = arg_matches.value_of("cluster_type") {
+                genesis_config.cluster_type = match cluster_type {
+                    "development" => ClusterType::Development,
+                    "devnet" => ClusterType::Devnet,
+                    "testnet" => ClusterType::Testnet,
+                    "mainnet-beta" => ClusterType::MainnetBeta,
                     _ => unreachable!(),
                 };
             }
