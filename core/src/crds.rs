@@ -24,10 +24,10 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
-use crate::crds_gossip_pull::CrdsFilter;
+use crate::crds_trie::CrdsTrie;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use indexmap::map::IndexMap;
+use indexmap::map::{Entry, IndexMap};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -38,8 +38,7 @@ pub struct Crds {
     /// Stores the map of labels and values
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize,
-
-    pub masks: IndexMap<CrdsValueLabel, u64>,
+    pub trie: CrdsTrie,
 }
 
 #[derive(PartialEq, Debug)]
@@ -89,7 +88,7 @@ impl Default for Crds {
         Crds {
             table: IndexMap::new(),
             num_inserts: 0,
-            masks: IndexMap::new(),
+            trie: CrdsTrie::new(),
         }
     }
 }
@@ -123,23 +122,25 @@ impl Crds {
         new_value: VersionedCrdsValue,
     ) -> Result<Option<VersionedCrdsValue>, CrdsError> {
         let label = new_value.value.label();
-        let wallclock = new_value.value.wallclock();
-        let do_insert = self
-            .table
-            .get(&label)
-            .map(|current| new_value > *current)
-            .unwrap_or(true);
-        if do_insert {
-            self.masks.insert(
-                label.clone(),
-                CrdsFilter::hash_as_u64(&new_value.value_hash),
-            );
-            let old = self.table.insert(label, new_value);
-            self.num_inserts += 1;
-            Ok(old)
-        } else {
-            trace!("INSERT FAILED data: {} new.wallclock: {}", label, wallclock,);
-            Err(CrdsError::InsertFailed)
+        match self.table.entry(label) {
+            Entry::Vacant(entry) => {
+                assert!(self.trie.insert(&new_value));
+                entry.insert(new_value);
+                Ok(None)
+            }
+            Entry::Occupied(mut entry) if *entry.get() < new_value => {
+                assert!(self.trie.remove(entry.get()));
+                assert!(self.trie.insert(&new_value));
+                Ok(Some(entry.insert(new_value)))
+            }
+            _ => {
+                trace!(
+                    "INSERT FAILED data: {} new.wallclock: {}",
+                    new_value.value.label(),
+                    new_value.value.wallclock(),
+                );
+                Err(CrdsError::InsertFailed)
+            }
         }
     }
     pub fn insert(
@@ -200,8 +201,9 @@ impl Crds {
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
-        self.table.swap_remove(key);
-        self.masks.swap_remove(key);
+        if let Some(value) = self.table.swap_remove(key) {
+            assert!(self.trie.remove(&value));
+        }
     }
 }
 

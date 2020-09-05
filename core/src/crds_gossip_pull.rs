@@ -88,10 +88,6 @@ impl CrdsFilter {
         let buf = item.as_ref()[..8].try_into().unwrap();
         u64::from_le_bytes(buf)
     }
-    pub fn test_mask_u64(&self, item: u64, ones: u64) -> bool {
-        let bits = item | ones;
-        bits == self.mask
-    }
     pub fn test_mask(&self, item: &Hash) -> bool {
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
         let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
@@ -407,52 +403,44 @@ impl CrdsGossipPull {
         filters: &[(CrdsValue, CrdsFilter)],
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        let mut ret = vec![vec![]; filters.len()];
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let jitter = rand::thread_rng().gen_range(0, msg_timeout / 4);
-        let start = filters.len();
         //skip filters from callers that are too old
         let future = now.saturating_add(msg_timeout);
         let past = now.saturating_sub(msg_timeout);
-        let recent: Vec<_> = filters
+        let mut dropped_requests = 0;
+        let mut total_skipped = 0;
+        let ret = filters
             .iter()
-            .enumerate()
-            .filter(|(_, (caller, _))| caller.wallclock() < future && caller.wallclock() >= past)
+            .map(|(caller, filter)| {
+                let caller_wallclock = caller.wallclock();
+                if caller_wallclock >= future || caller_wallclock < past {
+                    dropped_requests += 1;
+                    return vec![];
+                }
+                let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
+                crds.trie
+                    .find(filter.mask, filter.mask_bits)
+                    .filter_map(|label| {
+                        let item = crds.table.get(label).unwrap();
+                        debug_assert!(filter.test_mask(&item.value_hash));
+                        //skip values that are too new
+                        if item.value.wallclock() > caller_wallclock {
+                            total_skipped += 1;
+                            None
+                        } else if filter.filter_contains(&item.value_hash) {
+                            None
+                        } else {
+                            Some(item.value.clone())
+                        }
+                    })
+                    .collect()
+            })
             .collect();
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
-            start - recent.len()
+            dropped_requests
         );
-        if recent.is_empty() {
-            return ret;
-        }
-        let mut total_skipped = 0;
-        let mask_ones: Vec<_> = recent
-            .iter()
-            .map(|(_i, (_caller, filter))| (!0u64).checked_shr(filter.mask_bits).unwrap_or(!0u64))
-            .collect();
-        for (label, mask) in crds.masks.iter() {
-            recent
-                .iter()
-                .zip(mask_ones.iter())
-                .for_each(|((i, (caller, filter)), mask_ones)| {
-                    if filter.test_mask_u64(*mask, *mask_ones) {
-                        let item = crds.table.get(label).unwrap();
-
-                        //skip values that are too new
-                        if item.value.wallclock()
-                            > caller.wallclock().checked_add(jitter).unwrap_or_else(|| 0)
-                        {
-                            total_skipped += 1;
-                            return;
-                        }
-
-                        if !filter.filter_contains(&item.value_hash) {
-                            ret[*i].push(item.value.clone());
-                        }
-                    }
-                });
-        }
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
     }
