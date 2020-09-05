@@ -122,10 +122,21 @@ const renderAccountRow = (
       <td>
         <Address pubkey={account.address} link />
       </td>
-      <td className="text-right">
-        {account.uiAmount.toFixed(balanceFixedPoint)}
+      <td className="text-right text-monospace">
+        {fixedLocaleNumber(account.uiAmount, balanceFixedPoint)}
       </td>
-      <td className="text-right">{percent}</td>
+      <td className="text-right text-monospace">{percent}</td>
     </tr>
   );
 };
+
+function fixedLocaleNumber(value: number, fixedPoint: number) {
+  const fixed = value.toFixed(fixedPoint);
+  const split = fixed.split(".");
+
+  if (fixedPoint < 1) {
+    return parseInt(split[0], 10).toLocaleString("en");
+  }
+
+  return [parseInt(split[0], 10).toLocaleString("en"), split[1]].join(".");
+}
