@@ -3,10 +3,12 @@ import {
   object,
   StructType,
   number,
+  string,
   optional,
   array,
   pick,
   nullable,
+  union,
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
@@ -35,7 +37,7 @@ const InitializeMultisig = pick({
 const Transfer = object({
   source: Pubkey,
   destination: Pubkey,
-  amount: number(),
+  amount: union([string(), number()]),
   authority: optional(Pubkey),
   multisigAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
@@ -44,7 +46,7 @@ const Transfer = object({
 const Approve = object({
   source: Pubkey,
   delegate: Pubkey,
-  amount: number(),
+  amount: union([string(), number()]),
   owner: optional(Pubkey),
   multisigOwner: optional(Pubkey),
   signers: optional(array(Pubkey)),
@@ -77,7 +79,7 @@ const SetAuthority = object({
 const MintTo = object({
   mint: Pubkey,
   account: Pubkey,
-  amount: number(),
+  amount: union([string(), number()]),
   mintAuthority: optional(Pubkey),
   multisigMintAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
@@ -86,7 +88,7 @@ const MintTo = object({
 const Burn = object({
   account: Pubkey,
   mint: Pubkey,
-  amount: number(),
+  amount: union([string(), number()]),
   authority: optional(Pubkey),
   multisigAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
