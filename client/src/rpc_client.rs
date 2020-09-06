@@ -709,6 +709,10 @@ impl RpcClient {
         .into())
     }
 
+    pub fn get_first_available_block(&self) -> ClientResult<Slot> {
+        self.send(RpcRequest::GetFirstAvailableBlock, Value::Null)
+    }
+
     pub fn get_genesis_hash(&self) -> ClientResult<Hash> {
         let hash_str: String = self.send(RpcRequest::GetGenesisHash, Value::Null)?;
         let hash = hash_str.parse().map_err(|_| {
