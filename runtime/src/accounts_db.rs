@@ -40,6 +40,7 @@ use solana_sdk::{
 use std::convert::TryFrom;
 use std::{
     collections::{HashMap, HashSet},
+    convert::TryInto,
     io::{Error as IOError, Result as IOResult},
     iter::FromIterator,
     ops::RangeBounds,
@@ -1658,9 +1659,9 @@ impl AccountsDB {
 
         let mut sum_time = Measure::start("cap");
         let cap = if calculate_cap {
-            Some(hashes.iter().fold(0, |acuum: u64, (_, _, lamports)| {
-                acuum.checked_add(*lamports).unwrap()
-            }))
+            Some(Self::checked_sum_for_capitalization(
+                hashes.iter().map(|(_, _, lamports)| *lamports),
+            ))
         } else {
             None
         };
@@ -1674,6 +1675,14 @@ impl AccountsDB {
         debug!("{} {} {}", sort_time, hash_time, sum_time);
 
         (res, cap)
+    }
+
+    pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
+        balances
+            .map(|b| b as u128)
+            .sum::<u128>()
+            .try_into()
+            .expect("overflow is detected while summing capitalization")
     }
 
     pub fn account_balance_for_capitalization(
@@ -4535,5 +4544,22 @@ pub mod tests {
             ),
             1
         )
+    }
+
+    #[test]
+    fn test_checked_sum_for_capitalization_normal() {
+        assert_eq!(
+            AccountsDB::checked_sum_for_capitalization(vec![1, 2].into_iter()),
+            3
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "overflow is detected while summing capitalization")]
+    fn test_checked_sum_for_capitalization_overflow() {
+        assert_eq!(
+            AccountsDB::checked_sum_for_capitalization(vec![1, u64::max_value()].into_iter()),
+            3
+        );
     }
 }

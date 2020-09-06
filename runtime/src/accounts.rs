@@ -429,16 +429,18 @@ impl Accounts {
     }
 
     pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
-        self.load_by_program(ancestors, None)
-            .into_iter()
-            .map(|(_pubkey, account)| {
-                AccountsDB::account_balance_for_capitalization(
-                    account.lamports,
-                    &account.owner,
-                    account.executable,
-                )
-            })
-            .fold(0, |a, b| a.checked_add(b).unwrap())
+        let balances =
+            self.load_by_program(ancestors, None)
+                .into_iter()
+                .map(|(_pubkey, account)| {
+                    AccountsDB::account_balance_for_capitalization(
+                        account.lamports,
+                        &account.owner,
+                        account.executable,
+                    )
+                });
+
+        AccountsDB::checked_sum_for_capitalization(balances)
     }
 
     #[must_use]
