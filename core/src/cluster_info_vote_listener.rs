@@ -641,11 +641,11 @@ impl ClusterInfoVoteListener {
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
-        for (i, (vote_pubkey, vote, _)) in gossip_vote_txs
+        for (is_gossip, (vote_pubkey, vote, _)) in gossip_vote_txs
             .iter()
             .filter_map(|gossip_tx| {
-                vote_transaction::parse_vote_transaction(gossip_tx).filter(
-                    |(vote_pubkey, vote, _)| {
+                vote_transaction::parse_vote_transaction(gossip_tx)
+                    .filter(|(vote_pubkey, vote, _)| {
                         if vote.slots.is_empty() {
                             return false;
                         }
@@ -671,11 +671,10 @@ impl ClusterInfoVoteListener {
                         }
 
                         true
-                    },
-                )
+                    })
+                    .map(|v| (true, v))
             })
-            .chain(replayed_votes)
-            .enumerate()
+            .chain(replayed_votes.into_iter().map(|v| (false, v)))
         {
             Self::update_new_votes(
                 vote,
@@ -686,7 +685,7 @@ impl ClusterInfoVoteListener {
                 verified_vote_sender,
                 &mut diff,
                 &mut new_optimistic_confirmed_slots,
-                i < gossip_vote_txs.len(),
+                is_gossip,
             );
         }
 
