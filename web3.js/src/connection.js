@@ -1365,7 +1365,7 @@ export type ConfirmedSignatureInfo = {
 export class Connection {
   _rpcRequest: RpcRequest;
   _rpcWebSocket: RpcWebSocketClient;
-  _rpcWebSocketConnected: boolean = false;
+  _rpcWebSocketHeartbeat: IntervalID | null = null;
 
   _commitment: ?Commitment;
   _blockhashInfo: {
@@ -2669,7 +2669,10 @@ export class Connection {
    * @private
    */
   _wsOnOpen() {
-    this._rpcWebSocketConnected = true;
+    this._rpcWebSocketHeartbeat = setInterval(() => {
+      // Ping server every 5s to prevent idle timeouts
+      this._rpcWebSocket.notify('ping').catch(() => {});
+    }, 5000);
     this._updateSubscriptions();
   }
 
@@ -2684,7 +2687,8 @@ export class Connection {
    * @private
    */
   _wsOnClose() {
-    this._rpcWebSocketConnected = false;
+    clearInterval(this._rpcWebSocketHeartbeat);
+    this._rpcWebSocketHeartbeat = null;
     this._resetSubscriptions();
   }
 
@@ -2777,7 +2781,7 @@ export class Connection {
       return;
     }
 
-    if (!this._rpcWebSocketConnected) {
+    if (this._rpcWebSocketHeartbeat === null) {
       this._resetSubscriptions();
       this._rpcWebSocket.connect();
       return;
