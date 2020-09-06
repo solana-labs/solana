@@ -57,6 +57,19 @@ pub trait ClusterQuerySubCommands {
 impl ClusterQuerySubCommands for App<'_, '_> {
     fn cluster_query_subcommands(self) -> Self {
         self.subcommand(
+            SubCommand::with_name("block")
+                .about("Get a confirmed block")
+                .arg(
+                    Arg::with_name("slot")
+                        .long("slot")
+                        .validator(is_slot)
+                        .value_name("SLOT")
+                        .takes_value(true)
+                        .index(1)
+                        .required(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
                 .arg(
@@ -343,6 +356,14 @@ pub fn parse_cluster_ping(
             "keypair",
             wallet_manager,
         )?],
+    })
+}
+
+pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let slot = value_t_or_exit!(matches, "slot", Slot);
+    Ok(CliCommandInfo {
+        command: CliCommand::GetBlock { slot },
+        signers: vec![],
     })
 }
 
@@ -655,6 +676,42 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
         );
     }
 
+    Ok("".to_string())
+}
+
+pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot) -> ProcessResult {
+    let block =
+        rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+
+    println!("Slot: {}", slot);
+    println!("Parent Slot: {}", block.parent_slot);
+    println!("Blockhash: {}", block.blockhash);
+    println!("Previous Blockhash: {}", block.previous_blockhash);
+    if block.block_time.is_some() {
+        println!("Block Time: {:?}", block.block_time);
+    }
+    if !block.rewards.is_empty() {
+        println!("Rewards:",);
+        for reward in block.rewards {
+            println!(
+                "  {:<44}: {}",
+                reward.pubkey,
+                if reward.lamports > 0 {
+                    format!("◎{}", lamports_to_sol(reward.lamports as u64))
+                } else {
+                    format!("◎-{}", lamports_to_sol(reward.lamports.abs() as u64))
+                }
+            );
+        }
+    }
+    for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
+        println!("Transaction {}:", index);
+        println_transaction(
+            &transaction_with_meta.transaction.decode().unwrap(),
+            &transaction_with_meta.meta,
+            "  ",
+        );
+    }
     Ok("".to_string())
 }
 
