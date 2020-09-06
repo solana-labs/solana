@@ -162,7 +162,7 @@ pub fn write_transaction<W: io::Write>(
         )?;
         writeln!(
             w,
-            "{}  Fee: {} SOL",
+            "{}  Fee: ◎{}",
             prefix,
             lamports_to_sol(transaction_status.fee)
         )?;
@@ -179,7 +179,7 @@ pub fn write_transaction<W: io::Write>(
             if pre == post {
                 writeln!(
                     w,
-                    "{}  Account {} balance: {} SOL",
+                    "{}  Account {} balance: ◎{}",
                     prefix,
                     i,
                     lamports_to_sol(*pre)
@@ -187,7 +187,7 @@ pub fn write_transaction<W: io::Write>(
             } else {
                 writeln!(
                     w,
-                    "{}  Account {} balance: {} SOL -> {} SOL",
+                    "{}  Account {} balance: ◎{} -> ◎{}",
                     prefix,
                     i,
                     lamports_to_sol(*pre),

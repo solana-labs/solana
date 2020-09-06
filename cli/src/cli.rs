@@ -193,6 +193,10 @@ pub enum CliCommand {
         program_id: Pubkey,
     },
     Fees,
+    FirstAvailableBlock,
+    GetBlock {
+        slot: Slot,
+    },
     GetBlockTime {
         slot: Option<Slot>,
     },
@@ -639,6 +643,11 @@ pub fn parse_command(
             command: CliCommand::Fees,
             signers: vec![],
         }),
+        ("first-available-block", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::FirstAvailableBlock,
+            signers: vec![],
+        }),
+        ("block", Some(matches)) => parse_get_block(matches),
         ("block-time", Some(matches)) => parse_get_block_time(matches),
         ("epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
@@ -1865,6 +1874,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client, config),
+        CliCommand::FirstAvailableBlock => process_first_available_block(&rpc_client),
+        CliCommand::GetBlock { slot } => process_get_block(&rpc_client, config, *slot),
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
         CliCommand::GetEpoch => process_get_epoch(&rpc_client, config),
         CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client, config),
