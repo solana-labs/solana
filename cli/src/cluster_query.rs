@@ -91,6 +91,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get the version of the cluster entrypoint"),
         )
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .subcommand(
+            SubCommand::with_name("first-available-block")
+                .about("Get the first available block in the storage"),
+        )
         .subcommand(SubCommand::with_name("block-time")
             .about("Get estimated production time of a block")
             .alias("get-block-time")
@@ -612,6 +616,11 @@ pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult
         last_valid_slot,
     };
     Ok(config.output_format.formatted_string(&fees))
+}
+
+pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
+    let first_available_block = rpc_client.get_first_available_block()?;
+    Ok(format!("{}", first_available_block))
 }
 
 pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
