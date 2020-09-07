@@ -1059,7 +1059,7 @@ pub fn main() {
         exit(1);
     });
 
-    let mut snapshot_compression = CompressionType::Bzip2;
+    let mut snapshot_compression = CompressionType::Zstd;
     if let Ok(compression_str) = value_t!(matches, "snapshot_compression", String) {
         match compression_str.as_str() {
             "bz2" => snapshot_compression = CompressionType::Bzip2,
