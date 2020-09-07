@@ -4,7 +4,6 @@ import * as BufferLayout from 'buffer-layout';
 
 import {Account} from './account';
 import {PublicKey} from './publickey';
-import {NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction, PACKET_DATA_SIZE} from './transaction';
 import {SYSVAR_RENT_PUBKEY} from './sysvar';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
@@ -70,7 +69,7 @@ export class Loader {
         transaction,
         [payer, program],
         {
-          confirmations: 1,
+          commitment: 'single',
           skipPreflight: true,
         },
       );
@@ -111,17 +110,17 @@ export class Loader {
       });
       transactions.push(
         sendAndConfirmTransaction(connection, transaction, [payer, program], {
-          confirmations: 1,
+          commitment: 'single',
           skipPreflight: true,
         }),
       );
 
-      // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-      // since all the write transactions modify the same program account
-      await sleep(1000 / NUM_TICKS_PER_SECOND);
+      // Delay between sends in an attempt to reduce rate limit errors
+      const REQUESTS_PER_SECOND = 4;
+      await sleep(1000 / REQUESTS_PER_SECOND);
 
       // Run up to 8 Loads in parallel to prevent too many parallel transactions from
-      // getting rejected with AccountInUse.
+      // getting retried due to AccountInUse errors.
       //
       // TODO: 8 was selected empirically and should probably be revisited
       if (transactions.length === 8) {
@@ -159,7 +158,7 @@ export class Loader {
         transaction,
         [payer, program],
         {
-          confirmations: 1,
+          commitment: 'single',
           skipPreflight: true,
         },
       );
