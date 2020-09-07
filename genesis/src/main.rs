@@ -2,7 +2,7 @@
 
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
+    input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
     input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
@@ -329,10 +329,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .arg(
             Arg::with_name("cluster_type")
                 .long("cluster-type")
-                .possible_value("development")
-                .possible_value("devnet")
-                .possible_value("testnet")
-                .possible_value("mainnet-beta")
+                .possible_values(&ClusterType::STRINGS)
                 .takes_value(true)
                 .default_value(default_cluster_type)
                 .help(
@@ -427,13 +424,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Duration::from_micros(default_target_tick_duration)
     };
 
-    let cluster_type = match matches.value_of("cluster_type").unwrap() {
-        "development" => ClusterType::Development,
-        "devnet" => ClusterType::Devnet,
-        "testnet" => ClusterType::Testnet,
-        "mainnet-beta" => ClusterType::MainnetBeta,
-        _ => unreachable!(),
-    };
+    let cluster_type = cluster_type_of(&matches, "cluster_type").unwrap();
 
     match matches.value_of("hashes_per_tick").unwrap() {
         "auto" => match cluster_type {

@@ -6,7 +6,7 @@ use log::*;
 use regex::Regex;
 use serde_json::json;
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, pubkeys_of},
+    input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
     input_validators::{is_parsable, is_pubkey_or_keypair, is_slot, is_valid_percentage},
 };
 use solana_ledger::entry::Entry;
@@ -949,10 +949,7 @@ fn main() {
             .arg(
                 Arg::with_name("cluster_type")
                     .long("cluster-type")
-                    .possible_value("development")
-                    .possible_value("devnet")
-                    .possible_value("testnet")
-                    .possible_value("mainnet-beta")
+                    .possible_values(&ClusterType::STRINGS)
                     .takes_value(true)
                     .help(
                         "Selects the features that will be enabled for the cluster"
@@ -1334,14 +1331,8 @@ fn main() {
             let mut genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let output_directory = PathBuf::from(arg_matches.value_of("output_directory").unwrap());
 
-            if let Some(cluster_type) = arg_matches.value_of("cluster_type") {
-                genesis_config.cluster_type = match cluster_type {
-                    "development" => ClusterType::Development,
-                    "devnet" => ClusterType::Devnet,
-                    "testnet" => ClusterType::Testnet,
-                    "mainnet-beta" => ClusterType::MainnetBeta,
-                    _ => unreachable!(),
-                };
+            if let Some(cluster_type) = cluster_type_of(arg_matches, "cluster_type") {
+                genesis_config.cluster_type = cluster_type;
             }
 
             if let Some(hashes_per_tick) = arg_matches.value_of("hashes_per_tick") {
