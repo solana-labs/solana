@@ -3799,7 +3799,7 @@ pub mod tests {
     fn test_verify_bank_capitalization() {
         use BankHashVerificationError::*;
         solana_logger::setup();
-        let db = AccountsDB::new(Vec::new());
+        let db = AccountsDB::new(Vec::new(), &OperatingMode::Development);
 
         let key = Pubkey::new_rand();
         let some_data_len = 0;
