@@ -1280,16 +1280,22 @@ impl AccountsDB {
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
+    fn include_owner(cluster_type: &ClusterType, slot: Slot) -> bool {
+        // When devnet was moved to stable release channel, it was done without
+        // hashing account.owner. That's because devnet's slot was lower than
+        // 5_800_000 and the release channel's gating lacked ClusterType at the time...
+        match cluster_type {
+            ClusterType::Devnet => slot >= 5_800_000,
+            _ => true,
+        }
+    }
+
     pub fn hash_stored_account(
         slot: Slot,
         account: &StoredAccount,
         cluster_type: &ClusterType,
     ) -> Hash {
-        // bla bla historical context here
-        let include_owner = match cluster_type {
-            ClusterType::Devnet => slot >= 5_800_000,
-            _ => true,
-        };
+        let include_owner = Self::include_owner(cluster_type, slot);
 
         if slot > Self::get_blake3_slot(cluster_type) {
             Self::blake3_hash_account_data(
@@ -1322,11 +1328,7 @@ impl AccountsDB {
         pubkey: &Pubkey,
         cluster_type: &ClusterType,
     ) -> Hash {
-        // bla bla historical context here
-        let include_owner = match cluster_type {
-            ClusterType::Devnet => slot >= 5_800_000,
-            _ => true,
-        };
+        let include_owner = Self::include_owner(cluster_type, slot);
 
         if slot > Self::get_blake3_slot(cluster_type) {
             Self::blake3_hash_account_data(

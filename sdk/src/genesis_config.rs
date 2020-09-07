@@ -25,18 +25,38 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 // deprecated default that is no longer used
 pub const UNUSED_DEFAULT: u64 = 1024;
 
+// The order can't align with release lifecycle only to remain ABI-compatible...
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, AbiEnumVisitor, AbiExample)]
 pub enum ClusterType {
     Testnet,
     MainnetBeta,
     Devnet,
     Development,
+}
+
+impl ClusterType {
+    pub const STRINGS: [&'static str; 4] = ["development", "devnet", "testnet", "mainnet-beta"];
+}
+
+impl FromStr for ClusterType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "development" => Ok(ClusterType::Development),
+            "devnet" => Ok(ClusterType::Devnet),
+            "testnet" => Ok(ClusterType::Testnet),
+            "mainnet-beta" => Ok(ClusterType::MainnetBeta),
+            _ => Err(format!("{} is unrecognized for cluster type", s)),
+        }
+    }
 }
 
 #[frozen_abi(digest = "AM75NxYJj5s45rtkFV5S1RCHg2kNMgACjTu5HPfEt4Fp")]
