@@ -1365,7 +1365,9 @@ export type ConfirmedSignatureInfo = {
 export class Connection {
   _rpcRequest: RpcRequest;
   _rpcWebSocket: RpcWebSocketClient;
+  _rpcWebSocketConnected: boolean = false;
   _rpcWebSocketHeartbeat: IntervalID | null = null;
+  _rpcWebSocketIdleTimeout: TimeoutID | null = null;
 
   _commitment: ?Commitment;
   _blockhashInfo: {
@@ -2669,6 +2671,7 @@ export class Connection {
    * @private
    */
   _wsOnOpen() {
+    this._rpcWebSocketConnected = true;
     this._rpcWebSocketHeartbeat = setInterval(() => {
       // Ping server every 5s to prevent idle timeouts
       this._rpcWebSocket.notify('ping').catch(() => {});
@@ -2686,9 +2689,17 @@ export class Connection {
   /**
    * @private
    */
-  _wsOnClose() {
+  _wsOnClose(code: number) {
     clearInterval(this._rpcWebSocketHeartbeat);
     this._rpcWebSocketHeartbeat = null;
+
+    if (code === 1000) {
+      // explicit close, check if any subscriptions have been made since close
+      this._updateSubscriptions();
+      return;
+    }
+
+    // implicit close, prepare subscriptions for auto-reconnect
     this._resetSubscriptions();
   }
 
@@ -2777,12 +2788,23 @@ export class Connection {
       signatureKeys.length === 0 &&
       rootKeys.length === 0
     ) {
-      this._rpcWebSocket.close();
+      if (this._rpcWebSocketConnected) {
+        this._rpcWebSocketConnected = false;
+        this._rpcWebSocketIdleTimeout = setTimeout(() => {
+          this._rpcWebSocketIdleTimeout = null;
+          this._rpcWebSocket.close();
+        }, 500);
+      }
       return;
     }
 
-    if (this._rpcWebSocketHeartbeat === null) {
-      this._resetSubscriptions();
+    if (this._rpcWebSocketIdleTimeout !== null) {
+      clearTimeout(this._rpcWebSocketIdleTimeout);
+      this._rpcWebSocketIdleTimeout = null;
+      this._rpcWebSocketConnected = true;
+    }
+
+    if (!this._rpcWebSocketConnected) {
       this._rpcWebSocket.connect();
       return;
     }
