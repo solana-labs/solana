@@ -100,7 +100,7 @@
     "@solana/spl-token": "^0.0.7",
     "@typescript-eslint/eslint-plugin": "^4.0.0",
     "@typescript-eslint/parser": "^3.10.1",
-    "acorn": "^7.0.0",
+    "acorn": "^8.0.1",
     "babel-eslint": "10.1.0",
     "babel-plugin-module-resolver": "4.0.0",
     "codecov": "^3.0.4",
