@@ -897,8 +897,8 @@ fn load_frozen_forks(
             new_root_bank.squash();
 
             if last_free.elapsed() > Duration::from_secs(30) {
-                last_free = Instant::now();
                 new_root_bank.exhaustively_free_unused_resource();
+                last_free = Instant::now();
             }
 
             // Filter out all non descendants of the new root
