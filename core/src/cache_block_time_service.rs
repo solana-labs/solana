@@ -1,5 +1,6 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::Blockstore;
+use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::slot_duration_from_slots_per_year;
 use std::{
@@ -19,6 +20,8 @@ pub struct CacheBlockTimeService {
     thread_hdl: JoinHandle<()>,
 }
 
+const CACHE_BLOCK_TIME_WARNING_MS: u64 = 150;
+
 impl CacheBlockTimeService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
@@ -33,21 +36,30 @@ impl CacheBlockTimeService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Err(RecvTimeoutError::Disconnected) =
-                    Self::cache_block_time(&cache_block_time_receiver, &blockstore)
-                {
-                    break;
+                let recv_result = cache_block_time_receiver.recv_timeout(Duration::from_secs(1));
+                match recv_result {
+                    Err(RecvTimeoutError::Disconnected) => {
+                        break;
+                    }
+                    Ok(bank) => {
+                        let mut cache_block_time_timer = Measure::start("cache_block_time_timer");
+                        Self::cache_block_time(bank, &blockstore);
+                        cache_block_time_timer.stop();
+                        if cache_block_time_timer.as_ms() > CACHE_BLOCK_TIME_WARNING_MS {
+                            warn!(
+                                "cache_block_time operation took: {}ms",
+                                cache_block_time_timer.as_ms()
+                            );
+                        }
+                    }
+                    _ => {}
                 }
             })
             .unwrap();
         Self { thread_hdl }
     }
 
-    fn cache_block_time(
-        cache_block_time_receiver: &CacheBlockTimeReceiver,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<(), RecvTimeoutError> {
-        let bank = cache_block_time_receiver.recv_timeout(Duration::from_secs(1))?;
+    fn cache_block_time(bank: Arc<Bank>, blockstore: &Arc<Blockstore>) {
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
         let epoch = bank.epoch_schedule().get_epoch(bank.slot());
         let stakes = HashMap::new();
@@ -56,7 +68,6 @@ impl CacheBlockTimeService {
         if let Err(e) = blockstore.cache_block_time(bank.slot(), slot_duration, stakes) {
             error!("cache_block_time failed: slot {:?} {:?}", bank.slot(), e);
         }
-        Ok(())
     }
 
     pub fn join(self) -> thread::Result<()> {
