@@ -1,6 +1,9 @@
 use crate::rpc_filter::RpcFilterType;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_sdk::{clock::Epoch, commitment_config::CommitmentConfig};
+use solana_sdk::{
+    clock::Epoch,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,14 +14,17 @@ pub struct RpcSignatureStatusConfig {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSendTransactionConfig {
+    #[serde(default)]
     pub skip_preflight: bool,
-    pub preflight_commitment: Option<CommitmentConfig>,
+    pub preflight_commitment: Option<CommitmentLevel>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSimulateTransactionConfig {
+    #[serde(default)]
     pub sig_verify: bool,
+    #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }
 
