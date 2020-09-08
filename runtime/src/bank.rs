@@ -67,7 +67,7 @@ use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteSta
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     mem,
     ops::RangeInclusive,
     path::PathBuf,
@@ -1149,6 +1149,11 @@ impl Bank {
         // verify that we didn't pay any more than we expected to
         assert!(validator_rewards >= validator_rewards_paid);
 
+        info!(
+            "distributed inflation: {} (rounded from: {})",
+            validator_rewards_paid, validator_rewards
+        );
+
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
 
@@ -1292,6 +1297,10 @@ impl Bank {
         if collector_fees != 0 {
             let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
+            debug!(
+                "distributed fee: {} (rounded from: {}, burned: {})",
+                unburned, collector_fees, burned
+            );
             self.deposit(&self.collector_id, unburned);
             self.capitalization.fetch_sub(burned, Relaxed);
         }
@@ -2346,7 +2355,7 @@ impl Bank {
         &self,
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
         rent_to_be_distributed: u64,
-    ) -> u64 {
+    ) {
         let mut total_staked = 0;
         let mut rent_distributed_in_initial_round = 0;
 
@@ -2375,11 +2384,23 @@ impl Bank {
             }
         });
 
+        let enforce_fix = match self.cluster_type() {
+            ClusterType::Development => true,
+            ClusterType::Devnet => true,
+            ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
+            ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
+        };
+
         let validator_rent_shares = validator_stakes
             .into_iter()
             .map(|(pubkey, staked)| {
-                let rent_share =
-                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
+                let rent_share = if !enforce_fix {
+                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64
+                } else {
+                    (((staked as u128) * (rent_to_be_distributed as u128)) / (total_staked as u128))
+                        .try_into()
+                        .unwrap()
+                };
                 rent_distributed_in_initial_round += rent_share;
                 (pubkey, rent_share)
             })
@@ -2402,7 +2423,10 @@ impl Bank {
                 account.lamports += rent_to_be_paid;
                 self.store_account(&pubkey, &account);
             });
-        leftover_lamports
+
+        if enforce_fix {
+            assert!(leftover_lamports == 0);
+        }
     }
 
     fn distribute_rent(&self) {
@@ -2413,18 +2437,17 @@ impl Bank {
             .rent
             .calculate_burn(total_rent_collected);
 
+        debug!(
+            "distributed rent: {} (rounded from: {}, burned: {})",
+            rent_to_be_distributed, total_rent_collected, burned_portion
+        );
         self.capitalization.fetch_sub(burned_portion, Relaxed);
 
         if rent_to_be_distributed == 0 {
             return;
         }
 
-        let leftover =
-            self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-        if leftover != 0 {
-            warn!("There was leftover from rent distribution: {}", leftover);
-            self.capitalization.fetch_sub(leftover, Relaxed);
-        }
+        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
     fn collect_rent(
