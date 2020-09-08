@@ -133,6 +133,7 @@ pub async fn transaction_history(
     mut before: Option<Signature>,
     until: Option<Signature>,
     verbose: bool,
+    show_transactions: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
@@ -167,6 +168,28 @@ pub async fn transaction_history(
                 );
             } else {
                 println!("{}", result.signature);
+            }
+
+            if show_transactions {
+                match bigtable
+                    .get_confirmed_transaction(&result.signature, UiTransactionEncoding::Base64)
+                    .await
+                {
+                    Ok(Some(confirmed_transaction)) => {
+                        println_transaction(
+                            &confirmed_transaction
+                                .transaction
+                                .transaction
+                                .decode()
+                                .expect("Successful decode"),
+                            &confirmed_transaction.transaction.meta,
+                            "  ",
+                        );
+                    }
+                    Ok(None) => println!("  Confirmed transaction details not available"),
+                    Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
+                }
+                println!();
             }
         }
     }
@@ -315,6 +338,12 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("End with the last signature newer than this one"),
                         )
                         .arg(
+                            Arg::with_name("show_transactions")
+                                .long("show-transactions")
+                                .takes_value(false)
+                                .help("Display the full transactions"),
+                        )
+                        .arg(
                             Arg::with_name("verbose")
                                 .short("v")
                                 .long("verbose")
@@ -375,8 +404,16 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 .value_of("until")
                 .map(|signature| signature.parse().expect("Invalid signature"));
             let verbose = arg_matches.is_present("verbose");
+            let show_transactions = arg_matches.is_present("show_transactions");
 
-            runtime.block_on(transaction_history(&address, limit, before, until, verbose))
+            runtime.block_on(transaction_history(
+                &address,
+                limit,
+                before,
+                until,
+                verbose,
+                show_transactions,
+            ))
         }
         _ => unreachable!(),
     };
