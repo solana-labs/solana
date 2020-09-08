@@ -2425,7 +2425,7 @@ impl Bank {
             });
 
         if enforce_fix {
-            assert!(leftover_lamports == 0);
+            assert_eq!(leftover_lamports, 0);
         }
     }
 
