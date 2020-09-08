@@ -1,3 +1,4 @@
+use crate::send_transaction_service::{SendTransactionService, TransactionInfo};
 use bincode::{deserialize, serialize};
 use futures::{
     future,
@@ -8,7 +9,6 @@ use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentCache, CommitmentSlots},
-    send_transaction_service::{SendTransactionService, TransactionInfo},
 };
 use solana_sdk::{
     account::Account,

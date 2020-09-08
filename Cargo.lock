@@ -3316,7 +3316,9 @@ version = "1.3.9"
 dependencies = [
  "bincode",
  "futures 0.3.5",
+ "log 0.4.8",
  "solana-banks-interface",
+ "solana-metrics",
  "solana-runtime",
  "solana-sdk 1.3.9",
  "tarpc",
