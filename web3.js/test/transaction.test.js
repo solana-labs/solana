@@ -9,6 +9,72 @@ import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
 
+describe('compileMessage', () => {
+  test('payer is first account meta', () => {
+    const payer = new Account();
+    const other = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [
+        {pubkey: other.publicKey, isSigner: true, isWritable: true},
+        {pubkey: payer.publicKey, isSigner: true, isWritable: true},
+      ],
+      programId,
+    });
+
+    transaction.sign(payer, other);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.accountKeys[1].equals(other.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(2);
+    expect(message.header.numReadonlySignedAccounts).toEqual(0);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+
+  test('payer is writable', () => {
+    const payer = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [{pubkey: payer.publicKey, isSigner: true, isWritable: false}],
+      programId,
+    });
+
+    transaction.sign(payer);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(1);
+    expect(message.header.numReadonlySignedAccounts).toEqual(0);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+
+  test('signers are ordered and only writable if necessary', () => {
+    const payer = new Account();
+    const account1 = new Account();
+    const account2 = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [
+        {pubkey: payer.publicKey, isSigner: true, isWritable: false},
+        {pubkey: account1.publicKey, isSigner: false, isWritable: true},
+      ],
+      programId,
+    });
+
+    // account2 is an extra signer, not involved in any instructions
+    transaction.sign(payer, account1, account2);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.accountKeys[1].equals(account1.publicKey)).toBe(true);
+    expect(message.accountKeys[2].equals(account2.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(3);
+    expect(message.header.numReadonlySignedAccounts).toEqual(1);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+});
+
 test('signPartial', () => {
   const account1 = new Account();
   const account2 = new Account();
@@ -217,14 +283,22 @@ test('serialize unsigned transaction', () => {
   expect(() => {
     expectedTransaction.serialize();
   }).toThrow(Error);
-  expect(expectedTransaction.signatures.length).toBe(0);
-  // Signature array populated with null signatures fails.
-  expectedTransaction.serializeMessage();
+  expect(() => {
+    expectedTransaction.serializeMessage();
+  }).toThrow('Transaction feePayer required');
+
+  // Setting feePayer will populate signature array
+  expectedTransaction.feePayer = sender.publicKey;
   expect(expectedTransaction.signatures.length).toBe(1);
+
+  // Signature array populated with null signatures fails.
   expect(() => {
     expectedTransaction.serialize();
   }).toThrow(Error);
-  expect(expectedTransaction.signatures.length).toBe(1);
+
+  // Serializing the message is allowed when signature array has null signatures
+  expectedTransaction.serializeMessage();
+
   // Properly signed transaction succeeds
   expectedTransaction.sign(sender);
   expect(expectedTransaction.signatures.length).toBe(1);
@@ -254,6 +328,7 @@ test('externally signed stake delegate', () => {
   });
   const from = authority;
   tx.recentBlockhash = bs58.encode(recentBlockhash);
+  tx.feePayer = from.publicKey;
   const tx_bytes = tx.serializeMessage();
   const signature = nacl.sign.detached(tx_bytes, from.secretKey);
   tx.addSignature(from.publicKey, signature);

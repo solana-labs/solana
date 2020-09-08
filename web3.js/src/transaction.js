@@ -142,6 +142,31 @@ export class Transaction {
   }
 
   /**
+   * The transaction fee payer (first signer)
+   */
+  get feePayer(): PublicKey | null {
+    if (this.signatures.length > 0) {
+      return this.signatures[0].publicKey;
+    }
+    return null;
+  }
+
+  /**
+   * Set the transaction fee payer (first signer)
+   */
+  set feePayer(feePayer: PublicKey) {
+    if (
+      this.signatures.length === 0 ||
+      !this.signatures[0].publicKey.equals(feePayer)
+    ) {
+      this.signatures.unshift({
+        signature: null,
+        publicKey: feePayer,
+      });
+    }
+  }
+
+  /**
    * The instructions to atomically execute
    */
   instructions: Array<TransactionInstruction> = [];
@@ -206,6 +231,10 @@ export class Transaction {
       throw new Error('No instructions provided');
     }
 
+    if (this.feePayer === null) {
+      throw new Error('Transaction feePayer required');
+    }
+
     let numReadonlySignedAccounts = 0;
     let numReadonlyUnsignedAccounts = 0;
 
@@ -231,8 +260,6 @@ export class Transaction {
       });
     });
 
-    // Prefix accountMetas with feePayer here whenever that gets implemented
-
     // Sort. Prioritizing first by signer, then by writable
     accountMetas.sort(function (x, y) {
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
@@ -256,23 +283,36 @@ export class Transaction {
       }
     });
 
-    this.signatures.forEach(signature => {
-      const sigPubkeyString = signature.publicKey.toString();
+    // Move payer to the front and append other unknown signers as read-only
+    this.signatures.forEach((signature, signatureIndex) => {
+      const isPayer = signatureIndex === 0;
       const uniqueIndex = uniqueMetas.findIndex(x => {
-        return x.pubkey.toString() === sigPubkeyString;
+        return x.pubkey.equals(signature.publicKey);
       });
       if (uniqueIndex > -1) {
-        uniqueMetas[uniqueIndex].isSigner = true;
-      } else {
+        if (isPayer && uniqueIndex !== 0) {
+          const [payerMeta] = uniqueMetas.splice(uniqueIndex, 1);
+          payerMeta.isSigner = true;
+          uniqueMetas.unshift(payerMeta);
+        } else {
+          uniqueMetas[uniqueIndex].isSigner = true;
+        }
+      } else if (isPayer) {
         uniqueMetas.unshift({
-          pubkey: new PublicKey(sigPubkeyString),
+          pubkey: signature.publicKey,
           isSigner: true,
           isWritable: true,
+        });
+      } else {
+        uniqueMetas.push({
+          pubkey: signature.publicKey,
+          isSigner: true,
+          isWritable: false,
         });
       }
     });
 
-    // Split out signing from nonsigning keys and count readonlys
+    // Split out signing from non-signing keys and count read-only keys
     const signedKeys: string[] = [];
     const unsignedKeys: string[] = [];
     uniqueMetas.forEach(({pubkey, isSigner, isWritable}) => {
@@ -290,15 +330,6 @@ export class Transaction {
         }
       }
     });
-
-    // Initialize signature array, if needed
-    if (this.signatures.length === 0) {
-      const signatures: Array<SignaturePubkeyPair> = [];
-      signedKeys.forEach(pubkey => {
-        signatures.push({signature: null, publicKey: new PublicKey(pubkey)});
-      });
-      this.signatures = signatures;
-    }
 
     const accountKeys = signedKeys.concat(unsignedKeys);
     const instructions: CompiledInstruction[] = this.instructions.map(
@@ -321,7 +352,7 @@ export class Transaction {
 
     return new Message({
       header: {
-        numRequiredSignatures: this.signatures.length,
+        numRequiredSignatures: signedKeys.length,
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts,
       },

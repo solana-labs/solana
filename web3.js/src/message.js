@@ -13,7 +13,8 @@ import * as shortvec from './util/shortvec-encoding';
  * The message header, identifying signed and read-only account
  *
  * @typedef {Object} MessageHeader
- * @property {number} numRequiredSignatures The number of signatures required for this message to be considered valid
+ * @property {number} numRequiredSignatures The number of signatures required for this message to be considered valid. The
+ * signatures must match the first `numRequiredSignatures` of `accountKeys`.
  * @property {number} numReadonlySignedAccounts: The last `numReadonlySignedAccounts` of the signed keys are read-only accounts
  * @property {number} numReadonlyUnsignedAccounts The last `numReadonlySignedAccounts` of the unsigned keys are read-only accounts
  */
