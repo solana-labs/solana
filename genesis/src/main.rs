@@ -428,12 +428,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.value_of("hashes_per_tick").unwrap() {
         "auto" => match cluster_type {
-            ClusterType::Development | ClusterType::Devnet => {
+            ClusterType::Development => {
                 let hashes_per_tick =
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
                 poh_config.hashes_per_tick = Some(hashes_per_tick);
             }
-            ClusterType::Testnet | ClusterType::MainnetBeta => {
+            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
                 poh_config.hashes_per_tick =
                     Some(clock::DEFAULT_HASHES_PER_SECOND / clock::DEFAULT_TICKS_PER_SECOND);
             }
@@ -450,8 +450,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         value_t_or_exit!(matches, "slots_per_epoch", u64)
     } else {
         match cluster_type {
-            ClusterType::Development | ClusterType::Devnet => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
-            ClusterType::Testnet | ClusterType::MainnetBeta => clock::DEFAULT_SLOTS_PER_EPOCH,
+            ClusterType::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                clock::DEFAULT_SLOTS_PER_EPOCH
+            }
         }
     };
     let epoch_schedule = EpochSchedule::custom(
