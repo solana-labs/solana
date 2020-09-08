@@ -1136,7 +1136,7 @@ impl Bank {
         self.shrink_all_slots();
         shrink.stop();
 
-        debug!(
+        info!(
             "exhaustively_free_unused_resource(): {} {} {}",
             reclaim, clean, shrink,
         );
