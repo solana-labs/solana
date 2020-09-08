@@ -54,7 +54,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
 
   // Find largest fixed point in accounts array
   const balanceFixedPoint = accounts.reduce(
-    (prev: number, current: TokenAccountBalancePair) => {
+    (prev: number, current: TokenAccountBalancePairWithOwner) => {
       const amount = `${current.uiAmount}`;
       const length = amount.length;
       const decimalIndex = amount.indexOf(".");
@@ -125,9 +125,7 @@ const renderAccountRow = (
         <Address pubkey={account.address} link truncate />
       </td>
       <td>
-        {account.owner && (
-          <Address pubkey={account.owner} alignRight link truncate />
-        )}
+        {account.owner && <Address pubkey={account.owner} link truncate />}
       </td>
       <td className="text-right text-monospace">
         {fixedLocaleNumber(account.uiAmount, balanceFixedPoint)}

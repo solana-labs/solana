@@ -24,9 +24,10 @@ import { displayTimestamp } from "utils/date";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { Address } from "components/common/Address";
 import { Signature } from "components/common/Signature";
-import { intoTransactionInstruction } from "utils/tx";
+import { intoTransactionInstruction, isSerumInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
+import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -428,11 +429,13 @@ function InstructionsSection({ signature }: SignatureProps) {
         );
       }
 
-      const props = { ix, result, index };
+      const props = { ix, result, index, signature };
       if (SystemProgram.programId.equals(ix.programId)) {
         return <SystemDetailsCard key={index} {...props} />;
       } else if (StakeProgram.programId.equals(ix.programId)) {
         return <StakeDetailsCard key={index} {...props} />;
+      } else if (isSerumInstruction(ix)) {
+        return <SerumDetailsCard key={index} {...props} />;
       } else {
         return <UnknownDetailsCard key={index} {...props} />;
       }
