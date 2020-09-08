@@ -64,7 +64,7 @@ test('create and query nonce account', async () => {
     minimumAmount * 2,
   );
   mockConfirmTransaction(signature);
-  await connection.confirmTransaction(signature, 0);
+  await connection.confirmTransaction(signature, 'single');
 
   mockRpc.push([
     url,
@@ -113,7 +113,7 @@ test('create and query nonce account', async () => {
     },
   );
   mockConfirmTransaction(nonceSignature);
-  await connection.confirmTransaction(nonceSignature, 0);
+  await connection.confirmTransaction(nonceSignature, 'single');
 
   mockRpc.push([
     url,
@@ -193,7 +193,7 @@ test('create and query nonce account with seed', async () => {
     minimumAmount * 2,
   );
   mockConfirmTransaction(signature);
-  await connection.confirmTransaction(signature, 0);
+  await connection.confirmTransaction(signature, 'single');
 
   mockRpc.push([
     url,
@@ -240,7 +240,7 @@ test('create and query nonce account with seed', async () => {
     skipPreflight: true,
   });
   mockConfirmTransaction(nonceSignature);
-  await connection.confirmTransaction(nonceSignature, 0);
+  await connection.confirmTransaction(nonceSignature, 'single');
 
   mockRpc.push([
     url,
