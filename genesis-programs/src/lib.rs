@@ -12,18 +12,22 @@ use solana_runtime::bank::{Bank, EnteredEpochCallback};
 use solana_sdk::{
     clock::{Epoch, GENESIS_EPOCH},
     entrypoint_native::{ErasedProcessInstructionWithContext, ProcessInstructionWithContext},
-    genesis_config::OperatingMode,
+    genesis_config::ClusterType,
     inflation::Inflation,
     pubkey::Pubkey,
 };
 
-pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Inflation> {
-    match operating_mode {
-        OperatingMode::Development => match epoch {
+pub fn get_inflation(cluster_type: ClusterType, epoch: Epoch) -> Option<Inflation> {
+    match cluster_type {
+        ClusterType::Development => match epoch {
             0 => Some(Inflation::default()),
             _ => None,
         },
-        OperatingMode::Preview => match epoch {
+        ClusterType::Devnet => match epoch {
+            0 => Some(Inflation::default()),
+            _ => None,
+        },
+        ClusterType::Testnet => match epoch {
             // No inflation at epoch 0
             0 => Some(Inflation::new_disabled()),
             // testnet enabled inflation at epoch 44:
@@ -36,7 +40,7 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
             74 => Some(Inflation::default()),
             _ => None,
         },
-        OperatingMode::Stable => match epoch {
+        ClusterType::MainnetBeta => match epoch {
             // No inflation at epoch 0
             0 => Some(Inflation::new_disabled()),
             // Inflation starts The epoch of Epoch::MAX is a placeholder and is
@@ -70,10 +74,10 @@ impl std::fmt::Debug for Program {
     }
 }
 
-// given operating_mode, return the entire set of enabled programs
-fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
-    match operating_mode {
-        OperatingMode::Development => vec![
+// given cluster type, return the entire set of enabled programs
+fn get_programs(cluster_type: ClusterType) -> Vec<(Program, Epoch)> {
+    match cluster_type {
+        ClusterType::Development => vec![
             // Programs used for testing
             Program::BuiltinLoader(solana_bpf_loader_program!()),
             Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
@@ -84,8 +88,18 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
         .into_iter()
         .map(|program| (program, GENESIS_EPOCH))
         .collect::<Vec<_>>(),
+        ClusterType::Devnet => vec![
+            // Programs used for testing
+            Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
+            Program::Native(solana_vest_program!()),
+            Program::Native(solana_budget_program!()),
+            Program::Native(solana_exchange_program!()),
+        ]
+        .into_iter()
+        .map(|program| (program, GENESIS_EPOCH))
+        .collect::<Vec<_>>(),
 
-        OperatingMode::Preview => vec![
+        ClusterType::Testnet => vec![
             (
                 Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
                 GENESIS_EPOCH,
@@ -93,7 +107,7 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
             (Program::BuiltinLoader(solana_bpf_loader_program!()), 89),
         ],
 
-        OperatingMode::Stable => vec![
+        ClusterType::MainnetBeta => vec![
             (
                 Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
                 34,
@@ -108,9 +122,9 @@ fn get_programs(operating_mode: OperatingMode) -> Vec<(Program, Epoch)> {
     }
 }
 
-pub fn get_native_programs_for_genesis(operating_mode: OperatingMode) -> Vec<(String, Pubkey)> {
+pub fn get_native_programs_for_genesis(cluster_type: ClusterType) -> Vec<(String, Pubkey)> {
     let mut native_programs = vec![];
-    for (program, start_epoch) in get_programs(operating_mode) {
+    for (program, start_epoch) in get_programs(cluster_type) {
         if let Program::Native((string, key)) = program {
             if start_epoch == GENESIS_EPOCH {
                 native_programs.push((string, key));
@@ -120,7 +134,7 @@ pub fn get_native_programs_for_genesis(operating_mode: OperatingMode) -> Vec<(St
     native_programs
 }
 
-pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpochCallback {
+pub fn get_entered_epoch_callback(cluster_type: ClusterType) -> EnteredEpochCallback {
     Box::new(move |bank: &mut Bank, initial: bool| {
         // Be careful to add arbitrary logic here; this should be idempotent and can be called
         // at arbitrary point in an epoch not only epoch boundaries.
@@ -129,11 +143,11 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
         // In other words, this callback initializes some skip(serde) fields, regardless
         // frozen or not
 
-        if let Some(inflation) = get_inflation(operating_mode, bank.epoch()) {
+        if let Some(inflation) = get_inflation(cluster_type, bank.epoch()) {
             info!("Entering new epoch with inflation {:?}", inflation);
             bank.set_inflation(inflation);
         }
-        for (program, start_epoch) in get_programs(operating_mode) {
+        for (program, start_epoch) in get_programs(cluster_type) {
             let should_populate =
                 initial && bank.epoch() >= start_epoch || !initial && bank.epoch() == start_epoch;
             if should_populate {
@@ -185,29 +199,30 @@ mod tests {
 
     #[test]
     fn test_uniqueness() {
-        do_test_uniqueness(get_programs(OperatingMode::Development));
-        do_test_uniqueness(get_programs(OperatingMode::Preview));
-        do_test_uniqueness(get_programs(OperatingMode::Stable));
+        do_test_uniqueness(get_programs(ClusterType::Development));
+        do_test_uniqueness(get_programs(ClusterType::Devnet));
+        do_test_uniqueness(get_programs(ClusterType::Testnet));
+        do_test_uniqueness(get_programs(ClusterType::MainnetBeta));
     }
 
     #[test]
     fn test_development_inflation() {
         assert_eq!(
-            get_inflation(OperatingMode::Development, 0).unwrap(),
+            get_inflation(ClusterType::Development, 0).unwrap(),
             Inflation::default()
         );
-        assert_eq!(get_inflation(OperatingMode::Development, 1), None);
+        assert_eq!(get_inflation(ClusterType::Development, 1), None);
     }
 
     #[test]
     fn test_development_programs() {
-        assert_eq!(get_programs(OperatingMode::Development).len(), 5);
+        assert_eq!(get_programs(ClusterType::Development).len(), 5);
     }
 
     #[test]
     fn test_native_development_programs() {
         assert_eq!(
-            get_native_programs_for_genesis(OperatingMode::Development).len(),
+            get_native_programs_for_genesis(ClusterType::Development).len(),
             3
         );
     }
@@ -215,23 +230,23 @@ mod tests {
     #[test]
     fn test_softlaunch_inflation() {
         assert_eq!(
-            get_inflation(OperatingMode::Stable, 0).unwrap(),
+            get_inflation(ClusterType::MainnetBeta, 0).unwrap(),
             Inflation::new_disabled()
         );
-        assert_eq!(get_inflation(OperatingMode::Stable, 1), None);
+        assert_eq!(get_inflation(ClusterType::MainnetBeta, 1), None);
         assert_eq!(
-            get_inflation(OperatingMode::Stable, std::u64::MAX).unwrap(),
+            get_inflation(ClusterType::MainnetBeta, std::u64::MAX).unwrap(),
             Inflation::default()
         );
     }
 
     #[test]
     fn test_softlaunch_programs() {
-        assert!(!get_programs(OperatingMode::Stable).is_empty());
+        assert!(!get_programs(ClusterType::MainnetBeta).is_empty());
     }
 
     #[test]
     fn test_debug() {
-        assert!(!format!("{:?}", get_programs(OperatingMode::Development)).is_empty());
+        assert!(!format!("{:?}", get_programs(ClusterType::Development)).is_empty());
     }
 }

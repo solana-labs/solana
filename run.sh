@@ -78,7 +78,7 @@ else
       "$dataDir"/validator-vote-account.json \
       "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
-    --operating-mode development \
+    --cluster-type development \
     $SPL_GENESIS_ARGS \
     $SOLANA_RUN_SH_GENESIS_ARGS
 fi
