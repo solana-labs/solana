@@ -11,7 +11,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
-    bpf_loader,
+    bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
     entrypoint::MAX_PERMITTED_DATA_INCREASE,
@@ -40,12 +40,17 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf
 }
 
-fn load_bpf_program(bank_client: &BankClient, payer_keypair: &Keypair, name: &str) -> Pubkey {
+fn load_bpf_program(
+    bank_client: &BankClient,
+    loader_id: &Pubkey,
+    payer_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
     let path = create_bpf_path(name);
     let mut file = File::open(path).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    load_program(bank_client, payer_keypair, &bpf_loader::id(), elf)
+    load_program(bank_client, payer_keypair, loader_id, elf)
 }
 
 #[test]
@@ -101,7 +106,8 @@ fn test_program_bpf_sanity() {
         let bank_client = BankClient::new(bank);
 
         // Call user program
-        let program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
+        let program_id =
+            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.0);
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
@@ -119,6 +125,47 @@ fn test_program_bpf_sanity() {
         } else {
             assert!(result.is_err());
         }
+    }
+}
+
+#[test]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
+fn test_program_bpf_loader_deprecated() {
+    solana_logger::setup();
+
+    let mut programs = Vec::new();
+    #[cfg(feature = "bpf_c")]
+    {
+        programs.extend_from_slice(&[("deprecated_loader")]);
+    }
+    #[cfg(feature = "bpf_rust")]
+    {
+        programs.extend_from_slice(&[("solana_bpf_rust_deprecated_loader")]);
+    }
+
+    for program in programs.iter() {
+        println!("Test program: {:?}", program);
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
+        bank.add_builtin_loader(&name, id, entrypoint);
+        let bank_client = BankClient::new(bank);
+
+        let program_id = load_bpf_program(
+            &bank_client,
+            &bpf_loader_deprecated::id(),
+            &mint_keypair,
+            program,
+        );
+        let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
+        let instruction = Instruction::new(program_id, &1u8, account_metas);
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok());
     }
 }
 
@@ -149,7 +196,7 @@ fn test_program_bpf_duplicate_accounts() {
         bank.add_builtin_loader(&name, id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
-        let program_id = load_bpf_program(&bank_client, &mint_keypair, program);
+        let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let payee_account = Account::new(10, 1, &program_id);
         let payee_pubkey = Pubkey::new_rand();
         bank.store_account(&payee_pubkey, &payee_account);
@@ -233,7 +280,7 @@ fn test_program_bpf_error_handling() {
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin_loader(&name, id, entrypoint);
         let bank_client = BankClient::new(bank);
-        let program_id = load_bpf_program(&bank_client, &mint_keypair, program);
+        let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
 
         let instruction = Instruction::new(program_id, &1u8, account_metas.clone());
@@ -342,8 +389,10 @@ fn test_program_bpf_invoke() {
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
-        let invoke_program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
-        let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
+        let invoke_program_id =
+            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.0);
+        let invoked_program_id =
+            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
 
         let argument_keypair = Keypair::new();
         let account = Account::new(42, 100, &invoke_program_id);
