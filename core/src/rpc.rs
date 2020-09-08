@@ -1804,14 +1804,10 @@ impl RpcSol for RpcSolImpl {
             "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
             data_len
         );
-<<<<<<< HEAD
-        meta.get_minimum_balance_for_rent_exemption(data_len, commitment)
-=======
         if data_len as u64 > system_instruction::MAX_PERMITTED_DATA_LENGTH {
             return Err(Error::invalid_request());
         }
-        Ok(meta.get_minimum_balance_for_rent_exemption(data_len, commitment))
->>>>>>> 9e96180ce... getMinimumBalanceForRentExemption now only responds to valid account lengths
+        meta.get_minimum_balance_for_rent_exemption(data_len, commitment)
     }
 
     fn get_program_accounts(
