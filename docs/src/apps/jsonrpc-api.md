@@ -111,10 +111,10 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 
-- `{"commitment":"max"}` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
-- `{"commitment":"root"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
-- `{"commitment":"single"}` - the node will query the most recent bank having reached 1 confirmation
-- `{"commitment":"recent"}` - the node will query its most recent bank
+- `"max"` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
+- `"root"` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
+- `"single"` - the node will query the most recent bank having reached 1 confirmation
+- `"recent"` - the node will query its most recent bank
 
 The commitment parameter should be included as the last element in the `params` array:
 
@@ -124,7 +124,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Default:
 
-If commitment configuration is not provided, the node will default to `"commitment":"max"`
+If commitment configuration is not provided, the node will default to `"max"` commitment
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 
@@ -1397,7 +1397,7 @@ Before submitting, the following preflight checks are performed:
 - `<string>` - fully-signed Transaction, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following field:
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
-  - `preflightCommitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: max).
+  - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"max"`).
 
 #### Results:
 
@@ -1422,7 +1422,7 @@ Simulate sending a transaction
 - `<string>` - Transaction, as base-58 encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
-  - `commitment: <object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: max).
+  - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"max"`).
 
 #### Results:
 
