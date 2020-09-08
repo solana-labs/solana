@@ -2027,7 +2027,7 @@ impl Bank {
         &self,
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
         rent_to_be_distributed: u64,
-    ) {
+    ) -> u64 {
         let mut total_staked = 0;
         let mut rent_distributed_in_initial_round = 0;
 
@@ -2083,6 +2083,7 @@ impl Bank {
                 account.lamports += rent_to_be_paid;
                 self.store_account(&pubkey, &account);
             });
+        leftover_lamports
     }
 
     fn distribute_rent(&self) {
@@ -2100,7 +2101,12 @@ impl Bank {
             return;
         }
 
-        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
+        let leftover =
+            self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
+        if leftover != 0 {
+            warn!("There was leftover from rent distribution: {}", leftover);
+            self.capitalization.fetch_sub(leftover, Ordering::Relaxed);
+        }
     }
 
     fn collect_rent(
