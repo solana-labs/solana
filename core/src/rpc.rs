@@ -2150,7 +2150,10 @@ impl RpcSol for RpcSolImpl {
                 .into());
             }
 
-            let preflight_bank = &*meta.bank(config.preflight_commitment)?;
+            let preflight_commitment = config
+                .preflight_commitment
+                .map(|commitment| CommitmentConfig { commitment });
+            let preflight_bank = &*meta.bank(preflight_commitment)?;
             if let (Err(err), _log_output) =
                 run_transaction_simulation(&preflight_bank, transaction.clone())
             {
