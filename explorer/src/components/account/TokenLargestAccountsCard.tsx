@@ -52,7 +52,22 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     return <ErrorCard text="No holders found" />;
   }
 
+  // Find largest fixed point in accounts array
+  const balanceFixedPoint = accounts.reduce(
+    (prev: number, current: TokenAccountBalancePair) => {
+      const amount = `${current.uiAmount}`;
+      const length = amount.length;
+      const decimalIndex = amount.indexOf(".");
+      if (decimalIndex >= 0 && length - decimalIndex - 1 > prev) {
+        return length - decimalIndex - 1;
+      }
+      return prev;
+    },
+    0
+  );
+
   const supplyTotal = normalizeTokenAmount(mintInfo.supply, mintInfo.decimals);
+
   return (
     <>
       <div className="card">
@@ -77,7 +92,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
             </thead>
             <tbody className="list">
               {accounts.map((account, index) =>
-                renderAccountRow(account, index, supplyTotal)
+                renderAccountRow(account, index, balanceFixedPoint, supplyTotal)
               )}
             </tbody>
           </table>
@@ -90,11 +105,16 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
 const renderAccountRow = (
   account: TokenAccountBalancePairWithOwner,
   index: number,
+  balanceFixedPoint: number,
   supply: number
 ) => {
   let percent = "-";
   if (supply > 0) {
     percent = `${((100 * account.uiAmount) / supply).toFixed(3)}%`;
+
+    if (parseFloat(percent) === 0 && account.uiAmount > 0) {
+      percent = `~${percent}`;
+    }
   }
   return (
     <tr key={index}>
@@ -109,8 +129,21 @@ const renderAccountRow = (
           <Address pubkey={account.owner} alignRight link truncate />
         )}
       </td>
-      <td className="text-right">{account.uiAmount}</td>
-      <td className="text-right">{percent}</td>
+      <td className="text-right text-monospace">
+        {fixedLocaleNumber(account.uiAmount, balanceFixedPoint)}
+      </td>
+      <td className="text-right text-monospace">{percent}</td>
     </tr>
   );
 };
+
+function fixedLocaleNumber(value: number, fixedPoint: number) {
+  const fixed = value.toFixed(fixedPoint);
+  const split = fixed.split(".");
+
+  if (fixedPoint < 1) {
+    return parseInt(split[0], 10).toLocaleString("en");
+  }
+
+  return [parseInt(split[0], 10).toLocaleString("en"), split[1]].join(".");
+}
