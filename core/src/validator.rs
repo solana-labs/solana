@@ -297,49 +297,6 @@ impl Validator {
             &exit,
         );
 
-        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let rpc_service = config
-            .rpc_ports
-            .map(|(rpc_port, rpc_pubsub_port, rpc_banks_port)| {
-                if ContactInfo::is_valid_address(&node.info.rpc) {
-                    assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                    assert_eq!(rpc_port, node.info.rpc.port());
-                    assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
-                    assert_eq!(rpc_banks_port, node.info.rpc_banks.port());
-                } else {
-                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                }
-                let tpu_address = cluster_info.my_contact_info().tpu;
-                (
-                    JsonRpcService::new(
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
-                        config.rpc_config.clone(),
-                        config.snapshot_config.clone(),
-                        bank_forks.clone(),
-                        block_commitment_cache.clone(),
-                        blockstore.clone(),
-                        cluster_info.clone(),
-                        genesis_config.hash(),
-                        ledger_path,
-                        validator_exit.clone(),
-                        config.trusted_validators.clone(),
-                        rpc_override_health_check.clone(),
-                    ),
-                    PubSubService::new(
-                        &subscriptions,
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-                        &exit,
-                    ),
-                    RpcBanksService::new(
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_banks_port),
-                        tpu_address,
-                        &bank_forks,
-                        &block_commitment_cache,
-                        &exit,
-                    ),
-                )
-            });
-
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
             bank.epoch(),
@@ -362,7 +319,7 @@ impl Validator {
             std::thread::park();
         }
 
-        let poh_config = Arc::new(genesis_config.poh_config);
+        let poh_config = Arc::new(genesis_config.poh_config.clone());
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -385,6 +342,50 @@ impl Validator {
             poh_recorder.set_bank(&bank);
         }
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+        let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        let rpc_service = config
+            .rpc_ports
+            .map(|(rpc_port, rpc_pubsub_port, rpc_banks_port)| {
+                if ContactInfo::is_valid_address(&node.info.rpc) {
+                    assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                    assert_eq!(rpc_port, node.info.rpc.port());
+                    assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
+                    assert_eq!(rpc_banks_port, node.info.rpc_banks.port());
+                } else {
+                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                }
+                let tpu_address = cluster_info.my_contact_info().tpu;
+                (
+                    JsonRpcService::new(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                        config.rpc_config.clone(),
+                        config.snapshot_config.clone(),
+                        bank_forks.clone(),
+                        block_commitment_cache.clone(),
+                        blockstore.clone(),
+                        cluster_info.clone(),
+                        Some(poh_recorder.clone()),
+                        genesis_config.hash(),
+                        ledger_path,
+                        validator_exit.clone(),
+                        config.trusted_validators.clone(),
+                        rpc_override_health_check.clone(),
+                    ),
+                    PubSubService::new(
+                        &subscriptions,
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+                        &exit,
+                    ),
+                    RpcBanksService::new(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_banks_port),
+                        tpu_address,
+                        &bank_forks,
+                        &block_commitment_cache,
+                        &exit,
+                    ),
+                )
+            });
 
         let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
 
