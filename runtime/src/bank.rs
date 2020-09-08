@@ -2103,7 +2103,10 @@ impl Bank {
 
         let leftover =
             self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-        self.capitalization.fetch_sub(leftover, Ordering::Relaxed);
+        if leftover != 0 {
+            warn!("There was leftover from rent distribution: {}", leftover);
+            self.capitalization.fetch_sub(leftover, Ordering::Relaxed);
+        }
     }
 
     fn collect_rent(

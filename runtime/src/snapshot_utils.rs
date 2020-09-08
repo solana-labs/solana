@@ -14,7 +14,12 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use regex::Regex;
 use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{
+    clock::Slot,
+    genesis_config::{ClusterType, GenesisConfig},
+    hash::Hash,
+    pubkey::Pubkey,
+};
 use std::{
     cmp::Ordering,
     fmt,
@@ -591,6 +596,17 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
+    if genesis_config.cluster_type == ClusterType::Testnet {
+        let old = bank.set_capitalization();
+        if old != bank.capitalization() {
+            warn!(
+                "Capitalization was recalculated: {} => {}",
+                old,
+                bank.capitalization()
+            )
+        }
+    }
+
     measure.stop();
     info!("{}", measure);
 
