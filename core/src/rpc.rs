@@ -50,6 +50,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     stake_history::StakeHistory,
+    system_instruction,
     sysvar::{stake_history, Sysvar},
     timing::slot_duration_from_slots_per_year,
     transaction::{self, Transaction},
@@ -1803,7 +1804,14 @@ impl RpcSol for RpcSolImpl {
             "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
             data_len
         );
+<<<<<<< HEAD
         meta.get_minimum_balance_for_rent_exemption(data_len, commitment)
+=======
+        if data_len as u64 > system_instruction::MAX_PERMITTED_DATA_LENGTH {
+            return Err(Error::invalid_request());
+        }
+        Ok(meta.get_minimum_balance_for_rent_exemption(data_len, commitment))
+>>>>>>> 9e96180ce... getMinimumBalanceForRentExemption now only responds to valid account lengths
     }
 
     fn get_program_accounts(
@@ -2505,7 +2513,7 @@ pub mod tests {
         message::Message,
         nonce, rpc_port,
         signature::{Keypair, Signer},
-        system_instruction, system_program, system_transaction,
+        system_program, system_transaction,
         transaction::{self, TransactionError},
     };
     use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
