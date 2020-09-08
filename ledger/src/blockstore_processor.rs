@@ -313,7 +313,7 @@ fn initiate_callback(mut bank: &mut Arc<Bank>, genesis_config: &GenesisConfig) {
     Arc::get_mut(&mut bank)
         .unwrap()
         .initiate_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
-            genesis_config.operating_mode,
+            genesis_config.cluster_type,
         ));
 }
 
@@ -3173,7 +3173,7 @@ pub mod tests {
             mut genesis_config, ..
         } = create_genesis_config(123);
 
-        genesis_config.operating_mode = solana_sdk::genesis_config::OperatingMode::Stable;
+        genesis_config.cluster_type = solana_sdk::genesis_config::ClusterType::MainnetBeta;
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
 

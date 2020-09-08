@@ -407,7 +407,7 @@ mod tests {
     use solana_runtime::{
         bank::Bank, bank_forks::CompressionType, snapshot_utils::SnapshotVersion,
     };
-    use solana_sdk::{genesis_config::OperatingMode, signature::Signer};
+    use solana_sdk::{genesis_config::ClusterType, signature::Signer};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -462,7 +462,7 @@ mod tests {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
-        genesis_config.operating_mode = OperatingMode::Stable;
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Bank::new(&genesis_config);
         Arc::new(RwLock::new(BankForks::new(bank)))
     }

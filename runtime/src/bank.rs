@@ -39,7 +39,7 @@ use solana_sdk::{
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
@@ -452,7 +452,7 @@ pub struct Bank {
 
     pub skip_drop: AtomicBool,
 
-    pub operating_mode: Option<OperatingMode>,
+    pub cluster_type: Option<ClusterType>,
 
     pub lazy_rent_collection: AtomicBool,
 
@@ -477,10 +477,10 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
     ) -> Self {
         let mut bank = Self::default();
-        bank.operating_mode = Some(genesis_config.operating_mode);
+        bank.cluster_type = Some(genesis_config.cluster_type);
         bank.ancestors.insert(bank.slot(), 0);
 
-        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.operating_mode));
+        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config);
 
@@ -547,7 +547,7 @@ impl Bank {
             collected_rent: AtomicU64::new(0),
             rent_collector: parent
                 .rent_collector
-                .clone_with_epoch(epoch, parent.operating_mode()),
+                .clone_with_epoch(epoch, parent.cluster_type()),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator: fee_rate_governor.create_fee_calculator(),
@@ -572,7 +572,7 @@ impl Bank {
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
             skip_drop: AtomicBool::new(false),
-            operating_mode: parent.operating_mode,
+            cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
@@ -665,7 +665,7 @@ impl Bank {
             // clone()-ing is needed to consider a gated behavior in rent_collector
             rent_collector: fields
                 .rent_collector
-                .clone_with_epoch(fields.epoch, genesis_config.operating_mode),
+                .clone_with_epoch(fields.epoch, genesis_config.cluster_type),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes: RwLock::new(fields.stakes),
@@ -676,7 +676,7 @@ impl Bank {
             last_vote_sync: new(),
             rewards: new(),
             skip_drop: new(),
-            operating_mode: Some(genesis_config.operating_mode),
+            cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
         };
@@ -1218,7 +1218,7 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
-            self.operating_mode(),
+            self.cluster_type(),
         );
 
         // Add additional native programs specified in the genesis config
@@ -1619,13 +1619,14 @@ impl Bank {
 
     // Determine if the bank is currently in an upgrade epoch, where only votes are permitted
     fn upgrade_epoch(&self) -> bool {
-        match self.operating_mode() {
+        match self.cluster_type() {
             #[cfg(test)]
-            OperatingMode::Development => self.epoch == 0xdead, // Value assumed by `test_upgrade_epoch()`
+            ClusterType::Development => self.epoch == 0xdead, // Value assumed by `test_upgrade_epoch()`
             #[cfg(not(test))]
-            OperatingMode::Development => false,
-            OperatingMode::Preview => false,
-            OperatingMode::Stable => self.epoch == 61,
+            ClusterType::Development => false,
+            ClusterType::Devnet => false,
+            ClusterType::Testnet => false,
+            ClusterType::MainnetBeta => self.epoch == 61,
         }
     }
 
@@ -2302,15 +2303,16 @@ impl Bank {
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
 
-        let should_enable = match self.operating_mode() {
-            OperatingMode::Development => true,
-            OperatingMode::Preview => current_epoch >= Epoch::max_value(),
-            OperatingMode::Stable => {
+        let should_enable = match self.cluster_type() {
+            ClusterType::Development => true,
+            ClusterType::Devnet => true,
+            ClusterType::Testnet => current_epoch >= Epoch::max_value(),
+            ClusterType::MainnetBeta => {
                 #[cfg(not(test))]
                 let should_enable = current_epoch >= Epoch::max_value();
 
                 // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
-                // which depends on OperatingMode::Stable
+                // which depends on ClusterType::MainnetBeta
                 #[cfg(test)]
                 let should_enable = true;
 
@@ -2487,14 +2489,14 @@ impl Bank {
     // within an epoch, so lower the frequency of it.
     // These logic isn't strictly eager anymore and should only be used
     // for development/performance purpose.
-    // Absolutely not under OperationMode::Stable!!!!
+    // Absolutely not under ClusterType::MainnetBeta!!!!
     fn use_multi_epoch_collection_cycle(&self, epoch: Epoch) -> bool {
         epoch >= self.first_normal_epoch()
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
     fn use_fixed_collection_cycle(&self) -> bool {
-        self.operating_mode() != OperatingMode::Stable
+        self.cluster_type() != ClusterType::MainnetBeta
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
@@ -2509,10 +2511,10 @@ impl Bank {
         self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
-    pub fn operating_mode(&self) -> OperatingMode {
-        // unwrap is safe; self.operating_mode is ensured to be Some() always...
+    pub fn cluster_type(&self) -> ClusterType {
+        // unwrap is safe; self.cluster_type is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
-        self.operating_mode.unwrap()
+        self.cluster_type.unwrap()
     }
 
     /// Process a batch of transactions.
@@ -2623,10 +2625,11 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
 
-        let should_be_in_new_behavior = match self.operating_mode() {
-            OperatingMode::Development => true,
-            OperatingMode::Preview => self.epoch() >= Epoch::max_value(),
-            OperatingMode::Stable => self.epoch() >= Epoch::max_value(),
+        let should_be_in_new_behavior = match self.cluster_type() {
+            ClusterType::Development => true,
+            ClusterType::Devnet => true,
+            ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
+            ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
         };
 
         // don't collect rents if we're in the new behavior;
@@ -3246,7 +3249,7 @@ impl Bank {
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
-        for (program, start_epoch) in get_builtins(self.operating_mode()) {
+        for (program, start_epoch) in get_builtins(self.cluster_type()) {
             let should_populate = init_or_warp && self.epoch() >= start_epoch
                 || !init_or_warp && self.epoch() == start_epoch;
             if should_populate {
@@ -3264,7 +3267,7 @@ impl Bank {
     }
 
     fn recheck_cross_program_support(&mut self) {
-        if OperatingMode::Stable == self.operating_mode() {
+        if ClusterType::MainnetBeta == self.cluster_type() {
             self.set_cross_program_support(self.epoch() >= 63);
         } else {
             self.set_cross_program_support(true);
@@ -3272,7 +3275,7 @@ impl Bank {
     }
 
     fn recheck_compute_budget(&mut self) {
-        let compute_budget = if OperatingMode::Stable == self.operating_mode() {
+        let compute_budget = if ClusterType::MainnetBeta == self.cluster_type() {
             if self.epoch() >= u64::MAX - 1 {
                 ComputeBudget::default()
             } else {
@@ -3293,10 +3296,11 @@ impl Bank {
     }
 
     fn reconfigure_token2_native_mint(&mut self) {
-        let reconfigure_token2_native_mint = match self.operating_mode() {
-            OperatingMode::Development => true,
-            OperatingMode::Preview => self.epoch() == 93,
-            OperatingMode::Stable => self.epoch() == 75,
+        let reconfigure_token2_native_mint = match self.cluster_type() {
+            ClusterType::Development => true,
+            ClusterType::Devnet => true,
+            ClusterType::Testnet => self.epoch() == 93,
+            ClusterType::MainnetBeta => self.epoch() == 75,
         };
 
         if reconfigure_token2_native_mint {
@@ -3336,13 +3340,14 @@ impl Bank {
     }
 
     fn ensure_no_storage_rewards_pool(&mut self) {
-        let purge_window_epoch = match self.operating_mode() {
-            // never do this for testnet; we're pristine here. :)
-            OperatingMode::Development => false,
+        let purge_window_epoch = match self.cluster_type() {
+            ClusterType::Development => false,
+            // never do this for devnet; we're pristine here. :)
+            ClusterType::Devnet => false,
             // schedule to remove at testnet/tds
-            OperatingMode::Preview => self.epoch() == 93,
+            ClusterType::Testnet => self.epoch() == 93,
             // never do this for stable; we're pristine here. :)
-            OperatingMode::Stable => false,
+            ClusterType::MainnetBeta => false,
         };
 
         if purge_window_epoch {
@@ -3365,10 +3370,11 @@ impl Bank {
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
-        let activation_slot = match self.operating_mode() {
-            OperatingMode::Development => 0,
-            OperatingMode::Preview => 27_740_256, // Epoch 76
-            OperatingMode::Stable => Slot::MAX / 2,
+        let activation_slot = match self.cluster_type() {
+            ClusterType::Development => 0,
+            ClusterType::Devnet => 0,
+            ClusterType::Testnet => 27_740_256, // Epoch 76
+            ClusterType::MainnetBeta => Slot::MAX / 2,
         };
 
         self.slot() >= activation_slot
@@ -3589,7 +3595,7 @@ mod tests {
             accounts: (0..42)
                 .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &Pubkey::default())))
                 .collect(),
-            operating_mode: OperatingMode::Stable,
+            cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
         assert_eq!(bank.capitalization(), 42 * 42);
@@ -4368,7 +4374,7 @@ mod tests {
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
-        genesis_config.operating_mode = OperatingMode::Stable;
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -4438,7 +4444,7 @@ mod tests {
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
-        genesis_config.operating_mode = OperatingMode::Stable;
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -4496,7 +4502,7 @@ mod tests {
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
-        genesis_config.operating_mode = OperatingMode::Stable;
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64 * 8;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -5055,7 +5061,7 @@ mod tests {
                 hashes_per_tick: None,
                 target_tick_count: None,
             },
-            operating_mode: OperatingMode::Stable,
+            cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()
         }));
@@ -5167,7 +5173,7 @@ mod tests {
                 hashes_per_tick: None,
                 target_tick_count: None,
             },
-            operating_mode: OperatingMode::Stable,
+            cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()
         }));
@@ -8120,7 +8126,7 @@ mod tests {
             &[],
         );
         genesis_config.creation_time = 0;
-        genesis_config.operating_mode = OperatingMode::Stable;
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
         let mut bank = Arc::new(Bank::new(&genesis_config));
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
@@ -8481,16 +8487,16 @@ mod tests {
         let mut genesis_config =
             create_genesis_config_with_leader(5, &Pubkey::new_rand(), 0).genesis_config;
 
-        // OperatingMode::Development - Native mint exists immediately
-        assert_eq!(genesis_config.operating_mode, OperatingMode::Development);
+        // ClusterType::Development - Native mint exists immediately
+        assert_eq!(genesis_config.cluster_type, ClusterType::Development);
         let bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             1000000000
         );
 
-        // OperatingMode::Preview - Native mint blinks into existence at epoch 93
-        genesis_config.operating_mode = OperatingMode::Preview;
+        // Testnet - Native mint blinks into existence at epoch 93
+        genesis_config.cluster_type = ClusterType::Testnet;
         let bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
@@ -8514,8 +8520,8 @@ mod tests {
         );
         assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
 
-        // OperatingMode::Stable - Native mint blinks into existence at epoch 75
-        genesis_config.operating_mode = OperatingMode::Stable;
+        // MainnetBeta - Native mint blinks into existence at epoch 75
+        genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
@@ -8547,9 +8553,9 @@ mod tests {
         let mut genesis_config =
             create_genesis_config_with_leader(5, &Pubkey::new_rand(), 0).genesis_config;
 
-        // OperatingMode::Preview - Storage rewards pool is purged at epoch 93
+        // Testnet - Storage rewards pool is purged at epoch 93
         // Also this is with bad capitalization
-        genesis_config.operating_mode = OperatingMode::Preview;
+        genesis_config.cluster_type = ClusterType::Testnet;
         genesis_config.inflation = Inflation::default();
         let reward_pubkey = Pubkey::new_rand();
         genesis_config.rewards_pools.insert(

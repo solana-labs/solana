@@ -32,7 +32,7 @@ use solana_sdk::{
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-    genesis_config::OperatingMode,
+    genesis_config::ClusterType,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -734,11 +734,11 @@ fn test_listener_startup() {
 
 #[test]
 #[serial]
-fn test_stable_operating_mode() {
+fn test_mainnet_beta_cluster_type() {
     solana_logger::setup();
 
     let config = ClusterConfig {
-        operating_mode: OperatingMode::Stable,
+        cluster_type: ClusterType::MainnetBeta,
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![ValidatorConfig::default(); 1],
