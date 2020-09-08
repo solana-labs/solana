@@ -290,7 +290,7 @@ test('live Nonce actions', async () => {
     connection,
     createNonceAccount,
     [from, nonceAccount],
-    {confirmations: 0, skipPreflight: true},
+    {commitment: 'single', skipPreflight: true},
   );
   const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
   expect(nonceBalance).toEqual(minimumAmount);
@@ -319,7 +319,7 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, advanceNonce, [from], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
@@ -341,7 +341,7 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, authorizeNonce, [from], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -359,7 +359,7 @@ test('live Nonce actions', async () => {
   };
 
   await sendAndConfirmTransaction(connection, transfer, [from, newAuthority], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
   const toBalance = await connection.getBalance(to.publicKey);
@@ -378,7 +378,7 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, withdrawNonce, [newAuthority], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
   expect(await connection.getBalance(nonceAccount.publicKey)).toEqual(0);

@@ -9,6 +9,7 @@
 pub mod accounts_background_service;
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
+pub mod bigtable_upload_service;
 pub mod broadcast_stage;
 pub mod cluster_info_vote_listener;
 pub mod commitment_service;
@@ -57,6 +58,7 @@ pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
 pub mod rpc_service;
 pub mod rpc_subscriptions;
+pub mod send_transaction_service;
 pub mod serve_repair;
 pub mod serve_repair_service;
 pub mod sigverify;

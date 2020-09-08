@@ -8,6 +8,7 @@ use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     clock::UnixTimestamp,
     commitment_config::CommitmentConfig,
+    genesis_config::ClusterType,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature, Signer},
@@ -176,6 +177,10 @@ pub fn resolve_signer(
 
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
+}
+
+pub fn cluster_type_of(matches: &ArgMatches<'_>, name: &str) -> Option<ClusterType> {
+    value_of(matches, name)
 }
 
 pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentConfig> {

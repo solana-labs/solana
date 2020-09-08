@@ -634,7 +634,7 @@ impl RpcSubscriptions {
     ) {
         let (commitment, enable_received_notification) = signature_subscribe_config
             .map(|config| (config.commitment, config.enable_received_notification))
-            .unwrap_or((None, Some(false)));
+            .unwrap_or_default();
 
         let commitment_level = commitment
             .unwrap_or_else(CommitmentConfig::recent)
@@ -970,9 +970,7 @@ impl RpcSubscriptions {
                     },
                 ) in hashmap.iter()
                 {
-                    if is_received_notification_enabled
-                        .expect("All signature subscriptions must have this config field set")
-                    {
+                    if is_received_notification_enabled.unwrap_or_default() {
                         notifier.notify(
                             Response {
                                 context: RpcResponseContext {

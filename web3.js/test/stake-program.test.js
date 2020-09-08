@@ -295,7 +295,7 @@ test('live staking actions', async () => {
       connection,
       createAndInitialize,
       [from, newStakeAccount],
-      {confirmations: 0, skipPreflight: true},
+      {commitment: 'single', skipPreflight: true},
     );
     expect(await connection.getBalance(newStakeAccount.publicKey)).toEqual(
       minimumAmount + 42,
@@ -307,7 +307,7 @@ test('live staking actions', async () => {
       votePubkey,
     });
     await sendAndConfirmTransaction(connection, delegation, [authorized], {
-      confirmations: 0,
+      commitment: 'single',
       skipPreflight: true,
     });
   }
@@ -334,7 +334,7 @@ test('live staking actions', async () => {
     connection,
     createAndInitializeWithSeed,
     [from],
-    {confirmations: 0, skipPreflight: true},
+    {commitment: 'single', skipPreflight: true},
   );
   let originalStakeBalance = await connection.getBalance(newAccountPubkey);
   expect(originalStakeBalance).toEqual(3 * minimumAmount + 42);
@@ -345,7 +345,7 @@ test('live staking actions', async () => {
     votePubkey,
   });
   await sendAndConfirmTransaction(connection, delegation, [authorized], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -359,7 +359,7 @@ test('live staking actions', async () => {
   });
   await expect(
     sendAndConfirmTransaction(connection, withdraw, [authorized], {
-      confirmations: 0,
+      commitment: 'single',
       skipPreflight: true,
     }),
   ).rejects.toThrow();
@@ -373,7 +373,7 @@ test('live staking actions', async () => {
     lamports: minimumAmount + 20,
   });
   await sendAndConfirmTransaction(connection, split, [authorized, newStake], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -388,7 +388,7 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
   });
   await sendAndConfirmTransaction(connection, authorize, [authorized], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
   authorize = StakeProgram.authorize({
@@ -398,7 +398,7 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Staker,
   });
   await sendAndConfirmTransaction(connection, authorize, [authorized], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -412,7 +412,7 @@ test('live staking actions', async () => {
       connection,
       deactivateNotAuthorized,
       [authorized],
-      {confirmations: 0, skipPreflight: true},
+      {commitment: 'single', skipPreflight: true},
     ),
   ).rejects.toThrow();
 
@@ -422,7 +422,7 @@ test('live staking actions', async () => {
     authorizedPubkey: newAuthorized.publicKey,
   });
   await sendAndConfirmTransaction(connection, deactivate, [newAuthorized], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -434,7 +434,7 @@ test('live staking actions', async () => {
     lamports: minimumAmount + 20,
   });
   await sendAndConfirmTransaction(connection, withdraw, [newAuthorized], {
-    confirmations: 0,
+    commitment: 'single',
     skipPreflight: true,
   });
   const balance = await connection.getBalance(newAccountPubkey);

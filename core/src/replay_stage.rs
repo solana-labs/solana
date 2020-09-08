@@ -33,7 +33,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-    genesis_config::OperatingMode,
+    genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -281,7 +281,7 @@ impl ReplayStage {
                 let root_bank = bank_forks.read().unwrap().root_bank().clone();
                 let root = root_bank.slot();
                 let unlock_heaviest_subtree_fork_choice_slot =
-                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
+                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
                 let mut heaviest_subtree_fork_choice =
                     HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
@@ -1129,7 +1129,7 @@ impl ReplayStage {
         let node_keypair = cluster_info.keypair.clone();
 
         // Send our last few votes along with the new one
-        let vote_ix = if bank.slot() > Self::get_unlock_switch_vote_slot(bank.operating_mode()) {
+        let vote_ix = if bank.slot() > Self::get_unlock_switch_vote_slot(bank.cluster_type()) {
             switch_fork_decision
                 .to_vote_instruction(
                     vote,
@@ -1855,23 +1855,25 @@ impl ReplayStage {
         }
     }
 
-    pub fn get_unlock_switch_vote_slot(operating_mode: OperatingMode) -> Slot {
-        match operating_mode {
-            OperatingMode::Development => 0,
-            // 400_000 slots into epoch 61
-            OperatingMode::Stable => 26_752_000,
+    pub fn get_unlock_switch_vote_slot(cluster_type: ClusterType) -> Slot {
+        match cluster_type {
+            ClusterType::Development => 0,
+            ClusterType::Devnet => 0,
             // Epoch 63
-            OperatingMode::Preview => 21_692_256,
+            ClusterType::Testnet => 21_692_256,
+            // 400_000 slots into epoch 61
+            ClusterType::MainnetBeta => 26_752_000,
         }
     }
 
-    pub fn get_unlock_heaviest_subtree_fork_choice(operating_mode: OperatingMode) -> Slot {
-        match operating_mode {
-            OperatingMode::Development => 0,
-            // 400_000 slots into epoch 61
-            OperatingMode::Stable => 26_752_000,
+    pub fn get_unlock_heaviest_subtree_fork_choice(cluster_type: ClusterType) -> Slot {
+        match cluster_type {
+            ClusterType::Development => 0,
+            ClusterType::Devnet => 0,
             // Epoch 63
-            OperatingMode::Preview => 21_692_256,
+            ClusterType::Testnet => 21_692_256,
+            // 400_000 slots into epoch 61
+            ClusterType::MainnetBeta => 26_752_000,
         }
     }
 

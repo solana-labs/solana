@@ -361,7 +361,7 @@ mod test {
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
     use solana_sdk::{
         commitment_config::CommitmentConfig,
-        genesis_config::OperatingMode,
+        genesis_config::ClusterType,
         message::Message,
         native_token::sol_to_lamports,
         signature::{Keypair, Signer},
@@ -378,7 +378,7 @@ mod test {
 
         let one_sol = sol_to_lamports(1.0);
         let cluster = LocalCluster::new(&ClusterConfig {
-            operating_mode: OperatingMode::Stable,
+            cluster_type: ClusterType::MainnetBeta,
             node_stakes: vec![10; 1],
             cluster_lamports: sol_to_lamports(1_000_000_000.0),
             validator_configs: vec![ValidatorConfig {

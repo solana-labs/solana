@@ -1,7 +1,9 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
-    display::{format_labeled_address, new_spinner_progress_bar, println_name_value},
+    display::{
+        format_labeled_address, new_spinner_progress_bar, println_name_value, println_transaction,
+    },
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -33,6 +35,7 @@ use solana_sdk::{
     },
     transaction::Transaction,
 };
+use solana_transaction_status::UiTransactionEncoding;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     net::SocketAddr,
@@ -54,6 +57,19 @@ pub trait ClusterQuerySubCommands {
 impl ClusterQuerySubCommands for App<'_, '_> {
     fn cluster_query_subcommands(self) -> Self {
         self.subcommand(
+            SubCommand::with_name("block")
+                .about("Get a confirmed block")
+                .arg(
+                    Arg::with_name("slot")
+                        .long("slot")
+                        .validator(is_slot)
+                        .value_name("SLOT")
+                        .takes_value(true)
+                        .index(1)
+                        .required(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
                 .arg(
@@ -88,6 +104,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get the version of the cluster entrypoint"),
         )
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .subcommand(
+            SubCommand::with_name("first-available-block")
+                .about("Get the first available block in the storage"),
+        )
         .subcommand(SubCommand::with_name("block-time")
             .about("Get estimated production time of a block")
             .alias("get-block-time")
@@ -283,6 +303,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Start with the first signature older than this one"),
                 )
+                .arg(
+                    Arg::with_name("show_transactions")
+                        .long("show-transactions")
+                        .takes_value(false)
+                        .help("Display the full transactions"),
+                )
         )
     }
 }
@@ -330,6 +356,14 @@ pub fn parse_cluster_ping(
             "keypair",
             wallet_manager,
         )?],
+    })
+}
+
+pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let slot = value_t_or_exit!(matches, "slot", Slot);
+    Ok(CliCommandInfo {
+        command: CliCommand::GetBlock { slot },
+        signers: vec![],
     })
 }
 
@@ -454,6 +488,7 @@ pub fn parse_transaction_history(
         None => None,
     };
     let limit = value_t_or_exit!(matches, "limit", usize);
+    let show_transactions = matches.is_present("show_transactions");
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
@@ -461,6 +496,7 @@ pub fn parse_transaction_history(
             before,
             until,
             limit,
+            show_transactions,
         },
         signers: vec![],
     })
@@ -603,6 +639,11 @@ pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult
     Ok(config.output_format.formatted_string(&fees))
 }
 
+pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
+    let first_available_block = rpc_client.get_first_available_block()?;
+    Ok(format!("{}", first_available_block))
+}
+
 pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let first_slot_in_epoch = epoch_info.absolute_slot - epoch_info.slot_index;
@@ -635,6 +676,42 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
         );
     }
 
+    Ok("".to_string())
+}
+
+pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot) -> ProcessResult {
+    let block =
+        rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+
+    println!("Slot: {}", slot);
+    println!("Parent Slot: {}", block.parent_slot);
+    println!("Blockhash: {}", block.blockhash);
+    println!("Previous Blockhash: {}", block.previous_blockhash);
+    if block.block_time.is_some() {
+        println!("Block Time: {:?}", block.block_time);
+    }
+    if !block.rewards.is_empty() {
+        println!("Rewards:",);
+        for reward in block.rewards {
+            println!(
+                "  {:<44}: {}",
+                reward.pubkey,
+                if reward.lamports > 0 {
+                    format!("◎{}", lamports_to_sol(reward.lamports as u64))
+                } else {
+                    format!("◎-{}", lamports_to_sol(reward.lamports.abs() as u64))
+                }
+            );
+        }
+    }
+    for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
+        println!("Transaction {}:", index);
+        println_transaction(
+            &transaction_with_meta.transaction.decode().unwrap(),
+            &transaction_with_meta.meta,
+            "  ",
+        );
+    }
     Ok("".to_string())
 }
 
@@ -1323,6 +1400,7 @@ pub fn process_transaction_history(
     before: Option<Signature>,
     until: Option<Signature>,
     limit: usize,
+    show_transactions: bool,
 ) -> ProcessResult {
     let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
         address,
@@ -1349,6 +1427,28 @@ pub fn process_transaction_history(
             );
         } else {
             println!("{}", result.signature);
+        }
+
+        if show_transactions {
+            if let Ok(signature) = result.signature.parse::<Signature>() {
+                match rpc_client
+                    .get_confirmed_transaction(&signature, UiTransactionEncoding::Base64)
+                {
+                    Ok(confirmed_transaction) => {
+                        println_transaction(
+                            &confirmed_transaction
+                                .transaction
+                                .transaction
+                                .decode()
+                                .expect("Successful decode"),
+                            &confirmed_transaction.transaction.meta,
+                            "  ",
+                        );
+                    }
+                    Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
+                }
+            }
+            println!();
         }
     }
     Ok(transactions_found)

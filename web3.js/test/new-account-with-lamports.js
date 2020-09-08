@@ -26,6 +26,11 @@ export async function newAccountWithLamports(
     ]);
   }
 
-  await connection.requestAirdrop(account.publicKey, lamports);
+  const signature = await connection.requestAirdrop(
+    account.publicKey,
+    lamports,
+  );
+  await connection.confirmTransaction(signature, 'single');
+
   return account;
 }

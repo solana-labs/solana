@@ -14,6 +14,7 @@ import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
 import {Message} from './message';
 import {sleep} from './util/sleep';
+import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
@@ -57,11 +58,11 @@ export type SendOptions = {
  *
  * @typedef {Object} ConfirmOptions
  * @property {boolean | undefined} skipPreflight disable transaction verification step
- * @property {number | undefined} confirmations desired number of cluster confirmations
+ * @property {Commitment | undefined} commitment desired commitment level
  */
 export type ConfirmOptions = {
   skipPreflight?: boolean,
-  confirmations?: number,
+  commitment?: Commitment,
 };
 
 /**
@@ -325,7 +326,7 @@ type LeaderSchedule = {
 
 const GetLeaderScheduleResult = struct.record([
   'string',
-  struct.array(['number']),
+  'any', // validating struct.array(['number']) is extremely slow
 ]);
 
 /**
@@ -1366,6 +1367,8 @@ export class Connection {
   _rpcRequest: RpcRequest;
   _rpcWebSocket: RpcWebSocketClient;
   _rpcWebSocketConnected: boolean = false;
+  _rpcWebSocketHeartbeat: IntervalID | null = null;
+  _rpcWebSocketIdleTimeout: TimeoutID | null = null;
 
   _commitment: ?Commitment;
   _blockhashInfo: {
@@ -1947,38 +1950,76 @@ export class Connection {
   }
 
   /**
-   * Confirm the transaction identified by the specified signature
+   * Confirm the transaction identified by the specified signature.
+   *
+   * If `commitment` is not specified, default to 'max'.
    */
   async confirmTransaction(
     signature: TransactionSignature,
-    confirmations: ?number,
-  ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
-    const start = Date.now();
-    const WAIT_TIMEOUT_MS = 60 * 1000;
-
-    let statusResponse = await this.getSignatureStatus(signature);
-    for (;;) {
-      const status = statusResponse.value;
-      if (status) {
-        // Received a status, if not an error wait for confirmation
-        if (
-          status.err ||
-          status.confirmations === null ||
-          (typeof confirmations === 'number' &&
-            status.confirmations >= confirmations)
-        ) {
-          break;
-        }
-      } else if (Date.now() - start >= WAIT_TIMEOUT_MS) {
-        break;
-      }
-
-      // Sleep for approximately one slot
-      await sleep(MS_PER_SLOT);
-      statusResponse = await this.getSignatureStatus(signature);
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<SignatureResult>> {
+    let decodedSignature;
+    try {
+      decodedSignature = bs58.decode(signature);
+    } catch (err) {
+      throw new Error('signature must be base58 encoded: ' + signature);
     }
 
-    return statusResponse;
+    assert(decodedSignature.length === 64, 'signature has invalid length');
+
+    const start = Date.now();
+    const subscriptionCommitment: Commitment = commitment || 'max';
+
+    let subscriptionId;
+    let response: RpcResponseAndContext<SignatureResult> | null = null;
+    const confirmPromise = new Promise((resolve, reject) => {
+      try {
+        subscriptionId = this.onSignature(
+          signature,
+          (result, context) => {
+            subscriptionId = undefined;
+            response = {
+              context,
+              value: result,
+            };
+            resolve();
+          },
+          subscriptionCommitment,
+        );
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    let timeoutMs = 60 * 1000;
+    switch (subscriptionCommitment) {
+      case 'recent':
+      case 'single':
+      case 'singleGossip': {
+        timeoutMs = 10 * 1000;
+        break;
+      }
+      // exhaust enums to ensure full coverage
+      case 'max':
+      case 'root':
+    }
+
+    try {
+      await promiseTimeout(confirmPromise, timeoutMs);
+    } finally {
+      if (subscriptionId) {
+        this.removeSignatureListener(subscriptionId);
+      }
+    }
+
+    if (response === null) {
+      const duration = (Date.now() - start) / 1000;
+      throw new Error(
+        `Transaction was not confirmed in ${duration.toFixed(2)} seconds`,
+      );
+    }
+
+    return response;
   }
 
   /**
@@ -2667,6 +2708,10 @@ export class Connection {
    */
   _wsOnOpen() {
     this._rpcWebSocketConnected = true;
+    this._rpcWebSocketHeartbeat = setInterval(() => {
+      // Ping server every 5s to prevent idle timeouts
+      this._rpcWebSocket.notify('ping').catch(() => {});
+    }, 5000);
     this._updateSubscriptions();
   }
 
@@ -2680,8 +2725,17 @@ export class Connection {
   /**
    * @private
    */
-  _wsOnClose() {
-    this._rpcWebSocketConnected = false;
+  _wsOnClose(code: number) {
+    clearInterval(this._rpcWebSocketHeartbeat);
+    this._rpcWebSocketHeartbeat = null;
+
+    if (code === 1000) {
+      // explicit close, check if any subscriptions have been made since close
+      this._updateSubscriptions();
+      return;
+    }
+
+    // implicit close, prepare subscriptions for auto-reconnect
     this._resetSubscriptions();
   }
 
@@ -2770,12 +2824,23 @@ export class Connection {
       signatureKeys.length === 0 &&
       rootKeys.length === 0
     ) {
-      this._rpcWebSocket.close();
+      if (this._rpcWebSocketConnected) {
+        this._rpcWebSocketConnected = false;
+        this._rpcWebSocketIdleTimeout = setTimeout(() => {
+          this._rpcWebSocketIdleTimeout = null;
+          this._rpcWebSocket.close();
+        }, 500);
+      }
       return;
     }
 
+    if (this._rpcWebSocketIdleTimeout !== null) {
+      clearTimeout(this._rpcWebSocketIdleTimeout);
+      this._rpcWebSocketIdleTimeout = null;
+      this._rpcWebSocketConnected = true;
+    }
+
     if (!this._rpcWebSocketConnected) {
-      this._resetSubscriptions();
       this._rpcWebSocket.connect();
       return;
     }

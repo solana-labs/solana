@@ -19,8 +19,9 @@ import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
 import type {TransactionSignature} from '../src/transaction';
 import type {SignatureStatus, TransactionError} from '../src/connection';
 import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
+import {mockRpcSocket} from './__mocks__/rpc-websockets';
 
-// Testing blockhash cache takes around 30s to complete
+// Testing tokens and blockhash cache each take around 30s to complete
 jest.setTimeout(40000);
 
 const errorMessage = 'Invalid';
@@ -99,7 +100,7 @@ test('get program accounts', async () => {
     {
       error: null,
       result:
-        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
   mockRpc.push([
@@ -111,7 +112,7 @@ test('get program accounts', async () => {
     {
       error: null,
       result:
-        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
   await connection.requestAirdrop(account0.publicKey, LAMPORTS_PER_SOL);
@@ -129,39 +130,17 @@ test('get program accounts', async () => {
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 11,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
+
   let transaction = SystemProgram.assign({
     accountPubkey: account0.publicKey,
     programId: programId.publicKey,
   });
+
+  mockConfirmTransaction(
+    '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+  );
   await sendAndConfirmTransaction(connection, transaction, [account0], {
-    confirmations: 1,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -176,41 +155,17 @@ test('get program accounts', async () => {
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 11,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
 
   transaction = SystemProgram.assign({
     accountPubkey: account1.publicKey,
     programId: programId.publicKey,
   });
 
+  mockConfirmTransaction(
+    '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+  );
   await sendAndConfirmTransaction(connection, transaction, [account1], {
-    confirmations: 1,
+    commitment: 'single',
     skipPreflight: true,
   });
 
@@ -607,18 +562,9 @@ test('confirm transaction - error', async () => {
 
   const badTransactionSignature = 'bad transaction signature';
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [[badTransactionSignature]],
-    },
-    errorResponse,
-  ]);
-
   await expect(
     connection.confirmTransaction(badTransactionSignature),
-  ).rejects.toThrow(errorMessage);
+  ).rejects.toThrow('signature must be base58 encoded');
 
   mockRpc.push([
     url,
@@ -1348,7 +1294,7 @@ describe('token methods', () => {
     const payerAccount = new Account();
     await connection.confirmTransaction(
       await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
-      0,
+      'single',
     );
 
     const mintOwner = new Account();
@@ -1628,35 +1574,8 @@ test('request airdrop', async () => {
     minimumAmount + 42,
   );
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: null,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
-
-  await connection.confirmTransaction(signature, 0);
+  mockConfirmTransaction(signature);
+  await connection.confirmTransaction(signature, 'single');
 
   mockRpc.push([
     url,
@@ -1782,7 +1701,7 @@ test('transaction failure', async () => {
     {
       error: null,
       result:
-        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
   const airdropSignature = await connection.requestAirdrop(
@@ -1791,7 +1710,7 @@ test('transaction failure', async () => {
   );
 
   mockConfirmTransaction(airdropSignature);
-  await connection.confirmTransaction(airdropSignature, 0);
+  await connection.confirmTransaction(airdropSignature, 'single');
 
   mockRpc.push([
     url,
@@ -1826,33 +1745,6 @@ test('transaction failure', async () => {
     },
   ]);
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 1,
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
-
   const newAccount = new Account();
   let transaction = SystemProgram.createAccount({
     fromPubkey: account.publicKey,
@@ -1861,11 +1753,15 @@ test('transaction failure', async () => {
     space: 0,
     programId: SystemProgram.programId,
   });
+
+  mockConfirmTransaction(
+    '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+  );
   await sendAndConfirmTransaction(
     connection,
     transaction,
     [account, newAccount],
-    {confirmations: 1, skipPreflight: true},
+    {commitment: 'single', skipPreflight: true},
   );
 
   mockRpc.push([
@@ -1895,38 +1791,24 @@ test('transaction failure', async () => {
   );
 
   const expectedErr = {InstructionError: [0, {Custom: 0}]};
-  mockRpc.push([
-    url,
+  mockRpcSocket.push([
     {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
+      method: 'signatureSubscribe',
+      params: [signature, {commitment: 'single'}],
     },
     {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 1,
-            status: {Err: expectedErr},
-            err: expectedErr,
-          },
-        ],
+      context: {
+        slot: 11,
       },
+      value: {err: expectedErr},
     },
   ]);
 
   // Wait for one confirmation
-  const confirmResult = (await connection.confirmTransaction(signature, 1))
-    .value;
-  verifySignatureStatus(confirmResult, expectedErr);
+  const confirmResult = (
+    await connection.confirmTransaction(signature, 'single')
+  ).value;
+  expect(confirmResult.err).toEqual(expectedErr);
 
   mockRpc.push([
     url,
@@ -1991,15 +1873,16 @@ test('transaction', async () => {
     {
       error: null,
       result:
-        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
   const airdropFromSig = await connection.requestAirdrop(
     accountFrom.publicKey,
     minimumAmount + 100010,
   );
+
   mockConfirmTransaction(airdropFromSig);
-  await connection.confirmTransaction(airdropFromSig, 0);
+  await connection.confirmTransaction(airdropFromSig, 'single');
 
   mockRpc.push([
     url,
@@ -2033,33 +1916,15 @@ test('transaction', async () => {
         '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  mockRpc.push([
-    url,
-    {
-      method: 'getSignatureStatuses',
-      params: [
-        [
-          '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-        ],
-      ],
-    },
-    {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: 0,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
-      },
-    },
-  ]);
+
+  const airdropToSig = await connection.requestAirdrop(
+    accountTo.publicKey,
+    minimumAmount,
+  );
+
+  mockConfirmTransaction(airdropToSig);
+  await connection.confirmTransaction(airdropToSig, 'single');
+
   mockRpc.push([
     url,
     {
@@ -2076,11 +1941,7 @@ test('transaction', async () => {
       },
     },
   ]);
-  const airdropToSig = await connection.requestAirdrop(
-    accountTo.publicKey,
-    minimumAmount,
-  );
-  await connection.confirmTransaction(airdropToSig, 0);
+
   expect(await connection.getBalance(accountTo.publicKey)).toBe(minimumAmount);
 
   mockGetRecentBlockhash('max');
@@ -2108,8 +1969,9 @@ test('transaction', async () => {
   );
 
   mockConfirmTransaction(signature);
-  let confirmResult = (await connection.confirmTransaction(signature, 0)).value;
-  verifySignatureStatus(confirmResult);
+  let confirmResult = (await connection.confirmTransaction(signature, 'single'))
+    .value;
+  expect(confirmResult.err).toBeNull();
 
   mockGetRecentBlockhash('max');
   mockRpc.push([
@@ -2140,7 +2002,7 @@ test('transaction', async () => {
   expect(transaction.recentBlockhash).not.toEqual(transaction2.recentBlockhash);
 
   mockConfirmTransaction(signature2);
-  await connection.confirmTransaction(signature2, 0);
+  await connection.confirmTransaction(signature2, 'single');
 
   mockRpc.push([
     url,
@@ -2170,7 +2032,7 @@ test('transaction', async () => {
   expect(transaction2.recentBlockhash).toEqual(transaction3.recentBlockhash);
 
   mockConfirmTransaction(signature3);
-  await connection.confirmTransaction(signature3, 0);
+  await connection.confirmTransaction(signature3, 'single');
 
   // Sleep until blockhash cache times out
   await sleep(
@@ -2204,7 +2066,7 @@ test('transaction', async () => {
     },
   );
   mockConfirmTransaction(signature4);
-  await connection.confirmTransaction(signature4, 0);
+  await connection.confirmTransaction(signature4, 'single');
 
   expect(transaction4.recentBlockhash).not.toEqual(
     transaction3.recentBlockhash,
@@ -2267,7 +2129,7 @@ test('multi-instruction transaction', async () => {
     accountFrom.publicKey,
     LAMPORTS_PER_SOL,
   );
-  await connection.confirmTransaction(signature, 0);
+  await connection.confirmTransaction(signature, 'single');
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(
     LAMPORTS_PER_SOL,
   );
@@ -2281,7 +2143,7 @@ test('multi-instruction transaction', async () => {
     accountTo.publicKey,
     minimumAmount + 21,
   );
-  await connection.confirmTransaction(signature, 0);
+  await connection.confirmTransaction(signature, 'single');
   expect(await connection.getBalance(accountTo.publicKey)).toBe(
     minimumAmount + 21,
   );
@@ -2305,7 +2167,7 @@ test('multi-instruction transaction', async () => {
     {skipPreflight: true},
   );
 
-  await connection.confirmTransaction(signature, 1);
+  await connection.confirmTransaction(signature, 'single');
 
   const response = (await connection.getSignatureStatus(signature)).value;
   if (response !== null) {
@@ -2357,7 +2219,7 @@ test('account change notification', async () => {
       lamports: balanceNeeded,
     });
     await sendAndConfirmTransaction(connection, transaction, [owner], {
-      confirmations: 1,
+      commitment: 'single',
       skipPreflight: true,
     });
   } catch (err) {
@@ -2424,7 +2286,7 @@ test('program account change notification', async () => {
       lamports: balanceNeeded,
     });
     await sendAndConfirmTransaction(connection, transaction, [owner], {
-      confirmations: 1,
+      commitment: 'single',
       skipPreflight: true,
     });
   } catch (err) {

@@ -38,7 +38,7 @@ Finally, the following diagram shows a two layer cluster with a fanout of 2.
 
 Currently, configuration is set when the cluster is launched. In the future, these parameters may be hosted on-chain, allowing modification on the fly as the cluster sizes change.
 
-## Calcuating the required FEC rate
+## Calculating the required FEC rate
 
 Turbine relies on retransmission of packets between validators. Due to
 retransmission, any network wide packet loss is compounded, and the

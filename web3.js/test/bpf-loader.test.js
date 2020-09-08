@@ -1,6 +1,5 @@
 // @flow
 
-import bs58 from 'bs58';
 import fs from 'mz/fs';
 
 import {
@@ -47,7 +46,7 @@ test('load BPF C program', async () => {
     programId: program.publicKey,
   });
   await sendAndConfirmTransaction(connection, transaction, [from], {
-    confirmations: 1,
+    commitment: 'single',
     skipPreflight: true,
   });
 });
@@ -90,22 +89,22 @@ describe('load BPF Rust program', () => {
       data,
       BPF_LOADER_PROGRAM_ID,
     );
+
     const transaction = new Transaction().add({
       keys: [
         {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
       ],
       programId: program.publicKey,
     });
-    await sendAndConfirmTransaction(connection, transaction, [payerAccount], {
-      skipPreflight: true,
-    });
 
-    if (transaction.signature === null) {
-      expect(transaction.signature).not.toBeNull();
-      return;
-    }
-
-    signature = bs58.encode(transaction.signature);
+    signature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [payerAccount],
+      {
+        skipPreflight: true,
+      },
+    );
   });
 
   test('get confirmed transaction', async () => {

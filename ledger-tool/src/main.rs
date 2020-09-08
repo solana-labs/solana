@@ -6,7 +6,7 @@ use log::*;
 use regex::Regex;
 use serde_json::json;
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, pubkeys_of},
+    input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
     input_validators::{is_parsable, is_pubkey_or_keypair, is_slot, is_valid_percentage},
 };
 use solana_ledger::entry::Entry;
@@ -28,7 +28,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
-    genesis_config::{GenesisConfig, OperatingMode},
+    genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
     inflation::Inflation,
     native_token::{lamports_to_sol, sol_to_lamports, Sol},
@@ -947,11 +947,9 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&hashes_per_tick)
             .arg(
-                Arg::with_name("operating_mode")
-                    .long("operating-mode")
-                    .possible_value("development")
-                    .possible_value("preview")
-                    .possible_value("stable")
+                Arg::with_name("cluster_type")
+                    .long("cluster-type")
+                    .possible_values(&ClusterType::STRINGS)
                     .takes_value(true)
                     .help(
                         "Selects the features that will be enabled for the cluster"
@@ -1333,13 +1331,8 @@ fn main() {
             let mut genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let output_directory = PathBuf::from(arg_matches.value_of("output_directory").unwrap());
 
-            if let Some(operating_mode) = arg_matches.value_of("operating_mode") {
-                genesis_config.operating_mode = match operating_mode {
-                    "development" => OperatingMode::Development,
-                    "stable" => OperatingMode::Stable,
-                    "preview" => OperatingMode::Preview,
-                    _ => unreachable!(),
-                };
+            if let Some(cluster_type) = cluster_type_of(arg_matches, "cluster_type") {
+                genesis_config.cluster_type = cluster_type;
             }
 
             if let Some(hashes_per_tick) = arg_matches.value_of("hashes_per_tick") {

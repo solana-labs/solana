@@ -1,31 +1,19 @@
 // @flow
 
 import type {TransactionSignature} from '../../src/transaction';
-import {url} from '../url';
-import {mockRpc} from '../__mocks__/node-fetch';
+import {mockRpcSocket} from '../__mocks__/rpc-websockets';
 
 export function mockConfirmTransaction(signature: TransactionSignature) {
-  mockRpc.push([
-    url,
+  mockRpcSocket.push([
     {
-      method: 'getSignatureStatuses',
-      params: [[signature]],
+      method: 'signatureSubscribe',
+      params: [signature, {commitment: 'single'}],
     },
     {
-      error: null,
-      result: {
-        context: {
-          slot: 11,
-        },
-        value: [
-          {
-            slot: 0,
-            confirmations: null,
-            status: {Ok: null},
-            err: null,
-          },
-        ],
+      context: {
+        slot: 11,
       },
+      value: {err: null},
     },
   ]);
 }

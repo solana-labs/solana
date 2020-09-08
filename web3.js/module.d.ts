@@ -51,7 +51,7 @@ declare module '@solana/web3.js' {
   };
 
   export type ConfirmOptions = {
-    confirmations?: number;
+    commitment?: Commitment;
     skipPreflight?: boolean;
   };
 
@@ -384,8 +384,8 @@ declare module '@solana/web3.js' {
     getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus>;
     confirmTransaction(
       signature: TransactionSignature,
-      confirmations?: number,
-    ): Promise<RpcResponseAndContext<SignatureStatus | null>>;
+      commitment?: Commitment,
+    ): Promise<RpcResponseAndContext<SignatureResult>>;
     getSlot(commitment?: Commitment): Promise<number>;
     getSlotLeader(commitment?: Commitment): Promise<string>;
     getSignatureStatus(

@@ -18,7 +18,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     fee_calculator::FeeCalculator,
-    genesis_config::OperatingMode,
+    genesis_config::ClusterType,
     hash::Hash,
     message::Message,
     native_loader, nonce,
@@ -67,10 +67,10 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn new(paths: Vec<PathBuf>, operating_mode: &OperatingMode) -> Self {
+    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         Self {
             slot: 0,
-            accounts_db: Arc::new(AccountsDB::new(paths, operating_mode)),
+            accounts_db: Arc::new(AccountsDB::new(paths, cluster_type)),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
@@ -796,7 +796,7 @@ mod tests {
         account::Account,
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeCalculator,
-        genesis_config::OperatingMode,
+        genesis_config::ClusterType,
         hash::Hash,
         instruction::CompiledInstruction,
         message::Message,
@@ -820,7 +820,7 @@ mod tests {
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
@@ -1030,7 +1030,7 @@ mod tests {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
-            OperatingMode::Development,
+            ClusterType::Development,
         );
         let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
@@ -1386,7 +1386,7 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
 
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = Pubkey::new_rand();
@@ -1409,7 +1409,7 @@ mod tests {
 
     #[test]
     fn test_accounts_account_not_found() {
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
@@ -1431,7 +1431,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         accounts.bank_hash_at(1);
     }
 
@@ -1447,7 +1447,7 @@ mod tests {
         let account2 = Account::new(3, 0, &Pubkey::default());
         let account3 = Account::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1559,7 +1559,7 @@ mod tests {
         let account1 = Account::new(2, 0, &Pubkey::default());
         let account2 = Account::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1689,7 +1689,7 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         {
             let mut readonly_locks = accounts.readonly_locks.write().unwrap();
             let readonly_locks = readonly_locks.as_mut().unwrap();
@@ -1740,7 +1740,7 @@ mod tests {
     #[test]
     fn huge_clean() {
         solana_logger::setup();
-        let accounts = Accounts::new(Vec::new(), &OperatingMode::Development);
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         let mut old_pubkey = Pubkey::default();
         let zero_account = Account::new(0, 0, &Account::default().owner);
         info!("storing..");
