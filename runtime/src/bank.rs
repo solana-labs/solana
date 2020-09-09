@@ -1123,6 +1123,25 @@ impl Bank {
         }
     }
 
+    pub fn exhaustively_free_unused_resource(&self) {
+        let mut reclaim = Measure::start("reclaim");
+        self.process_dead_slots();
+        reclaim.stop();
+
+        let mut clean = Measure::start("clean");
+        self.clean_accounts();
+        clean.stop();
+
+        let mut shrink = Measure::start("shrink");
+        self.shrink_all_slots();
+        shrink.stop();
+
+        info!(
+            "exhaustively_free_unused_resource(): {} {} {}",
+            reclaim, clean, shrink,
+        );
+    }
+
     pub fn epoch_schedule(&self) -> &EpochSchedule {
         &self.epoch_schedule
     }
