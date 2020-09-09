@@ -3,6 +3,7 @@
 use crate::{
     bank_weight_fork_choice::BankWeightForkChoice,
     broadcast_stage::RetransmitSlotsSender,
+    cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
@@ -106,6 +107,7 @@ pub struct ReplayStageConfig {
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
+    pub cache_block_time_sender: Option<CacheBlockTimeSender>,
 }
 
 #[derive(Default)]
@@ -235,6 +237,7 @@ impl ReplayStage {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
+            cache_block_time_sender,
         } = config;
 
         trace!("replay stage");
@@ -494,6 +497,7 @@ impl ReplayStage {
                             &subscriptions,
                             &block_commitment_cache,
                             &mut heaviest_subtree_fork_choice,
+                            &cache_block_time_sender,
                         )?;
                     };
                     voting_time.stop();
@@ -1004,6 +1008,7 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        cache_block_time_sender: &Option<CacheBlockTimeSender>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1029,6 +1034,12 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
+            Self::cache_block_times(
+                blockstore,
+                bank_forks,
+                &rooted_slots,
+                cache_block_time_sender,
+            );
             let highest_confirmed_root = Some(
                 block_commitment_cache
                     .read()
@@ -1851,6 +1862,36 @@ impl ReplayStage {
                 rewards_recorder_sender
                     .send((bank.slot(), rewards.iter().copied().collect()))
                     .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
+            }
+        }
+    }
+
+    fn cache_block_times(
+        blockstore: &Arc<Blockstore>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        rooted_slots: &[Slot],
+        cache_block_time_sender: &Option<CacheBlockTimeSender>,
+    ) {
+        if let Some(cache_block_time_sender) = cache_block_time_sender {
+            for slot in rooted_slots {
+                if blockstore
+                    .get_block_time(*slot)
+                    .unwrap_or_default()
+                    .is_none()
+                {
+                    if let Some(rooted_bank) = bank_forks.read().unwrap().get(*slot) {
+                        cache_block_time_sender
+                            .send(rooted_bank.clone())
+                            .unwrap_or_else(|err| {
+                                warn!("cache_block_time_sender failed: {:?}", err)
+                            });
+                    } else {
+                        error!(
+                            "rooted_bank {:?} not available in BankForks; block time not cached",
+                            slot
+                        );
+                    }
+                }
             }
         }
     }

@@ -10,7 +10,11 @@ use rocksdb::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_runtime::hardened_unpack::UnpackError;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    clock::{Slot, UnixTimestamp},
+    pubkey::Pubkey,
+    signature::Signature,
+};
 use solana_transaction_status::{Rewards, TransactionStatusMeta};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
@@ -46,6 +50,8 @@ const ADDRESS_SIGNATURES_CF: &str = "address_signatures";
 const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 /// Column family for Rewards
 const REWARDS_CF: &str = "rewards";
+/// Column family for Blocktime
+const BLOCKTIME_CF: &str = "blocktime";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -61,6 +67,8 @@ pub enum BlockstoreError {
     UnpackError(#[from] UnpackError),
     UnableToSetOpenFileDescriptorLimit,
     TransactionStatusSlotMismatch,
+    EmptyEpochStakes,
+    NoVoteTimestampsInRange,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
@@ -128,6 +136,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The rewards column
     pub struct Rewards;
+
+    #[derive(Debug)]
+    /// The blocktime column
+    pub struct Blocktime;
 }
 
 pub enum AccessType {
@@ -187,8 +199,9 @@ impl Rocks {
         recovery_mode: Option<BlockstoreRecoveryMode>,
     ) -> Result<Rocks> {
         use columns::{
-            AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
-            Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
+            AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
+            Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
+            TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -221,6 +234,8 @@ impl Rocks {
         let transaction_status_index_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options());
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
+        let blocktime_cf_descriptor =
+            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options());
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -239,6 +254,7 @@ impl Rocks {
                 transaction_status_index_cf_descriptor,
             ),
             (Rewards::NAME, rewards_cf_descriptor),
+            (Blocktime::NAME, blocktime_cf_descriptor),
         ];
 
         // Open the database
@@ -276,8 +292,9 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
-            Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
+            AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
+            Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
+            TransactionStatusIndex,
         };
 
         vec![
@@ -294,6 +311,7 @@ impl Rocks {
             AddressSignatures::NAME,
             TransactionStatusIndex::NAME,
             Rewards::NAME,
+            Blocktime::NAME,
         ]
     }
 
@@ -517,6 +535,14 @@ impl ColumnName for columns::Rewards {
 }
 impl TypedColumn for columns::Rewards {
     type Type = Rewards;
+}
+
+impl SlotColumn for columns::Blocktime {}
+impl ColumnName for columns::Blocktime {
+    const NAME: &'static str = BLOCKTIME_CF;
+}
+impl TypedColumn for columns::Blocktime {
+    type Type = UnixTimestamp;
 }
 
 impl Column for columns::ShredCode {

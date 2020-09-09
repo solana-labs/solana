@@ -54,7 +54,6 @@ use solana_sdk::{
     stake_history::StakeHistory,
     system_instruction,
     sysvar::{stake_history, Sysvar},
-    timing::slot_duration_from_slots_per_year,
     transaction::{self, Transaction},
 };
 use solana_stake_program::stake_state::StakeState;
@@ -686,18 +685,7 @@ impl JsonRpcRequestProcessor {
                 .unwrap()
                 .highest_confirmed_root()
         {
-            // This calculation currently assumes that bank.slots_per_year will remain unchanged after
-            // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
-            // queried). If these values will be variable in the future, those timing parameters will
-            // need to be stored persistently, and the slot_duration calculation will likely need to be
-            // moved upstream into blockstore. Also, an explicit commitment level will need to be set.
-            let bank = self.bank(None);
-            let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
-            let epoch = bank.epoch_schedule().get_epoch(slot);
-            let stakes = HashMap::new();
-            let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
-
-            let result = self.blockstore.get_block_time(slot, slot_duration, stakes);
+            let result = self.blockstore.get_block_time(slot);
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
@@ -2544,6 +2532,7 @@ pub mod tests {
         nonce, rpc_port,
         signature::{Keypair, Signer},
         system_program, system_transaction,
+        timing::slot_duration_from_slots_per_year,
         transaction::{self, TransactionError},
     };
     use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
@@ -2555,7 +2544,7 @@ pub mod tests {
         option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey,
         state::AccountState as TokenAccountState, state::Mint,
     };
-    use std::collections::HashMap;
+    use std::{collections::HashMap, time::Duration};
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
@@ -2656,6 +2645,11 @@ pub mod tests {
 
             for root in roots.iter() {
                 bank_forks.write().unwrap().set_root(*root, &None, Some(0));
+                let mut stakes = HashMap::new();
+                stakes.insert(leader_vote_keypair.pubkey(), (1, Account::default()));
+                blockstore
+                    .cache_block_time(*root, Duration::from_millis(400), &stakes)
+                    .unwrap();
             }
         }
 
