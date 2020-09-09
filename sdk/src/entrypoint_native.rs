@@ -1,5 +1,7 @@
 //! @brief Solana Native program entry point
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use crate::abi_example::AbiExample;
 use crate::{
     account::Account, account::KeyedAccount, instruction::CompiledInstruction,
     instruction::InstructionError, message::Message, pubkey::Pubkey,
@@ -281,4 +283,22 @@ pub trait Executor: Send + Sync {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError>;
+}
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for Arc<dyn Executor> {
+    fn example() -> Self {
+        struct ExampleExecutor {}
+        impl Executor for ExampleExecutor {
+            fn execute(
+                &self,
+                _program_id: &Pubkey,
+                _keyed_accounts: &[KeyedAccount],
+                _instruction_data: &[u8],
+                _invoke_context: &mut dyn InvokeContext,
+            ) -> std::result::Result<(), InstructionError> {
+                Ok(())
+            }
+        }
+        Arc::new(ExampleExecutor {})
+    }
 }

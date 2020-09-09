@@ -25,6 +25,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
+use lru::LruCache;
 use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
@@ -146,10 +147,23 @@ impl Builtin {
     }
 }
 
-const CACHED_EXECUTOR_LIFETIME_EPOCHS: u64 = 5;
-struct CachedExecutor {
-    epoch: u64,
-    executor: Arc<dyn Executor>,
+const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
+#[derive(Clone)]
+struct CachedExecutors {
+    executors: Arc<RwLock<LruCache<Pubkey, Arc<dyn Executor>>>>,
+}
+impl Default for CachedExecutors {
+    fn default() -> Self {
+        Self {
+            executors: Arc::new(RwLock::new(LruCache::new(MAX_CACHED_EXECUTORS))),
+        }
+    }
+}
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for CachedExecutors {
+    fn example() -> Self {
+        Self::default()
+    }
 }
 
 #[derive(Default)]
@@ -342,9 +356,9 @@ pub(crate) struct BankFieldsToSerialize<'a> {
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
-/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serializeaion
+/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(Default, AbiExample)]
+#[derive(AbiExample, Default)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
@@ -469,7 +483,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: Arc<RwLock<HashMap<Pubkey, CachedExecutor>>>,
+    cached_executors: CachedExecutors,
 }
 
 impl Default for BlockhashQueue {
@@ -548,7 +562,7 @@ impl Bank {
             epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
-            // TODO: clean this up, soo much special-case copying...
+            // TODO: clean this up, so much special-case copying...
             hashes_per_tick: parent.hashes_per_tick,
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
@@ -617,14 +631,6 @@ impl Bank {
         new.update_fees();
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
-        }
-
-        // Remove old executors from the cache
-        {
-            let mut cached_executors = new.cached_executors.write().unwrap();
-            cached_executors.retain(|_, cached_executor| {
-                new.epoch - cached_executor.epoch <= CACHED_EXECUTOR_LIFETIME_EPOCHS
-            });
         }
 
         new
@@ -700,7 +706,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: Arc::new(RwLock::new(HashMap::default())),
+            cached_executors: CachedExecutors::default(),
         };
         bank.finish_init(genesis_config);
 
@@ -1843,17 +1849,17 @@ impl Bank {
         }
         let mut executors: HashMap<Pubkey, Arc<dyn Executor>> =
             HashMap::with_capacity(num_executors);
-        let cached_executors = self.cached_executors.read().unwrap();
+        let cached_executors = self.cached_executors.executors.read().unwrap();
 
         for key in message.account_keys.iter() {
-            if let Some(cached_executor) = cached_executors.get(key) {
-                executors.insert(*key, cached_executor.executor.clone());
+            if let Some(cached_executor) = cached_executors.peek(key) {
+                executors.insert(*key, (*cached_executor).clone());
             }
         }
         for instruction_loaders in loaders.iter() {
             for (key, _) in instruction_loaders.iter() {
-                if let Some(cached_executor) = cached_executors.get(key) {
-                    executors.insert(*key, cached_executor.executor.clone());
+                if let Some(cached_executor) = cached_executors.peek(key) {
+                    executors.insert(*key, cached_executor.clone());
                 }
             }
         }
@@ -1868,12 +1874,9 @@ impl Bank {
     fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
         let executors = executors.borrow();
         if executors.is_dirty {
-            let mut cached_executors = self.cached_executors.write().unwrap();
+            let mut cached_executors = self.cached_executors.executors.write().unwrap();
             for (key, executor) in executors.executors.iter() {
-                cached_executors.entry(*key).or_insert(CachedExecutor {
-                    epoch: self.epoch,
-                    executor: (*executor).clone(),
-                });
+                cached_executors.put(*key, (*executor).clone());
             }
         }
     }
@@ -8810,14 +8813,5 @@ mod tests {
         assert!(executors.borrow().executors.contains_key(&key2));
         assert!(executors.borrow().executors.contains_key(&key3));
         assert!(executors.borrow().executors.contains_key(&key4));
-
-        // Expire cache
-        let bank = Bank::new_from_parent(
-            &Arc::new(bank),
-            &Pubkey::new_rand(),
-            DEFAULT_SLOTS_PER_EPOCH * CACHED_EXECUTOR_LIFETIME_EPOCHS + 1,
-        );
-        let executors = bank.get_executors(&message, loaders);
-        assert_eq!(executors.borrow().executors.len(), 0);
     }
 }

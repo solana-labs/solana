@@ -154,8 +154,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_program_execute_noop(bencher: &mut Bencher) {
-    // solana_logger::setup(); // TODO remove
-
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -180,7 +178,6 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         .send_and_confirm_message(&[&mint_keypair], message.clone())
         .unwrap();
 
-    println!("start bench");
     bencher.iter(|| {
         bank.clear_signatures();
         bank_client
