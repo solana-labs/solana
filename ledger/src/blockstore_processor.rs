@@ -799,6 +799,7 @@ fn load_frozen_forks(
     let mut initial_forks = HashMap::new();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
+    let mut last_free = Instant::now();
     let mut pending_slots = vec![];
     let mut last_root_slot = root_bank.slot();
     let mut slots_elapsed = 0;
@@ -824,6 +825,7 @@ fn load_frozen_forks(
         let slot = bank.slot();
         if last_status_report.elapsed() > Duration::from_secs(2) {
             let secs = last_status_report.elapsed().as_secs() as f32;
+            last_status_report = Instant::now();
             info!(
                 "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
                 slot,
@@ -832,7 +834,6 @@ fn load_frozen_forks(
                 slots_elapsed as f32 / secs,
                 txs as f32 / secs,
             );
-            last_status_report = Instant::now();
             slots_elapsed = 0;
             txs = 0;
         }
@@ -895,9 +896,16 @@ fn load_frozen_forks(
             leader_schedule_cache.set_root(&new_root_bank);
             new_root_bank.squash();
 
+            if last_free.elapsed() > Duration::from_secs(30) {
+                // This could take few secs; so update last_free later
+                new_root_bank.exhaustively_free_unused_resource();
+                last_free = Instant::now();
+            }
+
             // Filter out all non descendants of the new root
             pending_slots.retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(root));
             initial_forks.retain(|_, fork_tip_bank| fork_tip_bank.ancestors.contains_key(root));
+            all_banks.retain(|_, bank| bank.ancestors.contains_key(root));
         }
 
         slots_elapsed += 1;
