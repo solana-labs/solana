@@ -441,4 +441,30 @@ test('live staking actions', async () => {
   expect(balance).toEqual(minimumAmount + 2);
   const recipientBalance = await connection.getBalance(recipient.publicKey);
   expect(recipientBalance).toEqual(minimumAmount + 20);
+
+  // Authorize a derived address
+  authorize = StakeProgram.authorize({
+    stakePubkey: newAccountPubkey,
+    authorizedPubkey: newAuthorized.publicKey,
+    newAuthorizedPubkey: newAccountPubkey,
+    stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
+  });
+  await sendAndConfirmTransaction(connection, authorize, [newAuthorized], {
+    commitment: 'single',
+    skipPreflight: true,
+  });
+
+  // Restore the previous authority using a dervied address
+  authorize = StakeProgram.authorizeWithSeed({
+    stakePubkey: newAccountPubkey,
+    authorityBase: from.publicKey,
+    authoritySeed: seed,
+    authorityOwner: StakeProgram.programId,
+    newAuthorizedPubkey: newAuthorized.publicKey,
+    stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
+  });
+  await sendAndConfirmTransaction(connection, authorize, [from], {
+    commitment: 'single',
+    skipPreflight: true,
+  });
 });
