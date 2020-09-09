@@ -125,20 +125,14 @@ impl Versioned for (u64, AccountInfo) {
 pub struct AccountStorage(pub DashMap<Slot, SlotStores>);
 
 impl AccountStorage {
-    fn scan_accounts(&self, account_info: &AccountInfo, slot: Slot) -> Option<(Account, Slot)> {
+    fn get_account_storage_entry(
+        &self,
+        account_info: &AccountInfo,
+        slot: Slot,
+    ) -> Option<Arc<AccountStorageEntry>> {
         self.0
             .get(&slot)
             .and_then(|storage_map| storage_map.value().get(&account_info.store_id).cloned())
-            .and_then(|store| {
-                Some(
-                    store
-                        .accounts
-                        .get_account(account_info.offset)?
-                        .0
-                        .clone_account(),
-                )
-            })
-            .map(|account| (account, slot))
     }
 
     fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
@@ -272,6 +266,15 @@ impl AccountStorageEntry {
 
     pub fn flush(&self) -> Result<(), IOError> {
         self.accounts.flush()
+    }
+
+    fn get_account(&self, account_info: &AccountInfo) -> Option<Account> {
+        Some(
+            self.accounts
+                .get_account(account_info.offset)?
+                .0
+                .clone_account(),
+        )
     }
 
     fn add_account(&self) {
@@ -1222,12 +1225,11 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-            scan_func(
-                &mut collector,
-                self.storage
-                    .scan_accounts(account_info, slot)
-                    .map(|(account, slot)| (pubkey, account, slot)),
-            )
+            let account_storage_entry = self.storage.get_account_storage_entry(account_info, slot);
+            let account_slot = account_storage_entry
+                .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
+                .map(|account| (pubkey, account, slot));
+            scan_func(&mut collector, account_slot)
         });
         collector
     }
@@ -1241,12 +1243,11 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.range_scan_accounts(ancestors, range, |pubkey, (account_info, slot)| {
-            scan_func(
-                &mut collector,
-                self.storage
-                    .scan_accounts(account_info, slot)
-                    .map(|(account, slot)| (pubkey, account, slot)),
-            )
+            let account_storage_entry = self.storage.get_account_storage_entry(account_info, slot);
+            let account_slot = account_storage_entry
+                .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
+                .map(|account| (pubkey, account, slot));
+            scan_func(&mut collector, account_slot)
         });
         collector
     }
@@ -1330,9 +1331,8 @@ impl AccountsDB {
         let accounts_index = self.accounts_index.read().unwrap();
         let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None).unwrap();
         let slot = lock[index].0;
-        let slot_storage = self.storage.0.get(&slot).unwrap();
         let info = &lock[index].1;
-        let entry = slot_storage.get(&info.store_id).unwrap();
+        let entry = self.storage.get_account_storage_entry(&info, slot).unwrap();
         let account = entry.accounts.get_account(info.offset);
         *account.as_ref().unwrap().0.hash
     }
@@ -2120,16 +2120,14 @@ impl AccountsDB {
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
             }
-            if let Some(slot_storage) = self.storage.0.get(slot) {
-                if let Some(store) = slot_storage.get(&account_info.store_id) {
-                    assert_eq!(
-                        *slot, store.slot,
-                        "AccountDB::accounts_index corrupted. Storage should only point to one slot"
-                    );
-                    let count = store.remove_account();
-                    if count == 0 {
-                        dead_slots.insert(*slot);
-                    }
+            if let Some(store) = self.storage.get_account_storage_entry(&account_info, *slot) {
+                assert_eq!(
+                    *slot, store.slot,
+                    "AccountDB::accounts_index corrupted. Storage should only point to one slot"
+                );
+                let count = store.remove_account();
+                if count == 0 {
+                    dead_slots.insert(*slot);
                 }
             }
         }
