@@ -119,20 +119,14 @@ impl Versioned for (u64, AccountInfo) {
 pub struct AccountStorage(pub HashMap<Slot, SlotStores>);
 
 impl AccountStorage {
-    fn scan_accounts(&self, account_info: &AccountInfo, slot: Slot) -> Option<(Account, Slot)> {
+    fn get_account_storage_entry(
+        &self,
+        account_info: &AccountInfo,
+        slot: Slot,
+    ) -> Option<Arc<AccountStorageEntry>> {
         self.0
             .get(&slot)
-            .and_then(|storage_map| storage_map.get(&account_info.store_id))
-            .and_then(|store| {
-                Some(
-                    store
-                        .accounts
-                        .get_account(account_info.offset)?
-                        .0
-                        .clone_account(),
-                )
-            })
-            .map(|account| (account, slot))
+            .and_then(|storage_map| storage_map.get(&account_info.store_id).cloned())
     }
 }
 
@@ -254,6 +248,14 @@ impl AccountStorageEntry {
 
     pub fn flush(&self) -> Result<(), IOError> {
         self.accounts.flush()
+    }
+
+    pub fn get_account(&self, account_info: &AccountInfo) -> Option<(Account, Slot)> {
+        self.accounts
+            .get_account(account_info.offset)?
+            .0
+            .clone_account()
+            .map(|account| (account, slot))
     }
 
     fn add_account(&self) {
@@ -1050,14 +1052,13 @@ impl AccountsDB {
     {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
-        let storage = self.storage.read().unwrap();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-            scan_func(
-                &mut collector,
-                storage
-                    .scan_accounts(account_info, slot)
-                    .map(|(account, slot)| (pubkey, account, slot)),
-            )
+            let storage = self.storage.read().unwrap();
+            let account_storage_entry = storage.get_account_storage_entry(account_info, slot);
+            let account_slot = account_storage_entry
+                .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
+                .map(|(account, slot)| (pubkey, account, slot));
+            scan_func(&mut collector, account_slot)
         });
         collector
     }
