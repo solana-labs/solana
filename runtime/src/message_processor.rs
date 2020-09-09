@@ -1349,7 +1349,7 @@ mod tests {
             &accounts,
             &rent_collector,
             None,
-            executors.clone(),
+            executors,
         );
         assert_eq!(
             result,
@@ -1504,7 +1504,7 @@ mod tests {
             &accounts,
             &rent_collector,
             None,
-            executors.clone(),
+            executors,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);

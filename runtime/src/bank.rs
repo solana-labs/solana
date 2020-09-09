@@ -8783,7 +8783,7 @@ mod tests {
         executors.insert(key4, executor.clone());
         let executors = Rc::new(RefCell::new(executors));
         executors.borrow_mut().is_dirty = false;
-        bank.update_executors(executors.clone());
+        bank.update_executors(executors);
         let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().executors.len(), 0);
 
