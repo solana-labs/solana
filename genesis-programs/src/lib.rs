@@ -88,16 +88,17 @@ fn get_programs(cluster_type: ClusterType) -> Vec<(Program, Epoch)> {
         .into_iter()
         .map(|program| (program, GENESIS_EPOCH))
         .collect::<Vec<_>>(),
+
         ClusterType::Devnet => vec![
-            // Programs used for testing
-            Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
-            Program::Native(solana_vest_program!()),
-            Program::Native(solana_budget_program!()),
-            Program::Native(solana_exchange_program!()),
-        ]
-        .into_iter()
-        .map(|program| (program, GENESIS_EPOCH))
-        .collect::<Vec<_>>(),
+            (
+                Program::BuiltinLoader(solana_bpf_loader_deprecated_program!()),
+                GENESIS_EPOCH,
+            ),
+            (Program::Native(solana_vest_program!()), GENESIS_EPOCH),
+            (Program::Native(solana_budget_program!()), GENESIS_EPOCH),
+            (Program::Native(solana_exchange_program!()), GENESIS_EPOCH),
+            (Program::BuiltinLoader(solana_bpf_loader_program!()), 400),
+        ],
 
         ClusterType::Testnet => vec![
             (
