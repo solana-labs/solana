@@ -1257,7 +1257,7 @@ dependencies = [
  "log 0.4.8",
  "slab",
  "tokio 0.2.22",
- "tokio-util 0.3.1",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4713,6 +4713,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "stdweb"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4870,10 +4876,11 @@ dependencies = [
 
 [[package]]
 name = "tarpc"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7262a81ff505d04617aabee6f3e416eafd4d67f856832196c221ffd434efda47"
+checksum = "1503e47bfae912674d6f4226c09cb8d2f0271a57eef7e799b6f98a545f89c7a3"
 dependencies = [
+ "anyhow",
  "fnv",
  "futures 0.3.5",
  "humantime 1.3.0",
@@ -4881,10 +4888,11 @@ dependencies = [
  "pin-project",
  "rand 0.7.3",
  "serde",
+ "static_assertions",
  "tarpc-plugins",
  "tokio 0.2.22",
  "tokio-serde",
- "tokio-util 0.2.0",
+ "tokio-util",
 ]
 
 [[package]]
@@ -5347,20 +5355,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
-dependencies = [
- "bytes 0.5.4",
- "futures-core",
- "futures-sink",
- "log 0.4.8",
- "pin-project-lite",
- "tokio 0.2.22",
-]
-
-[[package]]
-name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
@@ -5403,7 +5397,7 @@ dependencies = [
  "prost-derive",
  "tokio 0.2.22",
  "tokio-rustls 0.14.0",
- "tokio-util 0.3.1",
+ "tokio-util",
  "tower",
  "tower-balance",
  "tower-load",

@@ -191,7 +191,7 @@ pub async fn start_client(
 }
 
 pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
-    let transport = tcp::connect(addr, Bincode::default()).await?;
+    let transport = tcp::connect(addr, Bincode::default).await?;
     BanksClient::new(client::Config::default(), transport).spawn()
 }
 
