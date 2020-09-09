@@ -134,11 +134,16 @@ function launch_testnet() {
     maybeAsyncNodeInit="--async-node-init"
   fi
 
+  declare maybeExtraPrimordialStakes
+  if [[ -n "$EXTRA_PRIMORDIAL_STAKES" ]]; then
+    maybeExtraPrimordialStakes="--extra-primordial-stakes $EXTRA_PRIMORDIAL_STAKES"
+  fi
+
   # shellcheck disable=SC2068
   # shellcheck disable=SC2086
   "${REPO_ROOT}"/net/net.sh start $version_args \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-    --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit
+    --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit $maybeExtraPrimordialStakes
 
   execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
   wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
