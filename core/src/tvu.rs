@@ -5,6 +5,7 @@ use crate::{
     accounts_background_service::AccountsBackgroundService,
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
+    cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{VerifiedVoteReceiver, VoteTracker},
     cluster_slots::ClusterSlots,
@@ -96,6 +97,7 @@ impl Tvu {
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
+        cache_block_time_sender: Option<CacheBlockTimeSender>,
         snapshot_package_sender: Option<AccountsPackageSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -191,6 +193,7 @@ impl Tvu {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
+            cache_block_time_sender,
         };
 
         let replay_stage = ReplayStage::new(
@@ -323,6 +326,7 @@ pub mod tests {
             &exit,
             completed_slots_receiver,
             block_commitment_cache,
+            None,
             None,
             None,
             None,
