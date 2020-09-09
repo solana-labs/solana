@@ -134,6 +134,7 @@ pub async fn transaction_history(
     until: Option<Signature>,
     verbose: bool,
     show_transactions: bool,
+    query_chunk_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
@@ -143,7 +144,7 @@ pub async fn transaction_history(
                 address,
                 before.as_ref(),
                 until.as_ref(),
-                limit.min(1000),
+                limit.min(query_chunk_size),
             )
             .await?;
 
@@ -324,6 +325,19 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Maximum number of transaction signatures to return"),
                         )
                         .arg(
+                            Arg::with_name("query_chunk_size")
+                                .long("query-chunk-size")
+                                .takes_value(true)
+                                .value_name("AMOUNT")
+                                .validator(is_slot)
+                                .default_value("1000")
+                                .help(
+                                    "Number of transaction signatures to query at once. \
+                                       Smaller: more responsive/lower throughput. \
+                                       Larger: less responsive/higher throughput",
+                                ),
+                        )
+                        .arg(
                             Arg::with_name("before")
                                 .long("before")
                                 .value_name("TRANSACTION_SIGNATURE")
@@ -397,6 +411,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("transaction-history", Some(arg_matches)) => {
             let address = pubkey_of(arg_matches, "address").unwrap();
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
+            let query_chunk_size = value_t_or_exit!(arg_matches, "query_chunk_size", usize);
             let before = arg_matches
                 .value_of("before")
                 .map(|signature| signature.parse().expect("Invalid signature"));
@@ -413,6 +428,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 until,
                 verbose,
                 show_transactions,
+                query_chunk_size,
             ))
         }
         _ => unreachable!(),
