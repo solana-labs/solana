@@ -293,7 +293,7 @@ fn filter_signature_result(
 
 fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
-    _program_id: &Pubkey,
+    program_id: &Pubkey,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,
     bank: Option<Arc<Bank>>,
@@ -301,24 +301,27 @@ fn filter_program_results(
     let config = config.unwrap_or_default();
     let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
     let filters = config.filters;
+    let accounts_is_empty = accounts.is_empty();
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
         filters.iter().all(|filter_type| match filter_type {
             RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
         })
     });
-    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
-        if encoding == UiAccountEncoding::JsonParsed {
-            let bank = bank.unwrap(); // If !accounts.is_empty(), bank must be Some
-            Box::new(get_parsed_token_accounts(bank, keyed_accounts))
-        } else {
-            Box::new(
-                keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
-                    pubkey: pubkey.to_string(),
-                    account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
-                }),
-            )
-        };
+    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if program_id == &spl_token_id_v2_0()
+        && encoding == UiAccountEncoding::JsonParsed
+        && !accounts_is_empty
+    {
+        let bank = bank.unwrap(); // If !accounts_is_empty, bank must be Some
+        Box::new(get_parsed_token_accounts(bank, keyed_accounts))
+    } else {
+        Box::new(
+            keyed_accounts.map(move |(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: UiAccount::encode(&pubkey, account, encoding.clone(), None, None),
+            }),
+        )
+    };
     (accounts, last_notified_slot)
 }
 
