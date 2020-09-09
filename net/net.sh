@@ -874,12 +874,6 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 == --extra-primordial-stakes ]]; then
       extraPrimordialStakes=$2
-      # Extra primoridial stakes require that all of the validators start at
-      # the same time. Force async init and wait for supermajority here.
-      waitForNodeInit=false
-      if [[ -z "$maybeWaitForSupermajority" ]]; then
-        maybeWaitForSupermajority="--wait-for-supermajority 1"
-      fi
       shift 2
     else
       usage "Unknown long option: $1"
@@ -1006,6 +1000,21 @@ if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
     echo "Error: When specifying both --wait-for-supermajority and --warp-slot,"
     echo "they must use the same slot. ($waitSlot != $warpSlot)"
     exit 1
+  fi
+fi
+
+if [[ -n "$extraPrimordialStakes" ]]; then
+  # Extra primoridial stakes require that all of the validators start at
+  # the same time. Force async init and wait for supermajority here.
+  waitForNodeInit=false
+  if [[ -z "$maybeWaitForSupermajority" ]]; then
+    waitSlot=
+    if [[ -n "$maybeWarpSlot" ]]; then
+      read -r _ waitSlot <<<"$maybeWarpSlot"
+    else
+      waitSlot=1
+    fi
+    maybeWaitForSupermajority="--wait-for-supermajority $waitSlot"
   fi
 fi
 
