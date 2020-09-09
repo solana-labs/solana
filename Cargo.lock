@@ -3678,6 +3678,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
+ "solana-client",
  "solana-core",
  "solana-ledger",
  "solana-logger 1.4.0",
