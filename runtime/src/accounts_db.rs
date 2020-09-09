@@ -2650,28 +2650,26 @@ pub mod tests {
         db.store(1, &[(&pubkey, &account)]);
         db.store(1, &[(&pubkeys[0], &account)]);
         {
-            let stores = db.storage.read().unwrap();
-            let slot_0_stores = &stores.0.get(&0).unwrap();
-            let slot_1_stores = &stores.0.get(&1).unwrap();
+            let slot_0_stores = &db.storage.0.get(&0).unwrap().clone();
+            let slot_1_stores = &db.storage.0.get(&1).unwrap().clone();
             assert_eq!(slot_0_stores.len(), 1);
             assert_eq!(slot_1_stores.len(), 1);
-            assert_eq!(slot_0_stores[&0].count(), 2);
+            assert_eq!(slot_0_stores.get(&0).unwrap().count(), 2);
             assert_eq!(slot_1_stores[&1].count(), 2);
-            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
             assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
         }
 
         // adding root doesn't change anything
         db.add_root(1);
         {
-            let stores = db.storage.read().unwrap();
-            let slot_0_stores = &stores.0.get(&0).unwrap();
-            let slot_1_stores = &stores.0.get(&1).unwrap();
+            let slot_0_stores = &db.storage.0.get(&0).unwrap().clone();
+            let slot_1_stores = &db.storage.0.get(&1).unwrap().clone();
             assert_eq!(slot_0_stores.len(), 1);
             assert_eq!(slot_1_stores.len(), 1);
-            assert_eq!(slot_0_stores[&0].count(), 2);
+            assert_eq!(slot_0_stores.get(&0).unwrap().count(), 2);
             assert_eq!(slot_1_stores[&1].count(), 2);
-            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
             assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
         }
 
@@ -2680,14 +2678,13 @@ pub mod tests {
         db.store(2, &[(&pubkeys[0], &account)]);
         db.clean_accounts(None);
         {
-            let stores = db.storage.read().unwrap();
-            let slot_0_stores = &stores.0.get(&0).unwrap();
-            let slot_1_stores = &stores.0.get(&1).unwrap();
+            let slot_0_stores = &db.storage.0.get(&0).unwrap().clone();
+            let slot_1_stores = &db.storage.0.get(&1).unwrap().clone();
             assert_eq!(slot_0_stores.len(), 1);
             assert_eq!(slot_1_stores.len(), 1);
-            assert_eq!(slot_0_stores[&0].count(), 1);
+            assert_eq!(slot_0_stores.get(&0).unwrap().count(), 1);
             assert_eq!(slot_1_stores[&1].count(), 2);
-            assert_eq!(slot_0_stores[&0].approx_stored_count(), 2);
+            assert_eq!(slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
             assert_eq!(slot_1_stores[&1].approx_stored_count(), 2);
         }
     }
@@ -2737,7 +2734,7 @@ pub mod tests {
         db.remove_unrooted_slot(unrooted_slot);
         assert!(db.load_slow(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
-        assert!(db.storage.read().unwrap().0.get(&unrooted_slot).is_none());
+        assert!(db.storage.0.get(&unrooted_slot).is_none());
         assert!(db
             .accounts_index
             .read()
@@ -2833,9 +2830,8 @@ pub mod tests {
     }
 
     fn check_storage(accounts: &AccountsDB, slot: Slot, count: usize) -> bool {
-        let storage = accounts.storage.read().unwrap();
-        assert_eq!(storage.0[&slot].len(), 1);
-        let slot_storage = storage.0.get(&slot).unwrap();
+        assert_eq!(accounts.storage.0.get(&slot).unwrap().len(), 1);
+        let slot_storage = accounts.storage.0.get(&slot).unwrap();
         let mut total_count: usize = 0;
         for store in slot_storage.values() {
             assert_eq!(store.status(), AccountStorageStatus::Available);
@@ -2938,14 +2934,11 @@ pub mod tests {
         }
 
         let mut append_vec_histogram = HashMap::new();
-        for storage in accounts
-            .storage
-            .read()
-            .unwrap()
-            .0
-            .values()
-            .flat_map(|x| x.values())
-        {
+        let mut all_storages = vec![];
+        for slot_storage in accounts.storage.0.iter() {
+            all_storages.extend(slot_storage.values().cloned())
+        }
+        for storage in all_storages {
             *append_vec_histogram.entry(storage.slot).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
@@ -2963,23 +2956,32 @@ pub mod tests {
         let account1 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &[(&pubkey1, &account1)]);
         {
-            let stores = accounts.storage.read().unwrap();
-            assert_eq!(stores.0.len(), 1);
-            assert_eq!(stores.0[&0][&0].count(), 1);
-            assert_eq!(stores.0[&0][&0].status(), AccountStorageStatus::Available);
+            let stores = &accounts.storage.0;
+            assert_eq!(stores.len(), 1);
+            assert_eq!(stores.get(&0).unwrap()[&0].count(), 1);
+            assert_eq!(
+                stores.get(&0).unwrap()[&0].status(),
+                AccountStorageStatus::Available
+            );
         }
 
         let pubkey2 = Pubkey::new_rand();
         let account2 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &[(&pubkey2, &account2)]);
         {
-            let stores = accounts.storage.read().unwrap();
-            assert_eq!(stores.0.len(), 1);
-            assert_eq!(stores.0[&0].len(), 2);
-            assert_eq!(stores.0[&0][&0].count(), 1);
-            assert_eq!(stores.0[&0][&0].status(), AccountStorageStatus::Full);
-            assert_eq!(stores.0[&0][&1].count(), 1);
-            assert_eq!(stores.0[&0][&1].status(), AccountStorageStatus::Available);
+            let stores = &accounts.storage.0;
+            assert_eq!(stores.len(), 1);
+            assert_eq!(stores.get(&0).unwrap().len(), 2);
+            assert_eq!(stores.get(&0).unwrap()[&0].count(), 1);
+            assert_eq!(
+                stores.get(&0).unwrap()[&0].status(),
+                AccountStorageStatus::Full
+            );
+            assert_eq!(stores.get(&0).unwrap()[&1].count(), 1);
+            assert_eq!(
+                stores.get(&0).unwrap()[&1].status(),
+                AccountStorageStatus::Available
+            );
         }
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(
@@ -2996,15 +2998,15 @@ pub mod tests {
             let index = i % 2;
             accounts.store(0, &[(&pubkey1, &account1)]);
             {
-                let stores = accounts.storage.read().unwrap();
-                assert_eq!(stores.0.len(), 1);
-                assert_eq!(stores.0[&0].len(), 3);
-                assert_eq!(stores.0[&0][&0].count(), count[index]);
-                assert_eq!(stores.0[&0][&0].status(), status[0]);
-                assert_eq!(stores.0[&0][&1].count(), 1);
-                assert_eq!(stores.0[&0][&1].status(), status[1]);
-                assert_eq!(stores.0[&0][&2].count(), count[index ^ 1]);
-                assert_eq!(stores.0[&0][&2].status(), status[0]);
+                let stores = &accounts.storage.0;
+                assert_eq!(stores.len(), 1);
+                assert_eq!(stores.get(&0).unwrap().len(), 3);
+                assert_eq!(stores.get(&0).unwrap()[&0].count(), count[index]);
+                assert_eq!(stores.get(&0).unwrap()[&0].status(), status[0]);
+                assert_eq!(stores.get(&0).unwrap()[&1].count(), 1);
+                assert_eq!(stores.get(&0).unwrap()[&1].status(), status[1]);
+                assert_eq!(stores.get(&0).unwrap()[&2].count(), count[index ^ 1]);
+                assert_eq!(stores.get(&0).unwrap()[&2].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
@@ -3060,7 +3062,7 @@ pub mod tests {
         accounts.add_root(1);
 
         //slot is still there, since gc is lazy
-        assert!(accounts.storage.read().unwrap().0[&0].get(&id).is_some());
+        assert!(accounts.storage.0.get(&0).unwrap().get(&id).is_some());
 
         //store causes clean
         accounts.store(1, &[(&pubkey, &account)]);
@@ -3068,7 +3070,7 @@ pub mod tests {
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
         accounts.clean_accounts(None);
-        assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
+        assert!(accounts.storage.0.get(&0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -3077,9 +3079,7 @@ pub mod tests {
 
     impl AccountsDB {
         fn alive_account_count_in_store(&self, slot: Slot) -> usize {
-            let storage = self.storage.read().unwrap();
-
-            let slot_storage = storage.0.get(&slot);
+            let slot_storage = self.storage.0.get(&slot);
             if let Some(slot_storage) = slot_storage {
                 slot_storage.values().map(|store| store.count()).sum()
             } else {
@@ -3088,9 +3088,7 @@ pub mod tests {
         }
 
         fn all_account_count_in_append_vec(&self, slot: Slot) -> usize {
-            let storage = self.storage.read().unwrap();
-
-            let slot_storage = storage.0.get(&slot);
+            let slot_storage = self.storage.0.get(&slot);
             if let Some(slot_storage) = slot_storage {
                 let count = slot_storage
                     .values()
@@ -3535,9 +3533,11 @@ pub mod tests {
     }
 
     fn assert_no_stores(accounts: &AccountsDB, slot: Slot) {
-        let stores = accounts.storage.read().unwrap();
-        info!("{:?}", stores.0.get(&slot));
-        assert!(stores.0.get(&slot).is_none() || stores.0.get(&slot).unwrap().is_empty());
+        let slot_store = accounts.storage.0.get(&slot);
+        if let Some(ref x) = slot_store {
+            info!("{:?}", x.value());
+        }
+        assert!(slot_store.is_none() || slot_store.unwrap().is_empty());
     }
 
     #[test]
@@ -3713,16 +3713,7 @@ pub mod tests {
         accounts.store(current_slot, &[(&pubkey2, &account2)]);
 
         // Store enough accounts such that an additional store for slot 2 is created.
-        while accounts
-            .storage
-            .read()
-            .unwrap()
-            .0
-            .get(&current_slot)
-            .unwrap()
-            .len()
-            < 2
-        {
+        while accounts.storage.0.get(&current_slot).unwrap().len() < 2 {
             accounts.store(current_slot, &[(&filler_account_pubkey, &filler_account)]);
         }
         accounts.add_root(current_slot);
@@ -4375,13 +4366,7 @@ pub mod tests {
         let after_slot = base_slot + 1;
 
         db.store(base_slot, &[(&key, &account)]);
-        db.storage
-            .write()
-            .unwrap()
-            .0
-            .get_mut(&base_slot)
-            .unwrap()
-            .clear();
+        db.storage.0.get_mut(&base_slot).unwrap().clear();
         db.add_root(base_slot);
         assert!(db.get_snapshot_storages(after_slot).is_empty());
 
@@ -4418,8 +4403,14 @@ pub mod tests {
         db.add_root(base_slot);
         assert_eq!(1, db.get_snapshot_storages(after_slot).len());
 
-        let storage = db.storage.read().unwrap();
-        storage.0[&0].values().next().unwrap().remove_account();
+        db.storage
+            .0
+            .get(&0)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .remove_account();
         assert!(db.get_snapshot_storages(after_slot).is_empty());
     }
 
@@ -4430,8 +4421,15 @@ pub mod tests {
         let pubkey = Pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         accounts.store(0, &[(&pubkey, &account)]);
-        let storage = accounts.storage.read().unwrap();
-        let storage_entry = storage.0[&0].values().next().unwrap();
+        let storage_entry = accounts
+            .storage
+            .0
+            .get(&0)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .clone();
         storage_entry.remove_account();
         storage_entry.remove_account();
     }
