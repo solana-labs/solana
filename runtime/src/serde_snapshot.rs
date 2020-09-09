@@ -265,7 +265,7 @@ where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let accounts_db = AccountsDB::new(account_paths.to_vec(), cluster_type);
+    let mut accounts_db = AccountsDB::new(account_paths.to_vec(), cluster_type);
 
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
@@ -348,8 +348,7 @@ where
         .expect("At least one storage entry must exist from deserializing stream");
 
     {
-        let mut stores = accounts_db.storage.write().unwrap();
-        stores.0.extend(storage);
+        accounts_db.storage.0.extend(storage);
     }
 
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
