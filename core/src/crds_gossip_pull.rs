@@ -22,6 +22,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // The maximum age of a value received over pull responses
@@ -74,12 +75,8 @@ impl CrdsFilter {
         ((num_items / max_items).log2().ceil()).max(0.0) as u32
     }
     pub fn hash_as_u64(item: &Hash) -> u64 {
-        let arr = item.as_ref();
-        let mut accum = 0;
-        for (i, val) in arr.iter().enumerate().take(8) {
-            accum |= (u64::from(*val)) << (i * 8) as u64;
-        }
-        accum
+        let buf = item.as_ref()[..8].try_into().unwrap();
+        u64::from_le_bytes(buf)
     }
     pub fn test_mask_u64(&self, item: u64, ones: u64) -> bool {
         let bits = item | ones;
@@ -542,6 +539,31 @@ mod test {
     use solana_perf::test_tx::test_tx;
     use solana_sdk::hash::{hash, HASH_BYTES};
     use solana_sdk::packet::PACKET_DATA_SIZE;
+
+    #[test]
+    fn test_hash_as_u64() {
+        let arr: Vec<u8> = (0..HASH_BYTES).map(|i| i as u8 + 1).collect();
+        let hash = Hash::new(&arr);
+        assert_eq!(CrdsFilter::hash_as_u64(&hash), 0x807060504030201);
+    }
+
+    #[test]
+    fn test_hash_as_u64_random() {
+        fn hash_as_u64_bitops(hash: &Hash) -> u64 {
+            let mut out = 0;
+            for (i, val) in hash.as_ref().iter().enumerate().take(8) {
+                out |= (u64::from(*val)) << (i * 8) as u64;
+            }
+            out
+        }
+        let mut rng = thread_rng();
+        for _ in 0..100 {
+            let mut buf = [0u8; HASH_BYTES];
+            rng.fill(&mut buf);
+            let hash = Hash::new(&buf);
+            assert_eq!(CrdsFilter::hash_as_u64(&hash), hash_as_u64_bitops(&hash));
+        }
+    }
 
     #[test]
     fn test_new_pull_with_stakes() {
