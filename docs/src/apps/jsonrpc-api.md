@@ -111,10 +111,11 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 
-- `"max"` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
-- `"root"` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
-- `"single"` - the node will query the most recent bank having reached 1 confirmation
-- `"recent"` - the node will query its most recent bank
+- `"max"` - the node will query the most recent bank confirmed by the cluster as having reached maximum lockout.
+- `"root"` - the node will query the most recent bank having reached maximum lockout on this node.
+- `"single"` - the node will query the most recent bank having reached 1 cluster confirmation.
+- `"singleGossip"` - the node will query the most recent bank having reached 1 cluster confirmation via gossip votes; may occur before or after `single`, depending on gossip traffic.
+- `"recent"` - the node will query its most recent bank.
 
 The commitment parameter should be included as the last element in the `params` array:
 
