@@ -138,6 +138,7 @@ pub async fn transaction_history(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
+    let mut loaded_block: Option<(Slot, solana_transaction_status::ConfirmedBlock)> = None;
     while limit > 0 {
         let results = bigtable
             .get_confirmed_signatures_for_address(
@@ -151,11 +152,11 @@ pub async fn transaction_history(
         if results.is_empty() {
             break;
         }
-        before = Some(results.last().unwrap().signature);
+        before = Some(results.last().unwrap().0.signature);
         assert!(limit >= results.len());
         limit = limit.saturating_sub(results.len());
 
-        for result in results {
+        for (result, index) in results {
             if verbose {
                 println!(
                     "{}, slot={}, memo=\"{}\", status={}",
@@ -172,23 +173,45 @@ pub async fn transaction_history(
             }
 
             if show_transactions {
-                match bigtable
-                    .get_confirmed_transaction(&result.signature, UiTransactionEncoding::Base64)
-                    .await
-                {
-                    Ok(Some(confirmed_transaction)) => {
-                        println_transaction(
-                            &confirmed_transaction
-                                .transaction
-                                .transaction
-                                .decode()
-                                .expect("Successful decode"),
-                            &confirmed_transaction.transaction.meta,
-                            "  ",
-                        );
+                // Instead of using `bigtable.get_confirmed_transaction()`, fetch the entire block
+                // and keep it around.  This helps reduce BigTable query traffic and speeds up the
+                // results for high-volume addresses
+                loop {
+                    if let Some((slot, block)) = &loaded_block {
+                        if *slot == result.slot {
+                            match block.transactions.get(index as usize) {
+                                None => {
+                                    println!(
+                                        "  Transaction info for {} is corrupt",
+                                        result.signature
+                                    );
+                                }
+                                Some(transaction_with_meta) => {
+                                    println_transaction(
+                                        &transaction_with_meta
+                                            .transaction
+                                            .decode()
+                                            .expect("Successful decode"),
+                                        &transaction_with_meta.meta,
+                                        "  ",
+                                    );
+                                }
+                            }
+                            break;
+                        }
                     }
-                    Ok(None) => println!("  Confirmed transaction details not available"),
-                    Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
+                    match bigtable
+                        .get_confirmed_block(result.slot, UiTransactionEncoding::Base64)
+                        .await
+                    {
+                        Err(err) => {
+                            println!("  Unable to get confirmed transaction details: {}", err);
+                            break;
+                        }
+                        Ok(block) => {
+                            loaded_block = Some((result.slot, block));
+                        }
+                    }
                 }
                 println!();
             }
