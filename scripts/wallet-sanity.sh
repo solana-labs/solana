@@ -20,8 +20,11 @@ args+=(--keypair "$SOLANA_CONFIG_DIR"/faucet.json)
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  output=$($solana_cli "${args[@]}" transaction-count)
-  if [[ -n $output ]]; then
+  set +e
+  output=$($solana_cli "${args[@]}" transaction-count --commitment max)
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 && -n $output ]]; then
     node_readiness=true
     break
   fi
