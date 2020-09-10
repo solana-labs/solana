@@ -84,7 +84,7 @@ export function SysvarAccountSection({
 }
 
 function SysvarAccountRecentBlockhashesCard({
-  account
+  account,
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;
@@ -107,7 +107,7 @@ function SysvarAccountRecentBlockhashesCard({
 }
 
 function SysvarAccountSlotHashes({
-  account
+  account,
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;
@@ -131,7 +131,7 @@ function SysvarAccountSlotHashes({
 
 function SysvarAccountSlotHistory({
   account,
-  sysvarAccount
+  sysvarAccount,
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;
@@ -149,9 +149,7 @@ function SysvarAccountSlotHistory({
 
         <tr>
           <td>Next Slot</td>
-          <td className="text-lg-right">
-            {sysvarAccount.info.nextSlot}
-          </td>
+          <td className="text-lg-right">{sysvarAccount.info.nextSlot}</td>
         </tr>
 
         <AccountOwnerRow account={account} />
@@ -162,7 +160,7 @@ function SysvarAccountSlotHistory({
 
 function SysvarAccountStakeHistory({
   account,
-  sysvarAccount
+  sysvarAccount,
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;

@@ -1,7 +1,15 @@
 import React from "react";
-import { SysvarAccount, StakeHistoryInfo, StakeHistoryEntry } from "validators/accounts/sysvar";
+import {
+  SysvarAccount,
+  StakeHistoryInfo,
+  StakeHistoryEntry,
+} from "validators/accounts/sysvar";
 
-export function StakeHistoryCard({ sysvarAccount }: { sysvarAccount: SysvarAccount }) {
+export function StakeHistoryCard({
+  sysvarAccount,
+}: {
+  sysvarAccount: SysvarAccount;
+}) {
   const stakeHistory = sysvarAccount.info as StakeHistoryInfo;
   return (
     <>
@@ -46,18 +54,10 @@ export function StakeHistoryCard({ sysvarAccount }: { sysvarAccount: SysvarAccou
 const renderAccountRow = (entry: StakeHistoryEntry, index: number) => {
   return (
     <tr key={index}>
-      <td className="w-1 text-monospace">
-        {entry.epoch}
-      </td>
-      <td className="text-monospace">
-        {entry.stakeHistory.effective}
-      </td>
-      <td className="text-monospace">
-        {entry.stakeHistory.activating}
-      </td>
-      <td className="text-monospace">
-        {entry.stakeHistory.deactivating}
-      </td>
+      <td className="w-1 text-monospace">{entry.epoch}</td>
+      <td className="text-monospace">{entry.stakeHistory.effective}</td>
+      <td className="text-monospace">{entry.stakeHistory.activating}</td>
+      <td className="text-monospace">{entry.stakeHistory.deactivating}</td>
     </tr>
   );
 };

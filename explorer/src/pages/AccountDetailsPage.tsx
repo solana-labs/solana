@@ -132,19 +132,31 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       title: "Votes",
       path: "/votes",
     });
-  } else if (data && data.program === "sysvar" && data.parsed.type === "recentBlockhashes") {
+  } else if (
+    data &&
+    data.program === "sysvar" &&
+    data.parsed.type === "recentBlockhashes"
+  ) {
     tabs.push({
       slug: "blockhashes",
       title: "Blockhashes",
-      path: "/blockhashes"
+      path: "/blockhashes",
     });
-  } else if (data && data.program === "sysvar" && data.parsed.type === "slotHashes") {
+  } else if (
+    data &&
+    data.program === "sysvar" &&
+    data.parsed.type === "slotHashes"
+  ) {
     tabs.push({
       slug: "hashes",
       title: "Hashes",
       path: "/hashes",
     });
-  } else if (data && data.program === "sysvar" && data.parsed.type === "stakeHistory") {
+  } else if (
+    data &&
+    data.program === "sysvar" &&
+    data.parsed.type === "stakeHistory"
+  ) {
     tabs.push({
       slug: "stake-history",
       title: "Stake History",
@@ -205,7 +217,7 @@ function InfoSection({ account }: { account: Account }) {
       <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
     );
   } else if (data && data.program === "config") {
-    return <ConfigAccountCard account={account} configAccount={data.parsed} />
+    return <ConfigAccountCard account={account} configAccount={data.parsed} />;
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -217,7 +229,14 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "largest" | "votes" | "hashes" | "stake-history" | "blockhashes";
+type MoreTabs =
+  | "history"
+  | "tokens"
+  | "largest"
+  | "votes"
+  | "hashes"
+  | "stake-history"
+  | "blockhashes";
 function MoreSection({
   account,
   tab,
@@ -262,15 +281,21 @@ function MoreSection({
       {tab === "votes" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
-      {tab === "hashes" && data?.program === "sysvar" && data.parsed.type === "slotHashes" && (
-        <SlotHashesCard sysvarAccount={data.parsed} />
-      )}
-      {tab === "stake-history" && data?.program === "sysvar" && data.parsed.type === "stakeHistory" && (
-        <StakeHistoryCard sysvarAccount={data.parsed} />
-      )}
-      {tab === "blockhashes" && data?.program === "sysvar" && data.parsed.type === "recentBlockhashes" && (
-        <BlockhashesCard sysvarAccount={data.parsed} />
-      )}
+      {tab === "hashes" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "slotHashes" && (
+          <SlotHashesCard sysvarAccount={data.parsed} />
+        )}
+      {tab === "stake-history" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "stakeHistory" && (
+          <StakeHistoryCard sysvarAccount={data.parsed} />
+        )}
+      {tab === "blockhashes" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "recentBlockhashes" && (
+          <BlockhashesCard sysvarAccount={data.parsed} />
+        )}
     </>
   );
 }

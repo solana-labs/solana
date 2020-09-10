@@ -1,7 +1,15 @@
 import React from "react";
-import { SysvarAccount, RecentBlockhashesInfo, RecentBlockhashesEntry } from "validators/accounts/sysvar";
+import {
+  SysvarAccount,
+  RecentBlockhashesInfo,
+  RecentBlockhashesEntry,
+} from "validators/accounts/sysvar";
 
-export function BlockhashesCard({ sysvarAccount }: { sysvarAccount: SysvarAccount }) {
+export function BlockhashesCard({
+  sysvarAccount,
+}: {
+  sysvarAccount: SysvarAccount;
+}) {
   const blockhashes = sysvarAccount.info as RecentBlockhashesInfo;
   return (
     <>
@@ -44,10 +52,10 @@ export function BlockhashesCard({ sysvarAccount }: { sysvarAccount: SysvarAccoun
 const renderAccountRow = (entry: RecentBlockhashesEntry, index: number) => {
   return (
     <tr key={index}>
-      <td className="w-1 text-monospace">
-        {entry.blockhash}
+      <td className="w-1 text-monospace">{entry.blockhash}</td>
+      <td className="">
+        {entry.feeCalculator.lamportsPerSignature} lamports per signature
       </td>
-      <td className="">{entry.feeCalculator.lamportsPerSignature} lamports per signature</td>
     </tr>
   );
 };

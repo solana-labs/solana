@@ -1,7 +1,15 @@
 import React from "react";
-import { SysvarAccount, SlotHashesInfo, SlotHashEntry } from "validators/accounts/sysvar";
+import {
+  SysvarAccount,
+  SlotHashesInfo,
+  SlotHashEntry,
+} from "validators/accounts/sysvar";
 
-export function SlotHashesCard({ sysvarAccount }: { sysvarAccount: SysvarAccount }) {
+export function SlotHashesCard({
+  sysvarAccount,
+}: {
+  sysvarAccount: SysvarAccount;
+}) {
   const slotHashes = sysvarAccount.info as SlotHashesInfo;
   return (
     <>
