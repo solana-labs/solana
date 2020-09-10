@@ -62,11 +62,13 @@ pub enum CommitmentLevel {
     /// The highest slot having reached max vote lockout.
     Root,
 
-    /// The highest slot having reached 1 confirmation.
+    /// The most recent bank having reached 1 confirmation by supermajority of the network.
     Single,
 
-    /// The highest slot having reached 1 confirmation via gossip votes; may occur before or after Single,
-    /// depending on gossip traffic.
+    /// the most recent bank that has been voted on by supermajority of the network.
+    /// This differs from `single` in that it does not count votes on descendants of a bank,
+    /// only direct votes on the bank. This confirmation level also upholds "optimistic confirmation"
+    /// guarantees in release 1.3 and onwards.
     SingleGossip,
 }
 
