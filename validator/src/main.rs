@@ -897,6 +897,7 @@ pub fn main() {
             Arg::with_name("snapshot_compression")
                 .long("snapshot-compression")
                 .possible_values(&["bz2", "gzip", "zstd", "none"])
+                .default_value("zstd")
                 .value_name("COMPRESSION_TYPE")
                 .takes_value(true)
                 .help("Type of snapshot compression to use."),
@@ -1063,16 +1064,17 @@ pub fn main() {
         exit(1);
     });
 
-    let mut snapshot_compression = CompressionType::Zstd;
-    if let Ok(compression_str) = value_t!(matches, "snapshot_compression", String) {
+    let snapshot_compression = {
+        let compression_str = value_t_or_exit!(matches, "snapshot_compression", String);
         match compression_str.as_str() {
-            "bz2" => snapshot_compression = CompressionType::Bzip2,
-            "gzip" => snapshot_compression = CompressionType::Gzip,
-            "zstd" => snapshot_compression = CompressionType::Zstd,
-            "none" => snapshot_compression = CompressionType::NoCompression,
+            "bz2" => CompressionType::Bzip2,
+            "gzip" => CompressionType::Gzip,
+            "zstd" => CompressionType::Zstd,
+            "none" => CompressionType::NoCompression,
             _ => panic!("Compression type not recognized: {}", compression_str),
         }
-    }
+    };
+
     let snapshot_version =
         matches
             .value_of("snapshot_version")
