@@ -202,7 +202,6 @@ pub fn serialize_parameters_aligned(
         .unwrap();
     v.write_all(instruction_data).unwrap();
     v.write_all(program_id.as_ref()).unwrap();
-    // println!("{:?}", v.len());
     Ok(v)
 }
 
