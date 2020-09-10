@@ -268,6 +268,10 @@ wallet() {
 setup_validator_accounts() {
   declare node_sol=$1
 
+  if [[ -n "$SKIP_ACCOUNTS_CREATION" ]]; then
+    return 0
+  fi
+
   if ! wallet vote-account "$vote_account"; then
     if ((airdrops_enabled)); then
       echo "Adding $node_sol to validator identity account:"

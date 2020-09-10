@@ -385,7 +385,14 @@ EOF
     args+=(--init-complete-file "$initCompleteFile")
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
+
+    maybeSkipAccountsCreation=
+    if [[ $nodeIndex -le $extraPrimordialStakes ]]; then
+      maybeSkipAccountsCreation="export SKIP_ACCOUNTS_CREATION=1"
+    fi
+
 cat >> ~/solana/on-reboot <<EOF
+    $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
@@ -397,7 +404,7 @@ EOF
       net/remote/remote-node-wait-init.sh 600
     fi
 
-    if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
+    if [[ $skipSetup != true && $nodeType != blockstreamer && -z $maybeSkipAccountsCreation ]]; then
       # Wait for the validator to catch up to the bootstrap validator before
       # delegating stake to it
       solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
