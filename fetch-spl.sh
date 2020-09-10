@@ -10,10 +10,11 @@ fetch_program() {
   declare name=$1
   declare version=$2
   declare address=$3
+  declare loader=$4
 
   declare so=spl_$name-$version.so
 
-  genesis_args+=(--bpf-program "$address" "$so")
+  genesis_args+=(--bpf-program "$address" "$loader" "$so")
 
   if [[ -r $so ]]; then
     return
@@ -36,8 +37,8 @@ fetch_program() {
 
 }
 
-fetch_program token 2.0.3 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
-fetch_program memo  1.0.0 Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo
+fetch_program token 2.0.3 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA BPFLoader1111111111111111111111111111111111
+fetch_program memo  1.0.0 Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo BPFLoader1111111111111111111111111111111111
 
 echo "${genesis_args[@]}" > spl-genesis-args.sh
 
