@@ -985,7 +985,8 @@ impl AccountsDB {
                 }
                 if alive_count == stored_count && stores.values().len() == 1 {
                     trace!(
-                        "shrink_stale_slot: not able to shrink at all{}: {} / {}",
+                        "shrink_stale_slot ({}): not able to shrink at all: alive/stored: {} / {} {}",
+                        slot,
                         alive_count,
                         stored_count,
                         if forced { " (forced)" } else { "" },
@@ -993,7 +994,8 @@ impl AccountsDB {
                     return 0;
                 } else if (alive_count as f32 / stored_count as f32) >= 0.80 && !forced {
                     trace!(
-                        "shrink_stale_slot: not enough space to shrink: {} / {}",
+                        "shrink_stale_slot ({}): not enough space to shrink: {} / {}",
+                        slot,
                         alive_count,
                         stored_count,
                     );
