@@ -875,21 +875,23 @@ declare module '@solana/web3.js' {
   declare export class SystemProgram {
     static programId: PublicKey;
 
-    static createAccount(params: CreateAccountParams): Transaction;
+    static createAccount(params: CreateAccountParams): TransactionInstruction;
     static createAccountWithSeed(
       params: CreateAccountWithSeedParams,
-    ): Transaction;
+    ): TransactionInstruction;
     static allocate(
       params: AllocateParams | AllocateWithSeedParams,
-    ): Transaction;
-    static assign(params: AssignParams | AssignWithSeedParams): Transaction;
-    static transfer(params: TransferParams): Transaction;
+    ): TransactionInstruction;
+    static assign(
+      params: AssignParams | AssignWithSeedParams,
+    ): TransactionInstruction;
+    static transfer(params: TransferParams): TransactionInstruction;
     static createNonceAccount(
       params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
     ): Transaction;
     static nonceAdvance(params: AdvanceNonceParams): TransactionInstruction;
-    static nonceWithdraw(params: WithdrawNonceParams): Transaction;
-    static nonceAuthorize(params: AuthorizeNonceParams): Transaction;
+    static nonceWithdraw(params: WithdrawNonceParams): TransactionInstruction;
+    static nonceAuthorize(params: AuthorizeNonceParams): TransactionInstruction;
   }
 
   declare export type SystemInstructionType =

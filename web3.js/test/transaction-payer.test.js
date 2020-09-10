@@ -1,5 +1,11 @@
 // @flow
-import {Account, Connection, SystemProgram, LAMPORTS_PER_SOL} from '../src';
+import {
+  Account,
+  Connection,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
@@ -88,11 +94,13 @@ test('transaction-payer', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 10,
-  });
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: accountFrom.publicKey,
+      toPubkey: accountTo.publicKey,
+      lamports: 10,
+    }),
+  );
 
   const signature = await connection.sendTransaction(
     transaction,

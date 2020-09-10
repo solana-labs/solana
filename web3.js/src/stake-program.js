@@ -522,15 +522,18 @@ export class StakeProgram {
   static createAccountWithSeed(
     params: CreateStakeAccountWithSeedParams,
   ): Transaction {
-    let transaction = SystemProgram.createAccountWithSeed({
-      fromPubkey: params.fromPubkey,
-      newAccountPubkey: params.stakePubkey,
-      basePubkey: params.basePubkey,
-      seed: params.seed,
-      lamports: params.lamports,
-      space: this.space,
-      programId: this.programId,
-    });
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.createAccountWithSeed({
+        fromPubkey: params.fromPubkey,
+        newAccountPubkey: params.stakePubkey,
+        basePubkey: params.basePubkey,
+        seed: params.seed,
+        lamports: params.lamports,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
 
     const {stakePubkey, authorized, lockup} = params;
     return transaction.add(this.initialize({stakePubkey, authorized, lockup}));
@@ -540,13 +543,16 @@ export class StakeProgram {
    * Generate a Transaction that creates a new Stake account
    */
   static createAccount(params: CreateStakeAccountParams): Transaction {
-    let transaction = SystemProgram.createAccount({
-      fromPubkey: params.fromPubkey,
-      newAccountPubkey: params.stakePubkey,
-      lamports: params.lamports,
-      space: this.space,
-      programId: this.programId,
-    });
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: params.fromPubkey,
+        newAccountPubkey: params.stakePubkey,
+        lamports: params.lamports,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
 
     const {stakePubkey, authorized, lockup} = params;
     return transaction.add(this.initialize({stakePubkey, authorized, lockup}));
@@ -648,13 +654,16 @@ export class StakeProgram {
   static split(params: SplitStakeParams): Transaction {
     const {stakePubkey, authorizedPubkey, splitStakePubkey, lamports} = params;
 
-    let transaction = SystemProgram.createAccount({
-      fromPubkey: authorizedPubkey,
-      newAccountPubkey: splitStakePubkey,
-      lamports: 0,
-      space: this.space,
-      programId: this.programId,
-    });
+    const transaction = new Transaction();
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: authorizedPubkey,
+        newAccountPubkey: splitStakePubkey,
+        lamports: 0,
+        space: this.space,
+        programId: this.programId,
+      }),
+    );
     const type = STAKE_INSTRUCTION_LAYOUTS.Split;
     const data = encodeData(type, {lamports});
 
