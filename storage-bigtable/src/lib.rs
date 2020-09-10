@@ -367,7 +367,7 @@ impl LedgerStorage {
         before_signature: Option<&Signature>,
         until_signature: Option<&Signature>,
         limit: usize,
-    ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
+    ) -> Result<Vec<(ConfirmedTransactionStatusWithSignature, u32 /*slot index*/)>> {
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{}/", address);
 
@@ -436,12 +436,12 @@ impl LedgerStorage {
                 if slot == last_slot && tx_by_addr_info.index <= until_transaction_index {
                     continue;
                 }
-                infos.push(ConfirmedTransactionStatusWithSignature {
+                infos.push((ConfirmedTransactionStatusWithSignature {
                     signature: tx_by_addr_info.signature,
                     slot,
                     err: tx_by_addr_info.err,
                     memo: tx_by_addr_info.memo,
-                });
+                }, tx_by_addr_info.index));
                 // Respect limit
                 if infos.len() >= limit {
                     break 'outer;
