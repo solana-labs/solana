@@ -112,7 +112,7 @@ Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 
 - `"max"` - the node will query the most recent block confirmed by supermajority of the network as having reached
-maximum lockout on this node.
+maximum lockout.
 - `"root"` - the node will query the most recent block having reached maximum lockout on this node.
 - `"single"` - the node will query the most recent block having reached 1 confirmation by supermajority of the network.
 - `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the network via
