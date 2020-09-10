@@ -81,12 +81,10 @@ export function SysvarAccountSection({
         />
       );
   }
-
-  return <SysvarAccountCard account={account} sysvarAccount={sysvarAccount} />;
 }
 
 function SysvarAccountRecentBlockhashesCard({
-  account,
+  account
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;
@@ -102,19 +100,6 @@ function SysvarAccountRecentBlockhashesCard({
       <TableCardBody>
         <AccountAddressRow account={account} />
 
-        {/* <tr>
-          <td>Recent Blockhashes</td>
-          <td className="text-lg-right">
-            {sysvarAccount.info.map((blockhash: string, i: number) => {
-              return (
-                <code key={blockhash+i}>
-                  {blockhash}
-                </code>
-              )
-            })}
-          </td>
-        </tr> */}
-
         <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
@@ -122,8 +107,7 @@ function SysvarAccountRecentBlockhashesCard({
 }
 
 function SysvarAccountSlotHashes({
-  account,
-  sysvarAccount
+  account
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;
@@ -152,7 +136,6 @@ function SysvarAccountSlotHistory({
   account: Account;
   sysvarAccount: SysvarAccount;
 }) {
-  console.log(sysvarAccount);
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
@@ -184,7 +167,6 @@ function SysvarAccountStakeHistory({
   account: Account;
   sysvarAccount: SysvarAccount;
 }) {
-  console.log(sysvarAccount);
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
@@ -209,7 +191,6 @@ function SysvarAccountFeesCard({
   account: Account;
   sysvarAccount: SysvarAccount;
 }) {
-  console.log(sysvarAccount);
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
@@ -239,7 +220,6 @@ function SysvarAccountEpochScheduleCard({
   sysvarAccount: SysvarAccount;
 }) {
   const refresh = useFetchAccountInfo();
-  console.log(sysvarAccount);
   return (
     <div className="card">
       <AccountHeader
@@ -377,7 +357,6 @@ function SysvarAccountRewardsCard({
   sysvarAccount: SysvarAccount;
 }) {
   const refresh = useFetchAccountInfo();
-  console.log(sysvarAccount);
   return (
     <div className="card">
       <AccountHeader title="Rewards" refresh={() => refresh(account.pubkey)} />
@@ -387,31 +366,10 @@ function SysvarAccountRewardsCard({
 
         <tr>
           <td>Validator Point Value</td>
-          <td className="text-lg-right">
+          <td className="text-lg-right text-monospace">
             {sysvarAccount.info.validatorPointValue}
           </td>
         </tr>
-
-        <AccountOwnerRow account={account} />
-      </TableCardBody>
-    </div>
-  );
-}
-
-function SysvarAccountCard({
-  account,
-  sysvarAccount,
-}: {
-  account: Account;
-  sysvarAccount: SysvarAccount;
-}) {
-  const refresh = useFetchAccountInfo();
-  console.log(sysvarAccount);
-  return (
-    <div className="card">
-      <AccountHeader title="Sysvar" refresh={() => refresh(account.pubkey)} />
-      <TableCardBody>
-        <AccountAddressRow account={account} />
 
         <AccountOwnerRow account={account} />
       </TableCardBody>

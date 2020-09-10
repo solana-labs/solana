@@ -6,12 +6,14 @@ import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
+import { ConfigAccount } from "validators/accounts/config";
 
-export function UnknownAccountCard({ account }: { account: Account }) {
+export function ConfigAccountCard({ account, configAccount }: { account: Account, configAccount: ConfigAccount }) {
+
   const { details, lamports } = account;
   const { cluster } = useCluster();
   if (lamports === undefined) return null;
-
+  
   const label = addressLabel(account.pubkey.toBase58(), cluster);
   return (
     <div className="card">

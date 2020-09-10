@@ -25,6 +25,8 @@ import { VotesCard } from "components/account/VotesCard";
 import { SysvarAccountSection } from "components/account/SysvarAccountSection";
 import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
+import { BlockhashesCard } from "components/account/BlockhashesCard";
+import { ConfigAccountCard } from "components/account/ConfigAccountCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -130,6 +132,12 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       title: "Votes",
       path: "/votes",
     });
+  } else if (data && data.program === "sysvar" && data.parsed.type === "recentBlockhashes") {
+    tabs.push({
+      slug: "blockhashes",
+      title: "Blockhashes",
+      path: "/blockhashes"
+    });
   } else if (data && data.program === "sysvar" && data.parsed.type === "slotHashes") {
     tabs.push({
       slug: "hashes",
@@ -142,7 +150,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       title: "Stake History",
       path: "/stake-history",
     });
-  } else {
+  } else if (!data || (data && data.program !== "sysvar")) {
     tabs.push({
       slug: "tokens",
       title: "Tokens",
@@ -196,6 +204,8 @@ function InfoSection({ account }: { account: Account }) {
     return (
       <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
     );
+  } else if (data && data.program === "config") {
+    return <ConfigAccountCard account={account} configAccount={data.parsed} />
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -207,7 +217,7 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "largest" | "votes" | "hashes" | "stake-history";
+type MoreTabs = "history" | "tokens" | "largest" | "votes" | "hashes" | "stake-history" | "blockhashes";
 function MoreSection({
   account,
   tab,
@@ -257,6 +267,9 @@ function MoreSection({
       )}
       {tab === "stake-history" && data?.program === "sysvar" && data.parsed.type === "stakeHistory" && (
         <StakeHistoryCard sysvarAccount={data.parsed} />
+      )}
+      {tab === "blockhashes" && data?.program === "sysvar" && data.parsed.type === "recentBlockhashes" && (
+        <BlockhashesCard sysvarAccount={data.parsed} />
       )}
     </>
   );
