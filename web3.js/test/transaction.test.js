@@ -75,7 +75,7 @@ describe('compileMessage', () => {
   });
 });
 
-test('signPartial', () => {
+test('partialSign', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
@@ -92,7 +92,7 @@ test('signPartial', () => {
   partialTransaction.setSigners(account1.publicKey, account2.publicKey);
   expect(partialTransaction.signatures[0].signature).toBeNull();
   expect(partialTransaction.signatures[1].signature).toBeNull();
-  partialTransaction.signPartial(account1, account2);
+  partialTransaction.partialSign(account1, account2);
 
   expect(partialTransaction).toEqual(transaction);
 });
@@ -300,7 +300,7 @@ test('serialize unsigned transaction', () => {
   expectedTransaction.serializeMessage();
 
   // Properly signed transaction succeeds
-  expectedTransaction.signPartial(sender);
+  expectedTransaction.partialSign(sender);
   expect(expectedTransaction.signatures.length).toBe(1);
   const expectedSerialization = Buffer.from(
     'AVuErQHaXv0SG0/PchunfxHKt8wMRfMZzqV0tkC5qO6owYxWU2v871AoWywGoFQr4z+q/7mE8lIufNl/' +

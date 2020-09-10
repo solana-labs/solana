@@ -636,7 +636,7 @@ declare module '@solana/web3.js' {
     compileMessage(): Message;
     serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
-    signPartial(...partialSigners: Array<Account>): void;
+    partialSign(...partialSigners: Array<Account>): void;
     addSignature(pubkey: PublicKey, signature: Buffer): void;
     setSigners(...signer: Array<PublicKey>): void;
     verifySignatures(): boolean;

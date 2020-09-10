@@ -358,7 +358,7 @@ export class Transaction {
    * Specify the public keys which will be used to sign the Transaction.
    * The first signer will be used as the transaction fee payer account.
    *
-   * Signatures can be added with either `signPartial` or `addSignature`
+   * Signatures can be added with either `partialSign` or `addSignature`
    */
   setSigners(...signers: Array<PublicKey>) {
     if (signers.length === 0) {
@@ -390,16 +390,16 @@ export class Transaction {
       publicKey: signer.publicKey,
     }));
 
-    this.signPartial(...signers);
+    this.partialSign(...signers);
   }
 
   /**
    * Partially sign a transaction with the specified accounts. All accounts must
    * correspond to a public key that was previously provided to `setSigners`.
    *
-   * All the caveats from the `sign` method apply to `signPartial`
+   * All the caveats from the `sign` method apply to `partialSign`
    */
-  signPartial(...signers: Array<Account>) {
+  partialSign(...signers: Array<Account>) {
     if (signers.length === 0) {
       throw new Error('No signers');
     }
