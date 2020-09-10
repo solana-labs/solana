@@ -12,6 +12,7 @@
 
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
+import {PublicKey} from './src/publickey';
 
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
@@ -626,6 +627,7 @@ declare module '@solana/web3.js' {
     instructions: Array<TransactionInstruction>;
     recentBlockhash: ?Blockhash;
     nonceInfo: ?NonceInformation;
+    feePayer: PublicKey | null;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
@@ -638,9 +640,9 @@ declare module '@solana/web3.js' {
     compileMessage(): Message;
     serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
-    signPartial(...partialSigners: Array<PublicKey | Account>): void;
-    addSigner(signer: Account): void;
+    partialSign(...partialSigners: Array<Account>): void;
     addSignature(pubkey: PublicKey, signature: Buffer): void;
+    setSigners(...signers: Array<PublicKey>): void;
     verifySignatures(): boolean;
     serialize(): Buffer;
   }

@@ -157,6 +157,7 @@ describe('load BPF Rust program', () => {
       programId: program.publicKey,
     });
 
+    simulatedTransaction.setSigners(payerAccount.publicKey);
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction)
     ).value;
@@ -182,6 +183,7 @@ describe('load BPF Rust program', () => {
       programId: new Account().publicKey,
     });
 
+    simulatedTransaction.setSigners(payerAccount.publicKey);
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction)
     ).value;
@@ -206,7 +208,13 @@ describe('load BPF Rust program', () => {
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction, [program])
     ).value;
-    expect(err).toEqual('SignatureFailure');
-    expect(logs).toBeNull();
+    expect(err).toEqual('SanitizeFailure');
+
+    if (logs === null) {
+      expect(logs).not.toBeNull();
+      return;
+    }
+
+    expect(logs.length).toEqual(0);
   });
 });

@@ -623,6 +623,7 @@ declare module '@solana/web3.js' {
     instructions: Array<TransactionInstruction>;
     recentBlockhash?: Blockhash;
     nonceInfo?: NonceInformation;
+    feePayer: PublicKey | null;
 
     constructor(opts?: TransactionCtorFields);
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
@@ -635,9 +636,9 @@ declare module '@solana/web3.js' {
     compileMessage(): Message;
     serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
-    signPartial(...partialSigners: Array<PublicKey | Account>): void;
+    partialSign(...partialSigners: Array<Account>): void;
     addSignature(pubkey: PublicKey, signature: Buffer): void;
-    addSigner(signer: Account): void;
+    setSigners(...signer: Array<PublicKey>): void;
     verifySignatures(): boolean;
     serialize(): Buffer;
   }

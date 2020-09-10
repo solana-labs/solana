@@ -9,7 +9,73 @@ import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
 
-test('signPartial', () => {
+describe('compileMessage', () => {
+  test('payer is first account meta', () => {
+    const payer = new Account();
+    const other = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [
+        {pubkey: other.publicKey, isSigner: true, isWritable: true},
+        {pubkey: payer.publicKey, isSigner: true, isWritable: true},
+      ],
+      programId,
+    });
+
+    transaction.sign(payer, other);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.accountKeys[1].equals(other.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(2);
+    expect(message.header.numReadonlySignedAccounts).toEqual(0);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+
+  test('payer is writable', () => {
+    const payer = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [{pubkey: payer.publicKey, isSigner: true, isWritable: false}],
+      programId,
+    });
+
+    transaction.sign(payer);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(1);
+    expect(message.header.numReadonlySignedAccounts).toEqual(0);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+
+  test('signers are ordered and only writable if necessary', () => {
+    const payer = new Account();
+    const account1 = new Account();
+    const account2 = new Account();
+    const recentBlockhash = new Account().publicKey.toBase58();
+    const programId = new Account().publicKey;
+    const transaction = new Transaction({recentBlockhash}).add({
+      keys: [
+        {pubkey: payer.publicKey, isSigner: true, isWritable: false},
+        {pubkey: account1.publicKey, isSigner: false, isWritable: true},
+      ],
+      programId,
+    });
+
+    // account2 is an extra signer, not involved in any instructions
+    transaction.sign(payer, account1, account2);
+    const message = transaction.compileMessage();
+    expect(message.accountKeys[0].equals(payer.publicKey)).toBe(true);
+    expect(message.accountKeys[1].equals(account1.publicKey)).toBe(true);
+    expect(message.accountKeys[2].equals(account2.publicKey)).toBe(true);
+    expect(message.header.numRequiredSignatures).toEqual(3);
+    expect(message.header.numReadonlySignedAccounts).toEqual(1);
+    expect(message.header.numReadonlyUnsignedAccounts).toEqual(1);
+  });
+});
+
+test('partialSign', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
@@ -23,9 +89,10 @@ test('signPartial', () => {
   transaction.sign(account1, account2);
 
   const partialTransaction = new Transaction({recentBlockhash}).add(transfer);
-  partialTransaction.signPartial(account1, account2.publicKey);
+  partialTransaction.setSigners(account1.publicKey, account2.publicKey);
+  expect(partialTransaction.signatures[0].signature).toBeNull();
   expect(partialTransaction.signatures[1].signature).toBeNull();
-  partialTransaction.addSigner(account2);
+  partialTransaction.partialSign(account1, account2);
 
   expect(partialTransaction).toEqual(transaction);
 });
@@ -217,16 +284,23 @@ test('serialize unsigned transaction', () => {
   expect(() => {
     expectedTransaction.serialize();
   }).toThrow(Error);
-  expect(expectedTransaction.signatures.length).toBe(0);
-  // Signature array populated with null signatures fails.
-  expectedTransaction.serializeMessage();
+  expect(() => {
+    expectedTransaction.serializeMessage();
+  }).toThrow('Transaction feePayer required');
+
+  expectedTransaction.setSigners(sender.publicKey);
   expect(expectedTransaction.signatures.length).toBe(1);
+
+  // Signature array populated with null signatures fails.
   expect(() => {
     expectedTransaction.serialize();
   }).toThrow(Error);
-  expect(expectedTransaction.signatures.length).toBe(1);
+
+  // Serializing the message is allowed when signature array has null signatures
+  expectedTransaction.serializeMessage();
+
   // Properly signed transaction succeeds
-  expectedTransaction.sign(sender);
+  expectedTransaction.partialSign(sender);
   expect(expectedTransaction.signatures.length).toBe(1);
   const expectedSerialization = Buffer.from(
     'AVuErQHaXv0SG0/PchunfxHKt8wMRfMZzqV0tkC5qO6owYxWU2v871AoWywGoFQr4z+q/7mE8lIufNl/' +
@@ -254,6 +328,7 @@ test('externally signed stake delegate', () => {
   });
   const from = authority;
   tx.recentBlockhash = bs58.encode(recentBlockhash);
+  tx.setSigners(from.publicKey);
   const tx_bytes = tx.serializeMessage();
   const signature = nacl.sign.detached(tx_bytes, from.secretKey);
   tx.addSignature(from.publicKey, signature);
