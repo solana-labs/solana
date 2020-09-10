@@ -251,7 +251,7 @@ EOF
         shift
       done
 
-      if [[ -z "$maybeWarpSlot" ]]; then
+      if [[ -z "$maybeWarpSlot" && -n "$maybeWaitForSupermajority" ]]; then
         maybeWarpSlot="--warp-slot $maybeWaitForSupermajority"
       fi
 
