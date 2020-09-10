@@ -29,7 +29,9 @@ test('createAccount', () => {
     space: 0,
     programId: SystemProgram.programId,
   };
-  const transaction = SystemProgram.createAccount(params);
+  const transaction = new Transaction().add(
+    SystemProgram.createAccount(params),
+  );
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(
@@ -43,7 +45,7 @@ test('transfer', () => {
     toPubkey: new Account().publicKey,
     lamports: 123,
   };
-  const transaction = SystemProgram.transfer(params);
+  const transaction = new Transaction().add(SystemProgram.transfer(params));
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeTransfer(systemInstruction));
@@ -54,7 +56,7 @@ test('allocate', () => {
     accountPubkey: new Account().publicKey,
     space: 42,
   };
-  const transaction = SystemProgram.allocate(params);
+  const transaction = new Transaction().add(SystemProgram.allocate(params));
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeAllocate(systemInstruction));
@@ -68,7 +70,7 @@ test('allocateWithSeed', () => {
     space: 42,
     programId: new Account().publicKey,
   };
-  const transaction = SystemProgram.allocate(params);
+  const transaction = new Transaction().add(SystemProgram.allocate(params));
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(
@@ -81,7 +83,7 @@ test('assign', () => {
     accountPubkey: new Account().publicKey,
     programId: new Account().publicKey,
   };
-  const transaction = SystemProgram.assign(params);
+  const transaction = new Transaction().add(SystemProgram.assign(params));
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeAssign(systemInstruction));
@@ -94,7 +96,7 @@ test('assignWithSeed', () => {
     seed: '你好',
     programId: new Account().publicKey,
   };
-  const transaction = SystemProgram.assign(params);
+  const transaction = new Transaction().add(SystemProgram.assign(params));
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(
@@ -113,7 +115,9 @@ test('createAccountWithSeed', () => {
     space: 0,
     programId: SystemProgram.programId,
   };
-  const transaction = SystemProgram.createAccountWithSeed(params);
+  const transaction = new Transaction().add(
+    SystemProgram.createAccountWithSeed(params),
+  );
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(
@@ -130,7 +134,9 @@ test('createNonceAccount', () => {
     lamports: 123,
   };
 
-  const transaction = SystemProgram.createNonceAccount(params);
+  const transaction = new Transaction().add(
+    SystemProgram.createNonceAccount(params),
+  );
   expect(transaction.instructions).toHaveLength(2);
   const [createInstruction, initInstruction] = transaction.instructions;
 
@@ -165,7 +171,9 @@ test('createNonceAccount with seed', () => {
     lamports: 123,
   };
 
-  const transaction = SystemProgram.createNonceAccount(params);
+  const transaction = new Transaction().add(
+    SystemProgram.createNonceAccount(params),
+  );
   expect(transaction.instructions).toHaveLength(2);
   const [createInstruction, initInstruction] = transaction.instructions;
 
@@ -207,7 +215,9 @@ test('nonceWithdraw', () => {
     toPubkey: new Account().publicKey,
     lamports: 123,
   };
-  const transaction = SystemProgram.nonceWithdraw(params);
+  const transaction = new Transaction().add(
+    SystemProgram.nonceWithdraw(params),
+  );
   expect(transaction.instructions).toHaveLength(1);
   const [instruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeNonceWithdraw(instruction));
@@ -220,7 +230,9 @@ test('nonceAuthorize', () => {
     newAuthorizedPubkey: new Account().publicKey,
   };
 
-  const transaction = SystemProgram.nonceAuthorize(params);
+  const transaction = new Transaction().add(
+    SystemProgram.nonceAuthorize(params),
+  );
   expect(transaction.instructions).toHaveLength(1);
   const [instruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeNonceAuthorize(instruction));
@@ -280,12 +292,14 @@ test('live Nonce actions', async () => {
     'recent',
   );
 
-  let createNonceAccount = SystemProgram.createNonceAccount({
-    fromPubkey: from.publicKey,
-    noncePubkey: nonceAccount.publicKey,
-    authorizedPubkey: from.publicKey,
-    lamports: minimumAmount,
-  });
+  let createNonceAccount = new Transaction().add(
+    SystemProgram.createNonceAccount({
+      fromPubkey: from.publicKey,
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: from.publicKey,
+      lamports: minimumAmount,
+    }),
+  );
   await sendAndConfirmTransaction(
     connection,
     createNonceAccount,
@@ -345,11 +359,13 @@ test('live Nonce actions', async () => {
     skipPreflight: true,
   });
 
-  let transfer = SystemProgram.transfer({
-    fromPubkey: from.publicKey,
-    toPubkey: to.publicKey,
-    lamports: minimumAmount,
-  });
+  let transfer = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: from.publicKey,
+      toPubkey: to.publicKey,
+      lamports: minimumAmount,
+    }),
+  );
   transfer.nonceInfo = {
     nonce,
     nonceInstruction: SystemProgram.nonceAdvance({

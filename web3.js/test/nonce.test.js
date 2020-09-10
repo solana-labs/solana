@@ -2,7 +2,13 @@
 
 import bs58 from 'bs58';
 
-import {Account, Connection, SystemProgram, PublicKey} from '../src';
+import {
+  Account,
+  Connection,
+  SystemProgram,
+  Transaction,
+  PublicKey,
+} from '../src';
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
@@ -99,12 +105,14 @@ test('create and query nonce account', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.createNonceAccount({
-    fromPubkey: from.publicKey,
-    noncePubkey: nonceAccount.publicKey,
-    authorizedPubkey: from.publicKey,
-    lamports: minimumAmount,
-  });
+  const transaction = new Transaction().add(
+    SystemProgram.createNonceAccount({
+      fromPubkey: from.publicKey,
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: from.publicKey,
+      lamports: minimumAmount,
+    }),
+  );
   const nonceSignature = await connection.sendTransaction(
     transaction,
     [from, nonceAccount],
@@ -228,14 +236,16 @@ test('create and query nonce account with seed', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.createNonceAccount({
-    fromPubkey: from.publicKey,
-    noncePubkey: noncePubkey,
-    basePubkey: from.publicKey,
-    seed,
-    authorizedPubkey: from.publicKey,
-    lamports: minimumAmount,
-  });
+  const transaction = new Transaction().add(
+    SystemProgram.createNonceAccount({
+      fromPubkey: from.publicKey,
+      noncePubkey: noncePubkey,
+      basePubkey: from.publicKey,
+      seed,
+      authorizedPubkey: from.publicKey,
+      lamports: minimumAmount,
+    }),
+  );
   const nonceSignature = await connection.sendTransaction(transaction, [from], {
     skipPreflight: true,
   });

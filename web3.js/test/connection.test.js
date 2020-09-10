@@ -6,6 +6,7 @@ import {
   Account,
   Connection,
   SystemProgram,
+  Transaction,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
   PublicKey,
@@ -131,10 +132,12 @@ test('get program accounts', async () => {
     },
   ]);
 
-  let transaction = SystemProgram.assign({
-    accountPubkey: account0.publicKey,
-    programId: programId.publicKey,
-  });
+  let transaction = new Transaction().add(
+    SystemProgram.assign({
+      accountPubkey: account0.publicKey,
+      programId: programId.publicKey,
+    }),
+  );
 
   mockConfirmTransaction(
     '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -156,10 +159,12 @@ test('get program accounts', async () => {
     },
   ]);
 
-  transaction = SystemProgram.assign({
-    accountPubkey: account1.publicKey,
-    programId: programId.publicKey,
-  });
+  transaction = new Transaction().add(
+    SystemProgram.assign({
+      accountPubkey: account1.publicKey,
+      programId: programId.publicKey,
+    }),
+  );
 
   mockConfirmTransaction(
     '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -1746,13 +1751,15 @@ test('transaction failure', async () => {
   ]);
 
   const newAccount = new Account();
-  let transaction = SystemProgram.createAccount({
-    fromPubkey: account.publicKey,
-    newAccountPubkey: newAccount.publicKey,
-    lamports: 1000,
-    space: 0,
-    programId: SystemProgram.programId,
-  });
+  let transaction = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: account.publicKey,
+      newAccountPubkey: newAccount.publicKey,
+      lamports: 1000,
+      space: 0,
+      programId: SystemProgram.programId,
+    }),
+  );
 
   mockConfirmTransaction(
     '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -1777,13 +1784,15 @@ test('transaction failure', async () => {
   ]);
 
   // This should fail because the account is already created
-  transaction = SystemProgram.createAccount({
-    fromPubkey: account.publicKey,
-    newAccountPubkey: newAccount.publicKey,
-    lamports: 10,
-    space: 0,
-    programId: SystemProgram.programId,
-  });
+  transaction = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: account.publicKey,
+      newAccountPubkey: newAccount.publicKey,
+      lamports: 10,
+      space: 0,
+      programId: SystemProgram.programId,
+    }),
+  );
   const signature = await connection.sendTransaction(
     transaction,
     [account, newAccount],
@@ -1957,11 +1966,13 @@ test('transaction', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 10,
-  });
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: accountFrom.publicKey,
+      toPubkey: accountTo.publicKey,
+      lamports: 10,
+    }),
+  );
   const signature = await connection.sendTransaction(
     transaction,
     [accountFrom],
@@ -1988,11 +1999,13 @@ test('transaction', async () => {
 
   // Send again and ensure that new blockhash is used
   const lastFetch = Date.now();
-  const transaction2 = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 10,
-  });
+  const transaction2 = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: accountFrom.publicKey,
+      toPubkey: accountTo.publicKey,
+      lamports: 10,
+    }),
+  );
   const signature2 = await connection.sendTransaction(
     transaction2,
     [accountFrom],
@@ -2017,11 +2030,13 @@ test('transaction', async () => {
   ]);
 
   // Send new transaction and ensure that same blockhash is used
-  const transaction3 = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 9,
-  });
+  const transaction3 = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: accountFrom.publicKey,
+      toPubkey: accountTo.publicKey,
+      lamports: 9,
+    }),
+  );
   const signature3 = await connection.sendTransaction(
     transaction3,
     [accountFrom],
@@ -2052,11 +2067,13 @@ test('transaction', async () => {
     },
   ]);
 
-  const transaction4 = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 13,
-  });
+  const transaction4 = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: accountFrom.publicKey,
+      toPubkey: accountTo.publicKey,
+      lamports: 13,
+    }),
+  );
 
   const signature4 = await connection.sendTransaction(
     transaction4,
@@ -2150,17 +2167,21 @@ test('multi-instruction transaction', async () => {
 
   // 1. Move(accountFrom, accountTo)
   // 2. Move(accountTo, accountFrom)
-  const transaction = SystemProgram.transfer({
-    fromPubkey: accountFrom.publicKey,
-    toPubkey: accountTo.publicKey,
-    lamports: 100,
-  }).add(
-    SystemProgram.transfer({
-      fromPubkey: accountTo.publicKey,
-      toPubkey: accountFrom.publicKey,
-      lamports: 100,
-    }),
-  );
+  const transaction = new Transaction()
+    .add(
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 100,
+      }),
+    )
+    .add(
+      SystemProgram.transfer({
+        fromPubkey: accountTo.publicKey,
+        toPubkey: accountFrom.publicKey,
+        lamports: 100,
+      }),
+    );
   signature = await connection.sendTransaction(
     transaction,
     [accountFrom, accountTo],
@@ -2213,11 +2234,13 @@ test('account change notification', async () => {
 
   await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
-    let transaction = SystemProgram.transfer({
-      fromPubkey: owner.publicKey,
-      toPubkey: programAccount.publicKey,
-      lamports: balanceNeeded,
-    });
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: owner.publicKey,
+        toPubkey: programAccount.publicKey,
+        lamports: balanceNeeded,
+      }),
+    );
     await sendAndConfirmTransaction(connection, transaction, [owner], {
       commitment: 'single',
       skipPreflight: true,
@@ -2280,11 +2303,13 @@ test('program account change notification', async () => {
 
   await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
-    let transaction = SystemProgram.transfer({
-      fromPubkey: owner.publicKey,
-      toPubkey: programAccount.publicKey,
-      lamports: balanceNeeded,
-    });
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: owner.publicKey,
+        toPubkey: programAccount.publicKey,
+        lamports: balanceNeeded,
+      }),
+    );
     await sendAndConfirmTransaction(connection, transaction, [owner], {
       commitment: 'single',
       skipPreflight: true,
