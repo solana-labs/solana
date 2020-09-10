@@ -18,7 +18,6 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
             <thead>
               <tr>
                 <th className="w-1 text-muted">Slot</th>
-                {/* <th className="w-1 text-muted">Result</th> */}
                 <th className="text-muted">Confirmation Count</th>
               </tr>
             </thead>
@@ -47,11 +46,6 @@ const renderAccountRow = (vote: Vote, index: number) => {
       <td className="w-1 text-monospace">
         {vote.slot.toLocaleString("en-US")}
       </td>
-      {/* <td>
-        <span className={`badge badge-soft-success`}>
-          Success
-        </span>
-      </td> */}
       <td className="text-monospace">{vote.confirmationCount}</td>
     </tr>
   );
