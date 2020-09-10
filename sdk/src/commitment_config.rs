@@ -67,8 +67,8 @@ pub enum CommitmentLevel {
 
     /// The highest slot that has been voted on by supermajority of the network
     /// This differs from `single` in that:
-    /// 1) The votes are read directly from gossip
-    /// 2) it does not count votes on descendants of a bank, only direct votes on the bank.
+    /// 1) It incorporates votes from gossip and replay.
+    /// 2) It does not count votes on descendants of a bank, only direct votes on the bank.
     /// 3) This confirmation level also upholds "optimistic confirmation" guarantees in
     /// release 1.3 and onwards.
     SingleGossip,
