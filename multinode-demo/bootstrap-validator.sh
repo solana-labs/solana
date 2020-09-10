@@ -99,7 +99,6 @@ args+=(
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
-  #--rpc-bind-address 192.168.1.207
 )
 default_arg --gossip-port 8001
 default_arg --log -
