@@ -131,6 +131,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
     let default_operating_mode = "stable";
+    let default_cluster_type = "mainnet-beta";
     let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!())
@@ -339,6 +340,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
+            Arg::with_name("cluster_type")
+                .hidden(true)
+                .long("cluster-type")
+                .possible_value("development")
+                .possible_value("devnet")
+                .possible_value("testnet")
+                .possible_value("mainnet-beta")
+                .takes_value(true)
+                .default_value(default_cluster_type)
+                .help(
+                    "Selects the features that will be enabled for the cluster"
+                ),
+        )
+        .arg(
             Arg::with_name("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
@@ -426,7 +441,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Duration::from_micros(default_target_tick_duration)
     };
 
-    let operating_mode = match matches.value_of("operating_mode").unwrap() {
+    let operating_mode = if matches.occurrences_of("operating_mode") != 0 {
+        matches.value_of("operating_mode").unwrap()
+    } else {
+        match matches.value_of("cluster_type").unwrap() {
+            "development" => "development",
+            "devnet" => "development",
+            "testnet" => "preview",
+            "mainnet-beta" => "stable",
+            _ => unreachable!(),
+        }
+    };
+
+    let operating_mode = match operating_mode {
         "development" => OperatingMode::Development,
         "stable" => OperatingMode::Stable,
         "preview" => OperatingMode::Preview,
