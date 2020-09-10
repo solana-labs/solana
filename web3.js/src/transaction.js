@@ -152,21 +152,6 @@ export class Transaction {
   }
 
   /**
-   * Set the transaction fee payer (first signer)
-   */
-  set feePayer(feePayer: PublicKey) {
-    if (
-      this.signatures.length === 0 ||
-      !this.signatures[0].publicKey.equals(feePayer)
-    ) {
-      this.signatures.unshift({
-        signature: null,
-        publicKey: feePayer,
-      });
-    }
-  }
-
-  /**
    * The instructions to atomically execute
    */
   instructions: Array<TransactionInstruction> = [];
@@ -370,9 +355,24 @@ export class Transaction {
   }
 
   /**
-   * Sign the Transaction with the specified accounts.  Multiple signatures may
+   * Specify the public keys which will be used to sign the Transaction.
+   * The first signer will be used as the transaction fee payer account.
+   *
+   * Signatures can be added with either `signPartial` or `addSignature`
+   */
+  setSigners(...signers: Array<PublicKey>) {
+    if (signers.length === 0) {
+      throw new Error('No signers');
+    }
+
+    this.signatures = signers.map(publicKey => ({signature: null, publicKey}));
+  }
+
+  /**
+   * Sign the Transaction with the specified accounts. Multiple signatures may
    * be applied to a Transaction. The first signature is considered "primary"
-   * and is used when testing for Transaction confirmation.
+   * and is used when testing for Transaction confirmation. The first signer
+   * will be used as the transaction fee payer account.
    *
    * Transaction fields should not be modified after the first call to `sign`,
    * as doing so may invalidate the signature and cause the Transaction to be
@@ -381,70 +381,39 @@ export class Transaction {
    * The Transaction must be assigned a valid `recentBlockhash` before invoking this method
    */
   sign(...signers: Array<Account>) {
+    if (signers.length === 0) {
+      throw new Error('No signers');
+    }
+
+    this.signatures = signers.map(signer => ({
+      signature: null,
+      publicKey: signer.publicKey,
+    }));
+
     this.signPartial(...signers);
   }
 
   /**
-   * Partially sign a Transaction with the specified accounts.  The `Account`
-   * inputs will be used to sign the Transaction immediately, while any
-   * `PublicKey` inputs will be referenced in the signed Transaction but need to
-   * be filled in later by calling `addSigner()` with the matching `Account`.
+   * Partially sign a transaction with the specified accounts. All accounts must
+   * correspond to a public key that was previously provided to `setSigners`.
    *
    * All the caveats from the `sign` method apply to `signPartial`
    */
-  signPartial(...partialSigners: Array<PublicKey | Account>) {
-    if (partialSigners.length === 0) {
+  signPartial(...signers: Array<Account>) {
+    if (signers.length === 0) {
       throw new Error('No signers');
     }
 
-    function partialSignerPublicKey(accountOrPublicKey: any): PublicKey {
-      if ('publicKey' in accountOrPublicKey) {
-        return accountOrPublicKey.publicKey;
-      }
-      return accountOrPublicKey;
-    }
-
-    function signerAccount(accountOrPublicKey: any): ?Account {
-      if (
-        'publicKey' in accountOrPublicKey &&
-        'secretKey' in accountOrPublicKey
-      ) {
-        return accountOrPublicKey;
-      }
-    }
-
-    const signatures: Array<SignaturePubkeyPair> = partialSigners.map(
-      accountOrPublicKey => ({
-        signature: null,
-        publicKey: partialSignerPublicKey(accountOrPublicKey),
-      }),
-    );
-    this.signatures = signatures;
     const signData = this.serializeMessage();
-
-    partialSigners.forEach((accountOrPublicKey, index) => {
-      const account = signerAccount(accountOrPublicKey);
-      if (account) {
-        const signature = nacl.sign.detached(signData, account.secretKey);
-        invariant(signature.length === 64);
-        signatures[index].signature = Buffer.from(signature);
-      }
+    signers.forEach(signer => {
+      const signature = nacl.sign.detached(signData, signer.secretKey);
+      this.addSignature(signer.publicKey, signature);
     });
   }
 
   /**
-   * Fill in a signature for a partially signed Transaction.  The `signer` must
-   * be the corresponding `Account` for a `PublicKey` that was previously provided to
-   * `signPartial`
-   */
-  addSigner(signer: Account) {
-    const signData = this.serializeMessage();
-    const signature = nacl.sign.detached(signData, signer.secretKey);
-    this.addSignature(signer.publicKey, signature);
-  }
-
-  /**
-   * Add an externally created signature to a transaction
+   * Add an externally created signature to a transaction. The public key
+   * must correspond to a public key that was previously provided to `setSigners`.
    */
   addSignature(pubkey: PublicKey, signature: Buffer) {
     invariant(signature.length === 64);

@@ -89,9 +89,10 @@ test('signPartial', () => {
   transaction.sign(account1, account2);
 
   const partialTransaction = new Transaction({recentBlockhash}).add(transfer);
-  partialTransaction.signPartial(account1, account2.publicKey);
+  partialTransaction.setSigners(account1.publicKey, account2.publicKey);
+  expect(partialTransaction.signatures[0].signature).toBeNull();
   expect(partialTransaction.signatures[1].signature).toBeNull();
-  partialTransaction.addSigner(account2);
+  partialTransaction.signPartial(account1, account2);
 
   expect(partialTransaction).toEqual(transaction);
 });
@@ -287,8 +288,7 @@ test('serialize unsigned transaction', () => {
     expectedTransaction.serializeMessage();
   }).toThrow('Transaction feePayer required');
 
-  // Setting feePayer will populate signature array
-  expectedTransaction.feePayer = sender.publicKey;
+  expectedTransaction.setSigners(sender.publicKey);
   expect(expectedTransaction.signatures.length).toBe(1);
 
   // Signature array populated with null signatures fails.
@@ -300,7 +300,7 @@ test('serialize unsigned transaction', () => {
   expectedTransaction.serializeMessage();
 
   // Properly signed transaction succeeds
-  expectedTransaction.sign(sender);
+  expectedTransaction.signPartial(sender);
   expect(expectedTransaction.signatures.length).toBe(1);
   const expectedSerialization = Buffer.from(
     'AVuErQHaXv0SG0/PchunfxHKt8wMRfMZzqV0tkC5qO6owYxWU2v871AoWywGoFQr4z+q/7mE8lIufNl/' +
@@ -328,7 +328,7 @@ test('externally signed stake delegate', () => {
   });
   const from = authority;
   tx.recentBlockhash = bs58.encode(recentBlockhash);
-  tx.feePayer = from.publicKey;
+  tx.setSigners(from.publicKey);
   const tx_bytes = tx.serializeMessage();
   const signature = nacl.sign.detached(tx_bytes, from.secretKey);
   tx.addSignature(from.publicKey, signature);

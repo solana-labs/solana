@@ -157,7 +157,7 @@ describe('load BPF Rust program', () => {
       programId: program.publicKey,
     });
 
-    simulatedTransaction.feePayer = payerAccount.publicKey;
+    simulatedTransaction.setSigners(payerAccount.publicKey);
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction)
     ).value;
@@ -183,7 +183,7 @@ describe('load BPF Rust program', () => {
       programId: new Account().publicKey,
     });
 
-    simulatedTransaction.feePayer = payerAccount.publicKey;
+    simulatedTransaction.setSigners(payerAccount.publicKey);
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction)
     ).value;
