@@ -902,8 +902,8 @@ impl JsonRpcRequestProcessor {
                         ),
                     );
                     match bigtable_results {
-                        Ok(mut bigtable_results) => {
-                            results.append(&mut bigtable_results);
+                        Ok(bigtable_results) => {
+                            results.extend(bigtable_results.into_iter().map(|x| x.0));
                         }
                         Err(err) => {
                             warn!("{:?}", err);
