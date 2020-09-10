@@ -125,8 +125,9 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
-  wait_step
+  #command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  #wait_step
+  true
 
   # Coverage...
   if affects \
@@ -137,16 +138,18 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
-    wait_step
+    #command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
+    #wait_step
+    true
   else
     annotate --style info --context test-coverage \
       "Coverage skipped as no .rs files were modified"
   fi
 
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
-  wait_step
+  # command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
+  #wait_step
+  true
 
   # Perf test suite
   if affects \
@@ -169,6 +172,12 @@ all_test_steps() {
     artifact_paths: "log-*.txt"
     agents:
       - "queue=cuda"
+  - command: "ci/live-cluster-sanity.sh"
+    name: "live-cluster-sanity"
+    timeout_in_minutes: 40
+    artifact_paths: "log-*.txt"
+    agents:
+      - "queue=gce-deploy"
 EOF
   else
     annotate --style info \
@@ -196,13 +205,14 @@ EOF
 }
 
 pull_or_push_steps() {
-  command_step sanity "ci/test-sanity.sh" 5
-  wait_step
+  #command_step sanity "ci/test-sanity.sh" 5
+  #wait_step
 
   # Check for any .sh file changes
   if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
-    wait_step
+    #command_step shellcheck "ci/shellcheck.sh" 5
+    #wait_step
+    true
   fi
 
   # Run the full test suite by default, skipping only if modifications are local
