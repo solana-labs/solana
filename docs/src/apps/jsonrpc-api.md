@@ -111,11 +111,11 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
 
-- `"max"` - the node will query the most recent block confirmed by supermajority of the network as having reached
+- `"max"` - the node will query the most recent block confirmed by supermajority of the cluster as having reached
 maximum lockout.
 - `"root"` - the node will query the most recent block having reached maximum lockout on this node.
-- `"single"` - the node will query the most recent block having reached 1 confirmation by supermajority of the network.
-- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the network via
+- `"single"` - the node will query the most recent block having reached 1 confirmation by supermajority of the cluster.
+- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster via
 gossip votes. This differs from `single` in that:
   - It incorporates votes from gossip and replay.
   - It does not count votes on descendants of a bank, only direct votes on the bank.
