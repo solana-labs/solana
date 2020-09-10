@@ -173,7 +173,7 @@ macro_rules! translate {
 #[macro_export]
 macro_rules! translate_type_mut {
     ($t:ty, $vm_addr:expr, $regions:expr, $loader_id: expr) => {{
-        if *$loader_id != bpf_loader_deprecated::id()
+        if $loader_id != &bpf_loader_deprecated::id()
             && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
         {
             Err(SyscallError::UnalignedPointer.into())
@@ -206,7 +206,7 @@ macro_rules! translate_type {
 #[macro_export]
 macro_rules! translate_slice_mut {
     ($t:ty, $vm_addr:expr, $len: expr, $regions:expr, $loader_id: expr) => {{
-        if *$loader_id != bpf_loader_deprecated::id()
+        if $loader_id != &bpf_loader_deprecated::id()
             && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
         {
             Err(SyscallError::UnalignedPointer.into())
