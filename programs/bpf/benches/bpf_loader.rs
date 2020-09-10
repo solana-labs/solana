@@ -1,19 +1,31 @@
 #![feature(test)]
 #![cfg(feature = "bpf_c")]
+
 extern crate test;
+#[macro_use]
+extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use solana_bpf_loader_program::serialization::{deserialize_parameters, serialize_parameters};
 use solana_rbpf::EbpfVm;
+use solana_runtime::{
+    bank::Bank,
+    bank_client::BankClient,
+    genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    loader_utils::load_program,
+};
 use solana_sdk::{
-    account::Account,
-    bpf_loader,
+    account::{create_keyed_readonly_accounts, Account, KeyedAccount},
+    bpf_loader, bpf_loader_deprecated,
+    client::SyncClient,
+    entrypoint::SUCCESS,
     entrypoint_native::{ComputeBudget, ComputeMeter, InvokeContext, Logger, ProcessInstruction},
-    instruction::{CompiledInstruction, InstructionError},
+    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
+    signature::{Keypair, Signer},
 };
-use std::{cell::RefCell, rc::Rc};
-use std::{env, fs::File, io::Read, mem, path::PathBuf};
+use std::{cell::RefCell, env, fs::File, io::Read, mem, path::PathBuf, rc::Rc, sync::Arc};
 use test::Bencher;
 
 /// BPF program file extension
@@ -34,31 +46,33 @@ fn empty_check(_prog: &[u8]) -> Result<(), solana_bpf_loader_program::BPFError> 
     Ok(())
 }
 
-fn load_elf() -> Result<Vec<u8>, std::io::Error> {
-    let path = create_bpf_path("bench_alu");
+fn load_elf(name: &str) -> Result<Vec<u8>, std::io::Error> {
+    let path = create_bpf_path(name);
     let mut file = File::open(&path).expect(&format!("Unable to open {:?}", path));
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     Ok(elf)
 }
 
+fn load_bpf_program(
+    bank_client: &BankClient,
+    loader_id: &Pubkey,
+    payer_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
+    let path = create_bpf_path(name);
+    let mut file = File::open(path).unwrap();
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    load_program(bank_client, payer_keypair, loader_id, elf)
+}
+
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
-fn bench_program_load_elf(bencher: &mut Bencher) {
-    let elf = load_elf().unwrap();
-    let mut vm = EbpfVm::<solana_bpf_loader_program::BPFError>::new(None).unwrap();
-    vm.set_verifier(empty_check).unwrap();
-
-    bencher.iter(|| {
-        vm.set_elf(&elf).unwrap();
-    });
-}
-
-#[bench]
 fn bench_program_verify(bencher: &mut Bencher) {
-    let elf = load_elf().unwrap();
+    let elf = load_elf("bench_alu").unwrap();
     let mut vm = EbpfVm::<solana_bpf_loader_program::BPFError>::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
     vm.set_elf(&elf).unwrap();
@@ -80,14 +94,14 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let mut invoke_context = MockInvokeContext::default();
 
-    let elf = load_elf().unwrap();
+    let elf = load_elf("bench_alu").unwrap();
     let (mut vm, _) =
         solana_bpf_loader_program::create_vm(&bpf_loader::id(), &elf, &[], &mut invoke_context)
             .unwrap();
 
     println!("Interpreted:");
     assert_eq!(
-        0, /*success*/
+        SUCCESS,
         vm.execute_program(&mut inner_iter, &[], &[]).unwrap()
     );
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
@@ -133,6 +147,99 @@ fn bench_program_alu(bencher: &mut Bencher) {
     // let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
     // println!("  {:?} MIPS", mips);
     // println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+}
+
+#[bench]
+fn bench_program_execute_noop(bencher: &mut Bencher) {
+    // solana_logger::setup(); // TODO remove
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin_loader(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let invoke_program_id =
+        load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
+
+    let instruction = Instruction::new(invoke_program_id, &[u8::MAX, 0, 0, 0], account_metas);
+    let message = Message::new(&[instruction], Some(&mint_pubkey));
+
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair], message.clone())
+        .unwrap();
+
+    println!("start bench");
+    bencher.iter(|| {
+        bank.clear_signatures();
+        bank_client
+            .send_and_confirm_message(&[&mint_keypair], message.clone())
+            .unwrap();
+    });
+}
+
+fn create_serialization_create_params() -> (Vec<u8>, Vec<(Pubkey, RefCell<Account>)>) {
+    let accounts = vec![
+        (
+            Pubkey::new_rand(),
+            RefCell::new(Account::new(0, 100, &Pubkey::new_rand())),
+        ),
+        (
+            Pubkey::new_rand(),
+            RefCell::new(Account::new(0, 100, &Pubkey::new_rand())),
+        ),
+        (
+            Pubkey::new_rand(),
+            RefCell::new(Account::new(0, 250, &Pubkey::new_rand())),
+        ),
+        (
+            Pubkey::new_rand(),
+            RefCell::new(Account::new(0, 1000, &Pubkey::new_rand())),
+        ),
+    ];
+    (vec![0xee; 100], accounts)
+}
+
+#[bench]
+fn bench_serialization_aligned(bencher: &mut Bencher) {
+    let (data, accounts) = create_serialization_create_params();
+    let keyed_accounts = create_keyed_readonly_accounts(&accounts);
+
+    bencher.iter(|| {
+        let buffer = serialize_parameters(
+            &bpf_loader_deprecated::id(),
+            &Pubkey::new_rand(),
+            &keyed_accounts,
+            &data,
+        )
+        .unwrap();
+        deserialize_parameters(&bpf_loader_deprecated::id(), &keyed_accounts, &buffer).unwrap();
+    });
+}
+
+#[bench]
+fn bench_serialization_unaligned(bencher: &mut Bencher) {
+    let (data, accounts) = create_serialization_create_params();
+    let keyed_accounts = create_keyed_readonly_accounts(&accounts);
+
+    bencher.iter(|| {
+        let buffer = serialize_parameters(
+            &bpf_loader_deprecated::id(),
+            &Pubkey::new_rand(),
+            &keyed_accounts,
+            &data,
+        )
+        .unwrap();
+        deserialize_parameters(&bpf_loader_deprecated::id(), &keyed_accounts, &buffer).unwrap();
+    });
 }
 
 #[derive(Debug, Default)]

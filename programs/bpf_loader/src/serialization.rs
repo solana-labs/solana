@@ -50,7 +50,28 @@ pub fn serialize_parameters_unaligned(
 ) -> Result<Vec<u8>, InstructionError> {
     assert_eq!(32, size_of::<Pubkey>());
 
-    let mut v: Vec<u8> = Vec::new();
+    // Calculate size in order to alloc once
+    let mut size = size_of::<u64>();
+    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
+        let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
+        size += 1; // dup, signer, writable, executable
+        if !is_dup {
+            let data_len = keyed_account.data_len()?;
+            size += size_of::<Pubkey>()  // key
+                    + size_of::<Pubkey>() // owner
+                    + size_of::<u64>()  // lamports
+                    + size_of::<u64>()  // data len
+                    + data_len
+                    + MAX_PERMITTED_DATA_INCREASE
+                    + (data_len as *const u8).align_offset(align_of::<u128>())
+                    + size_of::<u64>(); // rent epoch;
+        }
+    }
+    size += size_of::<u64>() // data len
+        + instruction_data.len()
+        + size_of::<Pubkey>(); // program id;
+    let mut v: Vec<u8> = Vec::with_capacity(size);
+
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -120,10 +141,31 @@ pub fn serialize_parameters_aligned(
 ) -> Result<Vec<u8>, InstructionError> {
     assert_eq!(32, size_of::<Pubkey>());
 
-    let mut v: Vec<u8> = Vec::new();
+    // Calculate size in order to alloc once
+    let mut size = size_of::<u64>();
+    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
+        let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
+        size += 8; // dup, signer, writable, executable
+        if !is_dup {
+            let data_len = keyed_account.data_len()?;
+            size += size_of::<Pubkey>()  // key
+                + size_of::<Pubkey>() // owner
+                + size_of::<u64>()  // lamports
+                + size_of::<u64>()  // data len
+                + data_len
+                + MAX_PERMITTED_DATA_INCREASE
+                + (data_len as *const u8).align_offset(align_of::<u128>())
+                + size_of::<u64>(); // rent epoch;
+        }
+    }
+    size += size_of::<u64>() // data len
+    + instruction_data.len()
+    + size_of::<Pubkey>(); // program id;
+    let mut v: Vec<u8> = Vec::with_capacity(size);
+
+    // Serialize into the buffer
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
-
     if v.as_ptr().align_offset(align_of::<u128>()) != 0 {
         panic!();
     }
@@ -178,10 +220,10 @@ pub fn deserialize_parameters_aligned(
         } else {
             let mut account = keyed_account.try_account_ref_mut()?;
             start += size_of::<u8>() // is_signer
-            + size_of::<u8>() // is_writable
-            + size_of::<u8>() // executable
-            + 4 // padding to 128-bit aligned
-            + size_of::<Pubkey>(); // key
+                + size_of::<u8>() // is_writable
+                + size_of::<u8>() // executable
+                + 4 // padding to 128-bit aligned
+                + size_of::<Pubkey>(); // key
             account.owner = Pubkey::new(&buffer[start..start + size_of::<Pubkey>()]);
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
