@@ -784,10 +784,21 @@ impl AccountsDB {
         }
     }
 
+    fn handle_reclaims_single_unrooted_slot(&self, reclaims: SlotSlice<AccountInfo>) {
+        if reclaims.len() > 0 {
+            let expected_slot = reclaims[0].0;
+            let dead_slot = self.remove_dead_accounts(reclaims, Some(expected_slot));
+            assert!(dead_slot.len() <= 1);
+            if dead_slot.len() == 1 {
+                assert_eq!(dead_slot, expected_slot);
+            }
+
+            self.process_dead_slots(dead_slot);
+        }
+    }
+
     fn handle_reclaims_maybe_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
-        let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
         let dead_slots = self.remove_dead_accounts(reclaims);
-        dead_accounts.stop();
         let dead_slots_len = {
             let mut dead_slots_w = self.dead_slots.write().unwrap();
             dead_slots_w.extend(dead_slots);
@@ -798,26 +809,10 @@ impl AccountsDB {
         }
     }
 
-    // Atomically process reclaims and new dead_slots in this thread, guaranteeing
-    // complete data removal for slots in reclaims.
-    fn handle_reclaims_ensure_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
-        let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
-        let dead_slots = self.remove_dead_accounts(reclaims);
-        dead_accounts.stop();
-        let mut dead_slots_w = self.dead_slots.write().unwrap();
-        dead_slots_w.extend(dead_slots);
-        self.process_dead_slots(Some(dead_slots_w));
-    }
-
     pub fn process_dead_slots<'a>(
         &'a self,
-        dead_slots_w: Option<RwLockWriteGuard<'a, HashSet<Slot>>>,
+        dead_slots: &HashSet<Slot>,
     ) {
-        let empty = HashSet::new();
-        let mut dead_slots_w = dead_slots_w.unwrap_or_else(|| self.dead_slots.write().unwrap());
-        let dead_slots = std::mem::replace(&mut *dead_slots_w, empty);
-        drop(dead_slots_w);
-
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
         self.clean_dead_slots(&dead_slots);
         clean_dead_slots.stop();
@@ -1395,7 +1390,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims_ensure_cleanup(&reclaims);
+        self.handle_reclaims_single_unrooted_slot(&reclaims);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -2017,10 +2012,18 @@ impl AccountsDB {
         reclaims
     }
 
-    fn remove_dead_accounts(&self, reclaims: SlotSlice<AccountInfo>) -> HashSet<Slot> {
+    fn remove_dead_accounts(
+        &self,
+        reclaims: SlotSlice<AccountInfo>,
+        expected_slot: Option<Slot>,
+    ) -> HashSet<Slot> {
         let storage = self.storage.read().unwrap();
         let mut dead_slots = HashSet::new();
+        let slot = reclaims.first();
         for (slot, account_info) in reclaims {
+            if let Some(expected_slot) = expected_slot {
+                assert_eq!(slot, expected_slot);
+            }
             if let Some(slot_storage) = storage.0.get(slot) {
                 if let Some(store) = slot_storage.get(&account_info.store_id) {
                     assert_eq!(
