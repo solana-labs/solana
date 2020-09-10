@@ -169,7 +169,7 @@ macro_rules! translate {
 #[macro_export]
 macro_rules! translate_type_mut {
     ($t:ty, $vm_addr:expr, $regions:expr) => {{
-        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+        if false && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
             Err(SyscallError::UnalignedPointer.into())
         } else {
             unsafe {
@@ -200,7 +200,7 @@ macro_rules! translate_type {
 #[macro_export]
 macro_rules! translate_slice_mut {
     ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {{
-        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+        if false && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
             Err(SyscallError::UnalignedPointer.into())
         } else {
             match translate_addr::<BPFError>(
