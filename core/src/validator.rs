@@ -56,7 +56,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::HashSet,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicBool, Ordering},
@@ -77,7 +77,7 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
-    pub rpc_ports: Option<(u16, u16, u16)>, // (JsonRpc, JsonRpcPubSub, Banks)
+    pub rpc_addrs: Option<(SocketAddr, SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub, Banks)
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -107,7 +107,7 @@ impl Default for ValidatorConfig {
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
-            rpc_ports: None,
+            rpc_addrs: None,
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
@@ -351,20 +351,20 @@ impl Validator {
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let rpc_service = config
-            .rpc_ports
-            .map(|(rpc_port, rpc_pubsub_port, rpc_banks_port)| {
+            .rpc_addrs
+            .map(|(rpc_addr, rpc_pubsub_addr, rpc_banks_addr)| {
                 if ContactInfo::is_valid_address(&node.info.rpc) {
                     assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                    assert_eq!(rpc_port, node.info.rpc.port());
-                    assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
-                    assert_eq!(rpc_banks_port, node.info.rpc_banks.port());
+                    assert_eq!(rpc_addr.port(), node.info.rpc.port());
+                    assert_eq!(rpc_pubsub_addr.port(), node.info.rpc_pubsub.port());
+                    assert_eq!(rpc_banks_addr.port(), node.info.rpc_banks.port());
                 } else {
                     assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
                 }
                 let tpu_address = cluster_info.my_contact_info().tpu;
                 (
                     JsonRpcService::new(
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                        rpc_addr,
                         config.rpc_config.clone(),
                         config.snapshot_config.clone(),
                         bank_forks.clone(),
@@ -378,13 +378,9 @@ impl Validator {
                         config.trusted_validators.clone(),
                         rpc_override_health_check.clone(),
                     ),
-                    PubSubService::new(
-                        &subscriptions,
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-                        &exit,
-                    ),
+                    PubSubService::new(&subscriptions, rpc_pubsub_addr, &exit),
                     RpcBanksService::new(
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_banks_port),
+                        rpc_banks_addr,
                         tpu_address,
                         &bank_forks,
                         &block_commitment_cache,
@@ -670,7 +666,7 @@ fn new_banks_from_ledger(
 
     let blockstore = Arc::new(blockstore);
     let transaction_history_services =
-        if config.rpc_ports.is_some() && config.rpc_config.enable_rpc_transaction_history {
+        if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
             initialize_rpc_transaction_history_services(blockstore.clone(), exit)
         } else {
             TransactionHistoryServices::default()
@@ -921,11 +917,7 @@ impl TestValidator {
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let config = ValidatorConfig {
-            rpc_ports: Some((
-                node.info.rpc.port(),
-                node.info.rpc_pubsub.port(),
-                node.info.rpc_banks.port(),
-            )),
+            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks)),
             ..ValidatorConfig::default()
         };
         let vote_pubkey = voting_keypair.pubkey();
@@ -1091,10 +1083,10 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
-            rpc_ports: Some((
-                validator_node.info.rpc.port(),
-                validator_node.info.rpc_pubsub.port(),
-                validator_node.info.rpc_banks.port(),
+            rpc_addrs: Some((
+                validator_node.info.rpc,
+                validator_node.info.rpc_pubsub,
+                validator_node.info.rpc_banks,
             )),
             ..ValidatorConfig::default()
         };
@@ -1166,10 +1158,10 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
-                    rpc_ports: Some((
-                        validator_node.info.rpc.port(),
-                        validator_node.info.rpc_pubsub.port(),
-                        validator_node.info.rpc_banks.port(),
+                    rpc_addrs: Some((
+                        validator_node.info.rpc,
+                        validator_node.info.rpc_pubsub,
+                        validator_node.info.rpc_banks,
                     )),
                     ..ValidatorConfig::default()
                 };
