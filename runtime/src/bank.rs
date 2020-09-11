@@ -25,7 +25,6 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
-use lru::LruCache;
 use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
@@ -148,23 +147,61 @@ impl Builtin {
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
-#[derive(Clone)]
+
+/// LFU Cache of executors
 struct CachedExecutors {
-    executors: Arc<RwLock<LruCache<Pubkey, Arc<dyn Executor>>>>,
+    max: usize,
+    executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
-            executors: Arc::new(RwLock::new(LruCache::new(MAX_CACHED_EXECUTORS))),
+            max: MAX_CACHED_EXECUTORS,
+            executors: HashMap::new(),
         }
     }
 }
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for CachedExecutors {
-    fn example() -> Self {
-        Self::default()
+impl CachedExecutors {
+    pub fn new(max: usize) -> Self {
+        Self {
+            max,
+            executors: HashMap::new(),
+        }
+    }
+    pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(pubkey).map(|(count, executor)| {
+            count.fetch_add(1, Ordering::Relaxed);
+            executor.clone()
+        })
+    }
+    pub fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+        if !self.executors.contains_key(pubkey) {
+            if self.executors.len() >= self.max {
+                let mut least = u64::MAX;
+                let default_key = Pubkey::default();
+                let mut least_key = &default_key;
+                for (key, (count, _)) in self.executors.iter() {
+                    let count = count.load(Ordering::Relaxed);
+                    if count < least {
+                        least = count;
+                        least_key = key;
+                    }
+                }
+                let least_key = *least_key;
+                let _ = self.executors.remove(&least_key);
+            }
+            let _ = self
+                .executors
+                .insert(*pubkey, (AtomicU64::new(0), executor));
+        }
     }
 }
+// #[cfg(RUSTC_WITH_SPECIALIZATION)]
+// impl AbiExample for CachedExecutors {
+//     fn example() -> Self {
+//         Self::default()
+//     }
+// }
 
 #[derive(Default)]
 pub struct BankRc {
@@ -483,7 +520,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: CachedExecutors,
+    cached_executors: Arc<RwLock<CachedExecutors>>,
 }
 
 impl Default for BlockhashQueue {
@@ -706,7 +743,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: CachedExecutors::default(),
+            cached_executors: Arc::new(RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS))),
         };
         bank.finish_init(genesis_config);
 
@@ -1849,17 +1886,17 @@ impl Bank {
         }
         let mut executors: HashMap<Pubkey, Arc<dyn Executor>> =
             HashMap::with_capacity(num_executors);
-        let cached_executors = self.cached_executors.executors.read().unwrap();
+        let cached_executors = self.cached_executors.read().unwrap();
 
         for key in message.account_keys.iter() {
-            if let Some(cached_executor) = cached_executors.peek(key) {
-                executors.insert(*key, (*cached_executor).clone());
+            if let Some(cached_executor) = cached_executors.get(key) {
+                executors.insert(*key, cached_executor);
             }
         }
         for instruction_loaders in loaders.iter() {
             for (key, _) in instruction_loaders.iter() {
-                if let Some(cached_executor) = cached_executors.peek(key) {
-                    executors.insert(*key, cached_executor.clone());
+                if let Some(cached_executor) = cached_executors.get(key) {
+                    executors.insert(*key, cached_executor);
                 }
             }
         }
@@ -1874,9 +1911,9 @@ impl Bank {
     fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
         let executors = executors.borrow();
         if executors.is_dirty {
-            let mut cached_executors = self.cached_executors.executors.write().unwrap();
+            let mut cached_executors = self.cached_executors.write().unwrap();
             for (key, executor) in executors.executors.iter() {
-                cached_executors.put(*key, (*executor).clone());
+                cached_executors.put(key, (*executor).clone());
             }
         }
     }
@@ -8736,22 +8773,57 @@ mod tests {
         }
     }
 
+    struct TestExecutor {}
+    impl Executor for TestExecutor {
+        fn execute(
+            &self,
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _instruction_data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_cached_executors() {
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let mut cache = CachedExecutors::new(3);
+
+        cache.put(&key1, executor.clone());
+        cache.put(&key2, executor.clone());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        cache.put(&key4, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_none());
+        assert!(cache.get(&key4).is_some());
+
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_none());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
+    }
+
     #[test]
     fn test_bank_executor_cache() {
         solana_logger::setup();
-
-        struct TestExecutor {}
-        impl Executor for TestExecutor {
-            fn execute(
-                &self,
-                _program_id: &Pubkey,
-                _keyed_accounts: &[KeyedAccount],
-                _instruction_data: &[u8],
-                _invoke_context: &mut dyn InvokeContext,
-            ) -> std::result::Result<(), InstructionError> {
-                Ok(())
-            }
-        }
 
         let (genesis_config, _) = create_genesis_config(1);
         let bank = Bank::new(&genesis_config);
