@@ -2561,6 +2561,7 @@ pub mod tests {
         // overwrite old rooted account version; only the slot_0_stores.count() should be
         // decremented
         db.store(2, &[(&pubkeys[0], &account)]);
+        db.clean_accounts();
         {
             let stores = db.storage.read().unwrap();
             let slot_0_stores = &stores.0.get(&0).unwrap();
@@ -2950,7 +2951,6 @@ pub mod tests {
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
         accounts.clean_accounts();
-        accounts.process_dead_slots(None);
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
 
         //new value is there
@@ -3150,15 +3150,18 @@ pub mod tests {
 
         // Create 100 accounts in slot 0
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        assert_eq!(check_storage(&accounts, 0, 100), true);
+        accounts.clean_accounts();
         check_accounts(&accounts, &pubkeys, 0, 100, 1);
 
         // do some updates to those accounts and re-check
         modify_accounts(&accounts, &pubkeys, 0, 100, 2);
+        assert_eq!(check_storage(&accounts, 0, 100), true);
         check_accounts(&accounts, &pubkeys, 0, 100, 2);
         accounts.add_root(0);
 
         let mut pubkeys1: Vec<Pubkey> = vec![];
+
+        // CREATE SLOT 1
         let latest_slot = 1;
 
         // Modify the first 10 of the slot 0 accounts as updates in slot 1
@@ -3167,27 +3170,38 @@ pub mod tests {
         // Create 10 new accounts in slot 1
         create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
 
-        // Store a lamports=0 account in slot 1
+        // Store a lamports=0 account in slot 1. Slot 1 should now have
+        // 10 + 10 + 1 = 21 accounts
         let account = Account::new(0, 0, &Account::default().owner);
         accounts.store(latest_slot, &[(&pubkeys[30], &account)]);
         accounts.add_root(latest_slot);
-        info!("added root 1");
+        assert!(check_storage(&accounts, 1, 21));
 
+        // CREATE SLOT 2
         let latest_slot = 2;
         let mut pubkeys2: Vec<Pubkey> = vec![];
+
         // Modify original slot 0 accounts in slot 2
         modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
+        accounts.clean_accounts();
 
         // Create 10 new accounts in slot 2
         create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
 
-        // Store a lamports=0 account in slot 2
+        // Store a lamports=0 account in slot 2. Slot 2 should now have
+        // 10 + 10 + 10 + 1 = 31 accounts
         let account = Account::new(0, 0, &Account::default().owner);
         accounts.store(latest_slot, &[(&pubkeys[31], &account)]);
         accounts.add_root(latest_slot);
+        assert!(check_storage(&accounts, 2, 31));
 
-        assert!(check_storage(&accounts, 0, 90));
-        assert!(check_storage(&accounts, 1, 21));
+        accounts.clean_accounts();
+        // The first 20 accounts have been modified in slot 2, so only
+        // 80 accounts left in slot 0.
+        assert!(check_storage(&accounts, 0, 80));
+        // 10 of the 21 accounts have been modified in slot 2, so only 11
+        // accounts left in slot 1.
+        assert!(check_storage(&accounts, 1, 11));
         assert!(check_storage(&accounts, 2, 31));
 
         let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
@@ -3358,7 +3372,6 @@ pub mod tests {
         let hash = accounts.update_accounts_hash(current_slot, &ancestors);
 
         accounts.clean_accounts();
-        accounts.process_dead_slots(None);
 
         assert_eq!(
             accounts.update_accounts_hash(current_slot, &ancestors),
@@ -4246,7 +4259,8 @@ pub mod tests {
         current_slot += 1;
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
-        accounts.process_dead_slots(None);
+        accounts.clean_accounts();
+
         assert_eq!(
             // Removed one reference from the dead slot (reference only counted once
             // even though there were two stores to the pubkey in that slot)
