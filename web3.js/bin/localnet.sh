@@ -112,7 +112,7 @@ up)
 down)
   (
     set -x
-    if [[ -n "$(docker ps --filter "name=^solana-localnet$" -q)" ]]; then
+    if [[ $(docker ps --filter "name=^/solana-localnet$" -q) ]]; then
       docker stop --time 0 solana-localnet
     fi
   )
@@ -128,7 +128,7 @@ logs)
   fi
 
   while $follow; do
-    if [[ -n $(docker ps -q -f name=solana-localnet) ]]; then
+    if [[ $(docker ps -q -f "name=^/solana-localnet$") ]]; then
       (
         set -x
         docker logs solana-localnet -f
