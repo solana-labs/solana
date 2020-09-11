@@ -414,8 +414,6 @@ pub struct AccountsDB {
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
-    dead_slots: RwLock<HashSet<Slot>>,
-
     stats: AccountsStats,
 
     pub cluster_type: Option<ClusterType>,
@@ -478,7 +476,6 @@ impl Default for AccountsDB {
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),
-            dead_slots: RwLock::new(HashSet::new()),
             stats: AccountsStats::default(),
             cluster_type: None,
         }
@@ -561,7 +558,7 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        self.handle_reclaims_maybe_cleanup(&reclaims);
+        self.handle_reclaims(&reclaims, None, true);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
@@ -758,7 +755,7 @@ impl AccountsDB {
 
         self.handle_dead_keys(dead_keys);
 
-        self.handle_reclaims_maybe_cleanup(&reclaims);
+        self.handle_reclaims(&reclaims, None, true);
 
         reclaims_time.stop();
         datapoint_info!(
@@ -784,25 +781,23 @@ impl AccountsDB {
         }
     }
 
-    fn handle_reclaims_single_unrooted_slot(&self, reclaims: SlotSlice<AccountInfo>) {
+    fn handle_reclaims(
+        &self,
+        reclaims: SlotSlice<AccountInfo>,
+        expected_slot: Option<Slot>,
+        is_cleanup_possible: bool,
+    ) {
         if !reclaims.is_empty() {
-            let expected_slot = reclaims[0].0;
-            let dead_slot = self.remove_dead_accounts(reclaims, Some(expected_slot));
-            assert!(dead_slot.len() <= 1);
-            if dead_slot.len() == 1 {
-                assert!(dead_slot.contains(&expected_slot));
+            let dead_slots = self.remove_dead_accounts(reclaims, expected_slot);
+            if !is_cleanup_possible {
+                assert!(dead_slots.is_empty());
+            } else if let Some(expected_slot) = expected_slot {
+                assert!(dead_slots.len() <= 1);
+                if dead_slots.len() == 1 {
+                    assert!(dead_slots.contains(&expected_slot));
+                }
             }
-
-            self.process_dead_slots(&dead_slot);
-        }
-    }
-
-    fn handle_reclaims_maybe_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
-        let dead_slots = self.remove_dead_accounts(reclaims, None);
-        let mut dead_slots_w = self.dead_slots.write().unwrap();
-        dead_slots_w.extend(dead_slots);
-        if dead_slots_w.len() > 5000 {
-            self.process_dead_slots(&dead_slots_w);
+            self.process_dead_slots(&dead_slots);
         }
     }
 
@@ -984,7 +979,7 @@ impl AccountsDB {
             update_index_elapsed = start.as_us();
 
             let mut start = Measure::start("update_index_elapsed");
-            self.handle_reclaims_maybe_cleanup(&reclaims);
+            self.handle_reclaims(&reclaims, Some(slot), true);
             start.stop();
             handle_reclaims_elapsed = start.as_us();
 
@@ -1386,7 +1381,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims_single_unrooted_slot(&reclaims);
+        self.handle_reclaims(&reclaims, Some(remove_slot), true);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -2186,16 +2181,18 @@ impl AccountsDB {
     }
 
     fn store_with_hashes(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], hashes: &[Hash]) {
-        let mut store_accounts = Measure::start("store::store_accounts");
         let infos = self.store_accounts(slot, accounts, hashes);
-        store_accounts.stop();
-
-        let mut update_index = Measure::start("store::update_index");
         let reclaims = self.update_index(slot, infos, accounts);
-        update_index.stop();
-        trace!("reclaim: {}", reclaims.len());
 
-        self.handle_reclaims_single_unrooted_slot(&reclaims);
+        // A store for a single slot should:
+        // 1) Only make "reclaims" for the same slot
+        // 2) Should not cause any slots to be removed from the storage
+        // database because
+        //    a) this slot  has at least one account (the one being stored),
+        //    b)From 1) we know no other slots are included in the "reclaims"
+        //
+        // From 1) and 2) we guarantee passing Some(slot), false is safe
+        self.handle_reclaims(&reclaims, Some(slot), false);
     }
 
     pub fn add_root(&self, slot: Slot) {
