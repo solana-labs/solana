@@ -196,12 +196,6 @@ impl CachedExecutors {
         }
     }
 }
-// #[cfg(RUSTC_WITH_SPECIALIZATION)]
-// impl AbiExample for CachedExecutors {
-//     fn example() -> Self {
-//         Self::default()
-//     }
-// }
 
 #[derive(Default)]
 pub struct BankRc {
@@ -1884,19 +1878,18 @@ impl Bank {
         for instruction_loaders in loaders.iter() {
             num_executors += instruction_loaders.len();
         }
-        let mut executors: HashMap<Pubkey, Arc<dyn Executor>> =
-            HashMap::with_capacity(num_executors);
-        let cached_executors = self.cached_executors.read().unwrap();
+        let mut executors = HashMap::with_capacity(num_executors);
+        let cache = self.cached_executors.read().unwrap();
 
         for key in message.account_keys.iter() {
-            if let Some(cached_executor) = cached_executors.get(key) {
-                executors.insert(*key, cached_executor);
+            if let Some(executor) = cache.get(key) {
+                executors.insert(*key, executor);
             }
         }
         for instruction_loaders in loaders.iter() {
             for (key, _) in instruction_loaders.iter() {
-                if let Some(cached_executor) = cached_executors.get(key) {
-                    executors.insert(*key, cached_executor);
+                if let Some(executor) = cache.get(key) {
+                    executors.insert(*key, executor);
                 }
             }
         }
@@ -1911,9 +1904,9 @@ impl Bank {
     fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
         let executors = executors.borrow();
         if executors.is_dirty {
-            let mut cached_executors = self.cached_executors.write().unwrap();
+            let mut cache = self.cached_executors.write().unwrap();
             for (key, executor) in executors.executors.iter() {
-                cached_executors.put(key, (*executor).clone());
+                cache.put(key, (*executor).clone());
             }
         }
     }
