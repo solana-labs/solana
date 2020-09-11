@@ -621,6 +621,11 @@ declare module '@solana/web3.js' {
     signatures?: Array<SignaturePubkeyPair>,
   |};
 
+  declare export type SerializeConfig = {
+    requireAllSignatures?: boolean,
+    verifySignatures?: boolean,
+  };
+
   declare export class Transaction {
     signatures: Array<SignaturePubkeyPair>;
     signature: ?Buffer;
@@ -644,7 +649,7 @@ declare module '@solana/web3.js' {
     addSignature(pubkey: PublicKey, signature: Buffer): void;
     setSigners(...signers: Array<PublicKey>): void;
     verifySignatures(): boolean;
-    serialize(): Buffer;
+    serialize(config?: SerializeConfig): Buffer;
   }
 
   // === src/stake-program.js ===

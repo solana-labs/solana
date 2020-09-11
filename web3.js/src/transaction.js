@@ -63,6 +63,18 @@ export type TransactionInstructionCtorFields = {|
 |};
 
 /**
+ * Configuration object for Transaction.serialize()
+ *
+ * @typedef {Object} SerializeConfig
+ * @property {boolean|undefined} requireAllSignatures Require all transaction signatures be present (default: true)
+ * @property {boolean|undefined} verifySignatures Verify provided signatures (default: true)
+ */
+export type SerializeConfig = {
+  requireAllSignatures?: boolean,
+  verifySignatures?: boolean,
+};
+
+/**
  * Transaction Instruction class
  */
 export class TransactionInstruction {
@@ -462,37 +474,49 @@ export class Transaction {
    * Verify signatures of a complete, signed Transaction
    */
   verifySignatures(): boolean {
-    return this._verifySignatures(this.serializeMessage());
+    return this._verifySignatures(this.serializeMessage(), true);
   }
 
   /**
    * @private
    */
-  _verifySignatures(signData: Buffer): boolean {
-    let verified = true;
+  _verifySignatures(signData: Buffer, requireAllSignatures: boolean): boolean {
     for (const {signature, publicKey} of this.signatures) {
-      if (
-        !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
-      ) {
-        verified = false;
+      if (signature === null) {
+        if (requireAllSignatures) {
+          return false;
+        }
+      } else {
+        if (
+          !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
+        ) {
+          return false;
+        }
       }
     }
-    return verified;
+    return true;
   }
 
   /**
    * Serialize the Transaction in the wire format.
-   *
-   * The Transaction must have a valid `signature` before invoking this method
    */
-  serialize(): Buffer {
+  serialize(config?: SerializeConfig): Buffer {
     const {signatures} = this;
-    if (!signatures || signatures.length === 0) {
+
+    const {requireAllSignatures, verifySignatures} = Object.assign(
+      {requireAllSignatures: true, verifySignatures: true},
+      config,
+    );
+
+    if (requireAllSignatures && signatures.length === 0) {
       throw new Error('Transaction has not been signed');
     }
 
     const signData = this.serializeMessage();
-    if (!this._verifySignatures(signData)) {
+    if (
+      verifySignatures &&
+      !this._verifySignatures(signData, requireAllSignatures)
+    ) {
       throw new Error('Transaction has not been signed correctly');
     }
 

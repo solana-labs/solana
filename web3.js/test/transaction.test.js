@@ -136,9 +136,41 @@ test('partialSign', () => {
   partialTransaction.setSigners(account1.publicKey, account2.publicKey);
   expect(partialTransaction.signatures[0].signature).toBeNull();
   expect(partialTransaction.signatures[1].signature).toBeNull();
-  partialTransaction.partialSign(account1, account2);
+
+  partialTransaction.partialSign(account1);
+  expect(partialTransaction.signatures[0].signature).not.toBeNull();
+  expect(partialTransaction.signatures[1].signature).toBeNull();
+
+  expect(() => partialTransaction.serialize()).toThrow();
+  expect(() =>
+    partialTransaction.serialize({requireAllSignatures: false}),
+  ).not.toThrow();
+
+  partialTransaction.partialSign(account2);
+
+  expect(partialTransaction.signatures[0].signature).not.toBeNull();
+  expect(partialTransaction.signatures[1].signature).not.toBeNull();
+
+  expect(() => partialTransaction.serialize()).not.toThrow();
 
   expect(partialTransaction).toEqual(transaction);
+
+  if (
+    partialTransaction.signatures[0].signature != null /* <-- pacify flow */
+  ) {
+    partialTransaction.signatures[0].signature[0] = 0;
+    expect(() =>
+      partialTransaction.serialize({requireAllSignatures: false}),
+    ).toThrow();
+    expect(() =>
+      partialTransaction.serialize({
+        verifySignatures: false,
+        requireAllSignatures: false,
+      }),
+    ).not.toThrow();
+  } else {
+    throw new Error('unreachable');
+  }
 });
 
 describe('dedupe', () => {
@@ -393,6 +425,9 @@ test('serialize unsigned transaction', () => {
     expectedTransaction.serialize();
   }).toThrow(Error);
   expect(() => {
+    expectedTransaction.serialize({verifySignatures: false});
+  }).toThrow(Error);
+  expect(() => {
     expectedTransaction.serializeMessage();
   }).toThrow('Transaction feePayer required');
 
@@ -406,6 +441,18 @@ test('serialize unsigned transaction', () => {
 
   // Serializing the message is allowed when signature array has null signatures
   expectedTransaction.serializeMessage();
+
+  const expectedSerializationWithNoSignatures = Buffer.from(
+    'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' +
+      'AAAAAAAAAAAAAAAAAAABAAEDE5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8r9' +
+      'Q5/Mtmcn8onFxt47xKj+XdXXd3C8j/FcPu7csUrz/AAAAAAAAAAAAAAAAAAAAAAAAAAA' +
+      'AAAAAAAAAAAAAAAAxJrndgN4IFTxep3s6kO0ROug7bEsbx0xxuDkqEvwUusBAgIAAQwC' +
+      'AAAAMQAAAAAAAAA=',
+    'base64',
+  );
+  expect(
+    expectedTransaction.serialize({requireAllSignatures: false}),
+  ).toStrictEqual(expectedSerializationWithNoSignatures);
 
   // Properly signed transaction succeeds
   expectedTransaction.partialSign(sender);
