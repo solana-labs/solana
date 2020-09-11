@@ -1694,9 +1694,9 @@ impl AccountsDB {
             || solana_sdk::sysvar::check_id(owner);
 
         if is_specially_retained {
-            // specially retained accounts are ensured to exist by
-            // always having a balance of 1 lamports, which is
-            // outside the capitalization calculation.
+            // specially retained accounts always have an initial 1 lamport
+            // balance, but could be modified by transfers which increase
+            // the balance but don't affect the capitalization.
             lamports - 1
         } else {
             lamports
