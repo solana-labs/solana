@@ -2600,6 +2600,28 @@ impl Bank {
         }
     }
 
+    #[cfg(test)]
+    fn add_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
+        if let Some(old_account) = self.get_account(&pubkey) {
+            if new_account.lamports > old_account.lamports {
+                self.capitalization.fetch_add(
+                    new_account.lamports - old_account.lamports,
+                    Ordering::Relaxed,
+                );
+            } else {
+                self.capitalization.fetch_sub(
+                    old_account.lamports - new_account.lamports,
+                    Ordering::Relaxed,
+                );
+            }
+        } else {
+            self.capitalization
+                .fetch_add(new_account.lamports, Ordering::Relaxed);
+        }
+
+        self.store_account(pubkey, new_account);
+    }
+
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
@@ -3879,6 +3901,8 @@ mod tests {
 
     #[test]
     fn test_rent_distribution() {
+        solana_logger::setup();
+
         let bootstrap_validator_pubkey = Pubkey::new_rand();
         let bootstrap_validator_stake_lamports = 30;
         let mut genesis_config = create_genesis_config_with_leader(
@@ -4014,11 +4038,11 @@ mod tests {
 
         let payer = Keypair::new();
         let payer_account = Account::new(400, 0, &system_program::id());
-        bank.store_account(&payer.pubkey(), &payer_account);
+        bank.add_account_and_update_capitalization(&payer.pubkey(), &payer_account);
 
         let payee = Keypair::new();
         let payee_account = Account::new(70, 1, &system_program::id());
-        bank.store_account(&payee.pubkey(), &payee_account);
+        bank.add_account_and_update_capitalization(&payee.pubkey(), &payee_account);
 
         let bootstrap_validator_initial_balance = bank.get_balance(&bootstrap_validator_pubkey);
 
@@ -4099,6 +4123,8 @@ mod tests {
             previous_capitalization - current_capitalization,
             burned_portion
         );
+        bank.freeze();
+        assert!(bank.calculate_and_verify_capitalization());
     }
 
     #[test]
@@ -5047,6 +5073,8 @@ mod tests {
 
     #[test]
     fn test_bank_update_rewards() {
+        solana_logger::setup();
+
         // create a bank that ticks really slowly...
         let bank = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
@@ -5083,7 +5111,7 @@ mod tests {
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         // set up accounts
-        bank.store_account(&stake_id, &stake_account);
+        bank.add_account_and_update_capitalization(&stake_id, &stake_account);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -5093,7 +5121,7 @@ mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account(&vote_id, &vote_account);
+            bank.add_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -5101,7 +5129,7 @@ mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account(&vote_id, &vote_account);
+        bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         let validator_points: u128 = bank
             .stake_delegation_accounts()
@@ -5156,6 +5184,8 @@ mod tests {
                 (rewards.validator_point_value * validator_points as f64) as i64
             )])
         );
+        bank1.freeze();
+        assert!(bank1.calculate_and_verify_capitalization());
     }
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
@@ -5197,8 +5227,8 @@ mod tests {
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
         // set up accounts
-        bank.store_account(&stake_id1, &stake_account1);
-        bank.store_account(&stake_id2, &stake_account2);
+        bank.add_account_and_update_capitalization(&stake_id1, &stake_account1);
+        bank.add_account_and_update_capitalization(&stake_id2, &stake_account2);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -5208,7 +5238,7 @@ mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account(&vote_id, &vote_account);
+            bank.add_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -5216,7 +5246,7 @@ mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account(&vote_id, &vote_account);
+        bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -5227,11 +5257,15 @@ mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
+        bank1.freeze();
+        assert!(bank1.calculate_and_verify_capitalization());
         bank1.capitalization()
     }
 
     #[test]
     fn test_bank_update_rewards_determinism() {
+        solana_logger::setup();
+
         // The same reward should be distributed given same credits
         let expected_capitalization = do_test_bank_update_rewards_determinism();
         // Repeat somewhat large number of iterations to expose possible different behavior
