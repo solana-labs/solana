@@ -114,7 +114,6 @@ set by the client. Clients may specify either:
 - `"max"` - the node will query the most recent block confirmed by supermajority of the cluster as having reached
 maximum lockout.
 - `"root"` - the node will query the most recent block having reached maximum lockout on this node.
-- `"single"` - the node will query the most recent block having reached 1 confirmation by supermajority of the cluster.
 - `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster via
 gossip votes. This differs from `single` in that:
   - It incorporates votes from gossip and replay.
@@ -1963,7 +1962,7 @@ The result is the latest vote, containing its hash, a list of voted slots, and a
 Unsubscribe from vote notifications
 
 #### Parameters:
-
+s
 - `<integer>` - subscription id to cancel
 
 #### Results:
