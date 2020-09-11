@@ -117,7 +117,7 @@ maximum lockout.
 - `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster via
 gossip votes. This differs from `single` in that:
   - It incorporates votes from gossip and replay.
-  - It does not count votes on descendants of a bank, only direct votes on the bank.
+  - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
 - `"recent"` - the node will query its most recent block.
