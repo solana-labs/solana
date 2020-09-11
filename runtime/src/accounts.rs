@@ -428,9 +428,32 @@ impl Accounts {
         accounts_balances
     }
 
+    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
+        let balances = self
+            .load_all(ancestors)
+            .into_iter()
+            .map(|(_pubkey, account, _slot)| {
+                AccountsDB::account_balance_for_capitalization(
+                    account.lamports,
+                    &account.owner,
+                    account.executable,
+                )
+            });
+
+        AccountsDB::checked_sum_for_capitalization(balances)
+    }
+
     #[must_use]
-    pub fn verify_bank_hash(&self, slot: Slot, ancestors: &Ancestors) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
+    pub fn verify_bank_hash_and_lamports(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        total_lamports: u64,
+    ) -> bool {
+        if let Err(err) =
+            self.accounts_db
+                .verify_bank_hash_and_lamports(slot, ancestors, total_lamports)
+        {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {
@@ -460,13 +483,13 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
-        program_id: Option<&Pubkey>,
+        program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    program_id.is_none() || Some(&account.owner) == program_id
+                    account.owner == *program_id
                 })
             },
         )
