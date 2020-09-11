@@ -1594,13 +1594,13 @@ impl ReplayStage {
         loop {
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
-            if current_leader_slot == None || current_leader_slot.unwrap() <= root {
+            if current_leader_slot == None || current_leader_slot.unwrap() < root {
                 break;
             }
 
             let leader_propagated_stats = progress
                 .get_propagated_stats_mut(current_leader_slot.unwrap())
-                .expect("current_leader_slot > root, so must exist in the progress map");
+                .expect("current_leader_slot >= root, so must exist in the progress map");
 
             // If a descendant has reached propagation threshold, then
             // all its ancestor banks have also reached propagation
