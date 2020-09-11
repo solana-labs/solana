@@ -114,8 +114,7 @@ set by the client. Clients may specify either:
 - `"max"` - the node will query the most recent block confirmed by supermajority of the cluster as having reached
 maximum lockout.
 - `"root"` - the node will query the most recent block having reached maximum lockout on this node.
-- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster via
-gossip votes.
+- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
   - It incorporates votes from gossip and replay.
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
