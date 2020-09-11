@@ -2714,7 +2714,7 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    pub fn get_program_accounts(&self, program_id: Option<&Pubkey>) -> Vec<(Pubkey, Account)> {
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
             .load_by_program(&self.ancestors, program_id)
@@ -6839,17 +6839,17 @@ mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         parent.lazy_rent_collection.store(true, Ordering::Relaxed);
 
-        let genesis_accounts: Vec<_> = parent.get_program_accounts(None);
+        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
         assert!(
             genesis_accounts
                 .iter()
-                .any(|(pubkey, _)| *pubkey == mint_keypair.pubkey()),
+                .any(|(pubkey, _, _)| *pubkey == mint_keypair.pubkey()),
             "mint pubkey not found"
         );
         assert!(
             genesis_accounts
                 .iter()
-                .any(|(pubkey, _)| solana_sdk::sysvar::is_sysvar_id(pubkey)),
+                .any(|(pubkey, _, _)| solana_sdk::sysvar::is_sysvar_id(pubkey)),
             "no sysvars found"
         );
 
@@ -6867,11 +6867,11 @@ mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         bank1.squash();
         assert_eq!(
-            bank0.get_program_accounts(Some(&program_id)),
+            bank0.get_program_accounts(&program_id),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
-            bank1.get_program_accounts(Some(&program_id)),
+            bank1.get_program_accounts(&program_id),
             vec![(pubkey0, account0)]
         );
         assert_eq!(
@@ -6890,8 +6890,8 @@ mod tests {
 
         let bank3 = Arc::new(new_from_parent(&bank2));
         bank3.squash();
-        assert_eq!(bank1.get_program_accounts(Some(&program_id)).len(), 2);
-        assert_eq!(bank3.get_program_accounts(Some(&program_id)).len(), 2);
+        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
     }
 
     #[test]

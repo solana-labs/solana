@@ -429,16 +429,16 @@ impl Accounts {
     }
 
     pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
-        let balances =
-            self.load_by_program(ancestors, None)
-                .into_iter()
-                .map(|(_pubkey, account)| {
-                    AccountsDB::account_balance_for_capitalization(
-                        account.lamports,
-                        &account.owner,
-                        account.executable,
-                    )
-                });
+        let balances = self
+            .load_all(ancestors)
+            .into_iter()
+            .map(|(_pubkey, account, _slot)| {
+                AccountsDB::account_balance_for_capitalization(
+                    account.lamports,
+                    &account.owner,
+                    account.executable,
+                )
+            });
 
         AccountsDB::checked_sum_for_capitalization(balances)
     }
@@ -483,13 +483,13 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
-        program_id: Option<&Pubkey>,
+        program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    program_id.is_none() || Some(&account.owner) == program_id
+                    account.owner == *program_id
                 })
             },
         )

@@ -1686,7 +1686,7 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(Some(&solana_stake_program::id()))
+                            .get_program_accounts(&solana_stake_program::id())
                             .into_iter()
                         {
                             account.lamports = 0;
@@ -1714,7 +1714,7 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(Some(&solana_vote_program::id()))
+                            .get_program_accounts(&solana_vote_program::id())
                             .into_iter()
                         {
                             account.lamports = 0;
