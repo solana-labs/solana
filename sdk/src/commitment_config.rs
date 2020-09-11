@@ -62,11 +62,15 @@ pub enum CommitmentLevel {
     /// The highest slot having reached max vote lockout.
     Root,
 
-    /// The highest slot having reached 1 confirmation.
+    /// (DEPRECATED) The highest slot having reached 1 confirmation by supermajority of the cluster.
     Single,
 
-    /// The highest slot having reached 1 confirmation via gossip votes; may occur before or after Single,
-    /// depending on gossip traffic.
+    /// The highest slot that has been voted on by supermajority of the cluster
+    /// This differs from `single` in that:
+    /// 1) It incorporates votes from gossip and replay.
+    /// 2) It does not count votes on descendants of a block, only direct votes on that block.
+    /// 3) This confirmation level also upholds "optimistic confirmation" guarantees in
+    /// release 1.3 and onwards.
     SingleGossip,
 }
 
