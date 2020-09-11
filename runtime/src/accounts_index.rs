@@ -147,6 +147,22 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         self.update(slot, pubkey, account_info, reclaims);
     }
 
+    pub fn unref_from_storage(&self, pubkey: &Pubkey) {
+        let locked_entry = self.account_maps.get(pubkey);
+        if let Some(entry) = locked_entry {
+            entry.0.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
+        let locked_entry = self.account_maps.get(pubkey);
+        if let Some(entry) = locked_entry {
+            entry.0.load(Ordering::Relaxed)
+        } else {
+            0
+        }
+    }
+
     // Try to update an item in account_maps. If the account is not
     // already present, then the function will return back Some(account_info) which
     // the caller can then take the write lock and do an 'insert' with the item.
@@ -183,28 +199,9 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
                 lock.0.fetch_add(1, Ordering::Relaxed);
             }
             list.push((slot, account_info));
-            // now, do lazy clean
-            self.purge_older_root_entries(list, reclaims);
-
             None
         } else {
             Some(account_info)
-        }
-    }
-
-    pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let locked_entry = self.account_maps.get(pubkey);
-        if let Some(entry) = locked_entry {
-            entry.0.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        let locked_entry = self.account_maps.get(pubkey);
-        if let Some(entry) = locked_entry {
-            entry.0.load(Ordering::Relaxed)
-        } else {
-            0
         }
     }
 

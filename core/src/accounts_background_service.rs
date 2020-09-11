@@ -35,8 +35,6 @@ impl AccountsBackgroundService {
                 }
                 let bank = bank_forks.read().unwrap().root_bank().clone();
 
-                bank.process_dead_slots();
-
                 consumed_budget = bank
                     .process_stale_slot_with_budget(consumed_budget, SHRUNKEN_ACCOUNT_PER_INTERVAL);
 

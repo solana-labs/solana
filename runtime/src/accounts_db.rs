@@ -46,7 +46,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard},
     time::Instant,
 };
 use tempfile::TempDir;
@@ -785,34 +785,30 @@ impl AccountsDB {
     }
 
     fn handle_reclaims_single_unrooted_slot(&self, reclaims: SlotSlice<AccountInfo>) {
-        if reclaims.len() > 0 {
+        if !reclaims.is_empty() {
             let expected_slot = reclaims[0].0;
             let dead_slot = self.remove_dead_accounts(reclaims, Some(expected_slot));
             assert!(dead_slot.len() <= 1);
             if dead_slot.len() == 1 {
-                assert_eq!(dead_slot, expected_slot);
+                assert!(dead_slot.contains(&expected_slot));
             }
 
-            self.process_dead_slots(dead_slot);
+            self.process_dead_slots(&dead_slot);
         }
     }
 
     fn handle_reclaims_maybe_cleanup(&self, reclaims: SlotSlice<AccountInfo>) {
-        let dead_slots = self.remove_dead_accounts(reclaims);
-        let dead_slots_len = {
-            let mut dead_slots_w = self.dead_slots.write().unwrap();
-            dead_slots_w.extend(dead_slots);
-            dead_slots_w.len()
-        };
-        if dead_slots_len > 5000 {
-            self.process_dead_slots(None);
+        let dead_slots = self.remove_dead_accounts(reclaims, None);
+        let mut dead_slots_w = self.dead_slots.write().unwrap();
+        dead_slots_w.extend(dead_slots);
+        if dead_slots_w.len() > 5000 {
+            self.process_dead_slots(&dead_slots_w);
         }
     }
 
-    pub fn process_dead_slots<'a>(
-        &'a self,
-        dead_slots: &HashSet<Slot>,
-    ) {
+    // Must be kept private!, does sensitive cleanup that should only be called from
+    // supported pipelines in AccountsDb
+    fn process_dead_slots<'a>(&'a self, dead_slots: &HashSet<Slot>) {
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
         self.clean_dead_slots(&dead_slots);
         clean_dead_slots.stop();
@@ -1989,7 +1985,6 @@ impl AccountsDB {
     ) -> SlotList<AccountInfo> {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         let index = self.accounts_index.read().unwrap();
-        let mut update_index_work = Measure::start("update_index_work");
         let inserts: Vec<_> = infos
             .into_iter()
             .zip(accounts.iter())
@@ -2008,7 +2003,6 @@ impl AccountsDB {
                 index.insert(slot, pubkey, info, &mut reclaims);
             }
         }
-        update_index_work.stop();
         reclaims
     }
 
@@ -2019,10 +2013,9 @@ impl AccountsDB {
     ) -> HashSet<Slot> {
         let storage = self.storage.read().unwrap();
         let mut dead_slots = HashSet::new();
-        let slot = reclaims.first();
         for (slot, account_info) in reclaims {
             if let Some(expected_slot) = expected_slot {
-                assert_eq!(slot, expected_slot);
+                assert_eq!(*slot, expected_slot);
             }
             if let Some(slot_storage) = storage.0.get(slot) {
                 if let Some(store) = slot_storage.get(&account_info.store_id) {
@@ -2202,7 +2195,7 @@ impl AccountsDB {
         update_index.stop();
         trace!("reclaim: {}", reclaims.len());
 
-        self.handle_reclaims_maybe_cleanup(&reclaims);
+        self.handle_reclaims_single_unrooted_slot(&reclaims);
     }
 
     pub fn add_root(&self, slot: Slot) {
