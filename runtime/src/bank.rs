@@ -149,6 +149,7 @@ impl Builtin {
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
 /// LFU Cache of executors
+#[derive(AbiExample)]
 struct CachedExecutors {
     max: usize,
     executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
