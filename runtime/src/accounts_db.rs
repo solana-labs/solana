@@ -40,6 +40,7 @@ use solana_sdk::{
 use std::convert::TryFrom;
 use std::{
     collections::{HashMap, HashSet},
+    convert::TryInto,
     io::{Error as IOError, Result as IOResult},
     iter::FromIterator,
     ops::RangeBounds,
@@ -154,6 +155,7 @@ pub enum BankHashVerificationError {
     MismatchedAccountHash,
     MismatchedBankHash,
     MissingBankHash,
+    MismatchedTotalLamports(u64, u64),
 }
 
 /// Persistent storage structure holding the accounts
@@ -1614,8 +1616,11 @@ impl AccountsDB {
         );
     }
 
-    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        let hashes: Vec<_> = hashes.into_iter().map(|(_pubkey, hash)| hash).collect();
+    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
+        let hashes: Vec<_> = hashes
+            .into_iter()
+            .map(|(_pubkey, hash, _lamports)| hash)
+            .collect();
         let mut hashes: Vec<_> = hashes.chunks(fanout).map(|x| x.to_vec()).collect();
         while hashes.len() > 1 {
             let mut time = Measure::start("time");
@@ -1640,27 +1645,77 @@ impl AccountsDB {
         hasher.result()
     }
 
-    fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
-        let mut sort = Measure::start("sort");
+    fn accumulate_account_hashes(hashes: Vec<(Pubkey, Hash, u64)>) -> Hash {
+        let (hash, ..) = Self::do_accumulate_account_hashes_and_capitalization(hashes, false);
+        hash
+    }
+
+    fn accumulate_account_hashes_and_capitalization(
+        hashes: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, u64) {
+        let (hash, cap) = Self::do_accumulate_account_hashes_and_capitalization(hashes, true);
+        (hash, cap.unwrap())
+    }
+
+    fn do_accumulate_account_hashes_and_capitalization(
+        mut hashes: Vec<(Pubkey, Hash, u64)>,
+        calculate_cap: bool,
+    ) -> (Hash, Option<u64>) {
+        let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
-        sort.stop();
+        sort_time.stop();
+
+        let mut sum_time = Measure::start("cap");
+        let cap = if calculate_cap {
+            Some(Self::checked_sum_for_capitalization(
+                hashes.iter().map(|(_, _, lamports)| *lamports),
+            ))
+        } else {
+            None
+        };
+        sum_time.stop();
+
         let mut hash_time = Measure::start("hash");
-
         let fanout = 16;
-
         let res = Self::compute_merkle_root(hashes, fanout);
-
         hash_time.stop();
-        debug!("{} {}", sort, hash_time);
 
-        res
+        debug!("{} {} {}", sort_time, hash_time, sum_time);
+
+        (res, cap)
+    }
+
+    pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
+        balances
+            .map(|b| b as u128)
+            .sum::<u128>()
+            .try_into()
+            .expect("overflow is detected while summing capitalization")
+    }
+
+    pub fn account_balance_for_capitalization(
+        lamports: u64,
+        owner: &Pubkey,
+        executable: bool,
+    ) -> u64 {
+        let is_specially_retained = (solana_sdk::native_loader::check_id(owner) && executable)
+            || solana_sdk::sysvar::check_id(owner);
+
+        if is_specially_retained {
+            // specially retained accounts always have an initial 1 lamport
+            // balance, but could be modified by transfers which increase
+            // the balance but don't affect the capitalization.
+            lamports - 1
+        } else {
+            lamports
+        }
     }
 
     fn calculate_accounts_hash(
         &self,
         ancestors: &Ancestors,
         check_hash: bool,
-    ) -> Result<Hash, BankHashVerificationError> {
+    ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut scan = Measure::start("scan");
         let accounts_index = self.accounts_index.read().unwrap();
@@ -1679,6 +1734,11 @@ impl AccountsDB {
                             .and_then(|storage_map| storage_map.get(&account_info.store_id))
                             .and_then(|store| {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
+                                let balance = Self::account_balance_for_capitalization(
+                                    account_info.lamports,
+                                    &account.account_meta.owner,
+                                    account.account_meta.executable,
+                                );
 
                                 if check_hash {
                                     let hash = Self::hash_stored_account(
@@ -1694,7 +1754,7 @@ impl AccountsDB {
                                     }
                                 }
 
-                                Some((**pubkey, *account.hash))
+                                Some((**pubkey, *account.hash, balance))
                             })
                     } else {
                         None
@@ -1716,7 +1776,8 @@ impl AccountsDB {
         let hash_total = hashes.len();
 
         let mut accumulate = Measure::start("accumulate");
-        let accumulated_hash = Self::accumulate_account_hashes(hashes);
+        let (accumulated_hash, total_lamports) =
+            Self::accumulate_account_hashes_and_capitalization(hashes);
         accumulate.stop();
         datapoint_info!(
             "update_accounts_hash",
@@ -1724,7 +1785,7 @@ impl AccountsDB {
             ("hash_accumulate", accumulate.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
-        Ok(accumulated_hash)
+        Ok((accumulated_hash, total_lamports))
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
@@ -1733,22 +1794,32 @@ impl AccountsDB {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> Hash {
-        let hash = self.calculate_accounts_hash(ancestors, false).unwrap();
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+        let (hash, total_lamports) = self.calculate_accounts_hash(ancestors, false).unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        hash
+        (hash, total_lamports)
     }
 
-    pub fn verify_bank_hash(
+    pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
         ancestors: &Ancestors,
+        total_lamports: u64,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let calculated_hash = self.calculate_accounts_hash(ancestors, true)?;
+        let (calculated_hash, calculated_lamports) =
+            self.calculate_accounts_hash(ancestors, true)?;
+
+        if calculated_lamports != total_lamports {
+            warn!(
+                "Mismatched total lamports: {} calculated: {}",
+                total_lamports, calculated_lamports
+            );
+            return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
+        }
 
         let bank_hashes = self.bank_hashes.read().unwrap();
         if let Some(found_hash_info) = bank_hashes.get(&slot) {
@@ -1789,7 +1860,7 @@ impl AccountsDB {
         let mut accumulate = Measure::start("accumulate");
         let hashes: Vec<_> = account_maps
             .into_iter()
-            .map(|(pubkey, (_, hash))| (pubkey, hash))
+            .map(|(pubkey, (_, hash))| (pubkey, hash, 0))
             .collect();
         let ret = Self::accumulate_account_hashes(hashes);
         accumulate.stop();
@@ -3305,7 +3376,9 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
-        accounts.verify_bank_hash(4, &HashMap::default()).unwrap();
+        accounts
+            .verify_bank_hash_and_lamports(4, &HashMap::default(), 1222)
+            .unwrap();
     }
 
     #[test]
@@ -3694,7 +3767,7 @@ pub mod tests {
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
-        let key = Pubkey::default();
+        let key = Pubkey::new_rand();
         let some_data_len = 0;
         let some_slot: Slot = 0;
         let account = Account::new(1, some_data_len, &key);
@@ -3703,11 +3776,14 @@ pub mod tests {
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
         db.update_accounts_hash(some_slot, &ancestors);
-        assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            Ok(_)
+        );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
-            db.verify_bank_hash(some_slot, &ancestors),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MissingBankHash)
         );
 
@@ -3722,8 +3798,48 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, bank_hash_info);
         assert_matches!(
-            db.verify_bank_hash(some_slot, &ancestors),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedBankHash)
+        );
+    }
+
+    #[test]
+    fn test_verify_bank_capitalization() {
+        use BankHashVerificationError::*;
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
+
+        let key = Pubkey::new_rand();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = Account::new(1, some_data_len, &key);
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.store(some_slot, &[(&key, &account)]);
+        db.add_root(some_slot);
+        db.update_accounts_hash(some_slot, &ancestors);
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            Ok(_)
+        );
+
+        let native_account_pubkey = Pubkey::new_rand();
+        db.store(
+            some_slot,
+            &[(
+                &native_account_pubkey,
+                &solana_sdk::native_loader::create_loadable_account("foo"),
+            )],
+        );
+        db.update_accounts_hash(some_slot, &ancestors);
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
+            Ok(_)
+        );
+
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
+            Err(MismatchedTotalLamports(expected, actual)) if expected == 1 && actual == 10
         );
     }
 
@@ -3741,7 +3857,10 @@ pub mod tests {
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
         db.update_accounts_hash(some_slot, &ancestors);
-        assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
+        assert_matches!(
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0),
+            Ok(_)
+        );
     }
 
     #[test]
@@ -3764,7 +3883,7 @@ pub mod tests {
         db.store_with_hashes(some_slot, accounts, &[some_hash]);
         db.add_root(some_slot);
         assert_matches!(
-            db.verify_bank_hash(some_slot, &ancestors),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedAccountHash)
         );
     }
@@ -4184,12 +4303,12 @@ pub mod tests {
         let no_ancestors = HashMap::default();
         accounts.update_accounts_hash(current_slot, &no_ancestors);
         accounts
-            .verify_bank_hash(current_slot, &no_ancestors)
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts
-            .verify_bank_hash(current_slot, &no_ancestors)
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         // repeating should be no-op
@@ -4375,5 +4494,80 @@ pub mod tests {
             exit.store(true, Ordering::Relaxed);
             shrink_thread.join().unwrap();
         }
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_normal() {
+        // system accounts
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &Pubkey::default(), false),
+            10
+        );
+        // any random program data accounts
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &Pubkey::new_rand(), false),
+            10
+        );
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_sysvar() {
+        use solana_sdk::sysvar::Sysvar;
+
+        let normal_sysvar = solana_sdk::slot_history::SlotHistory::default().create_account(1);
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                normal_sysvar.lamports,
+                &normal_sysvar.owner,
+                normal_sysvar.executable
+            ),
+            0
+        );
+
+        // currently transactions can send any lamports to sysvars although this is not sensible.
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false),
+            9
+        );
+    }
+
+    #[test]
+    fn test_account_balance_for_capitalization_native_program() {
+        let normal_native_program = solana_sdk::native_loader::create_loadable_account("foo");
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                normal_native_program.lamports,
+                &normal_native_program.owner,
+                normal_native_program.executable
+            ),
+            0
+        );
+
+        // test maliciously assigned bogus native loader account
+        assert_eq!(
+            AccountsDB::account_balance_for_capitalization(
+                1,
+                &solana_sdk::native_loader::id(),
+                false
+            ),
+            1
+        )
+    }
+
+    #[test]
+    fn test_checked_sum_for_capitalization_normal() {
+        assert_eq!(
+            AccountsDB::checked_sum_for_capitalization(vec![1, 2].into_iter()),
+            3
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "overflow is detected while summing capitalization")]
+    fn test_checked_sum_for_capitalization_overflow() {
+        assert_eq!(
+            AccountsDB::checked_sum_for_capitalization(vec![1, u64::max_value()].into_iter()),
+            3
+        );
     }
 }

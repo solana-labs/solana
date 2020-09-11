@@ -3261,7 +3261,12 @@ dependencies = [
  "solana-logger 1.3.10",
  "solana-measure",
  "solana-runtime",
+<<<<<<< HEAD
  "solana-sdk 1.3.10",
+=======
+ "solana-sdk 1.4.0",
+ "solana-version",
+>>>>>>> de4a61361... Check bank capitalization (#11927)
 ]
 
 [[package]]
