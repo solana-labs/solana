@@ -1594,13 +1594,13 @@ impl ReplayStage {
         loop {
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
-            if current_leader_slot == None || current_leader_slot.unwrap() <= root {
+            if current_leader_slot == None || current_leader_slot.unwrap() < root {
                 break;
             }
 
             let leader_propagated_stats = progress
                 .get_propagated_stats_mut(current_leader_slot.unwrap())
-                .expect("current_leader_slot > root, so must exist in the progress map");
+                .expect("current_leader_slot >= root, so must exist in the progress map");
 
             // If a descendant has reached propagation threshold, then
             // all its ancestor banks have also reached propagation
@@ -3319,6 +3319,10 @@ pub(crate) mod tests {
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map, _) =
             initialize_state(&keypairs, stake_per_validator);
+        progress_map
+            .get_propagated_stats_mut(0)
+            .unwrap()
+            .is_leader_slot = true;
         bank_forks.set_root(0, &None, None);
         let total_epoch_stake = bank_forks.root_bank().total_epoch_stake();
 
@@ -3396,6 +3400,10 @@ pub(crate) mod tests {
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map, _) =
             initialize_state(&keypairs, stake_per_validator);
+        progress_map
+            .get_propagated_stats_mut(0)
+            .unwrap()
+            .is_leader_slot = true;
         bank_forks.set_root(0, &None, None);
 
         let total_epoch_stake = num_validators as u64 * stake_per_validator;
@@ -3726,6 +3734,70 @@ pub(crate) mod tests {
         for k in descendants.keys() {
             assert!(*k < 3);
         }
+    }
+
+    #[test]
+    fn test_leader_snapshot_restart_propagation() {
+        let ReplayBlockstoreComponents {
+            validator_voting_keys,
+            mut progress,
+            bank_forks,
+            leader_schedule_cache,
+            ..
+        } = replay_blockstore_components();
+
+        let root_bank = bank_forks.read().unwrap().root_bank().clone();
+        let my_pubkey = leader_schedule_cache
+            .slot_leader_at(root_bank.slot(), Some(&root_bank))
+            .unwrap();
+
+        // Check that we are the leader of the root bank
+        assert!(
+            progress
+                .get_propagated_stats(root_bank.slot())
+                .unwrap()
+                .is_leader_slot
+        );
+        let ancestors = bank_forks.read().unwrap().ancestors();
+
+        // Freeze bank so it shows up in frozen banks
+        root_bank.freeze();
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        // Compute bank stats, make sure vote is propagated back to starting root bank
+        let vote_tracker = VoteTracker::default();
+
+        // Add votes
+        for vote_key in validator_voting_keys.values() {
+            vote_tracker.insert_vote(root_bank.slot(), Arc::new(*vote_key));
+        }
+
+        assert!(!progress.is_propagated(root_bank.slot()));
+
+        // Update propagation status
+        let tower = Tower::new_for_tests(0, 0.67);
+        ReplayStage::compute_bank_stats(
+            &my_pubkey,
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+            &vote_tracker,
+            &ClusterSlots::default(),
+            &bank_forks,
+            &mut PubkeyReferences::default(),
+            &mut HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks.read().unwrap()),
+            &mut BankWeightForkChoice::default(),
+        );
+
+        // Check status is true
+        assert!(progress.is_propagated(root_bank.slot()));
     }
 
     fn setup_forks() -> (RwLock<BankForks>, ProgressMap) {
