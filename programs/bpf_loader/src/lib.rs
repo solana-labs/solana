@@ -60,7 +60,7 @@ pub enum BPFError {
 impl UserDefinedError for BPFError {}
 
 pub fn create_vm<'a>(
-    loader_id: &Pubkey,
+    loader_id: &'a Pubkey,
     prog: &'a [u8],
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,

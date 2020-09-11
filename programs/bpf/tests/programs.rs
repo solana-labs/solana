@@ -70,9 +70,10 @@ fn run_program(
     let mut program_account = Account::default();
     file.read_to_end(&mut program_account.data).unwrap();
 
+    let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
     let (mut vm, heap_region) = create_vm(
-        &bpf_loader::id(),
+        &loader_id,
         &program_account.data,
         parameter_accounts,
         &mut invoke_context,
