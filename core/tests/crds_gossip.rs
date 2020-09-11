@@ -222,7 +222,7 @@ fn network_simulator(network: &mut Network, max_convergance: f64) {
     network_values.par_iter().for_each(|node| {
         node.lock()
             .unwrap()
-            .refresh_push_active_set(&HashMap::new());
+            .refresh_push_active_set(&HashMap::new(), None);
     });
     let mut total_bytes = bytes_tx;
     for second in 1..num {
@@ -361,7 +361,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             network_values.par_iter().for_each(|node| {
                 node.lock()
                     .unwrap()
-                    .refresh_push_active_set(&HashMap::new());
+                    .refresh_push_active_set(&HashMap::new(), None);
             });
         }
         total = network_values
@@ -408,7 +408,7 @@ fn network_run_pull(
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
-                        .new_pull_request(now, &HashMap::new(), cluster_info::MAX_BLOOM_SIZE)
+                        .new_pull_request(now, None, &HashMap::new(), cluster_info::MAX_BLOOM_SIZE)
                         .ok()
                 })
                 .collect()
@@ -581,7 +581,7 @@ fn test_prune_errors() {
             0,
         )
         .unwrap();
-    crds_gossip.refresh_push_active_set(&HashMap::new());
+    crds_gossip.refresh_push_active_set(&HashMap::new(), None);
     let now = timestamp();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
