@@ -293,6 +293,9 @@ pub enum BlockstoreProcessorError {
 
     #[error("invalid hard fork")]
     InvalidHardFork(Slot),
+
+    #[error("root bank with mismatched capitalization at {0}")]
+    RootBankWithMismatchedCapitalization(Slot),
 }
 
 /// Callback for accessing bank state while processing the blockstore
@@ -480,6 +483,13 @@ fn do_process_blockstore_from_root(
         },
     );
     assert!(bank_forks.active_banks().is_empty());
+
+    // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
+    // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
+    // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
+    if !bank_forks.root_bank().calculate_and_verify_capitalization() {
+        return Err(BlockstoreProcessorError::RootBankWithMismatchedCapitalization(root));
+    }
 
     Ok((bank_forks, leader_schedule_cache))
 }

@@ -2625,6 +2625,28 @@ impl Bank {
         }
     }
 
+    #[cfg(test)]
+    fn add_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
+        if let Some(old_account) = self.get_account(&pubkey) {
+            if new_account.lamports > old_account.lamports {
+                self.capitalization.fetch_add(
+                    new_account.lamports - old_account.lamports,
+                    Ordering::Relaxed,
+                );
+            } else {
+                self.capitalization.fetch_sub(
+                    old_account.lamports - new_account.lamports,
+                    Ordering::Relaxed,
+                );
+            }
+        } else {
+            self.capitalization
+                .fetch_add(new_account.lamports, Ordering::Relaxed);
+        }
+
+        self.store_account(pubkey, new_account);
+    }
+
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
@@ -2739,7 +2761,7 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    pub fn get_program_accounts(&self, program_id: Option<&Pubkey>) -> Vec<(Pubkey, Account)> {
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
             .load_by_program(&self.ancestors, program_id)
@@ -2873,9 +2895,11 @@ impl Bank {
     /// snapshot.
     #[must_use]
     fn verify_bank_hash(&self) -> bool {
-        self.rc
-            .accounts
-            .verify_bank_hash(self.slot(), &self.ancestors)
+        self.rc.accounts.verify_bank_hash_and_lamports(
+            self.slot(),
+            &self.ancestors,
+            self.capitalization(),
+        )
     }
 
     pub fn get_snapshot_storages(&self) -> SnapshotStorages {
@@ -2905,22 +2929,21 @@ impl Bank {
     }
 
     pub fn calculate_capitalization(&self) -> u64 {
-        self.get_program_accounts(None)
-            .into_iter()
-            .map(|(_pubkey, account)| {
-                let is_specially_retained = solana_sdk::native_loader::check_id(&account.owner)
-                    || solana_sdk::sysvar::check_id(&account.owner);
+        self.rc.accounts.calculate_capitalization(&self.ancestors)
+    }
 
-                if is_specially_retained {
-                    // specially retained accounts are ensured to exist by
-                    // always having a balance of 1 lamports, which is
-                    // outside the capitalization calculation.
-                    account.lamports - 1
-                } else {
-                    account.lamports
-                }
-            })
-            .sum()
+    pub fn calculate_and_verify_capitalization(&self) -> bool {
+        let calculated = self.calculate_capitalization();
+        let expected = self.capitalization();
+        if calculated == expected {
+            true
+        } else {
+            warn!(
+                "Capitalization mismatch: calculated: {} != expected: {}",
+                calculated, expected
+            );
+            false
+        }
     }
 
     /// Forcibly overwrites current capitalization by actually recalculating accounts' balances.
@@ -2937,10 +2960,13 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.rc
+        let (hash, total_lamports) = self
+            .rc
             .accounts
             .accounts_db
-            .update_accounts_hash(self.slot(), &self.ancestors)
+            .update_accounts_hash(self.slot(), &self.ancestors);
+        assert_eq!(total_lamports, self.capitalization());
+        hash
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -3900,6 +3926,8 @@ mod tests {
 
     #[test]
     fn test_rent_distribution() {
+        solana_logger::setup();
+
         let bootstrap_validator_pubkey = Pubkey::new_rand();
         let bootstrap_validator_stake_lamports = 30;
         let mut genesis_config = create_genesis_config_with_leader(
@@ -4035,11 +4063,11 @@ mod tests {
 
         let payer = Keypair::new();
         let payer_account = Account::new(400, 0, &system_program::id());
-        bank.store_account(&payer.pubkey(), &payer_account);
+        bank.add_account_and_update_capitalization(&payer.pubkey(), &payer_account);
 
         let payee = Keypair::new();
         let payee_account = Account::new(70, 1, &system_program::id());
-        bank.store_account(&payee.pubkey(), &payee_account);
+        bank.add_account_and_update_capitalization(&payee.pubkey(), &payee_account);
 
         let bootstrap_validator_initial_balance = bank.get_balance(&bootstrap_validator_pubkey);
 
@@ -4120,6 +4148,8 @@ mod tests {
             previous_capitalization - current_capitalization,
             burned_portion
         );
+        bank.freeze();
+        assert!(bank.calculate_and_verify_capitalization());
     }
 
     #[test]
@@ -5068,6 +5098,8 @@ mod tests {
 
     #[test]
     fn test_bank_update_rewards() {
+        solana_logger::setup();
+
         // create a bank that ticks really slowly...
         let bank = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
@@ -5104,7 +5136,7 @@ mod tests {
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         // set up accounts
-        bank.store_account(&stake_id, &stake_account);
+        bank.add_account_and_update_capitalization(&stake_id, &stake_account);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -5114,7 +5146,7 @@ mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account(&vote_id, &vote_account);
+            bank.add_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -5122,7 +5154,7 @@ mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account(&vote_id, &vote_account);
+        bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         let validator_points: u128 = bank
             .stake_delegation_accounts()
@@ -5177,6 +5209,8 @@ mod tests {
                 (rewards.validator_point_value * validator_points as f64) as i64
             )])
         );
+        bank1.freeze();
+        assert!(bank1.calculate_and_verify_capitalization());
     }
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
@@ -5218,8 +5252,8 @@ mod tests {
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
         // set up accounts
-        bank.store_account(&stake_id1, &stake_account1);
-        bank.store_account(&stake_id2, &stake_account2);
+        bank.add_account_and_update_capitalization(&stake_id1, &stake_account1);
+        bank.add_account_and_update_capitalization(&stake_id2, &stake_account2);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -5229,7 +5263,7 @@ mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account(&vote_id, &vote_account);
+            bank.add_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -5237,7 +5271,7 @@ mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account(&vote_id, &vote_account);
+        bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -5248,11 +5282,15 @@ mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
+        bank1.freeze();
+        assert!(bank1.calculate_and_verify_capitalization());
         bank1.capitalization()
     }
 
     #[test]
     fn test_bank_update_rewards_determinism() {
+        solana_logger::setup();
+
         // The same reward should be distributed given same credits
         let expected_capitalization = do_test_bank_update_rewards_determinism();
         // Repeat somewhat large number of iterations to expose possible different behavior
@@ -6860,17 +6898,17 @@ mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         parent.lazy_rent_collection.store(true, Ordering::Relaxed);
 
-        let genesis_accounts: Vec<_> = parent.get_program_accounts(None);
+        let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
         assert!(
             genesis_accounts
                 .iter()
-                .any(|(pubkey, _)| *pubkey == mint_keypair.pubkey()),
+                .any(|(pubkey, _, _)| *pubkey == mint_keypair.pubkey()),
             "mint pubkey not found"
         );
         assert!(
             genesis_accounts
                 .iter()
-                .any(|(pubkey, _)| solana_sdk::sysvar::is_sysvar_id(pubkey)),
+                .any(|(pubkey, _, _)| solana_sdk::sysvar::is_sysvar_id(pubkey)),
             "no sysvars found"
         );
 
@@ -6888,11 +6926,11 @@ mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         bank1.squash();
         assert_eq!(
-            bank0.get_program_accounts(Some(&program_id)),
+            bank0.get_program_accounts(&program_id),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
-            bank1.get_program_accounts(Some(&program_id)),
+            bank1.get_program_accounts(&program_id),
             vec![(pubkey0, account0)]
         );
         assert_eq!(
@@ -6911,8 +6949,8 @@ mod tests {
 
         let bank3 = Arc::new(new_from_parent(&bank2));
         bank3.squash();
-        assert_eq!(bank1.get_program_accounts(Some(&program_id)).len(), 2);
-        assert_eq!(bank3.get_program_accounts(Some(&program_id)).len(), 2);
+        assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
+        assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
     }
 
     #[test]

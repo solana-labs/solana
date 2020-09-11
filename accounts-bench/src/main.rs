@@ -1,4 +1,4 @@
-use clap::{value_t, App, Arg};
+use clap::{crate_description, crate_name, value_t, App, Arg};
 use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
@@ -6,15 +6,16 @@ use solana_runtime::{
     accounts_index::Ancestors,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new("crate")
-        .about("about")
-        .version("version")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("num_slots")
                 .long("num_slots")
@@ -50,7 +51,8 @@ fn main() {
     let clean = matches.is_present("clean");
     println!("clean: {:?}", clean);
 
-    let path = PathBuf::from("farf/accounts-bench");
+    let path = PathBuf::from(env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_owned()))
+        .join("accounts-bench");
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
@@ -96,7 +98,7 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let hash = accounts.accounts_db.update_accounts_hash(0, &ancestors);
+            let hash = accounts.accounts_db.update_accounts_hash(0, &ancestors).0;
             time.stop();
             println!("hash: {} {}", hash, time);
             create_test_accounts(&accounts, &mut pubkeys, 1, 0);

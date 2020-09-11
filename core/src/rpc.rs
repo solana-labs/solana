@@ -1291,7 +1291,7 @@ fn get_filtered_program_accounts(
     program_id: &Pubkey,
     filters: Vec<RpcFilterType>,
 ) -> impl Iterator<Item = (Pubkey, Account)> {
-    bank.get_program_accounts(Some(&program_id))
+    bank.get_program_accounts(&program_id)
         .into_iter()
         .filter(move |(_, account)| {
             filters.iter().all(|filter_type| match filter_type {

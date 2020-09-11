@@ -18,7 +18,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
     let withdraw_authority_list = withdraw_authority();
 
     let clock = bank.clock();
-    let stake_accounts = bank.get_program_accounts(Some(&solana_stake_program::id()));
+    let stake_accounts = bank.get_program_accounts(&solana_stake_program::id());
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = StakeState::from(&account).unwrap_or_default();
         match stake_account {

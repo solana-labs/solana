@@ -202,10 +202,6 @@ impl GenesisConfig {
         self.native_instruction_processors.push((name, program_id));
     }
 
-    pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
-        self.rewards_pools.insert(pubkey, account);
-    }
-
     pub fn hashes_per_tick(&self) -> Option<u64> {
         self.poh_config.hashes_per_tick
     }
@@ -244,6 +240,8 @@ impl fmt::Display for GenesisConfig {
              {:?}\n\
              {:?}\n\
              Capitalization: {} SOL in {} accounts\n\
+             Native instruction processors: {:#?}\n\
+             Rewards pool: {:#?}\n\
              ",
             Utc.timestamp(self.creation_time, 0).to_rfc3339(),
             self.cluster_type,
@@ -272,6 +270,8 @@ impl fmt::Display for GenesisConfig {
                     .sum::<u64>()
             ),
             self.accounts.len(),
+            self.native_instruction_processors,
+            self.rewards_pools,
         )
     }
 }

@@ -3272,6 +3272,7 @@ dependencies = [
  "solana-measure",
  "solana-runtime",
  "solana-sdk 1.4.0",
+ "solana-version",
 ]
 
 [[package]]
