@@ -85,7 +85,7 @@ use crate::allocator_bump::BPFAllocator;
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_syscalls<'a>(
-    loader_id: &Pubkey,
+    loader_id: &'a Pubkey,
     vm: &mut EbpfVm<'a, BPFError>,
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
@@ -94,13 +94,14 @@ pub fn register_syscalls<'a>(
     // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
-    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
+    vm.register_syscall_with_context_ex("sol_panic_", Box::new(SyscallPanic { loader_id }))?;
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
             cost: compute_budget.log_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
+            loader_id,
         }),
     )?;
     vm.register_syscall_with_context_ex(
@@ -117,6 +118,7 @@ pub fn register_syscalls<'a>(
             Box::new(SyscallCreateProgramAddress {
                 cost: compute_budget.create_program_address_units,
                 compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
             }),
         )?;
 
@@ -128,6 +130,7 @@ pub fn register_syscalls<'a>(
             Box::new(SyscallProcessSolInstructionC {
                 callers_keyed_accounts,
                 invoke_context: invoke_context.clone(),
+                loader_id,
             }),
         )?;
         vm.register_syscall_with_context_ex(
@@ -135,6 +138,7 @@ pub fn register_syscalls<'a>(
             Box::new(SyscallProcessInstructionRust {
                 callers_keyed_accounts,
                 invoke_context: invoke_context.clone(),
+                loader_id,
             }),
         )?;
     }
@@ -155,7 +159,7 @@ pub fn register_syscalls<'a>(
 
 #[macro_export]
 macro_rules! translate {
-    ($vm_addr:expr, $len:expr, $regions:expr) => {
+    ($vm_addr:expr, $len:expr, $regions:expr, $loader_id: expr) => {
         translate_addr::<BPFError>(
             $vm_addr as u64,
             $len as usize,
@@ -168,8 +172,10 @@ macro_rules! translate {
 
 #[macro_export]
 macro_rules! translate_type_mut {
-    ($t:ty, $vm_addr:expr, $regions:expr) => {{
-        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+    ($t:ty, $vm_addr:expr, $regions:expr, $loader_id: expr) => {{
+        if $loader_id != &bpf_loader_deprecated::id()
+            && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
+        {
             Err(SyscallError::UnalignedPointer.into())
         } else {
             unsafe {
@@ -189,8 +195,8 @@ macro_rules! translate_type_mut {
 }
 #[macro_export]
 macro_rules! translate_type {
-    ($t:ty, $vm_addr:expr, $regions:expr) => {
-        match translate_type_mut!($t, $vm_addr, $regions) {
+    ($t:ty, $vm_addr:expr, $regions:expr, $loader_id: expr) => {
+        match translate_type_mut!($t, $vm_addr, $regions, $loader_id) {
             Ok(value) => Ok(&*value),
             Err(e) => Err(e),
         }
@@ -199,8 +205,10 @@ macro_rules! translate_type {
 
 #[macro_export]
 macro_rules! translate_slice_mut {
-    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {{
-        if ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0 {
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr, $loader_id: expr) => {{
+        if $loader_id != &bpf_loader_deprecated::id()
+            && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
+        {
             Err(SyscallError::UnalignedPointer.into())
         } else {
             match translate_addr::<BPFError>(
@@ -218,8 +226,8 @@ macro_rules! translate_slice_mut {
 }
 #[macro_export]
 macro_rules! translate_slice {
-    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
-        match translate_slice_mut!($t, $vm_addr, $len, $regions) {
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr, $loader_id: expr) => {
+        match translate_slice_mut!($t, $vm_addr, $len, $regions, $loader_id) {
             Ok(value) => Ok(&*value),
             Err(e) => Err(e),
         }
@@ -232,9 +240,10 @@ fn translate_string_and_do(
     addr: u64,
     len: u64,
     regions: &[MemoryRegion],
+    loader_id: &Pubkey,
     work: &mut dyn FnMut(&str) -> Result<u64, EbpfError<BPFError>>,
 ) -> Result<u64, EbpfError<BPFError>> {
-    let buf = translate_slice!(u8, addr, len, regions)?;
+    let buf = translate_slice!(u8, addr, len, regions, loader_id)?;
     let i = match buf.iter().position(|byte| *byte == 0) {
         Some(i) => i,
         None => len as usize,
@@ -263,27 +272,39 @@ pub fn syscall_abort(
 
 /// Panic syscall function, called when the BPF program calls 'sol_panic_()`
 /// Causes the BPF program to be halted immediately
-pub fn syscall_sol_panic(
-    file: u64,
-    len: u64,
-    line: u64,
-    column: u64,
-    _arg5: u64,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, EbpfError<BPFError>> {
-    translate_string_and_do(file, len, ro_regions, &mut |string: &str| {
-        Err(SyscallError::Panic(string.to_string(), line, column).into())
-    })
+/// Log a user's info message
+pub struct SyscallPanic<'a> {
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BPFError> for SyscallPanic<'a> {
+    fn call(
+        &mut self,
+        file: u64,
+        len: u64,
+        line: u64,
+        column: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        translate_string_and_do(
+            file,
+            len,
+            ro_regions,
+            &self.loader_id,
+            &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
+        )
+    }
 }
 
 /// Log a user's info message
-pub struct SyscallLog {
+pub struct SyscallLog<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
+    loader_id: &'a Pubkey,
 }
-impl SyscallObject<BPFError> for SyscallLog {
+impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
     fn call(
         &mut self,
         addr: u64,
@@ -300,10 +321,16 @@ impl SyscallObject<BPFError> for SyscallLog {
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         if logger.log_enabled() {
-            translate_string_and_do(addr, len, ro_regions, &mut |string: &str| {
-                logger.log(&format!("Program log: {}", string));
-                Ok(0)
-            })?;
+            translate_string_and_do(
+                addr,
+                len,
+                ro_regions,
+                &self.loader_id,
+                &mut |string: &str| {
+                    logger.log(&format!("Program log: {}", string));
+                    Ok(0)
+                },
+            )?;
         }
         Ok(0)
     }
@@ -384,11 +411,12 @@ impl SyscallObject<BPFError> for SyscallSolAllocFree {
 }
 
 /// Create a program address
-pub struct SyscallCreateProgramAddress {
+struct SyscallCreateProgramAddress<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
 }
-impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
+impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
     fn call(
         &mut self,
         seeds_addr: u64,
@@ -400,8 +428,9 @@ impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
         rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-
-        let untranslated_seeds = translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions)?;
+        // TODO need ref?
+        let untranslated_seeds =
+            translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions, self.loader_id)?;
         let seeds = untranslated_seeds
             .iter()
             .map(|untranslated_seed| {
@@ -409,11 +438,12 @@ impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
                     u8,
                     untranslated_seed.as_ptr(),
                     untranslated_seed.len(),
-                    ro_regions
+                    ro_regions,
+                    self.loader_id
                 )
             })
             .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-        let program_id = translate_type!(Pubkey, program_id_addr, ro_regions)?;
+        let program_id = translate_type!(Pubkey, program_id_addr, ro_regions, self.loader_id)?;
 
         let new_address = match Pubkey::create_program_address(&seeds, program_id)
             .map_err(SyscallError::BadSeeds)
@@ -421,7 +451,7 @@ impl SyscallObject<BPFError> for SyscallCreateProgramAddress {
             Ok(address) => address,
             Err(_) => return Ok(1),
         };
-        let address = translate_slice_mut!(u8, address_addr, 32, rw_regions)?;
+        let address = translate_slice_mut!(u8, address_addr, 32, rw_regions, self.loader_id)?;
         address.copy_from_slice(new_address.as_ref());
         Ok(0)
     }
@@ -468,6 +498,7 @@ trait SyscallProcessInstruction<'a> {
 pub struct SyscallProcessInstructionRust<'a> {
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
 }
 impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
@@ -483,15 +514,23 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
         addr: u64,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix = translate_type!(Instruction, addr, ro_regions)?;
+        let ix = translate_type!(Instruction, addr, ro_regions, self.loader_id)?;
         let accounts = translate_slice!(
             AccountMeta,
             ix.accounts.as_ptr(),
             ix.accounts.len(),
-            ro_regions
+            ro_regions,
+            self.loader_id
         )?
         .to_vec();
-        let data = translate_slice!(u8, ix.data.as_ptr(), ix.data.len(), ro_regions)?.to_vec();
+        let data = translate_slice!(
+            u8,
+            ix.data.as_ptr(),
+            ix.data.len(),
+            ro_regions,
+            self.loader_id
+        )?
+        .to_vec();
         Ok(Instruction {
             program_id: ix.program_id,
             accounts,
@@ -512,7 +551,8 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
                 AccountInfo,
                 account_infos_addr,
                 account_infos_len,
-                ro_regions
+                ro_regions,
+                self.loader_id
             )?
         } else {
             &[]
@@ -522,26 +562,56 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
             for account_info in account_infos.iter() {
-                let key = translate_type!(Pubkey, account_info.key as *const _, ro_regions)?;
+                let key = translate_type!(
+                    Pubkey,
+                    account_info.key as *const _,
+                    ro_regions,
+                    self.loader_id
+                )?;
                 if account_key == key {
                     let lamports = {
                         // Double translate lamports out of RefCell
-                        let ptr = translate_type!(u64, account_info.lamports.as_ptr(), ro_regions)?;
-                        translate_type_mut!(u64, *ptr, rw_regions)?
+                        let ptr = translate_type!(
+                            u64,
+                            account_info.lamports.as_ptr(),
+                            ro_regions,
+                            self.loader_id
+                        )?;
+                        translate_type_mut!(u64, *ptr, rw_regions, self.loader_id)?
                     };
-                    let owner =
-                        translate_type_mut!(Pubkey, account_info.owner as *const _, ro_regions)?;
+                    let owner = translate_type_mut!(
+                        Pubkey,
+                        account_info.owner as *const _,
+                        ro_regions,
+                        self.loader_id
+                    )?;
                     let (data, ref_to_len_in_vm, serialized_len_ptr) = {
                         // Double translate data out of RefCell
-                        let data = *translate_type!(&[u8], account_info.data.as_ptr(), ro_regions)?;
+                        let data = *translate_type!(
+                            &[u8],
+                            account_info.data.as_ptr(),
+                            ro_regions,
+                            self.loader_id
+                        )?;
                         let translated =
-                            translate!(account_info.data.as_ptr(), 8, ro_regions)? as *mut u64;
+                            translate!(account_info.data.as_ptr(), 8, ro_regions, self.loader_id)?
+                                as *mut u64;
                         let ref_to_len_in_vm = unsafe { &mut *translated.offset(1) };
                         let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
-                        let serialized_len_ptr =
-                            translate_type_mut!(u64, ref_of_len_in_input_buffer, rw_regions)?;
+                        let serialized_len_ptr = translate_type_mut!(
+                            u64,
+                            ref_of_len_in_input_buffer,
+                            rw_regions,
+                            self.loader_id
+                        )?;
                         (
-                            translate_slice_mut!(u8, data.as_ptr(), data.len(), rw_regions)?,
+                            translate_slice_mut!(
+                                u8,
+                                data.as_ptr(),
+                                data.len(),
+                                rw_regions,
+                                self.loader_id
+                            )?,
                             ref_to_len_in_vm,
                             serialized_len_ptr,
                         )
@@ -579,11 +649,21 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
     ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
-            let signers_seeds =
-                translate_slice!(&[&str], signers_seeds_addr, signers_seeds_len, ro_regions)?;
+            let signers_seeds = translate_slice!(
+                &[&str],
+                signers_seeds_addr,
+                signers_seeds_len,
+                ro_regions,
+                self.loader_id
+            )?;
             for signer_seeds in signers_seeds.iter() {
-                let untranslated_seeds =
-                    translate_slice!(&str, signer_seeds.as_ptr(), signer_seeds.len(), ro_regions)?;
+                let untranslated_seeds = translate_slice!(
+                    &str,
+                    signer_seeds.as_ptr(),
+                    signer_seeds.len(),
+                    ro_regions,
+                    self.loader_id
+                )?;
                 let seeds = untranslated_seeds
                     .iter()
                     .map(|untranslated_seed| {
@@ -591,7 +671,8 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
                             u8,
                             untranslated_seed.as_ptr(),
                             untranslated_seed.len(),
-                            ro_regions
+                            ro_regions,
+                            self.loader_id
                         )
                     })
                     .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
@@ -679,6 +760,7 @@ struct SolSignerSeedsC {
 pub struct SyscallProcessSolInstructionC<'a> {
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
 }
 impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
@@ -694,19 +776,28 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
         addr: u64,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix_c = translate_type!(SolInstruction, addr, ro_regions)?;
-        let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions)?;
+        let ix_c = translate_type!(SolInstruction, addr, ro_regions, self.loader_id)?;
+        let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions, self.loader_id)?;
         let meta_cs = translate_slice!(
             SolAccountMeta,
             ix_c.accounts_addr,
             ix_c.accounts_len,
-            ro_regions
+            ro_regions,
+            self.loader_id
         )?;
-        let data = translate_slice!(u8, ix_c.data_addr, ix_c.data_len, ro_regions)?.to_vec();
+        let data = translate_slice!(
+            u8,
+            ix_c.data_addr,
+            ix_c.data_len,
+            ro_regions,
+            self.loader_id
+        )?
+        .to_vec();
         let accounts = meta_cs
             .iter()
             .map(|meta_c| {
-                let pubkey = translate_type!(Pubkey, meta_c.pubkey_addr, ro_regions)?;
+                let pubkey =
+                    translate_type!(Pubkey, meta_c.pubkey_addr, ro_regions, self.loader_id)?;
                 Ok(AccountMeta {
                     pubkey: *pubkey,
                     is_signer: meta_c.is_signer,
@@ -734,29 +825,45 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
             SolAccountInfo,
             account_infos_addr,
             account_infos_len,
-            ro_regions
+            ro_regions,
+            self.loader_id
         )?;
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
             for account_info in account_infos.iter() {
-                let key = translate_type!(Pubkey, account_info.key_addr, ro_regions)?;
+                let key =
+                    translate_type!(Pubkey, account_info.key_addr, ro_regions, self.loader_id)?;
                 if account_key == key {
-                    let lamports =
-                        translate_type_mut!(u64, account_info.lamports_addr, rw_regions)?;
-                    let owner = translate_type_mut!(Pubkey, account_info.owner_addr, ro_regions)?;
+                    let lamports = translate_type_mut!(
+                        u64,
+                        account_info.lamports_addr,
+                        rw_regions,
+                        self.loader_id
+                    )?;
+                    let owner = translate_type_mut!(
+                        Pubkey,
+                        account_info.owner_addr,
+                        ro_regions,
+                        self.loader_id
+                    )?;
                     let data = translate_slice_mut!(
                         u8,
                         account_info.data_addr,
                         account_info.data_len,
-                        rw_regions
+                        rw_regions,
+                        self.loader_id
                     )?;
                     let ref_to_len_in_vm =
                         unsafe { &mut *(&account_info.data_len as *const u64 as u64 as *mut u64) };
                     let ref_of_len_in_input_buffer =
                         unsafe { (account_info.data_addr as *mut u8).offset(-8) };
-                    let serialized_len_ptr =
-                        translate_type_mut!(u64, ref_of_len_in_input_buffer, rw_regions)?;
+                    let serialized_len_ptr = translate_type_mut!(
+                        u64,
+                        ref_of_len_in_input_buffer,
+                        rw_regions,
+                        self.loader_id
+                    )?;
 
                     accounts.push(Rc::new(RefCell::new(Account {
                         lamports: *lamports,
@@ -793,7 +900,8 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
                 SolSignerSeedC,
                 signers_seeds_addr,
                 signers_seeds_len,
-                ro_regions
+                ro_regions,
+                self.loader_id
             )?;
             Ok(signers_seeds
                 .iter()
@@ -802,11 +910,14 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
                         SolSignerSeedC,
                         signer_seeds.addr,
                         signer_seeds.len,
-                        ro_regions
+                        ro_regions,
+                        self.loader_id
                     )?;
                     let seeds_bytes = seeds
                         .iter()
-                        .map(|seed| translate_slice!(u8, seed.addr, seed.len, ro_regions))
+                        .map(|seed| {
+                            translate_slice!(u8, seed.addr, seed.len, ro_regions, self.loader_id)
+                        })
                         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
                     Pubkey::create_program_address(&seeds_bytes, program_id)
                         .map_err(|err| SyscallError::BadSeeds(err).into())
@@ -1008,9 +1119,12 @@ mod tests {
         ];
         for (ok, start, length, value) in cases {
             if ok {
-                assert_eq!(translate!(start, length, &regions).unwrap(), value)
+                assert_eq!(
+                    translate!(start, length, &regions, &bpf_loader::id()).unwrap(),
+                    value
+                )
             } else {
-                assert!(translate!(start, length, &regions).is_err())
+                assert!(translate!(start, length, &regions, &bpf_loader::id()).is_err())
             }
         }
     }
@@ -1025,7 +1139,7 @@ mod tests {
             addr_vm: 100,
             len: std::mem::size_of::<Pubkey>() as u64,
         }];
-        let translated_pubkey = translate_type!(Pubkey, 100, &regions).unwrap();
+        let translated_pubkey = translate_type!(Pubkey, 100, &regions, &bpf_loader::id()).unwrap();
         assert_eq!(pubkey, *translated_pubkey);
 
         // Instruction
@@ -1040,12 +1154,11 @@ mod tests {
             addr_vm: 96,
             len: std::mem::size_of::<Instruction>() as u64,
         }];
-        let translated_instruction = translate_type!(Instruction, 96, &regions).unwrap();
+        let translated_instruction =
+            translate_type!(Instruction, 96, &regions, &bpf_loader::id()).unwrap();
         assert_eq!(instruction, *translated_instruction);
         regions[0].len = 1;
-        assert!(translate_type!(Instruction, 100, &regions).is_err());
-        regions[0].len = std::mem::size_of::<Instruction>() as u64 * 2;
-        assert!(translate_type!(Instruction, 100, &regions).is_err());
+        assert!(translate_type!(Instruction, 100, &regions, &bpf_loader::id()).is_err());
     }
 
     #[test]
@@ -1058,7 +1171,8 @@ mod tests {
             addr_vm: 100,
             len: data.len() as u64,
         }];
-        let translated_data = translate_slice!(u8, 100, data.len(), &regions).unwrap();
+        let translated_data =
+            translate_slice!(u8, 100, data.len(), &regions, &bpf_loader::id()).unwrap();
         assert_eq!(data, translated_data);
         data[0] = 10;
         assert_eq!(data, translated_data);
@@ -1071,7 +1185,8 @@ mod tests {
             addr_vm: 100,
             len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
         }];
-        let translated_data = translate_slice!(Pubkey, 100, data.len(), &regions).unwrap();
+        let translated_data =
+            translate_slice!(Pubkey, 100, data.len(), &regions, &bpf_loader::id()).unwrap();
         assert_eq!(data, translated_data);
         data[0] = Pubkey::new_rand(); // Both should point to same place
         assert_eq!(data, translated_data);
@@ -1088,10 +1203,16 @@ mod tests {
         }];
         assert_eq!(
             42,
-            translate_string_and_do(100, string.len() as u64, &regions, &mut |string: &str| {
-                assert_eq!(string, "Gaggablaghblagh!");
-                Ok(42)
-            })
+            translate_string_and_do(
+                100,
+                string.len() as u64,
+                &regions,
+                &bpf_loader::id(),
+                &mut |string: &str| {
+                    assert_eq!(string, "Gaggablaghblagh!");
+                    Ok(42)
+                }
+            )
             .unwrap()
         );
     }
@@ -1115,16 +1236,20 @@ mod tests {
             len: string.len() as u64,
         };
         let rw_region = MemoryRegion::default();
-        syscall_sol_panic(
-            100,
-            string.len() as u64,
-            42,
-            84,
-            0,
-            &[ro_region],
-            &[rw_region],
-        )
-        .unwrap();
+        let mut syscall_panic = SyscallPanic {
+            loader_id: &bpf_loader::id(),
+        };
+        syscall_panic
+            .call(
+                100,
+                string.len() as u64,
+                42,
+                84,
+                0,
+                &[ro_region],
+                &[rw_region],
+            )
+            .unwrap();
     }
 
     #[test]
@@ -1141,6 +1266,7 @@ mod tests {
             cost: 1,
             compute_meter,
             logger,
+            loader_id: &bpf_loader::id(),
         };
         let ro_regions = &[MemoryRegion {
             addr_host: addr,
@@ -1156,7 +1282,7 @@ mod tests {
         assert_eq!(
             Err(EbpfError::AccessViolation(
                 "programs/bpf_loader/src/syscalls.rs".to_string(),
-                238,
+                247,
                 100,
                 32,
                 "  regions: \n0x64-0x73".to_string()

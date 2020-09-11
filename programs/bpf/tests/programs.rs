@@ -53,6 +53,46 @@ fn load_bpf_program(
     load_program(bank_client, payer_keypair, loader_id, elf)
 }
 
+<<<<<<< HEAD
+=======
+fn run_program(
+    name: &str,
+    program_id: &Pubkey,
+    parameter_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+) -> Result<u64, InstructionError> {
+    let path = create_bpf_path(name);
+    let mut file = File::open(path).unwrap();
+
+    let mut program_account = Account::default();
+    file.read_to_end(&mut program_account.data).unwrap();
+
+    let loader_id = bpf_loader::id();
+    let mut invoke_context = MockInvokeContext::default();
+    let (mut vm, heap_region) = create_vm(
+        &loader_id,
+        &program_account.data,
+        parameter_accounts,
+        &mut invoke_context,
+    )
+    .unwrap();
+    let mut parameter_bytes = serialize_parameters(
+        &bpf_loader::id(),
+        program_id,
+        parameter_accounts,
+        &instruction_data,
+    )
+    .unwrap();
+    assert_eq!(
+        SUCCESS,
+        vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region.clone()])
+            .unwrap()
+    );
+    deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
+    Ok(vm.get_total_instruction_count())
+}
+
+>>>>>>> ae7b15f06... Gate pointer alignment enforcement (#12176)
 #[test]
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 fn test_program_bpf_sanity() {
