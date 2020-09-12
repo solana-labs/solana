@@ -220,14 +220,11 @@ export class Transaction {
       throw new Error('Transaction feePayer required');
     }
 
-    let numReadonlySignedAccounts = 0;
-    let numReadonlyUnsignedAccounts = 0;
-
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {
       instruction.keys.forEach(accountMeta => {
-        accountMetas.push(accountMeta);
+        accountMetas.push({...accountMeta});
       });
 
       const programId = instruction.programId.toString();
@@ -268,16 +265,17 @@ export class Transaction {
       }
     });
 
-    // Move payer to the front and append other unknown signers as read-only
+    // Move payer to the front and disallow unknown signers
     this.signatures.forEach((signature, signatureIndex) => {
       const isPayer = signatureIndex === 0;
       const uniqueIndex = uniqueMetas.findIndex(x => {
         return x.pubkey.equals(signature.publicKey);
       });
       if (uniqueIndex > -1) {
-        if (isPayer && uniqueIndex !== 0) {
+        if (isPayer) {
           const [payerMeta] = uniqueMetas.splice(uniqueIndex, 1);
           payerMeta.isSigner = true;
+          payerMeta.isWritable = true;
           uniqueMetas.unshift(payerMeta);
         } else {
           uniqueMetas[uniqueIndex].isSigner = true;
@@ -289,23 +287,22 @@ export class Transaction {
           isWritable: true,
         });
       } else {
-        uniqueMetas.push({
-          pubkey: signature.publicKey,
-          isSigner: true,
-          isWritable: false,
-        });
+        throw new Error(`unknown signer: ${signature.publicKey.toString()}`);
       }
     });
 
-    // Split out signing from non-signing keys and count read-only keys
+    let numRequiredSignatures = 0;
+    let numReadonlySignedAccounts = 0;
+    let numReadonlyUnsignedAccounts = 0;
+
+    // Split out signing from non-signing keys and count header values
     const signedKeys: string[] = [];
     const unsignedKeys: string[] = [];
     uniqueMetas.forEach(({pubkey, isSigner, isWritable}) => {
       if (isSigner) {
-        // Promote the first signer to writable as it is the fee payer
-        const first = signedKeys.length === 0;
         signedKeys.push(pubkey.toString());
-        if (!first && !isWritable) {
+        numRequiredSignatures += 1;
+        if (!isWritable) {
           numReadonlySignedAccounts += 1;
         }
       } else {
@@ -315,6 +312,10 @@ export class Transaction {
         }
       }
     });
+
+    if (numRequiredSignatures !== this.signatures.length) {
+      throw new Error('missing signer(s)');
+    }
 
     const accountKeys = signedKeys.concat(unsignedKeys);
     const instructions: CompiledInstruction[] = this.instructions.map(
@@ -337,7 +338,7 @@ export class Transaction {
 
     return new Message({
       header: {
-        numRequiredSignatures: signedKeys.length,
+        numRequiredSignatures,
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts,
       },
@@ -365,7 +366,18 @@ export class Transaction {
       throw new Error('No signers');
     }
 
-    this.signatures = signers.map(publicKey => ({signature: null, publicKey}));
+    const seen = new Set();
+    this.signatures = signers
+      .filter(publicKey => {
+        const key = publicKey.toString();
+        if (seen.has(key)) {
+          return false;
+        } else {
+          seen.add(key);
+          return true;
+        }
+      })
+      .map(publicKey => ({signature: null, publicKey}));
   }
 
   /**
@@ -385,10 +397,21 @@ export class Transaction {
       throw new Error('No signers');
     }
 
-    this.signatures = signers.map(signer => ({
-      signature: null,
-      publicKey: signer.publicKey,
-    }));
+    const seen = new Set();
+    this.signatures = signers
+      .filter(signer => {
+        const key = signer.publicKey.toString();
+        if (seen.has(key)) {
+          return false;
+        } else {
+          seen.add(key);
+          return true;
+        }
+      })
+      .map(signer => ({
+        signature: null,
+        publicKey: signer.publicKey,
+      }));
 
     this.partialSign(...signers);
   }
@@ -404,7 +427,14 @@ export class Transaction {
       throw new Error('No signers');
     }
 
-    const signData = this.serializeMessage();
+    const message = this.compileMessage();
+    this.signatures.sort(function (x, y) {
+      const xIndex = message.findSignerIndex(x.publicKey);
+      const yIndex = message.findSignerIndex(y.publicKey);
+      return xIndex < yIndex ? -1 : 1;
+    });
+
+    const signData = message.serialize();
     signers.forEach(signer => {
       const signature = nacl.sign.detached(signData, signer.secretKey);
       this.addSignature(signer.publicKey, signature);
@@ -422,7 +452,7 @@ export class Transaction {
       pubkey.equals(sigpair.publicKey),
     );
     if (index < 0) {
-      throw new Error(`Unknown signer: ${pubkey.toString()}`);
+      throw new Error(`unknown signer: ${pubkey.toString()}`);
     }
 
     this.signatures[index].signature = Buffer.from(signature);
