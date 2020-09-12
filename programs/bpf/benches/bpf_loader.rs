@@ -15,7 +15,7 @@ use solana_runtime::{
     loader_utils::load_program,
 };
 use solana_sdk::{
-    account::{create_keyed_readonly_accounts, Account, KeyedAccount},
+    account::{create_keyed_readonly_accounts, Account},
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
     entrypoint::SUCCESS,
@@ -92,12 +92,12 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
+    let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf("bench_alu").unwrap();
     let (mut vm, _) =
-        solana_bpf_loader_program::create_vm(&bpf_loader::id(), &elf, &[], &mut invoke_context)
-            .unwrap();
+        solana_bpf_loader_program::create_vm(&loader_id, &elf, &[], &mut invoke_context).unwrap();
 
     println!("Interpreted:");
     assert_eq!(
