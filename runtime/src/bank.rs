@@ -69,7 +69,7 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
@@ -564,18 +564,16 @@ impl Bank {
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
-            tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
+            tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
             entered_epoch_callback: parent.entered_epoch_callback.clone(),
             hard_forks: parent.hard_forks.clone(),
-            last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
+            last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
             rewards: None,
             skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
-            lazy_rent_collection: AtomicBool::new(
-                parent.lazy_rent_collection.load(Ordering::Relaxed),
-            ),
+            lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
         };
 
@@ -618,8 +616,7 @@ impl Bank {
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
         new.apply_feature_activations(true, true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
-        new.tick_height
-            .store(new.max_tick_height(), Ordering::Relaxed);
+        new.tick_height.store(new.max_tick_height(), Relaxed);
         new.freeze();
         new
     }
@@ -722,10 +719,10 @@ impl Bank {
             parent_hash: self.parent_hash,
             parent_slot: self.parent_slot,
             hard_forks: &*self.hard_forks,
-            transaction_count: self.transaction_count.load(Ordering::Relaxed),
-            tick_height: self.tick_height.load(Ordering::Relaxed),
-            signature_count: self.signature_count.load(Ordering::Relaxed),
-            capitalization: self.capitalization.load(Ordering::Relaxed),
+            transaction_count: self.transaction_count.load(Relaxed),
+            tick_height: self.tick_height.load(Relaxed),
+            signature_count: self.signature_count.load(Relaxed),
+            capitalization: self.capitalization.load(Relaxed),
             max_tick_height: self.max_tick_height,
             hashes_per_tick: self.hashes_per_tick,
             ticks_per_slot: self.ticks_per_slot,
@@ -737,16 +734,16 @@ impl Bank {
             epoch: self.epoch,
             block_height: self.block_height,
             collector_id: self.collector_id,
-            collector_fees: self.collector_fees.load(Ordering::Relaxed),
+            collector_fees: self.collector_fees.load(Relaxed),
             fee_calculator: self.fee_calculator.clone(),
             fee_rate_governor: self.fee_rate_governor.clone(),
-            collected_rent: self.collected_rent.load(Ordering::Relaxed),
+            collected_rent: self.collected_rent.load(Relaxed),
             rent_collector: self.rent_collector.clone(),
             epoch_schedule: self.epoch_schedule,
             inflation: *self.inflation.read().unwrap(),
             stakes: &self.stakes,
             epoch_stakes: &self.epoch_stakes,
-            is_delta: self.is_delta.load(Ordering::Relaxed),
+            is_delta: self.is_delta.load(Relaxed),
         }
     }
 
@@ -972,7 +969,7 @@ impl Bank {
         assert!(validator_rewards >= validator_rewards_paid);
 
         self.capitalization
-            .fetch_add(validator_rewards_paid, Ordering::Relaxed);
+            .fetch_add(validator_rewards_paid, Relaxed);
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
@@ -1088,13 +1085,13 @@ impl Bank {
     }
 
     fn collect_fees(&self) {
-        let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
+        let collector_fees = self.collector_fees.load(Relaxed) as u64;
 
         if collector_fees != 0 {
             let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
             self.deposit(&self.collector_id, unburned);
-            self.capitalization.fetch_sub(burned, Ordering::Relaxed);
+            self.capitalization.fetch_sub(burned, Relaxed);
         }
     }
 
@@ -1196,8 +1193,7 @@ impl Bank {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, account);
-            self.capitalization
-                .fetch_add(account.lamports, Ordering::Relaxed);
+            self.capitalization.fetch_add(account.lamports, Relaxed);
         }
 
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
@@ -1255,8 +1251,7 @@ impl Bank {
                 // malicious account is pre-occupying at program_id
                 // forcibly burn and purge it
 
-                self.capitalization
-                    .fetch_sub(account.lamports, Ordering::Relaxed);
+                self.capitalization.fetch_sub(account.lamports, Relaxed);
 
                 // Resetting account balance to 0 is needed to really purge from AccountsDB and
                 // flush the Stakes cache
@@ -1405,7 +1400,7 @@ impl Bank {
         // not attempt to freeze after observing the last tick and before blockhash is
         // updated
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
+        let current_tick_height = self.tick_height.fetch_add(1, Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
             if self.fix_recent_blockhashes_sysvar_delay() {
@@ -1980,7 +1975,7 @@ impl Bank {
             })
             .collect();
 
-        self.collector_fees.fetch_add(fees, Ordering::Relaxed);
+        self.collector_fees.fetch_add(fees, Relaxed);
         results
     }
 
@@ -2008,7 +2003,7 @@ impl Bank {
             .iter()
             .any(|(res, _hash_age_kind)| Self::can_commit(res))
         {
-            self.is_delta.store(true, Ordering::Relaxed);
+            self.is_delta.store(true, Relaxed);
         }
 
         let mut write_time = Measure::start("write_time");
@@ -2106,15 +2101,14 @@ impl Bank {
     }
 
     fn distribute_rent(&self) {
-        let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
+        let total_rent_collected = self.collected_rent.load(Relaxed);
 
         let (burned_portion, rent_to_be_distributed) = self
             .rent_collector
             .rent
             .calculate_burn(total_rent_collected);
 
-        self.capitalization
-            .fetch_sub(burned_portion, Ordering::Relaxed);
+        self.capitalization.fetch_sub(burned_portion, Relaxed);
 
         if rent_to_be_distributed == 0 {
             return;
@@ -2124,7 +2118,7 @@ impl Bank {
             self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
         if leftover != 0 {
             warn!("There was leftover from rent distribution: {}", leftover);
-            self.capitalization.fetch_sub(leftover, Ordering::Relaxed);
+            self.capitalization.fetch_sub(leftover, Relaxed);
         }
     }
 
@@ -2145,14 +2139,12 @@ impl Bank {
             collected_rent += acc.2;
         }
 
-        self.collected_rent
-            .fetch_add(collected_rent, Ordering::Relaxed);
+        self.collected_rent.fetch_add(collected_rent, Relaxed);
     }
 
     fn run_incinerator(&self) {
         if let Some((account, _)) = self.get_account_modified_since_parent(&incinerator::id()) {
-            self.capitalization
-                .fetch_sub(account.lamports, Ordering::Relaxed);
+            self.capitalization.fetch_sub(account.lamports, Relaxed);
             self.store_account(&incinerator::id(), &Account::default());
         }
     }
@@ -2171,7 +2163,7 @@ impl Bank {
     }
 
     fn enable_eager_rent_collection(&self) -> bool {
-        if self.lazy_rent_collection.load(Ordering::Relaxed) {
+        if self.lazy_rent_collection.load(Relaxed) {
             return false;
         }
 
@@ -2217,7 +2209,7 @@ impl Bank {
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
         }
-        self.collected_rent.fetch_add(rent, Ordering::Relaxed);
+        self.collected_rent.fetch_add(rent, Relaxed);
 
         datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
@@ -2629,19 +2621,14 @@ impl Bank {
     fn add_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
         if let Some(old_account) = self.get_account(&pubkey) {
             if new_account.lamports > old_account.lamports {
-                self.capitalization.fetch_add(
-                    new_account.lamports - old_account.lamports,
-                    Ordering::Relaxed,
-                );
+                self.capitalization
+                    .fetch_add(new_account.lamports - old_account.lamports, Relaxed);
             } else {
-                self.capitalization.fetch_sub(
-                    old_account.lamports - new_account.lamports,
-                    Ordering::Relaxed,
-                );
+                self.capitalization
+                    .fetch_sub(old_account.lamports - new_account.lamports, Relaxed);
             }
         } else {
-            self.capitalization
-                .fetch_add(new_account.lamports, Ordering::Relaxed);
+            self.capitalization.fetch_add(new_account.lamports, Relaxed);
         }
 
         self.store_account(pubkey, new_account);
@@ -2688,7 +2675,7 @@ impl Bank {
             self.collected_rent.fetch_add(
                 self.rent_collector
                     .collect_from_existing_account(pubkey, &mut account),
-                Ordering::Relaxed,
+                Relaxed,
             );
         }
 
@@ -2806,21 +2793,19 @@ impl Bank {
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.transaction_count.load(Ordering::Relaxed)
+        self.transaction_count.load(Relaxed)
     }
 
     fn increment_transaction_count(&self, tx_count: u64) {
-        self.transaction_count
-            .fetch_add(tx_count, Ordering::Relaxed);
+        self.transaction_count.fetch_add(tx_count, Relaxed);
     }
 
     pub fn signature_count(&self) -> u64 {
-        self.signature_count.load(Ordering::Relaxed)
+        self.signature_count.load(Relaxed)
     }
 
     fn increment_signature_count(&self, signature_count: u64) {
-        self.signature_count
-            .fetch_add(signature_count, Ordering::Relaxed);
+        self.signature_count.fetch_add(signature_count, Relaxed);
     }
 
     pub fn get_signature_status_processed_since_parent(
@@ -2951,7 +2936,7 @@ impl Bank {
     pub fn set_capitalization(&self) -> u64 {
         let old = self.capitalization();
         self.capitalization
-            .store(self.calculate_capitalization(), Ordering::Relaxed);
+            .store(self.calculate_capitalization(), Relaxed);
         old
     }
 
@@ -2995,7 +2980,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.tick_height.load(Ordering::Relaxed)
+        self.tick_height.load(Relaxed)
     }
 
     /// Return the inflation parameters of the Bank
@@ -3005,7 +2990,7 @@ impl Bank {
 
     /// Return the total capitalization of the Bank
     pub fn capitalization(&self) -> u64 {
-        self.capitalization.load(Ordering::Relaxed)
+        self.capitalization.load(Relaxed)
     }
 
     /// Return this bank's max_tick_height
@@ -3165,7 +3150,7 @@ impl Bank {
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.is_delta.load(Ordering::Relaxed)
+        !self.is_delta.load(Relaxed)
     }
 
     pub fn add_builtin_program(
@@ -3218,13 +3203,10 @@ impl Bank {
         assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
         assert_eq!(self.parent_hash, dbank.parent_hash);
         assert_eq!(
-            self.tick_height.load(Ordering::Relaxed),
-            dbank.tick_height.load(Ordering::Relaxed)
+            self.tick_height.load(Relaxed),
+            dbank.tick_height.load(Relaxed)
         );
-        assert_eq!(
-            self.is_delta.load(Ordering::Relaxed),
-            dbank.is_delta.load(Ordering::Relaxed)
-        );
+        assert_eq!(self.is_delta.load(Relaxed), dbank.is_delta.load(Relaxed));
 
         {
             let bh = self.hash.read().unwrap();
@@ -3378,7 +3360,7 @@ impl Bank {
                 }
             } else {
                 self.capitalization
-                    .fetch_add(native_mint_account.lamports, Ordering::Relaxed);
+                    .fetch_add(native_mint_account.lamports, Relaxed);
                 true
             };
 
@@ -3409,7 +3391,7 @@ impl Bank {
                         reward_account.lamports = 0;
                         self.store_account(&reward_pubkey, &reward_account);
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
-                        self.capitalization.fetch_add(1, Ordering::Relaxed);
+                        self.capitalization.fetch_add(1, Relaxed);
                         info!(
                             "purged rewards pool accont: {}, new capitalization: {}",
                             reward_pubkey,
@@ -3452,7 +3434,7 @@ impl Bank {
 impl Drop for Bank {
     fn drop(&mut self) {
         // For root slots this is a noop
-        if !self.skip_drop.load(Ordering::Relaxed) {
+        if !self.skip_drop.load(Relaxed) {
             self.rc.accounts.purge_slot(self.slot());
         }
     }
@@ -3506,7 +3488,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{result, time::Duration};
+    use std::{result, sync::atomic::Ordering::SeqCst, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -4086,14 +4068,11 @@ mod tests {
         assert_eq!(bank.get_balance(&payee.pubkey()), 159);
         total_rent_deducted += 70 + 21;
 
-        let previous_capitalization = bank.capitalization.load(Ordering::Relaxed);
+        let previous_capitalization = bank.capitalization.load(Relaxed);
 
         bank.freeze();
 
-        assert_eq!(
-            bank.collected_rent.load(Ordering::Relaxed),
-            total_rent_deducted
-        );
+        assert_eq!(bank.collected_rent.load(Relaxed), total_rent_deducted);
 
         let burned_portion =
             total_rent_deducted * u64::from(bank.rent_collector.rent.burn_percent) / 100;
@@ -4142,7 +4121,7 @@ mod tests {
             validator_3_portion + 42
         );
 
-        let current_capitalization = bank.capitalization.load(Ordering::Relaxed);
+        let current_capitalization = bank.capitalization.load(Relaxed);
 
         assert_eq!(
             previous_capitalization - current_capitalization,
@@ -4209,9 +4188,7 @@ mod tests {
         let root_bank = Bank::new(&genesis_config);
         // until we completely transition to the eager rent collection,
         // we must ensure lazy rent collection doens't get broken!
-        root_bank
-            .lazy_rent_collection
-            .store(true, Ordering::Relaxed);
+        root_bank.lazy_rent_collection.store(true, Relaxed);
         let root_bank = Arc::new(root_bank);
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);
 
@@ -4360,7 +4337,7 @@ mod tests {
         assert_eq!(bank.get_balance(&keypairs[13].pubkey()), 14);
 
         // Bank's collected rent should be sum of rent collected from all accounts
-        assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
+        assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
     }
 
     #[test]
@@ -4983,7 +4960,7 @@ mod tests {
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), some_slot));
 
-        assert_eq!(bank.collected_rent.load(Ordering::Relaxed), 0);
+        assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert_eq!(
             bank.get_account(&rent_due_pubkey).unwrap().lamports,
             little_lamports
@@ -5005,10 +4982,7 @@ mod tests {
         bank.collect_rent_in_partition((0, 0, 1)); // all range
 
         // unrelated 1-lamport account exists
-        assert_eq!(
-            bank.collected_rent.load(Ordering::Relaxed),
-            rent_collected + 1
-        );
+        assert_eq!(bank.collected_rent.load(Relaxed), rent_collected + 1);
         assert_eq!(
             bank.get_account(&rent_due_pubkey).unwrap().lamports,
             little_lamports - rent_collected
@@ -5127,7 +5101,7 @@ mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+        bank.lazy_rent_collection.store(true, Relaxed);
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
         assert_eq!(bank.rewards, None);
@@ -5241,7 +5215,7 @@ mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+        bank.lazy_rent_collection.store(true, Relaxed);
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
         assert_eq!(bank.rewards, None);
@@ -6623,23 +6597,23 @@ mod tests {
             .initiate_entered_epoch_callback({
                 let callback_count = callback_count.clone();
                 Box::new(move |_, _| {
-                    callback_count.fetch_add(1, Ordering::SeqCst);
+                    callback_count.fetch_add(1, SeqCst);
                 })
             });
 
         // set_entered_eepoc_callbak fires the initial call
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(callback_count.load(SeqCst), 1);
 
         let _bank1 =
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
         // No callback called while within epoch 0
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(callback_count.load(SeqCst), 1);
 
         let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
         // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
+        assert_eq!(callback_count.load(SeqCst), 2);
 
-        callback_count.store(0, Ordering::SeqCst);
+        callback_count.store(0, SeqCst);
         let _bank1 = Bank::new_from_parent(
             &bank0,
             &Pubkey::default(),
@@ -6648,7 +6622,7 @@ mod tests {
         // If the new bank jumps ahead multiple epochs the callback is still only called once.
         // This was done to keep the callback implementation simpler as new bank will never jump
         // cross multiple epochs in a real deployment.
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(callback_count.load(SeqCst), 1);
     }
 
     #[test]
@@ -6659,15 +6633,15 @@ mod tests {
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
+        assert_eq!(bank.is_delta.load(Relaxed), true);
 
         let bank1 = new_from_parent(&bank);
         let hash1 = bank1.hash_internal_state();
-        assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
+        assert_eq!(bank1.is_delta.load(Relaxed), false);
         assert_ne!(hash1, bank.hash());
         // ticks don't make a bank into a delta or change its state unless a block boundary is crossed
         bank1.register_tick(&Hash::default());
-        assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
+        assert_eq!(bank1.is_delta.load(Relaxed), false);
         assert_eq!(bank1.hash_internal_state(), hash1);
     }
 
@@ -6861,7 +6835,7 @@ mod tests {
     fn test_is_delta_with_no_committables() {
         let (genesis_config, mint_keypair) = create_genesis_config(8000);
         let bank = Bank::new(&genesis_config);
-        bank.is_delta.store(false, Ordering::Relaxed);
+        bank.is_delta.store(false, Relaxed);
 
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -6877,7 +6851,7 @@ mod tests {
         );
 
         // Check the bank is_delta is still false
-        assert!(!bank.is_delta.load(Ordering::Relaxed));
+        assert!(!bank.is_delta.load(Relaxed));
 
         // Should fail with InstructionError, but InstructionErrors are committable,
         // so is_delta should be true
@@ -6889,14 +6863,14 @@ mod tests {
             ))
         );
 
-        assert!(bank.is_delta.load(Ordering::Relaxed));
+        assert!(bank.is_delta.load(Relaxed));
     }
 
     #[test]
     fn test_bank_get_program_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let parent = Arc::new(Bank::new(&genesis_config));
-        parent.lazy_rent_collection.store(true, Ordering::Relaxed);
+        parent.lazy_rent_collection.store(true, Relaxed);
 
         let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
         assert!(
@@ -7101,10 +7075,8 @@ mod tests {
 
         let ((vote_id, vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
-        bank.capitalization.fetch_add(
-            vote_account.lamports + stake_account.lamports,
-            Ordering::Relaxed,
-        );
+        bank.capitalization
+            .fetch_add(vote_account.lamports + stake_account.lamports, Relaxed);
         bank.store_account(&vote_id, &vote_account);
         bank.store_account(&stake_id, &stake_account);
         assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
@@ -7162,12 +7134,12 @@ mod tests {
     fn test_bank_inherit_last_vote_sync() {
         let (genesis_config, _) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
-        let last_ts = bank0.last_vote_sync.load(Ordering::Relaxed);
+        let last_ts = bank0.last_vote_sync.load(Relaxed);
         assert_eq!(last_ts, 0);
-        bank0.last_vote_sync.store(1, Ordering::Relaxed);
+        bank0.last_vote_sync.store(1, Relaxed);
         let bank1 =
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
-        let last_ts = bank1.last_vote_sync.load(Ordering::Relaxed);
+        let last_ts = bank1.last_vote_sync.load(Relaxed);
         assert_eq!(last_ts, 1);
     }
 
@@ -8270,7 +8242,7 @@ mod tests {
         let pubkey2 = Pubkey::new_rand();
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
-        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+        bank.lazy_rent_collection.store(true, Relaxed);
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
 
@@ -8627,7 +8599,7 @@ mod tests {
         let bank0 = Bank::new(&genesis_config);
         // because capitalization has been reset with bogus capitalization calculation allowing overflows,
         // deliberately substract 1 lamport to simulate it
-        bank0.capitalization.fetch_sub(1, Ordering::Relaxed);
+        bank0.capitalization.fetch_sub(1, Relaxed);
         let bank0 = Arc::new(bank0);
         assert_eq!(bank0.get_balance(&reward_pubkey), u64::MAX,);
 
