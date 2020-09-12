@@ -79,6 +79,7 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
+            "sanity",
             "sysval",
         ];
         for program in rust_programs.iter() {
