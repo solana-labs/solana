@@ -501,23 +501,17 @@ export class Transaction {
    * Serialize the Transaction in the wire format.
    */
   serialize(config?: SerializeConfig): Buffer {
-    const {signatures} = this;
-
     const {requireAllSignatures, verifySignatures} = Object.assign(
       {requireAllSignatures: true, verifySignatures: true},
       config,
     );
-
-    if (requireAllSignatures && signatures.length === 0) {
-      throw new Error('Transaction has not been signed');
-    }
 
     const signData = this.serializeMessage();
     if (
       verifySignatures &&
       !this._verifySignatures(signData, requireAllSignatures)
     ) {
-      throw new Error('Transaction has not been signed correctly');
+      throw new Error('Signature verification failed');
     }
 
     return this._serialize(signData);
