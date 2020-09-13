@@ -781,6 +781,24 @@ impl AccountsDB {
         }
     }
 
+    // Removes the accounts in the input `reclaims` from the tracked "count" of
+    // their corresponding  storage entries. Note this does not actually free
+    // the memory from the storage entries until all the storage entries for
+    // a given slot `S` are empty, at which point `process_dead_slots` will
+    // remove all the storage entries for `S`.
+    //
+    /// # Arguments
+    /// * `reclaims` - The accounts to remove from storage entries' "count"
+    /// * `expected_slot` - A correctness assertion. If this is equal to `Some(S)`,
+    /// then the function will check that the only slot being cleaned up in `reclaims`
+    /// is the slot == `S`. This is true for instance when `handle_reclaims` is called
+    /// from store or slot shrinking, as those should only touch the slot they are
+    /// currently storing to or shrinking.
+    /// * `is_cleanup_possible` - A correctness assertion. If this is equal to
+    /// `false`, the function will check that no slots are cleaned up/removed via
+    /// `process_dead_slots`. For instance, on store, no slots should be cleaned up,
+    /// but during the background clean accounts purges accounts from old rooted slots,
+    /// so outdated slots may be removed.
     fn handle_reclaims(
         &self,
         reclaims: SlotSlice<AccountInfo>,
