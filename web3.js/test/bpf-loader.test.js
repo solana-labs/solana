@@ -196,25 +196,4 @@ describe('load BPF Rust program', () => {
 
     expect(logs.length).toEqual(0);
   });
-
-  test('simulate transaction with bad signer', async () => {
-    const simulatedTransaction = new Transaction().add({
-      keys: [
-        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
-      ],
-      programId: program.publicKey,
-    });
-
-    const {err, logs} = (
-      await connection.simulateTransaction(simulatedTransaction, [program])
-    ).value;
-    expect(err).toEqual('SanitizeFailure');
-
-    if (logs === null) {
-      expect(logs).not.toBeNull();
-      return;
-    }
-
-    expect(logs.length).toEqual(0);
-  });
 });
