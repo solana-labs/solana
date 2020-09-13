@@ -30,11 +30,21 @@ pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct CrdsFilter {
     pub filter: Bloom<Hash>,
     mask: u64,
     mask_bits: u32,
+}
+
+impl Default for CrdsFilter {
+    fn default() -> Self {
+        CrdsFilter {
+            filter: Bloom::default(),
+            mask: !0u64,
+            mask_bits: 0u32,
+        }
+    }
 }
 
 impl solana_sdk::sanitize::Sanitize for CrdsFilter {
@@ -562,6 +572,20 @@ mod test {
             rng.fill(&mut buf);
             let hash = Hash::new(&buf);
             assert_eq!(CrdsFilter::hash_as_u64(&hash), hash_as_u64_bitops(&hash));
+        }
+    }
+
+    #[test]
+    fn test_crds_filter_default() {
+        let filter = CrdsFilter::default();
+        let mask = CrdsFilter::compute_mask(0, filter.mask_bits);
+        assert_eq!(filter.mask, mask);
+        let mut rng = thread_rng();
+        for _ in 0..10 {
+            let mut buf = [0u8; HASH_BYTES];
+            rng.fill(&mut buf);
+            let hash = Hash::new(&buf);
+            assert!(filter.test_mask(&hash));
         }
     }
 
