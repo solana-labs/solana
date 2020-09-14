@@ -1003,7 +1003,7 @@ if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
   fi
 fi
 
-if [[ -n "$extraPrimordialStakes" ]]; then
+if [[ $extraPrimordialStakes -gt 0 ]]; then
   # Extra primoridial stakes require that all of the validators start at
   # the same time. Force async init and wait for supermajority here.
   waitForNodeInit=false
