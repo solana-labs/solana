@@ -1,3 +1,4 @@
+use log::*;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
@@ -158,8 +159,14 @@ impl AppendVec {
         data.flush().unwrap();
         //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data) };
-        let map =
-            map.unwrap_or_else(|e| panic!("failed to map the data file (size: {}): {}", size, e));
+        let map = map.unwrap_or_else(|e| {
+            error!(
+                "Failed to map the data file (size: {}): {}.\n
+                    Please increase sysctl vm.max_map_count or equivalent for your platform.",
+                size, e
+            );
+            std::process::exit(1);
+        });
 
         AppendVec {
             path: file.to_path_buf(),
@@ -174,7 +181,14 @@ impl AppendVec {
 
     #[allow(clippy::mutex_atomic)]
     pub(crate) fn new_empty_map(current_len: usize) -> Self {
-        let map = MmapMut::map_anon(1).expect("failed to map the data file");
+        let map = MmapMut::map_anon(1).unwrap_or_else(|e| {
+            error!(
+                "Failed to create VM map for snapshot. {:?}\n
+                        Please increase sysctl vm.max_map_count or equivalent for your platform.",
+                e
+            );
+            std::process::exit(1);
+        });
 
         AppendVec {
             path: PathBuf::from(String::default()),
@@ -483,7 +497,6 @@ pub mod tests {
     use super::test_utils::*;
     use super::*;
     use assert_matches::assert_matches;
-    use log::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::duration_as_ms;
     use std::time::Instant;
