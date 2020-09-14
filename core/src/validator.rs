@@ -3,6 +3,7 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
+    sample_performance_service::{SamplePerformanceService},
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
@@ -169,6 +170,7 @@ pub struct Validator {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_service: Option<CacheBlockTimeService>,
+    sample_performance_service: Option<SamplePerformanceService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -278,6 +280,11 @@ impl Validator {
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        let sample_performance_service = Some(SamplePerformanceService::new(
+            &bank_forks,
+            &exit,
+        ));
 
         info!("Starting validator with working bank slot {}", bank.slot());
         {
@@ -554,6 +561,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             cache_block_time_service,
+            sample_performance_service,
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -620,6 +628,10 @@ impl Validator {
 
         if let Some(cache_block_time_service) = self.cache_block_time_service {
             cache_block_time_service.join()?;
+        }
+
+        if let Some(sample_performance_service) = self.sample_performance_service {
+            sample_performance_service.join()?;
         }
 
         if let Some(s) = self.snapshot_packager_service {
