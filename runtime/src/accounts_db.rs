@@ -558,7 +558,7 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        self.handle_reclaims(&reclaims, None, true);
+        self.handle_reclaims(&reclaims, None, false);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
@@ -755,7 +755,7 @@ impl AccountsDB {
 
         self.handle_dead_keys(dead_keys);
 
-        self.handle_reclaims(&reclaims, None, true);
+        self.handle_reclaims(&reclaims, None, false);
 
         reclaims_time.stop();
         datapoint_info!(
@@ -789,12 +789,12 @@ impl AccountsDB {
     //
     /// # Arguments
     /// * `reclaims` - The accounts to remove from storage entries' "count"
-    /// * `expected_slot` - A correctness assertion. If this is equal to `Some(S)`,
+    /// * `expected_single_dead_slot` - A correctness assertion. If this is equal to `Some(S)`,
     /// then the function will check that the only slot being cleaned up in `reclaims`
     /// is the slot == `S`. This is true for instance when `handle_reclaims` is called
     /// from store or slot shrinking, as those should only touch the slot they are
     /// currently storing to or shrinking.
-    /// * `is_cleanup_possible` - A correctness assertion. If this is equal to
+    /// * `no_dead_slot` - A correctness assertion. If this is equal to
     /// `false`, the function will check that no slots are cleaned up/removed via
     /// `process_dead_slots`. For instance, on store, no slots should be cleaned up,
     /// but during the background clean accounts purges accounts from old rooted slots,
@@ -802,26 +802,28 @@ impl AccountsDB {
     fn handle_reclaims(
         &self,
         reclaims: SlotSlice<AccountInfo>,
-        expected_slot: Option<Slot>,
-        is_cleanup_possible: bool,
+        expected_single_dead_slot: Option<Slot>,
+        no_dead_slot: bool,
     ) {
         if !reclaims.is_empty() {
-            let dead_slots = self.remove_dead_accounts(reclaims, expected_slot);
-            if !is_cleanup_possible {
+            let dead_slots = self.remove_dead_accounts(reclaims, expected_single_dead_slot);
+            if no_dead_slot {
                 assert!(dead_slots.is_empty());
-            } else if let Some(expected_slot) = expected_slot {
+            } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
                 assert!(dead_slots.len() <= 1);
                 if dead_slots.len() == 1 {
-                    assert!(dead_slots.contains(&expected_slot));
+                    assert!(dead_slots.contains(&expected_single_dead_slot));
                 }
             }
-            self.process_dead_slots(&dead_slots);
+            if !dead_slots.is_empty() {
+                self.process_dead_slots(&dead_slots);
+            }
         }
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
     // supported pipelines in AccountsDb
-    fn process_dead_slots<'a>(&'a self, dead_slots: &HashSet<Slot>) {
+    fn process_dead_slots(&self, dead_slots: &HashSet<Slot>) {
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
         self.clean_dead_slots(&dead_slots);
         clean_dead_slots.stop();
@@ -1313,7 +1315,7 @@ impl AccountsDB {
         self.purge_slots(&slots);
     }
 
-    pub fn purge_slots(&self, slots: &HashSet<Slot>) {
+    fn purge_slots(&self, slots: &HashSet<Slot>) {
         //add_root should be called first
         let accounts_index = self.accounts_index.read().unwrap();
         let non_roots: Vec<_> = slots
@@ -1399,7 +1401,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims(&reclaims, Some(remove_slot), true);
+        self.handle_reclaims(&reclaims, Some(remove_slot), false);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -2058,56 +2060,54 @@ impl AccountsDB {
         dead_slots
     }
 
-    pub fn clean_dead_slots(&self, dead_slots: &HashSet<Slot>) {
-        if !dead_slots.is_empty() {
-            {
-                let mut measure = Measure::start("clean_dead_slots-ms");
-                let storage = self.storage.read().unwrap();
-                let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
-                for slot in dead_slots.iter() {
-                    if let Some(slot_storage) = storage.0.get(slot) {
-                        for store in slot_storage.values() {
-                            stores.push(store.clone());
-                        }
+    fn clean_dead_slots(&self, dead_slots: &HashSet<Slot>) {
+        {
+            let mut measure = Measure::start("clean_dead_slots-ms");
+            let storage = self.storage.read().unwrap();
+            let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
+            for slot in dead_slots.iter() {
+                if let Some(slot_storage) = storage.0.get(slot) {
+                    for store in slot_storage.values() {
+                        stores.push(store.clone());
                     }
                 }
-                drop(storage);
-                datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
-                let slot_pubkeys: HashSet<(Slot, Pubkey)> = {
-                    self.thread_pool_clean.install(|| {
-                        stores
-                            .into_par_iter()
-                            .map(|store| {
-                                let accounts = store.accounts.accounts(0);
-                                accounts
-                                    .into_iter()
-                                    .map(|account| (store.slot, account.meta.pubkey))
-                                    .collect::<HashSet<(Slot, Pubkey)>>()
-                            })
-                            .reduce(HashSet::new, |mut reduced, store_pubkeys| {
-                                reduced.extend(store_pubkeys);
-                                reduced
-                            })
-                    })
-                };
-                let index = self.accounts_index.read().unwrap();
-                for (_slot, pubkey) in slot_pubkeys {
-                    index.unref_from_storage(&pubkey);
-                }
-                drop(index);
-                measure.stop();
-                inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
-
-                let mut index = self.accounts_index.write().unwrap();
-                for slot in dead_slots.iter() {
-                    index.clean_dead_slot(*slot);
-                }
             }
-            {
-                let mut bank_hashes = self.bank_hashes.write().unwrap();
-                for slot in dead_slots.iter() {
-                    bank_hashes.remove(slot);
-                }
+            drop(storage);
+            datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
+            let slot_pubkeys: HashSet<(Slot, Pubkey)> = {
+                self.thread_pool_clean.install(|| {
+                    stores
+                        .into_par_iter()
+                        .map(|store| {
+                            let accounts = store.accounts.accounts(0);
+                            accounts
+                                .into_iter()
+                                .map(|account| (store.slot, account.meta.pubkey))
+                                .collect::<HashSet<(Slot, Pubkey)>>()
+                        })
+                        .reduce(HashSet::new, |mut reduced, store_pubkeys| {
+                            reduced.extend(store_pubkeys);
+                            reduced
+                        })
+                })
+            };
+            let index = self.accounts_index.read().unwrap();
+            for (_slot, pubkey) in slot_pubkeys {
+                index.unref_from_storage(&pubkey);
+            }
+            drop(index);
+            measure.stop();
+            inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
+
+            let mut index = self.accounts_index.write().unwrap();
+            for slot in dead_slots.iter() {
+                index.clean_dead_slot(*slot);
+            }
+        }
+        {
+            let mut bank_hashes = self.bank_hashes.write().unwrap();
+            for slot in dead_slots.iter() {
+                bank_hashes.remove(slot);
             }
         }
     }
@@ -2209,8 +2209,8 @@ impl AccountsDB {
         //    a) this slot  has at least one account (the one being stored),
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
-        // From 1) and 2) we guarantee passing Some(slot), false is safe
-        self.handle_reclaims(&reclaims, Some(slot), false);
+        // From 1) and 2) we guarantee passing Some(slot), true is safe
+        self.handle_reclaims(&reclaims, Some(slot), true);
     }
 
     pub fn add_root(&self, slot: Slot) {
