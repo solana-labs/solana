@@ -12,6 +12,7 @@ pub mod banking_stage;
 pub mod bigtable_upload_service;
 pub mod broadcast_stage;
 pub mod cache_block_time_service;
+pub mod sample_performance_service;
 pub mod cluster_info_vote_listener;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
