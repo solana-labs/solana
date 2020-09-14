@@ -14,7 +14,7 @@ much data is retained, and ensure you do not miss any data if one node fails.
 To run an api node:
 
 1. [Install the Solana command-line tool suite](../cli/install-solana-cli-tools.md)
-2. Boot the node with at least the following parameters:
+2. Start the validator with at least the following parameters:
 
 ```bash
 solana-validator \
@@ -25,7 +25,7 @@ solana-validator \
   --rpc-port 8899 \
   --no-voting \
   --enable-rpc-transaction-history \
-  --limit-ledger-size <SHRED_COUNT> \
+  --limit-ledger-size \
   --trusted-validator <VALIDATOR_ADDRESS> \
   --no-untrusted-rpc
 ```
@@ -35,7 +35,7 @@ Customize `--ledger` to your desired ledger storage location, and `--rpc-port` t
 The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining. The shred version will change on any hard forks in the cluster, so including `--expected-shred-version` ensures you are receiving current data from the cluster you expect.
 [Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the ledger will keep the entire ledger until it runs out of disk space. A larger value like `--limit-ledger-size 250000000000` is good for a couple days
+The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space. The default value is good for at least a couple days but larger values may be used by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`
 
 Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
 
@@ -60,14 +60,45 @@ order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
 `solana-validator` command to receive historical ledger data instead of a
 snapshot.
 
-If you pass the `--no-snapshot-fetch` parameter on your initial boot, it will
-take your node a very long time to catch up. We recommend booting from a
-snapshot first, and then using the `--no-snapshot-fetch` parameter for reboots.
+Do not pass the `--no-snapshot-fetch` parameter on your initial boot as it's not
+possible to boot the node all the way from the genesis block.  Instead boot from
+a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
 
 It is important to note that the amount of historical ledger available to your
 nodes is limited to what your trusted validators retain. You will need to ensure
 your nodes do not experience downtimes longer than this span, if ledger
 continuity is crucial for you.
+
+
+### Minimizing Validator Port Exposure
+
+The validator requires that various UDP and TCP ports be open for inbound
+traffic from all other Solana validators.   While this is the most efficient mode of
+operation, and is strongly recommended, it is possible to restrict the
+validator to only require inbound traffic from one other Solana validator.
+
+First add the `--restricted-repair-only-mode` argument.  This will cause the
+validator to operate in a restricted mode where it will not receive pushes from
+the rest of the validators, and instead will need to continually poll other
+validators for blocks.  The validator will only transmit UDP packets to other
+validators using the *Gossip* and *ServeR* ("serve repair") ports, and only
+receive UDP packets on its *Gossip* and *Repair* ports.
+
+The *Gossip* port is bi-directional and allows your validator to remain in
+contact with the rest of the cluster.  Your validator transmits on the *ServeR*
+to make repair requests to obtaining new blocks from the rest of the network,
+since Turbine is now disabled.  Your validator will then receive repair
+responses on the *Repair* port from other validators.
+
+To further restrict the validator to only requesting blocks from one or more
+validators, first determine the identity pubkey for that validator and add the
+`--gossip-pull-validator PUBKEY --repair-validator PUBKEY` arguments for each
+PUBKEY.  This will cause your validator to be a resource drain on each validator
+that you add, so please do this sparingly and only after consulting with the
+target validator.
+
+Your validator should now only be communicating with the explicitly listed
+validators and only on the *Gossip*, *Repair* and *ServeR* ports.
 
 ## Setting up Deposit Accounts
 
