@@ -383,33 +383,25 @@ fn simulate_transactions(
     rpc_client: &RpcClient,
     candidate_transactions: Vec<(Transaction, String)>,
 ) -> client_error::Result<Vec<(Transaction, String)>> {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    info!(
-        "Simulating {} transactions with blockhash {}",
-        candidate_transactions.len(),
-        blockhash
-    );
-    let mut simulated_transactions = vec![];
-    for (mut transaction, memo) in candidate_transactions {
-        transaction.message.recent_blockhash = blockhash;
-
-        let sim_result = rpc_client.simulate_transaction(&transaction, false)?;
-        if sim_result.value.err.is_some() {
-            trace!(
-                "filtering out transaction due to simulation failure: {:?}: {}",
-                sim_result,
-                memo
-            );
-        } else {
-            simulated_transactions.push((transaction, memo))
-        }
-    }
-    info!(
-        "Successfully simulating {} transactions",
-        simulated_transactions.len()
-    );
-    Ok(simulated_transactions)
+    let (transactions, _memos): (Vec<Transaction>, Vec<String>) =
+        candidate_transactions.iter().cloned().unzip();
+    let simulation_results = rpc_client.simulate_transactions(transactions, false)?;
+    Ok(candidate_transactions
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, (transaction, memo))| {
+            if let Some(simulation_error) = &simulation_results[i].err {
+                trace!(
+                    "filtering out transaction due to simulation failure: {:?}: {}",
+                    simulation_error,
+                    memo
+                );
+                None
+            } else {
+                Some((transaction, memo))
+            }
+        })
+        .collect())
 }
 
 fn transact(

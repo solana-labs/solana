@@ -1141,6 +1141,34 @@ impl RpcClient {
         }
     }
 
+    /// Sends a batch of transactions to be simulated by a node. All transactions use the same
+    /// blockhash; if the blockhash expires before the simulations are all complete, this method
+    /// will return an error.
+    pub fn simulate_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+        sig_verify: bool,
+    ) -> ClientResult<Vec<RpcSimulateTransactionResult>> {
+        let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
+        info!(
+            "Simulating {} transactions with blockhash {}",
+            transactions.len(),
+            blockhash
+        );
+        let mut simulation_results = vec![];
+        let mut successes = 0;
+        for mut transaction in transactions {
+            transaction.message.recent_blockhash = blockhash;
+            let result = self.simulate_transaction(&transaction, sig_verify)?;
+            if result.value.err.is_none() {
+                successes += 1;
+            }
+            simulation_results.push(result.value);
+        }
+        info!("{} transactions successful", successes);
+        Ok(simulation_results)
+    }
+
     pub fn validator_exit(&self) -> ClientResult<bool> {
         self.send(RpcRequest::ValidatorExit, Value::Null)
     }
