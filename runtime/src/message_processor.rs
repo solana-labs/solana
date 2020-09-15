@@ -8,7 +8,7 @@ use solana_sdk::{
     clock::Epoch,
     entrypoint_native::{
         ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
-        InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -18,7 +18,29 @@ use solana_sdk::{
     system_program,
     transaction::TransactionError,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+
+pub struct Executors {
+    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
+    pub is_dirty: bool,
+}
+impl Default for Executors {
+    fn default() -> Self {
+        Self {
+            executors: HashMap::default(),
+            is_dirty: false,
+        }
+    }
+}
+impl Executors {
+    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
+        let _ = self.executors.insert(key, executor);
+        self.is_dirty = true;
+    }
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(key).cloned()
+    }
+}
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
@@ -182,6 +204,7 @@ pub struct ThisInvokeContext {
     is_cross_program_supported: bool,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    executors: Rc<RefCell<Executors>>,
 }
 impl ThisInvokeContext {
     pub fn new(
@@ -192,6 +215,7 @@ impl ThisInvokeContext {
         log_collector: Option<Rc<LogCollector>>,
         is_cross_program_supported: bool,
         compute_budget: ComputeBudget,
+        executors: Rc<RefCell<Executors>>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -206,6 +230,7 @@ impl ThisInvokeContext {
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
                 remaining: compute_budget.max_units,
             })),
+            executors,
         }
     }
 }
@@ -261,6 +286,12 @@ impl InvokeContext for ThisInvokeContext {
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
+    }
+    fn add_executor(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+        self.executors.borrow_mut().insert(*pubkey, executor);
+    }
+    fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.borrow().get(&pubkey)
     }
 }
 pub struct ThisLogger {
@@ -633,6 +664,7 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
+        executors: Rc<RefCell<Executors>>,
     ) -> Result<(), InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let mut invoke_context = ThisInvokeContext::new(
@@ -643,6 +675,7 @@ impl MessageProcessor {
             log_collector,
             self.is_cross_program_supported,
             self.compute_budget,
+            executors,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -668,6 +701,7 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
+        executors: Rc<RefCell<Executors>>,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             self.execute_instruction(
@@ -677,6 +711,7 @@ impl MessageProcessor {
                 accounts,
                 rent_collector,
                 log_collector.clone(),
+                executors.clone(),
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -733,6 +768,7 @@ mod tests {
             None,
             true,
             ComputeBudget::default(),
+            Rc::new(RefCell::new(Executors::default())),
         );
 
         // Check call depth increases and has a limit
@@ -1244,6 +1280,8 @@ mod tests {
         let account = RefCell::new(create_loadable_account("mock_system_program"));
         loaders.push(vec![(mock_system_program_id, account)]);
 
+        let executors = Rc::new(RefCell::new(Executors::default()));
+
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
         let account_metas = vec![
@@ -1259,8 +1297,14 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors.clone(),
+        );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
@@ -1274,8 +1318,14 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors.clone(),
+        );
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1293,8 +1343,14 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors,
+        );
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1375,6 +1431,8 @@ mod tests {
         let account = RefCell::new(create_loadable_account("mock_system_program"));
         loaders.push(vec![(mock_program_id, account)]);
 
+        let executors = Rc::new(RefCell::new(Executors::default()));
+
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
         let dup_pubkey = from_pubkey;
@@ -1393,8 +1451,14 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors.clone(),
+        );
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1412,8 +1476,14 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors.clone(),
+        );
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
@@ -1428,8 +1498,14 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result =
-            message_processor.process_message(&message, &loaders, &accounts, &rent_collector, None);
+        let result = message_processor.process_message(
+            &message,
+            &loaders,
+            &accounts,
+            &rent_collector,
+            None,
+            executors,
+        );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
@@ -1504,6 +1580,7 @@ mod tests {
             None,
             true,
             ComputeBudget::default(),
+            Rc::new(RefCell::new(Executors::default())),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
