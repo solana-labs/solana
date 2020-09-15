@@ -12,7 +12,7 @@ Send tokens to the recipients in `<BIDS_CSV>`.
 Example bids.csv:
 
 ```text
-primary_address,bid_amount_dollars
+primary_address,accepted_amount_dollars
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,6.6
 ```
 
@@ -28,7 +28,7 @@ recipient,amount,signature
 ```
 
 Send tokens to the recipients in `<BIDS_CSV>` if the distribution is
-not already recordered in the transaction log.
+not already recorded in the transaction log.
 
 ```bash
 solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --from-bids --input-csv <BIDS_CSV> --fee-payer <KEYPAIR>
@@ -70,7 +70,7 @@ solana-tokens distribute-tokens --dollars-per-sol <NUMBER> --dry-run --from-bids
 Example bids.csv:
 
 ```text
-primary_address,bid_amount_dollars
+primary_address,accepted_amount_dollars
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,6.6
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,15.4
 3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM,9.24
