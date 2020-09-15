@@ -274,9 +274,25 @@ async fn distribute_allocations(
     Ok(())
 }
 
-fn read_allocations(input_csv: &str) -> io::Result<Vec<Allocation>> {
+fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result<Vec<Allocation>> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
-    Ok(rdr.deserialize().map(|entry| entry.unwrap()).collect())
+    let allocations = if let Some(amount) = transfer_amount {
+        let recipients: Vec<String> = rdr
+            .deserialize()
+            .map(|recipient| recipient.unwrap())
+            .collect();
+        recipients
+            .into_iter()
+            .map(|recipient| Allocation {
+                recipient,
+                amount,
+                lockup_date: "".to_string(),
+            })
+            .collect()
+    } else {
+        rdr.deserialize().map(|entry| entry.unwrap()).collect()
+    };
+    Ok(allocations)
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -291,7 +307,7 @@ pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
-    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv)?;
+    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv, args.transfer_amount)?;
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
@@ -467,7 +483,7 @@ pub async fn process_balances(
     client: &mut BanksClient,
     args: &BalancesArgs,
 ) -> Result<(), csv::Error> {
-    let allocations: Vec<Allocation> = read_allocations(&args.input_csv)?;
+    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -507,6 +523,7 @@ use tempfile::{tempdir, NamedTempFile};
 pub async fn test_process_distribute_tokens_with_client(
     client: &mut BanksClient,
     sender_keypair: Keypair,
+    transfer_amount: Option<f64>,
 ) {
     let fee_payer = Keypair::new();
     let transaction = transfer(
@@ -532,7 +549,11 @@ pub async fn test_process_distribute_tokens_with_client(
     let alice_pubkey = Pubkey::new_rand();
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
-        amount: 1000.0,
+        amount: if let Some(amount) = transfer_amount {
+            amount
+        } else {
+            1000.0
+        },
         lockup_date: "".to_string(),
     };
     let allocations_file = NamedTempFile::new().unwrap();
@@ -560,6 +581,7 @@ pub async fn test_process_distribute_tokens_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: None,
+        transfer_amount,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
@@ -683,6 +705,7 @@ pub async fn test_process_distribute_stake_with_client(
         output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
         sender_keypair: Box::new(sender_keypair),
+        transfer_amount: None,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
@@ -751,7 +774,24 @@ mod tests {
         Runtime::new().unwrap().block_on(async {
             let transport = start_local_server(&bank_forks).await;
             let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair).await;
+            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair, None)
+                .await;
+        });
+    }
+
+    #[test]
+    fn test_process_transfer_amount_allocations() {
+        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        Runtime::new().unwrap().block_on(async {
+            let transport = start_local_server(&bank_forks).await;
+            let mut banks_client = start_client(transport).await.unwrap();
+            test_process_distribute_tokens_with_client(
+                &mut banks_client,
+                sender_keypair,
+                Some(1.5),
+            )
+            .await;
         });
     }
 
@@ -780,7 +820,49 @@ mod tests {
         wtr.serialize(&allocation).unwrap();
         wtr.flush().unwrap();
 
-        assert_eq!(read_allocations(&input_csv).unwrap(), vec![allocation]);
+        assert_eq!(
+            read_allocations(&input_csv, None).unwrap(),
+            vec![allocation]
+        );
+    }
+
+    #[test]
+    fn test_read_allocations_transfer_amount() {
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize("recipient".to_string()).unwrap();
+        wtr.serialize(&pubkey0.to_string()).unwrap();
+        wtr.serialize(&pubkey1.to_string()).unwrap();
+        wtr.serialize(&pubkey2.to_string()).unwrap();
+        wtr.flush().unwrap();
+
+        let amount = 1.5;
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey2.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+        ];
+        assert_eq!(
+            read_allocations(&input_csv, Some(amount)).unwrap(),
+            expected_allocations
+        );
     }
 
     #[test]
@@ -889,6 +971,7 @@ mod tests {
             output_path: None,
             stake_args: Some(stake_args),
             sender_keypair: Box::new(Keypair::new()),
+            transfer_amount: None,
         };
         let lockup_date = lockup_date_str.parse().unwrap();
         let instructions = distribution_instructions(

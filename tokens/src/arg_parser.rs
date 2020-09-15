@@ -3,7 +3,8 @@ use crate::args::{
 };
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    input_validators::{is_valid_pubkey, is_valid_signer},
+    input_parsers::value_of,
+    input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
     keypair::{pubkey_from_path, signer_from_path},
 };
 use solana_cli_config::CONFIG_FILE;
@@ -59,6 +60,14 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Input CSV file"),
+                )
+                .arg(
+                    Arg::with_name("transfer_amount")
+                        .long("transfer-amount")
+                        .takes_value(true)
+                        .value_name("AMOUNT")
+                        .validator(is_amount)
+                        .help("The amount to send to each recipient, in SOL"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -255,6 +264,7 @@ fn parse_distribute_tokens_args(
         sender_keypair,
         fee_payer,
         stake_args: None,
+        transfer_amount: value_of(matches, "transfer_amount"),
     })
 }
 
@@ -330,6 +340,7 @@ fn parse_distribute_stake_args(
         sender_keypair,
         fee_payer,
         stake_args: Some(stake_args),
+        transfer_amount: None,
     })
 }
 
