@@ -49,26 +49,26 @@ static_assert(sizeof(uint64_t) == 8);
 /**
  * Minimum of signed integral types
  */
-# define INT8_MIN   (-128)
-# define INT16_MIN  (-32767-1)
-# define INT32_MIN  (-2147483647-1)
-# define INT64_MIN  (-__INT64_C(9223372036854775807)-1)
+#define INT8_MIN   (-128)
+#define INT16_MIN  (-32767-1)
+#define INT32_MIN  (-2147483647-1)
+#define INT64_MIN  (-9223372036854775807L-1)
 
 /**
  * Maximum of signed integral types
  */
-# define INT8_MAX   (127)
-# define INT16_MAX  (32767)
-# define INT32_MAX  (2147483647)
-# define INT64_MAX  (__INT64_C(9223372036854775807))
+#define INT8_MAX   (127)
+#define INT16_MAX  (32767)
+#define INT32_MAX  (2147483647)
+#define INT64_MAX  (9223372036854775807L)
 
 /**
  * Maximum of unsigned integral types
  */
-# define UINT8_MAX   (255)
-# define UINT16_MAX  (65535)
-# define UINT32_MAX  (4294967295U)
-# define UINT64_MAX  (__UINT64_C(18446744073709551615))
+#define UINT8_MAX   (255)
+#define UINT16_MAX  (65535)
+#define UINT32_MAX  (4294967295U)
+#define UINT64_MAX  (18446744073709551615UL)
 
 /**
  * NULL
@@ -226,6 +226,26 @@ static size_t sol_strlen(const char *s) {
  * Computes the number of elements in an array
  */
 #define SOL_ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
+
+/**
+ * Internal memory alloc/free function
+ */
+void *sol_alloc_free_(uint64_t size, void *ptr);
+
+/**
+ * Alloc zero-initialized memory
+ */
+static void *sol_calloc(size_t nitems, size_t size) {
+  return sol_alloc_free_(nitems * size, 0);
+}
+
+/**
+ * Deallocates the memory previously allocated by sol_calloc
+ */
+static void sol_free(void *ptr) {
+  (void) sol_alloc_free_(0, ptr);
+}
 
 /**
  * Panics
