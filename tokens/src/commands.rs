@@ -323,15 +323,6 @@ pub async fn process_allocations(
         return Ok(confirmations);
     }
 
-    println!(
-        "{}",
-        style(format!(
-            "{:<44}  {:>24}",
-            "Recipient", "Expected Balance (◎)"
-        ))
-        .bold()
-    );
-
     let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
     let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
@@ -366,6 +357,15 @@ pub async fn process_allocations(
             (distributed_tokens + undistributed_tokens) * dollars_per_sol,
         );
     }
+
+    println!(
+        "{}",
+        style(format!(
+            "{:<44}  {:>24}",
+            "Recipient", "Expected Balance (◎)"
+        ))
+        .bold()
+    );
 
     distribute_allocations(client, &mut db, &allocations, args).await?;
 
