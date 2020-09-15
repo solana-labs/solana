@@ -13,7 +13,7 @@ use crate::{
     builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     log_collector::LogCollector,
-    message_processor::MessageProcessor,
+    message_processor::{Executors, MessageProcessor},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -35,7 +35,9 @@ use solana_sdk::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
-    entrypoint_native::{ComputeBudget, ProcessInstruction, ProcessInstructionWithContext},
+    entrypoint_native::{
+        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
+    },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -44,6 +46,7 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
+    message::Message,
     native_loader,
     native_token::sol_to_lamports,
     nonce,
@@ -139,6 +142,58 @@ impl Builtin {
             name: name.to_string(),
             id,
             entrypoint,
+        }
+    }
+}
+
+const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
+
+/// LFU Cache of executors
+#[derive(AbiExample)]
+struct CachedExecutors {
+    max: usize,
+    executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
+}
+impl Default for CachedExecutors {
+    fn default() -> Self {
+        Self {
+            max: MAX_CACHED_EXECUTORS,
+            executors: HashMap::new(),
+        }
+    }
+}
+impl CachedExecutors {
+    pub fn new(max: usize) -> Self {
+        Self {
+            max,
+            executors: HashMap::new(),
+        }
+    }
+    pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(pubkey).map(|(count, executor)| {
+            count.fetch_add(1, Ordering::Relaxed);
+            executor.clone()
+        })
+    }
+    pub fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+        if !self.executors.contains_key(pubkey) {
+            if self.executors.len() >= self.max {
+                let mut least = u64::MAX;
+                let default_key = Pubkey::default();
+                let mut least_key = &default_key;
+                for (key, (count, _)) in self.executors.iter() {
+                    let count = count.load(Ordering::Relaxed);
+                    if count < least {
+                        least = count;
+                        least_key = key;
+                    }
+                }
+                let least_key = *least_key;
+                let _ = self.executors.remove(&least_key);
+            }
+            let _ = self
+                .executors
+                .insert(*pubkey, (AtomicU64::new(0), executor));
         }
     }
 }
@@ -333,9 +388,9 @@ pub(crate) struct BankFieldsToSerialize<'a> {
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
-/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serializeaion
+/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(Default, AbiExample)]
+#[derive(AbiExample, Default)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
@@ -458,6 +513,9 @@ pub struct Bank {
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
+
+    /// Cached executors
+    cached_executors: Arc<RwLock<CachedExecutors>>,
 }
 
 impl Default for BlockhashQueue {
@@ -536,7 +594,7 @@ impl Bank {
             epoch,
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
-            // TODO: clean this up, soo much special-case copying...
+            // TODO: clean this up, so much special-case copying...
             hashes_per_tick: parent.hashes_per_tick,
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
@@ -575,6 +633,7 @@ impl Bank {
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
+            cached_executors: parent.cached_executors.clone(),
         };
 
         datapoint_info!(
@@ -676,6 +735,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
+            cached_executors: Arc::new(RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS))),
         };
         bank.finish_init(genesis_config);
 
@@ -1804,6 +1864,49 @@ impl Bank {
             });
     }
 
+    /// Get any cached executors needed by the transaction
+    fn get_executors(
+        &self,
+        message: &Message,
+        loaders: &[Vec<(Pubkey, Account)>],
+    ) -> Rc<RefCell<Executors>> {
+        let mut num_executors = message.account_keys.len();
+        for instruction_loaders in loaders.iter() {
+            num_executors += instruction_loaders.len();
+        }
+        let mut executors = HashMap::with_capacity(num_executors);
+        let cache = self.cached_executors.read().unwrap();
+
+        for key in message.account_keys.iter() {
+            if let Some(executor) = cache.get(key) {
+                executors.insert(*key, executor);
+            }
+        }
+        for instruction_loaders in loaders.iter() {
+            for (key, _) in instruction_loaders.iter() {
+                if let Some(executor) = cache.get(key) {
+                    executors.insert(*key, executor);
+                }
+            }
+        }
+
+        Rc::new(RefCell::new(Executors {
+            executors,
+            is_dirty: false,
+        }))
+    }
+
+    /// Add executors back to the bank's cache if modified
+    fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
+        let executors = executors.borrow();
+        if executors.is_dirty {
+            let mut cache = self.cached_executors.write().unwrap();
+            for (key, executor) in executors.executors.iter() {
+                cache.put(key, (*executor).clone());
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -1861,6 +1964,8 @@ impl Bank {
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
+                    let executors = self.get_executors(&tx.message, &loaders);
+
                     let (account_refcells, loader_refcells) =
                         Self::accounts_to_refcells(accounts, loaders);
 
@@ -1870,6 +1975,7 @@ impl Bank {
                         &account_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
+                        executors.clone(),
                     );
 
                     Self::refcells_to_accounts(
@@ -1878,6 +1984,8 @@ impl Bank {
                         account_refcells,
                         loader_refcells,
                     );
+
+                    self.update_executors(executors);
 
                     if let Err(TransactionError::InstructionError(_, _)) = &process_result {
                         error_counters.instruction_error += 1;
@@ -3466,6 +3574,7 @@ mod tests {
         account::KeyedAccount,
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        entrypoint_native::InvokeContext,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -8628,5 +8737,119 @@ mod tests {
         } else {
             info!("NOT-asserting overflowing capitalization for bank0");
         }
+    }
+
+    struct TestExecutor {}
+    impl Executor for TestExecutor {
+        fn execute(
+            &self,
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _instruction_data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_cached_executors() {
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let mut cache = CachedExecutors::new(3);
+
+        cache.put(&key1, executor.clone());
+        cache.put(&key2, executor.clone());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        cache.put(&key4, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_none());
+        assert!(cache.get(&key4).is_some());
+
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_none());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
+    }
+
+    #[test]
+    fn test_bank_executor_cache() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1);
+        let bank = Bank::new(&genesis_config);
+
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key1, key2],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+
+        let loaders = &[
+            vec![(key3, Account::default()), (key4, Account::default())],
+            vec![(key1, Account::default())],
+        ];
+
+        // don't do any work if not dirty
+        let mut executors = Executors::default();
+        executors.insert(key1, executor.clone());
+        executors.insert(key2, executor.clone());
+        executors.insert(key3, executor.clone());
+        executors.insert(key4, executor.clone());
+        let executors = Rc::new(RefCell::new(executors));
+        executors.borrow_mut().is_dirty = false;
+        bank.update_executors(executors);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 0);
+
+        // do work
+        let mut executors = Executors::default();
+        executors.insert(key1, executor.clone());
+        executors.insert(key2, executor.clone());
+        executors.insert(key3, executor.clone());
+        executors.insert(key4, executor.clone());
+        let executors = Rc::new(RefCell::new(executors));
+        bank.update_executors(executors);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 4);
+        assert!(executors.borrow().executors.contains_key(&key1));
+        assert!(executors.borrow().executors.contains_key(&key2));
+        assert!(executors.borrow().executors.contains_key(&key3));
+        assert!(executors.borrow().executors.contains_key(&key4));
+
+        // Check inheritance
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::new_rand(), 1);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 4);
+        assert!(executors.borrow().executors.contains_key(&key1));
+        assert!(executors.borrow().executors.contains_key(&key2));
+        assert!(executors.borrow().executors.contains_key(&key3));
+        assert!(executors.borrow().executors.contains_key(&key4));
     }
 }
