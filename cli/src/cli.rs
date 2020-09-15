@@ -21,9 +21,9 @@ use solana_clap_utils::{
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-    rpc_client::RpcClient,
+    rpc_client::{RpcClient, TransactConfig},
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::{Response, RpcKeyedAccount},
+    rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -32,7 +32,7 @@ use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
-    clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
+    clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
     fee_calculator::FeeCalculator,
@@ -43,7 +43,6 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{Keypair, Signature, Signer, SignerError},
-    signers::Signers,
     system_instruction::{self, SystemError},
     system_program,
     transaction::{Transaction, TransactionError},
@@ -1168,97 +1167,6 @@ fn process_show_account(
     Ok(account_string)
 }
 
-fn send_and_confirm_transactions_with_spinner<T: Signers>(
-    rpc_client: &RpcClient,
-    mut transactions: Vec<Transaction>,
-    signer_keys: &T,
-) -> Result<(), Box<dyn error::Error>> {
-    let progress_bar = new_spinner_progress_bar();
-    let mut send_retries = 5;
-    loop {
-        let mut status_retries = 15;
-
-        // Send all transactions
-        let mut transactions_signatures = vec![];
-        let num_transactions = transactions.len();
-        for transaction in transactions {
-            if cfg!(not(test)) {
-                // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-                // when all the write transactions modify the same program account (eg, deploying a
-                // new program)
-                sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
-            }
-
-            let signature = rpc_client
-                .send_transaction_with_config(
-                    &transaction,
-                    RpcSendTransactionConfig {
-                        skip_preflight: true,
-                        ..RpcSendTransactionConfig::default()
-                    },
-                )
-                .ok();
-            transactions_signatures.push((transaction, signature));
-
-            progress_bar.set_message(&format!(
-                "[{}/{}] Transactions sent",
-                transactions_signatures.len(),
-                num_transactions
-            ));
-        }
-
-        // Collect statuses for all the transactions, drop those that are confirmed
-        while status_retries > 0 {
-            status_retries -= 1;
-
-            progress_bar.set_message(&format!(
-                "[{}/{}] Transactions confirmed",
-                num_transactions - transactions_signatures.len(),
-                num_transactions
-            ));
-
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
-            }
-
-            transactions_signatures = transactions_signatures
-                .into_iter()
-                .filter(|(_transaction, signature)| {
-                    signature
-                        .and_then(|signature| rpc_client.get_signature_statuses(&[signature]).ok())
-                        .map(|Response { context: _, value }| match &value[0] {
-                            None => true,
-                            Some(transaction_status) => {
-                                !(transaction_status.confirmations.is_none()
-                                    || transaction_status.confirmations.unwrap() > 1)
-                            }
-                        })
-                        .unwrap_or(true)
-                })
-                .collect();
-
-            if transactions_signatures.is_empty() {
-                return Ok(());
-            }
-        }
-
-        if send_retries == 0 {
-            return Err("Transactions failed".into());
-        }
-        send_retries -= 1;
-
-        // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator) = rpc_client
-            .get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
-        transactions = vec![];
-        for (mut transaction, _) in transactions_signatures.into_iter() {
-            transaction.try_sign(signer_keys, blockhash)?;
-            transactions.push(transaction);
-        }
-    }
-}
-
 fn process_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -1343,21 +1251,28 @@ fn process_deploy(
         CliError::DynamicProgramError("Program account allocation failed".to_string())
     })?;
 
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
-
     let mut write_transactions = vec![];
     for message in write_messages.into_iter() {
-        let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&signers, blockhash)?;
-        write_transactions.push(tx);
+        write_transactions.push(Transaction::new_unsigned(message));
     }
 
     trace!("Writing program data");
-    send_and_confirm_transactions_with_spinner(&rpc_client, write_transactions, &signers).map_err(
-        |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
-    )?;
+    let _results = rpc_client
+        .transact(
+            write_transactions,
+            &signers,
+            &config.signers[0].pubkey(),
+            TransactConfig {
+                commitment: Some(CommitmentConfig::single()),
+                dry_run: false,
+                retries: 5,
+                secs_between_status_checks: 0,
+                spinner: Some(new_spinner_progress_bar()),
+            },
+        )
+        .map_err(|_| {
+            CliError::DynamicProgramError("Data writes to program account failed".to_string())
+        })?;
 
     let (blockhash, _, _) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
