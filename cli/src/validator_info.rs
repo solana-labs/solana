@@ -271,10 +271,12 @@ pub fn process_set_validator_info(
     let all_config = rpc_client.get_program_accounts(&solana_config_program::id())?;
     let existing_account = all_config
         .iter()
-        .filter(|(_, account)| {
-            let key_list: ConfigKeys = deserialize(&account.data).map_err(|_| false).unwrap();
-            key_list.keys.contains(&(validator_info::id(), false))
-        })
+        .filter(
+            |(_, account)| match deserialize::<ConfigKeys>(&account.data) {
+                Ok(key_list) => key_list.keys.contains(&(validator_info::id(), false)),
+                Err(_) => false,
+            },
+        )
         .find(|(pubkey, account)| {
             let (validator_pubkey, _) = parse_validator_info(&pubkey, &account).unwrap();
             validator_pubkey == config.signers[0].pubkey()
@@ -385,10 +387,10 @@ pub fn process_get_validator_info(
         all_config
             .into_iter()
             .filter(|(_, validator_info_account)| {
-                let key_list: ConfigKeys = deserialize(&validator_info_account.data)
-                    .map_err(|_| false)
-                    .unwrap();
-                key_list.keys.contains(&(validator_info::id(), false))
+                match deserialize::<ConfigKeys>(&validator_info_account.data) {
+                    Ok(key_list) => key_list.keys.contains(&(validator_info::id(), false)),
+                    Err(_) => false,
+                }
             })
             .collect()
     };
