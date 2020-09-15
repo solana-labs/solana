@@ -6,16 +6,8 @@ use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
-<<<<<<< HEAD
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
-=======
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
->>>>>>> daae63878... Add --gossip-validator argument
 use solana_streamer::streamer;
 use std::{
     collections::HashSet,
@@ -282,11 +274,8 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(cluster_info);
-<<<<<<< HEAD
-    let gossip_service = GossipService::new(&cluster_info.clone(), None, gossip_socket, &exit);
-=======
-    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, None, &exit);
->>>>>>> daae63878... Add --gossip-validator argument
+    let gossip_service =
+        GossipService::new(&cluster_info.clone(), None, gossip_socket, None, &exit);
     (gossip_service, ip_echo, cluster_info)
 }
 

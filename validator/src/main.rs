@@ -157,16 +157,10 @@ fn start_gossip_node(
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
     let gossip_service = GossipService::new(
-<<<<<<< HEAD
         &cluster_info.clone(),
         None,
         gossip_socket,
-=======
-        &cluster_info,
-        None,
-        gossip_socket,
         gossip_validators,
->>>>>>> daae63878... Add --gossip-validator argument
         &gossip_exit_flag,
     );
     (cluster_info, gossip_exit_flag, gossip_service)
@@ -998,8 +992,6 @@ pub fn main() {
         "--gossip-validator",
     );
 
-<<<<<<< HEAD
-=======
     let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
         .expect("invalid bind_address");
     let rpc_bind_address = if matches.is_present("rpc_bind_address") {
@@ -1011,7 +1003,6 @@ pub fn main() {
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
 
->>>>>>> 63a67f415... Add --restricted-repair-only-mode flag
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
@@ -1039,21 +1030,10 @@ pub fn main() {
                 u64
             ),
         },
-<<<<<<< HEAD
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
             .map(|rpc_port| (rpc_port, rpc_port + 1)),
-        voting_disabled: matches.is_present("no_voting"),
-=======
-        rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
-            (
-                SocketAddr::new(rpc_bind_address, rpc_port),
-                SocketAddr::new(rpc_bind_address, rpc_port + 1),
-                SocketAddr::new(rpc_bind_address, rpc_port + 3),
-            )
-        }),
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
->>>>>>> 63a67f415... Add --restricted-repair-only-mode flag
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
         repair_validators,
@@ -1075,15 +1055,6 @@ pub fn main() {
     let dynamic_port_range =
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
-
-    let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
-        .expect("invalid bind_address");
-    let rpc_bind_address = if matches.is_present("rpc_bind_address") {
-        solana_net_utils::parse_host(matches.value_of("rpc_bind_address").unwrap())
-            .expect("invalid rpc_bind_address")
-    } else {
-        bind_address
-    };
 
     let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
         account_paths.split(',').map(PathBuf::from).collect()
@@ -1317,19 +1288,9 @@ pub fn main() {
         }
 
         let mut tcp_listeners = vec![];
-<<<<<<< HEAD
         if !private_rpc {
             if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
                 for (purpose, port) in &[("RPC", rpc_port), ("RPC pubsub", rpc_pubsub_port)] {
-=======
-        if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
-            for (purpose, addr) in &[
-                ("RPC", rpc_addr),
-                ("RPC pubsub", rpc_pubsub_addr),
-                ("RPC banks", rpc_banks_addr),
-            ] {
-                if ContactInfo::is_valid_address(&addr) {
->>>>>>> 63a67f415... Add --restricted-repair-only-mode flag
                     tcp_listeners.push((
                         *port,
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
@@ -1363,24 +1324,11 @@ pub fn main() {
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
+                validator_config.gossip_validators.clone(),
             );
 
             let mut blacklisted_rpc_nodes = HashSet::new();
             loop {
-<<<<<<< HEAD
-=======
-                if gossip.is_none() {
-                    gossip = Some(start_gossip_node(
-                        &identity_keypair,
-                        &cluster_entrypoint.gossip,
-                        &node.info.gossip,
-                        node.sockets.gossip.try_clone().unwrap(),
-                        validator_config.expected_shred_version,
-                        validator_config.gossip_validators.clone(),
-                    ));
-                }
-
->>>>>>> daae63878... Add --gossip-validator argument
                 let (rpc_contact_info, snapshot_hash) = get_rpc_node(
                     &cluster_info,
                     &validator_config,

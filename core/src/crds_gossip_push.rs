@@ -352,16 +352,12 @@ impl CrdsGossipPush {
             .filter(|(info, _)| {
                 info.id != *self_id
                     && ContactInfo::is_valid_address(&info.gossip)
-<<<<<<< HEAD
                     && (self_shred_version == 0
                         || info.shred_version == 0
                         || self_shred_version == info.shred_version)
-=======
-                    && self_shred_version == info.shred_version
                     && gossip_validators.map_or(true, |gossip_validators| {
                         gossip_validators.contains(&info.id)
                     })
->>>>>>> daae63878... Add --gossip-validator argument
             })
             .map(|(info, value)| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
