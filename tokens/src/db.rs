@@ -20,6 +20,7 @@ pub struct TransactionInfo {
 struct SignedTransactionInfo {
     recipient: String,
     amount: f64,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     new_stake_account_address: String,
     finalized_date: Option<DateTime<Utc>>,
     signature: String,

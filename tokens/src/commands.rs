@@ -250,7 +250,7 @@ async fn distribute_allocations(
                     &allocation.recipient.parse().unwrap(),
                     allocation.amount,
                     &transaction,
-                    Some(&new_stake_account_address),
+                    args.stake_args.as_ref().map(|_| &new_stake_account_address),
                     false,
                     last_valid_slot,
                     lockup_date,
