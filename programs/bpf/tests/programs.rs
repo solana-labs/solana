@@ -3,6 +3,14 @@
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
+<<<<<<< HEAD
+=======
+use solana_bpf_loader_program::{
+    create_vm,
+    serialization::{deserialize_parameters, serialize_parameters},
+};
+use solana_rbpf::vm::{EbpfVm, InstructionMeter};
+>>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -14,8 +22,16 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
+<<<<<<< HEAD
     entrypoint::MAX_PERMITTED_DATA_INCREASE,
     instruction::{AccountMeta, Instruction, InstructionError},
+=======
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    entrypoint_native::{
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+    },
+    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+>>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
     message::Message,
     pubkey::Pubkey,
     signature::Keypair,
@@ -53,6 +69,47 @@ fn load_bpf_program(
     load_program(bank_client, payer_keypair, loader_id, elf)
 }
 
+<<<<<<< HEAD
+=======
+fn run_program(
+    name: &str,
+    program_id: &Pubkey,
+    parameter_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+) -> Result<u64, InstructionError> {
+    let path = create_bpf_path(name);
+    let mut file = File::open(path).unwrap();
+
+    let mut data = vec![];
+    file.read_to_end(&mut data).unwrap();
+    let loader_id = bpf_loader::id();
+    let mut invoke_context = MockInvokeContext::default();
+
+    let executable = EbpfVm::create_executable_from_elf(&data, None).unwrap();
+    let (mut vm, heap_region) = create_vm(
+        &loader_id,
+        executable.as_ref(),
+        parameter_accounts,
+        &mut invoke_context,
+    )
+    .unwrap();
+    let mut parameter_bytes = serialize_parameters(
+        &bpf_loader::id(),
+        program_id,
+        parameter_accounts,
+        &instruction_data,
+    )
+    .unwrap();
+    assert_eq!(
+        SUCCESS,
+        vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region.clone()])
+            .unwrap()
+    );
+    deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
+    Ok(vm.get_total_instruction_count())
+}
+
+>>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
 #[test]
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 fn test_program_bpf_sanity() {
@@ -506,3 +563,123 @@ fn test_program_bpf_invoke() {
         }
     }
 }
+<<<<<<< HEAD
+=======
+
+#[test]
+fn assert_instruction_count() {
+    solana_logger::setup();
+
+    let mut programs = Vec::new();
+    #[cfg(feature = "bpf_c")]
+    {
+        programs.extend_from_slice(&[
+            ("bpf_to_bpf", 13),
+            ("multiple_static", 8),
+            ("noop", 1140),
+            ("noop++", 1140),
+            ("relative_call", 10),
+            ("struct_pass", 8),
+            ("struct_ret", 22),
+        ]);
+    }
+    #[cfg(feature = "bpf_rust")]
+    {
+        programs.extend_from_slice(&[
+            ("solana_bpf_rust_128bit", 543),
+            ("solana_bpf_rust_alloc", 19082),
+            ("solana_bpf_rust_dep_crate", 2),
+            ("solana_bpf_rust_external_spend", 465),
+            ("solana_bpf_rust_iter", 723),
+            ("solana_bpf_rust_many_args", 231),
+            ("solana_bpf_rust_noop", 2209),
+            ("solana_bpf_rust_param_passing", 54),
+        ]);
+    }
+
+    for program in programs.iter() {
+        println!("Test program: {:?}", program.0);
+        let program_id = Pubkey::new_rand();
+        let key = Pubkey::new_rand();
+        let mut account = RefCell::new(Account::default());
+        let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
+        let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();
+        println!("  {} : {:?} ({:?})", program.0, count, program.1,);
+        assert!(count <= program.1);
+    }
+}
+
+// Mock InvokeContext
+
+#[derive(Debug, Default)]
+struct MockInvokeContext {
+    pub key: Pubkey,
+    pub logger: MockLogger,
+    pub compute_meter: MockComputeMeter,
+}
+impl InvokeContext for MockInvokeContext {
+    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn pop(&mut self) {}
+    fn verify_and_update(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+        Ok(&self.key)
+    }
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
+        &[]
+    }
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        Rc::new(RefCell::new(self.logger.clone()))
+    }
+    fn is_cross_program_supported(&self) -> bool {
+        true
+    }
+    fn get_compute_budget(&self) -> ComputeBudget {
+        ComputeBudget::default()
+    }
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+        Rc::new(RefCell::new(self.compute_meter.clone()))
+    }
+    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        None
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct MockComputeMeter {}
+impl ComputeMeter for MockComputeMeter {
+    fn consume(&mut self, _amount: u64) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        u64::MAX
+    }
+}
+#[derive(Debug, Default, Clone)]
+struct MockLogger {}
+impl Logger for MockLogger {
+    fn log_enabled(&self) -> bool {
+        true
+    }
+    fn log(&mut self, _message: &str) {
+        // println!("{}", message);
+    }
+}
+
+struct TestInstructionMeter {}
+impl InstructionMeter for TestInstructionMeter {
+    fn consume(&mut self, _amount: u64) {}
+    fn get_remaining(&self) -> u64 {
+        u64::MAX
+    }
+}
+>>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)

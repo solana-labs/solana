@@ -6,8 +6,7 @@ extern crate test;
 extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_bpf_loader_program::serialization::{deserialize_parameters, serialize_parameters};
-use solana_rbpf::EbpfVm;
+use solana_rbpf::vm::EbpfVm;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -15,11 +14,13 @@ use solana_runtime::{
     loader_utils::load_program,
 };
 use solana_sdk::{
-    account::{create_keyed_readonly_accounts, Account},
-    bpf_loader, bpf_loader_deprecated,
+    account::Account,
+    bpf_loader,
     client::SyncClient,
     entrypoint::SUCCESS,
-    entrypoint_native::{ComputeBudget, ComputeMeter, InvokeContext, Logger, ProcessInstruction},
+    entrypoint_native::{
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+    },
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -40,10 +41,6 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf.push(name);
     pathbuf.set_extension(PLATFORM_FILE_EXTENSION_BPF);
     pathbuf
-}
-
-fn empty_check(_prog: &[u8]) -> Result<(), solana_bpf_loader_program::BPFError> {
-    Ok(())
 }
 
 fn load_elf(name: &str) -> Result<Vec<u8>, std::io::Error> {
@@ -71,15 +68,13 @@ const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
-fn bench_program_verify(bencher: &mut Bencher) {
+fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
-    let mut vm = EbpfVm::<solana_bpf_loader_program::BPFError>::new(None).unwrap();
-    vm.set_verifier(empty_check).unwrap();
-    vm.set_elf(&elf).unwrap();
 
     bencher.iter(|| {
-        vm.set_verifier(solana_bpf_loader_program::bpf_verifier::check)
-            .unwrap();
+        let _ =
+            EbpfVm::<solana_bpf_loader_program::BPFError>::create_executable_from_elf(&elf, None)
+                .unwrap();
     });
 }
 
@@ -96,8 +91,16 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf("bench_alu").unwrap();
-    let (mut vm, _) =
-        solana_bpf_loader_program::create_vm(&loader_id, &elf, &[], &mut invoke_context).unwrap();
+    let executable =
+        EbpfVm::<solana_bpf_loader_program::BPFError>::create_executable_from_elf(&elf, None)
+            .unwrap();
+    let (mut vm, _) = solana_bpf_loader_program::create_vm(
+        &loader_id,
+        executable.as_ref(),
+        &[],
+        &mut invoke_context,
+    )
+    .unwrap();
 
     println!("Interpreted:");
     assert_eq!(
@@ -151,8 +154,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_program_execute_noop(bencher: &mut Bencher) {
-    // solana_logger::setup(); // TODO remove
-
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -177,68 +178,11 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         .send_and_confirm_message(&[&mint_keypair], message.clone())
         .unwrap();
 
-    println!("start bench");
     bencher.iter(|| {
         bank.clear_signatures();
         bank_client
             .send_and_confirm_message(&[&mint_keypair], message.clone())
             .unwrap();
-    });
-}
-
-fn create_serialization_create_params() -> (Vec<u8>, Vec<(Pubkey, RefCell<Account>)>) {
-    let accounts = vec![
-        (
-            Pubkey::new_rand(),
-            RefCell::new(Account::new(0, 100, &Pubkey::new_rand())),
-        ),
-        (
-            Pubkey::new_rand(),
-            RefCell::new(Account::new(0, 100, &Pubkey::new_rand())),
-        ),
-        (
-            Pubkey::new_rand(),
-            RefCell::new(Account::new(0, 250, &Pubkey::new_rand())),
-        ),
-        (
-            Pubkey::new_rand(),
-            RefCell::new(Account::new(0, 1000, &Pubkey::new_rand())),
-        ),
-    ];
-    (vec![0xee; 100], accounts)
-}
-
-#[bench]
-fn bench_serialization_aligned(bencher: &mut Bencher) {
-    let (data, accounts) = create_serialization_create_params();
-    let keyed_accounts = create_keyed_readonly_accounts(&accounts);
-
-    bencher.iter(|| {
-        let buffer = serialize_parameters(
-            &bpf_loader_deprecated::id(),
-            &Pubkey::new_rand(),
-            &keyed_accounts,
-            &data,
-        )
-        .unwrap();
-        deserialize_parameters(&bpf_loader_deprecated::id(), &keyed_accounts, &buffer).unwrap();
-    });
-}
-
-#[bench]
-fn bench_serialization_unaligned(bencher: &mut Bencher) {
-    let (data, accounts) = create_serialization_create_params();
-    let keyed_accounts = create_keyed_readonly_accounts(&accounts);
-
-    bencher.iter(|| {
-        let buffer = serialize_parameters(
-            &bpf_loader_deprecated::id(),
-            &Pubkey::new_rand(),
-            &keyed_accounts,
-            &data,
-        )
-        .unwrap();
-        deserialize_parameters(&bpf_loader_deprecated::id(), &keyed_accounts, &buffer).unwrap();
     });
 }
 
@@ -278,6 +222,10 @@ impl InvokeContext for MockInvokeContext {
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.mock_compute_meter.clone()))
+    }
+    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        None
     }
 }
 #[derive(Debug, Default, Clone)]

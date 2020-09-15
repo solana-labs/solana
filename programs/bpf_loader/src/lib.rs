@@ -12,22 +12,22 @@ use crate::{
 };
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
-    ebpf::{EbpfError, UserDefinedError},
+    error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
-    EbpfVm, InstructionMeter,
+    vm::{EbpfVm, Executable, InstructionMeter},
 };
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    entrypoint_native::{ComputeMeter, InvokeContext},
+    entrypoint_native::{ComputeMeter, Executor, InvokeContext},
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
@@ -36,6 +36,7 @@ solana_sdk::declare_builtin!(
     solana_bpf_loader_program::process_instruction
 );
 
+/// Errors returned by the BPFLoader if the VM fails to run the program
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BPFLoaderError {
     #[error("failed to create virtual machine")]
@@ -49,7 +50,7 @@ impl<E> DecodeError<E> for BPFLoaderError {
     }
 }
 
-/// Errors returned by functions the BPF Loader registers with the vM
+/// Errors returned by functions the BPF Loader registers with the VM
 #[derive(Debug, Error, PartialEq)]
 pub enum BPFError {
     #[error("{0}")]
@@ -59,39 +60,7 @@ pub enum BPFError {
 }
 impl UserDefinedError for BPFError {}
 
-pub fn create_vm<'a>(
-    loader_id: &'a Pubkey,
-    prog: &'a [u8],
-    parameter_accounts: &'a [KeyedAccount<'a>],
-    invoke_context: &'a mut dyn InvokeContext,
-) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let mut vm = EbpfVm::new(None)?;
-    vm.set_verifier(bpf_verifier::check)?;
-    vm.set_elf(&prog)?;
-
-    let heap_region =
-        syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
-
-    Ok((vm, heap_region))
-}
-
-pub fn check_elf(prog: &[u8]) -> Result<(), EbpfError<BPFError>> {
-    let mut vm = EbpfVm::new(None)?;
-    vm.set_verifier(bpf_verifier::check)?;
-    vm.set_elf(&prog)?;
-    Ok(())
-}
-
-/// Look for a duplicate account and return its position if found
-pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool, usize) {
-    for (i, account) in accounts.iter().enumerate() {
-        if account == keyed_account {
-            return (true, i);
-        }
-    }
-    (false, 0)
-}
-
+/// Point all log messages to the log collector
 macro_rules! log{
     ($logger:ident, $message:expr) => {
         if let Ok(mut logger) = $logger.try_borrow_mut() {
@@ -102,23 +71,42 @@ macro_rules! log{
     };
     ($logger:ident, $fmt:expr, $($arg:tt)*) => {
         if let Ok(mut logger) = $logger.try_borrow_mut() {
-            logger.log(&format!($fmt, $($arg)*));
+            if logger.log_enabled() {
+                logger.log(&format!($fmt, $($arg)*));
+            }
         }
     };
 }
 
-struct ThisInstructionMeter {
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+pub fn create_and_cache_executor(
+    program: &KeyedAccount,
+    invoke_context: &mut dyn InvokeContext,
+) -> Result<Arc<BPFExecutor>, InstructionError> {
+    let executable = EbpfVm::create_executable_from_elf(
+        &program.try_account_ref()?.data,
+        Some(bpf_verifier::check),
+    )
+    .map_err(|e| {
+        let logger = invoke_context.get_logger();
+        log!(logger, "{}", e);
+        InstructionError::InvalidAccountData
+    })?;
+    let executor = Arc::new(BPFExecutor { executable });
+    invoke_context.add_executor(program.unsigned_key(), executor.clone());
+    Ok(executor)
 }
-impl InstructionMeter for ThisInstructionMeter {
-    fn consume(&mut self, amount: u64) {
-        // 1 to 1 instruction to compute unit mapping
-        // ignore error, Ebpf will bail if exceeded
-        let _ = self.compute_meter.borrow_mut().consume(amount);
-    }
-    fn get_remaining(&self) -> u64 {
-        self.compute_meter.borrow().get_remaining()
-    }
+
+/// Create the BPF virtual machine
+pub fn create_vm<'a>(
+    loader_id: &'a Pubkey,
+    executable: &'a dyn Executable<BPFError>,
+    parameter_accounts: &'a [KeyedAccount<'a>],
+    invoke_context: &'a mut dyn InvokeContext,
+) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
+    let mut vm = EbpfVm::new(executable)?;
+    let heap_region =
+        syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
+    Ok((vm, heap_region))
 }
 
 pub fn process_instruction(
@@ -135,8 +123,82 @@ pub fn process_instruction(
         log!(logger, "No account keys");
         return Err(InstructionError::NotEnoughAccountKeys);
     }
+    let program = &keyed_accounts[0];
 
     if is_executable(keyed_accounts)? {
+        let executor = match invoke_context.get_executor(program.unsigned_key()) {
+            Some(executor) => executor,
+            None => create_and_cache_executor(program, invoke_context)?,
+        };
+        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
+    } else if !keyed_accounts.is_empty() {
+        match limited_deserialize(instruction_data)? {
+            LoaderInstruction::Write { offset, bytes } => {
+                if program.signer_key().is_none() {
+                    log!(logger, "key[0] did not sign the transaction");
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                let offset = offset as usize;
+                let len = bytes.len();
+                if program.data_len()? < offset + len {
+                    log!(
+                        logger,
+                        "Write overflow: {} < {}",
+                        program.data_len()?,
+                        offset + len
+                    );
+                    return Err(InstructionError::AccountDataTooSmall);
+                }
+                program.try_account_ref_mut()?.data[offset..offset + len].copy_from_slice(&bytes);
+            }
+            LoaderInstruction::Finalize => {
+                if program.signer_key().is_none() {
+                    log!(logger, "key[0] did not sign the transaction");
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+
+                let _ = create_and_cache_executor(program, invoke_context)?;
+                program.try_account_ref_mut()?.executable = true;
+                log!(
+                    logger,
+                    "Finalized account {:?}",
+                    program.signer_key().unwrap()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Passed to the VM to enforce the compute budget
+struct ThisInstructionMeter {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+}
+impl InstructionMeter for ThisInstructionMeter {
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore error, Ebpf will bail if exceeded
+        let _ = self.compute_meter.borrow_mut().consume(amount);
+    }
+    fn get_remaining(&self) -> u64 {
+        self.compute_meter.borrow().get_remaining()
+    }
+}
+
+/// BPF Loader's Executor implementation
+pub struct BPFExecutor {
+    executable: Box<dyn Executable<BPFError>>,
+}
+impl Executor for BPFExecutor {
+    fn execute(
+        &self,
+        program_id: &Pubkey,
+        keyed_accounts: &[KeyedAccount],
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+    ) -> Result<(), InstructionError> {
+        let logger = invoke_context.get_logger();
+
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
@@ -149,10 +211,9 @@ pub fn process_instruction(
         )?;
         {
             let compute_meter = invoke_context.get_compute_meter();
-            let program_account = program.try_account_ref_mut()?;
             let (mut vm, heap_region) = match create_vm(
                 program_id,
-                &program_account.data,
+                self.executable.as_ref(),
                 &parameter_accounts,
                 invoke_context,
             ) {
@@ -201,59 +262,15 @@ pub fn process_instruction(
         }
         deserialize_parameters(program_id, parameter_accounts, &parameter_bytes)?;
         log!(logger, "BPF program {} success", program.unsigned_key());
-    } else if !keyed_accounts.is_empty() {
-        match limited_deserialize(instruction_data)? {
-            LoaderInstruction::Write { offset, bytes } => {
-                let mut keyed_accounts_iter = keyed_accounts.iter();
-                let program = next_keyed_account(&mut keyed_accounts_iter)?;
-                if program.signer_key().is_none() {
-                    log!(logger, "key[0] did not sign the transaction");
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                let offset = offset as usize;
-                let len = bytes.len();
-                if program.data_len()? < offset + len {
-                    log!(
-                        logger,
-                        "Write overflow: {} < {}",
-                        program.data_len()?,
-                        offset + len
-                    );
-                    return Err(InstructionError::AccountDataTooSmall);
-                }
-                program.try_account_ref_mut()?.data[offset..offset + len].copy_from_slice(&bytes);
-            }
-            LoaderInstruction::Finalize => {
-                let mut keyed_accounts_iter = keyed_accounts.iter();
-                let program = next_keyed_account(&mut keyed_accounts_iter)?;
-
-                if program.signer_key().is_none() {
-                    log!(logger, "key[0] did not sign the transaction");
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-
-                if let Err(e) = check_elf(&program.try_account_ref()?.data) {
-                    log!(logger, "{}", e);
-                    return Err(InstructionError::InvalidAccountData);
-                }
-
-                program.try_account_ref_mut()?.executable = true;
-                log!(
-                    logger,
-                    "Finalized account {:?}",
-                    program.signer_key().unwrap()
-                );
-            }
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::message_processor::ThisInvokeContext;
+    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
     use solana_sdk::{
         account::Account,
         entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
@@ -339,6 +356,10 @@ mod tests {
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
             Rc::new(RefCell::new(self.compute_meter.clone()))
         }
+        fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+        fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+            None
+        }
     }
 
     struct TestInstructionMeter {
@@ -364,10 +385,10 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let mut vm = EbpfVm::<BPFError>::new(None).unwrap();
-        vm.set_verifier(bpf_verifier::check).unwrap();
+        let executable =
+            EbpfVm::create_executable_from_text_bytes(program, Some(bpf_verifier::check)).unwrap();
+        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref()).unwrap();
         let instruction_meter = TestInstructionMeter { remaining: 10 };
-        vm.set_program(program).unwrap();
         vm.execute_program_metered(input, &[], &[], instruction_meter)
             .unwrap();
     }
@@ -518,38 +539,25 @@ mod tests {
 
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
+        let mut invoke_context = MockInvokeContext::default();
+
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(
-                &bpf_loader::id(),
-                &[],
-                &[],
-                &mut MockInvokeContext::default()
-            )
+            process_instruction(&bpf_loader::id(), &[], &[], &mut invoke_context)
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(
-                &bpf_loader::id(),
-                &keyed_accounts,
-                &[],
-                &mut MockInvokeContext::default()
-            )
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.borrow_mut().executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(
-                &bpf_loader::id(),
-                &keyed_accounts,
-                &[],
-                &mut MockInvokeContext::default()
-            )
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
 
@@ -558,12 +566,7 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(
-                &bpf_loader::id(),
-                &keyed_accounts,
-                &[],
-                &mut MockInvokeContext::default()
-            )
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
 
         // Case: limited budget
@@ -583,6 +586,7 @@ mod tests {
                 invoke_units: 1000,
                 max_invoke_depth: 2,
             },
+            Rc::new(RefCell::new(Executors::default())),
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),
