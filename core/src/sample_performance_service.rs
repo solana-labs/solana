@@ -8,6 +8,12 @@ use std::{
     thread::{self, sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+use solana_ledger::blockstore_meta::PerfSample;
+
+pub struct SamplePerformanceDelta {
+    pub num_transactions: u64,
+    pub num_slots: u64
+}
 
 const SAMPLE_INTERVAL: u64 = 60;
 const SLEEP_INTERVAL: u64 = 500;
@@ -20,6 +26,8 @@ pub struct SamplePerformanceSnapshot {
 pub struct SamplePerformanceService {
     thread_hdl: JoinHandle<()>,
 }
+
+const SAMPLE_INTERVAL: u64 = 10;
 
 impl SamplePerformanceService {
     #[allow(clippy::new_ret_no_self)]

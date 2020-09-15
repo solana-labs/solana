@@ -17,7 +17,6 @@ use crate::{
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
-    sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
