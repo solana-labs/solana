@@ -107,6 +107,7 @@ fn test_program_bpf_sanity() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
+            ("alloc", true),
             ("bpf_to_bpf", true),
             ("multiple_static", true),
             ("noop", true),
