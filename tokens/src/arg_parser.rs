@@ -41,11 +41,16 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
+                        .value_name("FILE")
+                        .help(
+                            "Location for storing distribution database. \
+                            The database is used for tracking transactions as they are finalized \
+                            and preventing double spends.",
+                        ),
                 )
                 .arg(
                     Arg::with_name("from_bids")
@@ -105,11 +110,16 @@ where
             SubCommand::with_name("distribute-stake")
                 .about("Distribute stake accounts")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
+                        .value_name("FILE")
+                        .help(
+                            "Location for storing distribution database. \
+                            The database is used for tracking transactions as they are finalized \
+                            and preventing double spends.",
+                        ),
                 )
                 .arg(
                     Arg::with_name("input_csv")
@@ -224,11 +234,12 @@ where
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
+                        .value_name("FILE")
+                        .help("Location of database to query"),
                 )
                 .arg(
                     Arg::with_name("output_path")
@@ -240,22 +251,6 @@ where
                 ),
         )
         .get_matches_from(args)
-}
-
-fn create_db_path(campaign_name: Option<String>) -> String {
-    let (prefix, hyphen) = if let Some(name) = campaign_name {
-        (name, "-")
-    } else {
-        ("".to_string(), "")
-    };
-    let path = dirs::home_dir().unwrap();
-    let filename = format!("{}{}transactions.db", prefix, hyphen);
-    path.join(".config")
-        .join("solana-tokens")
-        .join(filename)
-        .to_str()
-        .unwrap()
-        .to_string()
 }
 
 fn parse_distribute_tokens_args(
@@ -283,7 +278,7 @@ fn parse_distribute_tokens_args(
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
@@ -360,7 +355,7 @@ fn parse_distribute_stake_args(
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: false,
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
@@ -380,7 +375,7 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
     TransactionLogArgs {
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: value_t_or_exit!(matches, "output_path", String),
     }
 }
