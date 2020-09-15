@@ -54,6 +54,12 @@ pub enum Error {
     TransportError(#[from] TransportError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
+    #[error("insufficient funds for fee ({0} SOL)")]
+    InsufficientFundsForFees(f64),
+    #[error("insufficient funds for distribution ({0} SOL)")]
+    InsufficientFundsForDistribution(f64),
+    #[error("insufficient funds for distribution ({0} SOL) and fee ({1} SOL)")]
+    InsufficientFundsForDistributionAndFees(f64, f64),
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -203,6 +209,7 @@ async fn distribute_allocations(
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
+    let mut num_signatures = 0;
     for allocation in allocations {
         let new_stake_account_keypair = Keypair::new();
         let new_stake_account_address = new_stake_account_keypair.pubkey();
@@ -221,6 +228,7 @@ async fn distribute_allocations(
             }
         }
         let signers = unique_signers(signers);
+        num_signatures += signers.len();
 
         let lockup_date = if allocation.lockup_date == "" {
             None
@@ -260,6 +268,16 @@ async fn distribute_allocations(
                 eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
             }
         };
+    }
+    if args.dry_run {
+        let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+        check_payer_balances(
+            num_signatures,
+            sol_to_lamports(undistributed_tokens),
+            client,
+            args,
+        )
+        .await?;
     }
     Ok(())
 }
@@ -451,6 +469,40 @@ async fn update_finalized_transactions(
         }
     }
     Ok(confirmations)
+}
+
+async fn check_payer_balances(
+    num_signatures: usize,
+    allocation_lamports: u64,
+    client: &mut BanksClient,
+    args: &DistributeTokensArgs,
+) -> Result<(), Error> {
+    let (fee_calculator, _blockhash, _last_valid_slot) = client.get_fees().await?;
+    let fees = fee_calculator
+        .lamports_per_signature
+        .checked_mul(num_signatures as u64)
+        .unwrap();
+    if args.fee_payer.pubkey() == args.sender_keypair.pubkey() {
+        let balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        if balance < fees + allocation_lamports {
+            return Err(Error::InsufficientFundsForDistributionAndFees(
+                lamports_to_sol(allocation_lamports),
+                lamports_to_sol(fees),
+            ));
+        }
+    } else {
+        let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        if fee_payer_balance < fees {
+            return Err(Error::InsufficientFundsForFees(lamports_to_sol(fees)));
+        }
+        let sender_balance = client.get_balance(args.sender_keypair.pubkey()).await?;
+        if sender_balance < allocation_lamports {
+            return Err(Error::InsufficientFundsForDistribution(lamports_to_sol(
+                allocation_lamports,
+            )));
+        }
+    }
+    Ok(())
 }
 
 pub async fn process_balances(
