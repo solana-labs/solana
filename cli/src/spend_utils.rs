@@ -1,5 +1,8 @@
 use crate::{
-    checks::{calculate_fee, check_account_for_balance_with_commitment},
+    checks::{
+        calculate_fee, check_account_for_balance_with_commitment,
+        check_account_for_multiple_fees_with_commitment,
+    },
     cli::CliError,
 };
 use clap::ArgMatches;
@@ -120,6 +123,45 @@ where
         }
         Ok((message, spend))
     }
+}
+
+pub fn check_account_balances(
+    rpc_client: &RpcClient,
+    amount: u64,
+    fee_calculator: &FeeCalculator,
+    from_pubkey: &Pubkey,
+    fee_pubkey: &Pubkey,
+    messages: &[&Message],
+    commitment: CommitmentConfig,
+) -> Result<(), CliError> {
+    let from_balance = rpc_client
+        .get_balance_with_commitment(&from_pubkey, commitment)?
+        .value;
+    let fee = calculate_fee(fee_calculator, messages);
+    let spend = amount
+        .checked_mul(messages.len() as u64)
+        .ok_or_else(|| CliError::BadParameter("Amount overflow".to_string()))?;
+    if from_pubkey == fee_pubkey {
+        if from_balance == 0 || from_balance < spend + fee {
+            return Err(CliError::InsufficientFundsForSpendAndFee(
+                lamports_to_sol(spend),
+                lamports_to_sol(fee),
+            ));
+        }
+    } else {
+        if from_balance < spend {
+            return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(spend)));
+        }
+        check_account_for_multiple_fees_with_commitment(
+            rpc_client,
+            fee_pubkey,
+            &fee_calculator,
+            messages,
+            commitment,
+        )
+        .map_err(|_| CliError::InsufficientFundsForFee(lamports_to_sol(fee)))?;
+    }
+    Ok(())
 }
 
 fn resolve_spend_message<F>(

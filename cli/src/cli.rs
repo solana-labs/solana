@@ -1455,7 +1455,7 @@ fn process_transfer_many(
     let fee_payer = config.signers[fee_payer];
 
     // Build transactions
-    let (blockhash, _, _) = rpc_client
+    let (blockhash, fee_calculator, _) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
         .value;
     let mut transactions: Vec<Transaction> = Vec::new();
@@ -1474,6 +1474,20 @@ fn process_transfer_many(
         };
         transactions.push(Transaction::new_unsigned(message));
     }
+    let mut message_refs = vec![];
+    for transaction in transactions.iter() {
+        message_refs.push(&transaction.message);
+    }
+
+    check_account_balances(
+        rpc_client,
+        lamports,
+        &fee_calculator,
+        &from.pubkey(),
+        &fee_payer.pubkey(),
+        &message_refs,
+        config.commitment,
+    )?;
 
     if let Some(nonce_account) = &nonce_account {
         let nonce_account =
