@@ -34,6 +34,7 @@ use solana_client::{
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
+use solana_ledger::blockstore_meta::PerfSample;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -79,6 +80,7 @@ use std::{
 use tokio::runtime;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
@@ -1496,6 +1498,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
+    #[rpc(meta, name = "getRecentPerformanceSamples")]
+    fn get_recent_performance_samples(&self, meta: Self::Metadata, limit: Option<usize>, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>>;
+
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
         &self,
@@ -1883,6 +1888,33 @@ impl RpcSol for RpcSolImpl {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         Ok(meta.get_balance(&pubkey, commitment))
+    }
+
+    fn get_recent_performance_samples(&self, meta: Self::Metadata, limit: Option<usize>, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>> {
+        debug!("get_recent_performance_samples request received");
+        let bank = meta.bank(commitment);
+
+        let limit = match limit {
+            Some(limit) => limit,
+            None => PERFORMANCE_SAMPLES_LIMIT
+        };
+
+        if limit > PERFORMANCE_SAMPLES_LIMIT {
+            return Err(Error::invalid_params(format!(
+                "Invalid limit; max {}",
+                PERFORMANCE_SAMPLES_LIMIT
+            )));
+        }
+
+        let results = meta.blockstore.get_recent_perf_samples(limit);
+
+        match results {
+            Ok(results) => Ok(new_response(&bank, results)),
+            Err(err) => {
+                warn!("get_recent_performance_samples failed: {:?}", err);
+                Err(Error::invalid_request())
+            }
+        }
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {

@@ -1,28 +1,26 @@
-use solana_runtime::{
-    bank_forks::{BankForks},
-};
 use solana_ledger::blockstore::Blockstore;
+use solana_ledger::blockstore_meta::PerfSample;
+use solana_runtime::bank_forks::BankForks;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
-        RwLock
+        Arc, RwLock,
     },
-    thread::{self, Builder, JoinHandle, sleep},
-    time::{SystemTime, UNIX_EPOCH, Duration},
+    thread::{self, sleep, Builder, JoinHandle},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use solana_ledger::blockstore_meta::PerfSample;
+
+const SAMPLE_INTERVAL: u64 = 60;
+const SLEEP_INTERVAL: u64 = 500;
 
 pub struct SamplePerformanceDelta {
     pub num_transactions: u64,
-    pub num_slots: u64
+    pub num_slots: u64,
 }
 
 pub struct SamplePerformanceService {
     thread_hdl: JoinHandle<()>,
 }
-
-const SAMPLE_INTERVAL: u64 = 10;
 
 impl SamplePerformanceService {
     #[allow(clippy::new_ret_no_self)]
@@ -39,11 +37,7 @@ impl SamplePerformanceService {
         let thread_hdl = Builder::new()
             .name("sample-performance".to_string())
             .spawn(move || {
-                Self::run(
-                    bank_forks,
-                    &blockstore,
-                    exit
-                );
+                Self::run(bank_forks, &blockstore, exit);
             })
             .unwrap();
 
@@ -55,7 +49,6 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-
         let mut sample_deltas: Option<SamplePerformanceDelta> = None;
 
         loop {
@@ -64,28 +57,31 @@ impl SamplePerformanceService {
             }
 
             let start = SystemTime::now();
-            let since_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards").as_millis() as u64;
+            let since_epoch = start
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_millis() as u64;
             let elapsed_offset = since_epoch % (SAMPLE_INTERVAL * 1000);
 
-            if elapsed_offset < 500 {
-                let forks = bank_forks.read().unwrap();
-                let bank = forks.working_bank();
-                let highest_slot = forks.highest_slot();
-                drop(forks);
+            if elapsed_offset < SLEEP_INTERVAL {
+                let bank_forks = bank_forks.read().unwrap();
+                let bank = bank_forks.working_bank();
+                let highest_slot = bank_forks.highest_slot();
+                drop(bank_forks);
 
                 match sample_deltas {
-                    None => info!("Initialized SamplePerformance service"),
+                    None => info!("Initializing SamplePerformance service"),
                     Some(ref snapshot) => {
                         let perf_sample = PerfSample {
                             num_slots: highest_slot - snapshot.num_slots,
                             num_transactions: bank.transaction_count() - snapshot.num_transactions,
-                            sample_period_secs: SAMPLE_INTERVAL as u16
+                            sample_period_secs: SAMPLE_INTERVAL as u16,
                         };
 
                         if let Err(e) = blockstore.write_perf_sample(highest_slot, &perf_sample) {
                             error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
                         }
-                    },
+                    }
                 }
 
                 sample_deltas = Some(SamplePerformanceDelta {
@@ -93,9 +89,9 @@ impl SamplePerformanceService {
                     num_slots: highest_slot,
                 });
 
-                sleep(Duration::from_millis(500 - elapsed_offset));
+                sleep(Duration::from_millis(SLEEP_INTERVAL - elapsed_offset));
             } else {
-                sleep(Duration::from_millis(500));
+                sleep(Duration::from_millis(SLEEP_INTERVAL));
             }
         }
     }
