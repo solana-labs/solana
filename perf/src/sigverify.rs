@@ -598,7 +598,7 @@ mod tests {
         tx0.message.instructions[0].data = vec![1, 2, 3];
         let message0a = tx0.message_data();
         let tx_bytes = serialize(&tx0).unwrap();
-        assert!(tx_bytes.len() < PACKET_DATA_SIZE);
+        assert!(tx_bytes.len() <= PACKET_DATA_SIZE);
         assert_eq!(
             memfind(&tx_bytes, &tx0.signatures[0].as_ref()),
             Some(SIG_OFFSET)
