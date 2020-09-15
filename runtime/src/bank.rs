@@ -2432,7 +2432,7 @@ impl Bank {
         let should_enable = match self.cluster_type() {
             ClusterType::Development => true,
             ClusterType::Devnet => true,
-            ClusterType::Testnet => current_epoch >= Epoch::max_value(),
+            ClusterType::Testnet => current_epoch >= 97,
             ClusterType::MainnetBeta => {
                 #[cfg(not(test))]
                 let should_enable = current_epoch >= Epoch::max_value();
