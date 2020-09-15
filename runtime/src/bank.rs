@@ -2771,7 +2771,7 @@ impl Bank {
         let should_be_in_new_behavior = match self.cluster_type() {
             ClusterType::Development => true,
             ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
+            ClusterType::Testnet => self.epoch() >= 97,
             ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
         };
 
