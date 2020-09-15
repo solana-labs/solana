@@ -179,11 +179,10 @@ declare module '@solana/web3.js' {
   };
 
   declare export type StakeActivationData = {
-    state: string;
-    active: number;
-    inactive: number;
+    state: string,
+    active: number,
+    inactive: number,
   };
-
 
   declare export type ParsedMessageAccount = {
     pubkey: PublicKey,

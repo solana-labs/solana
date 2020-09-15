@@ -812,9 +812,8 @@ const ParsedAccountInfoResult = struct.object({
 const StakeActivationResult = struct.object({
   state: 'string',
   active: 'number',
-  inactive: 'number'
+  inactive: 'number',
 });
-
 
 /**
  * Expected JSON RPC response for the "getAccountInfo" message
@@ -1896,16 +1895,25 @@ export class Connection {
     commitment: ?Commitment,
     epoch: ?number,
   ): Promise<StakeActivationData | null> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment, epoch, 'base64');
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      epoch,
+      'base64',
+    );
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
     if (res.error) {
-      throw new Error(`failed to get Stake Activation ${publicKey.toBase58()}: ${res.error.message}`);
+      throw new Error(
+        `failed to get Stake Activation ${publicKey.toBase58()}: ${
+          res.error.message
+        }`,
+      );
     }
     assert(typeof res.result !== 'undefined');
 
     const {state, active, inactive} = res.result;
-    return { state, active, inactive };
+    return {state, active, inactive};
   }
 
   /**
