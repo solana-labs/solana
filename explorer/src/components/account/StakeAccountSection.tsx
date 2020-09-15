@@ -11,17 +11,20 @@ import {
   StakeAccountType,
 } from "validators/accounts/stake";
 import BN from "bn.js";
+import { StakeActivationData } from "@solana/web3.js";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
 export function StakeAccountSection({
   account,
   stakeAccount,
+  activation,
   stakeAccountType,
 }: {
   account: Account;
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
+  activation: StakeActivationData | null;
 }) {
   return (
     <>
@@ -35,6 +38,7 @@ export function StakeAccountSection({
         <>
           <DelegationCard
             stakeAccount={stakeAccount}
+            activation={activation}
             stakeAccountType={stakeAccountType}
           />
           <AuthoritiesCard meta={stakeAccount.meta} />
@@ -129,9 +133,11 @@ function OverviewCard({
 function DelegationCard({
   stakeAccount,
   stakeAccountType,
+  activation,
 }: {
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
+  activation: StakeActivationData | null;
 }) {
   const displayStatus = () => {
     // TODO check epoch
@@ -139,7 +145,7 @@ function DelegationCard({
     if (stakeAccountType !== "delegated") {
       status = "Not delegated";
     }
-    return status;
+    return `${status} (${activation?.state})`;
   };
 
   let voterPubkey, activationEpoch, deactivationEpoch;
