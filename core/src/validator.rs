@@ -281,11 +281,16 @@ impl Validator {
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        let sample_performance_service = Some(SamplePerformanceService::new(
-            &bank_forks,
-            &blockstore,
-            &exit,
-        ));
+        let sample_performance_service =
+            if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
+                Some(SamplePerformanceService::new(
+                    &bank_forks,
+                    &blockstore,
+                    &exit,
+                ))
+            } else {
+                None
+            };
 
         info!("Starting validator with working bank slot {}", bank.slot());
         {
