@@ -171,7 +171,7 @@ impl CachedExecutors {
     }
     pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.get(pubkey).map(|(count, executor)| {
-            count.fetch_add(1, Ordering::Relaxed);
+            count.fetch_add(1, Relaxed);
             executor.clone()
         })
     }
@@ -182,7 +182,7 @@ impl CachedExecutors {
                 let default_key = Pubkey::default();
                 let mut least_key = &default_key;
                 for (key, (count, _)) in self.executors.iter() {
-                    let count = count.load(Ordering::Relaxed);
+                    let count = count.load(Relaxed);
                     if count < least {
                         least = count;
                         least_key = key;
