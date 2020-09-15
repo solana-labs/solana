@@ -14,6 +14,7 @@ use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
     epoch_info::EpochInfo,
     native_token::lamports_to_sol,
+    signature::Signature,
     stake_history::StakeHistoryEntry,
 };
 use solana_stake_program::stake_state::{Authorized, Lockup};
@@ -1143,5 +1144,35 @@ impl fmt::Display for CliFees {
         )?;
         writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliTransferManyResults {
+    results: HashMap<String, bool>,
+}
+
+impl fmt::Display for CliTransferManyResults {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (signature, success) in self.results.iter() {
+            writeln!(
+                f,
+                "{} {}",
+                signature,
+                if *success { "Succeeded" } else { "Failed" }
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl From<Vec<(Signature, bool)>> for CliTransferManyResults {
+    fn from(results_vec: Vec<(Signature, bool)>) -> Self {
+        let mut results = HashMap::new();
+        for (signature, success) in results_vec {
+            results.insert(signature.to_string(), success);
+        }
+        Self { results }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     checks::*,
-    cli_output::{CliAccount, CliSignOnlyData, CliSignature, OutputFormat},
+    cli_output::{CliAccount, CliSignOnlyData, CliSignature, CliTransferManyResults, OutputFormat},
     cluster_query::*,
     display::{new_spinner_progress_bar, println_name_value, println_transaction},
     nonce::{self, *},
@@ -11,6 +11,7 @@ use crate::{
     vote::*,
 };
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use csv::{ReaderBuilder, Trim};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
@@ -60,6 +61,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
+    process::exit,
     str::FromStr,
     sync::Arc,
     thread::sleep,
@@ -419,6 +421,14 @@ pub enum CliCommand {
         sign_only: bool,
         no_wait: bool,
         blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
+        fee_payer: SignerIndex,
+    },
+    TransferMany {
+        lamports: u64,
+        recipients: Vec<Pubkey>,
+        from: SignerIndex,
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
@@ -914,6 +924,63 @@ pub fn parse_command(
                 signers: signer_info.signers,
             })
         }
+        ("transfer-many", Some(matches)) => {
+            let input_file = matches.value_of("addresses").unwrap();
+            let mut csv_reader = ReaderBuilder::new()
+                .trim(Trim::All)
+                .has_headers(false)
+                .from_path(input_file)
+                .map_err(|err| CliError::BadParameter(format!("addresses, {:?}", err)))?;
+            let mut recipients: Vec<Pubkey> = vec![];
+            for recipient in csv_reader.deserialize() {
+                match recipient {
+                    Ok(recipient) => {
+                        let recipient: String = recipient;
+                        let pubkey = Pubkey::from_str(&recipient).unwrap_or_else(|err| {
+                            eprintln!("Unable to parse address {}: {:?}", input_file, err);
+                            exit(1);
+                        });
+                        recipients.push(pubkey);
+                    }
+                    Err(err) => {
+                        eprintln!("Unable to parse address at {}: {:?}", input_file, err);
+                        exit(1);
+                    }
+                }
+            }
+
+            let lamports = lamports_of_sol(matches, "amount").unwrap();
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
+            let (nonce_authority, nonce_authority_pubkey) =
+                signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+            let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
+
+            let mut bulk_signers = vec![fee_payer, from];
+            if nonce_account.is_some() {
+                bulk_signers.push(nonce_authority);
+            }
+
+            let signer_info = generate_unique_signers(
+                bulk_signers,
+                matches,
+                default_signer_path,
+                wallet_manager,
+            )?;
+
+            Ok(CliCommandInfo {
+                command: CliCommand::TransferMany {
+                    lamports,
+                    recipients,
+                    nonce_account,
+                    nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+                    fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+                    from: signer_info.index_of(from_pubkey).unwrap(),
+                },
+                signers: signer_info.signers,
+            })
+        }
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1371,6 +1438,60 @@ fn process_transfer(
         };
         log_instruction_custom_error::<SystemError>(result, &config)
     }
+}
+
+fn process_transfer_many(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    lamports: u64,
+    recipients: &[Pubkey],
+    from: SignerIndex,
+    nonce_account: Option<&Pubkey>,
+    nonce_authority: SignerIndex,
+    fee_payer: SignerIndex,
+) -> ProcessResult {
+    let from = config.signers[from];
+    let nonce_authority = config.signers[nonce_authority];
+    let fee_payer = config.signers[fee_payer];
+
+    // Build transactions
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+    let mut transactions: Vec<Transaction> = Vec::new();
+    for to in recipients.iter() {
+        let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
+
+        let message = if let Some(nonce_account) = &nonce_account {
+            Message::new_with_nonce(
+                ixs,
+                Some(&fee_payer.pubkey()),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        } else {
+            Message::new(&ixs, Some(&fee_payer.pubkey()))
+        };
+        transactions.push(Transaction::new_unsigned(message));
+    }
+
+    if let Some(nonce_account) = &nonce_account {
+        let nonce_account =
+            nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+        check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
+    }
+
+    let results = rpc_client.transact(
+        transactions,
+        &config.signers,
+        &fee_payer.pubkey(),
+        TransactConfig {
+            spinner: Some(new_spinner_progress_bar()),
+            ..TransactConfig::default()
+        },
+    )?;
+    let results: CliTransferManyResults = results.into();
+    Ok(config.output_format.formatted_string(&results))
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
@@ -1911,6 +2032,23 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             *fee_payer,
         ),
+        CliCommand::TransferMany {
+            lamports,
+            recipients,
+            from,
+            ref nonce_account,
+            nonce_authority,
+            fee_payer,
+        } => process_transfer_many(
+            &rpc_client,
+            config,
+            *lamports,
+            recipients,
+            *from,
+            nonce_account.as_ref(),
+            *nonce_authority,
+            *fee_payer,
+        ),
     }
 }
 
@@ -2259,6 +2397,35 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+                .arg(fee_payer_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("transfer-many")
+                .about("Transfer funds to a set of system account addresses")
+                .arg(
+                    Arg::with_name("addresses")
+                        .index(1)
+                        .value_name("FILEPATH")
+                        .required(true)
+                        .help("Path to file containing a newline-separated list of recipient addresses"),
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .index(2)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .validator(is_amount)
+                        .required(true)
+                        .help("The amount to send each address, in SOL"),
+                )
+                .arg(
+                    pubkey!(Arg::with_name("from")
+                        .long("from")
+                        .value_name("FROM_ADDRESS"),
+                        "Source account of funds (if different from client local account). "),
+                )
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
                 .arg(fee_payer_arg()),
