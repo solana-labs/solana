@@ -107,8 +107,10 @@ Alternatively use the Github UI.
    1.  If the Cargo.toml version field is **0.12.3**, then the release tag must be **v0.12.3**
 1. Make sure the Target Branch field matches the branch you want to make a release on.
    1.  If you want to release v0.12.0, the target branch must be v0.12
-1. If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
-   template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.  If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
+1. Fill the release notes.
+   1.  If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
+   template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.
+   1. If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
 1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.
 1. Ensure all desired commits (usually backports) are landed on the branch by now.
 1. Ensure the release is marked **"This is a pre-release"**.  This flag will need to be be removed manually after confirming the the Linux binary artifacts appear at a later step.
