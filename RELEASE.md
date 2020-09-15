@@ -110,8 +110,10 @@ Alternatively use the Github UI.
 1. If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
    template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.  If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
 1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.
-1. Ensure the release is marked **"This is a pre-release"**.  This flag will then need to be be removed once the the Linux binary artifacts appear later.
-1. Go back into edit the release and click "Publish release" when ready.
+1. Ensure all desired commits (usually backports) are landed on the branch by now.
+1. Ensure the release is marked **"This is a pre-release"**.  This flag will need to be be removed manually after confirming the the Linux binary artifacts appear at a later step.
+1. Go back into edit the release and click "Publish release" while being marked as a pre-release.
+1. Confirm there is new git tag with intended version number at the intended revision after running `git fetch` locally.
 
 
 ### Update release branch with the next patch version
