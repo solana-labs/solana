@@ -2092,6 +2092,12 @@ dependencies = [
 name = "solana-secp256k1-program"
 version = "1.4.0"
 dependencies = [
+ "bincode",
+ "digest 0.9.0",
+ "libsecp256k1",
+ "rand",
+ "sha3",
+ "solana-logger",
  "solana-sdk",
 ]
 
