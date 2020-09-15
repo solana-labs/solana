@@ -75,6 +75,14 @@ where
                         .help("Do not execute any transfers"),
                 )
                 .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the transaction log to this file"),
+                )
+                .arg(
                     Arg::with_name("sender_keypair")
                         .long("from")
                         .required(true)
@@ -115,6 +123,14 @@ where
                     Arg::with_name("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
+                )
+                .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the transaction log to this file"),
                 )
                 .arg(
                     Arg::with_name("sender_keypair")
@@ -268,6 +284,7 @@ fn parse_distribute_tokens_args(
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
         transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
         sender_keypair,
@@ -344,6 +361,7 @@ fn parse_distribute_stake_args(
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: false,
         transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
         sender_keypair,

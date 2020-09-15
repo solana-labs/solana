@@ -388,6 +388,13 @@ pub async fn process_allocations(
     distribute_allocations(client, &mut db, &allocations, args).await?;
 
     let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
+
+    if !args.dry_run {
+        if let Some(output_path) = &args.output_path {
+            db::write_transaction_log(&db, &output_path)?;
+        }
+    }
+
     Ok(opt_confirmations)
 }
 
@@ -544,6 +551,7 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
     Ok(())
 }
 
+use crate::db::check_output_file;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub async fn test_process_distribute_tokens_with_client(
@@ -591,6 +599,9 @@ pub async fn test_process_distribute_tokens_with_client(
         .unwrap()
         .to_string();
 
+    let output_file = NamedTempFile::new().unwrap();
+    let output_path = output_file.path().to_str().unwrap().to_string();
+
     let args = DistributeTokensArgs {
         sender_keypair: Box::new(sender_keypair),
         fee_payer: Box::new(fee_payer),
@@ -598,6 +609,7 @@ pub async fn test_process_distribute_tokens_with_client(
         input_csv,
         from_bids: false,
         transaction_db: transaction_db.clone(),
+        output_path: Some(output_path.clone()),
         dollars_per_sol: None,
         stake_args: None,
     };
@@ -619,6 +631,8 @@ pub async fn test_process_distribute_tokens_with_client(
         expected_amount,
     );
 
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+
     // Now, run it again, and check there's no double-spend.
     process_allocations(client, &args).await.unwrap();
     let transaction_infos =
@@ -635,6 +649,8 @@ pub async fn test_process_distribute_tokens_with_client(
         client.get_balance(alice_pubkey).await.unwrap(),
         expected_amount,
     );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
 pub async fn test_process_distribute_stake_with_client(
@@ -701,6 +717,9 @@ pub async fn test_process_distribute_stake_with_client(
         .unwrap()
         .to_string();
 
+    let output_file = NamedTempFile::new().unwrap();
+    let output_path = output_file.path().to_str().unwrap().to_string();
+
     let stake_args = StakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
@@ -713,6 +732,7 @@ pub async fn test_process_distribute_stake_with_client(
         dry_run: false,
         input_csv,
         transaction_db: transaction_db.clone(),
+        output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
         from_bids: false,
         sender_keypair: Box::new(sender_keypair),
@@ -741,6 +761,8 @@ pub async fn test_process_distribute_stake_with_client(
         expected_amount - sol_to_lamports(1.0),
     );
 
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+
     // Now, run it again, and check there's no double-spend.
     process_allocations(client, &args).await.unwrap();
     let transaction_infos =
@@ -761,6 +783,8 @@ pub async fn test_process_distribute_stake_with_client(
         client.get_balance(new_stake_account_address).await.unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
 #[cfg(test)]
@@ -943,6 +967,7 @@ mod tests {
             dry_run: false,
             input_csv: "".to_string(),
             transaction_db: "".to_string(),
+            output_path: None,
             stake_args: Some(stake_args),
             from_bids: false,
             sender_keypair: Box::new(Keypair::new()),
