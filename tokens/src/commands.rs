@@ -268,19 +268,17 @@ fn read_allocations(
     input_csv: &str,
     from_bids: bool,
     dollars_per_sol: Option<f64>,
-) -> Vec<Allocation> {
-    let rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv);
-    if from_bids {
-        let bids: Vec<Bid> = rdr.unwrap().deserialize().map(|bid| bid.unwrap()).collect();
+) -> io::Result<Vec<Allocation>> {
+    let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
+    let allocations = if from_bids {
+        let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
         bids.into_iter()
             .map(|bid| create_allocation(&bid, dollars_per_sol.unwrap()))
             .collect()
     } else {
-        rdr.unwrap()
-            .deserialize()
-            .map(|entry| entry.unwrap())
-            .collect()
-    }
+        rdr.deserialize().map(|entry| entry.unwrap()).collect()
+    };
+    Ok(allocations)
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -296,7 +294,7 @@ pub async fn process_allocations(
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
+        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol)?;
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
@@ -460,7 +458,7 @@ pub async fn process_balances(
     args: &BalancesArgs,
 ) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
+        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol)?;
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -760,7 +758,10 @@ mod tests {
         wtr.serialize(&allocation).unwrap();
         wtr.flush().unwrap();
 
-        assert_eq!(read_allocations(&input_csv, false, None), vec![allocation]);
+        assert_eq!(
+            read_allocations(&input_csv, false, None).unwrap(),
+            vec![allocation]
+        );
     }
 
     #[test]
@@ -782,7 +783,7 @@ mod tests {
             lockup_date: "".to_string(),
         };
         assert_eq!(
-            read_allocations(&input_csv, true, Some(0.5)),
+            read_allocations(&input_csv, true, Some(0.5)).unwrap(),
             vec![allocation]
         );
     }
