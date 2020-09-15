@@ -26,8 +26,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
-    signature::Keypair,
-    signature::Signer,
+    signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
     transaction::TransactionError,
 };
@@ -84,7 +83,7 @@ fn run_program(
     )
     .unwrap();
     let mut parameter_bytes = serialize_parameters(
-        &bpf_loader::id(),
+        &loader_id,
         program_id,
         parameter_accounts,
         &instruction_data,
@@ -95,7 +94,7 @@ fn run_program(
         vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region.clone()])
             .unwrap()
     );
-    deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
+    deserialize_parameters(&loader_id, parameter_accounts, &parameter_bytes).unwrap();
     Ok(vm.get_total_instruction_count())
 }
 
