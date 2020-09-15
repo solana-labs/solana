@@ -2466,7 +2466,7 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
     let wire_transaction = bs58::decode(bs58_transaction)
         .into_vec()
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-    if wire_transaction.len() >= PACKET_DATA_SIZE {
+    if wire_transaction.len() > PACKET_DATA_SIZE {
         let err = format!(
             "transaction too large: {} bytes (max: {} bytes)",
             wire_transaction.len(),
