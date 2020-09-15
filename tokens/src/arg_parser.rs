@@ -53,26 +53,12 @@ where
                         ),
                 )
                 .arg(
-                    Arg::with_name("from_bids")
-                        .long("from-bids")
-                        .requires("dollars_per_sol")
-                        .help("Input CSV contains bids in dollars, not allocations in SOL"),
-                )
-                .arg(
                     Arg::with_name("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Input CSV file"),
-                )
-                .arg(
-                    Arg::with_name("dollars_per_sol")
-                        .long("dollars-per-sol")
-                        .takes_value(true)
-                        .value_name("NUMBER")
-                        .requires("from_bids")
-                        .help("Dollars per SOL, if input CSV contains bids"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -214,20 +200,6 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Bids CSV file"),
-                )
-                .arg(
-                    Arg::with_name("from_bids")
-                        .long("from-bids")
-                        .requires("dollars_per_sol")
-                        .help("Input CSV contains bids in dollars, not allocations in SOL"),
-                )
-                .arg(
-                    Arg::with_name("dollars_per_sol")
-                        .long("dollars-per-sol")
-                        .takes_value(true)
-                        .value_name("NUMBER")
-                        .requires("from_bids")
-                        .help("Dollars per SOL"),
                 ),
         )
         .subcommand(
@@ -277,10 +249,8 @@ fn parse_distribute_tokens_args(
 
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: matches.is_present("from_bids"),
         transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: matches.value_of("output_path").map(|path| path.to_string()),
-        dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
         sender_keypair,
         fee_payer,
@@ -354,10 +324,8 @@ fn parse_distribute_stake_args(
     };
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: false,
         transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: matches.value_of("output_path").map(|path| path.to_string()),
-        dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
         sender_keypair,
         fee_payer,
@@ -368,8 +336,6 @@ fn parse_distribute_stake_args(
 fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     BalancesArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: matches.is_present("from_bids"),
-        dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
     }
 }
 

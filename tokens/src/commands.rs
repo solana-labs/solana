@@ -105,14 +105,6 @@ fn apply_previous_transactions(
     allocations.retain(|x| x.amount > 0.5);
 }
 
-fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
-    Allocation {
-        recipient: bid.primary_address.clone(),
-        amount: bid.accepted_amount_dollars / dollars_per_sol,
-        lockup_date: "".to_string(),
-    }
-}
-
 async fn transfer<S: Signer>(
     client: &mut BanksClient,
     lamports: u64,
@@ -282,21 +274,9 @@ async fn distribute_allocations(
     Ok(())
 }
 
-fn read_allocations(
-    input_csv: &str,
-    from_bids: bool,
-    dollars_per_sol: Option<f64>,
-) -> io::Result<Vec<Allocation>> {
+fn read_allocations(input_csv: &str) -> io::Result<Vec<Allocation>> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
-    let allocations = if from_bids {
-        let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
-        bids.into_iter()
-            .map(|bid| create_allocation(&bid, dollars_per_sol.unwrap()))
-            .collect()
-    } else {
-        rdr.deserialize().map(|entry| entry.unwrap()).collect()
-    };
-    Ok(allocations)
+    Ok(rdr.deserialize().map(|entry| entry.unwrap()).collect())
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -311,8 +291,7 @@ pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
-    let mut allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol)?;
+    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv)?;
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
@@ -320,13 +299,6 @@ pub async fn process_allocations(
         style("Total in input_csv:").bold(),
         starting_total_tokens,
     );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Total in input_csv:").bold(),
-            starting_total_tokens * dollars_per_sol,
-        );
-    }
 
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
@@ -344,37 +316,16 @@ pub async fn process_allocations(
     let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
     let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Distributed:").bold(),
-            distributed_tokens * dollars_per_sol,
-        );
-    }
     println!(
         "{} ◎{}",
         style("Undistributed:").bold(),
         undistributed_tokens,
     );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Undistributed:").bold(),
-            undistributed_tokens * dollars_per_sol,
-        );
-    }
     println!(
         "{} ◎{}",
         style("Total:").bold(),
         distributed_tokens + undistributed_tokens,
     );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Total:").bold(),
-            (distributed_tokens + undistributed_tokens) * dollars_per_sol,
-        );
-    }
 
     println!(
         "{}",
@@ -516,8 +467,7 @@ pub async fn process_balances(
     client: &mut BanksClient,
     args: &BalancesArgs,
 ) -> Result<(), csv::Error> {
-    let allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol)?;
+    let allocations: Vec<Allocation> = read_allocations(&args.input_csv)?;
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -607,10 +557,8 @@ pub async fn test_process_distribute_tokens_with_client(
         fee_payer: Box::new(fee_payer),
         dry_run: false,
         input_csv,
-        from_bids: false,
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
-        dollars_per_sol: None,
         stake_args: None,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
@@ -734,9 +682,7 @@ pub async fn test_process_distribute_stake_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
-        from_bids: false,
         sender_keypair: Box::new(sender_keypair),
-        dollars_per_sol: None,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
@@ -834,34 +780,7 @@ mod tests {
         wtr.serialize(&allocation).unwrap();
         wtr.flush().unwrap();
 
-        assert_eq!(
-            read_allocations(&input_csv, false, None).unwrap(),
-            vec![allocation]
-        );
-    }
-
-    #[test]
-    fn test_read_allocations_from_bids() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bid = Bid {
-            primary_address: alice_pubkey.to_string(),
-            accepted_amount_dollars: 42.0,
-        };
-        let file = NamedTempFile::new().unwrap();
-        let input_csv = file.path().to_str().unwrap().to_string();
-        let mut wtr = csv::WriterBuilder::new().from_writer(file);
-        wtr.serialize(&bid).unwrap();
-        wtr.flush().unwrap();
-
-        let allocation = Allocation {
-            recipient: bid.primary_address,
-            amount: 84.0,
-            lockup_date: "".to_string(),
-        };
-        assert_eq!(
-            read_allocations(&input_csv, true, Some(0.5)).unwrap(),
-            vec![allocation]
-        );
+        assert_eq!(read_allocations(&input_csv).unwrap(), vec![allocation]);
     }
 
     #[test]
@@ -969,9 +888,7 @@ mod tests {
             transaction_db: "".to_string(),
             output_path: None,
             stake_args: Some(stake_args),
-            from_bids: false,
             sender_keypair: Box::new(Keypair::new()),
-            dollars_per_sol: None,
         };
         let lockup_date = lockup_date_str.parse().unwrap();
         let instructions = distribution_instructions(
