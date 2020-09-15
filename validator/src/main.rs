@@ -637,6 +637,12 @@ pub fn main() {
                 .help("Do not publish the RPC port for use by other nodes")
         )
         .arg(
+            Arg::with_name("no_port_check")
+                .long("--no-port-check")
+                .takes_value(false)
+                .help("Do not perform TCP/UDP reachable port check at start-up")
+        )
+        .arg(
             Arg::with_name("enable_rpc_exit")
                 .long("enable-rpc-exit")
                 .takes_value(false)
@@ -966,6 +972,7 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let no_check_vote_account = matches.is_present("no_check_vote_account");
     let private_rpc = matches.is_present("private_rpc");
+    let no_port_check = matches.is_present("no_port_check");
     let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
@@ -1316,11 +1323,13 @@ pub fn main() {
             }
         }
 
-        if !solana_net_utils::verify_reachable_ports(
-            &cluster_entrypoint.gossip,
-            tcp_listeners,
-            &udp_sockets,
-        ) {
+        if !no_port_check
+            && !solana_net_utils::verify_reachable_ports(
+                &cluster_entrypoint.gossip,
+                tcp_listeners,
+                &udp_sockets,
+            )
+        {
             exit(1);
         }
         if !no_genesis_fetch {
