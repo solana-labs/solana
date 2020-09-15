@@ -16,6 +16,7 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     signature::Signature,
     stake_history::StakeHistoryEntry,
+    transport::TransportError,
 };
 use solana_stake_program::stake_state::{Authorized, Lockup};
 use solana_vote_program::{
@@ -1150,7 +1151,7 @@ impl fmt::Display for CliFees {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliTransferManyResults {
-    results: HashMap<String, bool>,
+    results: HashMap<String, Option<String>>,
 }
 
 impl fmt::Display for CliTransferManyResults {
@@ -1160,18 +1161,21 @@ impl fmt::Display for CliTransferManyResults {
                 f,
                 "{} {}",
                 signature,
-                if *success { "Succeeded" } else { "Failed" }
+                match success {
+                    Some(err) => err,
+                    None => "Succeeded",
+                }
             )?;
         }
         Ok(())
     }
 }
 
-impl From<Vec<(Signature, bool)>> for CliTransferManyResults {
-    fn from(results_vec: Vec<(Signature, bool)>) -> Self {
+impl From<Vec<(Signature, Option<TransportError>)>> for CliTransferManyResults {
+    fn from(results_vec: Vec<(Signature, Option<TransportError>)>) -> Self {
         let mut results = HashMap::new();
         for (signature, success) in results_vec {
-            results.insert(signature.to_string(), success);
+            results.insert(signature.to_string(), success.map(|err| err.to_string()));
         }
         Self { results }
     }

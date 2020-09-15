@@ -34,6 +34,7 @@ use solana_sdk::{
     signature::Signature,
     signers::Signers,
     transaction::{self, Transaction},
+    transport::TransportError,
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
@@ -1190,7 +1191,7 @@ impl RpcClient {
         signers: &T,
         fee_payer: &Pubkey,
         config: TransactConfig,
-    ) -> ClientResult<Vec<(Signature, bool)>> {
+    ) -> ClientResult<Vec<(Signature, Option<TransportError>)>> {
         let commitment = config.commitment.unwrap_or_default();
         let mut retries = config.retries;
         loop {
@@ -1289,27 +1290,29 @@ impl RpcClient {
                 {
                     debug!("{}: status={:?}", signature, status);
                     let completed = if config.dry_run {
-                        Some(true)
+                        Some(None)
                     } else {
                         status.and_then(|status| {
                             if status.err.is_some() {
-                                return Some(false);
+                                return Some(Some(Into::<TransportError>::into(
+                                    status.err.unwrap(),
+                                )));
                             }
                             match commitment.commitment {
                                 CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
                                     if status.confirmations.is_none()
                                         || status.confirmations.unwrap() > 1
                                     {
-                                        return Some(true);
+                                        return Some(None);
                                     }
                                 }
                                 CommitmentLevel::Root | CommitmentLevel::Max => {
                                     if status.confirmations.is_none() {
-                                        return Some(true);
+                                        return Some(None);
                                     }
                                 }
                                 CommitmentLevel::Recent => {
-                                    return Some(true);
+                                    return Some(None);
                                 }
                             }
                             None
@@ -1317,7 +1320,7 @@ impl RpcClient {
                     };
 
                     if let Some(success) = completed {
-                        debug!("{}: completed.  success={}", signature, success);
+                        debug!("{}: completed.  success={:?}", signature, success);
                         let _ = pending_transactions.remove(&signature);
                         finalized_transactions.push((signature, success));
                     }
@@ -1333,7 +1336,10 @@ impl RpcClient {
                     pending_transactions.len()
                 );
                 for (signature, _) in pending_transactions.into_iter() {
-                    finalized_transactions.push((signature, false));
+                    finalized_transactions.push((
+                        signature,
+                        Some(TransportError::Custom("Signature not found".to_string())),
+                    ));
                 }
                 return Ok(finalized_transactions);
             }

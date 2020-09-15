@@ -423,8 +423,8 @@ fn transact(
     Ok(finalized_transactions
         .into_iter()
         .zip(memos)
-        .map(|((signature, success), memo)| ConfirmedTransaction {
-            success,
+        .map(|((signature, err), memo)| ConfirmedTransaction {
+            success: err.is_none(),
             signature,
             memo,
         })
