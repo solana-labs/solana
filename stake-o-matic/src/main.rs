@@ -6,7 +6,8 @@ use solana_clap_utils::{
 };
 use solana_cli::display::format_labeled_address;
 use solana_client::{
-    client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    client_error,
+    rpc_client::{RpcClient, TransactConfig},
     rpc_response::RpcVoteAccountInfo,
 };
 use solana_metrics::datapoint_info;
@@ -14,7 +15,6 @@ use solana_notifier::Notifier;
 use solana_sdk::{
     account_utils::StateMut,
     clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
     message::Message,
     native_token::*,
     pubkey::Pubkey,
@@ -31,8 +31,6 @@ use std::{
     path::PathBuf,
     process,
     str::FromStr,
-    thread::sleep,
-    time::Duration,
 };
 
 mod validator_list;
@@ -410,112 +408,27 @@ fn transact(
     transactions: Vec<(Transaction, String)>,
     authorized_staker: &Keypair,
 ) -> Result<Vec<ConfirmedTransaction>, Box<dyn error::Error>> {
-    let authorized_staker_balance = rpc_client.get_balance(&authorized_staker.pubkey())?;
-    info!(
-        "Authorized staker balance: {} SOL",
-        lamports_to_sol(authorized_staker_balance)
-    );
-
-    let (blockhash, fee_calculator, last_valid_slot) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::max())?
-        .value;
-    info!("{} transactions to send", transactions.len());
-
-    let required_fee = transactions.iter().fold(0, |fee, (transaction, _)| {
-        fee + fee_calculator.calculate_fee(&transaction.message)
-    });
-    info!("Required fee: {} SOL", lamports_to_sol(required_fee));
-    if required_fee > authorized_staker_balance {
-        return Err("Authorized staker has insufficient funds".into());
-    }
-
-    let mut pending_transactions = HashMap::new();
-    for (mut transaction, memo) in transactions.into_iter() {
-        transaction.sign(&[authorized_staker], blockhash);
-
-        pending_transactions.insert(transaction.signatures[0], memo);
-        if !dry_run {
-            rpc_client.send_transaction(&transaction)?;
-        }
-    }
-
-    let mut finalized_transactions = vec![];
-    loop {
-        if pending_transactions.is_empty() {
-            break;
-        }
-
-        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
-        info!(
-            "Current slot={}, last_valid_slot={} (slots remaining: {}) ",
-            slot,
-            last_valid_slot,
-            last_valid_slot.saturating_sub(slot)
-        );
-
-        if slot > last_valid_slot {
-            error!(
-                "Blockhash {} expired with {} pending transactions",
-                blockhash,
-                pending_transactions.len()
-            );
-
-            for (signature, memo) in pending_transactions.into_iter() {
-                finalized_transactions.push(ConfirmedTransaction {
-                    success: false,
-                    signature,
-                    memo,
-                });
-            }
-            break;
-        }
-
-        let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
-        let mut statuses = vec![];
-        for pending_signatures_chunk in
-            pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS - 1)
-        {
-            trace!(
-                "checking {} pending_signatures",
-                pending_signatures_chunk.len()
-            );
-            statuses.extend(
-                rpc_client
-                    .get_signature_statuses(&pending_signatures_chunk)?
-                    .value
-                    .into_iter(),
-            )
-        }
-        assert_eq!(statuses.len(), pending_signatures.len());
-
-        for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
-            info!("{}: status={:?}", signature, status);
-            let completed = if dry_run {
-                Some(true)
-            } else if let Some(status) = &status {
-                if status.confirmations.is_none() || status.err.is_some() {
-                    Some(status.err.is_none())
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            if let Some(success) = completed {
-                warn!("{}: completed.  success={}", signature, success);
-                let memo = pending_transactions.remove(&signature).unwrap();
-                finalized_transactions.push(ConfirmedTransaction {
-                    success,
-                    signature,
-                    memo,
-                });
-            }
-        }
-        sleep(Duration::from_secs(5));
-    }
-
-    Ok(finalized_transactions)
+    let (transactions, memos): (Vec<Transaction>, Vec<String>) =
+        transactions.iter().cloned().unzip();
+    let finalized_transactions = rpc_client.transact(
+        transactions,
+        &[authorized_staker],
+        &authorized_staker.pubkey(),
+        TransactConfig {
+            dry_run,
+            secs_between_status_checks: 5,
+            ..TransactConfig::default()
+        },
+    )?;
+    Ok(finalized_transactions
+        .into_iter()
+        .zip(memos)
+        .map(|((signature, success), memo)| ConfirmedTransaction {
+            success,
+            signature,
+            memo,
+        })
+        .collect())
 }
 
 fn process_confirmations(

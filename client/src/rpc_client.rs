@@ -7,7 +7,9 @@ use crate::{
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
         RpcSendTransactionConfig, RpcTokenAccountsFilter,
     },
-    rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
+    rpc_request::{
+        RpcError, RpcRequest, TokenAccountsFilter, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    },
     rpc_response::*,
     rpc_sender::RpcSender,
 };
@@ -27,8 +29,10 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
+    native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::Signature,
+    signers::Signers,
     transaction::{self, Transaction},
 };
 use solana_transaction_status::{
@@ -36,6 +40,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -1169,6 +1174,177 @@ impl RpcClient {
         Ok(simulation_results)
     }
 
+    /// Signs and sends a batch of transactions; confirms each transaction at the specified
+    /// config.commitment level. Returns a vector of Signatures paired with whether the transaction
+    /// was successful.
+    ///
+    /// This method provides several configuration options:
+    ///   - `commitment` allows customizing the number of confirmations to wait for; default is Max
+    ///   - `dry_run = true` will not submit the transactions, and will return all signatures as successful
+    ///   - `retries > 0` will resign the transactions once the blockhash expires and resubmit;
+    ///   - `secs_between_status_checks` allows tuning for RPC load;
+    ///   - `spinner` enables an optional progress bar drawn to StdErr
+    pub fn transact<T: Signers>(
+        &self,
+        mut transactions: Vec<Transaction>,
+        signers: &T,
+        fee_payer: &Pubkey,
+        config: TransactConfig,
+    ) -> ClientResult<Vec<(Signature, bool)>> {
+        let commitment = config.commitment.unwrap_or_default();
+        let mut retries = config.retries;
+        loop {
+            let (blockhash, fee_calculator, last_valid_slot) =
+                self.get_recent_blockhash_with_commitment(commitment)?.value;
+
+            let fee_payer_balance = self
+                .get_balance_with_commitment(fee_payer, commitment)?
+                .value;
+            debug!(
+                "Fee payer balance: {} SOL",
+                lamports_to_sol(fee_payer_balance)
+            );
+
+            let required_fee = transactions.iter().fold(0, |fee, transaction| {
+                fee + fee_calculator.calculate_fee(&transaction.message)
+            });
+            debug!("Required fee: {} SOL", lamports_to_sol(required_fee));
+            if required_fee > fee_payer_balance {
+                return Err(ClientErrorKind::Custom(format!(
+                    "Fee payer has insufficient funds for {} transactions",
+                    transactions.len()
+                ))
+                .into());
+            }
+
+            let num_transactions = transactions.len();
+            debug!("{} transactions to send", num_transactions);
+            let mut pending_transactions = HashMap::new();
+            for transaction in transactions.iter_mut() {
+                transaction.try_sign(signers, blockhash)?;
+                pending_transactions.insert(transaction.signatures[0], transaction.clone());
+                if !config.dry_run {
+                    self.send_transaction_with_config(
+                        &transaction,
+                        RpcSendTransactionConfig {
+                            preflight_commitment: Some(commitment.commitment),
+                            ..RpcSendTransactionConfig::default()
+                        },
+                    )?;
+                }
+                if let Some(progress_bar) = &config.spinner {
+                    progress_bar.set_message(&format!(
+                        "[{}/{}] Transactions sent",
+                        pending_transactions.len(),
+                        num_transactions
+                    ));
+                }
+            }
+
+            let mut finalized_transactions = vec![];
+            while !pending_transactions.is_empty() {
+                let slot = self.get_slot_with_commitment(commitment)?;
+                debug!(
+                    "Current slot={}, last_valid_slot={} (slots remaining: {}) ",
+                    slot,
+                    last_valid_slot,
+                    last_valid_slot.saturating_sub(slot)
+                );
+
+                if slot > last_valid_slot {
+                    warn!(
+                        "Blockhash {} expired with {} pending transactions",
+                        blockhash,
+                        pending_transactions.len()
+                    );
+                    break;
+                }
+
+                let mut statuses = vec![];
+                let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
+                for pending_signatures_chunk in
+                    pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS - 1)
+                {
+                    trace!(
+                        "checking {} pending_signatures",
+                        pending_signatures_chunk.len()
+                    );
+                    statuses.extend(
+                        self.get_signature_statuses(pending_signatures_chunk)?
+                            .value
+                            .into_iter(),
+                    );
+
+                    if let Some(progress_bar) = &config.spinner {
+                        progress_bar.set_message(&format!(
+                            "[{}/{}] Transactions confirmed",
+                            num_transactions - pending_transactions.len(),
+                            num_transactions
+                        ));
+                    }
+                }
+                assert_eq!(statuses.len(), pending_signatures.len());
+
+                for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter())
+                {
+                    debug!("{}: status={:?}", signature, status);
+                    let completed = if config.dry_run {
+                        Some(true)
+                    } else {
+                        status.and_then(|status| {
+                            if status.err.is_some() {
+                                return Some(false);
+                            }
+                            match commitment.commitment {
+                                CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
+                                    if status.confirmations.is_none()
+                                        || status.confirmations.unwrap() > 1
+                                    {
+                                        return Some(true);
+                                    }
+                                }
+                                CommitmentLevel::Root | CommitmentLevel::Max => {
+                                    if status.confirmations.is_none() {
+                                        return Some(true);
+                                    }
+                                }
+                                CommitmentLevel::Recent => {
+                                    return Some(true);
+                                }
+                            }
+                            None
+                        })
+                    };
+
+                    if let Some(success) = completed {
+                        debug!("{}: completed.  success={}", signature, success);
+                        let _ = pending_transactions.remove(&signature);
+                        finalized_transactions.push((signature, success));
+                    }
+                }
+                if pending_transactions.is_empty() {
+                    return Ok(finalized_transactions);
+                }
+                sleep(Duration::from_secs(config.secs_between_status_checks));
+            }
+            if retries == 0 {
+                warn!(
+                    "Retries expired with {} pending transactions",
+                    pending_transactions.len()
+                );
+                for (signature, _) in pending_transactions.into_iter() {
+                    finalized_transactions.push((signature, false));
+                }
+                return Ok(finalized_transactions);
+            }
+            retries -= 1;
+            transactions = pending_transactions
+                .into_iter()
+                .map(|(_, transaction)| transaction)
+                .collect();
+        }
+    }
+
     pub fn validator_exit(&self) -> ClientResult<bool> {
         self.send(RpcRequest::ValidatorExit, Value::Null)
     }
@@ -1184,6 +1360,27 @@ impl RpcClient {
             .map_err(|err| err.into_with_request(request))?;
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
+    }
+}
+
+#[derive(Debug)]
+pub struct TransactConfig {
+    pub commitment: Option<CommitmentConfig>,
+    pub dry_run: bool,
+    pub retries: usize,
+    pub secs_between_status_checks: u64,
+    pub spinner: Option<ProgressBar>,
+}
+
+impl Default for TransactConfig {
+    fn default() -> Self {
+        Self {
+            commitment: None,
+            dry_run: false,
+            retries: 0,
+            secs_between_status_checks: 5,
+            spinner: None,
+        }
     }
 }
 
