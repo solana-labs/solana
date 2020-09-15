@@ -1288,9 +1288,19 @@ pub fn main() {
         }
 
         let mut tcp_listeners = vec![];
+<<<<<<< HEAD
         if !private_rpc {
             if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
                 for (purpose, port) in &[("RPC", rpc_port), ("RPC pubsub", rpc_pubsub_port)] {
+=======
+        if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+            for (purpose, addr) in &[
+                ("RPC", rpc_addr),
+                ("RPC pubsub", rpc_pubsub_addr),
+                ("RPC banks", rpc_banks_addr),
+            ] {
+                if !private_rpc && ContactInfo::is_valid_address(&addr) {
+>>>>>>> b85e8497b... Really skip private rpc port reachable checks (#12239)
                     tcp_listeners.push((
                         *port,
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
