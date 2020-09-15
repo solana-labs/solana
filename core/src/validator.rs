@@ -283,6 +283,7 @@ impl Validator {
 
         let sample_performance_service = Some(SamplePerformanceService::new(
             &bank_forks,
+            &blockstore,
             &exit,
         ));
 
