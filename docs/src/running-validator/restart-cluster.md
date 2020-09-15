@@ -21,7 +21,6 @@ call this NEW\_SHRED\_VERSION and NEW\_BANK\_HASH respectively.
 Adjust your validator's arugments:
 
 ```bash
- --expected-shred-version NEW_SHRED_VERSION
  --wait-for-supermajority SLOT_X
  --expected-bank-hash NEW_BANK_HASH
 ```
@@ -51,7 +50,6 @@ Post something like the following to #announcements (adjusting the text as appro
 > ```bash
 > solana-validator
 >   --wait-for-supermajority 12961040  # <-- NEW! IMPORTANT!
->   --expected-shred-version 56096     # <-- NEW! IMPORTANT!
 >   --expected-bank-hash 6q2oTgs8FiJxra2Zo1N8tzWqo5b6uGbjmFgoWDsXxchY    # <-- NEW! IMPORTANT!
 >   --hard-fork 56096                  # <-- NEW! IMPORTANT!
 >   --entrypoint 35.203.170.30:8001    # <-- Same as before

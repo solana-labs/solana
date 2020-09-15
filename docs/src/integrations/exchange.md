@@ -21,7 +21,6 @@ solana-validator \
   --ledger <LEDGER_PATH> \
   --entrypoint <CLUSTER_ENTRYPOINT> \
   --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
-  --expected-shred-version <EXPECTED_SHRED_VERSION> \
   --rpc-port 8899 \
   --no-voting \
   --enable-rpc-transaction-history \
@@ -32,7 +31,7 @@ solana-validator \
 
 Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
 
-The `--entrypoint`, `--expected-genesis-hash`, and `--expected-shred-version` parameters are all specific to the cluster you are joining. The shred version will change on any hard forks in the cluster, so including `--expected-shred-version` ensures you are receiving current data from the cluster you expect.
+The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to the cluster you are joining.
 [Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
 The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space. The default value is good for at least a couple days but larger values may be used by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`
