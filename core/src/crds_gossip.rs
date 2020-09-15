@@ -115,10 +115,15 @@ impl CrdsGossip {
 
     /// refresh the push active set
     /// * ratio - number of actives to rotate
-    pub fn refresh_push_active_set(&mut self, stakes: &HashMap<Pubkey, u64>) {
+    pub fn refresh_push_active_set(
+        &mut self,
+        stakes: &HashMap<Pubkey, u64>,
+        gossip_validators: Option<&HashSet<Pubkey>>,
+    ) {
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
+            gossip_validators,
             &self.id,
             self.shred_version,
             self.pull.pull_request_time.len(),
@@ -130,6 +135,7 @@ impl CrdsGossip {
     pub fn new_pull_request(
         &self,
         now: u64,
+        gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
@@ -138,6 +144,7 @@ impl CrdsGossip {
             &self.id,
             self.shred_version,
             now,
+            gossip_validators,
             stakes,
             bloom_size,
         )
@@ -271,7 +278,7 @@ mod test {
                 0,
             )
             .unwrap();
-        crds_gossip.refresh_push_active_set(&HashMap::new());
+        crds_gossip.refresh_push_active_set(&HashMap::new(), None);
         let now = timestamp();
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(

@@ -9,12 +9,17 @@ use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_streamer::streamer;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep, JoinHandle};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashSet,
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        {Arc, RwLock},
+    },
+    thread::{self, sleep, JoinHandle},
+    time::{Duration, Instant},
+};
 
 pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -25,6 +30,7 @@ impl GossipService {
         cluster_info: &Arc<ClusterInfo>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
+        gossip_validators: Option<HashSet<Pubkey>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
@@ -50,7 +56,13 @@ impl GossipService {
             response_sender.clone(),
             exit,
         );
-        let t_gossip = ClusterInfo::gossip(cluster_info.clone(), bank_forks, response_sender, exit);
+        let t_gossip = ClusterInfo::gossip(
+            cluster_info.clone(),
+            bank_forks,
+            response_sender,
+            gossip_validators,
+            exit,
+        );
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { thread_hdls }
     }
@@ -262,7 +274,8 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(cluster_info);
-    let gossip_service = GossipService::new(&cluster_info.clone(), None, gossip_socket, &exit);
+    let gossip_service =
+        GossipService::new(&cluster_info.clone(), None, gossip_socket, None, &exit);
     (gossip_service, ip_echo, cluster_info)
 }
 
@@ -281,7 +294,7 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let c = Arc::new(cluster_info);
-        let d = GossipService::new(&c, None, tn.sockets.gossip, &exit);
+        let d = GossipService::new(&c, None, tn.sockets.gossip, None, &exit);
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
     }
