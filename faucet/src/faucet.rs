@@ -211,7 +211,7 @@ pub fn request_airdrop_transaction(
 
     // Read length of transaction
     let mut buffer = [0; 2];
-    stream.read_exact(&mut buffer).map(|err| {
+    stream.read_exact(&mut buffer).map_err(|err| {
         info!(
             "request_airdrop_transaction: buffer length read_exact error: {:?}",
             err
@@ -219,7 +219,7 @@ pub fn request_airdrop_transaction(
         Error::new(ErrorKind::Other, "Airdrop failed")
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
-    if transaction_length >= PACKET_DATA_SIZE {
+    if transaction_length >= PACKET_DATA_SIZE || transaction_length == 0 {
         return Err(Error::new(
             ErrorKind::Other,
             format!(
@@ -293,7 +293,7 @@ pub fn run_faucet(
                     }
                     Err(e) => {
                         info!("Error in request: {:?}", e);
-                        Ok(Bytes::from(&b""[..]))
+                        Ok(Bytes::from(0u16.to_le_bytes().to_vec()))
                     }
                 }
             });
