@@ -50,6 +50,7 @@ where
                 .arg(
                     Arg::with_name("from_bids")
                         .long("from-bids")
+                        .requires("dollars_per_sol")
                         .help("Input CSV contains bids in dollars, not allocations in SOL"),
                 )
                 .arg(
@@ -65,6 +66,7 @@ where
                         .long("dollars-per-sol")
                         .takes_value(true)
                         .value_name("NUMBER")
+                        .requires("from_bids")
                         .help("Dollars per SOL, if input CSV contains bids"),
                 )
                 .arg(
@@ -190,6 +192,7 @@ where
                 .arg(
                     Arg::with_name("from_bids")
                         .long("from-bids")
+                        .requires("dollars_per_sol")
                         .help("Input CSV contains bids in dollars, not allocations in SOL"),
                 )
                 .arg(
@@ -197,6 +200,7 @@ where
                         .long("dollars-per-sol")
                         .takes_value(true)
                         .value_name("NUMBER")
+                        .requires("from_bids")
                         .help("Dollars per SOL"),
                 ),
         )
