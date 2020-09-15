@@ -3,14 +3,11 @@
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
-<<<<<<< HEAD
-=======
 use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
 };
 use solana_rbpf::vm::{EbpfVm, InstructionMeter};
->>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -18,20 +15,15 @@ use solana_runtime::{
     loader_utils::load_program,
 };
 use solana_sdk::{
-    account::Account,
+    account::{Account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
     clock::DEFAULT_SLOTS_PER_EPOCH,
-<<<<<<< HEAD
-    entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::{AccountMeta, Instruction, InstructionError},
-=======
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     entrypoint_native::{
         ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
     },
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
->>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
     message::Message,
     pubkey::Pubkey,
     signature::Keypair,
@@ -39,7 +31,7 @@ use solana_sdk::{
     sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
     transaction::TransactionError,
 };
-use std::{env, fs::File, io::Read, path::PathBuf, sync::Arc};
+use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, rc::Rc, sync::Arc};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -69,8 +61,6 @@ fn load_bpf_program(
     load_program(bank_client, payer_keypair, loader_id, elf)
 }
 
-<<<<<<< HEAD
-=======
 fn run_program(
     name: &str,
     program_id: &Pubkey,
@@ -109,7 +99,6 @@ fn run_program(
     Ok(vm.get_total_instruction_count())
 }
 
->>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
 #[test]
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 fn test_program_bpf_sanity() {
@@ -563,8 +552,6 @@ fn test_program_bpf_invoke() {
         }
     }
 }
-<<<<<<< HEAD
-=======
 
 #[test]
 fn assert_instruction_count() {
@@ -682,4 +669,3 @@ impl InstructionMeter for TestInstructionMeter {
         u64::MAX
     }
 }
->>>>>>> 3278d78f0... Cache re-usable work performed by the loader (#12135)
