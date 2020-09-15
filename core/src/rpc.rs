@@ -2702,6 +2702,14 @@ pub mod tests {
             &socketaddr!("127.0.0.1:1234"),
         ));
 
+        let sample1 = PerfSample {
+            num_slots: 1,
+            num_transactions: 4,
+            sample_period_secs: 60
+        };
+
+        blockstore.write_perf_sample(0, &sample1).expect("write to blockstore");
+
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
@@ -2826,6 +2834,75 @@ pub mod tests {
 
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples"}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "context": {
+                    "slot": 0
+                },
+                "value": [
+                    [
+                        0,
+                        {
+                            "num_slots": 1,
+                            "num_transactions": 4,
+                            "sample_period_secs": 60
+                        }
+                    ]
+                ],
+            },
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples_invalid_limit() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32602,
+                "message": "Invalid limit; max 720"
+            },
+            "id": 1
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
         assert_eq!(expected, result);
     }
 
