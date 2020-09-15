@@ -1312,7 +1312,7 @@ pub fn main() {
                 ("RPC pubsub", rpc_pubsub_addr),
                 ("RPC banks", rpc_banks_addr),
             ] {
-                if ContactInfo::is_valid_address(&addr) {
+                if !private_rpc && ContactInfo::is_valid_address(&addr) {
                     tcp_listeners.push((
                         addr.port(),
                         TcpListener::bind(addr).unwrap_or_else(|err| {
