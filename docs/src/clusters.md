@@ -44,14 +44,8 @@ $ solana-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-<<<<<<< HEAD
-    --entrypoint devnet.solana.com:8001 \
-    --expected-genesis-hash HzyuivuNXMHJKjM6q6BE2qBsR3etqW21BSvuJTpJFj9A \
-    --expected-shred-version 61357 \
-=======
     --entrypoint entrypoint.devnet.solana.com:8001 \
     --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
->>>>>>> 4ada4d43f... Drop the recommendation that `--expected-shred-version` be set by validators
     --limit-ledger-size
 ```
 
