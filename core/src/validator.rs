@@ -3,7 +3,6 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
-    sample_performance_service::{SamplePerformanceService},
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
@@ -17,6 +16,7 @@ use crate::{
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
+    sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
