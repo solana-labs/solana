@@ -1521,6 +1521,30 @@ test('get largest accounts', async () => {
   expect(largestAccounts.length).toEqual(20);
 });
 
+test('get stake activation', async () => {
+  const connection = new Connection(url);
+
+  const publicKey = new Account().publicKey;
+  mockRpc.push([
+    url,
+    {
+      method: 'getStakeActivation',
+      params: [publicKey.toBase58(), { encoding: 'base64' }],
+    },
+    {
+      error: null,
+      result: {
+        state: 'active',
+        active: 0,
+        inactive: 80,
+      },
+    },
+  ]);
+
+  const activation = (await connection.getStakeActivation(publicKey));
+  expect(activation.state).toEqual('active');
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 
