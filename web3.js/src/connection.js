@@ -810,7 +810,12 @@ const ParsedAccountInfoResult = struct.object({
  * @private
  */
 const StakeActivationResult = struct.object({
-  state: 'string',
+  state: struct.union([
+    struct.literal('active'),
+    struct.literal('inactive'),
+    struct.literal('activating'),
+    struct.literal('deactivating'),
+  ]),
   active: 'number',
   inactive: 'number',
 });
@@ -1226,7 +1231,7 @@ type ParsedAccountData = {
  * @property {number} inactive: stake inactive during the epoch
  */
 type StakeActivationData = {
-  state: string,
+  state: 'active' | 'inactive' | 'activating' | 'deactivating',
   active: number,
   inactive: number,
 };
@@ -1894,13 +1899,18 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
     epoch: ?number,
-  ): Promise<StakeActivationData | null> {
-    let _args = [publicKey.toBase58()];
-    if (epoch !== undefined) {
-      _args.push({epoch});
+  ): Promise<StakeActivationData> {
+    let config = {};
+
+    if (commitment !== undefined) {
+      config.commitment = commitment;
     }
 
-    const args = this._buildArgs(_args, commitment, 'base64');
+    if (epoch !== undefined) {
+      config.epoch = epoch;
+    }
+
+    const args = this._buildArgs([publicKey.toBase58()]);
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
     if (res?.error) {
