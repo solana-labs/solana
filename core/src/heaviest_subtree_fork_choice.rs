@@ -498,10 +498,10 @@ impl HeaviestSubtreeForkChoice {
                 let heaviest_slot_on_same_voted_fork = self.best_slot(last_voted_slot);
                 if heaviest_slot_on_same_voted_fork.is_none() {
                     if !tower.is_stray_last_vote() {
-                        // Unless last vote is stray, we always must be able to fetch last_voted_slot's
-                        // bast_slot, justifying to panic! here.
+                        // Unless last vote is stray, self.bast_slot(last_voted_slot) must return
+                        // Some(_), justifying to panic! here.
                         // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
-                        // if all votes are older than replayed_root_slot. So this code shoun't be
+                        // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
                         // touched in that case as well.
                         // In other words, except being stray, all other slots have been voted on while this
                         // validator has been running, so we must be able to fetch best_slots for all of

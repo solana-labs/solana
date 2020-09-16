@@ -429,7 +429,13 @@ impl Tower {
         None
     }
 
-    // root may be forcibly set by arbitrary replay root slot
+    // root may be forcibly set by arbitrary replay root slot, for example from a root
+    // after replaying a snapshot.
+    // Also, tower.root() couldn't be None; do_initialize_lockouts() ensures that.
+    // Conceptually, every tower must have been constructed from a concrete starting point,
+    // which establishes the origin of trust (i.e. root) whether booting from genesis (slot 0) or
+    // snapshot (slot N). In other words, there should be no possibility a Tower doesn't have
+    // root, unlike young vote accounts.
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
     }
@@ -504,10 +510,10 @@ impl Tower {
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
                         if !self.is_stray_last_vote() {
-                            // Unless last vote is stray, we always must be able to fetch last_voted_slot's
-                            // ancestors, justifying to panic! here.
+                            // Unless last vote is stray, ancestors.get(last_voted_slot) must
+                            // return Some(_), justifying to panic! here.
                             // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
-                            // if all votes are older than replayed_root_slot. So this code shoun't be
+                            // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
                             // touched in that case as well.
                             // In other words, except being stray, all other slots have been voted on while
                             // this validator has been running, so we must be able to fetch ancestors for
@@ -764,9 +770,10 @@ impl Tower {
             self.voted_slots()
         );
 
+        // sanity assertions for roots
         assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
-        // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(self.root().is_some());
+        // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
             self.root().unwrap() <= replayed_root_slot,
             format!(
@@ -817,21 +824,21 @@ impl Tower {
         let mut anchored_slot = None;
 
         let mut root_checked = false;
-        let mut checked_slots = if let Some(root) = self.lockouts.root_slot {
+        let mut slots_in_tower = if let Some(root) = self.lockouts.root_slot {
             root_checked = true;
             vec![root]
         } else {
             vec![]
         };
-        checked_slots.extend(self.voted_slots());
+        slots_in_tower.extend(self.voted_slots());
 
-        // iterate over votes in the newest => oldest order
+        // iterate over votes + root (if any) in the newest => oldest order
         // bail out early if bad condition is found
-        for voted_slot in checked_slots.iter().rev() {
-            let check = slot_history.check(*voted_slot);
+        for slot_in_tower in slots_in_tower.iter().rev() {
+            let check = slot_history.check(*slot_in_tower);
 
             if anchored_slot.is_none() && check == Check::Found {
-                anchored_slot = Some(*voted_slot);
+                anchored_slot = Some(*slot_in_tower);
             } else if anchored_slot.is_some() && check == Check::NotFound {
                 // this can't happen unless we're fed with bogus snapshot
                 return Err(TowerError::FatallyInconsistent("diverged ancestor?"));
@@ -852,20 +859,25 @@ impl Tower {
                 ));
             }
 
-            assert!(checked_slot
-                .map(
-                    |checked_slot| (*voted_slot == checked_slot && *voted_slot == 0)
-                        || *voted_slot < checked_slot
-                )
-                .unwrap_or(true));
+            if let Some(checked_slot) = checked_slot {
+                // This is really special, only if tower is initialized (root = slot 0) for genesis and contains
+                // a vote (= slot 0) for the genesis, the slot 0 can repeat only once
+                let voting_from_genesis = *slot_in_tower == checked_slot && *slot_in_tower == 0;
 
-            checked_slot = Some(*voted_slot);
+                if !voting_from_genesis {
+                    // Unless we're voting since genesis, slots_in_tower must always be older than last checked_slot
+                    // including all vote slot and the root slot.
+                    assert!(*slot_in_tower < checked_slot)
+                }
+            }
+
+            checked_slot = Some(*slot_in_tower);
 
             retain_flags_for_each_vote_in_reverse.push(anchored_slot.is_none());
         }
 
         assert_eq!(
-            checked_slots.len(),
+            slots_in_tower.len(),
             retain_flags_for_each_vote_in_reverse.len()
         );
 
