@@ -29,8 +29,8 @@ use solana_ledger::{
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
-    bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
-    snapshot_package::AccountsPackageSender, vote_sender_types::ReplayVoteSender,
+    accounts_background_service::SnapshotRequestSender, bank::Bank, bank_forks::BankForks,
+    commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -103,7 +103,7 @@ pub struct ReplayStageConfig {
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub latest_root_senders: Vec<Sender<Slot>>,
-    pub accounts_hash_sender: Option<AccountsPackageSender>,
+    pub snapshot_request_sender: Option<SnapshotRequestSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
@@ -234,7 +234,7 @@ impl ReplayStage {
             subscriptions,
             leader_schedule_cache,
             latest_root_senders,
-            accounts_hash_sender,
+            snapshot_request_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -455,7 +455,7 @@ impl ReplayStage {
                             &blockstore,
                             &leader_schedule_cache,
                             &lockouts_sender,
-                            &accounts_hash_sender,
+                            &snapshot_request_sender,
                             &latest_root_senders,
                             &mut all_pubkeys,
                             &subscriptions,
@@ -1025,7 +1025,7 @@ impl ReplayStage {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
-        accounts_hash_sender: &Option<AccountsPackageSender>,
+        snapshot_request_sender: &Option<SnapshotRequestSender>,
         latest_root_senders: &[Sender<Slot>],
         all_pubkeys: &mut PubkeyReferences,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -1081,7 +1081,7 @@ impl ReplayStage {
                 new_root,
                 &bank_forks,
                 progress,
-                accounts_hash_sender,
+                snapshot_request_sender,
                 all_pubkeys,
                 highest_confirmed_root,
                 heaviest_subtree_fork_choice,
@@ -1778,7 +1778,7 @@ impl ReplayStage {
         new_root: Slot,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
-        accounts_hash_sender: &Option<AccountsPackageSender>,
+        snapshot_request_sender: &Option<SnapshotRequestSender>,
         all_pubkeys: &mut PubkeyReferences,
         highest_confirmed_root: Option<Slot>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -1786,7 +1786,7 @@ impl ReplayStage {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
         bank_forks.write().unwrap().set_root(
             new_root,
-            accounts_hash_sender,
+            snapshot_request_sender,
             highest_confirmed_root,
         );
         let r_bank_forks = bank_forks.read().unwrap();

@@ -1823,7 +1823,7 @@ fn main() {
                                 &bank,
                                 &slot_snapshot_paths,
                                 &temp_dir,
-                                &bank.src.roots(),
+                                bank.src.slot_deltas(&bank.src.roots()),
                                 output_directory,
                                 storages,
                                 CompressionType::Bzip2,

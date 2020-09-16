@@ -27,8 +27,10 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
-    accounts_background_service::AccountsBackgroundService, bank_forks::BankForks,
-    commitment::BlockCommitmentCache, snapshot_package::AccountsPackageSender,
+    accounts_background_service::{AccountsBackgroundService, SnapshotItems},
+    bank_forks::{BankForks, SnapshotConfig},
+    commitment::BlockCommitmentCache,
+    snapshot_package::AccountsPackageSender,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
@@ -100,7 +102,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_time_sender: Option<CacheBlockTimeSender>,
-        snapshot_package_sender: Option<AccountsPackageSender>,
+        snapshot_config_and_package_sender: Option<(SnapshotConfig, AccountsPackageSender)>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -174,7 +176,9 @@ impl Tvu {
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_hash_receiver,
-            snapshot_package_sender,
+            snapshot_config_and_package_sender
+                .as_ref()
+                .map(|(_, accounts_package_sender)| accounts_package_sender.clone()),
             exit,
             &cluster_info,
             tvu_config.trusted_validators.clone(),
@@ -182,6 +186,22 @@ impl Tvu {
             tvu_config.accounts_hash_fault_injection_slots,
             snapshot_interval_slots,
         );
+
+        let (snapshot_request_sender, snapshot_items) = {
+            snapshot_config_and_package_sender
+                .map(|(snapshot_config, _)| {
+                    let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+                    (
+                        Some(snapshot_request_sender),
+                        Some(SnapshotItems {
+                            snapshot_config,
+                            snapshot_request_receiver,
+                            accounts_package_sender: accounts_hash_sender,
+                        }),
+                    )
+                })
+                .unwrap_or((None, None))
+        };
 
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
@@ -191,7 +211,7 @@ impl Tvu {
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
-            accounts_hash_sender: Some(accounts_hash_sender),
+            snapshot_request_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -222,7 +242,8 @@ impl Tvu {
             )
         });
 
-        let accounts_background_service = AccountsBackgroundService::new(bank_forks.clone(), &exit);
+        let accounts_background_service =
+            AccountsBackgroundService::new(bank_forks.clone(), &exit, snapshot_items);
 
         Tvu {
             fetch_stage,
