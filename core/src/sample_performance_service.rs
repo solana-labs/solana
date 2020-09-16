@@ -13,7 +13,7 @@ use std::{
 const SAMPLE_INTERVAL: u64 = 60;
 const SLEEP_INTERVAL: u64 = 500;
 
-pub struct SamplePerformanceDelta {
+pub struct SamplePerformanceSnapshot {
     pub num_transactions: u64,
     pub num_slots: u64,
 }
@@ -49,7 +49,7 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-        let mut sample_deltas: Option<SamplePerformanceDelta> = None;
+        let mut sample_snapshot: Option<SamplePerformanceSnapshot> = None;
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -69,7 +69,7 @@ impl SamplePerformanceService {
                 let highest_slot = bank_forks.highest_slot();
                 drop(bank_forks);
 
-                match sample_deltas {
+                match sample_snapshot {
                     None => info!("Initializing SamplePerformance service"),
                     Some(ref snapshot) => {
                         let perf_sample = PerfSample {
@@ -84,7 +84,7 @@ impl SamplePerformanceService {
                     }
                 }
 
-                sample_deltas = Some(SamplePerformanceDelta {
+                sample_snapshot = Some(SamplePerformanceSnapshot {
                     num_transactions: bank.transaction_count(),
                     num_slots: highest_slot,
                 });
