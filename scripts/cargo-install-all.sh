@@ -123,7 +123,11 @@ fi
 
 (
   set -x
-  cp -fv target/$buildVariant/deps/libsolana*program.* "$installDir/bin/deps"
+  # deps dir can be empty
+  shopt -s nullglob
+  for dep in target/"$buildVariant"/deps/libsolana*program.*; do
+    cp -fv "$dep" "$installDir/bin/deps"
+  done
 )
 
 echo "Done after $SECONDS seconds"
