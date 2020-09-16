@@ -63,6 +63,14 @@ pub fn get_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
         )]);
     }
 
+    let secp256k1_builtin = Builtin::new(
+        "secp256k1_program",
+        solana_sdk::secp256k1_program::id(),
+        Entrypoint::Program(solana_secp256k1_program::process_instruction),
+    );
+    let secp_epoch = solana_sdk::secp256k1::is_enabled_epoch(cluster_type);
+    builtins.push((secp256k1_builtin, secp_epoch));
+
     builtins
 }
 
@@ -101,6 +109,9 @@ mod tests {
 
     #[test]
     fn test_get_builtins() {
+        let mock_program_id =
+            Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap();
+
         let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
         genesis_config.cluster_type = ClusterType::Testnet;
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -145,7 +156,7 @@ mod tests {
                 solana_config_program::id(),
                 solana_stake_program::id(),
                 solana_vote_program::id(),
-                Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap(),
+                mock_program_id,
             ]
         );
 
@@ -157,7 +168,7 @@ mod tests {
                 solana_config_program::id(),
                 solana_stake_program::id(),
                 solana_vote_program::id(),
-                Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap(),
+                mock_program_id,
             ]
         );
 
@@ -169,7 +180,7 @@ mod tests {
                 solana_config_program::id(),
                 solana_stake_program::id(),
                 solana_vote_program::id(),
-                Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap(),
+                mock_program_id,
             ]
         );
     }

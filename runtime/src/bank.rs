@@ -569,11 +569,15 @@ impl Bank {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
+        let epoch_schedule = parent.epoch_schedule;
+        let epoch = epoch_schedule.get_epoch(slot);
+
         let rc = BankRc {
             accounts: Arc::new(Accounts::new_from_parent(
                 &parent.rc.accounts,
                 slot,
                 parent.slot(),
+                epoch,
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
@@ -581,8 +585,6 @@ impl Bank {
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
         };
-        let epoch_schedule = parent.epoch_schedule;
-        let epoch = epoch_schedule.get_epoch(slot);
 
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
@@ -2057,7 +2059,10 @@ impl Bank {
                 };
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee(tx.message());
+                let fee = fee_calculator.calculate_fee(
+                    tx.message(),
+                    solana_sdk::secp256k1::get_fee_config(self.cluster_type(), self.epoch()),
+                );
 
                 let message = tx.message();
                 match *res {
@@ -8387,7 +8392,8 @@ mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
         consumed_budgets.sort();
-        assert_eq!(consumed_budgets, vec![0, 1, 9]);
+        // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
+        assert_eq!(consumed_budgets, vec![0, 1, 10]);
     }
 
     #[test]
