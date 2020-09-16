@@ -1913,14 +1913,14 @@ export class Connection {
     const args = this._buildArgs([publicKey.toBase58()]);
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
-    if (res?.error) {
+    if (res.error) {
       throw new Error(
         `failed to get Stake Activation ${publicKey.toBase58()}: ${
           res.error.message
         }`,
       );
     }
-    assert(typeof res?.result !== 'undefined');
+    assert(typeof res.result !== 'undefined');
 
     const {state, active, inactive} = res.result;
     return {state, active, inactive};
