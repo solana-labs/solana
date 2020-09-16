@@ -2170,11 +2170,6 @@ impl RpcSol for RpcSolImpl {
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
             if let (Err(err), logs) = preflight_bank.simulate_transaction(transaction.clone()) {
-                // Note: it's possible that the transaction simulation failed but the actual
-                // transaction would succeed, such as when a transaction depends on an earlier
-                // transaction that has yet to reach max confirmations. In these cases the user
-                // should use the config.skip_preflight flag, and potentially in the future
-                // additional controls over what bank is used for preflight should be exposed.
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: format!("Transaction simulation failed: {}", err),
                     result: RpcSimulateTransactionResult {
