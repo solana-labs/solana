@@ -448,16 +448,8 @@ fn check_payer_balances(
     Ok(())
 }
 
-<<<<<<< HEAD
 pub fn process_balances(client: &ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
-    let allocations: Vec<Allocation> = read_allocations(&args.input_csv)?;
-=======
-pub async fn process_balances(
-    client: &mut BanksClient,
-    args: &BalancesArgs,
-) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
->>>>>>> a48cc073c... solana-tokens: Add capability to perform the same transfer to a batch of recipients (#12259)
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -494,16 +486,12 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 use crate::db::check_output_file;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-<<<<<<< HEAD
-pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient::new(client, false);
-=======
-pub async fn test_process_distribute_tokens_with_client(
-    client: &mut BanksClient,
+pub fn test_process_distribute_tokens_with_client<C: Client>(
+    client: C,
     sender_keypair: Keypair,
     transfer_amount: Option<f64>,
 ) {
->>>>>>> a48cc073c... solana-tokens: Add capability to perform the same transfer to a batch of recipients (#12259)
+    let thin_client = ThinClient::new(client, false);
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -721,35 +709,17 @@ mod tests {
     #[test]
     fn test_process_token_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-<<<<<<< HEAD
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
-        test_process_distribute_tokens_with_client(bank_client, sender_keypair);
-=======
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair, None)
-                .await;
-        });
+        test_process_distribute_tokens_with_client(bank_client, sender_keypair, None);
     }
 
     #[test]
     fn test_process_transfer_amount_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(
-                &mut banks_client,
-                sender_keypair,
-                Some(1.5),
-            )
-            .await;
-        });
->>>>>>> a48cc073c... solana-tokens: Add capability to perform the same transfer to a batch of recipients (#12259)
+        let bank = Bank::new(&genesis_config);
+        let bank_client = BankClient::new(bank);
+        test_process_distribute_tokens_with_client(bank_client, sender_keypair, Some(1.5));
     }
 
     #[test]
