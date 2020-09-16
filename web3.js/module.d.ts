@@ -198,7 +198,7 @@ declare module '@solana/web3.js' {
   };
 
   export type StakeActivationData = {
-    state: string;
+    state: 'active' | 'inactive' | 'activating' | 'deactivating';
     active: number;
     inactive: number;
   };
@@ -324,7 +324,7 @@ declare module '@solana/web3.js' {
       publicKey: PublicKey,
       commitment?: Commitment,
       epoch?: number,
-    ): Promise<StakeActivationData | null>;
+    ): Promise<StakeActivationData>;
     getProgramAccounts(
       programId: PublicKey,
       commitment?: Commitment,

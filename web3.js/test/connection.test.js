@@ -1521,7 +1521,7 @@ test('get largest accounts', async () => {
   expect(largestAccounts.length).toEqual(20);
 });
 
-test('get stake activation', async () => {
+test('stake activation should throw when called for not delegated account', async () => {
   const connection = new Connection(url);
 
   const publicKey = new Account().publicKey;
@@ -1529,7 +1529,7 @@ test('get stake activation', async () => {
     url,
     {
       method: 'getStakeActivation',
-      params: [publicKey.toBase58(), {encoding: 'base64'}],
+      params: [publicKey.toBase58()],
     },
     {
       error: {message: 'account not delegated'},
@@ -1540,6 +1540,36 @@ test('get stake activation', async () => {
   await expect(connection.getStakeActivation(publicKey)).rejects.toThrow(
     `failed to get Stake Activation ${publicKey.toBase58()}: account not delegated`,
   );
+});
+
+test('stake activation should only accept state with valid string literals', async () => {
+  const connection = new Connection(url);
+
+  const publicKey = new Account().publicKey;
+  const addStakeActivationMock = state => {
+    mockRpc.push([
+      url,
+      {
+        method: 'getStakeActivation',
+        params: [publicKey.toBase58()],
+      },
+      {
+        error: undefined,
+        result: {
+          state: state,
+          active: 0,
+          inactive: 80,
+        },
+      },
+    ]);
+  };
+
+  addStakeActivationMock('active');
+  let activation = await connection.getStakeActivation(publicKey);
+  expect(activation.state).toBe('active');
+
+  addStakeActivationMock('invalid');
+  await expect(connection.getStakeActivation(publicKey)).rejects.toThrow();
 });
 
 test('getVersion', async () => {
