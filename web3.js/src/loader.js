@@ -68,6 +68,7 @@ export class Loader {
       let transaction: Transaction | null = null;
       if (programInfo !== null) {
         if (programInfo.executable) {
+          console.error('Program load failed, account is already executable');
           return false;
         }
 
