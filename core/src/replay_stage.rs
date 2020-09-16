@@ -664,7 +664,7 @@ impl ReplayStage {
         }
         let root = root_bank.slot();
         let unlock_heaviest_subtree_fork_choice_slot =
-            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.operating_mode());
+            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
         let heaviest_subtree_fork_choice =
             HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
 
