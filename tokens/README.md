@@ -82,6 +82,32 @@ Recipient                                     Expected Balance (◎)
 7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr  42
 ```
 
+## Distribute tokens: transfer-amount
+
+This tool also makes it straightforward to transfer the same amount of tokens to a simple list of recipients. Just add the `--transfer-amount` arg to specify the amount:
+
+Example recipients.csv:
+
+```text
+recipient
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT
+```
+
+```bash
+solana-tokens distribute-tokens --transfer-amount 10 --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
+```
+
+Example output:
+
+```text
+Recipient                                     Expected Balance (◎)
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  10
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr  10
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT  10
+```
+
 ## Distribute stake accounts
 
 Distributing tokens via stake accounts works similarly to how tokens are distributed. The
