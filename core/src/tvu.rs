@@ -2,7 +2,6 @@
 //! validation pipeline in software.
 
 use crate::{
-    accounts_background_service::AccountsBackgroundService,
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
@@ -28,8 +27,9 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
-    bank_forks::BankForks, commitment::BlockCommitmentCache,
-    snapshot_package::AccountsPackageSender, vote_sender_types::ReplayVoteSender,
+    accounts_background_service::AccountsBackgroundService, bank_forks::BankForks,
+    commitment::BlockCommitmentCache, snapshot_package::AccountsPackageSender,
+    vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
