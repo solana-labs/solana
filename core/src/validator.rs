@@ -87,6 +87,7 @@ pub struct ValidatorConfig {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
     pub repair_validators: Option<HashSet<Pubkey>>,  // None = repair from all
+    pub gossip_validators: Option<HashSet<Pubkey>>,  // None = gossip with all
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
@@ -116,6 +117,7 @@ impl Default for ValidatorConfig {
             new_hard_forks: None,
             trusted_validators: None,
             repair_validators: None,
+            gossip_validators: None,
             halt_on_trusted_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
@@ -395,6 +397,7 @@ impl Validator {
             &cluster_info,
             Some(bank_forks.clone()),
             node.sockets.gossip,
+            config.gossip_validators.clone(),
             &exit,
         );
 

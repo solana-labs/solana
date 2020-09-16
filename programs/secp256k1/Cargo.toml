@@ -1,0 +1,28 @@
+[package]
+name = "solana-secp256k1-program"
+description = "Blockchain, Rebuilt for Scale"
+version = "1.4.0"
+documentation = "https://docs.rs/solana"
+homepage = "https://solana.com/"
+readme = "README.md"
+repository = "https://github.com/solana-labs/solana"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+license = "Apache-2.0"
+edition = "2018"
+publish = false
+
+[dependencies]
+solana-sdk = { path = "../../sdk", version = "1.4.0" }
+libsecp256k1 = "0.3.5"
+sha3 = "0.9.1"
+digest = "0.9.0"
+bincode = "1.3.1"
+rand = "0.7.0"
+solana-logger = { path = "../../logger", version = "1.4.0" }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_secp256k1_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

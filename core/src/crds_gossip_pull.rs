@@ -185,10 +185,18 @@ impl CrdsGossipPull {
         self_id: &Pubkey,
         self_shred_version: u16,
         now: u64,
+        gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
-        let options = self.pull_options(crds, &self_id, self_shred_version, now, stakes);
+        let options = self.pull_options(
+            crds,
+            &self_id,
+            self_shred_version,
+            now,
+            gossip_validators,
+            stakes,
+        );
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
@@ -207,6 +215,7 @@ impl CrdsGossipPull {
         self_id: &Pubkey,
         self_shred_version: u16,
         now: u64,
+        gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(f32, &'a ContactInfo)> {
         crds.table
@@ -216,6 +225,8 @@ impl CrdsGossipPull {
                 v.id != *self_id
                     && ContactInfo::is_valid_address(&v.gossip)
                     && (self_shred_version == 0 || self_shred_version == v.shred_version)
+                    && gossip_validators
+                        .map_or(true, |gossip_validators| gossip_validators.contains(&v.id))
             })
             .map(|item| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
@@ -609,7 +620,7 @@ mod test {
             stakes.insert(id, i * 100);
         }
         let now = 1024;
-        let mut options = node.pull_options(&crds, &me.label().pubkey(), 0, now, &stakes);
+        let mut options = node.pull_options(&crds, &me.label().pubkey(), 0, now, None, &stakes);
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.
@@ -659,7 +670,7 @@ mod test {
 
         // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
-            .pull_options(&crds, &me.label().pubkey(), 123, 0, &stakes)
+            .pull_options(&crds, &me.label().pubkey(), 123, 0, None, &stakes)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
@@ -669,7 +680,7 @@ mod test {
 
         // spy nodes will see all
         let options = node
-            .pull_options(&crds, &spy.label().pubkey(), 0, 0, &stakes)
+            .pull_options(&crds, &spy.label().pubkey(), 0, 0, None, &stakes)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
@@ -677,6 +688,65 @@ mod test {
         assert!(options.contains(&me.pubkey()));
         assert!(options.contains(&node_123.pubkey()));
         assert!(options.contains(&node_456.pubkey()));
+    }
+
+    #[test]
+    fn test_pulls_only_from_allowed() {
+        let mut crds = Crds::default();
+        let stakes = HashMap::new();
+        let node = CrdsGossipPull::default();
+        let gossip = socketaddr!("127.0.0.1:1234");
+
+        let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip,
+            ..ContactInfo::default()
+        }));
+        let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip,
+            ..ContactInfo::default()
+        }));
+
+        crds.insert(me.clone(), 0).unwrap();
+        crds.insert(node_123.clone(), 0).unwrap();
+
+        // Empty gossip_validators -- will pull from nobody
+        let mut gossip_validators = HashSet::new();
+        let options = node.pull_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            0,
+            Some(&gossip_validators),
+            &stakes,
+        );
+        assert!(options.is_empty());
+
+        // Unknown pubkey in gossip_validators -- will pull from nobody
+        gossip_validators.insert(Pubkey::new_rand());
+        let options = node.pull_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            0,
+            Some(&gossip_validators),
+            &stakes,
+        );
+        assert!(options.is_empty());
+
+        // node_123 pubkey in gossip_validators -- will pull from it
+        gossip_validators.insert(node_123.pubkey());
+        let options = node.pull_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            0,
+            Some(&gossip_validators),
+            &stakes,
+        );
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].1.id, node_123.pubkey());
     }
 
     #[test]
@@ -733,13 +803,13 @@ mod test {
         let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE),
+            node.new_pull_request(&crds, &id, 0, 0, None, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
         crds.insert(entry.clone(), 0).unwrap();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE),
+            node.new_pull_request(&crds, &id, 0, 0, None, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
@@ -748,7 +818,7 @@ mod test {
             0,
         )));
         crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE);
+        let req = node.new_pull_request(&crds, &id, 0, 0, None, &HashMap::new(), PACKET_DATA_SIZE);
         let (to, _, self_info) = req.unwrap();
         assert_eq!(to, new.label().pubkey());
         assert_eq!(self_info, entry);
@@ -785,6 +855,7 @@ mod test {
                 &node_pubkey,
                 0,
                 u64::max_value(),
+                None,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
             );
@@ -814,6 +885,7 @@ mod test {
             &node_pubkey,
             0,
             0,
+            None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
         );
@@ -874,6 +946,7 @@ mod test {
             &node_pubkey,
             0,
             0,
+            None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
         );
@@ -948,6 +1021,7 @@ mod test {
                 &node_pubkey,
                 0,
                 0,
+                None,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
             );

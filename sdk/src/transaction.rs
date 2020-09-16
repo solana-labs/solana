@@ -1,6 +1,7 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
 use crate::sanitize::{Sanitize, SanitizeError};
+use crate::secp256k1::verify_eth_addresses;
 use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -328,6 +329,28 @@ impl Transaction {
         } else {
             Ok(())
         }
+    }
+
+    pub fn verify_precompiles(&self) -> Result<()> {
+        for instruction in &self.message().instructions {
+            // The Transaction may not be sanitized at this point
+            if instruction.program_id_index as usize >= self.message().account_keys.len() {
+                return Err(TransactionError::AccountNotFound);
+            }
+            let program_id = &self.message().account_keys[instruction.program_id_index as usize];
+            if crate::secp256k1_program::check_id(program_id) {
+                let instruction_datas: Vec<_> = self
+                    .message()
+                    .instructions
+                    .iter()
+                    .map(|instruction| instruction.data.as_ref())
+                    .collect();
+                let data = &instruction.data;
+                let e = verify_eth_addresses(data, &instruction_datas);
+                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
+            }
+        }
+        Ok(())
     }
 
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs

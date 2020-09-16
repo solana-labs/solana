@@ -16,7 +16,7 @@ use rand::{thread_rng, Rng};
 use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
-    clock::Slot,
+    clock::{Epoch, Slot},
     fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
     hash::Hash,
@@ -44,6 +44,9 @@ pub struct Accounts {
     /// my slot
     pub slot: Slot,
 
+    /// my epoch
+    pub epoch: Epoch,
+
     /// Single global AccountsDB
     pub accounts_db: Arc<AccountsDB>,
 
@@ -70,17 +73,19 @@ impl Accounts {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         Self {
             slot: 0,
+            epoch: 0,
             accounts_db: Arc::new(AccountsDB::new(paths, cluster_type)),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
     }
 
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot, epoch: Epoch) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Self {
             slot,
+            epoch,
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
@@ -90,6 +95,7 @@ impl Accounts {
     pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
         Self {
             slot: 0,
+            epoch: 0,
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
@@ -293,7 +299,13 @@ impl Accounts {
                             .cloned(),
                     };
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee(tx.message())
+                        fee_calculator.calculate_fee(
+                            tx.message(),
+                            solana_sdk::secp256k1::get_fee_config(
+                                self.accounts_db.cluster_type.unwrap(),
+                                self.epoch,
+                            ),
+                        )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
                     };
@@ -993,7 +1005,7 @@ mod tests {
         );
 
         let fee_calculator = FeeCalculator::new(10);
-        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
+        assert_eq!(fee_calculator.calculate_fee(tx.message(), None), 10);
 
         let loaded_accounts =
             load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);

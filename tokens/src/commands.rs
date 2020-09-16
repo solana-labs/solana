@@ -54,6 +54,12 @@ pub enum Error {
     TransportError(#[from] TransportError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
+    #[error("insufficient funds for fee ({0} SOL)")]
+    InsufficientFundsForFees(f64),
+    #[error("insufficient funds for distribution ({0} SOL)")]
+    InsufficientFundsForDistribution(f64),
+    #[error("insufficient funds for distribution ({0} SOL) and fee ({1} SOL)")]
+    InsufficientFundsForDistributionAndFees(f64, f64),
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -97,14 +103,6 @@ fn apply_previous_transactions(
         }
     }
     allocations.retain(|x| x.amount > 0.5);
-}
-
-fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
-    Allocation {
-        recipient: bid.primary_address.clone(),
-        amount: bid.accepted_amount_dollars / dollars_per_sol,
-        lockup_date: "".to_string(),
-    }
 }
 
 async fn transfer<S: Signer>(
@@ -203,6 +201,7 @@ async fn distribute_allocations(
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
+    let mut num_signatures = 0;
     for allocation in allocations {
         let new_stake_account_keypair = Keypair::new();
         let new_stake_account_address = new_stake_account_keypair.pubkey();
@@ -221,6 +220,7 @@ async fn distribute_allocations(
             }
         }
         let signers = unique_signers(signers);
+        num_signatures += signers.len();
 
         let lockup_date = if allocation.lockup_date == "" {
             None
@@ -250,7 +250,7 @@ async fn distribute_allocations(
                     &allocation.recipient.parse().unwrap(),
                     allocation.amount,
                     &transaction,
-                    Some(&new_stake_account_address),
+                    args.stake_args.as_ref().map(|_| &new_stake_account_address),
                     false,
                     last_valid_slot,
                     lockup_date,
@@ -261,26 +261,38 @@ async fn distribute_allocations(
             }
         };
     }
+    if args.dry_run {
+        let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+        check_payer_balances(
+            num_signatures,
+            sol_to_lamports(undistributed_tokens),
+            client,
+            args,
+        )
+        .await?;
+    }
     Ok(())
 }
 
-fn read_allocations(
-    input_csv: &str,
-    from_bids: bool,
-    dollars_per_sol: Option<f64>,
-) -> Vec<Allocation> {
-    let rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv);
-    if from_bids {
-        let bids: Vec<Bid> = rdr.unwrap().deserialize().map(|bid| bid.unwrap()).collect();
-        bids.into_iter()
-            .map(|bid| create_allocation(&bid, dollars_per_sol.unwrap()))
+fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result<Vec<Allocation>> {
+    let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
+    let allocations = if let Some(amount) = transfer_amount {
+        let recipients: Vec<String> = rdr
+            .deserialize()
+            .map(|recipient| recipient.unwrap())
+            .collect();
+        recipients
+            .into_iter()
+            .map(|recipient| Allocation {
+                recipient,
+                amount,
+                lockup_date: "".to_string(),
+            })
             .collect()
     } else {
-        rdr.unwrap()
-            .deserialize()
-            .map(|entry| entry.unwrap())
-            .collect()
-    }
+        rdr.deserialize().map(|entry| entry.unwrap()).collect()
+    };
+    Ok(allocations)
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -295,8 +307,7 @@ pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
-    let mut allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
+    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv, args.transfer_amount)?;
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
@@ -304,13 +315,6 @@ pub async fn process_allocations(
         style("Total in input_csv:").bold(),
         starting_total_tokens,
     );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Total in input_csv:").bold(),
-            starting_total_tokens * dollars_per_sol,
-        );
-    }
 
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
@@ -325,6 +329,20 @@ pub async fn process_allocations(
         return Ok(confirmations);
     }
 
+    let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
+    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+    println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
+    println!(
+        "{} ◎{}",
+        style("Undistributed:").bold(),
+        undistributed_tokens,
+    );
+    println!(
+        "{} ◎{}",
+        style("Total:").bold(),
+        distributed_tokens + undistributed_tokens,
+    );
+
     println!(
         "{}",
         style(format!(
@@ -334,44 +352,16 @@ pub async fn process_allocations(
         .bold()
     );
 
-    let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
-    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Distributed:").bold(),
-            distributed_tokens * dollars_per_sol,
-        );
-    }
-    println!(
-        "{} ◎{}",
-        style("Undistributed:").bold(),
-        undistributed_tokens,
-    );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Undistributed:").bold(),
-            undistributed_tokens * dollars_per_sol,
-        );
-    }
-    println!(
-        "{} ◎{}",
-        style("Total:").bold(),
-        distributed_tokens + undistributed_tokens,
-    );
-    if let Some(dollars_per_sol) = args.dollars_per_sol {
-        println!(
-            "{} ${}",
-            style("Total:").bold(),
-            (distributed_tokens + undistributed_tokens) * dollars_per_sol,
-        );
-    }
-
     distribute_allocations(client, &mut db, &allocations, args).await?;
 
     let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
+
+    if !args.dry_run {
+        if let Some(output_path) = &args.output_path {
+            db::write_transaction_log(&db, &output_path)?;
+        }
+    }
+
     Ok(opt_confirmations)
 }
 
@@ -455,12 +445,45 @@ async fn update_finalized_transactions(
     Ok(confirmations)
 }
 
+async fn check_payer_balances(
+    num_signatures: usize,
+    allocation_lamports: u64,
+    client: &mut BanksClient,
+    args: &DistributeTokensArgs,
+) -> Result<(), Error> {
+    let (fee_calculator, _blockhash, _last_valid_slot) = client.get_fees().await?;
+    let fees = fee_calculator
+        .lamports_per_signature
+        .checked_mul(num_signatures as u64)
+        .unwrap();
+    if args.fee_payer.pubkey() == args.sender_keypair.pubkey() {
+        let balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        if balance < fees + allocation_lamports {
+            return Err(Error::InsufficientFundsForDistributionAndFees(
+                lamports_to_sol(allocation_lamports),
+                lamports_to_sol(fees),
+            ));
+        }
+    } else {
+        let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        if fee_payer_balance < fees {
+            return Err(Error::InsufficientFundsForFees(lamports_to_sol(fees)));
+        }
+        let sender_balance = client.get_balance(args.sender_keypair.pubkey()).await?;
+        if sender_balance < allocation_lamports {
+            return Err(Error::InsufficientFundsForDistribution(lamports_to_sol(
+                allocation_lamports,
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub async fn process_balances(
     client: &mut BanksClient,
     args: &BalancesArgs,
 ) -> Result<(), csv::Error> {
-    let allocations: Vec<Allocation> =
-        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
+    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -494,11 +517,13 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
     Ok(())
 }
 
+use crate::db::check_output_file;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub async fn test_process_distribute_tokens_with_client(
     client: &mut BanksClient,
     sender_keypair: Keypair,
+    transfer_amount: Option<f64>,
 ) {
     let fee_payer = Keypair::new();
     let transaction = transfer(
@@ -524,7 +549,11 @@ pub async fn test_process_distribute_tokens_with_client(
     let alice_pubkey = Pubkey::new_rand();
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
-        amount: 1000.0,
+        amount: if let Some(amount) = transfer_amount {
+            amount
+        } else {
+            1000.0
+        },
         lockup_date: "".to_string(),
     };
     let allocations_file = NamedTempFile::new().unwrap();
@@ -541,15 +570,18 @@ pub async fn test_process_distribute_tokens_with_client(
         .unwrap()
         .to_string();
 
+    let output_file = NamedTempFile::new().unwrap();
+    let output_path = output_file.path().to_str().unwrap().to_string();
+
     let args = DistributeTokensArgs {
         sender_keypair: Box::new(sender_keypair),
         fee_payer: Box::new(fee_payer),
         dry_run: false,
         input_csv,
-        from_bids: false,
         transaction_db: transaction_db.clone(),
-        dollars_per_sol: None,
+        output_path: Some(output_path.clone()),
         stake_args: None,
+        transfer_amount,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
@@ -569,6 +601,8 @@ pub async fn test_process_distribute_tokens_with_client(
         expected_amount,
     );
 
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+
     // Now, run it again, and check there's no double-spend.
     process_allocations(client, &args).await.unwrap();
     let transaction_infos =
@@ -585,6 +619,8 @@ pub async fn test_process_distribute_tokens_with_client(
         client.get_balance(alice_pubkey).await.unwrap(),
         expected_amount,
     );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
 pub async fn test_process_distribute_stake_with_client(
@@ -651,6 +687,9 @@ pub async fn test_process_distribute_stake_with_client(
         .unwrap()
         .to_string();
 
+    let output_file = NamedTempFile::new().unwrap();
+    let output_path = output_file.path().to_str().unwrap().to_string();
+
     let stake_args = StakeArgs {
         stake_account_address,
         stake_authority: Box::new(stake_authority),
@@ -663,10 +702,10 @@ pub async fn test_process_distribute_stake_with_client(
         dry_run: false,
         input_csv,
         transaction_db: transaction_db.clone(),
+        output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
-        from_bids: false,
         sender_keypair: Box::new(sender_keypair),
-        dollars_per_sol: None,
+        transfer_amount: None,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
     assert_eq!(confirmations, None);
@@ -691,6 +730,8 @@ pub async fn test_process_distribute_stake_with_client(
         expected_amount - sol_to_lamports(1.0),
     );
 
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
+
     // Now, run it again, and check there's no double-spend.
     process_allocations(client, &args).await.unwrap();
     let transaction_infos =
@@ -711,6 +752,8 @@ pub async fn test_process_distribute_stake_with_client(
         client.get_balance(new_stake_account_address).await.unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
+
+    check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
 #[cfg(test)]
@@ -731,7 +774,24 @@ mod tests {
         Runtime::new().unwrap().block_on(async {
             let transport = start_local_server(&bank_forks).await;
             let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair).await;
+            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair, None)
+                .await;
+        });
+    }
+
+    #[test]
+    fn test_process_transfer_amount_allocations() {
+        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        Runtime::new().unwrap().block_on(async {
+            let transport = start_local_server(&bank_forks).await;
+            let mut banks_client = start_client(transport).await.unwrap();
+            test_process_distribute_tokens_with_client(
+                &mut banks_client,
+                sender_keypair,
+                Some(1.5),
+            )
+            .await;
         });
     }
 
@@ -760,30 +820,48 @@ mod tests {
         wtr.serialize(&allocation).unwrap();
         wtr.flush().unwrap();
 
-        assert_eq!(read_allocations(&input_csv, false, None), vec![allocation]);
+        assert_eq!(
+            read_allocations(&input_csv, None).unwrap(),
+            vec![allocation]
+        );
     }
 
     #[test]
-    fn test_read_allocations_from_bids() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bid = Bid {
-            primary_address: alice_pubkey.to_string(),
-            accepted_amount_dollars: 42.0,
-        };
+    fn test_read_allocations_transfer_amount() {
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
-        wtr.serialize(&bid).unwrap();
+        wtr.serialize("recipient".to_string()).unwrap();
+        wtr.serialize(&pubkey0.to_string()).unwrap();
+        wtr.serialize(&pubkey1.to_string()).unwrap();
+        wtr.serialize(&pubkey2.to_string()).unwrap();
         wtr.flush().unwrap();
 
-        let allocation = Allocation {
-            recipient: bid.primary_address,
-            amount: 84.0,
-            lockup_date: "".to_string(),
-        };
+        let amount = 1.5;
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey2.to_string(),
+                amount,
+                lockup_date: "".to_string(),
+            },
+        ];
         assert_eq!(
-            read_allocations(&input_csv, true, Some(0.5)),
-            vec![allocation]
+            read_allocations(&input_csv, Some(amount)).unwrap(),
+            expected_allocations
         );
     }
 
@@ -890,10 +968,10 @@ mod tests {
             dry_run: false,
             input_csv: "".to_string(),
             transaction_db: "".to_string(),
+            output_path: None,
             stake_args: Some(stake_args),
-            from_bids: false,
             sender_keypair: Box::new(Keypair::new()),
-            dollars_per_sol: None,
+            transfer_amount: None,
         };
         let lockup_date = lockup_date_str.parse().unwrap();
         let instructions = distribution_instructions(

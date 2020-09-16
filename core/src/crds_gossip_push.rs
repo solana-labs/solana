@@ -280,6 +280,7 @@ impl CrdsGossipPush {
         &mut self,
         crds: &Crds,
         stakes: &HashMap<Pubkey, u64>,
+        gossip_validators: Option<&HashSet<Pubkey>>,
         self_id: &Pubkey,
         self_shred_version: u16,
         network_size: usize,
@@ -288,7 +289,13 @@ impl CrdsGossipPush {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
 
-        let options: Vec<_> = self.push_options(crds, &self_id, self_shred_version, stakes);
+        let options: Vec<_> = self.push_options(
+            crds,
+            &self_id,
+            self_shred_version,
+            stakes,
+            gossip_validators,
+        );
         if options.is_empty() {
             return;
         }
@@ -336,6 +343,7 @@ impl CrdsGossipPush {
         self_id: &Pubkey,
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
+        gossip_validators: Option<&HashSet<Pubkey>>,
     ) -> Vec<(f32, &'a ContactInfo)> {
         crds.table
             .values()
@@ -345,6 +353,9 @@ impl CrdsGossipPush {
                 info.id != *self_id
                     && ContactInfo::is_valid_address(&info.gossip)
                     && self_shred_version == info.shred_version
+                    && gossip_validators.map_or(true, |gossip_validators| {
+                        gossip_validators.contains(&info.id)
+                    })
             })
             .map(|(info, value)| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
@@ -552,7 +563,7 @@ mod test {
         )));
 
         assert_eq!(crds.insert(value1.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         assert!(push.active_set.get(&value1.label().pubkey()).is_some());
         let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -562,7 +573,7 @@ mod test {
         assert!(push.active_set.get(&value2.label().pubkey()).is_none());
         assert_eq!(crds.insert(value2.clone(), 0), Ok(None));
         for _ in 0..30 {
-            push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+            push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
             if push.active_set.get(&value2.label().pubkey()).is_some() {
                 break;
             }
@@ -575,7 +586,7 @@ mod test {
             ));
             assert_eq!(crds.insert(value2.clone(), 0), Ok(None));
         }
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
         assert_eq!(push.active_set.len(), push.num_active);
     }
     #[test]
@@ -593,7 +604,7 @@ mod test {
             crds.insert(peer.clone(), time).unwrap();
             stakes.insert(id, i * 100);
         }
-        let mut options = push.push_options(&crds, &Pubkey::default(), 0, &stakes);
+        let mut options = push.push_options(&crds, &Pubkey::default(), 0, &stakes, None);
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.
@@ -643,7 +654,7 @@ mod test {
 
         // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
-            .push_options(&crds, &me.label().pubkey(), 123, &stakes)
+            .push_options(&crds, &me.label().pubkey(), 123, &stakes, None)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
@@ -653,12 +664,71 @@ mod test {
 
         // spy nodes should not push to people on different shred versions
         let options = node
-            .push_options(&crds, &spy.label().pubkey(), 0, &stakes)
+            .push_options(&crds, &spy.label().pubkey(), 0, &stakes, None)
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
         assert!(options.is_empty());
     }
+
+    #[test]
+    fn test_pushes_only_to_allowed() {
+        let mut crds = Crds::default();
+        let stakes = HashMap::new();
+        let node = CrdsGossipPush::default();
+        let gossip = socketaddr!("127.0.0.1:1234");
+
+        let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip,
+            ..ContactInfo::default()
+        }));
+        let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip,
+            ..ContactInfo::default()
+        }));
+
+        crds.insert(me.clone(), 0).unwrap();
+        crds.insert(node_123.clone(), 0).unwrap();
+
+        // Unknown pubkey in gossip_validators -- will push to nobody
+        let mut gossip_validators = HashSet::new();
+        let options = node.push_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            &stakes,
+            Some(&gossip_validators),
+        );
+
+        assert!(options.is_empty());
+
+        // Unknown pubkey in gossip_validators -- will push to nobody
+        gossip_validators.insert(Pubkey::new_rand());
+        let options = node.push_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            &stakes,
+            Some(&gossip_validators),
+        );
+        assert!(options.is_empty());
+
+        // node_123 pubkey in gossip_validators -- will push to it
+        gossip_validators.insert(node_123.pubkey());
+        let options = node.push_options(
+            &crds,
+            &me.label().pubkey(),
+            0,
+            &stakes,
+            Some(&gossip_validators),
+        );
+
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].1.id, node_123.pubkey());
+    }
+
     #[test]
     fn test_new_push_messages() {
         let mut crds = Crds::default();
@@ -668,7 +738,7 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
@@ -705,7 +775,7 @@ mod test {
             push.process_push_message(&mut crds, &Pubkey::default(), peer_3.clone(), 0),
             Ok(None)
         );
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         // push 3's contact info to 1 and 2 and 3
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -728,7 +798,7 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
@@ -755,7 +825,7 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer, 0), Ok(None));
-        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 0, 1, 1);
+        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
 
         let mut ci = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
         ci.wallclock = 1;

@@ -418,7 +418,7 @@ pub struct AccountsDB {
 
     stats: AccountsStats,
 
-    cluster_type: Option<ClusterType>,
+    pub cluster_type: Option<ClusterType>,
 }
 
 #[derive(Debug, Default)]

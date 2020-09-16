@@ -35,7 +35,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
         // Test allocated memory read and write
 
         const ITERS: usize = 100;
-        let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
+        let layout = Layout::from_size_align(ITERS, mem::align_of::<u8>()).unwrap();
         let ptr = alloc::alloc::alloc(layout);
         if ptr.is_null() {
             info!("Error: Alloc failed");

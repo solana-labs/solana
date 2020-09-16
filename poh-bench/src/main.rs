@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, value_t, App, Arg};
 use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
 use solana_measure::measure::Measure;
 use solana_perf::perf_libs;
-use solana_sdk::hash::hash;
+use solana_sdk::{genesis_config::ClusterType, hash::hash};
 
 fn main() {
     solana_logger::setup();
@@ -118,7 +118,7 @@ fn main() {
             let recyclers = VerifyRecyclers::default();
             for _ in 0..iterations {
                 assert!(ticks[..num_entries]
-                    .start_verify(&start_hash, recyclers.clone())
+                    .start_verify(&start_hash, recyclers.clone(), ClusterType::Development, 0)
                     .finish_verify(&ticks[..num_entries]));
             }
             time.stop();

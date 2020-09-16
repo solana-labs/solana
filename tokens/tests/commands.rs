@@ -20,7 +20,7 @@ fn test_process_distribute_with_rpc_client() {
 
     Runtime::new().unwrap().block_on(async {
         let mut banks_client = start_tcp_client(leader_data.rpc_banks).await.unwrap();
-        test_process_distribute_tokens_with_client(&mut banks_client, alice).await
+        test_process_distribute_tokens_with_client(&mut banks_client, alice, None).await
     });
 
     // Explicit cleanup, otherwise "pure virtual method called" crash in Docker

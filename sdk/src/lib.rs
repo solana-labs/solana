@@ -37,6 +37,7 @@ pub mod pubkey;
 pub mod rent;
 pub mod rpc_port;
 pub mod sanitize;
+pub mod secp256k1_program;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
@@ -88,6 +89,8 @@ pub mod client;
 pub mod genesis_config;
 #[cfg(not(feature = "program"))]
 pub mod hard_forks;
+#[cfg(not(feature = "program"))]
+pub mod secp256k1;
 #[cfg(not(feature = "program"))]
 pub mod shred_version;
 #[cfg(not(feature = "program"))]

@@ -17,6 +17,8 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::clock::Epoch;
+use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
@@ -323,8 +325,13 @@ pub trait EntrySlice {
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState;
-    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers)
-        -> EntryVerificationState;
+    fn start_verify(
+        &self,
+        start_hash: &Hash,
+        recyclers: VerifyRecyclers,
+        cluster_type: ClusterType,
+        epoch: Epoch,
+    ) -> EntryVerificationState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
@@ -332,13 +339,18 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_transaction_signatures(&self) -> bool;
+    fn verify_transaction_signatures(&self, cluster_type: ClusterType, epoch: Epoch) -> bool;
 }
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default())
-            .finish_verify(self)
+        self.start_verify(
+            start_hash,
+            VerifyRecyclers::default(),
+            ClusterType::Development,
+            0,
+        )
+        .finish_verify(self)
     }
 
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState {
@@ -485,13 +497,20 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn verify_transaction_signatures(&self) -> bool {
+    fn verify_transaction_signatures(&self, cluster_type: ClusterType, epoch: Epoch) -> bool {
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.par_iter().all(|e| {
-                    e.transactions
-                        .par_iter()
-                        .all(|transaction| transaction.verify().is_ok())
+                    e.transactions.par_iter().all(|transaction| {
+                        let sig_verify = transaction.verify().is_ok();
+                        if sig_verify
+                            && solana_sdk::secp256k1::is_enabled(cluster_type, epoch)
+                            && transaction.verify_precompiles().is_err()
+                        {
+                            return false;
+                        }
+                        sig_verify
+                    })
                 })
             })
         })
@@ -501,9 +520,11 @@ impl EntrySlice for [Entry] {
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
+        cluster_type: ClusterType,
+        epoch: Epoch,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let res = self.verify_transaction_signatures();
+        let res = self.verify_transaction_signatures(cluster_type, epoch);
         let transaction_duration_us = timing::duration_as_us(&start.elapsed());
         if !res {
             return EntryVerificationState {

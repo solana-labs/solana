@@ -142,6 +142,7 @@ fn start_gossip_node(
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
     expected_shred_version: Option<u16>,
+    gossip_validators: Option<HashSet<Pubkey>>,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
@@ -155,7 +156,13 @@ fn start_gossip_node(
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
-    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &gossip_exit_flag);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        gossip_socket,
+        gossip_validators,
+        &gossip_exit_flag,
+    );
     (cluster_info, gossip_exit_flag, gossip_service)
 }
 
@@ -608,6 +615,17 @@ pub fn main() {
                 .help("Skip the RPC vote account sanity check")
         )
         .arg(
+            Arg::with_name("restricted_repair_only_mode")
+                .long("restricted-repair-only-mode")
+                .takes_value(false)
+                .help("Do not publish the Gossip, TPU, TVU or Repair Service ports causing \
+                       the validator to operate in a limited capacity that reduces its \
+                       exposure to the rest of the cluster. \
+                       \
+                       The --no-voting flag is implicit when this flag is enabled \
+                      "),
+        )
+        .arg(
             Arg::with_name("dev_halt_at_slot")
                 .long("dev-halt-at-slot")
                 .value_name("SLOT")
@@ -815,7 +833,8 @@ pub fn main() {
                 .requires("expected_bank_hash")
                 .value_name("SLOT")
                 .validator(is_slot)
-                .help("After processing the ledger and the next slot is SLOT, wait until a supermajority of stake is visible on gossip before starting PoH"),
+                .help("After processing the ledger and the next slot is SLOT, wait until a \
+                       supermajority of stake is visible on gossip before starting PoH"),
         )
         .arg(
             Arg::with_name("hard_forks")
@@ -850,7 +869,18 @@ pub fn main() {
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to request repairs from. If specified, repair will not \
-                       request from validators outside this set [default: request repairs from all validators]")
+                       request from validators outside this set [default: all validators]")
+        )
+        .arg(
+            Arg::with_name("gossip_validators")
+                .long("gossip-validator")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to gossip with.  If specified, gossip \
+                      will not pull/pull from from validators outside this set. \
+                      [default: all validators]")
         )
         .arg(
             Arg::with_name("no_rocksdb_compaction")
@@ -967,6 +997,12 @@ pub fn main() {
         "repair_validators",
         "--repair-validator",
     );
+    let gossip_validators = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "gossip_validators",
+        "--gossip-validator",
+    );
 
     let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
         .expect("invalid bind_address");
@@ -976,6 +1012,8 @@ pub fn main() {
     } else {
         bind_address
     };
+
+    let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
 
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
@@ -1011,10 +1049,11 @@ pub fn main() {
                 SocketAddr::new(rpc_bind_address, rpc_port + 3),
             )
         }),
-        voting_disabled: matches.is_present("no_voting"),
+        voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
         repair_validators,
+        gossip_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
         wal_recovery_mode,
@@ -1022,8 +1061,10 @@ pub fn main() {
     };
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        warn!("--vote-account not specified, validator will not vote");
-        validator_config.voting_disabled = true;
+        if !validator_config.voting_disabled {
+            warn!("--vote-account not specified, validator will not vote");
+            validator_config.voting_disabled = true;
+        }
         Keypair::new().pubkey()
     });
 
@@ -1223,6 +1264,18 @@ pub fn main() {
         bind_address,
     );
 
+    if restricted_repair_only_mode {
+        let any = SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), 0);
+        // When in --restricted_repair_only_mode is enabled only the gossip and repair ports
+        // need to be reachable by the entrypoint to respond to gossip pull requests and repair
+        // requests initiated by the node.  All other ports are unused.
+        node.info.tpu = any;
+        node.info.tpu_forwards = any;
+        node.info.tvu = any;
+        node.info.tvu_forwards = any;
+        node.info.serve_repair = any;
+    }
+
     if !private_rpc {
         if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
@@ -1232,26 +1285,34 @@ pub fn main() {
     }
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
-        let mut udp_sockets = vec![
-            &node.sockets.gossip,
-            &node.sockets.repair,
-            &node.sockets.serve_repair,
-        ];
-        udp_sockets.extend(node.sockets.tpu.iter());
-        udp_sockets.extend(node.sockets.tpu_forwards.iter());
-        udp_sockets.extend(node.sockets.tvu.iter());
-        udp_sockets.extend(node.sockets.tvu_forwards.iter());
-        udp_sockets.extend(node.sockets.broadcast.iter());
-        udp_sockets.extend(node.sockets.retransmit_sockets.iter());
+        let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
+
+        if ContactInfo::is_valid_address(&node.info.serve_repair) {
+            udp_sockets.push(&node.sockets.serve_repair);
+        }
+        if ContactInfo::is_valid_address(&node.info.tpu) {
+            udp_sockets.extend(node.sockets.tpu.iter());
+        }
+        if ContactInfo::is_valid_address(&node.info.tpu_forwards) {
+            udp_sockets.extend(node.sockets.tpu_forwards.iter());
+        }
+        if ContactInfo::is_valid_address(&node.info.tvu) {
+            udp_sockets.extend(node.sockets.tvu.iter());
+            udp_sockets.extend(node.sockets.broadcast.iter());
+            udp_sockets.extend(node.sockets.retransmit_sockets.iter());
+        }
+        if ContactInfo::is_valid_address(&node.info.tvu_forwards) {
+            udp_sockets.extend(node.sockets.tvu_forwards.iter());
+        }
 
         let mut tcp_listeners = vec![];
-        if !private_rpc {
-            if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
-                for (purpose, addr) in &[
-                    ("RPC", rpc_addr),
-                    ("RPC pubsub", rpc_pubsub_addr),
-                    ("RPC banks", rpc_banks_addr),
-                ] {
+        if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+            for (purpose, addr) in &[
+                ("RPC", rpc_addr),
+                ("RPC pubsub", rpc_pubsub_addr),
+                ("RPC banks", rpc_banks_addr),
+            ] {
+                if !private_rpc && ContactInfo::is_valid_address(&addr) {
                     tcp_listeners.push((
                         addr.port(),
                         TcpListener::bind(addr).unwrap_or_else(|err| {
@@ -1268,9 +1329,11 @@ pub fn main() {
             }
         }
 
-        if let Some(ip_echo) = &node.sockets.ip_echo {
-            let ip_echo = ip_echo.try_clone().expect("unable to clone tcp_listener");
-            tcp_listeners.push((node.info.gossip.port(), ip_echo));
+        if !restricted_repair_only_mode {
+            if let Some(ip_echo) = &node.sockets.ip_echo {
+                let ip_echo = ip_echo.try_clone().expect("unable to clone tcp_listener");
+                tcp_listeners.push((ip_echo.local_addr().unwrap().port(), ip_echo));
+            }
         }
 
         if !solana_net_utils::verify_reachable_ports(
@@ -1291,6 +1354,7 @@ pub fn main() {
                         &node.info.gossip,
                         node.sockets.gossip.try_clone().unwrap(),
                         validator_config.expected_shred_version,
+                        validator_config.gossip_validators.clone(),
                     ));
                 }
 

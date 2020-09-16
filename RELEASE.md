@@ -107,11 +107,15 @@ Alternatively use the Github UI.
    1.  If the Cargo.toml version field is **0.12.3**, then the release tag must be **v0.12.3**
 1. Make sure the Target Branch field matches the branch you want to make a release on.
    1.  If you want to release v0.12.0, the target branch must be v0.12
-1. If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
-   template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.  If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
+1. Fill the release notes.
+   1.  If this is the first release on the branch (e.g. v0.13.**0**), paste in [this
+   template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md).  Engineering Lead can provide summary contents for release notes if needed.
+   1. If this is a patch release, review all the commits since the previous release on this branch and add details as needed.
 1. Click "Save Draft", then confirm the release notes look good and the tag name and branch are correct.
-1. Ensure the release is marked **"This is a pre-release"**.  This flag will then need to be be removed once the the Linux binary artifacts appear later.
-1. Go back into edit the release and click "Publish release" when ready.
+1. Ensure all desired commits (usually backports) are landed on the branch by now.
+1. Ensure the release is marked **"This is a pre-release"**.  This flag will need to be be removed manually after confirming the the Linux binary artifacts appear at a later step.
+1. Go back into edit the release and click "Publish release" while being marked as a pre-release.
+1. Confirm there is new git tag with intended version number at the intended revision after running `git fetch` locally.
 
 
 ### Update release branch with the next patch version
@@ -131,7 +135,8 @@ Alternatively use the Github UI.
 1. Open a PR against origin/vX.Y and then merge the PR after passing CI.
 
 ### Prepare for the next release
-1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release nodes.  This allows people to incrementally add new release notes until it's time for the next release
+1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release notes.  This allows people to incrementally add new release notes until it's time for the next release
+    1. Also, point the branch field to the same branch and mark the relese as **"This is a pre-release"**.
 1.  Go to the [Github Milestones](https://github.com/solana-labs/solana/milestones).  Create a new milestone for the `X.Y.Z+1`, move over
 unresolved issues still in the `X.Y.Z` milestone, then close the `X.Y.Z` milestone.
 

@@ -3,7 +3,8 @@ use crate::args::{
 };
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    input_validators::{is_valid_pubkey, is_valid_signer},
+    input_parsers::value_of,
+    input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
     keypair::{pubkey_from_path, signer_from_path},
 };
 use solana_cli_config::CONFIG_FILE;
@@ -41,16 +42,16 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
-                )
-                .arg(
-                    Arg::with_name("from_bids")
-                        .long("from-bids")
-                        .help("Input CSV contains bids in dollars, not allocations in SOL"),
+                        .value_name("FILE")
+                        .help(
+                            "Location for storing distribution database. \
+                            The database is used for tracking transactions as they are finalized \
+                            and preventing double spends.",
+                        ),
                 )
                 .arg(
                     Arg::with_name("input_csv")
@@ -61,16 +62,25 @@ where
                         .help("Input CSV file"),
                 )
                 .arg(
-                    Arg::with_name("dollars_per_sol")
-                        .long("dollars-per-sol")
+                    Arg::with_name("transfer_amount")
+                        .long("transfer-amount")
                         .takes_value(true)
-                        .value_name("NUMBER")
-                        .help("Dollars per SOL, if input CSV contains bids"),
+                        .value_name("AMOUNT")
+                        .validator(is_amount)
+                        .help("The amount to send to each recipient, in SOL"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
+                )
+                .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the transaction log to this file"),
                 )
                 .arg(
                     Arg::with_name("sender_keypair")
@@ -95,11 +105,16 @@ where
             SubCommand::with_name("distribute-stake")
                 .about("Distribute stake accounts")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
+                        .value_name("FILE")
+                        .help(
+                            "Location for storing distribution database. \
+                            The database is used for tracking transactions as they are finalized \
+                            and preventing double spends.",
+                        ),
                 )
                 .arg(
                     Arg::with_name("input_csv")
@@ -113,6 +128,14 @@ where
                     Arg::with_name("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
+                )
+                .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the transaction log to this file"),
                 )
                 .arg(
                     Arg::with_name("sender_keypair")
@@ -186,29 +209,18 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Bids CSV file"),
-                )
-                .arg(
-                    Arg::with_name("from_bids")
-                        .long("from-bids")
-                        .help("Input CSV contains bids in dollars, not allocations in SOL"),
-                )
-                .arg(
-                    Arg::with_name("dollars_per_sol")
-                        .long("dollars-per-sol")
-                        .takes_value(true)
-                        .value_name("NUMBER")
-                        .help("Dollars per SOL"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
-                    Arg::with_name("campaign_name")
-                        .long("campaign-name")
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
                         .takes_value(true)
-                        .value_name("NAME")
-                        .help("Campaign name for storing transaction data"),
+                        .value_name("FILE")
+                        .help("Location of database to query"),
                 )
                 .arg(
                     Arg::with_name("output_path")
@@ -220,22 +232,6 @@ where
                 ),
         )
         .get_matches_from(args)
-}
-
-fn create_db_path(campaign_name: Option<String>) -> String {
-    let (prefix, hyphen) = if let Some(name) = campaign_name {
-        (name, "-")
-    } else {
-        ("".to_string(), "")
-    };
-    let path = dirs::home_dir().unwrap();
-    let filename = format!("{}{}transactions.db", prefix, hyphen);
-    path.join(".config")
-        .join("solana-tokens")
-        .join(filename)
-        .to_str()
-        .unwrap()
-        .to_string()
 }
 
 fn parse_distribute_tokens_args(
@@ -262,13 +258,13 @@ fn parse_distribute_tokens_args(
 
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: matches.is_present("from_bids"),
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
-        dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
+        output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dry_run: matches.is_present("dry_run"),
         sender_keypair,
         fee_payer,
         stake_args: None,
+        transfer_amount: value_of(matches, "transfer_amount"),
     })
 }
 
@@ -338,27 +334,25 @@ fn parse_distribute_stake_args(
     };
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: false,
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
-        dollars_per_sol: None,
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
+        output_path: matches.value_of("output_path").map(|path| path.to_string()),
         dry_run: matches.is_present("dry_run"),
         sender_keypair,
         fee_payer,
         stake_args: Some(stake_args),
+        transfer_amount: None,
     })
 }
 
 fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     BalancesArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        from_bids: matches.is_present("from_bids"),
-        dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
     }
 }
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
     TransactionLogArgs {
-        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: value_t_or_exit!(matches, "output_path", String),
     }
 }

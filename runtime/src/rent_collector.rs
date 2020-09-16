@@ -65,7 +65,7 @@ impl RentCollector {
         match self.cluster_type.unwrap() {
             ClusterType::Development => true,
             ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch >= Epoch::max_value(),
+            ClusterType::Testnet => self.epoch >= 97,
             ClusterType::MainnetBeta => self.epoch >= Epoch::max_value(),
         }
     }

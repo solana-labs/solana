@@ -171,7 +171,7 @@ impl CachedExecutors {
     }
     pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.get(pubkey).map(|(count, executor)| {
-            count.fetch_add(1, Ordering::Relaxed);
+            count.fetch_add(1, Relaxed);
             executor.clone()
         })
     }
@@ -182,7 +182,7 @@ impl CachedExecutors {
                 let default_key = Pubkey::default();
                 let mut least_key = &default_key;
                 for (key, (count, _)) in self.executors.iter() {
-                    let count = count.load(Ordering::Relaxed);
+                    let count = count.load(Relaxed);
                     if count < least {
                         least = count;
                         least_key = key;
@@ -569,11 +569,15 @@ impl Bank {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
+        let epoch_schedule = parent.epoch_schedule;
+        let epoch = epoch_schedule.get_epoch(slot);
+
         let rc = BankRc {
             accounts: Arc::new(Accounts::new_from_parent(
                 &parent.rc.accounts,
                 slot,
                 parent.slot(),
+                epoch,
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
@@ -581,8 +585,6 @@ impl Bank {
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
         };
-        let epoch_schedule = parent.epoch_schedule;
-        let epoch = epoch_schedule.get_epoch(slot);
 
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
@@ -2057,7 +2059,10 @@ impl Bank {
                 };
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee(tx.message());
+                let fee = fee_calculator.calculate_fee(
+                    tx.message(),
+                    solana_sdk::secp256k1::get_fee_config(self.cluster_type(), self.epoch()),
+                );
 
                 let message = tx.message();
                 match *res {
@@ -2432,7 +2437,7 @@ impl Bank {
         let should_enable = match self.cluster_type() {
             ClusterType::Development => true,
             ClusterType::Devnet => true,
-            ClusterType::Testnet => current_epoch >= Epoch::max_value(),
+            ClusterType::Testnet => current_epoch >= 97,
             ClusterType::MainnetBeta => {
                 #[cfg(not(test))]
                 let should_enable = current_epoch >= Epoch::max_value();
@@ -2771,7 +2776,7 @@ impl Bank {
         let should_be_in_new_behavior = match self.cluster_type() {
             ClusterType::Development => true,
             ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
+            ClusterType::Testnet => self.epoch() >= 97,
             ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
         };
 
@@ -8387,7 +8392,8 @@ mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
         consumed_budgets.sort();
-        assert_eq!(consumed_budgets, vec![0, 1, 9]);
+        // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
+        assert_eq!(consumed_budgets, vec![0, 1, 10]);
     }
 
     #[test]
