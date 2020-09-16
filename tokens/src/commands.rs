@@ -1,6 +1,9 @@
-use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
-use crate::db::{self, TransactionInfo};
-use crate::thin_client::{Client, ThinClient};
+use crate::{
+    args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
+    db::{self, TransactionInfo},
+    thin_client::{Client, ThinClient},
+};
+use chrono::prelude::*;
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
@@ -8,6 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
+    instruction::Instruction,
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
@@ -15,7 +19,7 @@ use solana_sdk::{
     transport::TransportError,
 };
 use solana_stake_program::{
-    stake_instruction,
+    stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use std::{
@@ -35,6 +39,7 @@ struct Bid {
 struct Allocation {
     recipient: String,
     amount: f64,
+    lockup_date: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -47,6 +52,8 @@ pub enum Error {
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
     TransportError(#[from] TransportError),
+    #[error("Missing lockup authority")]
+    MissingLockupAuthority,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -57,10 +64,17 @@ fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
             .or_insert(Allocation {
                 recipient: allocation.recipient.clone(),
                 amount: 0.0,
+                lockup_date: "".to_string(),
             })
             .amount += allocation.amount;
     }
     allocation_map.values().cloned().collect()
+}
+
+/// Return true if the recipient and lockups are the same
+fn has_same_recipient(allocation: &Allocation, transaction_info: &TransactionInfo) -> bool {
+    allocation.recipient == transaction_info.recipient.to_string()
+        && allocation.lockup_date.parse().ok() == transaction_info.lockup_date
 }
 
 fn apply_previous_transactions(
@@ -70,7 +84,7 @@ fn apply_previous_transactions(
     for transaction_info in transaction_infos {
         let mut amount = transaction_info.amount;
         for allocation in allocations.iter_mut() {
-            if allocation.recipient != transaction_info.recipient.to_string() {
+            if !has_same_recipient(&allocation, &transaction_info) {
                 continue;
             }
             if allocation.amount >= amount {
@@ -89,10 +103,84 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     Allocation {
         recipient: bid.primary_address.clone(),
         amount: bid.accepted_amount_dollars / dollars_per_sol,
+        lockup_date: "".to_string(),
     }
 }
 
-fn distribute_tokens(
+fn distribution_instructions(
+    allocation: &Allocation,
+    new_stake_account_address: &Pubkey,
+    args: &DistributeTokensArgs,
+    lockup_date: Option<DateTime<Utc>>,
+) -> Vec<Instruction> {
+    if args.stake_args.is_none() {
+        let from = args.sender_keypair.pubkey();
+        let to = allocation.recipient.parse().unwrap();
+        let lamports = sol_to_lamports(allocation.amount);
+        let instruction = system_instruction::transfer(&from, &to, lamports);
+        return vec![instruction];
+    }
+
+    let stake_args = args.stake_args.as_ref().unwrap();
+    let sol_for_fees = stake_args.sol_for_fees;
+    let sender_pubkey = args.sender_keypair.pubkey();
+    let stake_authority = stake_args.stake_authority.pubkey();
+    let withdraw_authority = stake_args.withdraw_authority.pubkey();
+
+    let mut instructions = stake_instruction::split(
+        &stake_args.stake_account_address,
+        &stake_authority,
+        sol_to_lamports(allocation.amount - sol_for_fees),
+        &new_stake_account_address,
+    );
+
+    let recipient = allocation.recipient.parse().unwrap();
+
+    // Make the recipient the new stake authority
+    instructions.push(stake_instruction::authorize(
+        &new_stake_account_address,
+        &stake_authority,
+        &recipient,
+        StakeAuthorize::Staker,
+    ));
+
+    // Make the recipient the new withdraw authority
+    instructions.push(stake_instruction::authorize(
+        &new_stake_account_address,
+        &withdraw_authority,
+        &recipient,
+        StakeAuthorize::Withdrawer,
+    ));
+
+    // Add lockup
+    if let Some(lockup_date) = lockup_date {
+        let lockup_authority = stake_args
+            .lockup_authority
+            .as_ref()
+            .map(|signer| signer.pubkey())
+            .unwrap();
+        let lockup = LockupArgs {
+            unix_timestamp: Some(lockup_date.timestamp()),
+            epoch: None,
+            custodian: None,
+        };
+        instructions.push(stake_instruction::set_lockup(
+            &new_stake_account_address,
+            &lockup,
+            &lockup_authority,
+        ));
+    }
+
+    instructions.push(system_instruction::transfer(
+        &sender_pubkey,
+        &recipient,
+        sol_to_lamports(sol_for_fees),
+    ));
+
+    instructions
+}
+
+fn distribute_allocations(
     client: &ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
@@ -107,56 +195,25 @@ fn distribute_tokens(
             signers.push(&*stake_args.stake_authority);
             signers.push(&*stake_args.withdraw_authority);
             signers.push(&new_stake_account_keypair);
+            if allocation.lockup_date != "" {
+                if let Some(lockup_authority) = &stake_args.lockup_authority {
+                    signers.push(&**lockup_authority);
+                } else {
+                    return Err(Error::MissingLockupAuthority);
+                }
+            }
         }
         let signers = unique_signers(signers);
 
-        println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-        let instructions = if let Some(stake_args) = &args.stake_args {
-            let sol_for_fees = stake_args.sol_for_fees;
-            let sender_pubkey = args.sender_keypair.pubkey();
-            let stake_authority = stake_args.stake_authority.pubkey();
-            let withdraw_authority = stake_args.withdraw_authority.pubkey();
-
-            let mut instructions = stake_instruction::split(
-                &stake_args.stake_account_address,
-                &stake_authority,
-                sol_to_lamports(allocation.amount - sol_for_fees),
-                &new_stake_account_address,
-            );
-
-            let recipient = allocation.recipient.parse().unwrap();
-
-            // Make the recipient the new stake authority
-            instructions.push(stake_instruction::authorize(
-                &new_stake_account_address,
-                &stake_authority,
-                &recipient,
-                StakeAuthorize::Staker,
-            ));
-
-            // Make the recipient the new withdraw authority
-            instructions.push(stake_instruction::authorize(
-                &new_stake_account_address,
-                &withdraw_authority,
-                &recipient,
-                StakeAuthorize::Withdrawer,
-            ));
-
-            instructions.push(system_instruction::transfer(
-                &sender_pubkey,
-                &recipient,
-                sol_to_lamports(sol_for_fees),
-            ));
-
-            instructions
+        let lockup_date = if allocation.lockup_date == "" {
+            None
         } else {
-            let from = args.sender_keypair.pubkey();
-            let to = allocation.recipient.parse().unwrap();
-            let lamports = sol_to_lamports(allocation.amount);
-            let instruction = system_instruction::transfer(&from, &to, lamports);
-            vec![instruction]
+            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
         };
 
+        println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
+        let instructions =
+            distribution_instructions(allocation, &new_stake_account_address, args, lockup_date);
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
         match client.send_and_confirm_message(message, &signers) {
@@ -169,6 +226,7 @@ fn distribute_tokens(
                     Some(&new_stake_account_address),
                     false,
                     last_valid_slot,
+                    lockup_date,
                 )?;
             }
             Err(e) => {
@@ -206,7 +264,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn process_distribute_tokens(
+pub fn process_allocations(
     client: &ThinClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
@@ -284,7 +342,7 @@ pub fn process_distribute_tokens(
         );
     }
 
-    distribute_tokens(client, &mut db, &allocations, args)?;
+    distribute_allocations(client, &mut db, &allocations, args)?;
 
     let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
     Ok(opt_confirmations)
@@ -420,6 +478,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: 1000.0,
+        lockup_date: "".to_string(),
     };
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
@@ -445,7 +504,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         dollars_per_sol: None,
         stake_args: None,
     };
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_allocations(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -464,7 +523,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    process_allocations(&thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -518,6 +577,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: 1000.0,
+        lockup_date: "".to_string(),
     };
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
@@ -537,6 +597,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         stake_account_address,
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
+        lockup_authority: None,
         sol_for_fees: 1.0,
     };
     let args = DistributeTokensArgs {
@@ -549,7 +610,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_allocations(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -573,7 +634,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    process_allocations(&thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -599,9 +660,10 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::genesis_config::create_genesis_config;
+    use solana_stake_program::stake_instruction::StakeInstruction;
 
     #[test]
-    fn test_process_distribute_tokens() {
+    fn test_process_token_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
@@ -609,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_distribute_stake() {
+    fn test_process_stake_allocations() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
@@ -622,6 +684,7 @@ mod tests {
         let allocation = Allocation {
             recipient: alice_pubkey.to_string(),
             amount: 42.0,
+            lockup_date: "".to_string(),
         };
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
@@ -648,6 +711,7 @@ mod tests {
         let allocation = Allocation {
             recipient: bid.primary_address,
             amount: 84.0,
+            lockup_date: "".to_string(),
         };
         assert_eq!(
             read_allocations(&input_csv, true, Some(0.5)),
@@ -663,10 +727,12 @@ mod tests {
             Allocation {
                 recipient: alice.to_string(),
                 amount: 1.0,
+                lockup_date: "".to_string(),
             },
             Allocation {
                 recipient: bob.to_string(),
                 amount: 1.0,
+                lockup_date: "".to_string(),
             },
         ];
         let transaction_infos = vec![TransactionInfo {
@@ -680,5 +746,102 @@ mod tests {
         // Ensure that we applied the transaction to the allocation with
         // a matching recipient address (to bob, not alice).
         assert_eq!(allocations[0].recipient, alice.to_string());
+    }
+
+    #[test]
+    fn test_has_same_recipient() {
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let lockup0 = "2021-01-07T00:00:00Z".to_string();
+        let lockup1 = "9999-12-31T23:59:59Z".to_string();
+        let alice_alloc = Allocation {
+            recipient: alice_pubkey.to_string(),
+            amount: 1.0,
+            lockup_date: "".to_string(),
+        };
+        let alice_alloc_lockup0 = Allocation {
+            recipient: alice_pubkey.to_string(),
+            amount: 1.0,
+            lockup_date: lockup0.clone(),
+        };
+        let alice_info = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: None,
+            ..TransactionInfo::default()
+        };
+        let alice_info_lockup0 = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: lockup0.parse().ok(),
+            ..TransactionInfo::default()
+        };
+        let alice_info_lockup1 = TransactionInfo {
+            recipient: alice_pubkey,
+            lockup_date: lockup1.parse().ok(),
+            ..TransactionInfo::default()
+        };
+        let bob_info = TransactionInfo {
+            recipient: bob_pubkey,
+            lockup_date: None,
+            ..TransactionInfo::default()
+        };
+        assert!(!has_same_recipient(&alice_alloc, &bob_info)); // Different recipient, no lockup
+        assert!(!has_same_recipient(&alice_alloc, &alice_info_lockup0)); // One with no lockup, one locked up
+        assert!(!has_same_recipient(
+            &alice_alloc_lockup0,
+            &alice_info_lockup1
+        )); // Different lockups
+        assert!(has_same_recipient(&alice_alloc, &alice_info)); // Same recipient, no lockups
+        assert!(has_same_recipient(
+            &alice_alloc_lockup0,
+            &alice_info_lockup0
+        )); // Same recipient, same lockups
+    }
+
+    const SET_LOCKUP_INDEX: usize = 4;
+
+    #[test]
+    fn test_set_stake_lockup() {
+        let lockup_date_str = "2021-01-07T00:00:00Z";
+        let allocation = Allocation {
+            recipient: Pubkey::default().to_string(),
+            amount: 1.0,
+            lockup_date: lockup_date_str.to_string(),
+        };
+        let stake_account_address = Pubkey::new_rand();
+        let new_stake_account_address = Pubkey::new_rand();
+        let lockup_authority = Keypair::new();
+        let stake_args = StakeArgs {
+            stake_account_address,
+            stake_authority: Box::new(Keypair::new()),
+            withdraw_authority: Box::new(Keypair::new()),
+            lockup_authority: Some(Box::new(lockup_authority)),
+            sol_for_fees: 1.0,
+        };
+        let args = DistributeTokensArgs {
+            fee_payer: Box::new(Keypair::new()),
+            dry_run: false,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            stake_args: Some(stake_args),
+            from_bids: false,
+            sender_keypair: Box::new(Keypair::new()),
+            dollars_per_sol: None,
+        };
+        let lockup_date = lockup_date_str.parse().unwrap();
+        let instructions = distribution_instructions(
+            &allocation,
+            &new_stake_account_address,
+            &args,
+            Some(lockup_date),
+        );
+        let lockup_instruction =
+            bincode::deserialize(&instructions[SET_LOCKUP_INDEX].data).unwrap();
+        if let StakeInstruction::SetLockup(lockup_args) = lockup_instruction {
+            assert_eq!(lockup_args.unix_timestamp, Some(lockup_date.timestamp()));
+            assert_eq!(lockup_args.epoch, None); // Don't change the epoch
+            assert_eq!(lockup_args.custodian, None); // Don't change the lockup authority
+        } else {
+            panic!("expected SetLockup instruction");
+        }
     }
 }

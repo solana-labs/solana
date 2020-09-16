@@ -159,6 +159,14 @@ where
                         .help("Withdraw Authority Keypair"),
                 )
                 .arg(
+                    Arg::with_name("lockup_authority")
+                        .long("lockup-authority")
+                        .takes_value(true)
+                        .value_name("KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Lockup Authority Keypair"),
+                )
+                .arg(
                     Arg::with_name("fee_payer")
                         .long("fee-payer")
                         .required(true)
@@ -310,11 +318,23 @@ fn parse_distribute_stake_args(
         &mut wallet_manager,
     )?;
 
+    let lockup_authority_str = value_t!(matches, "lockup_authority", String).ok();
+    let lockup_authority = match lockup_authority_str {
+        Some(path) => Some(signer_from_path(
+            &signer_matches,
+            &path,
+            "lockup authority",
+            &mut wallet_manager,
+        )?),
+        None => None,
+    };
+
     let stake_args = StakeArgs {
         stake_account_address,
         sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
         stake_authority,
         withdraw_authority,
+        lockup_authority,
     };
     Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),

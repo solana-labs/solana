@@ -13,6 +13,7 @@ pub struct TransactionInfo {
     pub finalized_date: Option<DateTime<Utc>>,
     pub transaction: Transaction,
     pub last_valid_slot: Slot,
+    pub lockup_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -37,6 +38,7 @@ impl Default for TransactionInfo {
             finalized_date: None,
             transaction,
             last_valid_slot: 0,
+            lockup_date: None,
         }
     }
 }
@@ -106,6 +108,7 @@ pub fn set_transaction_info(
     new_stake_account_address: Option<&Pubkey>,
     finalized: bool,
     last_valid_slot: Slot,
+    lockup_date: Option<DateTime<Utc>>,
 ) -> Result<(), Error> {
     let finalized_date = if finalized { Some(Utc::now()) } else { None };
     let transaction_info = TransactionInfo {
@@ -115,6 +118,7 @@ pub fn set_transaction_info(
         finalized_date,
         transaction: transaction.clone(),
         last_valid_slot,
+        lockup_date,
     };
     let signature = transaction.signatures[0];
     db.set(&signature.to_string(), &transaction_info)?;
