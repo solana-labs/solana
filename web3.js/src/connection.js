@@ -1895,12 +1895,12 @@ export class Connection {
     commitment: ?Commitment,
     epoch: ?number,
   ): Promise<StakeActivationData | null> {
-    const args = this._buildArgs(
-      [publicKey.toBase58()],
-      commitment,
-      epoch,
-      'base64',
-    );
+    let _args = [publicKey.toBase58()];
+    if (epoch !== undefined) {
+      _args.push({epoch});
+    }
+
+    const args = this._buildArgs(_args, commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
     if (res.error) {
