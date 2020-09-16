@@ -2,9 +2,8 @@ use solana_sdk::{pubkey::Pubkey, signature::Signer};
 
 pub struct DistributeTokensArgs {
     pub input_csv: String,
-    pub from_bids: bool,
     pub transaction_db: String,
-    pub dollars_per_sol: Option<f64>,
+    pub output_path: Option<String>,
     pub dry_run: bool,
     pub sender_keypair: Box<dyn Signer>,
     pub fee_payer: Box<dyn Signer>,
@@ -21,8 +20,6 @@ pub struct StakeArgs {
 
 pub struct BalancesArgs {
     pub input_csv: String,
-    pub from_bids: bool,
-    pub dollars_per_sol: Option<f64>,
 }
 
 pub struct TransactionLogArgs {

@@ -20,6 +20,7 @@ pub struct TransactionInfo {
 struct SignedTransactionInfo {
     recipient: String,
     amount: f64,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     new_stake_account_address: String,
     finalized_date: Option<DateTime<Utc>>,
     signature: String,
@@ -176,6 +177,33 @@ pub fn update_finalized_transaction(
     transaction_info.finalized_date = Some(Utc::now());
     db.set(&signature.to_string(), &transaction_info)?;
     Ok(None)
+}
+
+use csv::{ReaderBuilder, Trim};
+pub(crate) fn check_output_file(path: &str, db: &PickleDb) {
+    let mut rdr = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(path)
+        .unwrap();
+    let logged_infos: Vec<SignedTransactionInfo> =
+        rdr.deserialize().map(|entry| entry.unwrap()).collect();
+
+    let mut transaction_infos = read_transaction_infos(db);
+    transaction_infos.sort_by(compare_transaction_infos);
+    let transaction_infos: Vec<SignedTransactionInfo> = transaction_infos
+        .iter()
+        .map(|info| SignedTransactionInfo {
+            recipient: info.recipient.to_string(),
+            amount: info.amount,
+            new_stake_account_address: info
+                .new_stake_account_address
+                .map(|x| x.to_string())
+                .unwrap_or_else(|| "".to_string()),
+            finalized_date: info.finalized_date,
+            signature: info.transaction.signatures[0].to_string(),
+        })
+        .collect();
+    assert_eq!(logged_infos, transaction_infos);
 }
 
 #[cfg(test)]
