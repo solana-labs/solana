@@ -1529,20 +1529,17 @@ test('get stake activation', async () => {
     url,
     {
       method: 'getStakeActivation',
-      params: [publicKey.toBase58(), { encoding: 'base64' }],
+      params: [publicKey.toBase58(), {encoding: 'base64'}],
     },
     {
-      error: null,
-      result: {
-        state: 'active',
-        active: 0,
-        inactive: 80,
-      },
+      error: {message: 'account not delegated'},
+      result: undefined,
     },
   ]);
 
-  const activation = (await connection.getStakeActivation(publicKey));
-  expect(activation.state).toEqual('active');
+  await expect(connection.getStakeActivation(publicKey)).rejects.toThrow(
+    `failed to get Stake Activation ${publicKey.toBase58()}: account not delegated`,
+  );
 });
 
 test('getVersion', async () => {
