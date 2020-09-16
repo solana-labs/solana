@@ -11,7 +11,7 @@ fn test_process_distribute_with_rpc_client() {
         ..TestValidatorOptions::default()
     });
     let rpc_client = RpcClient::new_socket(validator.leader_data.rpc);
-    test_process_distribute_tokens_with_client(rpc_client, validator.alice);
+    test_process_distribute_tokens_with_client(rpc_client, validator.alice, None);
 
     validator.server.close().unwrap();
     remove_dir_all(validator.ledger_path).unwrap();
