@@ -8,6 +8,7 @@ pub struct DistributeTokensArgs {
     pub sender_keypair: Box<dyn Signer>,
     pub fee_payer: Box<dyn Signer>,
     pub stake_args: Option<StakeArgs>,
+    pub transfer_amount: Option<f64>,
 }
 
 pub struct StakeArgs {
