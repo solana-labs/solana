@@ -837,7 +837,7 @@ pub fn parse_command(
         ("decode-transaction", Some(matches)) => {
             let blob = value_t_or_exit!(matches, "transaction", String);
             let encoding = match matches.value_of("encoding").unwrap() {
-                "base58" => UiTransactionEncoding::Binary,
+                "base58" => UiTransactionEncoding::Base58,
                 "base64" => UiTransactionEncoding::Base64,
                 _ => unreachable!(),
             };
