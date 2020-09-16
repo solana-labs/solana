@@ -760,7 +760,7 @@ impl<T: Default> COption<T> {
     pub fn unwrap_or_default(self) -> T {
         match self {
             COption::Some(x) => x,
-            COption::None => Default::default(),
+            COption::None => T::default(),
         }
     }
 }
