@@ -45,6 +45,7 @@
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
+    "dev:watch": "cross-env NODE_ENV=development rollup -c --watch",
     "doc": "set -ex; esdoc; node -p '\"\\nDocumentation coverage: \" + require(\"./doc/coverage.json\").coverage'",
     "defs": "set -ex; flow check-contents < module.flow.js; tsc module.d.ts",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
