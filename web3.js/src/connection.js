@@ -807,6 +807,15 @@ const ParsedAccountInfoResult = struct.object({
 });
 
 /**
+ * @private
+ */
+const StakeActivationResult = struct.object({
+  state: 'string',
+  active: 'number',
+  inactive: 'number',
+});
+
+/**
  * Expected JSON RPC response for the "getAccountInfo" message
  */
 const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
@@ -818,6 +827,13 @@ const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
  */
 const GetParsedAccountInfoResult = jsonRpcResultAndContext(
   struct.union(['null', ParsedAccountInfoResult]),
+);
+
+/**
+ * Expected JSON RPC response for the "getStakeActivation" message with jsonParsed param
+ */
+const GetStakeActivationResult = jsonRpcResult(
+  struct.union(['null', StakeActivationResult]),
 );
 
 /**
@@ -1199,6 +1215,20 @@ type ParsedAccountData = {
   program: string,
   parsed: any,
   space: number,
+};
+
+/**
+ * Stake Activation data
+ *
+ * @typedef {Object} StakeActivationData
+ * @property {string} state: <string - the stake account's activation state, one of: active, inactive, activating, deactivating
+ * @property {number} active: stake active during the epoch
+ * @property {number} inactive: stake inactive during the epoch
+ */
+type StakeActivationData = {
+  state: string,
+  active: number,
+  inactive: number,
 };
 
 /**
@@ -1855,6 +1885,35 @@ export class Connection {
           'failed to get info about account ' + publicKey.toBase58() + ': ' + e,
         );
       });
+  }
+
+  /**
+   * Returns epoch activation information for a stake account that has been delegated
+   */
+  async getStakeActivation(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+    epoch: ?number,
+  ): Promise<StakeActivationData | null> {
+    let _args = [publicKey.toBase58()];
+    if (epoch !== undefined) {
+      _args.push({epoch});
+    }
+
+    const args = this._buildArgs(_args, commitment, 'base64');
+    const unsafeRes = await this._rpcRequest('getStakeActivation', args);
+    const res = GetStakeActivationResult(unsafeRes);
+    if (res?.error) {
+      throw new Error(
+        `failed to get Stake Activation ${publicKey.toBase58()}: ${
+          res.error.message
+        }`,
+      );
+    }
+    assert(typeof res?.result !== 'undefined');
+
+    const {state, active, inactive} = res.result;
+    return {state, active, inactive};
   }
 
   /**

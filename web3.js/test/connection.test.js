@@ -1521,6 +1521,27 @@ test('get largest accounts', async () => {
   expect(largestAccounts.length).toEqual(20);
 });
 
+test('get stake activation', async () => {
+  const connection = new Connection(url);
+
+  const publicKey = new Account().publicKey;
+  mockRpc.push([
+    url,
+    {
+      method: 'getStakeActivation',
+      params: [publicKey.toBase58(), {encoding: 'base64'}],
+    },
+    {
+      error: {message: 'account not delegated'},
+      result: undefined,
+    },
+  ]);
+
+  await expect(connection.getStakeActivation(publicKey)).rejects.toThrow(
+    `failed to get Stake Activation ${publicKey.toBase58()}: account not delegated`,
+  );
+});
+
 test('getVersion', async () => {
   const connection = new Connection(url);
 
