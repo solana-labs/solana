@@ -74,6 +74,8 @@ use std::{
 };
 use tokio::runtime;
 
+pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+
 fn new_response<T>(bank: &Bank, value: T) -> Result<RpcResponse<T>> {
     let context = RpcResponseContext { slot: bank.slot() };
     Ok(Response { context, value })
