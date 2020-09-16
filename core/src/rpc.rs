@@ -33,8 +33,8 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
 use solana_ledger::blockstore_meta::PerfSample;
+use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -1499,7 +1499,12 @@ pub trait RpcSol {
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
     #[rpc(meta, name = "getRecentPerformanceSamples")]
-    fn get_recent_performance_samples(&self, meta: Self::Metadata, limit: Option<usize>, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>>;
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>>;
 
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
@@ -1890,13 +1895,18 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.get_balance(&pubkey, commitment))
     }
 
-    fn get_recent_performance_samples(&self, meta: Self::Metadata, limit: Option<usize>, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>> {
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>> {
         debug!("get_recent_performance_samples request received");
         let bank = meta.bank(commitment);
 
         let limit = match limit {
             Some(limit) => limit,
-            None => PERFORMANCE_SAMPLES_LIMIT
+            None => PERFORMANCE_SAMPLES_LIMIT,
         };
 
         if limit > PERFORMANCE_SAMPLES_LIMIT {
@@ -2705,10 +2715,12 @@ pub mod tests {
         let sample1 = PerfSample {
             num_slots: 1,
             num_transactions: 4,
-            sample_period_secs: 60
+            sample_period_secs: 60,
         };
 
-        blockstore.write_perf_sample(0, &sample1).expect("write to blockstore");
+        blockstore
+            .write_perf_sample(0, &sample1)
+            .expect("write to blockstore");
 
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
@@ -2840,11 +2852,7 @@ pub mod tests {
     #[test]
     fn test_rpc_get_recent_performance_samples() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler {
-            io,
-            meta,
-            ..
-        } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples"}"#;
 
@@ -2880,13 +2888,10 @@ pub mod tests {
     #[test]
     fn test_rpc_get_recent_performance_samples_invalid_limit() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler {
-            io,
-            meta,
-            ..
-        } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
 
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
