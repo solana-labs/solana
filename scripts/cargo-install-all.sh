@@ -125,7 +125,7 @@ fi
   set -x
   # deps dir can be empty
   shopt -s nullglob
-  for dep in target/$buildVariant/deps/libsolana*program.*; do
+  for dep in target/"$buildVariant"/deps/libsolana*program.*; do
     cp -fv "$dep" "$installDir/bin/deps"
   done
 )
