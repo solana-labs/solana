@@ -409,12 +409,18 @@ impl RpcClient {
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
         let signature = self.send_transaction(transaction)?;
-        let mut status_retries = 15;
+        let recent_blockhash = transaction.message.recent_blockhash;
         let status = loop {
             let status = self.get_signature_status(&signature)?;
             if status.is_none() {
-                status_retries -= 1;
-                if status_retries == 0 {
+                if self
+                    .get_fee_calculator_for_blockhash_with_commitment(
+                        &recent_blockhash,
+                        CommitmentConfig::recent(),
+                    )?
+                    .value
+                    .is_none()
+                {
                     break status;
                 }
             } else {
@@ -1058,15 +1064,21 @@ impl RpcClient {
             MAX_LOCKOUT_HISTORY + 1,
             transaction.signatures[0],
         ));
-        let mut status_retries = 15;
+        let recent_blockhash = transaction.message.recent_blockhash;
         let signature = self.send_transaction_with_config(transaction, config)?;
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
             let status =
                 self.get_signature_status_with_commitment(&signature, CommitmentConfig::recent())?;
             if status.is_none() {
-                status_retries -= 1;
-                if status_retries == 0 {
+                if self
+                    .get_fee_calculator_for_blockhash_with_commitment(
+                        &recent_blockhash,
+                        CommitmentConfig::recent(),
+                    )?
+                    .value
+                    .is_none()
+                {
                     break (signature, status);
                 }
             } else {
