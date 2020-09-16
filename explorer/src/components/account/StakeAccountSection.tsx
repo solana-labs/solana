@@ -24,7 +24,7 @@ export function StakeAccountSection({
   account: Account;
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
-  activation: StakeActivationData | null;
+  activation?: StakeActivationData;
 }) {
   return (
     <>
@@ -137,15 +137,18 @@ function DelegationCard({
 }: {
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
-  activation: StakeActivationData | null;
+  activation?: StakeActivationData;
 }) {
   const displayStatus = () => {
-    // TODO check epoch
     let status = TYPE_NAMES[stakeAccountType];
+    let activationState = "";
     if (stakeAccountType !== "delegated") {
       status = "Not delegated";
+    } else {
+      activationState = activation ? `(${activation.state})` : "";
     }
-    return `${status} (${activation?.state})`;
+
+    return [status, activationState].join(" ");
   };
 
   let voterPubkey, activationEpoch, deactivationEpoch;

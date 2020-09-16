@@ -25,7 +25,7 @@ export { useAccountHistory } from "./history";
 export type StakeProgramData = {
   program: "stake";
   parsed: StakeAccount | StakeAccountWasm;
-  activation: StakeActivationData | null;
+  activation?: StakeActivationData;
 };
 
 export type TokenProgramData = {
@@ -123,7 +123,7 @@ async function fetchAccountInfo(
 
           const activation = isDelegated
             ? await connection.getStakeActivation(pubkey)
-            : null;
+            : undefined;
 
           data = {
             program: "stake",
