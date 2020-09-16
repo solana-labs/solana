@@ -1,10 +1,9 @@
-use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
-use crate::db::{self, TransactionInfo};
-<<<<<<< HEAD
-use crate::thin_client::{Client, ThinClient};
-=======
+use crate::{
+    args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
+    db::{self, TransactionInfo},
+    thin_client::{Client, ThinClient},
+};
 use chrono::prelude::*;
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
@@ -12,11 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-<<<<<<< HEAD
-=======
-    commitment_config::CommitmentLevel,
     instruction::Instruction,
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
@@ -112,27 +107,6 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     }
 }
 
-<<<<<<< HEAD
-fn distribute_tokens(
-    client: &ThinClient,
-=======
-async fn transfer<S: Signer>(
-    client: &mut BanksClient,
-    lamports: u64,
-    sender_keypair: &S,
-    to_pubkey: &Pubkey,
-) -> io::Result<Transaction> {
-    let create_instruction =
-        system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
-    let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
-    let recent_blockhash = client.get_recent_blockhash().await?;
-    Ok(Transaction::new(
-        &[sender_keypair],
-        message,
-        recent_blockhash,
-    ))
-}
-
 fn distribution_instructions(
     allocation: &Allocation,
     new_stake_account_address: &Pubkey,
@@ -206,9 +180,8 @@ fn distribution_instructions(
     instructions
 }
 
-async fn distribute_allocations(
-    client: &mut BanksClient,
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+fn distribute_allocations(
+    client: &ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
@@ -291,13 +264,8 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-<<<<<<< HEAD
-pub fn process_distribute_tokens(
+pub fn process_allocations(
     client: &ThinClient,
-=======
-pub async fn process_allocations(
-    client: &mut BanksClient,
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
@@ -374,11 +342,7 @@ pub async fn process_allocations(
         );
     }
 
-<<<<<<< HEAD
-    distribute_tokens(client, &mut db, &allocations, args)?;
-=======
-    distribute_allocations(client, &mut db, &allocations, args).await?;
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+    distribute_allocations(client, &mut db, &allocations, args)?;
 
     let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
     Ok(opt_confirmations)
@@ -540,11 +504,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         dollars_per_sol: None,
         stake_args: None,
     };
-<<<<<<< HEAD
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
-=======
-    let confirmations = process_allocations(client, &args).await.unwrap();
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+    let confirmations = process_allocations(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -563,11 +523,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     );
 
     // Now, run it again, and check there's no double-spend.
-<<<<<<< HEAD
-    process_distribute_tokens(&thin_client, &args).unwrap();
-=======
-    process_allocations(client, &args).await.unwrap();
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+    process_allocations(&thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -654,11 +610,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
-<<<<<<< HEAD
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
-=======
-    let confirmations = process_allocations(client, &args).await.unwrap();
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+    let confirmations = process_allocations(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -682,11 +634,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     );
 
     // Now, run it again, and check there's no double-spend.
-<<<<<<< HEAD
-    process_distribute_tokens(&thin_client, &args).unwrap();
-=======
-    process_allocations(client, &args).await.unwrap();
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
+    process_allocations(&thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -712,12 +660,7 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::genesis_config::create_genesis_config;
-<<<<<<< HEAD
-=======
     use solana_stake_program::stake_instruction::StakeInstruction;
-    use std::sync::{Arc, RwLock};
-    use tokio::runtime::Runtime;
->>>>>>> 5553732ae... Add lockups via solana-tokens (#11782)
 
     #[test]
     fn test_process_token_allocations() {
