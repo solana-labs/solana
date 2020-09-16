@@ -13,6 +13,17 @@ fn test_process_distribute_with_rpc_client() {
     let rpc_client = RpcClient::new_socket(validator.leader_data.rpc);
     test_process_distribute_tokens_with_client(rpc_client, validator.alice);
 
+<<<<<<< HEAD
     validator.server.close().unwrap();
     remove_dir_all(validator.ledger_path).unwrap();
+=======
+    Runtime::new().unwrap().block_on(async {
+        let mut banks_client = start_tcp_client(leader_data.rpc_banks).await.unwrap();
+        test_process_distribute_tokens_with_client(&mut banks_client, alice, None).await
+    });
+
+    // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+>>>>>>> a48cc073c... solana-tokens: Add capability to perform the same transfer to a batch of recipients (#12259)
 }
