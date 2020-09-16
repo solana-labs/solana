@@ -92,7 +92,7 @@ function Home() {
   return (
     <Layout
       title="Homepage"
-      description="Solana Documentation"/>
+      description="Solana Documentation"
     >
       {/* <header className={clsx("hero hero--primary", styles.heroBanner)}> */}
       {/* <div className="container">
