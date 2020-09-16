@@ -1,5 +1,6 @@
 use crate::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use crate::message::Message;
+use crate::secp256k1_program;
 use log::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, AbiExample)]
@@ -18,6 +19,11 @@ impl Default for FeeCalculator {
     }
 }
 
+#[derive(Clone)]
+pub struct FeeConfig {
+    pub is_secp256k1_enabled: bool,
+}
+
 impl FeeCalculator {
     pub fn new(lamports_per_signature: u64) -> Self {
         Self {
@@ -25,8 +31,27 @@ impl FeeCalculator {
         }
     }
 
-    pub fn calculate_fee(&self, message: &Message) -> u64 {
-        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
+    // extra_config: None == everything enabled
+    pub fn calculate_fee(&self, message: &Message, extra_config: Option<FeeConfig>) -> u64 {
+        let is_secp256k1_enabled = match extra_config {
+            Some(config) => config.is_secp256k1_enabled,
+            None => true,
+        };
+        let mut num_secp_signatures: u64 = 0;
+        if is_secp256k1_enabled {
+            for instruction in &message.instructions {
+                let program_index = instruction.program_id_index as usize;
+                // Transaction may not be sanitized here
+                if program_index < message.account_keys.len() {
+                    let id = message.account_keys[program_index];
+                    if secp256k1_program::check_id(&id) && !instruction.data.is_empty() {
+                        num_secp_signatures += instruction.data[0] as u64;
+                    }
+                }
+            }
+        }
+        self.lamports_per_signature
+            * (u64::from(message.header.num_required_signatures) + num_secp_signatures)
     }
 }
 
@@ -182,25 +207,76 @@ mod tests {
 
     #[test]
     fn test_fee_calculator_calculate_fee() {
+        let fee_config = Some(FeeConfig {
+            is_secp256k1_enabled: true,
+        });
         // Default: no fee.
         let message = Message::default();
-        assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
+        assert_eq!(
+            FeeCalculator::default().calculate_fee(&message, fee_config.clone()),
+            0
+        );
 
         // No signature, no fee.
-        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 0);
+        assert_eq!(FeeCalculator::new(1).calculate_fee(&message, fee_config), 0);
 
+        let fee_config = Some(FeeConfig {
+            is_secp256k1_enabled: false,
+        });
         // One signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message = Message::new(&[ix0], Some(&pubkey0));
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message, fee_config), 2);
 
         // Two signatures, double the fee.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
         let message = Message::new(&[ix0, ix1], Some(&pubkey0));
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message, None), 4);
+    }
+
+    #[test]
+    fn test_fee_calculator_calculate_fee_secp256k1() {
+        use crate::instruction::Instruction;
+        let pubkey0 = Pubkey::new(&[0; 32]);
+        let pubkey1 = Pubkey::new(&[1; 32]);
+        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
+        let mut secp_instruction = Instruction {
+            program_id: crate::secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut secp_instruction2 = Instruction {
+            program_id: crate::secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = Message::new(
+            &[
+                ix0.clone(),
+                secp_instruction.clone(),
+                secp_instruction2.clone(),
+            ],
+            Some(&pubkey0),
+        );
+        let fee_config = Some(FeeConfig {
+            is_secp256k1_enabled: true,
+        });
+        assert_eq!(
+            FeeCalculator::new(1).calculate_fee(&message, fee_config.clone()),
+            2
+        );
+
+        secp_instruction.data = vec![0];
+        secp_instruction2.data = vec![10];
+        let message = Message::new(&[ix0, secp_instruction, secp_instruction2], Some(&pubkey0));
+        assert_eq!(
+            FeeCalculator::new(1).calculate_fee(&message, fee_config),
+            11
+        );
     }
 
     #[test]
