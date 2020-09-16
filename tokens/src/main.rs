@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match command_args.command {
         Command::DistributeTokens(args) => {
             let thin_client = ThinClient::new(client, args.dry_run);
-            commands::process_distribute_tokens(&thin_client, &args)?;
+            commands::process_allocations(&thin_client, &args)?;
         }
         Command::Balances(args) => {
             let thin_client = ThinClient::new(client, false);
