@@ -1329,12 +1329,8 @@ pub fn main() {
             let mut blacklisted_rpc_nodes = HashSet::new();
             loop {
                 let (rpc_contact_info, snapshot_hash) = get_rpc_node(
-<<<<<<< HEAD
                     &cluster_info,
-=======
-                    &gossip.as_ref().unwrap().0,
                     &cluster_entrypoint.gossip,
->>>>>>> 98cfe9274... Rework snapshot download logic to be more forgiving when ` --expected-shred-version` is not provided
                     &validator_config,
                     &mut blacklisted_rpc_nodes,
                     no_snapshot_fetch,

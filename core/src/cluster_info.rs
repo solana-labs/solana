@@ -492,6 +492,21 @@ impl ClusterInfo {
             .map(map)
     }
 
+    pub fn lookup_contact_info_by_gossip_addr(
+        &self,
+        gossip_addr: &SocketAddr,
+    ) -> Option<ContactInfo> {
+        for versioned_value in self.gossip.read().unwrap().crds.table.values() {
+            if let Some(contact_info) = CrdsValue::contact_info(&versioned_value.value) {
+                if contact_info.gossip == *gossip_addr {
+                    return Some(contact_info.clone());
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn my_contact_info(&self) -> ContactInfo {
         self.my_contact_info.read().unwrap().clone()
     }
