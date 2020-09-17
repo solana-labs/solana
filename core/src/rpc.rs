@@ -1503,8 +1503,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         limit: Option<usize>,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>>;
+    ) -> Result<Vec<(Slot, PerfSample)>>;
 
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
@@ -1899,15 +1898,10 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         limit: Option<usize>,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Vec<(Slot, PerfSample)>>> {
+    ) -> Result<Vec<(Slot, PerfSample)>> {
         debug!("get_recent_performance_samples request received");
-        let bank = meta.bank(commitment);
 
-        let limit = match limit {
-            Some(limit) => limit,
-            None => PERFORMANCE_SAMPLES_LIMIT,
-        };
+        let limit = limit.unwrap_or(PERFORMANCE_SAMPLES_LIMIT);
 
         if limit > PERFORMANCE_SAMPLES_LIMIT {
             return Err(Error::invalid_params(format!(
@@ -1916,15 +1910,12 @@ impl RpcSol for RpcSolImpl {
             )));
         }
 
-        let results = meta.blockstore.get_recent_perf_samples(limit);
-
-        match results {
-            Ok(results) => Ok(new_response(&bank, results)),
-            Err(err) => {
+        meta.blockstore
+            .get_recent_perf_samples(limit)
+            .map_err(|err| {
                 warn!("get_recent_performance_samples failed: {:?}", err);
-                Err(Error::invalid_request())
-            }
-        }
+                Error::invalid_request()
+            })
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -2863,21 +2854,16 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "result": {
-                "context": {
-                    "slot": 0
-                },
-                "value": [
-                    [
-                        0,
-                        {
-                            "num_slots": 1,
-                            "num_transactions": 4,
-                            "sample_period_secs": 60
-                        }
-                    ]
-                ],
-            },
+            "result": [
+                [
+                    0,
+                    {
+                        "num_slots": 1,
+                        "num_transactions": 4,
+                        "sample_period_secs": 60
+                    }
+                ]
+            ],
         });
 
         let expected: Response =
