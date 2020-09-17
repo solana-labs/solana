@@ -258,15 +258,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
-name = "crc32fast"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba125de2af0df55319f41944744ad91c71113bf74a4646efff39afe1f6842db1"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -341,7 +332,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
 dependencies = [
  "generic-array 0.14.3",
- "subtle 2.2.2",
+ "subtle 2.2.3",
 ]
 
 [[package]]
@@ -373,15 +364,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
 dependencies = [
  "generic-array 0.14.3",
-]
-
-[[package]]
-name = "dir-diff"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2860407d7d7e2e004bb2128510ad9e8d669e76fa005ccf567977b5d71b8b4a0b"
-dependencies = [
- "walkdir",
 ]
 
 [[package]]
@@ -1645,7 +1627,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -1660,7 +1642,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-programs"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -1675,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-bpf-rust-128bit-dep",
  "solana-sdk",
@@ -1683,21 +1665,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit-dep"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-alloc"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dep-crate"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "byteorder 1.3.4",
  "solana-sdk",
@@ -1705,14 +1687,14 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-dup-accounts"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-error-handling"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "num-derive 0.2.5",
  "num-traits",
@@ -1722,14 +1704,14 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-external-spend"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-bpf-rust-invoked",
  "solana-sdk",
@@ -1737,21 +1719,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-invoked"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-iter"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-bpf-rust-many-args-dep",
  "solana-sdk",
@@ -1759,28 +1741,28 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-many-args-dep"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-noop"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-panic"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-bpf-rust-param-passing-dep",
  "solana-sdk",
@@ -1788,21 +1770,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-param-passing-dep"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sysval"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-config-program"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "chrono",
@@ -1814,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -1837,7 +1819,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -1846,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "jemalloc-ctl",
  "jemallocator",
@@ -1857,7 +1839,7 @@ dependencies = [
 
 [[package]]
 name = "solana-metrics"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "env_logger",
  "gethostname",
@@ -1869,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -1877,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "blake3",
@@ -1912,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -1948,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.18",
@@ -1959,7 +1941,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-program"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "log",
@@ -1976,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote-program"
-version = "1.2.27"
+version = "1.2.30"
 dependencies = [
  "bincode",
  "log",
