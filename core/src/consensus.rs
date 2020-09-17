@@ -761,25 +761,25 @@ impl Tower {
     // tower lockouts may need adjustment
     pub fn adjust_lockouts_after_replay(
         self,
-        replayed_root_slot: Slot,
+        replayed_root: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
         info!(
             "adjusting lockouts (after replay up to {}): {:?}",
-            replayed_root_slot,
+            replayed_root,
             self.voted_slots()
         );
 
         // sanity assertions for roots
-        assert_eq!(slot_history.check(replayed_root_slot), Check::Found);
+        assert_eq!(slot_history.check(replayed_root), Check::Found);
         assert!(self.root().is_some());
+        let tower_root = self.root().unwrap();
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
-            self.root().unwrap() <= replayed_root_slot,
+            tower_root <= replayed_root,
             format!(
                 "tower root: {:?} >= replayed root slot: {}",
-                self.root().unwrap(),
-                replayed_root_slot
+                tower_root, replayed_root
             )
         );
         assert!(
@@ -806,12 +806,13 @@ impl Tower {
             ));
         }
 
-        self.do_adjust_lockouts_after_replay(replayed_root_slot, slot_history)
+        self.do_adjust_lockouts_after_replay(tower_root, replayed_root, slot_history)
     }
 
     fn do_adjust_lockouts_after_replay(
         mut self,
-        replayed_root_slot: Slot,
+        tower_root: Slot,
+        replayed_root: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
         // retained slots will be consisted only from divergent slots
@@ -823,13 +824,7 @@ impl Tower {
         let mut checked_slot = None;
         let mut anchored_slot = None;
 
-        let mut root_checked = false;
-        let mut slots_in_tower = if let Some(root) = self.lockouts.root_slot {
-            root_checked = true;
-            vec![root]
-        } else {
-            vec![]
-        };
+        let mut slots_in_tower = vec![tower_root];
         slots_in_tower.extend(self.voted_slots());
 
         // iterate over votes + root (if any) in the newest => oldest order
@@ -881,49 +876,32 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.len()
         );
 
-        if root_checked {
-            retain_flags_for_each_vote_in_reverse.pop();
-        }
+        retain_flags_for_each_vote_in_reverse.pop();
 
         // Check for errors if not anchored
-        // Being not anchored doesn't always equate to errors: All of votes in
-        // an unrooted (= !root_checked) warming-up vote account may legally not
-        // be anchored.
+        info!("adjusted tower's anchored slot: {:?}", anchored_slot);
         if anchored_slot.is_none() {
-            let oldest_slot_in_tower = checked_slot.unwrap();
-            let with_no_overlap_slots = oldest_slot_in_tower > slot_history.newest();
-            if with_no_overlap_slots {
-                // we couldn't find an anchor... And this was indeed due to too much gap between
-                // tower and blockstore, so return error here.
-                // Generally, this shouldn't occur unless bad external backup/restore is conducted...
-                return Err(TowerError::TooOldSlotHistory(
-                    oldest_slot_in_tower,
-                    slot_history.newest(),
-                ));
-            } else if root_checked {
-                // this error really shouldn't happen unless ledger/tower is corrupted so check
-                // after the TooOldSlotHistory...
-                return Err(TowerError::FatallyInconsistent(
-                    "no common slot for rooted tower",
-                ));
-            }
+            // this error really shouldn't happen unless ledger/tower is corrupted
+            return Err(TowerError::FatallyInconsistent(
+                "no common slot for rooted tower",
+            ));
         }
 
         let mut retain_flags_for_each_vote =
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
         let original_votes_len = self.lockouts.votes.len();
-        self.do_initialize_lockouts(replayed_root_slot, move |_| {
+        self.do_initialize_lockouts(replayed_root, move |_| {
             retain_flags_for_each_vote.next().unwrap()
         });
 
         if self.lockouts.votes.is_empty() {
             info!(
-                "All restored votes were behind replayed_root_slot({}); resetting root_slot and last_vote in tower!",
-                replayed_root_slot
+                "All restored votes were behind replayed_root({}); resetting root_slot and last_vote in tower!",
+                replayed_root
             );
             // we might not have banks for those votes so just reset.
-            // That's because the votes may well past replayed_root_slot
+            // That's because the votes may well past replayed_root
             self.last_vote = Vote::default();
         } else {
             info!(
@@ -1065,12 +1043,6 @@ pub enum TowerError {
         newest slot in tower ({0}) << oldest slot in available history ({1})"
     )]
     TooOldTower(Slot, Slot),
-
-    #[error(
-        "The slot history is too old: \
-        oldest slot in tower ({0}) >> newest slot in available history ({1})"
-    )]
-    TooOldSlotHistory(Slot, Slot),
 
     #[error("The tower is fatally inconsistent with blockstore: {0}")]
     FatallyInconsistent(&'static str),
@@ -2886,37 +2858,6 @@ pub mod test {
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "The tower is too old: newest slot in tower (0) << oldest slot in available history (1)"
-        );
-    }
-
-    #[test]
-    fn test_adjust_lockouts_after_replay_too_old_slot_history() {
-        solana_logger::setup();
-        let mut tower = Tower::new_for_tests(10, 0.9);
-        tower.lockouts.votes.push_back(Lockout::new(100));
-        tower.lockouts.votes.push_back(Lockout::new(101));
-        let vote = Vote::new(vec![101], Hash::default());
-        tower.last_vote = vote;
-        tower.lockouts.root_slot = None;
-
-        let mut slot_history = SlotHistory::default();
-        slot_history.add(0);
-        slot_history.add(2);
-
-        let result = tower
-            .clone()
-            .do_adjust_lockouts_after_replay(2, &slot_history);
-        assert_eq!(
-            format!("{}", result.unwrap_err()),
-            "The slot history is too old: oldest slot in tower (100) >> newest slot in available history (2)"
-        );
-
-        tower.lockouts.root_slot = Some(11);
-        // Skip some assertions to assume we're censored with crafted slots
-        let result = tower.do_adjust_lockouts_after_replay(2, &slot_history);
-        assert_eq!(
-            format!("{}", result.unwrap_err()),
-            "The slot history is too old: oldest slot in tower (11) >> newest slot in available history (2)"
         );
     }
 
