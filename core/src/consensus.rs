@@ -871,13 +871,6 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.push(anchored_slot.is_none());
         }
 
-        assert_eq!(
-            slots_in_tower.len(),
-            retain_flags_for_each_vote_in_reverse.len()
-        );
-
-        retain_flags_for_each_vote_in_reverse.pop();
-
         // Check for errors if not anchored
         info!("adjusted tower's anchored slot: {:?}", anchored_slot);
         if anchored_slot.is_none() {
@@ -887,6 +880,12 @@ impl Tower {
             ));
         }
 
+        assert_eq!(
+            slots_in_tower.len(),
+            retain_flags_for_each_vote_in_reverse.len()
+        );
+        // pop for the tower root
+        retain_flags_for_each_vote_in_reverse.pop();
         let mut retain_flags_for_each_vote =
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
