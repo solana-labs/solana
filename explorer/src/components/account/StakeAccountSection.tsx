@@ -199,6 +199,22 @@ function DelegationCard({
               </td>
             </tr>
 
+            {activation && (<>
+              <tr>
+                <td>Active Stake (SOL)</td>
+                <td className="text-lg-right">
+                  {lamportsToSolString(activation.active)}
+                </td>
+              </tr>
+
+              <tr>
+                <td>Inactive Stake (SOL)</td>
+                <td className="text-lg-right">
+                  {lamportsToSolString(activation.inactive)}
+                </td>
+              </tr>
+            </>)}
+
             {voterPubkey && (
               <tr>
                 <td>Delegated Vote Address</td>
