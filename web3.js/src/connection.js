@@ -1898,15 +1898,12 @@ export class Connection {
     commitment: ?Commitment,
     epoch: ?number,
   ): Promise<StakeActivationData> {
-    let config = {};
-    if (commitment !== undefined) {
-      config.commitment = commitment;
-    }
+    const args = this._buildArgs([publicKey.toBase58()], commitment);
     if (epoch !== undefined) {
-      config.epoch = epoch;
+      // options
+      args[args.length - 1].epoch = epoch;
     }
 
-    const args = this._buildArgs([publicKey.toBase58(), config]);
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
     if (res.error) {
