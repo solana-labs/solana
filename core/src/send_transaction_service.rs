@@ -116,7 +116,7 @@ impl SendTransactionService {
         }
 
         Builder::new()
-            .name("send-tx-svc".to_string())
+            .name("send-tx-sv2".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
