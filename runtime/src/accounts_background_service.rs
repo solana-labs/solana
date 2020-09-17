@@ -115,7 +115,7 @@ impl AccountsBackgroundService {
                     if bank.block_height() - last_cleaned_slot
                         > (CLEAN_INTERVAL_SLOTS + thread_rng().gen_range(0, 10))
                     {
-                        bank.clean_accounts();
+                        bank.clean_accounts(None);
                         last_cleaned_slot = bank.block_height();
                     }
                 }
@@ -144,6 +144,10 @@ impl AccountsBackgroundService {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
                 } = snapshot_request;
+
+                snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot()));
+                snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
+
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = Self::generate_accounts_package(

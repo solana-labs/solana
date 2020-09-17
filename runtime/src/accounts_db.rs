@@ -536,7 +536,7 @@ impl AccountsDB {
 
     // Reclaim older states of rooted non-zero lamport accounts as a general
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
-    fn clean_old_rooted_accounts(&self, purges_in_root: Vec<Pubkey>) {
+    fn clean_old_rooted_accounts(&self, purges_in_root: Vec<Pubkey>, max_clean_root: Option<Slot>) {
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
@@ -549,7 +549,7 @@ impl AccountsDB {
                     let mut reclaims = Vec::new();
                     let accounts_index = self.accounts_index.read().unwrap();
                     for pubkey in pubkeys {
-                        accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
+                        accounts_index.clean_rooted_entries(&pubkey, &mut reclaims, max_clean_root);
                     }
                     reclaims
                 });
@@ -564,8 +564,16 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
     }
 
-    fn do_reset_uncleaned_roots(&self, candidates: &mut MutexGuard<Vec<Slot>>) {
-        let previous_roots = self.accounts_index.write().unwrap().reset_uncleaned_roots();
+    fn do_reset_uncleaned_roots(
+        &self,
+        candidates: &mut MutexGuard<Vec<Slot>>,
+        max_clean_root: Option<Slot>,
+    ) {
+        let previous_roots = self
+            .accounts_index
+            .write()
+            .unwrap()
+            .reset_uncleaned_roots(max_clean_root);
         candidates.extend(previous_roots);
     }
 
@@ -647,7 +655,7 @@ impl AccountsDB {
     // collection
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
-    pub fn clean_accounts(&self) {
+    pub fn clean_accounts(&self, max_clean_root: Option<Slot>) {
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
         // modifying the rooted slot storages!
@@ -665,7 +673,7 @@ impl AccountsDB {
                 let mut purges_in_root = Vec::new();
                 let mut purges = HashMap::new();
                 for pubkey in pubkeys {
-                    if let Some((list, index)) = accounts_index.get(pubkey, None) {
+                    if let Some((list, index)) = accounts_index.get(pubkey, None, max_clean_root) {
                         let (slot, account_info) = &list[index];
                         if account_info.lamports == 0 {
                             purges.insert(*pubkey, accounts_index.would_purge(pubkey));
@@ -691,9 +699,9 @@ impl AccountsDB {
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         if !purges_in_root.is_empty() {
-            self.clean_old_rooted_accounts(purges_in_root);
+            self.clean_old_rooted_accounts(purges_in_root, max_clean_root);
         }
-        self.do_reset_uncleaned_roots(&mut candidates);
+        self.do_reset_uncleaned_roots(&mut candidates, max_clean_root);
         clean_old_rooted.stop();
 
         let mut store_counts_time = Measure::start("store_counts");
@@ -920,7 +928,7 @@ impl AccountsDB {
                         (store_id, offset),
                         _write_version,
                     )| {
-                        if let Some((list, _)) = accounts_index.get(pubkey, None) {
+                        if let Some((list, _)) = accounts_index.get(pubkey, None, None) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
                         } else {
@@ -1219,7 +1227,7 @@ impl AccountsDB {
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
-        let (lock, index) = accounts_index.get(pubkey, Some(ancestors))?;
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None)?;
         let slot = lock[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
@@ -1236,7 +1244,7 @@ impl AccountsDB {
     #[cfg(test)]
     fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
         let accounts_index = self.accounts_index.read().unwrap();
-        let (lock, index) = accounts_index.get(pubkey, Some(ancestors)).unwrap();
+        let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None).unwrap();
         let slot = lock[index].0;
         let storage = self.storage.read().unwrap();
         let slot_storage = storage.0.get(&slot).unwrap();
@@ -1840,7 +1848,7 @@ impl AccountsDB {
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
-                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors)) {
+                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors), None) {
                     let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         storage
@@ -2579,7 +2587,7 @@ pub mod tests {
         // overwrite old rooted account version; only the slot_0_stores.count() should be
         // decremented
         db.store(2, &[(&pubkeys[0], &account)]);
-        db.clean_accounts();
+        db.clean_accounts(None);
         {
             let stores = db.storage.read().unwrap();
             let slot_0_stores = &stores.0.get(&0).unwrap();
@@ -2968,7 +2976,7 @@ pub mod tests {
 
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
 
         //new value is there
@@ -3039,7 +3047,7 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_store(0), 1);
         assert_eq!(accounts.alive_account_count_in_store(1), 1);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         //now old state is cleaned up
         assert_eq!(accounts.alive_account_count_in_store(0), 0);
@@ -3069,7 +3077,7 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_store(0), 2);
         assert_eq!(accounts.alive_account_count_in_store(1), 2);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         //still old state behind zero-lamport account isn't cleaned up
         assert_eq!(accounts.alive_account_count_in_store(0), 1);
@@ -3103,7 +3111,7 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_store(1), 1);
         assert_eq!(accounts.alive_account_count_in_store(2), 1);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         //both zero lamport and normal accounts are cleaned up
         assert_eq!(accounts.alive_account_count_in_store(0), 0);
@@ -3119,7 +3127,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&pubkey1, None)
+            .get(&pubkey1, None, None)
             .is_none());
     }
 
@@ -3139,7 +3147,7 @@ pub mod tests {
         assert_eq!(accounts.uncleaned_root_count(), 1);
 
         //now uncleaned roots are cleaned up
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         assert_eq!(accounts.uncleaned_root_count(), 0);
     }
 
@@ -3156,7 +3164,7 @@ pub mod tests {
         assert_eq!(accounts.uncleaned_root_count(), 1);
 
         //now uncleaned roots are cleaned up
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         assert_eq!(accounts.uncleaned_root_count(), 0);
     }
 
@@ -3168,7 +3176,7 @@ pub mod tests {
 
         // Create 100 accounts in slot 0
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         check_accounts(&accounts, &pubkeys, 0, 100, 1);
 
         // do some updates to those accounts and re-check
@@ -3201,7 +3209,7 @@ pub mod tests {
 
         // Modify original slot 0 accounts in slot 2
         modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         // Create 10 new accounts in slot 2
         create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
@@ -3213,7 +3221,7 @@ pub mod tests {
         accounts.add_root(latest_slot);
         assert!(check_storage(&accounts, 2, 31));
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         // The first 20 accounts have been modified in slot 2, so only
         // 80 accounts left in slot 0.
         assert!(check_storage(&accounts, 0, 80));
@@ -3325,7 +3333,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("pre_purge");
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         accounts.print_accounts_stats("post_purge");
 
@@ -3389,7 +3397,7 @@ pub mod tests {
         info!("ancestors: {:?}", ancestors);
         let hash = accounts.update_accounts_hash(current_slot, &ancestors);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         assert_eq!(
             accounts.update_accounts_hash(current_slot, &ancestors),
@@ -3460,7 +3468,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("accounts");
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         accounts.print_accounts_stats("accounts_post_purge");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
@@ -3533,7 +3541,7 @@ pub mod tests {
     fn test_accounts_purge_chained_purge_before_snapshot_restore() {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
-            accounts.clean_accounts();
+            accounts.clean_accounts(None);
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
@@ -3544,7 +3552,7 @@ pub mod tests {
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts.print_accounts_stats("after_reconstruct");
-            accounts.clean_accounts();
+            accounts.clean_accounts(None);
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
@@ -4218,7 +4226,7 @@ pub mod tests {
         accounts.print_count_and_status("before reconstruct");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.print_count_and_status("before purge zero");
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         accounts.print_count_and_status("after purge zero");
 
         assert_load_account(&accounts, current_slot, pubkey, old_lamport);
@@ -4277,7 +4285,7 @@ pub mod tests {
         current_slot += 1;
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         assert_eq!(
             // Removed one reference from the dead slot (reference only counted once
@@ -4300,9 +4308,9 @@ pub mod tests {
         // If step C and step D should be purged, snapshot restore would cause
         // pubkey1 to be revived as the state of step A.
         // So, prevent that from happening by introducing refcount
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         assert_load_account(&accounts, current_slot, pubkey1, zero_lamport);
         assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
@@ -4314,7 +4322,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         // Do clean
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         // Ensure pubkey2 is cleaned from the index finally
         assert_not_load_account(&accounts, current_slot, pubkey1);
@@ -4441,7 +4449,7 @@ pub mod tests {
         }
         accounts.add_root(current_slot);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         assert_eq!(
             pubkey_count,
@@ -4505,7 +4513,7 @@ pub mod tests {
         }
         accounts.add_root(current_slot);
 
-        accounts.clean_accounts();
+        accounts.clean_accounts(None);
 
         assert_eq!(
             pubkey_count,
@@ -4639,7 +4647,7 @@ pub mod tests {
 
             // let's dance.
             for _ in 0..10 {
-                accounts.clean_accounts();
+                accounts.clean_accounts(None);
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
 

@@ -31,7 +31,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     {
         for (pubkey, list) in iter {
             let list_r = &list.1.read().unwrap();
-            if let Some(index) = self.latest_slot(Some(ancestors), &list_r) {
+            if let Some(index) = self.latest_slot(Some(ancestors), &list_r, None) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
         }
@@ -94,13 +94,21 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
 
     // find the latest slot and T in a slice for a given ancestor
     // returns index into 'slice' if found, None if not.
-    fn latest_slot(&self, ancestors: Option<&Ancestors>, slice: SlotSlice<T>) -> Option<usize> {
+    fn latest_slot(
+        &self,
+        ancestors: Option<&Ancestors>,
+        slice: SlotSlice<T>,
+        max_root: Option<Slot>,
+    ) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= max
-                && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
-                    || self.is_root(*slot))
+            if *slot >= max && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot)))
+                || (self.is_root(*slot)
+                    && max_root
+                        .as_ref()
+                        .map(|max_root| slot <= max_root)
+                        .unwrap_or(true))
             {
                 rv = Some((slice.len() - 1) - i);
                 max = *slot;
@@ -115,11 +123,12 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
     ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.1.read().unwrap();
             let lock = &list_r;
-            let found_index = self.latest_slot(ancestors, &lock)?;
+            let found_index = self.latest_slot(ancestors, &lock, max_root)?;
             Some((list_r, found_index))
         })
     }
@@ -205,10 +214,18 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         }
     }
 
-    fn purge_older_root_entries(&self, list: &mut SlotList<T>, reclaims: &mut SlotList<T>) {
+    fn purge_older_root_entries(
+        &self,
+        list: &mut SlotList<T>,
+        reclaims: &mut SlotList<T>,
+        max_clean_root: Option<Slot>,
+    ) {
         let roots = &self.roots;
 
-        let max_root = Self::get_max_root(roots, &list);
+        let mut max_root = Self::get_max_root(roots, &list);
+        if let Some(max_clean_root) = max_clean_root {
+            max_root = std::cmp::min(max_root, max_clean_root);
+        }
 
         reclaims.extend(
             list.iter()
@@ -218,10 +235,15 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         list.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
     }
 
-    pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut SlotList<T>) {
+    pub fn clean_rooted_entries(
+        &self,
+        pubkey: &Pubkey,
+        reclaims: &mut SlotList<T>,
+        max_clean_root: Option<Slot>,
+    ) {
         if let Some(locked_entry) = self.account_maps.get(pubkey) {
             let mut list = locked_entry.1.write().unwrap();
-            self.purge_older_root_entries(&mut list, reclaims);
+            self.purge_older_root_entries(&mut list, reclaims, max_clean_root);
         }
     }
 
@@ -270,10 +292,19 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         self.previous_uncleaned_roots.remove(&slot);
     }
 
-    pub fn reset_uncleaned_roots(&mut self) -> HashSet<Slot> {
-        let empty = HashSet::new();
-        let new_previous = std::mem::replace(&mut self.uncleaned_roots, empty);
-        std::mem::replace(&mut self.previous_uncleaned_roots, new_previous)
+    pub fn reset_uncleaned_roots(&mut self, max_cleaned_slot: Option<Slot>) -> HashSet<Slot> {
+        let mut cleaned_roots = HashSet::new();
+        self.uncleaned_roots.retain(|root| {
+            let is_cleaned = max_cleaned_slot
+                .map(|max_cleaned_slot| *root <= max_cleaned_slot)
+                .unwrap_or(true);
+            if is_cleaned {
+                cleaned_roots.insert(*root);
+            }
+            // Only keep the slots that have yet to be cleaned
+            !is_cleaned
+        });
+        std::mem::replace(&mut self.previous_uncleaned_roots, cleaned_roots)
     }
 }
 

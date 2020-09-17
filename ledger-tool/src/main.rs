@@ -1805,7 +1805,7 @@ fn main() {
                     );
                     assert!(bank.is_complete());
                     bank.squash();
-                    bank.clean_accounts();
+                    bank.clean_accounts(None);
                     bank.update_accounts_hash();
                     if rehash {
                         bank.rehash();

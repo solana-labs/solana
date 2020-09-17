@@ -1306,9 +1306,11 @@ impl Bank {
         }
     }
 
+    // Should not be called outside of startup, will race with
+    // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self) {
         let mut clean = Measure::start("clean");
-        self.clean_accounts();
+        self.clean_accounts(None);
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
@@ -3252,7 +3254,7 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.clean_accounts();
+        self.clean_accounts(None);
         self.shrink_all_slots();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
@@ -3532,8 +3534,8 @@ impl Bank {
         );
     }
 
-    pub fn clean_accounts(&self) {
-        self.rc.accounts.accounts_db.clean_accounts();
+    pub fn clean_accounts(&self, max_clean_slot: Option<Slot>) {
+        self.rc.accounts.accounts_db.clean_accounts(max_clean_slot);
     }
 
     pub fn shrink_all_slots(&self) {
