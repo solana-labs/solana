@@ -579,7 +579,7 @@ impl AccountsDB {
 
     #[cfg(test)]
     fn reset_uncleaned_roots(&self) {
-        self.do_reset_uncleaned_roots(&mut self.shrink_candidate_slots.lock().unwrap());
+        self.do_reset_uncleaned_roots(&mut self.shrink_candidate_slots.lock().unwrap(), None);
     }
 
     fn calc_delete_dependencies(
@@ -2638,7 +2638,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, Some(&ancestors))
+            .get(&key, Some(&ancestors), None)
             .is_some());
         assert_load_account(&db, unrooted_slot, key, 1);
 
@@ -2659,7 +2659,7 @@ pub mod tests {
             .accounts_index
             .read()
             .unwrap()
-            .get(&key, Some(&ancestors))
+            .get(&key, Some(&ancestors), None)
             .is_none());
 
         // Test we can store for the same slot again and get the right information
@@ -2963,7 +2963,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let id = {
             let index = accounts.accounts_index.read().unwrap();
-            let (list, idx) = index.get(&pubkey, Some(&ancestors)).unwrap();
+            let (list, idx) = index.get(&pubkey, Some(&ancestors), None).unwrap();
             list[idx].1.store_id
         };
         accounts.add_root(1);

@@ -5,9 +5,8 @@
 use crate::{
     bank::{Bank, BankSlotDelta},
     bank_forks::{BankForks, SnapshotConfig},
-    snapshot_package::{AccountsPackageSendError, AccountsPackageSender},
-    snapshot_utils::{self, SnapshotError},
-    status_cache::MAX_CACHE_ENTRIES,
+    snapshot_package::AccountsPackageSender,
+    snapshot_utils,
 };
 use crossbeam_channel::{Receiver, Sender};
 use log::*;
@@ -20,7 +19,6 @@ use std::sync::{
 };
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
-use thiserror::Error;
 
 const INTERVAL_MS: u64 = 100;
 const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
@@ -30,16 +28,6 @@ const CLEAN_INTERVAL_SLOTS: u64 = 100;
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
-type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("snapshot error")]
-    SnapshotError(#[from] SnapshotError),
-
-    #[error("accounts package send error")]
-    AccountsPackageSendError(#[from] AccountsPackageSendError),
-}
 
 pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
@@ -150,11 +138,14 @@ impl AccountsBackgroundService {
 
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
-                let r = Self::generate_accounts_package(
+                let r = snapshot_utils::snapshot_bank(
                     &snapshot_root_bank,
                     status_cache_slot_deltas,
                     accounts_package_sender,
-                    snapshot_config,
+                    &snapshot_config.snapshot_path,
+                    &snapshot_config.snapshot_package_output_path,
+                    snapshot_config.snapshot_version,
+                    &snapshot_config.compression,
                 );
                 if r.is_err() {
                     warn!(
@@ -165,69 +156,10 @@ impl AccountsBackgroundService {
                 }
 
                 // Cleanup outdated snapshots
-                Self::purge_old_snapshots(snapshot_config);
+                snapshot_utils::purge_old_snapshots(&snapshot_config.snapshot_path);
                 snapshot_time.stop();
                 inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
                 snapshot_root_bank.slot()
             })
-    }
-
-    // Gather the necessary elements for a snapshot of the given `root_bank`
-    pub fn generate_accounts_package(
-        root_bank: &Bank,
-        status_cache_slot_deltas: Vec<BankSlotDelta>,
-        accounts_package_sender: &AccountsPackageSender,
-        snapshot_config: &SnapshotConfig,
-    ) -> Result<()> {
-        let storages: Vec<_> = root_bank.get_snapshot_storages();
-        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-        snapshot_utils::add_snapshot(
-            &snapshot_config.snapshot_path,
-            &root_bank,
-            &storages,
-            snapshot_config.snapshot_version,
-        )?;
-        add_snapshot_time.stop();
-        inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
-
-        // Package the relevant snapshots
-        let slot_snapshot_paths =
-            snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
-        let latest_slot_snapshot_paths = slot_snapshot_paths
-            .last()
-            .expect("no snapshots found in config snapshot_path");
-        // We only care about the last bank's snapshot.
-        // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
-        let package = snapshot_utils::package_snapshot(
-            &root_bank,
-            latest_slot_snapshot_paths,
-            &snapshot_config.snapshot_path,
-            status_cache_slot_deltas,
-            &snapshot_config.snapshot_package_output_path,
-            storages,
-            snapshot_config.compression.clone(),
-            snapshot_config.snapshot_version,
-        )?;
-
-        accounts_package_sender.send(package)?;
-
-        Ok(())
-    }
-
-    pub fn purge_old_snapshots(snapshot_config: &SnapshotConfig) {
-        // Remove outdated snapshots
-        let slot_snapshot_paths =
-            snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
-        let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
-        for slot_files in &slot_snapshot_paths[..num_to_remove] {
-            let r =
-                snapshot_utils::remove_snapshot(slot_files.slot, &snapshot_config.snapshot_path);
-            if r.is_err() {
-                warn!(
-                    "Couldn't remove snapshot at: {:?}",
-                    snapshot_config.snapshot_path
-                );
-            }
-        }
     }
 }

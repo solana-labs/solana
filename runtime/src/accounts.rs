@@ -1810,7 +1810,7 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts();
+        accounts.accounts_db.clean_accounts(None);
     }
 
     fn load_accounts_no_store(

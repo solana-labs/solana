@@ -103,12 +103,13 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= max && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot)))
-                || (self.is_root(*slot)
-                    && max_root
-                        .as_ref()
-                        .map(|max_root| slot <= max_root)
-                        .unwrap_or(true))
+            if *slot >= max
+                && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
+                    || (self.is_root(*slot)
+                        && max_root
+                            .as_ref()
+                            .map(|max_root| slot <= max_root)
+                            .unwrap_or(true)))
             {
                 rv = Some((slice.len() - 1) - i);
                 max = *slot;
@@ -318,8 +319,8 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
-        assert!(index.get(&key.pubkey(), None).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -335,8 +336,8 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
-        assert!(index.get(&key.pubkey(), None).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -352,7 +353,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -368,7 +369,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
 
         let mut num = 0;
@@ -400,7 +401,7 @@ mod tests {
         assert!(gc.is_empty());
 
         index.add_root(0);
-        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
         assert_eq!(list[idx], (0, true));
     }
 
@@ -434,7 +435,7 @@ mod tests {
         assert_eq!(2, index.uncleaned_roots.len());
 
         assert_eq!(0, index.previous_uncleaned_roots.len());
-        index.reset_uncleaned_roots();
+        index.reset_uncleaned_roots(None);
         assert_eq!(2, index.roots.len());
         assert_eq!(0, index.uncleaned_roots.len());
         assert_eq!(2, index.previous_uncleaned_roots.len());
@@ -464,14 +465,14 @@ mod tests {
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, false));
     }
 
@@ -486,10 +487,10 @@ mod tests {
         assert!(gc.is_empty());
         index.insert(1, &key.pubkey(), false, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (1, false));
     }
 
@@ -511,7 +512,7 @@ mod tests {
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
         assert_eq!(gc, vec![]);
-        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
         assert_eq!(list[idx], (3, true));
 
         let mut num = 0;

@@ -5259,7 +5259,7 @@ mod tests {
     impl Bank {
         fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
             let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
-            let (accounts, _) = accounts_index.get(&pubkey, Some(&ancestors)).unwrap();
+            let (accounts, _) = accounts_index.get(&pubkey, Some(&ancestors), None).unwrap();
             accounts
                 .iter()
                 .map(|(slot, _)| *slot)
@@ -5634,7 +5634,7 @@ mod tests {
         }
 
         let hash = bank.update_accounts_hash();
-        bank.clean_accounts();
+        bank.clean_accounts(None);
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -5654,14 +5654,14 @@ mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.clean_accounts();
+        bank0.clean_accounts(None);
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.clean_accounts();
+        bank1.clean_accounts(None);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -5679,7 +5679,7 @@ mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.clean_accounts();
+        bank1.clean_accounts(None);
 
         assert!(bank1.verify_bank_hash());
     }
@@ -8570,7 +8570,7 @@ mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         bank.squash();
-        bank.clean_accounts();
+        bank.clean_accounts(None);
         let force_to_return_alive_account = 0;
         assert_eq!(
             bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
