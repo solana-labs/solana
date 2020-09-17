@@ -37,6 +37,12 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const tokens = ownedTokens.data?.tokens;
   if (tokens === undefined || tokens.length === 0) return null;
 
+  if (tokens.length > 25) {
+    return (
+      <ErrorCard text="Token transaction history is not available for accounts with over 25 token accounts" />
+    );
+  }
+
   return <TokenHistoryTable tokens={tokens} />;
 }
 
