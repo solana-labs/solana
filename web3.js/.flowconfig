@@ -10,7 +10,6 @@ esproposal.class_instance_fields=enable
 esproposal.class_static_fields=enable
 esproposal.decorators=ignore
 esproposal.export_star_as=enable
-esproposal.optional_chaining=enable
 module.system.node.resolve_dirname=./src
 module.use_strict=true
 experimental.const_params=true

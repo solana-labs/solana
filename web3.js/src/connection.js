@@ -837,9 +837,7 @@ const GetParsedAccountInfoResult = jsonRpcResultAndContext(
 /**
  * Expected JSON RPC response for the "getStakeActivation" message with jsonParsed param
  */
-const GetStakeActivationResult = jsonRpcResult(
-  struct.union(['null', StakeActivationResult]),
-);
+const GetStakeActivationResult = jsonRpcResult(StakeActivationResult);
 
 /**
  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
@@ -1901,16 +1899,14 @@ export class Connection {
     epoch: ?number,
   ): Promise<StakeActivationData> {
     let config = {};
-
     if (commitment !== undefined) {
       config.commitment = commitment;
     }
-
     if (epoch !== undefined) {
       config.epoch = epoch;
     }
 
-    const args = this._buildArgs([publicKey.toBase58()]);
+    const args = this._buildArgs([publicKey.toBase58(), config]);
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
     if (res.error) {

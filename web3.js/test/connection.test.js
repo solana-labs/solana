@@ -1529,7 +1529,7 @@ test('stake activation should throw when called for not delegated account', asyn
     url,
     {
       method: 'getStakeActivation',
-      params: [publicKey.toBase58()],
+      params: [publicKey.toBase58(), {}],
     },
     {
       error: {message: 'account not delegated'},
@@ -1551,7 +1551,7 @@ test('stake activation should only accept state with valid string literals', asy
       url,
       {
         method: 'getStakeActivation',
-        params: [publicKey.toBase58()],
+        params: [publicKey.toBase58(), {}],
       },
       {
         error: undefined,
