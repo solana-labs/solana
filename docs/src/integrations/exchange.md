@@ -486,6 +486,145 @@ public class PubkeyValidator
 }
 ```
 
+## Supporting the SPL Token Standard
+
+[SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
+token creation and exchange on the Solana blockchain.
+
+The SPL Token workflow is similar to that of native SOL tokens, but there are a
+few differences which will be discussed in this section.
+
+### Token Mints
+
+Each *type* of SPL Token is declared by creating a *mint* account.  This account
+stores metadata describing token features like the supply, number of decimals and
+various authorities with control over the mint.  Each SPL Token account references
+its associated mint and may only interact with SPL Tokens of that type.
+
+### Installing the `spl-token` CLI Tool
+
+`spl-token` is distributed from Rust [crates.io](https://crates.io) via the Rust
+`cargo` command line utility. The latest version of `cargo` can be installed
+using a handy one-liner for your platform at [rustup.rs](https://rustup.rs). Once
+`cargo` is installed, `spl-token` can be obtained with the following command:
+
+```
+cargo install spl-token-cli
+```
+
+You can then check the installed version to verify
+
+```
+spl-token --version
+```
+
+Which should result in something like
+
+```text
+spl-token-cli 2.0.1
+```
+
+### Account Creation
+
+SPL Token accounts impose additional requirements as opposed to native System
+Program accounts.
+
+1. SPL Token accounts are not implicitly created, so must be created explicitly
+before an SPL Token balance can be deposited
+1. SPL Token accounts must remain [rent-exempt](https://docs.solana.com/apps/rent#rent-exemption)
+for the duration of their existence and therefore require a small amount of
+native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
+this amount is 2,039,280 Lamports (0.00203928 SOL).
+
+#### Command Line
+To create an SPL Token account, for the given mint at a random address and owned
+by the funding account's keypair
+
+```
+spl-token create-account <TOKEN_MINT_ADDRESS>
+```
+
+#### Example
+```
+$ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
+Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+✅ Approved
+Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
+```
+
+### Checking an Account's Balance
+
+#### Command Line
+```
+spl-token balance <TOKEN_ACCOUNT_ADDRESS>
+```
+
+#### Example
+```
+$ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+0
+```
+
+### Token Transfers
+
+For SPL Token transfers to succeed a few prerequisite conditions must be met
+1. The recipient account must exist before the transfer is executed. As described
+in [account creation](#account-creation), SPL Token accounts are *not* explicitly
+created.
+1. Both the sender and recipient accounts must belong to the same mint.  SPL Token
+accounts can only hold one type of SPL token.
+
+#### Command Line
+```
+spl-token transfer <SENDER_ACCOUNT_PUBKEY> <AMOUNT> <RECIPIENT_ACCOUNT_PUBKEY>
+```
+
+#### Example
+```
+$ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Transfer 1 tokens
+  Sender: 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN
+  Recipient: 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+✅ Approved
+Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
+```
+
+### Deposits
+Since each `(user, mint)` pair requires a separate account on chain, it is
+recommended that batches of token accounts be created in advance and assigned
+to users as requested. These accounts should all be owned by exchange-controlled
+keypairs.
+
+Monitoring for deposits should follow the [block polling](#poll-for-blocks) method
+described above. Each new block should be scanned for successful transactions
+issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
+or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
+instructions referencing user accounts, then querying the
+[token account balance](https://docs.solana.com/apps/jsonrpc-api#gettokenaccountbalance)
+updates.
+
+[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
+made to exend the `preBalance` and `postBalance` transaction status metadata
+fields to include SPL Token balance transfers.
+
+### Withdraws
+The withdraw address a user provides must point to an initialized SPL Token account
+of the correct mint. Before executing a withdraw [transfer](#token-transfers),
+it is recommended that the exchange check the address as
+[described above](#validating-user-supplied-account-addresses-for-withdrawals)
+as well as query the account to verify its existence and that it belongs to the
+correct mint.
+
+### Other Considerations
+
+#### Freeze Authority
+For regulatory compliance reasons, an SPL Token issuing entity may optionally
+choose to impose "Freeze Authority" over all accounts created in association with
+ it.  This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
+the assets in a given account at will, rendering the account unusable until thawed.
+If this feature is in use, the freeze authority's pubkey will be registered in
+the SPL Token's mint account.
+
 ## Testing the Integration
 
 Be sure to test your complete workflow on Solana devnet and testnet
