@@ -1898,11 +1898,12 @@ export class Connection {
     commitment: ?Commitment,
     epoch: ?number,
   ): Promise<StakeActivationData> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment);
-    if (epoch !== undefined) {
-      // options
-      args[args.length - 1].epoch = epoch;
-    }
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      undefined,
+      epoch !== undefined ? {epoch} : undefined,
+    );
 
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = GetStakeActivationResult(unsafeRes);
@@ -3155,15 +3156,19 @@ export class Connection {
     args: Array<any>,
     override: ?Commitment,
     encoding?: 'jsonParsed' | 'base64',
+    extra?: any,
   ): Array<any> {
     const commitment = override || this._commitment;
-    if (commitment || encoding) {
+    if (commitment || encoding || extra) {
       let options: any = {};
       if (encoding) {
         options.encoding = encoding;
       }
       if (commitment) {
         options.commitment = commitment;
+      }
+      if (extra) {
+        options = Object.assign(options, extra);
       }
       args.push(options);
     }

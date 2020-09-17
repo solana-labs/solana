@@ -1554,9 +1554,7 @@ test('stake activation should return activating for new accounts', async () => {
   const voteAccount = voteAccounts.current.concat(voteAccounts.delinquent)[0];
   const votePubkey = new PublicKey(voteAccount.votePubkey);
 
-  const from = new Account();
   const authorized = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
   await connection.requestAirdrop(authorized.publicKey, 2 * LAMPORTS_PER_SOL);
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
@@ -1566,7 +1564,7 @@ test('stake activation should return activating for new accounts', async () => {
 
   const newStakeAccount = new Account();
   let createAndInitialize = StakeProgram.createAccount({
-    fromPubkey: from.publicKey,
+    fromPubkey: authorized.publicKey,
     stakePubkey: newStakeAccount.publicKey,
     authorized: new Authorized(authorized.publicKey, authorized.publicKey),
     lockup: new Lockup(0, 0, new PublicKey(0)),
@@ -1576,7 +1574,7 @@ test('stake activation should return activating for new accounts', async () => {
   await sendAndConfirmTransaction(
     connection,
     createAndInitialize,
-    [from, newStakeAccount],
+    [authorized, newStakeAccount],
     {commitment: 'single', skipPreflight: true},
   );
   let delegation = StakeProgram.delegate({
