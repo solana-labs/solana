@@ -29,6 +29,7 @@ pub mod crds_gossip;
 pub mod crds_gossip_error;
 pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
+pub mod crds_shards;
 pub mod crds_value;
 pub mod epoch_slots;
 pub mod fetch_stage;
