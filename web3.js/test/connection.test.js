@@ -4,12 +4,15 @@ import {Token, u64} from '@solana/spl-token';
 
 import {
   Account,
+  Authorized,
   Connection,
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
+  Lockup,
   PublicKey,
+  StakeProgram,
 } from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
@@ -1519,6 +1522,125 @@ test('get largest accounts', async () => {
 
   const largestAccounts = (await connection.getLargestAccounts()).value;
   expect(largestAccounts.length).toEqual(20);
+});
+
+test('stake activation should throw when called for not delegated account', async () => {
+  const connection = new Connection(url);
+
+  const publicKey = new Account().publicKey;
+  mockRpc.push([
+    url,
+    {
+      method: 'getStakeActivation',
+      params: [publicKey.toBase58(), {}],
+    },
+    {
+      error: {message: 'account not delegated'},
+      result: undefined,
+    },
+  ]);
+
+  await expect(connection.getStakeActivation(publicKey)).rejects.toThrow();
+});
+
+test('stake activation should return activating for new accounts', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+  const voteAccounts = await connection.getVoteAccounts();
+  const voteAccount = voteAccounts.current.concat(voteAccounts.delinquent)[0];
+  const votePubkey = new PublicKey(voteAccount.votePubkey);
+
+  const authorized = new Account();
+  await connection.requestAirdrop(authorized.publicKey, 2 * LAMPORTS_PER_SOL);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    StakeProgram.space,
+    'recent',
+  );
+
+  const newStakeAccount = new Account();
+  let createAndInitialize = StakeProgram.createAccount({
+    fromPubkey: authorized.publicKey,
+    stakePubkey: newStakeAccount.publicKey,
+    authorized: new Authorized(authorized.publicKey, authorized.publicKey),
+    lockup: new Lockup(0, 0, new PublicKey(0)),
+    lamports: minimumAmount + 42,
+  });
+
+  await sendAndConfirmTransaction(
+    connection,
+    createAndInitialize,
+    [authorized, newStakeAccount],
+    {commitment: 'single', skipPreflight: true},
+  );
+  let delegation = StakeProgram.delegate({
+    stakePubkey: newStakeAccount.publicKey,
+    authorizedPubkey: authorized.publicKey,
+    votePubkey,
+  });
+  await sendAndConfirmTransaction(connection, delegation, [authorized], {
+    commitment: 'single',
+    skipPreflight: true,
+  });
+
+  const LARGE_EPOCH = 4000;
+  await expect(
+    connection.getStakeActivation(
+      newStakeAccount.publicKey,
+      'recent',
+      LARGE_EPOCH,
+    ),
+  ).rejects.toThrow(
+    `failed to get Stake Activation ${newStakeAccount.publicKey.toBase58()}: Invalid param: epoch ${LARGE_EPOCH} has not yet started`,
+  );
+
+  const activationState = await connection.getStakeActivation(
+    newStakeAccount.publicKey,
+  );
+  expect(activationState.state).toBe('activating');
+  expect(activationState.inactive).toBe(42);
+  expect(activationState.active).toBe(0);
+});
+
+test('stake activation should only accept state with valid string literals', async () => {
+  if (!mockRpcEnabled) {
+    console.log('live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+  const publicKey = new Account().publicKey;
+
+  const addStakeActivationMock = state => {
+    mockRpc.push([
+      url,
+      {
+        method: 'getStakeActivation',
+        params: [publicKey.toBase58(), {}],
+      },
+      {
+        error: undefined,
+        result: {
+          state: state,
+          active: 0,
+          inactive: 80,
+        },
+      },
+    ]);
+  };
+
+  addStakeActivationMock('active');
+  let activation = await connection.getStakeActivation(publicKey);
+  expect(activation.state).toBe('active');
+  expect(activation.active).toBe(0);
+  expect(activation.inactive).toBe(80);
+
+  addStakeActivationMock('invalid');
+  await expect(connection.getStakeActivation(publicKey)).rejects.toThrow();
 });
 
 test('getVersion', async () => {

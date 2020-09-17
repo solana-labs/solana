@@ -807,6 +807,20 @@ const ParsedAccountInfoResult = struct.object({
 });
 
 /**
+ * @private
+ */
+const StakeActivationResult = struct.object({
+  state: struct.union([
+    struct.literal('active'),
+    struct.literal('inactive'),
+    struct.literal('activating'),
+    struct.literal('deactivating'),
+  ]),
+  active: 'number',
+  inactive: 'number',
+});
+
+/**
  * Expected JSON RPC response for the "getAccountInfo" message
  */
 const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
@@ -819,6 +833,11 @@ const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
 const GetParsedAccountInfoResult = jsonRpcResultAndContext(
   struct.union(['null', ParsedAccountInfoResult]),
 );
+
+/**
+ * Expected JSON RPC response for the "getStakeActivation" message with jsonParsed param
+ */
+const GetStakeActivationResult = jsonRpcResult(StakeActivationResult);
 
 /**
  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
@@ -1199,6 +1218,20 @@ type ParsedAccountData = {
   program: string,
   parsed: any,
   space: number,
+};
+
+/**
+ * Stake Activation data
+ *
+ * @typedef {Object} StakeActivationData
+ * @property {string} state: <string - the stake account's activation state, one of: active, inactive, activating, deactivating
+ * @property {number} active: stake active during the epoch
+ * @property {number} inactive: stake inactive during the epoch
+ */
+type StakeActivationData = {
+  state: 'active' | 'inactive' | 'activating' | 'deactivating',
+  active: number,
+  inactive: number,
 };
 
 /**
@@ -1855,6 +1888,36 @@ export class Connection {
           'failed to get info about account ' + publicKey.toBase58() + ': ' + e,
         );
       });
+  }
+
+  /**
+   * Returns epoch activation information for a stake account that has been delegated
+   */
+  async getStakeActivation(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+    epoch: ?number,
+  ): Promise<StakeActivationData> {
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      undefined,
+      epoch !== undefined ? {epoch} : undefined,
+    );
+
+    const unsafeRes = await this._rpcRequest('getStakeActivation', args);
+    const res = GetStakeActivationResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        `failed to get Stake Activation ${publicKey.toBase58()}: ${
+          res.error.message
+        }`,
+      );
+    }
+    assert(typeof res.result !== 'undefined');
+
+    const {state, active, inactive} = res.result;
+    return {state, active, inactive};
   }
 
   /**
@@ -3093,15 +3156,19 @@ export class Connection {
     args: Array<any>,
     override: ?Commitment,
     encoding?: 'jsonParsed' | 'base64',
+    extra?: any,
   ): Array<any> {
     const commitment = override || this._commitment;
-    if (commitment || encoding) {
+    if (commitment || encoding || extra) {
       let options: any = {};
       if (encoding) {
         options.encoding = encoding;
       }
       if (commitment) {
         options.commitment = commitment;
+      }
+      if (extra) {
+        options = Object.assign(options, extra);
       }
       args.push(options);
     }
