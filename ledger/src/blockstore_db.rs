@@ -9,16 +9,11 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-<<<<<<< HEAD
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-=======
-use solana_runtime::hardened_unpack::UnpackError;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
     signature::Signature,
 };
->>>>>>> 95ed3641c... Add blocktime column to blockstore (#12336)
 use solana_transaction_status::{Rewards, TransactionStatusMeta};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
