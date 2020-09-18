@@ -67,4 +67,32 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     symbol: "SOL",
     name: "Wrapped SOL",
   },
+  SF3oTvfWzEP3DTwGSvUXRrGTvr75pdZNnBLAH9bzMuX: {
+    symbol: "SXP",
+    name: "Wrapped Swipe",
+  },
+  BtZQfWqDGbk9Wf2rXEiWyQBdBY1etnUUn6zEphvVS7yN: {
+    symbol: "HGET",
+    name: "Wrapped Hedget",
+  },
+  "873KLxCbz7s9Kc4ZzgYRtNmhfkQrhfyWGZJBmyCbC3ei": {
+    symbol: "UBXT",
+    name: "Wrapped Upbots",
+  },
+  CsZ5LZkDS7h9TDKjrbL7VAwQZ9nsRu8vJLhRYfmGaN8K: {
+    symbol: "ALEPH",
+    name: "Wrapped Aleph",
+  },
+  "5Fu5UUgbjpUvdBveb3a1JTNirL8rXtiYeSMWvKjtUNQv": {
+    symbol: "CREAM",
+    name: "Wrapped Cream Finance",
+  },
+  HqB7uswoVg4suaQiDP3wjxob1G5WdZ144zhdStwMCq7e: {
+    symbol: "HNT",
+    name: "Wrapped Helium",
+  },
+  AR1Mtgh7zAtxuxGd2XPovXPVjcSdY3i4rQYisNadjfKy: {
+    symbol: "SUSHI",
+    name: "Wrapped Sushi",
+  },
 };
