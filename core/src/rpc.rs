@@ -78,6 +78,8 @@ use std::{
 };
 use tokio::runtime;
 
+pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
     Response { context, value }
@@ -1750,7 +1752,7 @@ fn _send_transaction(
     last_valid_slot: Slot,
 ) -> Result<String> {
     if transaction.signatures.is_empty() {
-        return Err(RpcCustomError::SendTransactionIsNotSigned.into());
+        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
     let signature = transaction.signatures[0];
     let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
@@ -2158,33 +2160,24 @@ impl RpcSol for RpcSolImpl {
 
         if !config.skip_preflight {
             if transaction.verify().is_err() {
-                return Err(RpcCustomError::SendTransactionPreflightFailure {
-                    message: "Transaction signature verification failed".into(),
-                }
-                .into());
+                return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
             }
 
             if meta.health.check() != RpcHealthStatus::Ok {
-                return Err(RpcCustomError::SendTransactionPreflightFailure {
-                    message: "RPC node is unhealthy, unable to simulate transaction".into(),
-                }
-                .into());
+                return Err(RpcCustomError::RpcNodeUnhealthy.into());
             }
 
             let preflight_commitment = config
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            if let (Err(err), _log_output) =
-                preflight_bank.simulate_transaction(transaction.clone())
-            {
-                // Note: it's possible that the transaction simulation failed but the actual
-                // transaction would succeed, such as when a transaction depends on an earlier
-                // transaction that has yet to reach max confirmations. In these cases the user
-                // should use the config.skip_preflight flag, and potentially in the future
-                // additional controls over what bank is used for preflight should be exposed.
+            if let (Err(err), logs) = preflight_bank.simulate_transaction(transaction.clone()) {
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: format!("Transaction simulation failed: {}", err),
+                    result: RpcSimulateTransactionResult {
+                        err: Some(err),
+                        logs: Some(logs),
+                    },
                 }
                 .into());
             }
@@ -2475,7 +2468,7 @@ fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Tr
     let wire_transaction = bs58::decode(bs58_transaction)
         .into_vec()
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-    if wire_transaction.len() >= PACKET_DATA_SIZE {
+    if wire_transaction.len() > PACKET_DATA_SIZE {
         let err = format!(
             "transaction too large: {} bytes (max: {} bytes)",
             wire_transaction.len(),
@@ -4060,7 +4053,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"err":"BlockhashNotFound","logs":[]}},"id":1}"#.to_string(),
             )
         );
 
@@ -4076,7 +4069,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Transaction failed to sanitize accounts offsets correctly"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Transaction failed to sanitize accounts offsets correctly","data":{"err":"SanitizeFailure","logs":[]}},"id":1}"#.to_string(),
             )
         );
         let mut bad_transaction =
@@ -4092,7 +4085,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"RPC node is unhealthy, unable to simulate transaction"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"RPC node is unhealthy"},"id":1}"#.to_string(),
             )
         );
         health.stub_set_health_status(None);
@@ -4108,7 +4101,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction signature verification failed"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction signature verification failure"},"id":1}"#.to_string(),
             )
         );
 
@@ -4137,7 +4130,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction is not signed"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction signature verification failure"},"id":1}"#.to_string(),
             )
         );
     }

@@ -1,10 +1,12 @@
 use jsonrpc_core::{Error, ErrorCode};
+use solana_client::rpc_response::RpcSimulateTransactionResult;
 use solana_sdk::clock::Slot;
 
 const JSON_RPC_SERVER_ERROR_1: i64 = -32001;
 const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
 const JSON_RPC_SERVER_ERROR_3: i64 = -32003;
 const JSON_RPC_SERVER_ERROR_4: i64 = -32004;
+const JSON_RPC_SERVER_ERROR_5: i64 = -32005;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -13,11 +15,13 @@ pub enum RpcCustomError {
     },
     SendTransactionPreflightFailure {
         message: String,
+        result: RpcSimulateTransactionResult,
     },
-    SendTransactionIsNotSigned,
+    TransactionSignatureVerificationFailure,
     BlockNotAvailable {
         slot: Slot,
     },
+    RpcNodeUnhealthy,
 }
 
 impl From<RpcCustomError> for Error {
@@ -34,19 +38,24 @@ impl From<RpcCustomError> for Error {
                 ),
                 data: None,
             },
-            RpcCustomError::SendTransactionPreflightFailure { message } => Self {
+            RpcCustomError::SendTransactionPreflightFailure { message, result } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_2),
                 message,
-                data: None,
+                data: Some(serde_json::json!(result)),
             },
-            RpcCustomError::SendTransactionIsNotSigned => Self {
+            RpcCustomError::TransactionSignatureVerificationFailure => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_3),
-                message: "Transaction is not signed".to_string(),
+                message: "Transaction signature verification failure".to_string(),
                 data: None,
             },
             RpcCustomError::BlockNotAvailable { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_4),
                 message: format!("Block not available for slot {}", slot),
+                data: None,
+            },
+            RpcCustomError::RpcNodeUnhealthy => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_5),
+                message: "RPC node is unhealthy".to_string(),
                 data: None,
             },
         }

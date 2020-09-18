@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import {
   TokenAccount,
@@ -15,6 +14,7 @@ import { TokenRegistry } from "tokenRegistry";
 import { useCluster } from "providers/cluster";
 import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
+import { reportError } from "utils/sentry";
 
 export function TokenAccountSection({
   account,
@@ -39,10 +39,8 @@ export function TokenAccountSection({
       }
     }
   } catch (err) {
-    Sentry.captureException(err, {
-      tags: {
-        address: account.pubkey.toBase58(),
-      },
+    reportError(err, {
+      address: account.pubkey.toBase58(),
     });
   }
   return <UnknownAccountCard account={account} />;

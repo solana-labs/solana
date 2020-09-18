@@ -5,4 +5,6 @@
 /flow-typed
 /lib
 /module.flow.js
+/.eslintrc.js
+/test/.eslintrc.js
 /jest-environment.js

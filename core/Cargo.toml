@@ -98,6 +98,9 @@ name = "blockstore"
 name = "crds_gossip_pull"
 
 [[bench]]
+name = "crds_shards"
+
+[[bench]]
 name = "gen_keys"
 
 [[bench]]

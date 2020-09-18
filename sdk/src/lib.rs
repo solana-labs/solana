@@ -32,6 +32,8 @@ pub mod native_token;
 pub mod nonce;
 pub mod packet;
 pub mod poh_config;
+pub mod program_option;
+pub mod program_pack;
 pub mod program_utils;
 pub mod pubkey;
 pub mod rent;

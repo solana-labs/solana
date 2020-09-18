@@ -81,34 +81,6 @@ fn hash_validator(hash: String) -> Result<(), String> {
         .map_err(|e| format!("{:?}", e))
 }
 
-fn get_shred_rpc_peers(
-    cluster_info: &ClusterInfo,
-    expected_shred_version: Option<u16>,
-) -> Vec<ContactInfo> {
-    let rpc_peers = cluster_info.all_rpc_peers();
-    match expected_shred_version {
-        Some(expected_shred_version) => {
-            // Filter out rpc peers that don't match the expected shred version
-            rpc_peers
-                .into_iter()
-                .filter(|contact_info| contact_info.shred_version == expected_shred_version)
-                .collect::<Vec<_>>()
-        }
-        None => {
-            if !rpc_peers
-                .iter()
-                .all(|contact_info| contact_info.shred_version == rpc_peers[0].shred_version)
-            {
-                eprintln!(
-                        "Multiple shred versions observed in gossip.  Restart with --expected-shred-version"
-                    );
-                exit(1);
-            }
-            rpc_peers
-        }
-    }
-}
-
 fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>>) -> bool {
     if let Some(trusted_validators) = trusted_validators {
         trusted_validators.contains(id)
@@ -168,6 +140,7 @@ fn start_gossip_node(
 
 fn get_rpc_node(
     cluster_info: &ClusterInfo,
+    entrypoint_gossip: &SocketAddr,
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
@@ -175,14 +148,40 @@ fn get_rpc_node(
 ) -> (ContactInfo, Option<(Slot, Hash)>) {
     let mut blacklist_timeout = Instant::now();
     loop {
-        info!(
-            "Searching for an RPC service, shred version={:?}...",
-            validator_config.expected_shred_version
-        );
         sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.contact_info_trace());
 
-        let rpc_peers = get_shred_rpc_peers(&cluster_info, validator_config.expected_shred_version);
+        let shred_version = validator_config
+            .expected_shred_version
+            .unwrap_or_else(|| cluster_info.my_shred_version());
+        if shred_version == 0 {
+            if let Some(entrypoint) =
+                cluster_info.lookup_contact_info_by_gossip_addr(entrypoint_gossip)
+            {
+                if entrypoint.shred_version == 0 {
+                    eprintln!(
+                        "Entrypoint shred version is zero.  Restart with --expected-shred-version"
+                    );
+                    exit(1);
+                }
+            }
+            info!(
+                "Waiting to adopt entrypoint shred version, contact info for {:?} not found...",
+                entrypoint_gossip
+            );
+            continue;
+        }
+
+        info!(
+            "Searching for an RPC service with shred version {}...",
+            shred_version
+        );
+
+        let rpc_peers = cluster_info
+            .all_rpc_peers()
+            .into_iter()
+            .filter(|contact_info| contact_info.shred_version == shred_version)
+            .collect::<Vec<_>>();
         let rpc_peers_total = rpc_peers.len();
 
         // Filter out blacklisted nodes
@@ -1360,6 +1359,7 @@ pub fn main() {
 
                 let (rpc_contact_info, snapshot_hash) = get_rpc_node(
                     &gossip.as_ref().unwrap().0,
+                    &cluster_entrypoint.gossip,
                     &validator_config,
                     &mut blacklisted_rpc_nodes,
                     no_snapshot_fetch,

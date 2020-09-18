@@ -353,6 +353,7 @@ impl JsonRpcService {
                 ]))
                 .cors_max_age(86400)
                 .request_middleware(request_middleware)
+                .max_request_body_size(MAX_REQUEST_PAYLOAD_SIZE)
                 .start_http(&rpc_addr);
 
                 if let Err(e) = server {

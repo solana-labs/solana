@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import { useCluster, Cluster } from "providers/cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
@@ -12,6 +11,7 @@ import {
 import { TokenAccountInfo, TokenAccount } from "validators/accounts/token";
 import { ParsedInfo } from "validators";
 import { coerce } from "superstruct";
+import { reportError } from "utils/sentry";
 
 type LargestAccounts = {
   largest: TokenAccountBalancePairWithOwner[];
@@ -89,7 +89,7 @@ async function fetchLargestAccounts(
             }
           } catch (error) {
             if (cluster !== Cluster.Custom) {
-              Sentry.captureException(error, { tags: { url } });
+              reportError(error, { url });
             }
           }
           return account;
@@ -100,7 +100,7 @@ async function fetchLargestAccounts(
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+      reportError(error, { url });
     }
     fetchStatus = FetchStatus.FetchFailed;
   }

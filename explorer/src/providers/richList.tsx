@@ -1,8 +1,8 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 
 import { AccountBalancePair, Connection } from "@solana/web3.js";
 import { useCluster, ClusterStatus, Cluster } from "./cluster";
+import { reportError } from "utils/sentry";
 
 export enum Status {
   Idle,
@@ -72,7 +72,7 @@ async function fetch(dispatch: Dispatch, cluster: Cluster, url: string) {
     });
   } catch (err) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(err, { tags: { url } });
+      reportError(err, { url });
     }
     dispatch("Failed to fetch top accounts");
   }

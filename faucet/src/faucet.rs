@@ -219,7 +219,7 @@ pub fn request_airdrop_transaction(
         Error::new(ErrorKind::Other, "Airdrop failed")
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
-    if transaction_length >= PACKET_DATA_SIZE || transaction_length == 0 {
+    if transaction_length > PACKET_DATA_SIZE || transaction_length == 0 {
         return Err(Error::new(
             ErrorKind::Other,
             format!(

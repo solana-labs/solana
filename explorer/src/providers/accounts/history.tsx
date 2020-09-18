@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
@@ -9,6 +8,7 @@ import {
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
+import { reportError } from "utils/sentry";
 
 type AccountHistory = {
   fetched: ConfirmedSignatureInfo[];
@@ -104,7 +104,7 @@ async function fetchAccountHistory(
     status = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+      reportError(error, { url });
     }
     status = FetchStatus.FetchFailed;
   }
