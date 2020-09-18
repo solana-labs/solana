@@ -589,14 +589,14 @@ Transfer 1 tokens
 Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
 ```
 
-### Deposits
+### Depositing
 Since each `(user, mint)` pair requires a separate account on chain, it is
 recommended that an exchange create batches of token accounts in advance and assign them
 to users on request. These accounts should all be owned by exchange-controlled
 keypairs.
 
-Monitoring for deposits should follow the [block polling](#poll-for-blocks) method
-described above. Each new block should be scanned for successful transactions
+Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
+method described above. Each new block should be scanned for successful transactions
 issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
 or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
 instructions referencing user accounts, then querying the
@@ -607,7 +607,7 @@ updates.
 made to exend the `preBalance` and `postBalance` transaction status metadata
 fields to include SPL Token balance transfers.
 
-### Withdraws
+### Withdrawing
 The withdraw address a user provides must point to an initialized SPL Token account
 of the correct mint. Before executing a withdraw [transfer](#token-transfers),
 it is recommended that the exchange check the address as
