@@ -26,6 +26,11 @@ declare print_free_tree=(
   ':runtime/src/**.rs'
   ':sdk/bpf/rust/rust-utils/**.rs'
   ':sdk/**.rs'
+<<<<<<< HEAD
+=======
+  ':^sdk/src/program_option.rs'
+  ':^sdk/src/program_stubs.rs'
+>>>>>>> 58542cf7f... Add Pack and COption to sdk (#12294)
   ':programs/**.rs'
   ':^**bin**.rs'
   ':^**bench**.rs'
