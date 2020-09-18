@@ -4,7 +4,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-set -e
+set -ex
 
 rm -rf "$SOLANA_CONFIG_DIR"/bootstrap-validator
 mkdir -p "$SOLANA_CONFIG_DIR"/bootstrap-validator
@@ -48,4 +48,5 @@ default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --cluster-type development
 
+echo "genesis args: ${args[@]}"
 $solana_genesis "${args[@]}"

@@ -289,6 +289,7 @@ startBootstrapLeader() {
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
+         > ~/solana/remote-node.log
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -360,6 +361,7 @@ startNode() {
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
+         > ~/solana/remote-node.log
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
