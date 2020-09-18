@@ -17,6 +17,7 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
+import { Slot } from "components/common/Slot";
 import { useTransactionDetails } from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import { coerce } from "superstruct";
@@ -249,8 +250,8 @@ function TokenTransactionRow({
 
             return (
               <tr key={index}>
-                <td className="w-1 text-monospace">
-                  {tx.slot.toLocaleString("en-US")}
+                <td className="w-1">
+                  <Slot slot={tx.slot} />
                 </td>
 
                 <td>
@@ -288,7 +289,9 @@ function TokenTransactionRow({
 
   return (
     <tr key={tx.signature}>
-      <td className="w-1 text-monospace">{tx.slot.toLocaleString("en-US")}</td>
+      <td className="w-1">
+        <Slot slot={tx.slot} />
+      </td>
 
       <td>
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>

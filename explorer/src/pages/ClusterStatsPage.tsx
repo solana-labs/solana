@@ -1,6 +1,7 @@
 import React from "react";
 
 import { TableCardBody } from "components/common/TableCardBody";
+import { Slot } from "components/common/Slot";
 import {
   useDashboardInfo,
   usePerformanceInfo,
@@ -70,18 +71,21 @@ function StatsCardBody() {
     slotsInEpoch - slotIndex,
     hourlyBlockTime
   );
-  const blockHeight = epochInfo.blockHeight.toLocaleString("en-US");
-  const currentSlot = epochInfo.absoluteSlot.toLocaleString("en-US");
+  const { blockHeight, absoluteSlot } = epochInfo;
 
   return (
     <TableCardBody>
       <tr>
         <td className="w-100">Slot</td>
-        <td className="text-lg-right text-monospace">{currentSlot}</td>
+        <td className="text-lg-right text-monospace">
+          <Slot slot={absoluteSlot} />
+        </td>
       </tr>
       <tr>
         <td className="w-100">Block height</td>
-        <td className="text-lg-right text-monospace">{blockHeight}</td>
+        <td className="text-lg-right text-monospace">
+          <Slot slot={blockHeight} />
+        </td>
       </tr>
       <tr>
         <td className="w-100">Block time</td>
