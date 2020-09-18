@@ -530,8 +530,8 @@ spl-token-cli 2.0.1
 
 ### Account Creation
 
-SPL Token accounts carry additional requirements that native System
-Program accounts do not:
+SPL Token accounts carry additional requirements that native System Program
+accounts do not:
 
 1. SPL Token accounts are not implicitly created, so must be created explicitly
 before an SPL Token balance can be deposited
@@ -541,8 +541,10 @@ native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
 this amount is 0.00203928 SOL (2,039,280 lamports).
 
 #### Command Line
-To create an SPL Token account, for the given mint at a random address and owned
-by the funding account's keypair
+To create an SPL Token account with the following properties:
+1. At a random address
+1. Associated with the given mint
+1. Owned by the funding account's keypair
 
 ```
 spl-token create-account <TOKEN_MINT_ADDRESS>
