@@ -105,7 +105,7 @@ type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
 // Eager rent collection repeats in cyclic manner.
-// Each cycle is composed of <partiion_count> number of tiny pubkey subranges
+// Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
 type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
@@ -2075,7 +2075,7 @@ impl Bank {
         let (_, _, in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
-        // risk of any mis-calculation instead of neligilbe faster computation per slot for the
+        // risk of any mis-calculation instead of negligible faster computation per slot for the
         // likely case.
         let mut start_partition_index =
             Self::partition_index_from_slot_index(start_slot_index, cycle_params);
@@ -2087,7 +2087,7 @@ impl Bank {
         let in_middle_of_cycle = start_partition_index > 0;
         if in_multi_epoch_cycle && is_special_new_epoch && in_middle_of_cycle {
             // Adjust slot indexes so that the final partition ranges are continuous!
-            // This is neeed because the caller gives us off-by-one indexes when
+            // This is needed because the caller gives us off-by-one indexes when
             // an epoch boundary is crossed.
             // Usually there is no need for this adjustment because cycles are aligned
             // with epochs. But for multi-epoch cycles, adjust the indexes if it
@@ -2331,7 +2331,7 @@ impl Bank {
         };
 
         // don't collect rents if we're in the new behavior;
-        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
+        // in general, it's not worthwhile to account for rents outside the runtime (transactions)
         // there are too many and subtly nuanced modification codepaths
         if !should_be_in_new_behavior {
             // previously we're too much collecting rents as if it existed since epoch 0...
