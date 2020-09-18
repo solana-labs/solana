@@ -84,17 +84,17 @@ test_with_live_cluster() {
     show_log
   done
 
+  echo "--- Monitoring validator $cluster_label"
+
   snapshot_slot=$(./net/ssh.sh "$instance_ip" ls -t cluster-sanity/ledger/snapshot* |
     head -n 1 |
     grep -o 'snapshot-[0-9]*-' |
     grep -o '[0-9]*'
   )
-
-  echo "--- Monitoring validator $cluster_label"
-
-  attempts=100
   current_root=$snapshot_slot
   goal_root=$((snapshot_slot + 100))
+
+  attempts=100
   while [[ $current_root -le $goal_root ]]; do
     attempts=$((attempts - 1))
     if [[ (($attempts == 0)) || ! -d "/proc/$ssh_pid" ]]; then
