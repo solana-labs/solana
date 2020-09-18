@@ -219,7 +219,7 @@ impl JsonRpcRequestProcessor {
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = channel();
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         Self {
             config: JsonRpcConfig::default(),
@@ -2702,7 +2702,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -4014,7 +4014,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
@@ -4055,7 +4055,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         let mut bad_transaction =
             system_transaction::transfer(&mint_keypair, &Pubkey::new_rand(), 42, Hash::default());
@@ -4237,7 +4237,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(request_processor.validator_exit(), false);
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
@@ -4266,7 +4266,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(request_processor.validator_exit(), true);
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
@@ -4357,7 +4357,7 @@ pub mod tests {
             &runtime::Runtime::new().unwrap(),
             None,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, &exit, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {
