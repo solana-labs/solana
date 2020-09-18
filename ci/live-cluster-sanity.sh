@@ -53,7 +53,6 @@ test_with_live_cluster() {
   ssh_pid=$!
   tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
   tail_pid=$!
-  sleep 3
 
   attempts=100
   while ! ./net/ssh.sh "$instance_ip" test -f cluster-sanity/init-completed &> /dev/null ; do
@@ -70,7 +69,7 @@ test_with_live_cluster() {
     echo "##### validator is starting... (until timeout: $attempts) #####"
     if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
       echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-200 || true
+      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
       truncate --size 0 cluster-sanity/log-tail
       echo
     fi
@@ -102,7 +101,7 @@ test_with_live_cluster() {
     echo "##### validator is running ($current_root/$goal_root)... (until timeout: $attempts) #####"
     if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
       echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-200 || true
+      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
       truncate --size 0 cluster-sanity/log-tail
       echo
     fi
@@ -113,7 +112,6 @@ test_with_live_cluster() {
     -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
     http://localhost:18899
-  sleep 10
 
   (sleep 3 && kill "$tail_pid") &
   kill_pid=$!
