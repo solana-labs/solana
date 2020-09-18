@@ -313,14 +313,12 @@ impl JsonRpcService {
             bigtable_ledger_storage,
         );
 
-        let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
         let leader_info =
             poh_recorder.map(|recorder| LeaderInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,
             leader_info,
-            &exit_send_transaction_service,
             receiver,
         ));
 
@@ -369,7 +367,6 @@ impl JsonRpcService {
                 let server = server.unwrap();
                 close_handle_sender.send(server.close_handle()).unwrap();
                 server.wait();
-                exit_send_transaction_service.store(true, Ordering::Relaxed);
                 exit_bigtable_ledger_upload_service.store(true, Ordering::Relaxed);
             })
             .unwrap();
