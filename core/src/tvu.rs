@@ -173,12 +173,15 @@ impl Tvu {
             }
         };
         info!("snapshot_interval_slots: {}", snapshot_interval_slots);
+        let (snapshot_config, accounts_package_sender) = snapshot_config_and_package_sender
+            .map(|(snapshot_config, accounts_package_sender)| {
+                (Some(snapshot_config), Some(accounts_package_sender))
+            })
+            .unwrap_or((None, None));
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_hash_receiver,
-            snapshot_config_and_package_sender
-                .as_ref()
-                .map(|(_, accounts_package_sender)| accounts_package_sender.clone()),
+            accounts_package_sender,
             exit,
             &cluster_info,
             tvu_config.trusted_validators.clone(),
@@ -188,8 +191,8 @@ impl Tvu {
         );
 
         let (snapshot_request_sender, snapshot_items) = {
-            snapshot_config_and_package_sender
-                .map(|(snapshot_config, _)| {
+            snapshot_config
+                .map(|snapshot_config| {
                     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
                     (
                         Some(snapshot_request_sender),
