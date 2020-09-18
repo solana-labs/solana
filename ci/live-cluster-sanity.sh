@@ -125,18 +125,24 @@ test_with_live_cluster() {
   upload-ci-artifact "$validator_log"
 }
 
+# UPDATE docs/src/clusters.md TOO!!
 test_with_live_cluster "mainnet-beta" \
+    --entrypoint mainnet-beta.solana.com:8001 \
     --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
     --trusted-validator GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
-    --entrypoint mainnet-beta.solana.com:8001 \
+    --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
-    --expected-shred-version 64864
+    --expected-shred-version 64864 \
+    # for your pain-less copy-paste
 
+# UPDATE docs/src/clusters.md TOO!!
 test_with_live_cluster "testnet" \
+    --entrypoint entrypoint.testnet.solana.com:8001 \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --entrypoint 35.203.170.30:8001 \
-    --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    --expected-shred-version 1579 \
+    --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
+    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
+    --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
+    # for your pain-less copy-paste
 
 ./net/gce.sh delete -p "$instance_prefix" && instance_deleted=yes
