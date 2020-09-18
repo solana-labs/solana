@@ -24,7 +24,7 @@ on_trap() {
 trap on_trap INT TERM EXIT
 
 _ cargo +"$rust_stable" build --bins --release
-_ ./net/scp.sh ./target/release/solana-validator "$instance_ip":.
+_ ./net/scp.sh ./target/release/solana-validator "$instance_ip:."
 echo 500000 | ./net/ssh.sh "$instance_ip" sudo tee /proc/sys/vm/max_map_count > /dev/null
 
 test_with_live_cluster() {
@@ -39,7 +39,7 @@ test_with_live_cluster() {
   ./net/ssh.sh "$instance_ip" mkdir cluster-sanity
 
   validator_log="$cluster_label-validator.log"
-  (./net/ssh.sh "$instance_ip" -Llocalhost:18899:localhost:18899 ./solana-validator \
+  ./net/ssh.sh "$instance_ip" -Llocalhost:18899:localhost:18899 ./solana-validator \
     --no-untrusted-rpc \
     --ledger cluster-sanity/ledger \
     --log - \
@@ -49,7 +49,7 @@ test_with_live_cluster() {
     --rpc-port 18899 \
     --rpc-bind-address localhost \
     --snapshot-interval-slots 0 \
-    "$@" ) &> "$validator_log" &
+    "$@" &> "$validator_log" &
   ssh_pid=$!
   tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
   tail_pid=$!
@@ -70,7 +70,7 @@ test_with_live_cluster() {
     echo "##### validator is starting... (until timeout: $attempts) #####"
     if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
       echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 || true
+      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-200 || true
       truncate --size 0 cluster-sanity/log-tail
       echo
     fi
@@ -102,7 +102,7 @@ test_with_live_cluster() {
     echo "##### validator is running ($current_root/$goal_root)... (until timeout: $attempts) #####"
     if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
       echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 || true
+      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-200 || true
       truncate --size 0 cluster-sanity/log-tail
       echo
     fi
