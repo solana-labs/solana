@@ -212,7 +212,6 @@ pull_or_push_steps() {
   if affects .sh$; then
     command_step shellcheck "ci/shellcheck.sh" 5
     wait_step
-    true
   fi
 
   # Run the full test suite by default, skipping only if modifications are local
