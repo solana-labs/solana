@@ -36,15 +36,15 @@ solana config set --url https://devnet.solana.com
 
 ```bash
 $ solana-validator \
+    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
+    --entrypoint entrypoint.devnet.solana.com:8001 \
+    --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
-    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.devnet.solana.com:8001 \
-    --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
     --limit-ledger-size
 ```
 
@@ -74,20 +74,21 @@ solana config set --url https://testnet.solana.com
 
 ##### Example `solana-validator` command-line
 
+[comment]: <> (UPDATE ci/live-cluster-sanity.sh TOO!)
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --entrypoint entrypoint.testnet.solana.com:8001 \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
     --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
+    --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
+    --identity ~/validator-keypair.json \
+    --vote-account ~/vote-account-keypair.json \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.testnet.solana.com:8001 \
-    --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --limit-ledger-size
 ```
 
@@ -120,21 +121,22 @@ solana config set --url https://api.mainnet-beta.solana.com
 
 ##### Example `solana-validator` command-line
 
+[comment]: <> (UPDATE ci/live-cluster-sanity.sh TOO!)
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --entrypoint mainnet-beta.solana.com:8001 \
     --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
     --trusted-validator GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
     --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
+    --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
+    --expected-shred-version 64864 \
+    --identity ~/validator-keypair.json \
+    --vote-account ~/vote-account-keypair.json \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint mainnet-beta.solana.com:8001 \
-    --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
-    --expected-shred-version 64864 \
     --limit-ledger-size
 ```
 
