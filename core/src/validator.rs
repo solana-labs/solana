@@ -67,7 +67,7 @@ use std::{
     time::Duration,
 };
 
-pub const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
+const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
@@ -96,6 +96,8 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
+    pub cuda: bool,
     pub require_tower: bool,
 }
 
@@ -127,6 +129,8 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
+            poh_verify: true,
+            cuda: false,
             require_tower: false,
         }
     }
@@ -178,18 +182,16 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
-        keypair: &Arc<Keypair>,
+        identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
-        entrypoint_info_option: Option<&ContactInfo>,
-        poh_verify: bool,
+        cluster_entrypoint: Option<&ContactInfo>,
         config: &ValidatorConfig,
     ) -> Self {
-        let id = keypair.pubkey();
+        let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
         warn!("identity: {}", id);
@@ -205,7 +207,7 @@ impl Validator {
         }
         report_target_features();
 
-        info!("entrypoint: {:?}", entrypoint_info_option);
+        info!("entrypoint: {:?}", cluster_entrypoint);
 
         if solana_perf::perf_libs::api().is_some() {
             info!("Initializing sigverify, this could take a while...");
@@ -214,6 +216,14 @@ impl Validator {
         }
         sigverify::init();
         info!("Done.");
+
+        if !ledger_path.is_dir() {
+            error!(
+                "ledger directory does not exist or is not accessible: {:?}",
+                ledger_path
+            );
+            process::exit(1);
+        }
 
         if let Some(shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
@@ -257,7 +267,14 @@ impl Validator {
                 cache_block_time_service,
             },
             tower,
-        ) = new_banks_from_ledger(&id, vote_account, config, ledger_path, poh_verify, &exit);
+        ) = new_banks_from_ledger(
+            &id,
+            vote_account,
+            config,
+            ledger_path,
+            config.poh_verify,
+            &exit,
+        );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -289,7 +306,10 @@ impl Validator {
             }
         }
 
-        let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info.clone(),
+            identity_keypair.clone(),
+        ));
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
@@ -415,8 +435,8 @@ impl Validator {
 
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap validator
-        if let Some(entrypoint_info) = entrypoint_info_option {
-            cluster_info.set_entrypoint(entrypoint_info.clone());
+        if let Some(cluster_entrypoint) = cluster_entrypoint {
+            cluster_info.set_entrypoint(cluster_entrypoint.clone());
         }
 
         let (snapshot_packager_service, snapshot_package_sender) =
@@ -1030,7 +1050,6 @@ impl TestValidator {
             &voting_keypair.pubkey(),
             vec![Arc::new(voting_keypair)],
             None,
-            true,
             &config,
         );
         discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
@@ -1199,7 +1218,6 @@ mod tests {
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
             Some(&leader_node.info),
-            true,
             &config,
         );
         validator.close().unwrap();
@@ -1274,7 +1292,6 @@ mod tests {
                     &vote_account_keypair.pubkey(),
                     vec![Arc::new(vote_account_keypair)],
                     Some(&leader_node.info),
-                    true,
                     &config,
                 )
             })

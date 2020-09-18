@@ -217,7 +217,6 @@ impl LocalCluster {
             &leader_vote_keypair.pubkey(),
             vec![leader_vote_keypair.clone()],
             None,
-            true,
             &leader_config,
         );
 
@@ -365,7 +364,6 @@ impl LocalCluster {
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
             Some(&self.entry_point_info),
-            true,
             &config,
         );
 
@@ -648,7 +646,6 @@ impl Cluster for LocalCluster {
             &validator_info.voting_keypair.pubkey(),
             vec![validator_info.voting_keypair.clone()],
             entry_point_info,
-            true,
             &cluster_validator_info.config,
         );
 
