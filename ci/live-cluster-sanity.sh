@@ -4,7 +4,6 @@ cd "$(dirname "$0")/.."
 
 source ci/_
 source ci/rust-version.sh stable
-source ci/upload-ci-artifact.sh
 
 escaped_branch=$(echo "$BUILDKITE_BRANCH" | tr -c "[:alnum:]" - | sed -r "s#(^-*|-*head-*|-*$)##g")
 instance_prefix="testnet-live-sanity-$escaped_branch"
@@ -18,8 +17,6 @@ on_trap() {
   if [[ -z $instance_deleted ]]; then
     (
       set +e
-      upload-ci-artifact cluster-sanity/testnet-validator.log
-      upload-ci-artifact cluster-sanity/mainnet-beta-validator.log
       _ ./net/gce.sh delete -p "$instance_prefix"
     )
   fi
@@ -41,7 +38,7 @@ test_with_live_cluster() {
   ./net/ssh.sh "$instance_ip" rm -rf cluster-sanity
   ./net/ssh.sh "$instance_ip" mkdir cluster-sanity
 
-  validator_log="cluster-sanity/$cluster_label-validator.log"
+  validator_log="$cluster_label-validator.log"
   (./net/ssh.sh "$instance_ip" -Llocalhost:18899:localhost:18899 ./solana-validator \
     --no-untrusted-rpc \
     --ledger cluster-sanity/ledger \
@@ -121,8 +118,6 @@ test_with_live_cluster() {
   (sleep 3 && kill "$tail_pid") &
   kill_pid=$!
   wait "$ssh_pid" "$tail_pid" "$kill_pid"
-
-  upload-ci-artifact "$validator_log"
 }
 
 # UPDATE docs/src/clusters.md TOO!!
