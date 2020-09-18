@@ -6,6 +6,7 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
+import { Slot } from "components/common/Slot";
 
 export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -70,7 +71,9 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
       detailsList.push(
         <tr key={signature}>
-          <td className="w-1 text-monospace">{slot.toLocaleString("en-US")}</td>
+          <td className="w-1">
+            <Slot slot={slot} />
+          </td>
 
           <td>
             <span className={`badge badge-soft-${statusClass}`}>
