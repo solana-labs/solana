@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import {
   TransactionSignature,
   Connection,
@@ -9,6 +8,7 @@ import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
+import { reportError } from "utils/sentry";
 export { useTransactionDetails } from "./details";
 
 export type Confirmations = number | "max";
@@ -80,9 +80,7 @@ export async function fetchTransactionStatus(
         blockTime = await connection.getBlockTime(value.slot);
       } catch (error) {
         if (cluster === Cluster.MainnetBeta) {
-          Sentry.captureException(error, {
-            tags: { slot: `${value.slot}` },
-          });
+          reportError(error, { slot: `${value.slot}` });
         }
       }
       let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
@@ -105,7 +103,7 @@ export async function fetchTransactionStatus(
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+      reportError(error, { url });
     }
     fetchStatus = FetchStatus.FetchFailed;
   }

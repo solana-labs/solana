@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import { coerce } from "superstruct";
 import {
   SignatureResult,
@@ -19,6 +18,7 @@ import {
   useFetchAccountInfo,
 } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
+import { reportError } from "utils/sentry";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -36,10 +36,8 @@ export function TokenDetailsCard(props: DetailsProps) {
     const coerced = coerce(info, IX_STRUCTS[type] as any);
     return <TokenInstruction title={title} info={coerced} {...props} />;
   } catch (err) {
-    Sentry.captureException(err, {
-      tags: {
-        signature: props.tx.signatures[0],
-      },
+    reportError(err, {
+      signature: props.tx.signatures[0],
     });
     return <UnknownDetailsCard {...props} />;
   }

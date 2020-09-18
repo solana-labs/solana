@@ -1,5 +1,4 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
 import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
@@ -15,6 +14,7 @@ import {
 } from "validators/accounts/token";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
+import { reportError } from "utils/sentry";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -117,9 +117,7 @@ async function fetchAccountInfo(
             parsed,
           };
         } catch (err) {
-          Sentry.captureException(err, {
-            tags: { url, address: pubkey.toBase58() },
-          });
+          reportError(err, { url, address: pubkey.toBase58() });
           // TODO store error state in Account info
         }
       } else if ("parsed" in result.data) {
@@ -133,9 +131,7 @@ async function fetchAccountInfo(
               parsed,
             };
           } catch (err) {
-            Sentry.captureException(err, {
-              tags: { url, address: pubkey.toBase58() },
-            });
+            reportError(err, { url, address: pubkey.toBase58() });
             // TODO store error state in Account info
           }
         }
@@ -152,7 +148,7 @@ async function fetchAccountInfo(
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+      reportError(error, { url });
     }
     fetchStatus = FetchStatus.FetchFailed;
   }
@@ -200,9 +196,7 @@ export function useMintAccountInfo(
 
     return coerce(data.parsed.info, MintAccountInfo);
   } catch (err) {
-    Sentry.captureException(err, {
-      tags: { address },
-    });
+    reportError(err, { address });
   }
 }
 
@@ -221,9 +215,7 @@ export function useTokenAccountInfo(
 
     return coerce(data.parsed.info, TokenAccountInfo);
   } catch (err) {
-    Sentry.captureException(err, {
-      tags: { address },
-    });
+    reportError(err, { address });
   }
 }
 
