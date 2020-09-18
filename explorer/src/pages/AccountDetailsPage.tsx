@@ -26,7 +26,8 @@ import { SysvarAccountSection } from "components/account/SysvarAccountSection";
 import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
-import { ConfigAccountCard } from "components/account/ConfigAccountCard";
+import { ConfigAccountSection } from "components/account/ConfigAccountSection";
+import { KeysCard } from "components/account/KeysCard";
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -162,6 +163,16 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       title: "Stake History",
       path: "/stake-history",
     });
+  } else if (
+    data &&
+    data.program === "config" &&
+    data.parsed.type === "validatorInfo"
+  ) {
+    tabs.unshift({
+      slug: "public-keys",
+      title: "Public Keys",
+      path: "/public-keys",
+    });
   } else if (!data || (data && data.program !== "sysvar")) {
     tabs.push({
       slug: "tokens",
@@ -217,7 +228,9 @@ function InfoSection({ account }: { account: Account }) {
       <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
     );
   } else if (data && data.program === "config") {
-    return <ConfigAccountCard account={account} configAccount={data.parsed} />;
+    return (
+      <ConfigAccountSection account={account} configAccount={data.parsed} />
+    );
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -236,7 +249,9 @@ type MoreTabs =
   | "votes"
   | "hashes"
   | "stake-history"
-  | "blockhashes";
+  | "blockhashes"
+  | "public-keys";
+
 function MoreSection({
   account,
   tab,
@@ -281,6 +296,11 @@ function MoreSection({
       {tab === "votes" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
+      {tab === "public-keys" &&
+        data?.program === "config" &&
+        data.parsed.type === "validatorInfo" && (
+          <KeysCard configAccount={data.parsed} />
+        )}
       {tab === "hashes" &&
         data?.program === "sysvar" &&
         data.parsed.type === "slotHashes" && (

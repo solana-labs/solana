@@ -160,7 +160,6 @@ function SysvarAccountSlotHistory({
 
 function SysvarAccountStakeHistory({
   account,
-  sysvarAccount,
 }: {
   account: Account;
   sysvarAccount: SysvarAccount;

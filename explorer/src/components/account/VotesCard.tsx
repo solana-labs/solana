@@ -23,9 +23,9 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
             </thead>
             <tbody className="list">
               {voteAccount.info.votes.length > 0 &&
-                voteAccount.info.votes.map((vote: Vote, index) => {
-                  return renderAccountRow(vote, index);
-                })}
+                voteAccount.info.votes.map((vote: Vote, index) =>
+                  renderAccountRow(vote, index)
+                )}
             </tbody>
           </table>
         </div>
