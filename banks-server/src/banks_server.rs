@@ -25,7 +25,6 @@ use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
     sync::{
-        atomic::AtomicBool,
         mpsc::{channel, Receiver, Sender},
         Arc, RwLock,
     },
@@ -250,14 +249,8 @@ pub async fn start_tcp_server(
         // the generated Banks trait.
         .map(move |chan| {
             let (sender, receiver) = channel();
-            let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
 
-            SendTransactionService::new(
-                tpu_addr,
-                &bank_forks,
-                &exit_send_transaction_service,
-                receiver,
-            );
+            SendTransactionService::new(tpu_addr, &bank_forks, receiver);
 
             let server =
                 BanksServer::new(bank_forks.clone(), block_commitment_cache.clone(), sender);

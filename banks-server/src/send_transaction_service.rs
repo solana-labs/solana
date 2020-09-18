@@ -1,3 +1,4 @@
+// TODO: Merge this implementation with the one at `core/src/send_transaction_service.rs`
 use log::*;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
@@ -6,8 +7,7 @@ use std::{
     collections::HashMap,
     net::{SocketAddr, UdpSocket},
     sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
+        mpsc::{Receiver, RecvTimeoutError},
         Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
@@ -50,10 +50,9 @@ impl SendTransactionService {
     pub fn new(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
-        exit: &Arc<AtomicBool>,
         receiver: Receiver<TransactionInfo>,
     ) -> Self {
-        let thread = Self::retry_thread(receiver, bank_forks.clone(), tpu_address, exit.clone());
+        let thread = Self::retry_thread(receiver, bank_forks.clone(), tpu_address);
         Self { thread }
     }
 
@@ -61,7 +60,6 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         tpu_address: SocketAddr,
-        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut transactions = HashMap::new();
@@ -70,20 +68,20 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-svc".to_string())
             .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                if let Ok(transaction_info) = receiver.recv_timeout(Duration::from_secs(1)) {
-                    Self::send_transaction(
-                        &send_socket,
-                        &tpu_address,
-                        &transaction_info.wire_transaction,
-                    );
-                    if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
-                        transactions.insert(transaction_info.signature, transaction_info);
-                    } else {
-                        datapoint_warn!("send_transaction_service-queue-overflow");
+                match receiver.recv_timeout(Duration::from_secs(1)) {
+                    Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Ok(transaction_info) => {
+                        Self::send_transaction(
+                            &send_socket,
+                            &tpu_address,
+                            &transaction_info.wire_transaction,
+                        );
+                        if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
+                            transactions.insert(transaction_info.signature, transaction_info);
+                        } else {
+                            datapoint_warn!("send_transaction_service-queue-overflow");
+                        }
                     }
                 }
 
@@ -193,13 +191,12 @@ mod test {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let bank = Bank::default();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let exit = Arc::new(AtomicBool::new(false));
-        let (_sender, receiver) = channel();
+        let (sender, receiver) = channel();
 
         let send_tranaction_service =
-            SendTransactionService::new(tpu_address, &bank_forks, &exit, receiver);
+            SendTransactionService::new(tpu_address, &bank_forks, receiver);
 
-        exit.store(true, Ordering::Relaxed);
+        drop(sender);
         send_tranaction_service.join().unwrap();
     }
 
