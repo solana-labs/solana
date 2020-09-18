@@ -612,8 +612,8 @@ made to exend the `preBalance` and `postBalance` transaction status metadata
 fields to include SPL Token balance transfers.
 
 ### Withdrawing
-The withdraw address a user provides must point to an initialized SPL Token account
-of the correct mint. Before executing a withdraw [transfer](#token-transfers),
+The withdrawal address a user provides must point to an initialized SPL Token account
+of the correct mint. Before executing a withdrawal [transfer](#token-transfers),
 it is recommended that the exchange check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals)
 as well as query the account to verify its existence and that it belongs to the
