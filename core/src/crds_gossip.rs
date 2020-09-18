@@ -10,6 +10,7 @@ use crate::{
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
     crds_value::{CrdsValue, CrdsValueLabel},
 };
+use rayon::ThreadPool;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 
@@ -134,12 +135,14 @@ impl CrdsGossip {
     /// generate a random request
     pub fn new_pull_request(
         &self,
+        thread_pool: &ThreadPool,
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
         self.pull.new_pull_request(
+            thread_pool,
             &self.crds,
             &self.id,
             self.shred_version,
