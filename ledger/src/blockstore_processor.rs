@@ -24,6 +24,7 @@ use solana_runtime::{
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
+    account::Account,
     clock::{Slot, MAX_PROCESSING_AGE},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -35,7 +36,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     path::PathBuf,
     result,
     sync::Arc,
@@ -882,7 +883,8 @@ fn load_frozen_forks(
         // for newer cluster confirmed roots
         let new_root_bank = {
             if *root == max_root {
-                supermajority_root_from_bank(&bank).and_then(|supermajority_root| {
+                supermajority_root_from_vote_accounts(bank.slot(), bank.total_epoch_stake(), bank.vote_accounts()
+                .into_iter()).and_then(|supermajority_root| {
                     if supermajority_root > *root {
                         // If there's a cluster confirmed root greater than our last
                         // replayed root, then beccause the cluster confirmed root should
@@ -949,23 +951,36 @@ fn load_frozen_forks(
     Ok(initial_forks.values().cloned().collect::<Vec<_>>())
 }
 
-fn supermajority_root(roots: &BTreeMap<Slot, u64>, total_epoch_stake: u64) -> Option<Slot> {
+// `roots` is sorted largest to smallest by root slot
+fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<Slot> {
+    if roots.is_empty() {
+        return None;
+    }
+
     // Find latest root
     let mut total = 0;
-    for (root, stake) in roots.iter().rev() {
+    let mut prev_root = roots[0].0;
+    for (root, stake) in roots.iter() {
+        assert!(*root <= prev_root);
         total += stake;
         if total as f64 / total_epoch_stake as f64 > VOTE_THRESHOLD_SIZE {
             return Some(*root);
         }
+        prev_root = *root;
     }
 
     None
 }
 
-fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
-    let roots: BTreeMap<Slot, u64> = bank
-        .vote_accounts()
-        .into_iter()
+fn supermajority_root_from_vote_accounts<I>(
+    bank_slot: Slot,
+    total_epoch_stake: u64,
+    vote_accounts_iter: I,
+) -> Option<Slot>
+where
+    I: Iterator<Item = (Pubkey, (u64, Account))>,
+{
+    let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts_iter
         .filter_map(|(key, (stake, account))| {
             if stake == 0 {
                 return None;
@@ -975,8 +990,7 @@ fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
             if vote_state.is_none() {
                 warn!(
                     "Unable to get vote_state from account {} in bank: {}",
-                    key,
-                    bank.slot()
+                    key, bank_slot
                 );
                 return None;
             }
@@ -988,10 +1002,11 @@ fn supermajority_root_from_bank(bank: &Bank) -> Option<Slot> {
         })
         .collect();
 
-    let total_epoch_stake = bank.total_epoch_stake();
+    // Sort from greatest to smallest slot
+    roots_stakes.sort_unstable_by(|a, b| a.0.cmp(&b.0).reverse());
 
     // Find latest root
-    supermajority_root(&roots, total_epoch_stake)
+    supermajority_root(&roots_stakes, total_epoch_stake)
 }
 
 // Processes and replays the contents of a single slot, returns Error
@@ -1104,7 +1119,6 @@ pub mod tests {
     use solana_runtime::genesis_utils::{
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
-    use solana_sdk::account::Account;
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
         hash::Hash,
@@ -1114,7 +1128,11 @@ pub mod tests {
         system_transaction,
         transaction::{Transaction, TransactionError},
     };
-    use solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction};
+    use solana_vote_program::{
+        self,
+        vote_state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
+        vote_transaction,
+    };
     use std::{collections::BTreeSet, sync::RwLock};
     use trees::tr;
 
@@ -3126,6 +3144,57 @@ pub mod tests {
     fn test_process_blockstore_with_supermajority_root() {
         run_test_process_blockstore_with_supermajority_root(None);
         run_test_process_blockstore_with_supermajority_root(Some(1))
+    }
+
+    #[test]
+    fn test_supermajority_root_from_vote_accounts() {
+        let convert_to_vote_accounts =
+            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, Account))> {
+                roots_stakes
+                    .into_iter()
+                    .map(|(root, stake)| {
+                        let mut vote_state = VoteState::default();
+                        vote_state.root_slot = Some(root);
+                        let mut vote_account =
+                            Account::new(1, VoteState::size_of(), &solana_vote_program::id());
+                        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+                        VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
+                        (Pubkey::new_rand(), (stake, vote_account))
+                    })
+                    .collect_vec()
+            };
+
+        let total_stake = 10;
+        let slot = 100;
+
+        // Supermajority root should be None
+        assert!(
+            supermajority_root_from_vote_accounts(slot, total_stake, std::iter::empty()).is_none()
+        );
+
+        // Supermajority root should be None
+        let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 1)];
+        let accounts = convert_to_vote_accounts(roots_stakes);
+        assert!(
+            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter())
+                .is_none()
+        );
+
+        // Supermajority root should be 4, has 7/10 of the stake
+        let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 5)];
+        let accounts = convert_to_vote_accounts(roots_stakes);
+        assert_eq!(
+            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter()).unwrap(),
+            4
+        );
+
+        // Supermajority root should be 8, it has 7/10 of the stake
+        let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 6)];
+        let accounts = convert_to_vote_accounts(roots_stakes);
+        assert_eq!(
+            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter()).unwrap(),
+            8
+        );
     }
 
     #[test]
