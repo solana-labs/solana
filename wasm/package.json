@@ -26,6 +26,10 @@
   "files": [
     "./dist"
   ],
+  "engines": {
+    "node": ">=12.0.0",
+    "npm": ">=6.0.0"
+  },
   "scripts": {
     "clean": "rimraf ./dist",
     "build": "rollup -c",
@@ -36,9 +40,12 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "glob": "^7.1.6",
+    "rimraf": "^3.0.2",
     "rollup": "^2.27.1",
     "rollup-plugin-typescript2": "^0.27.2",
     "rollup-pluginutils": "^2.8.2",
+    "toml": "^3.0.0",
     "tslib": "^2.0.1",
     "typescript": "^4.0.2"
   }
