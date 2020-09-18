@@ -526,15 +526,15 @@ spl-token-cli 2.0.1
 
 ### Account Creation
 
-SPL Token accounts impose additional requirements as opposed to native System
-Program accounts.
+SPL Token accounts carry additional requirements that native System
+Program accounts do not:
 
 1. SPL Token accounts are not implicitly created, so must be created explicitly
 before an SPL Token balance can be deposited
 1. SPL Token accounts must remain [rent-exempt](https://docs.solana.com/apps/rent#rent-exemption)
 for the duration of their existence and therefore require a small amount of
 native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-this amount is 2,039,280 Lamports (0.00203928 SOL).
+this amount is 0.00203928 SOL (2,039,280 lamports).
 
 #### Command Line
 To create an SPL Token account, for the given mint at a random address and owned
@@ -567,7 +567,7 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 ### Token Transfers
 
-For SPL Token transfers to succeed a few prerequisite conditions must be met
+For SPL Token transfers to succeed, a few prerequisite conditions must be met:
 1. The recipient account must exist before the transfer is executed. As described
 in [account creation](#account-creation), SPL Token accounts are *not* explicitly
 created.
@@ -591,8 +591,8 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 
 ### Deposits
 Since each `(user, mint)` pair requires a separate account on chain, it is
-recommended that batches of token accounts be created in advance and assigned
-to users as requested. These accounts should all be owned by exchange-controlled
+recommended that an exchange create batches of token accounts in advance and assign them
+to users on request. These accounts should all be owned by exchange-controlled
 keypairs.
 
 Monitoring for deposits should follow the [block polling](#poll-for-blocks) method
@@ -619,8 +619,8 @@ correct mint.
 
 #### Freeze Authority
 For regulatory compliance reasons, an SPL Token issuing entity may optionally
-choose to impose "Freeze Authority" over all accounts created in association with
- it.  This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
+choose to hold "Freeze Authority" over all accounts created in association with
+ its mint.  This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
 the assets in a given account at will, rendering the account unusable until thawed.
 If this feature is in use, the freeze authority's pubkey will be registered in
 the SPL Token's mint account.
