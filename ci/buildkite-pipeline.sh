@@ -174,8 +174,8 @@ all_test_steps() {
       - "queue=cuda"
   - command: "ci/live-cluster-sanity.sh"
     name: "live-cluster-sanity"
-    timeout_in_minutes: 40
-    artifact_paths: "log-*.txt"
+    timeout_in_minutes: 20
+    artifact_paths: "*-validator.log"
     agents:
       - "queue=gce-deploy"
 EOF
