@@ -37,8 +37,8 @@ solana config set --url https://devnet.solana.com
 
 ```bash
 $ solana-validator \
-    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --entrypoint entrypoint.devnet.solana.com:8001 \
+    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --expected-genesis-hash Ap36zrBt2jLWpwUjaF48hRULVgmvSE3ViFxiQgjZX2XC \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
