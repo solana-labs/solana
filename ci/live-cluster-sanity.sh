@@ -30,8 +30,8 @@ echo 500000 | ./net/ssh.sh "$instance_ip" sudo tee /proc/sys/vm/max_map_count > 
 on_error() {
   status=$1
   set +e
-  kill $ssh_pid $tail_pid
-  wait $ssh_pid $tail_pid
+  kill "$ssh_pid" "$tail_pid"
+  wait "$ssh_pid" "$tail_pid"
   echo "Error: validator failed to $status"
   exit 1
 }
