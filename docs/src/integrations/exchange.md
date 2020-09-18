@@ -497,7 +497,7 @@ few differences which will be discussed in this section.
 ### Token Mints
 
 Each *type* of SPL Token is declared by creating a *mint* account.  This account
-stores metadata describing token features like the supply, number of decimals and
+stores metadata describing token features like the supply, number of decimals, and
 various authorities with control over the mint.  Each SPL Token account references
 its associated mint and may only interact with SPL Tokens of that type.
 
