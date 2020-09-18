@@ -1,0 +1,45 @@
+{
+  "name": "@solana/wasm",
+  "version": "0.0.0-development",
+  "description": "Solana Javascript API",
+  "keywords": [
+    "api",
+    "blockchain"
+  ],
+  "license": "MIT",
+  "author": "Solana Maintainers <maintainers@solana.com>",
+  "homepage": "https://solana.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solana-labs/solana-web3.js.git"
+  },
+  "bugs": {
+    "url": "http://github.com/solana-labs/solana-web3.js.git/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/solana-wasm.cjs.js",
+  "module": "dist/solana-wasm.esm.js",
+  "browser": "dist/solana-wasm.umd.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "./dist"
+  ],
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "build": "rollup -c",
+    "watch": "rollup -cw"
+  },
+  "jest": {
+    "testEnvironment": "./jest-environment"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "rollup": "^2.27.1",
+    "rollup-plugin-typescript2": "^0.27.2",
+    "rollup-pluginutils": "^2.8.2",
+    "tslib": "^2.0.1",
+    "typescript": "^4.0.2"
+  }
+}

@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "target": "es6",
+        "module": "ESNext",
+        "declaration": true,
+        "moduleResolution": "node",
+        "outDir": "./lib",
+        "allowJs": true,
+        "strict": true
+      },
+      "include": ["./ts"],
+      "exclude": ["node_modules", "**/__tests__/*", "lib", "src", "./Cargo.toml", "target"]
+  }
