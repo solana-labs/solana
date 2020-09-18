@@ -123,6 +123,7 @@ pub struct Blockstore {
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
+    _blocktime_cf: LedgerColumn<cf::Blocktime>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -278,6 +279,9 @@ impl Blockstore {
         let address_signatures_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
+        // This column is created (but never populated) in order to maintain compatibility with
+        // newer versions of Blockstore.
+        let _blocktime_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -322,6 +326,7 @@ impl Blockstore {
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
+            _blocktime_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
