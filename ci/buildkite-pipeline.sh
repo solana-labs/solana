@@ -210,8 +210,8 @@ pull_or_push_steps() {
 
   # Check for any .sh file changes
   if affects .sh$; then
-    #command_step shellcheck "ci/shellcheck.sh" 5
-    #wait_step
+    command_step shellcheck "ci/shellcheck.sh" 5
+    wait_step
     true
   fi
 
