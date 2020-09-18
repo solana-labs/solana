@@ -27,6 +27,24 @@ _ cargo +"$rust_stable" build --bins --release
 _ ./net/scp.sh ./target/release/solana-validator "$instance_ip:."
 echo 500000 | ./net/ssh.sh "$instance_ip" sudo tee /proc/sys/vm/max_map_count > /dev/null
 
+on_error() {
+  status=$1
+  set +e
+  kill $ssh_pid $tail_pid
+  wait $ssh_pid $tail_pid
+  echo "Error: validator failed to $status"
+  exit 1
+}
+
+show_log() {
+  if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
+    echo "##### new log:"
+    timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
+    truncate --size 0 cluster-sanity/log-tail
+    echo
+  fi
+}
+
 test_with_live_cluster() {
   cluster_label="$1"
   shift
@@ -58,21 +76,12 @@ test_with_live_cluster() {
   while ! ./net/ssh.sh "$instance_ip" test -f cluster-sanity/init-completed &> /dev/null ; do
     attempts=$((attempts - 1))
     if [[ (($attempts == 0)) || ! -d "/proc/$ssh_pid" ]]; then
-       set +e
-       kill $ssh_pid $tail_pid
-       wait $ssh_pid $tail_pid
-       echo "Error: validator failed to boot"
-       exit 1
+      on_error "start"
     fi
 
     sleep 3
     echo "##### validator is starting... (until timeout: $attempts) #####"
-    if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
-      echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
-      truncate --size 0 cluster-sanity/log-tail
-      echo
-    fi
+    show_log
   done
 
   snapshot_slot=$(./net/ssh.sh "$instance_ip" ls -t cluster-sanity/ledger/snapshot* |
@@ -89,22 +98,13 @@ test_with_live_cluster() {
   while [[ $current_root -le $goal_root ]]; do
     attempts=$((attempts - 1))
     if [[ (($attempts == 0)) || ! -d "/proc/$ssh_pid" ]]; then
-       set +e
-       kill $ssh_pid $tail_pid
-       wait $ssh_pid $tail_pid
-       echo "Error: validator failed to boot"
-       exit 1
+      on_error "root new slots"
     fi
 
     sleep 3
     current_root=$(./target/release/solana --url http://localhost:18899 slot --commitment root)
     echo "##### validator is running ($current_root/$goal_root)... (until timeout: $attempts) #####"
-    if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
-      echo "##### new log:"
-      timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
-      truncate --size 0 cluster-sanity/log-tail
-      echo
-    fi
+    show_log
   done
 
   _ curl \
