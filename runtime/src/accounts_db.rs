@@ -1340,13 +1340,16 @@ impl AccountsDB {
     }
 
     pub fn include_owner_in_hash(slot: Slot, operating_mode: OperatingMode) -> bool {
-        // Account hashing will be updated to include owner at this slot on the devnet.
-        // For testnet, it fully transitioned already thanks to eager rent collection,
-        // so, this check is irrelevant, strictly speaking.
+        // When ClusterType::Devnet (= OperatingMode::Development here) was moved to
+        // stable release channel, it was done without hashing account.owner.
+        // That's because devnet's slot was lower than 5_800_000 and the release
+        // channel's gating lacked ClusterType at the time...
+        //
+        // For testnet and mainnet-beta, they fully transitioned already thanks to
+        // eager rent collection. So, this check is irrelevant, strictly speaking.
         match operating_mode {
             OperatingMode::Development => slot >= 5_800_000,
-            OperatingMode::Stable => true,
-            OperatingMode::Preview => true,
+            _ => true,
         }
     }
 
