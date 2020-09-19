@@ -20,6 +20,13 @@ impl<'a> AncestorIterator<'a> {
             blockstore,
         }
     }
+
+    pub fn new_inclusive(start_slot: Slot, blockstore: &'a Blockstore) -> Self {
+        Self {
+            current: blockstore.meta(start_slot).unwrap().map(|_| start_slot),
+            blockstore,
+        }
+    }
 }
 impl<'a> Iterator for AncestorIterator<'a> {
     type Item = Slot;
@@ -109,6 +116,35 @@ mod tests {
         assert_eq!(
             AncestorIterator::new(3, &blockstore).collect::<Vec<Slot>>(),
             vec![2, 1, 0]
+        );
+    }
+
+    #[test]
+    fn test_ancestor_iterator_inclusive() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+        let (shreds, _) = make_slot_entries(0, 0, 42);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(1, 0, 42);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let (shreds, _) = make_slot_entries(2, 1, 42);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        assert_eq!(
+            AncestorIterator::new(2, &blockstore).collect::<Vec<Slot>>(),
+            vec![1, 0]
+        );
+        // existing start_slot
+        assert_eq!(
+            AncestorIterator::new_inclusive(2, &blockstore).collect::<Vec<Slot>>(),
+            vec![2, 1, 0]
+        );
+
+        // non-existing start_slot
+        assert_eq!(
+            AncestorIterator::new_inclusive(3, &blockstore).collect::<Vec<Slot>>(),
+            vec![] as Vec<Slot>
         );
     }
 }

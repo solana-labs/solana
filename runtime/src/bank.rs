@@ -913,6 +913,10 @@ impl Bank {
         });
     }
 
+    pub fn get_slot_history(&self) -> SlotHistory {
+        SlotHistory::from_account(&self.get_account(&sysvar::slot_history::id()).unwrap()).unwrap()
+    }
+
     fn update_epoch_stakes(&mut self, leader_schedule_epoch: Epoch) {
         // update epoch_stakes cache
         //  if my parent didn't populate for this staker's epoch, we've

@@ -6,6 +6,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
+    consensus::{reconcile_blockstore_roots_with_tower, Tower, TowerError},
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -95,6 +96,7 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    pub require_tower: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -125,6 +127,7 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
+            require_tower: false,
         }
     }
 }
@@ -253,7 +256,8 @@ impl Validator {
                 cache_block_time_sender,
                 cache_block_time_service,
             },
-        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
+            tower,
+        ) = new_banks_from_ledger(&id, vote_account, config, ledger_path, poh_verify, &exit);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -475,6 +479,7 @@ impl Validator {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            tower,
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
@@ -613,8 +618,81 @@ impl Validator {
     }
 }
 
+fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
+    if let Some(account) = &bank.get_account(vote_account) {
+        if let Some(vote_state) = VoteState::from(&account) {
+            return !vote_state.votes.is_empty();
+        }
+    }
+    false
+}
+
+fn post_process_restored_tower(
+    restored_tower: crate::consensus::Result<Tower>,
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
+    config: &ValidatorConfig,
+    ledger_path: &Path,
+    bank_forks: &BankForks,
+) -> Tower {
+    restored_tower
+        .and_then(|tower| {
+            let root_bank = bank_forks.root_bank();
+            let slot_history = root_bank.get_slot_history();
+            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+        })
+        .unwrap_or_else(|err| {
+            let voting_has_been_active =
+                active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+            let saved_tower_is_missing = if let TowerError::IOError(io_err) = &err {
+                io_err.kind() == std::io::ErrorKind::NotFound
+            } else {
+                false
+            };
+            if !saved_tower_is_missing {
+                datapoint_error!(
+                    "tower_error",
+                    (
+                        "error",
+                        format!("Unable to restore tower: {}", err),
+                        String
+                    ),
+                );
+            }
+            if config.require_tower && voting_has_been_active {
+                error!("Requested mandatory tower restore failed: {}", err);
+                error!(
+                    "And there is an existing vote_account containing actual votes. \
+                       Aborting due to possible conflicting duplicate votes"
+                );
+                process::exit(1);
+            }
+            if saved_tower_is_missing && !voting_has_been_active {
+                // Currently, don't protect against spoofed snapshots with no tower at all
+                info!(
+                    "Ignoring expected failed tower restore because this is the initial \
+                      validator start with the vote account..."
+                );
+            } else {
+                error!(
+                    "Rebuilding a new tower from the latest vote account due to failed tower restore: {}",
+                    err
+                );
+            }
+
+            Tower::new_from_bankforks(
+                &bank_forks,
+                &ledger_path,
+                &validator_identity,
+                &vote_account,
+            )
+        })
+}
+
 #[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
     config: &ValidatorConfig,
     ledger_path: &Path,
     poh_verify: bool,
@@ -628,6 +706,7 @@ fn new_banks_from_ledger(
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
     TransactionHistoryServices,
+    Tower,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
@@ -658,6 +737,14 @@ fn new_banks_from_ledger(
     } = Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
         .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
+
+    let restored_tower = Tower::restore(ledger_path, &validator_identity);
+    if let Ok(tower) = &restored_tower {
+        reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
+            error!("Failed to reconcile blockstore with tower: {:?}", err);
+            std::process::exit(1);
+        });
+    }
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
@@ -690,6 +777,17 @@ fn new_banks_from_ledger(
         process::exit(1);
     });
 
+    let tower = post_process_restored_tower(
+        restored_tower,
+        &validator_identity,
+        &vote_account,
+        &config,
+        &ledger_path,
+        &bank_forks,
+    );
+
+    info!("Tower state: {:?}", tower);
+
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
@@ -704,6 +802,7 @@ fn new_banks_from_ledger(
         leader_schedule_cache,
         snapshot_hash,
         transaction_history_services,
+        tower,
     )
 }
 
