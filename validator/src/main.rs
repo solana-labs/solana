@@ -1130,7 +1130,7 @@ pub fn main() {
             Arg::with_name("require_tower")
                 .long("require-tower")
                 .takes_value(false)
-                .hidden(true)
+                .help("Refuse to start if saved tower state is not found"),
         )
         .arg(
             Arg::with_name("expected_genesis_hash")
@@ -1424,6 +1424,7 @@ pub fn main() {
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
+        require_tower: matches.is_present("require_tower"),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         cuda: matches.is_present("cuda"),
         expected_genesis_hash: matches

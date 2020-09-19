@@ -10,6 +10,7 @@ use crate::{
     cluster_info_vote_listener::{VerifiedVoteReceiver, VoteTracker},
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
+    consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::PohRecorder,
@@ -91,6 +92,7 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
@@ -206,6 +208,7 @@ impl Tvu {
             cluster_info.clone(),
             ledger_signal_receiver,
             poh_recorder.clone(),
+            tower,
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
@@ -305,6 +308,7 @@ pub mod tests {
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let tower = Tower::new_with_key(&target1_keypair.pubkey());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             vec![Arc::new(vote_keypair)],
@@ -327,6 +331,7 @@ pub mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             &poh_recorder,
+            tower,
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
