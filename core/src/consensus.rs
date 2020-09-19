@@ -2704,6 +2704,7 @@ pub mod test {
     }
 
     #[test]
+    #[ignore]
     #[should_panic(expected = "at least 1 parent slot must be found")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_parent() {
         solana_logger::setup();
