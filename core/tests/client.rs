@@ -1,7 +1,7 @@
 use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
 use solana_core::{
     rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
-    validator::TestValidator,
+    test_validator::TestValidator,
 };
 use solana_runtime::{
     bank::Bank,
