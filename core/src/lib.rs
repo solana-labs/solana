@@ -67,6 +67,7 @@ pub mod sigverify;
 pub mod sigverify_shreds;
 pub mod sigverify_stage;
 pub mod snapshot_packager_service;
+pub mod test_validator;
 pub mod tpu;
 pub mod transaction_status_service;
 pub mod tree_diff;
