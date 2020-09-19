@@ -26,6 +26,8 @@ trap on_trap INT TERM EXIT
 _ cargo +"$rust_stable" build --bins --release
 _ ./net/scp.sh ./target/release/solana-validator "$instance_ip:."
 echo 500000 | ./net/ssh.sh "$instance_ip" sudo tee /proc/sys/vm/max_map_count > /dev/null
+./net/ssh.sh "$instance_ip" mkdir deps
+./net/scp.sh ./target/release/deps/libsolana_bpf_loader_program.so "$instance_ip:./deps/"
 
 on_error() {
   status=$1
