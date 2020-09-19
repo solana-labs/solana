@@ -83,6 +83,7 @@ pub mod log;
 pub mod program;
 pub mod program_error;
 pub mod program_stubs;
+pub mod serialize_utils;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
