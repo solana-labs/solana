@@ -7743,25 +7743,25 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "A1pQjC4aGvK5iokQztbwHbeswkCzjkoebkSWc47ctRsK"
+                    "HrxvKJxPhzgXgoJ2Rg91acrXWki6SErJk1sfxfTDWsZt"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "J7NjxvfySQDqMNNJRUcWRvczjEv2TjHgEzJ6seehwPFN"
+                    "AemCVcpsULuA76fpDYzs74futtMQtNNiF1gz3VSVP4AS"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "8pfF9QbZxdW1SS51tF5XqjFyMipis5iai6KT2xCKgm66"
+                    "4ECxp4u4SRwn2w7YUj28nnADMx7kQ2gYRB7PA617eWu6"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "9D3YWZ2dpL1fgUo4JMGLfuDzsz64kVqpxiMFmqmGDK5F"
+                    "AeHGi2VWQ7gWh6KkMQjrhY1ZrLUedgMxfvPRR82dyg6L"
                 );
                 break;
             }
