@@ -1431,12 +1431,6 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
             prev_voted_slot
         );
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
-
-        std::fs::remove_file(Tower::get_filename(
-            &exited_validator_info.info.ledger_path,
-            &entry_point_id,
-        ))
-        .unwrap();
     }
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
@@ -1473,6 +1467,7 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
 #[serial]
 #[ignore]
 fn test_no_optimistic_confirmation_violation_with_tower() {
+    // rewrite this test scenario!
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
 
@@ -1597,7 +1592,7 @@ fn test_validator_saves_tower() {
     let validator_info = cluster.exit_node(&validator_id);
     let tower1 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower1: {:?}", tower1);
-    assert_eq!(tower1.root(), Some(0));
+    assert_eq!(tower1.root(), 0);
 
     // Restart the validator and wait for a new root
     cluster.restart_node(&validator_id, validator_info);
@@ -1622,7 +1617,7 @@ fn test_validator_saves_tower() {
     let validator_info = cluster.exit_node(&validator_id);
     let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower2: {:?}", tower2);
-    assert_eq!(tower2.root(), Some(last_replayed_root));
+    assert_eq!(tower2.root(), last_replayed_root);
     last_replayed_root = recent_slot;
 
     // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
@@ -1651,7 +1646,7 @@ fn test_validator_saves_tower() {
     let mut validator_info = cluster.exit_node(&validator_id);
     let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower3: {:?}", tower3);
-    assert!(tower3.root().unwrap() > last_replayed_root);
+    assert!(tower3.root() > last_replayed_root);
 
     // Remove the tower file entirely and allow the validator to start without a tower.  It will
     // rebuild tower from its vote account contents
@@ -1680,7 +1675,7 @@ fn test_validator_saves_tower() {
     let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower4: {:?}", tower4);
     // should tower4 advance 1 slot compared to tower3????
-    assert_eq!(tower4.root(), tower3.root().map(|s| s + 1));
+    assert_eq!(tower4.root(), tower3.root() + 1);
 }
 
 fn wait_for_next_snapshot(
