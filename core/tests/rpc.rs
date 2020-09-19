@@ -13,7 +13,7 @@ use solana_client::{
     rpc_response::{Response, RpcSignatureResult},
 };
 use solana_core::contact_info::ContactInfo;
-use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
+use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
     commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Signer,
     system_transaction, transaction::Transaction,
