@@ -23,6 +23,13 @@ sleep_if_positive() {
   fi
 }
 
+check_sanity() {
+  (
+    set -e
+    "$NET_SH" sanity
+  )
+}
+
 # Fetch new software and upload it to the bootstrap validator
 declare -g sw_version_args
 get_net_launch_software_version_launch_args "$UPGRADE_CHANNEL" "upgrade-release" sw_version_args
@@ -33,7 +40,7 @@ get_net_launch_software_version_launch_args "$UPGRADE_CHANNEL" "upgrade-release"
 sleep_if_positive "$UPGRADE_INITIAL_DELAY"
 
 if [[ "$UPGRADE_INITIAL_DELAY" -gt 0 ]]; then
-  "$NET_SH" sanity
+  check_sanity
 fi
 
 # Restart validators one by one
@@ -52,11 +59,11 @@ for i in "${!validatorIpList[@]}"; do
   # This could be replaced with something based on `solana catchup`
   sleep_if_positive "$UPGRADE_INTERVALIDATOR_DELAY"
 
-  "$NET_SH" sanity
+  check_sanity
 done
 
 sleep_if_positive "$UPGRADE_POST_TEST_DELAY"
 
 if [[ "$UPGRADE_POST_TEST_DELAY" -gt 0 ]]; then
-  "$NET_SH" sanity
+  check_sanity
 fi
