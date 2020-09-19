@@ -93,12 +93,8 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-<<<<<<< HEAD
-=======
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
-    pub require_tower: bool,
->>>>>>> 1a03afccb... validator/ cleanup
 }
 
 impl Default for ValidatorConfig {
@@ -129,12 +125,8 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
-<<<<<<< HEAD
-=======
             poh_verify: true,
             cuda: false,
-            require_tower: false,
->>>>>>> 1a03afccb... validator/ cleanup
         }
     }
 }
@@ -264,19 +256,7 @@ impl Validator {
                 rewards_recorder_sender,
                 rewards_recorder_service,
             },
-<<<<<<< HEAD
-        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
-=======
-            tower,
-        ) = new_banks_from_ledger(
-            &id,
-            vote_account,
-            config,
-            ledger_path,
-            config.poh_verify,
-            &exit,
-        );
->>>>>>> 1a03afccb... validator/ cleanup
+        ) = new_banks_from_ledger(config, ledger_path, config.poh_verify, &exit);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -865,102 +845,6 @@ fn wait_for_supermajority(
     false
 }
 
-<<<<<<< HEAD
-pub struct TestValidator {
-    pub server: Validator,
-    pub leader_data: ContactInfo,
-    pub alice: Keypair,
-    pub ledger_path: PathBuf,
-    pub genesis_hash: Hash,
-    pub vote_pubkey: Pubkey,
-}
-
-pub struct TestValidatorOptions {
-    pub fees: u64,
-    pub bootstrap_validator_lamports: u64,
-    pub mint_lamports: u64,
-}
-
-impl Default for TestValidatorOptions {
-    fn default() -> Self {
-        use solana_ledger::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
-        TestValidatorOptions {
-            fees: 0,
-            bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
-            mint_lamports: 1_000_000,
-        }
-    }
-}
-
-impl TestValidator {
-    pub fn run() -> Self {
-        Self::run_with_options(TestValidatorOptions::default())
-    }
-
-    pub fn run_with_options(options: TestValidatorOptions) -> Self {
-        use solana_ledger::genesis_utils::{
-            create_genesis_config_with_leader_ex, GenesisConfigInfo,
-        };
-        use solana_sdk::fee_calculator::FeeRateGovernor;
-
-        let TestValidatorOptions {
-            fees,
-            bootstrap_validator_lamports,
-            mint_lamports,
-        } = options;
-        let node_keypair = Arc::new(Keypair::new());
-        let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
-        let contact_info = node.info.clone();
-
-        let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            voting_keypair,
-        } = create_genesis_config_with_leader_ex(
-            mint_lamports,
-            &contact_info.id,
-            &Keypair::new(),
-            &Pubkey::new_rand(),
-            42,
-            bootstrap_validator_lamports,
-        );
-        genesis_config
-            .native_instruction_processors
-            .push(solana_budget_program!());
-        genesis_config.rent.lamports_per_byte_year = 1;
-        genesis_config.rent.exemption_threshold = 1.0;
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-
-        let config = ValidatorConfig {
-            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks)),
-            ..ValidatorConfig::default()
-        };
-        let vote_pubkey = voting_keypair.pubkey();
-        let node = Validator::new(
-            node,
-            &node_keypair,
-            &ledger_path,
-            &voting_keypair.pubkey(),
-            vec![Arc::new(voting_keypair)],
-            None,
-            &config,
-        );
-        discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
-        TestValidator {
-            server: node,
-            leader_data: contact_info,
-            alice: mint_keypair,
-            ledger_path,
-            genesis_hash: blockhash,
-            vote_pubkey,
-        }
-    }
-}
-
-=======
->>>>>>> 208dd1de3... Move TestValidator into its own module
 fn report_target_features() {
     warn!(
         "CUDA is {}abled",
