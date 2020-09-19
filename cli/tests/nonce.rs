@@ -11,7 +11,7 @@ use solana_cli::{
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::contact_info::ContactInfo;
-use solana_core::validator::{TestValidator, TestValidatorOptions};
+use solana_core::test_validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     commitment_config::CommitmentConfig,

@@ -6,7 +6,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     contact_info::ContactInfo,
-    gossip_service::{discover_cluster, GossipService},
+    gossip_service::GossipService,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     poh_service::PohService,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -30,7 +30,6 @@ use solana_ledger::{
     blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
-    create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -866,6 +865,7 @@ fn wait_for_supermajority(
     false
 }
 
+<<<<<<< HEAD
 pub struct TestValidator {
     pub server: Validator,
     pub leader_data: ContactInfo,
@@ -959,6 +959,8 @@ impl TestValidator {
     }
 }
 
+=======
+>>>>>>> 208dd1de3... Move TestValidator into its own module
 fn report_target_features() {
     warn!(
         "CUDA is {}abled",
@@ -1081,7 +1083,7 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::genesis_utils::create_genesis_config_with_leader;
+    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
     use std::fs::remove_dir_all;
 
     #[test]
