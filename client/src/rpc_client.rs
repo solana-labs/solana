@@ -15,7 +15,10 @@ use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
-use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount, UiAccountEncoding};
+use solana_account_decoder::{
+    parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
+    UiAccount, UiAccountData, UiAccountEncoding,
+};
 use solana_sdk::{
     account::Account,
     clock::{
@@ -720,6 +723,67 @@ impl RpcClient {
             )
         })?;
         Ok(hash)
+    }
+
+    pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
+        Ok(self
+            .get_token_account_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
+    }
+
+    pub fn get_token_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Option<UiTokenAccount>> {
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::JsonParsed),
+            commitment: Some(commitment_config),
+            data_slice: None,
+        };
+        let response = self.sender.send(
+            RpcRequest::GetAccountInfo,
+            json!([pubkey.to_string(), config]),
+        );
+
+        response
+            .map(|result_json| {
+                if result_json.is_null() {
+                    return Err(
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                    );
+                }
+                let Response {
+                    context,
+                    value: rpc_account,
+                } = serde_json::from_value::<Response<Option<UiAccount>>>(result_json)?;
+                trace!("Response account {:?} {:?}", pubkey, rpc_account);
+                let response = {
+                    if let Some(rpc_account) = rpc_account {
+                        if let UiAccountData::Json(account_data) = rpc_account.data {
+                            let token_account_type: TokenAccountType =
+                                serde_json::from_value(account_data.parsed)?;
+                            if let TokenAccountType::Account(token_account) = token_account_type {
+                                return Ok(Response {
+                                    context,
+                                    value: Some(token_account),
+                                });
+                            }
+                        }
+                    }
+                    Err(Into::<ClientError>::into(RpcError::ForUser(format!(
+                        "Account could not be parsed as token account: pubkey={}",
+                        pubkey
+                    ))))
+                };
+                response?
+            })
+            .map_err(|err| {
+                Into::<ClientError>::into(RpcError::ForUser(format!(
+                    "AccountNotFound: pubkey={}: {}",
+                    pubkey, err
+                )))
+            })?
     }
 
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<UiTokenAmount> {
