@@ -129,14 +129,4 @@ test_with_live_cluster "mainnet-beta" \
     --expected-shred-version 64864 \
     # for your pain-less copy-paste
 
-# UPDATE docs/src/clusters.md TOO!!
-test_with_live_cluster "testnet" \
-    --entrypoint entrypoint.testnet.solana.com:8001 \
-    --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --trusted-validator ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T \
-    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
-    --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
-    --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    # for your pain-less copy-paste
-
 ./net/gce.sh delete -p "$instance_prefix" && instance_deleted=yes
