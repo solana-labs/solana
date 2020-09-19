@@ -1339,11 +1339,15 @@ impl AccountsDB {
         hasher.result()
     }
 
-    pub fn include_owner_in_hash(slot: Slot) -> bool {
+    pub fn include_owner_in_hash(slot: Slot, operating_mode: OperatingMode) -> bool {
         // Account hashing will be updated to include owner at this slot on the devnet.
         // For testnet, it fully transitioned already thanks to eager rent collection,
         // so, this check is irrelevant, strictly speaking.
-        slot >= 5_800_000
+        match operating_mode {
+            OperatingMode::Development => slot >= 5_800_000,
+            OperatingMode::Stable => true,
+            OperatingMode::Preview => true,
+        }
     }
 
     pub fn hash_account_data(
@@ -1653,13 +1657,15 @@ impl AccountsDB {
                             .and_then(|store| {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
 
+                                let operating_mode = self
+                                    .operating_mode
+                                    .expect("Operating mode must be set at initialization");
                                 if check_hash {
                                     let hash = Self::hash_stored_account(
                                         *slot,
                                         &account,
-                                        self.operating_mode
-                                            .expect("Operating mode must be set at initialization"),
-                                        Self::include_owner_in_hash(*slot),
+                                        operating_mode,
+                                        Self::include_owner_in_hash(*slot, operating_mode),
                                     );
                                     if hash != *account.hash {
                                         mismatch_found.fetch_add(1, Ordering::Relaxed);
@@ -1911,7 +1917,7 @@ impl AccountsDB {
                     account,
                     pubkey,
                     operating_mode,
-                    Self::include_owner_in_hash(slot),
+                    Self::include_owner_in_hash(slot, operating_mode),
                 )
             })
             .collect();
