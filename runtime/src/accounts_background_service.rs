@@ -10,7 +10,6 @@ use crate::{
 };
 use crossbeam_channel::{Receiver, Sender};
 use log::*;
-use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
 use solana_sdk::clock::Slot;
 use std::sync::{
@@ -24,7 +23,6 @@ const INTERVAL_MS: u64 = 100;
 const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
 const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
     SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
-const CLEAN_INTERVAL_SLOTS: u64 = 100;
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
@@ -99,13 +97,6 @@ impl AccountsBackgroundService {
                         consumed_budget,
                         SHRUNKEN_ACCOUNT_PER_INTERVAL,
                     );
-
-                    if bank.block_height() - last_cleaned_slot
-                        > (CLEAN_INTERVAL_SLOTS + thread_rng().gen_range(0, 10))
-                    {
-                        bank.clean_accounts(None);
-                        last_cleaned_slot = bank.block_height();
-                    }
                 }
 
                 sleep(Duration::from_millis(INTERVAL_MS));
@@ -133,12 +124,12 @@ impl AccountsBackgroundService {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
                 // Don't clean the slot we're snapshotting becaue it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
                 snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot() - 1));
-                snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
