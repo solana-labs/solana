@@ -57,8 +57,9 @@ Cost of the transaction will count the number of signatures to verify multiplied
 
 ## Optimization notes
 
-The operation will have to take place after deserialization and accounts load assuming the transaction references external
-accounts for the inputs. It should be relatively easy though to scan the transaction for introspection inputs.
+The operation will have to take place after (at least partial) deserialization, but all inputs come
+from the transaction data itself, this allows it to be relatively easy to execute in parallel to
+transaction processing and PoH verification.
 
 ## Other solutions
 
