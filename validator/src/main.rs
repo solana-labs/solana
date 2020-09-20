@@ -541,20 +541,18 @@ fn verify_reachable_ports(
 
     let mut tcp_listeners = vec![];
     if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
-        for (purpose, addr) in &[
-            ("RPC", rpc_addr),
-            ("RPC pubsub", rpc_pubsub_addr),
-            ("RPC banks", rpc_banks_addr),
+        for (purpose, bind_addr, public_addr) in &[
+            ("RPC", rpc_addr, &node.info.rpc),
+            ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
+            ("RPC banks", rpc_banks_addr, &node.info.rpc_banks),
         ] {
-            if ContactInfo::is_valid_address(&addr) {
+            if ContactInfo::is_valid_address(&public_addr) {
                 tcp_listeners.push((
-                    addr.port(),
-                    TcpListener::bind(addr).unwrap_or_else(|err| {
+                    bind_addr.port(),
+                    TcpListener::bind(bind_addr).unwrap_or_else(|err| {
                         error!(
-                            "Unable to bind to tcp/{:?} for {}: {}",
-                            addr.port(),
-                            purpose,
-                            err
+                            "Unable to bind to tcp {:?} for {}: {}",
+                            bind_addr, purpose, err
                         );
                         exit(1);
                     }),
