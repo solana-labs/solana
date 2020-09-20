@@ -4,10 +4,11 @@
         "module": "ESNext",
         "declaration": true,
         "moduleResolution": "node",
-        "outDir": "./lib",
+        "outDir": "./dist",
         "allowJs": true,
-        "strict": true
+        "strict": true,
+        "typeRoots": [ "./types", "./node_modules/@types"]
       },
       "include": ["./ts"],
-      "exclude": ["node_modules", "**/__tests__/*", "lib", "src", "./Cargo.toml", "target"]
+      "exclude": ["node_modules", "**/__tests__/*", "dist", "src", "target", "types"]
   }
