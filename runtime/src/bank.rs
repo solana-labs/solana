@@ -1983,6 +1983,8 @@ impl Bank {
                         &self.rent_collector,
                         log_collector.clone(),
                         executors.clone(),
+                        self.cluster_type(),
+                        self.epoch(),
                     );
 
                     Self::refcells_to_accounts(
