@@ -1310,7 +1310,11 @@ impl Bank {
     // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self) {
         let mut clean = Measure::start("clean");
-        self.clean_accounts(None);
+        // Don't clean the slot we're snapshotting becaue it may have zero-lamport
+        // accounts that were included in the bank delta hash when the bank was frozen,
+        // and if we clean them here, any newly created snapshot's hash for this bank
+        // may not match the frozen hash.
+        self.clean_accounts(Some(self.slot() - 1));
         clean.stop();
 
         let mut shrink = Measure::start("shrink");

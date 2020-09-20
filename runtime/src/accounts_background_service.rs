@@ -133,7 +133,11 @@ impl AccountsBackgroundService {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot()));
+                // Don't clean the slot we're snapshotting becaue it may have zero-lamport
+                // accounts that were included in the bank delta hash when the bank was frozen,
+                // and if we clean them here, the newly created snapshot's hash may not match
+                // the frozen hash.
+                snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot() - 1));
                 snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
                 // Generate an accounts package
