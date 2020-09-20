@@ -21,6 +21,9 @@ pub struct Pair{
 	secret: Vec<u8>
 }
 
+/// Generates key pair for use with ED25519 from ed25519_dalek
+///
+/// * returned struct has two fields public and secret.
 #[wasm_bindgen(js_name = GenerateKeyPair)]
 pub fn generate_keypair() -> Result<JsValue, JsValue> {
 	let mut csprng = OsRng{};
@@ -49,3 +52,5 @@ pub fn ed25519_sign(pubkey: &[u8], seckey: &[u8], message: &[u8]) -> Vec<u8> {
 		.to_bytes()
 		.to_vec()
 }
+
+// TODO: add verification

@@ -213,7 +213,6 @@ async function wasm_pack(cx, state, dir, source, id, options) {
                     return instance.exports;
                 }
 
-
                 // TODO: if CJS in the browser load via script ???
                 // import('@solana/wasm/dist/solana.wasm').then(xyz => xyz());
 
