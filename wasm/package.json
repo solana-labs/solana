@@ -1,7 +1,7 @@
 {
   "name": "@solana/wasm",
   "version": "0.0.0-development",
-  "description": "Solana Javascript API",
+  "description": "Solana WebAssembly API",
   "keywords": [
     "api",
     "blockchain"
@@ -11,10 +11,10 @@
   "homepage": "https://solana.com/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/solana-labs/solana-web3.js.git"
+    "url": "https://github.com/solana-labs/solana-wasm.git"
   },
   "bugs": {
-    "url": "http://github.com/solana-labs/solana-web3.js.git/issues"
+    "url": "http://github.com/solana-labs/solana-wasm.git/issues"
   },
   "publishConfig": {
     "access": "public"
