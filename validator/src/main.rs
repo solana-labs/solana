@@ -514,7 +514,11 @@ fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
     logger_thread
 }
 
-fn verify_reachable_ports(node: &Node, cluster_entrypoint: &ContactInfo) {
+fn verify_reachable_ports(
+    node: &Node,
+    cluster_entrypoint: &ContactInfo,
+    validator_config: &ValidatorConfig,
+) {
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
     if ContactInfo::is_valid_address(&node.info.serve_repair) {
@@ -536,24 +540,26 @@ fn verify_reachable_ports(node: &Node, cluster_entrypoint: &ContactInfo) {
     }
 
     let mut tcp_listeners = vec![];
-    for (purpose, addr) in &[
-        ("RPC", node.info.rpc),
-        ("RPC pubsub", node.info.rpc_pubsub),
-        ("RPC banks", node.info.rpc_banks),
-    ] {
-        if ContactInfo::is_valid_address(&addr) {
-            tcp_listeners.push((
-                addr.port(),
-                TcpListener::bind(addr).unwrap_or_else(|err| {
-                    error!(
-                        "Unable to bind to tcp/{} for {}: {}",
-                        addr.port(),
-                        purpose,
-                        err
-                    );
-                    exit(1);
-                }),
-            ));
+    if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+        for (purpose, addr) in &[
+            ("RPC", rpc_addr),
+            ("RPC pubsub", rpc_pubsub_addr),
+            ("RPC banks", rpc_banks_addr),
+        ] {
+            if ContactInfo::is_valid_address(&addr) {
+                tcp_listeners.push((
+                    addr.port(),
+                    TcpListener::bind(addr).unwrap_or_else(|err| {
+                        error!(
+                            "Unable to bind to tcp/{:?} for {}: {}",
+                            addr.port(),
+                            purpose,
+                            err
+                        );
+                        exit(1);
+                    }),
+                ));
+            }
         }
     }
 
@@ -601,7 +607,7 @@ fn rpc_bootstrap(
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
 ) {
-    verify_reachable_ports(&node, cluster_entrypoint);
+    verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
 
     if bootstrap_config.no_genesis_fetch && bootstrap_config.no_snapshot_fetch {
         return;
