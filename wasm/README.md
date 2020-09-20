@@ -15,3 +15,10 @@ $ yarn add @solana/wasm
 $ npm install --save @solana/wasm
 ```
 
+
+## Building
+
+Requires:
+* rustup
+* wasm-pack
+* Node.js >= 12

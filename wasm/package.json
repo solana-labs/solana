@@ -3,6 +3,7 @@
   "version": "0.0.0-development",
   "description": "Solana WebAssembly API",
   "keywords": [
+    "wasm",
     "api",
     "blockchain"
   ],
