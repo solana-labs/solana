@@ -211,12 +211,16 @@ async function wasm_pack(cx, state, dir, source, id, options) {
                     const instance = await WebAssembly.instantiate(module, imports);
 
                     return instance.exports;
+                } else {
+                    await import('${dest}');
+
+                    // TODO: if CJS in the browser load via script ???
+                    // import('@solana/wasm/dist/solana.wasm').then(xyz => xyz());
+
+                    // TODO: if ESM use dynamic import (add instruction for webpack to copy file)
+                    new Function();
+                    return instance.exports;
                 }
-
-                // TODO: if CJS in the browser load via script ???
-                // import('@solana/wasm/dist/solana.wasm').then(xyz => xyz());
-
-                // TODO: if ESM use dynamic import (add instruction for webpack to copy file)
 
                 // TODO: if IIF load script base64 ???? (import.meta.url?)
             }
@@ -345,14 +349,11 @@ export const rust = (options = {}) => {
                 const dir = $path.dirname(id);
                 const wasmPath = posixPath($path.relative(dir, "wasm.base64.js"));
             
-                
-                
                 return {
                     code: `
-                        global.__wasm = {};
-                        export const wasm = __wasm;
-
-                        export default wasm;
+                        // stub to prevent circular import of wasm by rollup
+                        const __empty = undefined;
+                        export default __empty;
                     `,
                     syntheticNamedExports: ['wasm'],
                     map: { mappings: '' }
