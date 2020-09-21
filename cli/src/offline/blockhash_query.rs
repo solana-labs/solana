@@ -1,4 +1,9 @@
 use super::*;
+<<<<<<< HEAD
+=======
+use solana_client::nonce_utils;
+use solana_sdk::commitment_config::CommitmentConfig;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
@@ -17,8 +22,13 @@ impl Source {
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
+<<<<<<< HEAD
                 let data = nonce::get_account(rpc_client, pubkey)
                     .and_then(|ref a| nonce::data_from_account(a))?;
+=======
+                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
                 Ok((data.blockhash, data.fee_calculator))
             }
         }
@@ -35,6 +45,7 @@ impl Source {
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
+<<<<<<< HEAD
                 let res = nonce::get_account(rpc_client, pubkey)
                     .and_then(|ref a| nonce::data_from_account(a))
                     .and_then(|d| {
@@ -45,6 +56,13 @@ impl Source {
                         }
                     })?;
                 Ok(res)
+=======
+                let res = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)?;
+                let res = nonce_utils::data_from_account(&res)?;
+                Ok(Some(res)
+                    .filter(|d| d.blockhash == *blockhash)
+                    .map(|d| d.fee_calculator))
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
             }
         }
     }

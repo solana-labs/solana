@@ -2,15 +2,19 @@ use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
-    nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
 };
+<<<<<<< HEAD
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
+=======
+use solana_client::{nonce_utils, rpc_client::RpcClient};
+use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     nonce::State as NonceState,
@@ -147,10 +151,21 @@ fn test_transfer() {
     check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Nonced transfer
     config.signers = vec![&default_signer];
@@ -169,12 +184,25 @@ fn test_transfer() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
+<<<<<<< HEAD
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
     let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    check_recent_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_recent_balance(30, &rpc_client, &recipient_pubkey);
+    let new_nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
     assert_ne!(nonce_hash, new_nonce_hash);
 
     // Assign nonce authority to offline
@@ -188,10 +216,21 @@ fn test_transfer() {
     check_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];

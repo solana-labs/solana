@@ -3535,7 +3535,12 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+<<<<<<< HEAD
  "solana-logger 1.2.30",
+=======
+ "solana-clap-utils",
+ "solana-logger 1.4.0",
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
  "solana-net-utils",
  "solana-sdk 1.2.30",
  "solana-transaction-status",

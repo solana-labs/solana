@@ -2,14 +2,13 @@ use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
-    nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::{nonce_utils, rpc_client::RpcClient};
 use solana_core::contact_info::ContactInfo;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
@@ -299,10 +298,21 @@ fn test_create_account_with_seed() {
     check_balance(0, &rpc_client, &to_address);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_address)
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_address,
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Test by creating transfer TX with nonce, fully offline
     let mut authority_config = CliConfig::default();

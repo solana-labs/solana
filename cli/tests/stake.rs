@@ -2,15 +2,19 @@ use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
-    nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
     spend_utils::SpendAmount,
 };
+<<<<<<< HEAD
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
+=======
+use solana_client::{nonce_utils, rpc_client::RpcClient};
+use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -502,10 +506,21 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Delegate stake
     config.signers = vec![&config_keypair];
@@ -526,10 +541,21 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Deactivate stake
     config.command = CliCommand::DeactivateStake {
@@ -742,10 +768,21 @@ fn test_stake_authorize() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Nonced assignment of new online stake authority
     let online_authority = Keypair::new();
@@ -788,10 +825,21 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
+<<<<<<< HEAD
     let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let new_nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
     assert_ne!(nonce_hash, new_nonce_hash);
 
     server.close().unwrap();
@@ -1024,10 +1072,21 @@ fn test_stake_split() {
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Nonced offline split
     let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -1281,10 +1340,21 @@ fn test_stake_set_lockup() {
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Nonced offline set lockup
     let lockup = LockupArgs {
@@ -1400,10 +1470,21 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Create stake account offline
     let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap();
@@ -1451,10 +1532,21 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     check_balance(50_000, &rpc_client, &stake_pubkey);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Offline, nonced stake-withdraw
     let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
@@ -1495,10 +1587,21 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     check_balance(42, &rpc_client, &recipient_pubkey);
 
     // Fetch nonce hash
+<<<<<<< HEAD
     let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
         .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
         .blockhash;
+=======
+    let nonce_hash = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::recent(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 
     // Create another stake account. This time with seed
     let seed = "seedy";

@@ -18,12 +18,22 @@ rayon = "1.4.0"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.110"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.53"
 solana-account-decoder = { path = "../account-decoder", version = "1.2.30" }
 solana-net-utils = { path = "../net-utils", version = "1.2.30" }
 solana-sdk = { path = "../sdk", version = "1.2.30" }
 solana-transaction-status = { path = "../transaction-status", version = "1.2.30" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.30" }
+=======
+serde_json = "1.0.56"
+solana-account-decoder = { path = "../account-decoder", version = "1.4.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
+solana-net-utils = { path = "../net-utils", version = "1.4.0" }
+solana-sdk = { path = "../sdk", version = "1.4.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.4.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.4.0" }
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 thiserror = "1.0"
 tungstenite = "0.10.1"
 url = "2.1.1"

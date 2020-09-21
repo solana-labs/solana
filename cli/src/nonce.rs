@@ -11,18 +11,17 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
     input_parsers::*, input_validators::*, offline::BLOCKHASH_ARG, ArgConstant,
 };
-use solana_client::{nonce_utils::Error, rpc_client::RpcClient};
+use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
+<<<<<<< HEAD
     account_utils::StateMut,
+=======
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
     hash::Hash,
     message::Message,
-    nonce::{
-        self,
-        state::{Data, Versions},
-        State,
-    },
+    nonce::{self, State},
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_nonce_account,
@@ -201,6 +200,7 @@ impl NonceSubCommands for App<'_, '_> {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub fn get_account(
     rpc_client: &RpcClient,
     nonce_pubkey: &Pubkey,
@@ -262,6 +262,8 @@ pub fn data_from_state(state: &State) -> Result<&Data, Error> {
     }
 }
 
+=======
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
@@ -639,9 +641,10 @@ mod tests {
     use crate::cli::{app, parse_command};
     use solana_sdk::{
         account::Account,
+        account_utils::StateMut,
         fee_calculator::FeeCalculator,
         hash::hash,
-        nonce::{self, State},
+        nonce::{self, state::Versions, State},
         signature::{read_keypair_file, write_keypair, Keypair, Signer},
         system_program,
     };

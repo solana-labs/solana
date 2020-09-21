@@ -1711,7 +1711,15 @@ fn process_transfer(
         return_signers(&tx, &config)
     } else {
         if let Some(nonce_account) = &nonce_account {
+<<<<<<< HEAD
             let nonce_account = rpc_client.get_account(nonce_account)?;
+=======
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
+>>>>>>> a6533c3a2... Move CLI nonce account helpers in client
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
 
