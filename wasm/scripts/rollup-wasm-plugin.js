@@ -121,20 +121,23 @@ async function get_target_dir(dir) {
 async function wasm_pack(cx, state, dir, source, id, options) {
     const target_dir = await get_target_dir(dir);
     const PACKAGE_NAME = options.wasmName;
+    const RESULT_DIR = 'dist';
 
     const toml = $toml.parse(source);
 
     const name = toml.package.name;
 
-    const out_dir = $path.resolve($path.join(target_dir, "wasm-pack", name));
+    const WASM_TARGET_DIR = $path.resolve($path.join(target_dir, "wasm-pack", name));
 
-    await rm(out_dir);
+    await rm(RESULT_DIR);
+    await rm(WASM_TARGET_DIR);
 
-    // TODO: customize the name
+    $fs.mkdirSync(RESULT_DIR)
+
     const args = [
         "--log-level", (options.verbose ? "info" : "error"),
         "build",
-        "--out-dir", out_dir,
+        "--out-dir", WASM_TARGET_DIR,
         "--out-name", PACKAGE_NAME,
         "--target", "bundler",
         (options.debug ? "--dev" : "--release"),
@@ -160,30 +163,27 @@ async function wasm_pack(cx, state, dir, source, id, options) {
         }
     }
 
-    // TODO: customize the name
-    const import_path = JSON.stringify("./" + posixPath($path.relative(dir, $path.join(out_dir, "index.js"))));
+    const import_path = JSON.stringify("./" + posixPath($path.relative(dir, $path.join(WASM_TARGET_DIR, `${PACKAGE_NAME}.js`))));
     const WASM_INPUT_FILE_NAME = `${PACKAGE_NAME}_bg`;
-    const WASM_OUTPUT_FILE_NAME = `${PACKAGE_NAME}_index_bg`;
-    const binaryPath = $path.join(out_dir, WASM_INPUT_FILE_NAME+'.wasm');
+    const WASM_OUTPUT_FILE_NAME = `${PACKAGE_NAME}.${Date.now().toString()}`;
+    const binaryPath = $path.join(WASM_TARGET_DIR, WASM_INPUT_FILE_NAME+'.wasm');
     const wasm = await read(binaryPath);
 
     const separate_base64_wasm = wasmToBase64(wasm);
 
     // copy wasm for use in node and webpack projects
     const target = binaryPath;
-    console.log(target);
     const dest = $path.join(dir, 'dist', WASM_OUTPUT_FILE_NAME+'.wasm');
-    console.log('dest', dest)
     $fs.copyFileSync(target, dest)
 
     // generate base64 encoded version of the file
     cx.emitFile({
         type: "asset",
         source: separate_base64_wasm,
-        fileName: 'wasm.base64.js'
+        fileName: `${PACKAGE_NAME}_wasm.base64.js`
     });
 
-    const wasmPath = posixPath($path.relative(dir, $path.join(out_dir, "wasm.base64.js")));
+    const wasmPath = posixPath($path.relative(dir, $path.join(WASM_TARGET_DIR, "wasm.base64.js")));
     await write(wasmPath, separate_base64_wasm, 'utf8');
 
     return {
@@ -203,12 +203,13 @@ async function wasm_pack(cx, state, dir, source, id, options) {
             }
 
             export async function loadWASM() {
+                let imports = {};
+                imports['./${WASM_INPUT_FILE_NAME}.js'] = exports;
+
                 let isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null
                 if (isNode) {
-                    const path = require('path').join(__dirname, '${WASM_INPUT_FILE_NAME}.wasm');
+                    const path = require('path').join(__dirname, '${WASM_OUTPUT_FILE_NAME}.wasm');
                     const bytes = await loadFile(path);
-                    let imports = {};
-                    imports['./${WASM_INPUT_FILE_NAME}.js'] = exports;
                     const module = await WebAssembly.compile(bytes);
                     const instance = await WebAssembly.instantiate(module, imports);
 
@@ -216,23 +217,25 @@ async function wasm_pack(cx, state, dir, source, id, options) {
                 } else {
                     // NOTE: fetch URL is replaced by BablePlugin during client compilation phase
                     // I decided to use Bable transfor to enable isomorphic library that can be used both by Web (webpack, plain js) and Node.js
-                    const response = fetch('${WASM_INPUT_FILE_NAME}.wasm');
+                    const response = await fetch('${WASM_OUTPUT_FILE_NAME}.wasm');
                     let wasm;
                     if (typeof WebAssembly.instantiateStreaming === 'function') {
                         try {
                             wasm = await WebAssembly.instantiateStreaming(response, imports);
                         } catch (e) {
+                            /*
                             if (response.headers.get('Content-Type') != 'application/wasm') {
                                 console.warn("WebAssembly.instantiateStreaming failed because your server does not serve wasm with application/wasm MIME type. Falling back to WebAssembly.instantiate which is slower. Original error:\n", e);
                             } else {
                                 throw e;
                             }
+                            */
                         }
                     }
 
                     if(!wasm) {
                         const bytes = await response.arrayBuffer();
-                        wasm await WebAssembly.instantiate(bytes, imports);
+                        wasm = await WebAssembly.instantiate(bytes, imports);
                     }
 
                     // TODO: if CJS in the browser load via script ???

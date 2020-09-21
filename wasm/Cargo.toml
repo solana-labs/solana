@@ -1,6 +1,7 @@
 [package]
 name = "solana-wasm"
 version = "0.1.0"
+description = "Solana WASM bindings"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"

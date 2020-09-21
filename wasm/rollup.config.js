@@ -11,16 +11,10 @@ function generateConfig(configType) {
         rust({
           verbose: true,
           debug: true,
-          cargoArgs: []
+          cargoArgs: [],
+          wasmName: 'solana'
         }),
         typescript()
-        // replace({
-        //   'process.env.NODE_ENV': JSON.stringify(env),
-        // }),
-        // commonjs(),
-        // copy({
-        //   targets: [{src: 'module.d.ts', dest: 'lib', rename: 'index.d.ts'}],
-        // }),
       ],
     };
   

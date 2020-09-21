@@ -25,7 +25,8 @@
   "browser": "dist/solana-wasm.umd.js",
   "types": "dist/index.d.ts",
   "files": [
-    "./dist"
+    "./dist",
+    "./webpack"
   ],
   "engines": {
     "node": ">=12.0.0",

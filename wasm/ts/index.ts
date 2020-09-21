@@ -2,7 +2,7 @@ let exports: any; // TODO: figure out a way to link to types
 
 export const ensureReady = () => {
     if(exports === undefined) {
-        throw new Error(`@solana SDK not ready. You need to await waitReady function before making API calls`);
+        throw new Error(`@solana/wasm package is not ready. You need to await waitReady() before making API calls`);
     }
 }
 
