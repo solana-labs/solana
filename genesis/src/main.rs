@@ -526,6 +526,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
+    solana_runtime::genesis_utils::add_feature_accounts(&mut genesis_config);
 
     if let Some(files) = matches.values_of("primordial_accounts_file") {
         for file in files {

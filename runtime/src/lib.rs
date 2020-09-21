@@ -12,6 +12,8 @@ pub mod bloom;
 pub mod builtins;
 pub mod commitment;
 pub mod epoch_stakes;
+pub mod feature;
+pub mod feature_set;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod instruction_recorder;
