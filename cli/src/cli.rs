@@ -135,28 +135,6 @@ pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(FEE_PAYER_ARG.help)
 }
 
-#[derive(Debug)]
-pub struct KeypairEq(Keypair);
-
-impl From<Keypair> for KeypairEq {
-    fn from(keypair: Keypair) -> Self {
-        Self(keypair)
-    }
-}
-
-impl PartialEq for KeypairEq {
-    fn eq(&self, other: &Self) -> bool {
-        self.pubkey() == other.pubkey()
-    }
-}
-
-impl std::ops::Deref for KeypairEq {
-    type Target = Keypair;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     nonce::nonce_authority_arg().requires(NONCE_ARG.name)
 }
