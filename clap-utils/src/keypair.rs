@@ -11,6 +11,7 @@ use solana_remote_wallet::{
     remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
 };
 use solana_sdk::{
+    hash::Hash,
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
@@ -24,6 +25,81 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+pub struct SignOnly {
+    pub blockhash: Hash,
+    pub present_signers: Vec<(Pubkey, Signature)>,
+    pub absent_signers: Vec<Pubkey>,
+    pub bad_signers: Vec<Pubkey>,
+}
+
+impl SignOnly {
+    pub fn has_all_signers(&self) -> bool {
+        self.absent_signers.is_empty() && self.bad_signers.is_empty()
+    }
+
+    pub fn presigner_of(&self, pubkey: &Pubkey) -> Option<Presigner> {
+        presigner_from_pubkey_sigs(pubkey, &self.present_signers)
+    }
+}
+pub type CliSigners = Vec<Box<dyn Signer>>;
+pub type SignerIndex = usize;
+pub struct CliSignerInfo {
+    pub signers: CliSigners,
+}
+
+impl CliSignerInfo {
+    pub fn index_of(&self, pubkey: Option<Pubkey>) -> Option<usize> {
+        if let Some(pubkey) = pubkey {
+            self.signers
+                .iter()
+                .position(|signer| signer.pubkey() == pubkey)
+        } else {
+            Some(0)
+        }
+    }
+}
+
+pub struct DefaultSigner {
+    pub arg_name: String,
+    pub path: String,
+}
+
+impl DefaultSigner {
+    pub fn generate_unique_signers(
+        &self,
+        bulk_signers: Vec<Option<Box<dyn Signer>>>,
+        matches: &ArgMatches<'_>,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
+        let mut unique_signers = vec![];
+
+        // Determine if the default signer is needed
+        if bulk_signers.iter().any(|signer| signer.is_none()) {
+            let default_signer = self.signer_from_path(matches, wallet_manager)?;
+            unique_signers.push(default_signer);
+        }
+
+        for signer in bulk_signers.into_iter() {
+            if let Some(signer) = signer {
+                if !unique_signers.iter().any(|s| s == &signer) {
+                    unique_signers.push(signer);
+                }
+            }
+        }
+        Ok(CliSignerInfo {
+            signers: unique_signers,
+        })
+    }
+
+    pub fn signer_from_path(
+        &self,
+        matches: &ArgMatches,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
+        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
+    }
+}
 
 pub enum KeypairUrl {
     Ask,

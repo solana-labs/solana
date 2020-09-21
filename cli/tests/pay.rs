@@ -2,16 +2,15 @@ use chrono::prelude::*;
 use serde_json::Value;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
-    cli_output::OutputFormat,
-    nonce,
-    offline::{
-        blockhash_query::{self, BlockhashQuery},
-        parse_sign_only_reply_string,
-    },
     spend_utils::SpendAmount,
     test_utils::check_recent_balance,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
+use solana_client::{
+    blockhash_query::{self, BlockhashQuery},
+    nonce_utils,
+    rpc_client::RpcClient,
+};
 use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -411,12 +410,12 @@ fn test_nonced_pay_tx() {
     check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -438,12 +437,12 @@ fn test_nonced_pay_tx() {
     check_recent_balance(10, &rpc_client, &bob_pubkey);
 
     // Verify that nonce has been used
-    let nonce_hash2 = nonce::get_account_with_commitment(
+    let nonce_hash2 = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
     assert_ne!(nonce_hash, nonce_hash2);

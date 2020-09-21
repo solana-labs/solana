@@ -1,5 +1,13 @@
-use super::*;
-use solana_sdk::commitment_config::CommitmentConfig;
+use crate::{nonce_utils, rpc_client::RpcClient};
+use clap::ArgMatches;
+use solana_clap_utils::{
+    input_parsers::{pubkey_of, value_of},
+    nonce::*,
+    offline::*,
+};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
@@ -21,8 +29,8 @@ impl Source {
                 Ok((res.0, res.1))
             }
             Self::NonceAccount(ref pubkey) => {
-                let data = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| nonce::data_from_account(a))?;
+                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
                 Ok((data.blockhash, data.fee_calculator))
             }
         }
@@ -42,8 +50,8 @@ impl Source {
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
-                let res = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)?;
-                let res = nonce::data_from_account(&res)?;
+                let res = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)?;
+                let res = nonce_utils::data_from_account(&res)?;
                 Ok(Some(res)
                     .filter(|d| d.blockhash == *blockhash)
                     .map(|d| d.fee_calculator))
@@ -75,7 +83,7 @@ impl BlockhashQuery {
     pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
         let blockhash = value_of(matches, BLOCKHASH_ARG.name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-        let nonce_account = pubkey_of(matches, nonce::NONCE_ARG.name);
+        let nonce_account = pubkey_of(matches, NONCE_ARG.name);
         BlockhashQuery::new(blockhash, sign_only, nonce_account)
     }
 
@@ -108,17 +116,15 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{nonce::nonce_arg, offline::blockhash_query::BlockhashQuery};
-    use clap::App;
-    use serde_json::{self, json, Value};
-    use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_client::{
+    use crate::{
+        blockhash_query,
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcFeeCalculator, RpcResponseContext},
     };
-    use solana_sdk::{
-        account::Account, fee_calculator::FeeCalculator, hash::hash, nonce, system_program,
-    };
+    use clap::App;
+    use serde_json::{self, json, Value};
+    use solana_account_decoder::{UiAccount, UiAccountEncoding};
+    use solana_sdk::{account::Account, hash::hash, nonce, system_program};
     use std::collections::HashMap;
 
     #[test]
@@ -171,9 +177,7 @@ mod tests {
 
     #[test]
     fn test_blockhash_query_new_from_matches_ok() {
-        let test_commands = App::new("blockhash_query_test")
-            .arg(nonce_arg())
-            .offline_args();
+        let test_commands = App::new("blockhash_query_test").nonce_args().offline_args();
         let blockhash = hash(&[1u8]);
         let blockhash_string = blockhash.to_string();
 

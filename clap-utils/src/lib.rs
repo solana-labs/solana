@@ -24,7 +24,9 @@ impl std::fmt::Debug for DisplayError {
 }
 
 pub mod commitment;
+pub mod fee_payer;
 pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;
+pub mod nonce;
 pub mod offline;
