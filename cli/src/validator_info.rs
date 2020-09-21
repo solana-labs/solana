@@ -1,6 +1,5 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    cli_output::{CliValidatorInfo, CliValidatorInfoVec},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use bincode::deserialize;
@@ -13,8 +12,9 @@ use solana_account_decoder::validator_info::{
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
-    keypair::signer_from_path,
+    keypair::DefaultSigner,
 };
+use solana_cli_output::{CliValidatorInfo, CliValidatorInfoVec};
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -212,7 +212,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
 
 pub fn parse_validator_info_command(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
@@ -224,12 +224,7 @@ pub fn parse_validator_info_command(
             force_keybase: matches.is_present("force"),
             info_pubkey,
         },
-        signers: vec![signer_from_path(
-            matches,
-            default_signer_path,
-            "keypair",
-            wallet_manager,
-        )?],
+        signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
 }
 

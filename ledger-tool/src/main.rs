@@ -124,7 +124,7 @@ fn output_slot(
                         })
                         .map(|transaction_status| transaction_status.into());
 
-                    solana_cli::display::println_transaction(
+                    solana_cli_output::display::println_transaction(
                         &transaction,
                         &transaction_status,
                         "      ",

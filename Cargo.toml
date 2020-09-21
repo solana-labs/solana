@@ -6,6 +6,7 @@ members = [
     "accounts-bench",
     "banking-bench",
     "cli-config",
+    "cli-output",
     "client",
     "core",
     "dos",
