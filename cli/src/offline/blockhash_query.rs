@@ -1,4 +1,5 @@
 use super::*;
+use solana_client::nonce_utils;
 use solana_sdk::commitment_config::CommitmentConfig;
 
 #[derive(Debug, PartialEq)]
@@ -21,8 +22,8 @@ impl Source {
                 Ok((res.0, res.1))
             }
             Self::NonceAccount(ref pubkey) => {
-                let data = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| nonce::data_from_account(a))?;
+                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
                 Ok((data.blockhash, data.fee_calculator))
             }
         }
@@ -42,8 +43,8 @@ impl Source {
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
-                let res = nonce::get_account_with_commitment(rpc_client, pubkey, commitment)?;
-                let res = nonce::data_from_account(&res)?;
+                let res = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)?;
+                let res = nonce_utils::data_from_account(&res)?;
                 Ok(Some(res)
                     .filter(|d| d.blockhash == *blockhash)
                     .map(|d| d.fee_calculator))

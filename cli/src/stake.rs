@@ -6,13 +6,15 @@ use crate::{
         SignerIndex, FEE_PAYER_ARG,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
-    nonce::{self, check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
+    nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
-use solana_client::{rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE};
+use solana_client::{
+    nonce_utils, rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
@@ -934,8 +936,11 @@ pub fn process_create_stake_account(
         }
 
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
     }
@@ -1006,8 +1011,11 @@ pub fn process_stake_authorize(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1066,8 +1074,11 @@ pub fn process_deactivate_stake_account(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1135,8 +1146,11 @@ pub fn process_withdraw_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1275,8 +1289,11 @@ pub fn process_split_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1374,8 +1391,11 @@ pub fn process_merge_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1437,8 +1457,11 @@ pub fn process_stake_set_lockup(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
@@ -1722,8 +1745,11 @@ pub fn process_delegate_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account =
-                nonce::get_account_with_commitment(rpc_client, nonce_account, config.commitment)?;
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee_with_commitment(
