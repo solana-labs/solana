@@ -3,7 +3,7 @@ use crate::{
     cli_output::{CliAccount, CliSignOnlyData, CliSignature, OutputFormat},
     cluster_query::*,
     display::{new_spinner_progress_bar, println_name_value, println_transaction},
-    nonce::{self, *},
+    nonce::*,
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::*,
     stake::*,
@@ -16,8 +16,8 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_clap_utils::{
-    commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
-    keypair::signer_from_path, offline::SIGN_ONLY_ARG, ArgConstant,
+    self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
+    keypair::signer_from_path, nonce::*, offline::SIGN_ONLY_ARG, ArgConstant,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -133,10 +133,6 @@ pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(FEE_PAYER_ARG.help)
-}
-
-pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    nonce::nonce_authority_arg().requires(NONCE_ARG.name)
 }
 
 #[derive(Debug, PartialEq)]
@@ -2278,8 +2274,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg()),
+                .nonce_args()
         )
         .subcommand(
             SubCommand::with_name("resolve-signer")
@@ -2326,8 +2321,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg()),
         )
         .subcommand(

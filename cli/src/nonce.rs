@@ -8,9 +8,7 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    input_parsers::*, input_validators::*, offline::BLOCKHASH_ARG, ArgConstant,
-};
+use solana_clap_utils::{input_parsers::*, input_validators::*, nonce::*};
 use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -28,42 +26,8 @@ use solana_sdk::{
 };
 use std::sync::Arc;
 
-pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
-    name: "nonce",
-    long: "nonce",
-    help: "Provide the nonce account to use when creating a nonced \n\
-           transaction. Nonced transactions are useful when a transaction \n\
-           requires a lengthy signing process. Learn more about nonced \n\
-           transactions at https://docs.solana.com/offline-signing/durable-nonce",
-};
-
-pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
-    name: "nonce_authority",
-    long: "nonce-authority",
-    help: "Provide the nonce authority keypair to use when signing a nonced transaction",
-};
-
 pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
-}
-
-pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NONCE_ARG.name)
-        .long(NONCE_ARG.long)
-        .takes_value(true)
-        .value_name("PUBKEY")
-        .requires(BLOCKHASH_ARG.name)
-        .validator(is_valid_pubkey)
-        .help(NONCE_ARG.help)
-}
-
-pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-        .long(NONCE_AUTHORITY_ARG.long)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help(NONCE_AUTHORITY_ARG.help)
 }
 
 impl NonceSubCommands for App<'_, '_> {
