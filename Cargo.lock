@@ -3555,7 +3555,6 @@ dependencies = [
  "solana-logger 1.4.0",
  "solana-net-utils",
  "solana-remote-wallet",
- "solana-runtime",
  "solana-sdk 1.4.0",
  "solana-stake-program",
  "solana-transaction-status",
