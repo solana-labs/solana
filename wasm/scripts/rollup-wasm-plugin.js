@@ -120,6 +120,7 @@ async function get_target_dir(dir) {
 
 async function wasm_pack(cx, state, dir, source, id, options) {
     const target_dir = await get_target_dir(dir);
+    const PACKAGE_NAME = options.wasmName;
 
     const toml = $toml.parse(source);
 
@@ -134,7 +135,7 @@ async function wasm_pack(cx, state, dir, source, id, options) {
         "--log-level", (options.verbose ? "info" : "error"),
         "build",
         "--out-dir", out_dir,
-        "--out-name", "index",
+        "--out-name", PACKAGE_NAME,
         "--target", "bundler",
         (options.debug ? "--dev" : "--release"),
         "--",
@@ -161,8 +162,9 @@ async function wasm_pack(cx, state, dir, source, id, options) {
 
     // TODO: customize the name
     const import_path = JSON.stringify("./" + posixPath($path.relative(dir, $path.join(out_dir, "index.js"))));
-    const WASM_FILE_NAME = "index_bg";
-    const binaryPath = $path.join(out_dir, WASM_FILE_NAME+'.wasm');
+    const WASM_INPUT_FILE_NAME = `${PACKAGE_NAME}_bg`;
+    const WASM_OUTPUT_FILE_NAME = `${PACKAGE_NAME}_index_bg`;
+    const binaryPath = $path.join(out_dir, WASM_INPUT_FILE_NAME+'.wasm');
     const wasm = await read(binaryPath);
 
     const separate_base64_wasm = wasmToBase64(wasm);
@@ -170,7 +172,7 @@ async function wasm_pack(cx, state, dir, source, id, options) {
     // copy wasm for use in node and webpack projects
     const target = binaryPath;
     console.log(target);
-    const dest = $path.join(dir, 'dist', WASM_FILE_NAME+'.wasm');
+    const dest = $path.join(dir, 'dist', WASM_OUTPUT_FILE_NAME+'.wasm');
     console.log('dest', dest)
     $fs.copyFileSync(target, dest)
 
@@ -203,23 +205,39 @@ async function wasm_pack(cx, state, dir, source, id, options) {
             export async function loadWASM() {
                 let isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null
                 if (isNode) {
-                    const path = require('path').join(__dirname, '${WASM_FILE_NAME}.wasm');
+                    const path = require('path').join(__dirname, '${WASM_INPUT_FILE_NAME}.wasm');
                     const bytes = await loadFile(path);
                     let imports = {};
-                    imports['./${WASM_FILE_NAME}.js'] = exports;
+                    imports['./${WASM_INPUT_FILE_NAME}.js'] = exports;
                     const module = await WebAssembly.compile(bytes);
                     const instance = await WebAssembly.instantiate(module, imports);
 
                     return instance.exports;
                 } else {
-                    await import('${dest}');
+                    // NOTE: fetch URL is replaced by BablePlugin during client compilation phase
+                    // I decided to use Bable transfor to enable isomorphic library that can be used both by Web (webpack, plain js) and Node.js
+                    const response = fetch('${WASM_INPUT_FILE_NAME}.wasm');
+                    let wasm;
+                    if (typeof WebAssembly.instantiateStreaming === 'function') {
+                        try {
+                            wasm = await WebAssembly.instantiateStreaming(response, imports);
+                        } catch (e) {
+                            if (response.headers.get('Content-Type') != 'application/wasm') {
+                                console.warn("WebAssembly.instantiateStreaming failed because your server does not serve wasm with application/wasm MIME type. Falling back to WebAssembly.instantiate which is slower. Original error:\n", e);
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    if(!wasm) {
+                        const bytes = await response.arrayBuffer();
+                        wasm await WebAssembly.instantiate(bytes, imports);
+                    }
 
                     // TODO: if CJS in the browser load via script ???
                     // import('@solana/wasm/dist/solana.wasm').then(xyz => xyz());
-
-                    // TODO: if ESM use dynamic import (add instruction for webpack to copy file)
-                    new Function();
-                    return instance.exports;
+                    return wasm.instance.exports;
                 }
 
                 // TODO: if IIF load script base64 ???? (import.meta.url?)
@@ -343,6 +361,14 @@ export const rust = (options = {}) => {
             }
         },
 
+        resolveId(source, importer) {
+            // treat wasm references from toml file as external to allow webpack and rollup of external apps to manage wasm via loader
+            if (source && source.endsWith('.wasm') && importer && importer.endsWith('.toml')) {
+              return {id: source, external: true};
+            }
+            return null;
+          },
+
         transform(source, id) {
             // ignore renference to wasm since they are handled differently
             if ($path.basename(id).endsWith('wasm') && filter(id)) {
@@ -351,15 +377,14 @@ export const rust = (options = {}) => {
             
                 return {
                     code: `
-                        // stub to prevent circular import of wasm by rollup
-                        const __empty = undefined;
-                        export default __empty;
+                        global.__wasm = {};
+                        export const wasm = __wasm;
+                        export default wasm;
                     `,
                     syntheticNamedExports: ['wasm'],
                     map: { mappings: '' }
                 };
             }
-
             if ($path.basename(id) === "Cargo.toml" && filter(id)) {
                 return build(this, state, source, id, options);
 

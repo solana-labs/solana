@@ -1,4 +1,4 @@
-let exports: any;
+let exports: any; // TODO: figure out a way to link to types
 
 export const ensureReady = () => {
     if(exports === undefined) {
