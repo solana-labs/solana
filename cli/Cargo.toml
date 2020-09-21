@@ -37,7 +37,6 @@ solana-faucet = { path = "../faucet", version = "1.2.30" }
 solana-logger = { path = "../logger", version = "1.2.30" }
 solana-net-utils = { path = "../net-utils", version = "1.2.30" }
 solana-remote-wallet = { path = "../remote-wallet", version = "1.2.30" }
-solana-runtime = { path = "../runtime", version = "1.2.30" }
 solana-sdk = { path = "../sdk", version = "1.2.30" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.30" }
 solana-transaction-status = { path = "../transaction-status", version = "1.2.30" }
