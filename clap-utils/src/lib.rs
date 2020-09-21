@@ -27,4 +27,5 @@ pub mod commitment;
 pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;
+pub mod nonce;
 pub mod offline;
