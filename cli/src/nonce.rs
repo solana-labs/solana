@@ -1,29 +1,26 @@
 use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
-        generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
-        CliConfig, CliError, ProcessResult, SignerIndex,
+        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult,
     },
-    cli_output::CliNonceAccount,
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    input_parsers::*, input_validators::*, offline::BLOCKHASH_ARG, ArgConstant,
+    input_parsers::*,
+    input_validators::*,
+    keypair::{DefaultSigner, SignerIndex},
+    nonce::*,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_cli_output::CliNonceAccount;
+use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
-    account_utils::StateMut,
-    commitment_config::CommitmentConfig,
     hash::Hash,
     message::Message,
-    nonce::{
-        self,
-        state::{Data, Versions},
-        State,
-    },
+    nonce::{self, State},
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_nonce_account,
@@ -33,62 +30,9 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::sync::Arc;
-use thiserror::Error;
-
-#[derive(Debug, Error, PartialEq)]
-pub enum CliNonceError {
-    #[error("invalid account owner")]
-    InvalidAccountOwner,
-    #[error("invalid account data")]
-    InvalidAccountData,
-    #[error("unexpected account data size")]
-    UnexpectedDataSize,
-    #[error("query hash does not match stored hash")]
-    InvalidHash,
-    #[error("query authority does not match account authority")]
-    InvalidAuthority,
-    #[error("invalid state for requested operation")]
-    InvalidStateForOperation,
-    #[error("client error: {0}")]
-    Client(String),
-}
-
-pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
-    name: "nonce",
-    long: "nonce",
-    help: "Provide the nonce account to use when creating a nonced \n\
-           transaction. Nonced transactions are useful when a transaction \n\
-           requires a lengthy signing process. Learn more about nonced \n\
-           transactions at https://docs.solana.com/offline-signing/durable-nonce",
-};
-
-pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
-    name: "nonce_authority",
-    long: "nonce-authority",
-    help: "Provide the nonce authority keypair to use when signing a nonced transaction",
-};
 
 pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
-}
-
-pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NONCE_ARG.name)
-        .long(NONCE_ARG.long)
-        .takes_value(true)
-        .value_name("PUBKEY")
-        .requires(BLOCKHASH_ARG.name)
-        .validator(is_valid_pubkey)
-        .help(NONCE_ARG.help)
-}
-
-pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-        .long(NONCE_AUTHORITY_ARG.long)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help(NONCE_AUTHORITY_ARG.help)
 }
 
 impl NonceSubCommands for App<'_, '_> {
@@ -220,64 +164,9 @@ impl NonceSubCommands for App<'_, '_> {
     }
 }
 
-pub fn get_account(
-    rpc_client: &RpcClient,
-    nonce_pubkey: &Pubkey,
-) -> Result<Account, CliNonceError> {
-    get_account_with_commitment(rpc_client, nonce_pubkey, CommitmentConfig::default())
-}
-
-pub fn get_account_with_commitment(
-    rpc_client: &RpcClient,
-    nonce_pubkey: &Pubkey,
-    commitment: CommitmentConfig,
-) -> Result<Account, CliNonceError> {
-    rpc_client
-        .get_account_with_commitment(nonce_pubkey, commitment)
-        .map_err(|e| CliNonceError::Client(format!("{}", e)))
-        .and_then(|result| {
-            result.value.ok_or_else(|| {
-                CliNonceError::Client(format!("AccountNotFound: pubkey={}", nonce_pubkey))
-            })
-        })
-        .and_then(|a| match account_identity_ok(&a) {
-            Ok(()) => Ok(a),
-            Err(e) => Err(e),
-        })
-}
-
-pub fn account_identity_ok(account: &Account) -> Result<(), CliNonceError> {
-    if account.owner != system_program::id() {
-        Err(CliNonceError::InvalidAccountOwner)
-    } else if account.data.is_empty() {
-        Err(CliNonceError::UnexpectedDataSize)
-    } else {
-        Ok(())
-    }
-}
-
-pub fn state_from_account(account: &Account) -> Result<State, CliNonceError> {
-    account_identity_ok(account)?;
-    StateMut::<Versions>::state(account)
-        .map_err(|_| CliNonceError::InvalidAccountData)
-        .map(|v| v.convert_to_current())
-}
-
-pub fn data_from_account(account: &Account) -> Result<Data, CliNonceError> {
-    account_identity_ok(account)?;
-    state_from_account(account).and_then(|ref s| data_from_state(s).map(|d| d.clone()))
-}
-
-pub fn data_from_state(state: &State) -> Result<&Data, CliNonceError> {
-    match state {
-        State::Uninitialized => Err(CliNonceError::InvalidStateForOperation),
-        State::Initialized(data) => Ok(data),
-    }
-}
-
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -286,10 +175,9 @@ pub fn parse_authorize_nonce_account(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
-    let signer_info = generate_unique_signers(
+    let signer_info = default_signer.generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
-        default_signer_path,
         wallet_manager,
     )?;
 
@@ -305,7 +193,7 @@ pub fn parse_authorize_nonce_account(
 
 pub fn parse_nonce_create_account(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (nonce_account, nonce_account_pubkey) =
@@ -315,10 +203,9 @@ pub fn parse_nonce_create_account(
     let nonce_authority = pubkey_of_signer(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
-    let signer_info = generate_unique_signers(
+    let signer_info = default_signer.generate_unique_signers(
         vec![payer_provided, nonce_account],
         matches,
-        default_signer_path,
         wallet_manager,
     )?;
 
@@ -348,7 +235,7 @@ pub fn parse_get_nonce(
 
 pub fn parse_new_nonce(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -356,10 +243,9 @@ pub fn parse_new_nonce(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
-    let signer_info = generate_unique_signers(
+    let signer_info = default_signer.generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
-        default_signer_path,
         wallet_manager,
     )?;
 
@@ -391,7 +277,7 @@ pub fn parse_show_nonce_account(
 
 pub fn parse_withdraw_from_nonce_account(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -402,10 +288,9 @@ pub fn parse_withdraw_from_nonce_account(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
-    let signer_info = generate_unique_signers(
+    let signer_info = default_signer.generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
-        default_signer_path,
         wallet_manager,
     )?;
 
@@ -429,14 +314,14 @@ pub fn check_nonce_account(
     match state_from_account(nonce_account)? {
         State::Initialized(ref data) => {
             if &data.blockhash != nonce_hash {
-                Err(CliNonceError::InvalidHash.into())
+                Err(Error::InvalidHash.into())
             } else if nonce_authority != &data.authority {
-                Err(CliNonceError::InvalidAuthority.into())
+                Err(Error::InvalidAuthority.into())
             } else {
                 Ok(())
             }
         }
-        State::Uninitialized => Err(CliNonceError::InvalidStateForOperation.into()),
+        State::Uninitialized => Err(Error::InvalidStateForOperation.into()),
     }
 }
 
@@ -691,9 +576,10 @@ mod tests {
     use crate::cli::{app, parse_command};
     use solana_sdk::{
         account::Account,
+        account_utils::StateMut,
         fee_calculator::FeeCalculator,
         hash::hash,
-        nonce::{self, State},
+        nonce::{self, state::Versions, State},
         signature::{read_keypair_file, write_keypair, Keypair, Signer},
         system_program,
     };
@@ -710,6 +596,10 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+        let default_signer = DefaultSigner {
+            path: default_keypair_file.clone(),
+            arg_name: String::new(),
+        };
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let nonce_account_keypair = Keypair::new();
         write_keypair(&nonce_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -728,12 +618,7 @@ mod tests {
             &Pubkey::default().to_string(),
         ]);
         assert_eq!(
-            parse_command(
-                &test_authorize_nonce_account,
-                &default_keypair_file,
-                &mut None
-            )
-            .unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: nonce_account_pubkey,
@@ -754,12 +639,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(
-                &test_authorize_nonce_account,
-                &default_keypair_file,
-                &mut None
-            )
-            .unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
@@ -781,7 +661,7 @@ mod tests {
             "50",
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_create_nonce_account, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: 1,
@@ -806,7 +686,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_create_nonce_account, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: 1,
@@ -828,7 +708,7 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_get_nonce, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_get_nonce, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetNonce(nonce_account_keypair.pubkey()),
                 signers: vec![],
@@ -842,7 +722,7 @@ mod tests {
                 .get_matches_from(vec!["test", "new-nonce", &keypair_file]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_new_nonce, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
@@ -862,7 +742,7 @@ mod tests {
         ]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_new_nonce, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
@@ -882,7 +762,7 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_show_nonce_account, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_show_nonce_account, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ShowNonceAccount {
                     nonce_account_pubkey: nonce_account_keypair.pubkey(),
@@ -903,7 +783,7 @@ mod tests {
         assert_eq!(
             parse_command(
                 &test_withdraw_from_nonce_account,
-                &default_keypair_file,
+                &default_signer,
                 &mut None
             )
             .unwrap(),
@@ -931,7 +811,7 @@ mod tests {
         assert_eq!(
             parse_command(
                 &test_withdraw_from_nonce_account,
-                &default_keypair_file,
+                &default_signer,
                 &mut None
             )
             .unwrap(),
@@ -966,14 +846,14 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, CliNonceError::InvalidAccountOwner,);
+            assert_eq!(err, Error::InvalidAccountOwner,);
         }
 
         let invalid_data = Account::new_data(1, &"invalid", &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, CliNonceError::InvalidAccountData,);
+            assert_eq!(err, Error::InvalidAccountData,);
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
@@ -985,7 +865,7 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, CliNonceError::InvalidHash,);
+            assert_eq!(err, Error::InvalidHash,);
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
@@ -997,7 +877,7 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, CliNonceError::InvalidAuthority,);
+            assert_eq!(err, Error::InvalidAuthority,);
         }
 
         let data = Versions::new_current(State::Uninitialized);
@@ -1005,7 +885,7 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, CliNonceError::InvalidStateForOperation,);
+            assert_eq!(err, Error::InvalidStateForOperation,);
         }
     }
 
@@ -1017,14 +897,14 @@ mod tests {
         let system_account = Account::new(1, 0, &system_program::id());
         assert_eq!(
             account_identity_ok(&system_account),
-            Err(CliNonceError::UnexpectedDataSize),
+            Err(Error::UnexpectedDataSize),
         );
 
         let other_program = Pubkey::new(&[1u8; 32]);
         let other_account_no_data = Account::new(1, 0, &other_program);
         assert_eq!(
             account_identity_ok(&other_account_no_data),
-            Err(CliNonceError::InvalidAccountOwner),
+            Err(Error::InvalidAccountOwner),
         );
     }
 
@@ -1049,7 +929,7 @@ mod tests {
         let wrong_data_size_account = Account::new(1, 1, &system_program::id());
         assert_eq!(
             state_from_account(&wrong_data_size_account),
-            Err(CliNonceError::InvalidAccountData),
+            Err(Error::InvalidAccountData),
         );
     }
 
@@ -1059,11 +939,11 @@ mod tests {
         let state = state_from_account(&nonce_account).unwrap();
         assert_eq!(
             data_from_state(&state),
-            Err(CliNonceError::InvalidStateForOperation)
+            Err(Error::InvalidStateForOperation)
         );
         assert_eq!(
             data_from_account(&nonce_account),
-            Err(CliNonceError::InvalidStateForOperation)
+            Err(Error::InvalidStateForOperation)
         );
 
         let data = nonce::state::Data {
