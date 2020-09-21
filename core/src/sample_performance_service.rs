@@ -57,7 +57,7 @@ impl SamplePerformanceService {
         exit: Arc<AtomicBool>,
     ) {
         let forks = bank_forks.read().unwrap();
-        let bank = forks.working_bank();
+        let bank = forks.root_bank().clone();
         let highest_slot = forks.highest_slot();
         drop(forks);
 
@@ -82,8 +82,8 @@ impl SamplePerformanceService {
                 drop(bank_forks);
 
                 let perf_sample = PerfSample {
-                    num_slots: highest_slot - sample_snapshot.num_slots,
-                    num_transactions: bank.transaction_count() - sample_snapshot.num_transactions,
+                    num_slots: highest_slot.checked_sub(sample_snapshot.num_slots).unwrap_or_default(),
+                    num_transactions: bank.transaction_count().checked_sub(sample_snapshot.num_transactions).unwrap_or_default(),
                     sample_period_secs: elapsed.as_secs() as u16,
                 };
 
