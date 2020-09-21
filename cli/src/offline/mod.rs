@@ -1,13 +1,7 @@
 pub mod blockhash_query;
 
-use clap::{App, Arg, ArgMatches};
 use serde_json::Value;
-use solana_clap_utils::{
-    input_parsers::{pubkey_of, value_of},
-    input_validators::{is_hash, is_pubkey_sig},
-    keypair::presigner_from_pubkey_sigs,
-    offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
-};
+use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     fee_calculator::FeeCalculator,
@@ -16,46 +10,6 @@ use solana_sdk::{
     signature::{Presigner, Signature},
 };
 use std::str::FromStr;
-
-fn blockhash_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(BLOCKHASH_ARG.name)
-        .long(BLOCKHASH_ARG.long)
-        .takes_value(true)
-        .value_name("BLOCKHASH")
-        .validator(is_hash)
-        .help(BLOCKHASH_ARG.help)
-}
-
-fn sign_only_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(SIGN_ONLY_ARG.name)
-        .long(SIGN_ONLY_ARG.long)
-        .takes_value(false)
-        .requires(BLOCKHASH_ARG.name)
-        .help(SIGN_ONLY_ARG.help)
-}
-
-fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(SIGNER_ARG.name)
-        .long(SIGNER_ARG.long)
-        .takes_value(true)
-        .value_name("PUBKEY=SIGNATURE")
-        .validator(is_pubkey_sig)
-        .requires(BLOCKHASH_ARG.name)
-        .multiple(true)
-        .help(SIGNER_ARG.help)
-}
-
-pub trait OfflineArgs {
-    fn offline_args(self) -> Self;
-}
-
-impl OfflineArgs for App<'_, '_> {
-    fn offline_args(self) -> Self {
-        self.arg(blockhash_arg())
-            .arg(sign_only_arg())
-            .arg(signer_arg())
-    }
-}
 
 pub struct SignOnly {
     pub blockhash: Hash,
