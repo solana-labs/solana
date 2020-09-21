@@ -1,7 +1,8 @@
+use crate::{feature::Feature, feature_set::FeatureSet};
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeRateGovernor,
-    genesis_config::GenesisConfig,
+    genesis_config::{ClusterType, GenesisConfig},
     pubkey::Pubkey,
     rent::Rent,
     signature::{Keypair, Signer},
@@ -107,6 +108,24 @@ pub fn create_genesis_config_with_leader(
     )
 }
 
+pub fn add_feature_accounts(genesis_config: &mut GenesisConfig) {
+    // Activate all features at genesis in development mode
+    if genesis_config.cluster_type == ClusterType::Development {
+        let feature_set = FeatureSet::new_enabled();
+
+        for feature_id in feature_set.active {
+            let feature = Feature {
+                activated_at: Some(0),
+            };
+
+            genesis_config.accounts.insert(
+                feature_id,
+                feature.create_account(genesis_config.rent.minimum_balance(Feature::size_of())),
+            );
+        }
+    }
+}
+
 pub fn create_genesis_config_with_leader_ex(
     mint_lamports: u64,
     bootstrap_validator_pubkey: &Pubkey,
@@ -164,6 +183,7 @@ pub fn create_genesis_config_with_leader_ex(
     };
 
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
+    add_feature_accounts(&mut genesis_config);
 
     GenesisConfigInfo {
         genesis_config,

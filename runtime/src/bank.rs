@@ -13,6 +13,8 @@ use crate::{
     builtins::get_builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     instruction_recorder::InstructionRecorder,
+    feature::Feature,
+    feature_set::{FeatureSet},
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
     nonce_utils,
@@ -526,6 +528,8 @@ pub struct Bank {
     cached_executors: Arc<RwLock<CachedExecutors>>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
+
+    pub feature_set: Arc<FeatureSet>,
 }
 
 impl Default for BlockhashQueue {
@@ -649,6 +653,7 @@ impl Bank {
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: parent.cached_executors.clone(),
             transaction_debug_keys: parent.transaction_debug_keys.clone(),
+            feature_set: parent.feature_set.clone(),
         };
 
         datapoint_info!(
@@ -753,6 +758,7 @@ impl Bank {
             rewards_pool_pubkeys: new(),
             cached_executors: Arc::new(RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS))),
             transaction_debug_keys: debug_keys,
+            feature_set: new(),
         };
         bank.finish_init(genesis_config);
 
@@ -3458,12 +3464,59 @@ impl Bank {
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
+        let new_feature_activations = self.compute_active_feature_set();
+        for feature_id in new_feature_activations {
+            info!("New feature activated: {}", feature_id);
+        }
+
         self.ensure_builtins(init_finish_or_warp);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
         self.reconfigure_token2_native_mint();
         self.ensure_no_storage_rewards_pool();
+    }
+
+    // Compute the active feature set based on the current bank state, and return the set of newly activated features
+    fn compute_active_feature_set(&mut self) -> HashSet<Pubkey> {
+        let mut active = self.feature_set.active.clone();
+        let mut inactive = HashSet::new();
+        let mut newly_activated = HashSet::new();
+        let slot = self.slot();
+
+        for feature_id in &self.feature_set.inactive {
+            if let Some(mut account) = self.get_account(feature_id) {
+                if let Some(mut feature) = Feature::from_account(&account) {
+                    match feature.activated_at {
+                        None => {
+                            // Feature has been requested, activate it now
+                            feature.activated_at = Some(slot);
+                            if feature.to_account(&mut account).is_some() {
+                                self.store_account(feature_id, &account);
+                            }
+                            newly_activated.insert(*feature_id);
+                            active.insert(*feature_id);
+                            continue;
+                        }
+                        Some(activation_slot) => {
+                            if slot >= activation_slot {
+                                // Feature is already active
+                                active.insert(*feature_id);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            inactive.insert(*feature_id);
+        }
+
+        self.feature_set = Arc::new(FeatureSet {
+            id: self.feature_set.id,
+            active,
+            inactive,
+        });
+        newly_activated
     }
 
     fn ensure_builtins(&mut self, init_or_warp: bool) {
