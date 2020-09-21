@@ -3546,7 +3546,6 @@ dependencies = [
  "solana-logger 1.3.13",
  "solana-net-utils",
  "solana-remote-wallet",
- "solana-runtime",
  "solana-sdk 1.3.13",
  "solana-stake-program",
  "solana-transaction-status",
