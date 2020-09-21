@@ -17,14 +17,6 @@ pub struct SamplePerformanceSnapshot {
     pub num_slots: u64,
 }
 
-const SAMPLE_INTERVAL: u64 = 60;
-const SLEEP_INTERVAL: u64 = 500;
-
-pub struct SamplePerformanceSnapshot {
-    pub num_transactions: u64,
-    pub num_slots: u64,
-}
-
 pub struct SamplePerformanceService {
     thread_hdl: JoinHandle<()>,
 }
