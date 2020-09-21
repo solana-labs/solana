@@ -23,6 +23,7 @@ use solana_clap_utils::{
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
+    nonce_utils,
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
     rpc_response::{Response, RpcKeyedAccount},
@@ -467,7 +468,7 @@ pub enum CliError {
     #[error("insufficient funds for spend ({0} SOL) and fee ({1} SOL)")]
     InsufficientFundsForSpendAndFee(f64, f64),
     #[error(transparent)]
-    InvalidNonce(CliNonceError),
+    InvalidNonce(nonce_utils::Error),
     #[error("dynamic program error: {0}")]
     DynamicProgramError(String),
     #[error("rpc request error: {0}")]
@@ -482,10 +483,10 @@ impl From<Box<dyn error::Error>> for CliError {
     }
 }
 
-impl From<CliNonceError> for CliError {
-    fn from(error: CliNonceError) -> Self {
+impl From<nonce_utils::Error> for CliError {
+    fn from(error: nonce_utils::Error) -> Self {
         match error {
-            CliNonceError::Client(client_error) => Self::RpcRequestError(client_error),
+            nonce_utils::Error::Client(client_error) => Self::RpcRequestError(client_error),
             _ => Self::InvalidNonce(error),
         }
     }
