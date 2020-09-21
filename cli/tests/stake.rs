@@ -1,7 +1,6 @@
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
-    nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
@@ -9,7 +8,7 @@ use solana_cli::{
     spend_utils::SpendAmount,
     test_utils::{check_ready, check_recent_balance},
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::{nonce_utils, rpc_client::RpcClient};
 use solana_core::test_validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -503,12 +502,12 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -531,12 +530,12 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -770,12 +769,12 @@ fn test_stake_authorize() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -824,12 +823,12 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
-    let new_nonce_hash = nonce::get_account_with_commitment(
+    let new_nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -1069,12 +1068,12 @@ fn test_stake_split() {
     check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -1338,12 +1337,12 @@ fn test_stake_set_lockup() {
     check_recent_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -1465,12 +1464,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -1520,12 +1519,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     check_recent_balance(50_000, &rpc_client, &stake_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
@@ -1568,12 +1567,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     check_recent_balance(42, &rpc_client, &recipient_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account_with_commitment(
+    let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::recent(),
     )
-    .and_then(|ref a| nonce::data_from_account(a))
+    .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash;
 
