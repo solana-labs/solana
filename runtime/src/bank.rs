@@ -516,6 +516,8 @@ pub struct Bank {
 
     /// Cached executors
     cached_executors: Arc<RwLock<CachedExecutors>>,
+
+    transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -526,15 +528,17 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[])
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None)
     }
 
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
     ) -> Self {
         let mut bank = Self::default();
+        bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
         bank.ancestors.insert(bank.slot(), 0);
 
@@ -636,6 +640,7 @@ impl Bank {
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: parent.cached_executors.clone(),
+            transaction_debug_keys: parent.transaction_debug_keys.clone(),
         };
 
         datapoint_info!(
@@ -688,6 +693,7 @@ impl Bank {
         bank_rc: BankRc,
         genesis_config: &GenesisConfig,
         fields: BankFieldsToDeserialize,
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -738,6 +744,7 @@ impl Bank {
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: Arc::new(RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS))),
+            transaction_debug_keys: debug_keys,
         };
         bank.finish_init(genesis_config);
 
@@ -2015,6 +2022,14 @@ impl Bank {
         let mut tx_count: u64 = 0;
         let err_count = &mut error_counters.total;
         for ((r, _hash_age_kind), tx) in executed.iter().zip(txs.iter()) {
+            if let Some(debug_keys) = &self.transaction_debug_keys {
+                for key in &tx.message.account_keys {
+                    if debug_keys.contains(key) {
+                        info!("slot: {} result: {:?} tx: {:?}", self.slot, r, tx);
+                        break;
+                    }
+                }
+            }
             if r.is_ok() {
                 tx_count += 1;
             } else {
