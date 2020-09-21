@@ -184,7 +184,7 @@ fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: Con
 
                 if notify {
                     let mut w = Vec::new();
-                    if solana_cli::display::write_transaction(
+                    if solana_cli_output::display::write_transaction(
                         &mut w,
                         &transaction,
                         &rpc_transaction.meta,

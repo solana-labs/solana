@@ -2,16 +2,32 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+    input_validators::is_url,
+    keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    DisplayError,
 };
-use solana_cli::{
-    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
-    cli_output::OutputFormat,
-    display::{println_name_value, println_name_value_or},
+use solana_cli::cli::{
+    app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
+use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{error, sync::Arc};
+
+pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
+    let description = match setting_type {
+        SettingType::Explicit => "",
+        SettingType::Computed => "(computed)",
+        SettingType::SystemDefault => "(default)",
+    };
+
+    println!(
+        "{} {} {}",
+        style(name).bold(),
+        style(value),
+        style(description).italic(),
+    );
+}
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
@@ -119,13 +135,19 @@ pub fn parse_args<'a>(
         matches.value_of("json_rpc_url").unwrap_or(""),
         &config.json_rpc_url,
     );
+    let default_signer_arg_name = "keypair".to_string();
     let (_, default_signer_path) = CliConfig::compute_keypair_path_setting(
-        matches.value_of("keypair").unwrap_or(""),
+        matches.value_of(&default_signer_arg_name).unwrap_or(""),
         &config.keypair_path,
     );
 
+    let default_signer = DefaultSigner {
+        arg_name: default_signer_arg_name,
+        path: default_signer_path.clone(),
+    };
+
     let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer_path, &mut wallet_manager)?;
+        parse_command(&matches, &default_signer, &mut wallet_manager)?;
 
     let output_format = matches
         .value_of("output_format")

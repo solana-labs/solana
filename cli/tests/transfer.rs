@@ -1,15 +1,14 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    cli_output::OutputFormat,
-    nonce,
-    offline::{
-        blockhash_query::{self, BlockhashQuery},
-        parse_sign_only_reply_string,
-    },
     spend_utils::SpendAmount,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
+use solana_client::{
+    blockhash_query::{self, BlockhashQuery},
+    nonce_utils,
+    rpc_client::RpcClient,
+};
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -147,8 +146,8 @@ fn test_transfer() {
     check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
+    let nonce_hash = nonce_utils::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce_utils::data_from_account(a))
         .unwrap()
         .blockhash;
 
@@ -171,8 +170,8 @@ fn test_transfer() {
     process_command(&config).unwrap();
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
-    let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
+    let new_nonce_hash = nonce_utils::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce_utils::data_from_account(a))
         .unwrap()
         .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -188,8 +187,8 @@ fn test_transfer() {
     check_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
-        .and_then(|ref a| nonce::data_from_account(a))
+    let nonce_hash = nonce_utils::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce_utils::data_from_account(a))
         .unwrap()
         .blockhash;
 
