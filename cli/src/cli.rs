@@ -4,7 +4,7 @@ use crate::{
     cluster_query::*,
     display::{new_spinner_progress_bar, println_name_value, println_transaction},
     nonce::*,
-    offline::{blockhash_query::BlockhashQuery, *},
+    offline::blockhash_query::BlockhashQuery,
     spend_utils::*,
     stake::*,
     validator_info::*,
@@ -17,7 +17,7 @@ use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_clap_utils::{
     self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
-    keypair::signer_from_path, nonce::*, offline::SIGN_ONLY_ARG, ArgConstant,
+    keypair::signer_from_path, nonce::*, offline::*, ArgConstant,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -2357,6 +2357,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::offline::*;
     use serde_json::Value;
     use solana_client::mock_sender::SIGNATURE;
     use solana_sdk::{

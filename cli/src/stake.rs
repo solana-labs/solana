@@ -6,7 +6,7 @@ use crate::{
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::check_nonce_account,
-    offline::{blockhash_query::BlockhashQuery, *},
+    offline::blockhash_query::BlockhashQuery,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
@@ -1762,7 +1762,10 @@ pub fn process_delegate_stake(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{app, parse_command};
+    use crate::{
+        cli::{app, parse_command},
+        offline::blockhash_query,
+    };
     use solana_sdk::{
         hash::Hash,
         signature::{
