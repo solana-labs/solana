@@ -1,6 +1,10 @@
 use super::*;
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+use solana_clap_utils::nonce::*;
+>>>>>>> 3fb842863... Move CLI nonce args to clap-utils
 use solana_client::nonce_utils;
 use solana_sdk::commitment_config::CommitmentConfig;
 >>>>>>> a6533c3a2... Move CLI nonce account helpers in client
@@ -91,7 +95,7 @@ impl BlockhashQuery {
     pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
         let blockhash = value_of(matches, BLOCKHASH_ARG.name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-        let nonce_account = pubkey_of(matches, nonce::NONCE_ARG.name);
+        let nonce_account = pubkey_of(matches, NONCE_ARG.name);
         BlockhashQuery::new(blockhash, sign_only, nonce_account)
     }
 
@@ -121,7 +125,7 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{nonce::nonce_arg, offline::blockhash_query::BlockhashQuery};
+    use crate::offline::blockhash_query::BlockhashQuery;
     use clap::App;
     use serde_json::{self, json, Value};
     use solana_account_decoder::{UiAccount, UiAccountEncoding};
@@ -184,9 +188,7 @@ mod tests {
 
     #[test]
     fn test_blockhash_query_new_from_matches_ok() {
-        let test_commands = App::new("blockhash_query_test")
-            .arg(nonce_arg())
-            .offline_args();
+        let test_commands = App::new("blockhash_query_test").nonce_args().offline_args();
         let blockhash = hash(&[1u8]);
         let blockhash_string = blockhash.to_string();
 

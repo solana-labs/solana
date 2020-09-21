@@ -1,6 +1,5 @@
 pub mod blockhash_query;
 
-use crate::nonce;
 use clap::{App, Arg, ArgMatches};
 use serde_json::Value;
 use solana_clap_utils::{

@@ -1,17 +1,16 @@
 use crate::{
     checks::{check_account_for_fee, check_unique_pubkeys},
     cli::{
-        fee_payer_arg, generate_unique_signers, log_instruction_custom_error, nonce_authority_arg,
-        return_signers, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
-        SignerIndex, FEE_PAYER_ARG,
+        fee_payer_arg, generate_unique_signers, log_instruction_custom_error, return_signers,
+        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
-    nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
+    nonce::check_nonce_account,
     offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
+use solana_clap_utils::{input_parsers::*, input_validators::*, nonce::*, offline::*, ArgConstant};
 use solana_client::{
     nonce_utils, rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
 };
@@ -144,8 +143,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Source account of funds [default: cli config keypair]"),
                 )
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -174,8 +172,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -205,8 +202,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -221,8 +217,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -262,8 +257,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -285,8 +279,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -317,8 +310,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(withdraw_authority_arg())
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
                 .arg(
                     Arg::with_name("custodian")
@@ -373,8 +365,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Keypair of the existing custodian [default: cli config pubkey]")
                 )
                 .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
+                .nonce_args()
                 .arg(fee_payer_arg())
         )
         .subcommand(
