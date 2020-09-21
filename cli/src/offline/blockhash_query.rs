@@ -1,10 +1,19 @@
 use super::*;
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 =======
 use solana_clap_utils::nonce::*;
 >>>>>>> 3fb842863... Move CLI nonce args to clap-utils
+=======
+use clap::ArgMatches;
+use solana_clap_utils::{
+    input_parsers::{pubkey_of, value_of},
+    nonce::*,
+    offline::*,
+};
+>>>>>>> 6cf74d116... Move CLI offline args to clap-utils
 use solana_client::nonce_utils;
 use solana_sdk::commitment_config::CommitmentConfig;
 >>>>>>> a6533c3a2... Move CLI nonce account helpers in client
@@ -125,7 +134,7 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::offline::blockhash_query::BlockhashQuery;
+    use crate::offline::blockhash_query::{self, BlockhashQuery};
     use clap::App;
     use serde_json::{self, json, Value};
     use solana_account_decoder::{UiAccount, UiAccountEncoding};
