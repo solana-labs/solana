@@ -204,7 +204,8 @@ build() {
       else
         git reset --hard "FETCH_HEAD"
       fi
-      export CI_COMMIT=$(git rev-parse HEAD)
+      CI_COMMIT=$(git rev-parse HEAD)
+      export CI_COMMIT
     fi
 
     cargo_error_code=
